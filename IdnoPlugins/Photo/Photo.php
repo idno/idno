@@ -106,7 +106,7 @@ namespace IdnoPlugins\Photo {
             }
 
             $this->title = \Idno\Core\Idno::site()->currentPage()->getInput('title');
-            $this->body  = \Idno\Core\Idno::site()->currentPage()->getInput('body');
+            $this->body  = \Idno\Core\Idno::site()->template()->sanitize_html(\Idno\Core\Idno::site()->currentPage()->getInput('body'));
             $this->tags  = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
             $access = \Idno\Core\Idno::site()->currentPage()->getInput('access');
             $this->setAccess($access);

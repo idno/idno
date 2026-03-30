@@ -613,6 +613,11 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
         {
             $_url = $url;
             foreach ($_url as $url) {
+                // SSRF protection: validate URL before fetching
+                if (!\Idno\Core\UrlValidator::isSafeUrl($url)) {
+                    \Idno\Core\Idno::site()->logging()->warning("Micropub: Blocked unsafe URL in file upload: {$url}");
+                    continue;
+                }
                 $pathinfo = pathinfo(parse_url($url, PHP_URL_PATH));
                 switch ($pathinfo['extension']) {
                     case 'jpg':

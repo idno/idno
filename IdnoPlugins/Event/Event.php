@@ -62,7 +62,7 @@ namespace IdnoPlugins\Event {
             }
             $body = \Idno\Core\Idno::site()->currentPage()->getInput('body');
             if (!empty($body)) {
-                $this->body = $body;
+                $this->body = \Idno\Core\Idno::site()->template()->sanitize_html($body);
                 $this->title = \Idno\Core\Idno::site()->currentPage()->getInput('title');
                 $this->summary = \Idno\Core\Idno::site()->currentPage()->getInput('summary');
                 $this->location = \Idno\Core\Idno::site()->currentPage()->getInput('location');

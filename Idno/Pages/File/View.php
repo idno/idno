@@ -24,6 +24,16 @@ namespace Idno\Pages\File {
                 $this->noContent();
             }
 
+            // Enforce access control: if file is attached to an entity, check canRead()
+            if (!empty($object->file['attached_entity'])) {
+                $parentEntity = \Idno\Common\Entity::getByUUID($object->file['attached_entity']);
+                if ($parentEntity && !$parentEntity->canRead()) {
+                    $this->setResponse(403);
+                    echo '';
+                    return;
+                }
+            }
+
             session_write_close();  // Close the session early
             //header("Pragma: public");
             // Determine uploaded timestamp
@@ -44,10 +54,19 @@ namespace Idno\Pages\File {
             header('Expires: ' . date(\DateTime::RFC1123, time() + (86400 * 30))); // Cache files for 30 days!
             $this->setLastModifiedHeader($upload_ts);
 
-            if (!empty($object->file['mime_type'])) {
-                header('Content-type: ' . $object->file['mime_type']);
-            } else {
-                header('Content-type: application/data');
+            $mimeType = !empty($object->file['mime_type']) ? $object->file['mime_type'] : 'application/octet-stream';
+            header('Content-type: ' . $mimeType);
+
+            // Force download for MIME types that could execute scripts in the browser
+            $safeMimeTypes = [
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                'application/pdf',
+                'audio/mpeg', 'audio/ogg', 'audio/wav',
+                'video/mp4', 'video/ogg', 'video/webm',
+            ];
+            if (!in_array($mimeType, $safeMimeTypes)) {
+                $filename = !empty($this->arguments[1]) ? basename($this->arguments[1]) : 'download';
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
             }
 
             header('Accept-Ranges: bytes');

@@ -945,6 +945,15 @@ namespace Idno\Common {
                 'filename' => $file['filename'],
             ];
             $this->attachments = $attachments;
+
+            // Store back-reference on the file for access control enforcement
+            if ($fileObj = \Idno\Entities\File::getByID($file['_id'])) {
+                if (is_object($fileObj) && isset($fileObj->file) && is_array($fileObj->file)) {
+                    $fileObj->file['attached_entity'] = $this->getUUID();
+                    $fileObj->file['access'] = $this->access;
+                    $fileObj->save();
+                }
+            }
         }
 
         /**
