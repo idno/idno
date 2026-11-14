@@ -120,7 +120,7 @@ namespace Tests\Characterisation {
             $this->assertSame(403, $r->status);
         }
 
-        public function testPostWithoutCsrfTokenIsRejected(): void
+        public function testAnonymousPostWithoutCsrfTokenCreatesNothing(): void
         {
             $marker = $this->marker('csrf-marker');
 

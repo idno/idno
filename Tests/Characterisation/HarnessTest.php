@@ -26,6 +26,15 @@ namespace Tests\Characterisation {
             $this->assertFalse(\Idno\Common\Entity::getByUUID($uuid));
         }
 
+        public function testStatusExistsFindsStoredStatusOnly(): void
+        {
+            $body = 'status-exists-' . uniqid();
+            $this->createStatus($this->user(), $body);
+
+            $this->assertTrue($this->statusExists($body));
+            $this->assertFalse($this->statusExists($body . '-unknown'));
+        }
+
         public function testFailingFixtureCleanupDoesNotStopOthersAndIsReported(): void
         {
             $broken = new class extends \IdnoPlugins\Status\Status {
