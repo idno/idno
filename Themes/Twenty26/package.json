@@ -21,6 +21,6 @@
     "@tiptap/pm": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0",
     "alpinejs": "^3.17.5",
-    "lucide": "^0.460.0"
+    "lucide": "^1.71.0"
   }
 }
