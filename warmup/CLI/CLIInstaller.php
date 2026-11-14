@@ -154,7 +154,7 @@ class CLIInstaller extends \Idno\Core\Installer
             ->setDescription('Install Idno')
             ->setDefinition(
                 [
-                new \Symfony\Component\Console\Input\InputArgument('config', \Symfony\Component\Console\Input\InputArgument::OPTIONAL, 'Specify the output config to write, this could be config.ini (default) or my.domain.ini for a domain specific config.', 'config.ini'),
+                new \Symfony\Component\Console\Input\InputArgument('config', \Symfony\Component\Console\Input\InputArgument::OPTIONAL, 'The config file to write in configuration/. Only config.ini is accepted (kept as an argument so that a manifest can still follow it).', 'config.ini'),
                 new \Symfony\Component\Console\Input\InputArgument('manifest', \Symfony\Component\Console\Input\InputArgument::OPTIONAL, 'Configuration manifest. If not provided, you will be prompted for settings.', ''),
                 ]
             )
@@ -162,6 +162,18 @@ class CLIInstaller extends \Idno\Core\Installer
                 function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
 
                     $helper = new Symfony\Component\Console\Helper\QuestionHelper();
+
+                    // Idno reads configuration/config.ini only: per-domain files (my.domain.ini)
+                    // are ignored, so writing one would leave a site that looks uninstalled.
+                    $config_name = $input->getArgument('config');
+                    if (empty($config_name)) {
+                        $config_name = 'config.ini';
+                    }
+                    if ($config_name !== 'config.ini') {
+                        $output->writeln("Cannot write $config_name: per-domain configuration files are no longer read. The installer writes configuration/config.ini only.");
+
+                        return \Symfony\Component\Console\Command\Command::FAILURE;
+                    }
 
                     if ($this->isInstalled()) {
                         throw new \Exception("Idno is already installed.");
@@ -175,12 +187,6 @@ class CLIInstaller extends \Idno\Core\Installer
                         if (file_exists($filename)) {
                             $this->config = @parse_ini_file($filename);
                         }
-                    }
-
-                    // Load config name
-                    $config_name = $input->getArgument('config');
-                    if (empty($config_name)) {
-                        $config_name = 'config.ini';
                     }
 
                     // Gather settings

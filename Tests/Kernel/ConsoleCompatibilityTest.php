@@ -90,4 +90,25 @@ final class ConsoleCompatibilityTest extends TestCase
             @unlink($file);
         }
     }
+
+    public function testInstallerNoLongerOffersAPerDomainConfigFile(): void
+    {
+        [$code, $out] = $this->runCli('warmup/CLI/CLIInstaller.php', 'help', 'install');
+
+        $this->assertSame(0, $code);
+        $this->assertStringNotContainsString('my.domain.ini', $out);
+        $this->assertStringNotContainsString('domain specific', $out);
+    }
+
+    public function testInstallerRefusesToWriteAPerDomainConfigFile(): void
+    {
+        $root = dirname(__DIR__, 2);
+        // Refused before anything else (the requirements check, the "already installed" check,
+        // prompts, the database), so this never touches the test site.
+        [$code, $out] = $this->runCli('warmup/CLI/CLIInstaller.php', 'install', 'example.com.ini', '/nonexistent-manifest.ini');
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('per-domain configuration files are no longer read', $out);
+        $this->assertFileDoesNotExist($root . '/configuration/example.com.ini');
+    }
 }
