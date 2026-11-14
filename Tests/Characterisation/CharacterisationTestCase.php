@@ -78,6 +78,15 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * Whether a status with exactly this body is stored. Lets a test prove a
+         * request did not create anything.
+         */
+        protected function statusExists(string $body): bool
+        {
+            return \IdnoPlugins\Status\Status::getOne(['body' => $body]) !== false;
+        }
+
+        /**
          * Strip the site's base URL from an absolute URL.
          */
         protected function path(string $absoluteUrl): string
