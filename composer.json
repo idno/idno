@@ -59,7 +59,8 @@
         "composer/installers": "^2",
         "vlucas/phpdotenv": "^5.3",
         "landrok/activitypub": "^0.7.1",
-        "symfony/runtime": "^8.0"
+        "symfony/runtime": "^8.0",
+        "symfony/monolog-bundle": "^4.1"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,

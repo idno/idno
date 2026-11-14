@@ -88,9 +88,9 @@ final class LegacyServiceFactory
         }
     }
 
-    public function logging(): \Idno\Core\Logging
+    public function logging(\Psr\Log\LoggerInterface $logger): \Idno\Core\Logging
     {
-        return new \Idno\Core\Logging();
+        return new \Idno\Core\Logging($logger);
     }
 
     public function session(): \Idno\Core\Session

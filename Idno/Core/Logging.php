@@ -25,15 +25,18 @@ namespace Idno\Core {
 
         public $loglevel_filter = self::LEVEL_DEBUG;
         private $identifier;
+        private LoggerInterface $logger;
 
         /**
          * Create a basic logger to log to the PHP log.
          *
+         * @param LoggerInterface $logger       The Monolog channel that writes the lines. Level filtering stays here.
          * @param type $loglevel_filter Log levels to show 0 - off, 1 - errors, 2 - errors & warnings, 3 - errors, warnings and info, 4 - 3 + debug
          * @param type $identifier      Identify this site in the log (defaults to current domain)
          */
-        public function __construct($loglevel_filter = 0, $identifier = null)
+        public function __construct(LoggerInterface $logger, $loglevel_filter = 0, $identifier = null)
         {
+            $this->logger = $logger;
             if (!$identifier) {
                 $identifier = Idno::site()->config()->host;
             }
@@ -195,7 +198,8 @@ namespace Idno\Core {
                         $logline.=$trace;
                     }
 
-                    error_log($logline);
+                    // The line is complete, so the channel gets no context to interpolate.
+                    $this->logger->log($level, $logline);
 
                     $lines ++;
                 }

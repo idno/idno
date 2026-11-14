@@ -211,7 +211,9 @@ Each content plugin has an `Entry.php` entity class that defines
 - Entity properties are dynamic (magic `__get`/`__set` via `$this->attributes` array)
 - Plugins use braced namespace blocks: `namespace IdnoPlugins\Foo { class Main extends \Idno\Common\Plugin { } }`
 - Core uses indented namespace blocks (historical style)
-- Use `\Idno\Core\Idno::site()->logging()->info()` / `warning()` / `error()` for logging
+- New code injects `Psr\Log\LoggerInterface` (the Monolog `idno` channel, `monolog.logger.idno`) for logging.
+  `\Idno\Core\Idno::site()->logging()` (`info()` / `warning()` / `error()`) is legacy: it keeps
+  working, filters by the site's log level, and writes through that same channel.
 - Always pass `$overrideAccess = true` to `save()` on system-level entities (queue events, followers)
   to bypass `canEdit()` checks when no user session exists
 

@@ -81,6 +81,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     }
     // Config reads the same BootConfig as the rest of the container.
     $services->get(\Idno\Core\Config::class)->args([service(BootConfig::class)]);
+    // Logging writes through the "idno" Monolog channel (config/packages/monolog.php).
+    $services->get(\Idno\Core\Logging::class)->args([service('monolog.logger.idno')]);
 
     $services->set(LegacyBootstrap::class)
         ->args([service('service_container')])
