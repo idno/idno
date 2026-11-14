@@ -37,6 +37,9 @@ php -l path/to/File.php
 # The command line (Symfony's commands and the legacy console plugins; idno.php is an alias)
 php bin/console list
 php bin/console version
+
+# Against the test rig (its config turns on pedantic_mode), run the console like the tests
+composer console -- list
 ```
 
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`)
@@ -179,6 +182,13 @@ New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
   example, pinned by `Tests/Characterisation/KernelRoutingTest`.
 
 ### Console commands
+
+The test rig's configuration enables `pedantic_mode`, which turns every reported PHP error into
+an exception. On PHP versions that emit deprecations for legacy code, a plain `php bin/console`
+there prints them, one becomes a warning ("headers already sent") and the console stops with
+`Idno could not start: ...`. Run it as `composer console -- <command>` (or
+`php -d error_reporting=22527 bin/console <command>`), for the same reason tests run through
+`composer test`. Sites without `pedantic_mode` are not affected.
 
 The console's environment and debug flag come from the `APP_ENV` and `APP_DEBUG` environment
 variables, through `Kernel::fromGlobals()`, e.g. `APP_ENV=test APP_DEBUG=1 php bin/console ...`.

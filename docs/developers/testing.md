@@ -15,6 +15,7 @@ composer install
 composer test:up     # start MySQL (127.0.0.1:33306) and the site (http://127.0.0.1:8089/)
 composer test        # run the whole suite
 composer test:down   # stop both
+composer console -- list   # run bin/console against the rig with the same PHP flags
 ```
 
 `composer test` runs PHPUnit with `IDNO_DOMAIN=127.0.0.1` and `IDNO_PORT=8089`. If you run `vendor/bin/phpunit` yourself, set those two environment variables to the same values, and run PHP with `-d error_reporting=22527` (everything except deprecation and strict notices, as in a stock production `php.ini`). Idno's `pedantic_mode`, which the test configuration turns on, throws an exception for every reported error, so reported deprecations would otherwise stop the suite. Extra PHPUnit arguments can be passed after `--`, for example `composer test -- IdnoPlugins/ActivityPub/Tests/`.

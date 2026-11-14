@@ -114,6 +114,7 @@
     "scripts": {
         "test:up": "Tests/rig/up.sh",
         "test:down": "Tests/rig/down.sh",
+        "console": "php -d error_reporting=22527 bin/console",
         "test": "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"
     }
 }
