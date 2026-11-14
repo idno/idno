@@ -1,1 +1,1 @@
-deny from all
+Require all denied

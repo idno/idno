@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// PHP's built-in web server only: anywhere else, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli-server') {
+    http_response_code(404);
+    exit;
+}
+
 /**
  * Router script for PHP's built-in web server, used by LegacyDispatcherTest: sends a
  * LegacyResponse the way index.php does, so the test can inspect the real HTTP response.

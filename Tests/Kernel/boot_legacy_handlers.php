@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// Command line only: under a web server, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+    http_response_code(404);
+    exit;
+}
+
 /**
  * Subprocess helper for KernelBootTest: boots the kernel WITH the legacy application in
  * a clean PHP process (no PHPUnit handlers) and reports whether the PHP error handler

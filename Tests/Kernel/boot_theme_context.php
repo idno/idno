@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// Command line only: under a web server, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+    http_response_code(404);
+    exit;
+}
+
 /**
  * Subprocess helper for RemovedFeaturesTest: boots the application in a clean PHP process,
  * the way the console or a web request does, and reports what plugin and theme discovery

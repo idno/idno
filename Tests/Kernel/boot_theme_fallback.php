@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+// Command line only: under a web server, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+    http_response_code(404);
+    exit;
+}
+
 /**
  * Subprocess helper for ThemeFallbackTest: boots the application as a web request (with a
  * Host header), sets the configured theme in memory only, builds the theme manager and, when

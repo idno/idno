@@ -5,7 +5,9 @@
     #RewriteBase /
 
     RewriteRule ^\.git(|hub)/ - [F]
-    RewriteRule ^(var|config|bin)(/|$) - [F]
+    # Never serve the cache, kernel configuration, command-line scripts, tests or docs
+    RewriteRule ^(var|config|bin|Tests|docs|warmup/CLI)(/|$) - [F,NC]
+    RewriteRule ^(idno|known)\.php$ - [F,NC]
 
     RewriteCond %{HTTP:Authorization} ^(.+)$
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
@@ -41,6 +43,9 @@
   Require all denied
 </Files>
 <Files ~ "known\.php">
+  Require all denied
+</Files>
+<Files ~ "^idno\.php$">
   Require all denied
 </Files>
 <Files  ~ "\.known">

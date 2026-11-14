@@ -1,4 +1,9 @@
 <?php
+// PHP's built-in web server only: anywhere else, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli-server') {
+    http_response_code(404);
+    exit;
+}
 
 /**
  * Router script for PHP's built-in web server (`php -S`), used by the local test rig.
@@ -11,8 +16,9 @@ $root = dirname(__DIR__, 2);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $file = realpath($root . rawurldecode($path));
 
-// Mirror the deny rules in warmup/webserver-configs: never serve these directories.
-if (preg_match('#^/(var|config|bin)(/|$)#', '/' . ltrim(rawurldecode($path), '/'))) {
+// Mirror the deny rules in .htaccess and warmup/webserver-configs: never serve these
+// directories or the command-line scripts (case-insensitive, as on a case-insensitive filesystem).
+if (preg_match('#^/((var|config|bin|tests|docs|warmup/cli)(/|$)|(idno|known)\.php$)#i', '/' . ltrim(rawurldecode($path), '/'))) {
     http_response_code(403);
     return true;
 }

@@ -1,9 +1,14 @@
 <?php
+// PHP's built-in web server only: anywhere else, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli-server') {
+    http_response_code(404);
+    exit;
+}
 
 /**
  * Router for PHP's built-in web server, used to run the test suite in CI:
  *
- *     php -S 0.0.0.0:80 -t . Tests/build/router.php
+ *     php -S localhost:80 -t . Tests/build/router.php
  *
  * It mirrors the rewrite rules in warmup/webserver-configs/htaccess.dist:
  * real files are served as-is, cache-busted asset URLs are mapped back to
@@ -15,8 +20,10 @@
 $root = dirname(__DIR__, 2);
 $path = rawurldecode((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH));
 
-// Never expose things the .htaccess file denies
+// Never expose things the .htaccess file denies (directories case-insensitively, as on a
+// case-insensitive filesystem)
 if (preg_match('#^/(\.git|\.github|Uploads|configuration)(/|$)#', $path)
+    || preg_match('#^/((var|config|bin|tests|docs|warmup/cli)(/|$)|(idno|known)\.php$)#i', $path)
     || preg_match('#\.(dist|ini|yml|bak|lock)$#', $path)
     || (preg_match('#(\.xml|/composer\.json|/package\.json)$#', $path) && is_file($root . $path))
     || strpos($path, '..') !== false

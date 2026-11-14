@@ -1,4 +1,9 @@
 <?php
+// Command line only: under a web server, answer 404 with an empty body before loading anything.
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+    http_response_code(404);
+    exit;
+}
 
 // Intentionally loading vendor libraries before bootstrapping from environment variables,
 // so we can use .env files. require_once ensures that our call to start.php later on won't
