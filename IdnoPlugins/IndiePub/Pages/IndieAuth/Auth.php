@@ -41,6 +41,18 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                    exit;
             }
 
+            // Validate that redirect_uri belongs to the same domain as client_id
+            // per IndieAuth spec: https://indieauth.spec.indieweb.org/#redirect-url
+            if (!empty($redirect_uri) && !empty($client_id)) {
+                $redirectHost = parse_url($redirect_uri, PHP_URL_HOST);
+                $clientHost = parse_url($client_id, PHP_URL_HOST);
+                if ($redirectHost !== $clientHost) {
+                    $this->setResponse(400);
+                    echo 'redirect_uri must be on the same domain as client_id.';
+                    exit;
+                }
+            }
+
             $me_prime = $user->getIndieAuthURL();
             $t        = \Idno\Core\site()->template();
             $t->body  = $t->__(array(

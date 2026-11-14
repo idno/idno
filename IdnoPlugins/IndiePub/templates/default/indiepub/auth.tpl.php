@@ -15,9 +15,9 @@
             <p>
                 <?php
                 if (empty($vars['scope'])) {
-                    echo \Idno\Core\Idno::site()->language()->_('Authenticate to %s?', [$vars['client_id']]);
+                    echo \Idno\Core\Idno::site()->language()->_('Authenticate to %s?', [htmlspecialchars($vars['client_id'] ?? '', ENT_QUOTES, 'UTF-8')]);
                 } else {
-                    echo \Idno\Core\Idno::site()->language()->_('Authorize %s to access this site with the following permission(s)?<br />%s', [$vars['client_id'], $vars['scope']]);
+                    echo \Idno\Core\Idno::site()->language()->_('Authorize %s to access this site with the following permission(s)?<br />%s', [htmlspecialchars($vars['client_id'] ?? '', ENT_QUOTES, 'UTF-8'), htmlspecialchars($vars['scope'] ?? '', ENT_QUOTES, 'UTF-8')]);
                 }
                 ?>
             </p>
@@ -28,13 +28,13 @@
                         <?php echo empty($vars['scope']) ? \Idno\Core\Idno::site()->language()->_('Authenticate') : \Idno\Core\Idno::site()->language()->_('Authorize'); ?>
                     </button>
                     <a class="btn btn-cancel"
-                       href="<?php echo $vars['redirect_uri'] ?>"><?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?></a>
+                       href="<?php echo htmlspecialchars($vars['redirect_uri'] ?? '', ENT_QUOTES, 'UTF-8') ?>"><?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?></a>
                 </div>
             </div>
 
             <?php
             foreach (array("me", "client_id", "redirect_uri", "scope", "state") as $param) {
-                echo '<input type="hidden" name="' . $param . '" value="' . $vars[$param] . '" />';
+                echo '<input type="hidden" name="' . $param . '" value="' . htmlspecialchars($vars[$param] ?? '', ENT_QUOTES, 'UTF-8') . '" />';
             }
             ?>
 

@@ -202,6 +202,17 @@ Each content plugin has an `Entry.php` entity class that defines
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
 - HTML sanitization via HTMLPurifier
+- SSRF protection: call `\Idno\Core\UrlValidator::isSafeUrl($url)` before any server-side
+  fetch of a URL supplied by a remote party (webmention sources, ActivityPub actors,
+  Micropub media URLs). It rejects non-HTTP schemes and hosts that resolve to
+  loopback, private, link-local or reserved addresses.
+- File access control: `Entity::save()` records the entity's UUID on each of its stored
+  files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
+  `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
+  files (e.g. Photo thumbnails) override `getAttachedFileIDs()`. Custom filesystems
+  must implement `updateMetadata()` for this to apply.
+- Redirect targets taken from user input must go through
+  `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Content Security Policy headers via template system
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 

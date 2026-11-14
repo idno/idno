@@ -40,6 +40,20 @@ namespace Idno\Files {
         abstract function storeContent($content, $metadata, $options = []);
 
         /**
+         * Merge $metadata into the stored metadata of the file with ID $id.
+         * Filesystems that can't update metadata may leave this default in
+         * place, in which case entity-based file access control is not applied.
+         *
+         * @param  string $id
+         * @param  array  $metadata
+         * @return bool True if the metadata is stored (or was already current)
+         */
+        public function updateMetadata($id, array $metadata)
+        {
+            return false;
+        }
+
+        /**
          * Get a translated error message for PHP Upload errors.
          *
          * @param int $code

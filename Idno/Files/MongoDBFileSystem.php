@@ -72,6 +72,31 @@ namespace Idno\Files {
             return false;
         }
 
+        public function updateMetadata($id, array $metadata)
+        {
+            if (empty($metadata)) {
+                return true;
+            }
+
+            try {
+                $set = [];
+                foreach ($metadata as $key => $value) {
+                    $set['metadata.' . $key] = $value;
+                }
+                $collection = new \MongoDB\Collection($this->manager, $this->dbname, 'fs.files');
+                $result     = $collection->updateOne(
+                    ['_id' => new \MongoDB\BSON\ObjectId((string) $id)],
+                    ['$set' => $set]
+                );
+
+                return $result->getMatchedCount() > 0;
+            } catch (\Exception $ex) {
+                \Idno\Core\site()->logging()->debug($ex->getMessage());
+            }
+
+            return false;
+        }
+
         public function storeFile($file_path, $metadata, $options = [])
         {
 

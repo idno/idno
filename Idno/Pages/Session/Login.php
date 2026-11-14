@@ -24,6 +24,7 @@ namespace Idno\Pages\Session {
                 } else {
                     $fwd = \Idno\Core\Webservice::base64UrlDecode($this->getInput('fwd'));
                 }
+                $fwd = self::sanitizeRedirectUrl($fwd);
                 $this->forward($fwd);
             }
 
@@ -34,6 +35,7 @@ namespace Idno\Pages\Session {
             if (empty($fwd)) {
                 $fwd = \Idno\Core\Idno::site()->config()->getDisplayURL();
             }
+            $fwd = self::sanitizeRedirectUrl($fwd);
             $t        = \Idno\Core\Idno::site()->template();
             $vars = [
                 'fwd' => $fwd
@@ -57,6 +59,7 @@ namespace Idno\Pages\Session {
             if (empty($fwd)) {
                 $fwd = \Idno\Core\Idno::site()->config()->getDisplayURL();
             }
+            $fwd = self::sanitizeRedirectUrl($fwd);
 
             if ($user = \Idno\Entities\User::getByHandle($this->getInput('email'))) {
             } else if ($user = \Idno\Entities\User::getByEmail($this->getInput('email'))) {
@@ -79,6 +82,54 @@ namespace Idno\Pages\Session {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Oops! We couldn't find your username or email address. Please check you typed it correctly and try again."));
                 $this->forwardToLogin($fwd);
             }
+        }
+
+        /**
+         * Validates that a redirect URL is local to this site.
+         * Returns the site's home URL if the redirect is external.
+         *
+         * @param  string $url
+         * @return string
+         */
+        public static function sanitizeRedirectUrl($url)
+        {
+            $siteUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+            $url     = trim((string) $url);
+
+            if ($url === '') {
+                return $siteUrl;
+            }
+
+            // Browsers treat backslashes as slashes and strip control characters,
+            // so neither can be trusted in a redirect target
+            if (strpos($url, '\\') !== false || preg_match('/[\x00-\x1F\x7F]/', $url)) {
+                return $siteUrl;
+            }
+
+            // Allow site-relative paths, but not protocol-relative URLs (//example.com)
+            if ($url[0] === '/') {
+                return (strlen($url) > 1 && $url[1] === '/') ? $siteUrl : $url;
+            }
+
+            // Otherwise it must be an absolute http(s) URL on this site's own host.
+            // Compare parsed hosts rather than string prefixes, so that
+            // https://example.com.evil.test and https://example.com@evil.test are rejected.
+            $target = parse_url($url);
+            $site   = parse_url($siteUrl);
+            if (empty($target['scheme']) || empty($target['host']) || empty($site['host'])) {
+                return $siteUrl;
+            }
+            if (!in_array(strtolower($target['scheme']), ['http', 'https'], true)) {
+                return $siteUrl;
+            }
+            if (strtolower($target['host']) !== strtolower($site['host'])) {
+                return $siteUrl;
+            }
+            if (($target['port'] ?? null) !== ($site['port'] ?? null)) {
+                return $siteUrl;
+            }
+
+            return $url;
         }
 
     }

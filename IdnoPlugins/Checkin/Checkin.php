@@ -158,7 +158,7 @@ namespace IdnoPlugins\Checkin {
                 $this->long      = $long;
                 $this->placename = $placename;
                 $this->title     = \Idno\Core\Idno::site()->language()->_('Checked into %s', [$placename]);
-                $this->body      = $body;
+                $this->body      = \Idno\Core\Idno::site()->template()->sanitize_html($body);
                 $this->address   = $user_address;
                 $this->setAccess($access);
                 $this->tags = $tags;
