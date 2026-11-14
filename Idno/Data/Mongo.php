@@ -433,7 +433,11 @@ namespace Idno\Data {
             if ($results = $this->getRecords($fields, $query_parameters, $limit, $offset, $collection)) {
                 $return = array();
                 foreach ($results as $row) {
-                    $return[] = $this->rowToEntity($row);
+                    $object = $this->rowToEntity($row);
+                    if ($this->isHiddenByPublishStatus($object)) {
+                        continue;
+                    }
+                    $return[] = $object;
                 }
 
                 return $return;

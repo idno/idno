@@ -27,14 +27,20 @@ namespace Idno\Pages\File {
             // Enforce access control: if file is attached to an entity, check canRead()
             $restricted = false;
             if (!empty($object->file['attached_entity'])) {
-                $parentEntity = \Idno\Common\Entity::getByUUID($object->file['attached_entity']);
+                // Load the entity whether or not the current user can see it: a lookup that
+                // respects access would not find it, and the check below would be skipped
+                $db = \Idno\Core\Idno::site()->db();
+                $ignoreAccess = $db->setIgnoreAccess(true);
+                $parentEntity = \Idno\Common\Entity::getOneFromAll(['uuid' => $object->file['attached_entity']]);
+                $db->setIgnoreAccess($ignoreAccess);
                 if ($parentEntity) {
                     if (!$parentEntity->canRead()) {
                         $this->setResponse(403);
                         echo '';
                         return;
                     }
-                    $restricted = ($parentEntity->access !== 'PUBLIC');
+                    $publishStatus = $parentEntity->getPublishStatus();
+                    $restricted = ($parentEntity->access !== 'PUBLIC') || (!empty($publishStatus) && $publishStatus != 'published');
                 }
             }
 
