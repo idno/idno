@@ -633,7 +633,6 @@ abstract class RecordStoreContract extends TestCase
             $this->assertNull($this->store()->findByUuid($name, $record['uuid']), $name);
             $this->assertNull($this->store()->findLatest($name), $name);
             $this->assertSame([], $this->store()->find($name, [], 10, 0), $name);
-            $this->assertTrue($this->store()->delete($name, $record['_id']) || true);
         }
     }
 
