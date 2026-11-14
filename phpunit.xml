@@ -3,6 +3,10 @@
     <testsuites>
         <testsuite name="Idno Basic Unit Tests">
             <directory>./Tests/</directory>
+            <exclude>./Tests/Characterisation/</exclude>
+        </testsuite>
+        <testsuite name="Characterisation">
+            <directory>./Tests/Characterisation/</directory>
         </testsuite>
 	<testsuite name="Plugins">
 	    <directory>./IdnoPlugins/*/Tests/</directory>

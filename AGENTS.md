@@ -17,7 +17,15 @@ system as Idno.
 # Install dependencies
 composer install
 
-# Run the full test suite (core + plugins)
+# Local test rig: MySQL in Docker (127.0.0.1:33306) + php -S web server (http://127.0.0.1:8089/)
+composer test:up      # start the rig (creates configuration/config.ini if absent; never overwrites)
+composer test         # run the full suite (core + plugins)
+composer test:down    # stop the rig
+
+# Without the composer script, set the rig's environment yourself:
+#   IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit
+
+# Run the full test suite (core + plugins) against an already-configured environment
 php vendor/bin/phpunit
 
 # Run a single plugin's tests
@@ -28,9 +36,9 @@ php -l path/to/File.php
 ```
 
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`)
-- Two test suites: `Idno Basic Unit Tests` (`Tests/`) and `Plugins` (`IdnoPlugins/*/Tests/`)
 - Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT`
-- Tests require a running database; the bootstrap loads `Idno/start.php`
+- Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
+- Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 
 ## Architecture
 

@@ -86,7 +86,8 @@
     "require-dev": {
         "mapkyca/mapkyca-known-docker": "^1.0",
         "codeception/aspect-mock": "*",
-        "squizlabs/php_codesniffer": "3.*"
+        "squizlabs/php_codesniffer": "3.*",
+        "phpunit/phpunit": "^9.6"
     },
     "extra": {
         "unused": [
@@ -106,5 +107,10 @@
         "allow-plugins": {
             "composer/installers": true
         }
+    },
+    "scripts": {
+        "test:up": "Tests/rig/up.sh",
+        "test:down": "Tests/rig/down.sh",
+        "test": "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"
     }
 }

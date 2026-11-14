@@ -90,3 +90,9 @@ configbackup.ini
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# Local test rig
+!/Tests/rig/config.ini
+/Tests/rig/.server.pid
+/Tests/rig/.server.log
+/Tests/rig/baseline.xml

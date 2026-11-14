@@ -1,0 +1,15 @@
+# MySQL for the local test rig. Started by `composer test:up`.
+name: idno-test-rig
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: known_unittest
+    ports:
+      - "33306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
