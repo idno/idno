@@ -88,28 +88,48 @@ namespace Idno\Pages\Session {
          * Validates that a redirect URL is local to this site.
          * Returns the site's home URL if the redirect is external.
          *
-         * @param string $url
+         * @param  string $url
          * @return string
          */
-        private static function sanitizeRedirectUrl($url)
+        public static function sanitizeRedirectUrl($url)
         {
-            if (empty($url)) {
-                return \Idno\Core\Idno::site()->config()->getDisplayURL();
-            }
             $siteUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+            $url     = trim((string) $url);
 
-            // Allow relative paths that don't start with // (protocol-relative)
-            if (strlen($url) > 0 && $url[0] === '/' && (strlen($url) < 2 || $url[1] !== '/')) {
-                return $url;
+            if ($url === '') {
+                return $siteUrl;
             }
 
-            // Allow URLs that start with the site's base URL
-            if (stripos($url, $siteUrl) === 0) {
-                return $url;
+            // Browsers treat backslashes as slashes and strip control characters,
+            // so neither can be trusted in a redirect target
+            if (strpos($url, '\\') !== false || preg_match('/[\x00-\x1F\x7F]/', $url)) {
+                return $siteUrl;
             }
 
-            // Reject everything else
-            return $siteUrl;
+            // Allow site-relative paths, but not protocol-relative URLs (//example.com)
+            if ($url[0] === '/') {
+                return (strlen($url) > 1 && $url[1] === '/') ? $siteUrl : $url;
+            }
+
+            // Otherwise it must be an absolute http(s) URL on this site's own host.
+            // Compare parsed hosts rather than string prefixes, so that
+            // https://example.com.evil.test and https://example.com@evil.test are rejected.
+            $target = parse_url($url);
+            $site   = parse_url($siteUrl);
+            if (empty($target['scheme']) || empty($target['host']) || empty($site['host'])) {
+                return $siteUrl;
+            }
+            if (!in_array(strtolower($target['scheme']), ['http', 'https'], true)) {
+                return $siteUrl;
+            }
+            if (strtolower($target['host']) !== strtolower($site['host'])) {
+                return $siteUrl;
+            }
+            if (($target['port'] ?? null) !== ($site['port'] ?? null)) {
+                return $siteUrl;
+            }
+
+            return $url;
         }
 
     }

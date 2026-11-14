@@ -25,12 +25,16 @@ namespace Idno\Pages\File {
             }
 
             // Enforce access control: if file is attached to an entity, check canRead()
+            $restricted = false;
             if (!empty($object->file['attached_entity'])) {
                 $parentEntity = \Idno\Common\Entity::getByUUID($object->file['attached_entity']);
-                if ($parentEntity && !$parentEntity->canRead()) {
-                    $this->setResponse(403);
-                    echo '';
-                    return;
+                if ($parentEntity) {
+                    if (!$parentEntity->canRead()) {
+                        $this->setResponse(403);
+                        echo '';
+                        return;
+                    }
+                    $restricted = ($parentEntity->access !== 'PUBLIC');
                 }
             }
 
@@ -49,13 +53,20 @@ namespace Idno\Pages\File {
 
             $this->lastModifiedGatekeeper($upload_ts); // 304 if we've not updated the object
 
-            header("Pragma: public");
-            header("Cache-Control: public");
-            header('Expires: ' . date(\DateTime::RFC1123, time() + (86400 * 30))); // Cache files for 30 days!
+            if ($restricted) {
+                // Never let shared caches keep a copy of a file with restricted access
+                header("Cache-Control: private, no-cache");
+            } else {
+                header("Pragma: public");
+                header("Cache-Control: public");
+                header('Expires: ' . date(\DateTime::RFC1123, time() + (86400 * 30))); // Cache files for 30 days!
+            }
             $this->setLastModifiedHeader($upload_ts);
 
             $mimeType = !empty($object->file['mime_type']) ? $object->file['mime_type'] : 'application/octet-stream';
+            $mimeType = preg_replace('/[\r\n]+.*/s', '', (string) $mimeType);
             header('Content-type: ' . $mimeType);
+            header('X-Content-Type-Options: nosniff');
 
             // Force download for MIME types that could execute scripts in the browser
             $safeMimeTypes = [
@@ -64,8 +75,9 @@ namespace Idno\Pages\File {
                 'audio/mpeg', 'audio/ogg', 'audio/wav',
                 'video/mp4', 'video/ogg', 'video/webm',
             ];
-            if (!in_array($mimeType, $safeMimeTypes)) {
+            if (!in_array(strtolower(trim(explode(';', $mimeType)[0])), $safeMimeTypes, true)) {
                 $filename = !empty($this->arguments[1]) ? basename($this->arguments[1]) : 'download';
+                $filename = preg_replace('/[^A-Za-z0-9._-]/', '_', $filename);
                 header('Content-Disposition: attachment; filename="' . $filename . '"');
             }
 

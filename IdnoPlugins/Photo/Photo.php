@@ -87,6 +87,29 @@ namespace IdnoPlugins\Photo {
 
 
         /**
+         * Include thumbnails, so they get the same access control as the photo itself
+         *
+         * @return array
+         */
+        public function getAttachedFileIDs()
+        {
+            $ids = parent::getAttachedFileIDs();
+            foreach ((array) $this->getAttributes() as $key => $value) {
+                if (strpos((string) $key, 'thumbs_') === 0 && is_array($value)) {
+                    foreach ($value as $thumb) {
+                        if (is_array($thumb) && !empty($thumb['id'])) {
+                            $ids[] = (string) $thumb['id'];
+                        }
+                    }
+                } else if (preg_match('/^thumbnail(_[a-z]+)?_id$/', (string) $key) && !empty($value) && is_scalar($value)) {
+                    $ids[] = (string) $value;
+                }
+            }
+
+            return array_values(array_unique($ids));
+        }
+
+        /**
          * Saves changes to this object based on user input
          * @return bool
          */
