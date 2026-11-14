@@ -131,8 +131,27 @@ class ActivityHandler
                 'ActivityPub: Signature crypto verification failed for keyId=' . $sigParams['keyId'] .
                 ' method=' . $method . ' path=' . $path
             );
+            return false;
         }
-        return $result;
+
+        // Verify that the signing key's actor matches the actor claimed in the activity body.
+        // This prevents actor spoofing where attacker signs with their key but claims a different identity.
+        $keyActorUri = preg_replace('/#.*$/', '', $sigParams['keyId']);
+        $bodyActorUri = $activity['actor'] ?? '';
+        if (!empty($bodyActorUri) && $keyActorUri !== $bodyActorUri) {
+            // Allow if the key and body actors are on the same domain (covers some legitimate delegation patterns)
+            $keyHost = parse_url($keyActorUri, PHP_URL_HOST);
+            $bodyHost = parse_url($bodyActorUri, PHP_URL_HOST);
+            if ($keyHost !== $bodyHost) {
+                \Idno\Core\Idno::site()->logging()->warning(
+                    'ActivityPub: Actor spoofing attempt - keyId actor ' . $keyActorUri .
+                    ' does not match body actor ' . $bodyActorUri
+                );
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

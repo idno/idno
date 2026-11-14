@@ -20,6 +20,18 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $scope        = $this->getInput('scope');
 
             if (!empty($me) && parse_url($me, PHP_URL_HOST) == parse_url($user->getIndieAuthURL(), PHP_URL_HOST)) {
+
+                // Validate redirect_uri belongs to same domain as client_id
+                if (!empty($redirect_uri) && !empty($client_id)) {
+                    $redirectHost = parse_url($redirect_uri, PHP_URL_HOST);
+                    $clientHost = parse_url($client_id, PHP_URL_HOST);
+                    if ($redirectHost !== $clientHost) {
+                        $this->setResponse(400);
+                        echo 'redirect_uri must be on the same domain as client_id.';
+                        return;
+                    }
+                }
+
                 $indieauth_codes = $user->indieauth_codes;
                 if (empty($indieauth_codes)) {
                     $indieauth_codes = array();

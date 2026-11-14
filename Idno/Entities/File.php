@@ -295,7 +295,16 @@ namespace Idno\Entities {
         {
             foreach ([$file_name, file_get_contents($file_path)] as $contents) {
                 $contents = strtolower($contents);
+                // Check for script tags and PHP tags
                 if (stripos($contents, '<script') !== false || stripos($contents, '<?php') !== false) {
+                    return false;
+                }
+                // Check for event handler attributes (XSS vectors in SVG/HTML)
+                if (preg_match('/\bon(error|load|click|mouseover|mouseout|focus|blur|submit|change|input|keydown|keyup|keypress)\s*=/i', $contents)) {
+                    return false;
+                }
+                // Check for javascript: URIs
+                if (preg_match('/javascript\s*:/i', $contents)) {
                     return false;
                 }
             }

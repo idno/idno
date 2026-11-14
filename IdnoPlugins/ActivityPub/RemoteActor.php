@@ -27,6 +27,11 @@ class RemoteActor
             return false;
         }
 
+        // SSRF protection: block requests to private/reserved IP ranges
+        if (!\Idno\Core\UrlValidator::isSafeUrl($actorUri)) {
+            return false;
+        }
+
         // Resolve a signing user: prefer the caller-supplied user, fall back to any local user
         if (!$asUser) {
             $asUser = self::getSigningUser();

@@ -68,6 +68,14 @@ namespace Idno\Pages\Webmentions {
                     // Check that source exists, parse it for mf2 content,
                     // and ensure that it genuinely mentions this page
                     if ($webmention_ok) {
+                        // SSRF protection: validate source URL before fetching
+                        if (!\Idno\Core\UrlValidator::isSafeUrl($source)) {
+                            $error      = 'source_not_allowed';
+                            $error_text = 'The source URL is not allowed.';
+                            $webmention_ok = false;
+                        }
+                    }
+                    if ($webmention_ok) {
                         \Idno\Core\Idno::site()->logging()->debug("webmention is ok with target page " . get_class($page));
                         if ($source_response = \Idno\Core\Webservice::get($source)) {
                             if (substr_count($source_response['content'], $target) || $source_response['response'] == 410) {

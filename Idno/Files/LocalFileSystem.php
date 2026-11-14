@@ -53,6 +53,38 @@ namespace Idno\Files {
         }
 
         /**
+         * Merge $metadata into the stored metadata of the file with ID $id
+         *
+         * @param  string $id
+         * @param  array  $metadata
+         * @return bool
+         */
+        public function updateMetadata($id, array $metadata)
+        {
+            $id = (string) $id;
+            if (!preg_match('/^[a-f0-9]{32}$/i', $id)) {
+                return false;
+            }
+
+            $path      = rtrim(\Idno\Core\Idno::site()->config()->uploadpath, ' /') . '/';
+            $data_file = $path . \Idno\Core\Idno::site()->config()->getFileBaseDirName() . '/' . $id[0] . '/' . $id[1] . '/' . $id[2] . '/' . $id[3] . '/' . $id . '.data';
+            if (!file_exists($data_file)) {
+                return false;
+            }
+
+            $existing = json_decode((string) file_get_contents($data_file), true);
+            if (!is_array($existing)) {
+                $existing = [];
+            }
+            $merged = array_merge($existing, $metadata);
+            if ($merged == $existing) {
+                return true;
+            }
+
+            return @file_put_contents($data_file, json_encode($merged), LOCK_EX) !== false;
+        }
+
+        /**
          * Store the file at $file_path with $metadata and $options
          *
          * @param  $file_path

@@ -715,8 +715,10 @@ namespace Idno\Common {
                     $this->_id = $result;
                     $this->uuid = $this->getUUID();
                     \Idno\Core\Idno::site()->db()->saveObject($this);
+                    $this->linkAttachedFiles();
                     \Idno\Core\Idno::site()->events()->triggerEvent('saved', ['object' => $this]);
                 } else {
+                    $this->linkAttachedFiles();
                     \Idno\Core\Idno::site()->events()->triggerEvent('updated', ['object' => $this]);
                 }
 
@@ -945,6 +947,56 @@ namespace Idno\Common {
                 'filename' => $file['filename'],
             ];
             $this->attachments = $attachments;
+        }
+
+        /**
+         * Get the IDs of every stored file that belongs to this entity.
+         * Subclasses that keep extra files (eg thumbnails) should extend this.
+         *
+         * @return array
+         */
+        public function getAttachedFileIDs()
+        {
+            $ids = [];
+            if (!empty($this->attachments) && is_array($this->attachments)) {
+                foreach ($this->attachments as $attachment) {
+                    if (!empty($attachment['_id'])) {
+                        $ids[] = (string) $attachment['_id'];
+                    }
+                }
+            }
+
+            return array_values(array_unique($ids));
+        }
+
+        /**
+         * Record this entity's UUID on each of its stored files, so that the
+         * file endpoint can enforce this entity's access permissions.
+         * Called from save(), once the entity has a UUID.
+         *
+         * @return void
+         */
+        public function linkAttachedFiles()
+        {
+            $uuid = $this->getUUID();
+            if (empty($uuid)) {
+                return;
+            }
+            $ids = $this->getAttachedFileIDs();
+            if (empty($ids)) {
+                return;
+            }
+            $fs = \Idno\Core\Idno::site()->filesystem();
+            if (empty($fs)) {
+                return;
+            }
+            foreach ($ids as $id) {
+                try {
+                    $fs->updateMetadata($id, ['attached_entity' => $uuid]);
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->warning('Could not link file ' . $id . ' to its entity: ' . $e->getMessage());
+                }
+            }
         }
 
         /**
