@@ -7,7 +7,7 @@ declare(strict_types=1);
  * Host header), sets the configured theme in memory only, builds the theme manager and, when
  * asked, logs the test admin on and runs the post-authentication announcement twice.
  *
- * Usage: php boot_theme_fallback.php <configured-theme> anonymous|admin
+ * Usage: php boot_theme_fallback.php <configured-theme> anonymous|admin [pinned]
  */
 
 $root = dirname(__DIR__, 2);
@@ -32,6 +32,9 @@ $routeCount = static function () use ($site): int {
 
 $_SESSION['messages'] = [];
 $site->config()->theme = $configured;
+if (($argv[3] ?? '') === 'pinned') {
+    $site->config()->ini_config['theme'] = $configured; // as if set in config.ini
+}
 $themes = new \Idno\Core\Themes();
 
 if ($who === 'admin') {

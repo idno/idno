@@ -91,9 +91,16 @@ namespace Idno\Core {
         public function announceRetiredTheme()
         {
             $configured = (string)site()->config()->theme;
+            // A theme pinned in config.ini or the environment would override the saved value on
+            // every load, so saving and announcing would repeat forever: leave it alone.
+            // (Same data as SiteSettings::isOverridden('theme'): ini_config is the boot config.)
+            if (array_key_exists('theme', site()->config()->ini_config)) {
+                return;
+            }
             if (!$this->requestHasHostHeader() || !in_array($configured, self::RETIRED, true) || !site()->session()->isAdmin()) {
                 return;
             }
+            // For an admin authenticated by API token the setting is saved but the session notice may never be seen.
             $theme = self::resolve($configured);
             site()->config()->config['theme'] = $theme;
             site()->config()->theme           = $theme;

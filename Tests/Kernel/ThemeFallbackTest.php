@@ -82,12 +82,12 @@ final class ThemeFallbackTest extends IdnoTestCase
      *
      * @return array<string,mixed>
      */
-    private function probe(string $configured, string $who): array
+    private function probe(string $configured, string $who, string $pinned = ''): array
     {
         $root = dirname(__DIR__, 2);
         $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr '
             . escapeshellarg(__DIR__ . '/boot_theme_fallback.php')
-            . ' ' . escapeshellarg($configured) . ' ' . escapeshellarg($who);
+            . ' ' . escapeshellarg($configured) . ' ' . escapeshellarg($who) . ' ' . escapeshellarg($pinned);
 
         $process = proc_open(
             $command,
@@ -134,6 +134,7 @@ final class ThemeFallbackTest extends IdnoTestCase
 
     public function testFallbackIsSavedAndAnnouncedOnceForAnAdmin(): void
     {
+        $this->requireNoStoredTheme();
         $this->admin(); // make sure the test admin exists
         $result = $this->probe('Solo', 'admin');
 
@@ -146,6 +147,7 @@ final class ThemeFallbackTest extends IdnoTestCase
 
     public function testMissingCustomThemeIsLeftAlone(): void
     {
+        $this->requireNoStoredTheme();
         $this->admin();
         $result = $this->probe('SomeCustomTheme', 'admin');
 
@@ -154,5 +156,39 @@ final class ThemeFallbackTest extends IdnoTestCase
         $this->assertSame('', $result['stored_after_first']);
         $this->assertSame('SomeCustomTheme', $result['config_theme_after']);
         $this->assertSame([], $result['messages_second']);
+    }
+
+    public function testPinnedRetiredThemeIsRenderedButNeverSavedOrAnnounced(): void
+    {
+        $this->requireNoStoredTheme();
+        $this->admin();
+        $result = $this->probe('Solo', 'admin', 'pinned');
+
+        $this->assertSame('Twenty26', $result['theme']);
+        $this->assertSame(['Twenty26'], $result['themes_loaded']);
+        $this->assertSame('', $result['stored_after_first'], 'nothing was saved');
+        $this->assertSame([], $result['messages_first']);
+        $this->assertSame([], $result['messages_second'], 'two consecutive loads announce nothing');
+    }
+
+    /**
+     * Wiring guard, not a behaviour test: Idno::__construct() must call announceRetiredTheme()
+     * after tryAuthUser(); without that call the admin save-and-notify path silently does nothing.
+     */
+    public function testConstructorAnnouncesAfterAuthentication(): void
+    {
+        $method = new \ReflectionMethod(\Idno\Core\Idno::class, '__construct');
+        $lines = array_slice(file((string)$method->getFileName()), $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+        $source = implode('', $lines);
+
+        $this->assertStringContainsString('announceRetiredTheme()', $source);
+        $this->assertGreaterThan(strpos($source, 'tryAuthUser()'), strpos($source, 'announceRetiredTheme()'));
+    }
+
+    private function requireNoStoredTheme(): void
+    {
+        if ((string)($this->originalRecord['theme'] ?? '') !== '') {
+            $this->markTestSkipped('The test site has a stored theme; this test needs a site with none.');
+        }
     }
 }
