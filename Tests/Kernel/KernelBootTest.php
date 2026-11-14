@@ -89,6 +89,68 @@ final class KernelBootTest extends TestCase
         );
     }
 
+    public function testLegacyBootLeavesTheLegacyErrorHandlerInPlace(): void
+    {
+        $cacheDir = sys_get_temp_dir() . '/idno-test-legacy-handlers-' . bin2hex(random_bytes(6));
+        $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr '
+            . escapeshellarg(__DIR__ . '/boot_legacy_handlers.php');
+        $env = ['IDNO_CACHE_DIR' => $cacheDir, 'PATH' => (string) getenv('PATH')];
+        foreach (['IDNO_DOMAIN', 'IDNO_PORT'] as $name) {
+            if (getenv($name) !== false) {
+                $env[$name] = (string) getenv($name);
+            }
+        }
+        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__, 2), $env);
+        $this->assertIsResource($process);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $code = proc_close($process);
+        $this->removeDir($cacheDir);
+
+        $this->assertSame(0, $code, "Subprocess failed:\n$stdout\n$stderr");
+        $this->assertSame(['legacy_owns_error_handler' => true], json_decode($stdout, true), "Subprocess output:\n$stdout\n$stderr");
+    }
+
+    public function testCacheDirIncludesTheBuildNumber(): void
+    {
+        $this->kernel = new Kernel('test', true, bootLegacy: false);
+        $build = parse_ini_file($this->kernel->getProjectDir() . '/version.idno')['build'];
+
+        $this->assertStringEndsWith('/test/' . $build, $this->kernel->getCacheDir());
+    }
+
+    public function testCacheDirFallsBackToDevWithoutAVersionFile(): void
+    {
+        $projectDir = sys_get_temp_dir() . '/idno-test-noversion-' . bin2hex(random_bytes(6));
+        mkdir($projectDir);
+        $previous = $_SERVER['IDNO_CACHE_DIR'] ?? null;
+        $_SERVER['IDNO_CACHE_DIR'] = $projectDir . '/cache';
+        try {
+            $kernel = new class ('test', true, false, $projectDir) extends Kernel {
+                public function __construct(string $environment, bool $debug, bool $bootLegacy, private readonly string $dir)
+                {
+                    parent::__construct($environment, $debug, $bootLegacy);
+                }
+
+                public function getProjectDir(): string
+                {
+                    return $this->dir;
+                }
+            };
+
+            $this->assertSame($projectDir . '/cache/test/dev', $kernel->getCacheDir());
+        } finally {
+            if ($previous === null) {
+                unset($_SERVER['IDNO_CACHE_DIR']);
+            } else {
+                $_SERVER['IDNO_CACHE_DIR'] = $previous;
+            }
+            $this->removeDir($projectDir);
+        }
+    }
+
     public function testCompiledContainerContainsNoSecrets(): void
     {
         $kernel = $this->boot();

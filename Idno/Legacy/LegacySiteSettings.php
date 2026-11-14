@@ -20,16 +20,6 @@ final class LegacySiteSettings implements SiteSettings
     {
     }
 
-    /**
-     * Container factory. Idno\Core\Config is not a container service yet, so it is
-     * fetched from the legacy singleton at the moment this service is first used
-     * (never at compile time).
-     */
-    public static function fromLegacySite(BootConfig $bootConfig): self
-    {
-        return new self(\Idno\Core\Idno::site()->config(), $bootConfig);
-    }
-
     public function get(string $key, mixed $default = null): mixed
     {
         return array_key_exists($key, $this->config->config) ? $this->config->config[$key] : $default;

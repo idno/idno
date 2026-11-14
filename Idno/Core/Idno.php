@@ -33,6 +33,8 @@ namespace Idno\Core {
         private $logging;
         /* @var \Idno\Core\Idno $site */
         private static $site;
+        /* @var \Psr\Container\ContainerInterface $container */
+        private static $container;
         private $currentPage;
         private $idno_hub;
         private $helper_robot;
@@ -52,60 +54,23 @@ namespace Idno\Core {
         function init()
         {
             self::$site       = $this;
-            $this->routes     = new PageHandler();
-            $this->dispatcher = new EventDispatcher();
-            $this->config     = new Config();
+            $this->routes     = self::container()->get(PageHandler::class);
+            $this->dispatcher = self::container()->get(EventDispatcher::class);
+            $this->config     = self::container()->get(Config::class);
             if ($this->config->isDefaultConfig()) {
-                header('Location: ./warmup/');
-                exit; // Load the installer
+                // Idno\Legacy\LegacyBootstrap checks this before constructing anything; the
+                // entry points send the redirect to the installer.
+                throw new \Idno\Legacy\NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
             }
 
             // We need to load initial values from the .ini files
             $this->config()->loadIniFiles();
 
-            switch (trim(strtolower($this->config->database))) {
-                case 'mongo':
-                case 'mongodb':
-                    $this->db = new \Idno\Data\Mongo();
-                    break;
-                case 'mysql':
-                    $this->db = new \Idno\Data\MySQL();
-                    break;
-                case 'beanstalk-mysql': // A special instance of MYSQL designed for use with Amazon Elastic Beanstalk
-                    $this->config->dbhost = $_SERVER['RDS_HOSTNAME'];
-                    $this->config->dbuser = $_SERVER['RDS_USERNAME'];
-                    $this->config->dbpass = $_SERVER['RDS_PASSWORD'];
-                    $this->config->dbport = $_SERVER['RDS_PORT'];
-                    if (empty($this->config->dbname)) {
-                        $this->config->dbname = $_SERVER['RDS_DB_NAME'];
-                    }
-                    $this->db = new \Idno\Data\MySQL();
-                    break;
-                default:
-                    $this->db = $this->componentFactory($this->config->database, "Idno\\Core\\DataConcierge", "Idno\\Data\\", "Idno\\Data\\MySQL");
-                    break;
-            }
+            // Services are built by Idno\Legacy\LegacyServiceFactory when first fetched.
+            $this->db         = self::container()->get(DataConcierge::class);
+            $this->filesystem = self::container()->get(\Idno\Files\FileSystem::class);
 
-            switch ($this->config->filesystem) {
-                case 'local':
-                    $this->filesystem = new \Idno\Files\LocalFileSystem();
-                    break;
-                default:
-
-                    if (empty($this->filesystem)) {
-                        if ($fs = $this->db()->getFilesystem()) {
-                            $this->filesystem = $fs;
-                        }
-                    }
-
-                    if (!empty($this->config->filesystem)) {
-                        $this->filesystem = $this->componentFactory($this->config->filesystem, "Idno\\Files\\FileSystem", "Idno\\Files\\", "Idno\\Files\\LocalFileSystem");
-                    }
-
-                    break;
-            }
-
-            $this->logging = new Logging();
+            $this->logging = self::container()->get(Logging::class);
             try {
                 $this->config->load();
             } catch (\Throwable $e) {
@@ -116,17 +81,17 @@ namespace Idno\Core {
                 $this->logging->setLogLevel($this->config->loglevel);
             }
 
-            $this->session      = new Session();
-            $this->actions      = new Actions();
+            $this->session      = self::container()->get(Session::class);
+            $this->actions      = self::container()->get(Actions::class);
             $this->site_details = $this->site_details();
-            $this->template     = $this->componentFactory($this->config->template, Template::class, "Idno\\Core\\", HybridTwigTemplate::class);
-            $this->language     = new Language();
+            $this->template     = self::container()->get(Template::class);
+            $this->language     = self::container()->get(Language::class);
                 $this->language()->register(new GetTextTranslation()); // Register default gettext translations
-            $this->syndication  = new Syndication();
-            $this->reader       = new Reader();
-            $this->helper_robot = new HelperRobot();
-            $this->queue        = $this->componentFactory($this->config->event_queue, "Idno\\Core\\EventQueue", "Idno\\Core\\", "Idno\\Core\\SynchronousQueue");
-            $this->statistics   = $this->componentFactory($this->config->statistics_collector, "Idno\\Stats\\StatisticsCollector", "Idno\\Stats\\", "Idno\\Stats\\DummyStatisticsCollector");
+            $this->syndication  = self::container()->get(Syndication::class);
+            $this->reader       = self::container()->get(Reader::class);
+            $this->helper_robot = self::container()->get(HelperRobot::class);
+            $this->queue        = self::container()->get(EventQueue::class);
+            $this->statistics   = self::container()->get(\Idno\Stats\StatisticsCollector::class);
 
             // Log some page statistics
             \Idno\Stats\Timer::start('script');
@@ -140,11 +105,7 @@ namespace Idno\Core {
             );
 
             // Attempt to create a cache object, making use of support present on the system
-            $cache_default = "Idno\\Caching\\FilesystemCache";
-            if (extension_loaded('apc') && ini_get('apc.enabled')) {
-                $cache_default = "Idno\\Caching\\APCuCache";
-            }
-            $this->cache = $this->componentFactory($this->config->cache, "Idno\\Caching\\Cache", "Idno\\Caching\\", $cache_default);
+            $this->cache = self::container()->get(\Idno\Caching\PersistentCache::class);
 
             // No URL is a critical error, default base fallback is now a warning (Refs #526)
             if (!defined('IDNO_CONSOLE')) {
@@ -287,8 +248,8 @@ namespace Idno\Core {
             // Shared inbox route is registered by the ActivityPub plugin
 
             // These must be loaded last
-            $this->plugins = new Plugins();
-            $this->themes  = new Themes();
+            $this->plugins = self::container()->get(Plugins::class);
+            $this->themes  = self::container()->get(Themes::class);
         }
 
         /**
@@ -759,6 +720,32 @@ namespace Idno\Core {
         static function &site() : ?Idno
         {
             return self::$site;
+        }
+
+        /**
+         * Sets the service container the legacy services are fetched from.
+         * Called by \Idno\Legacy\LegacyBootstrap before the site is constructed.
+         *
+         * @param \Psr\Container\ContainerInterface $c
+         */
+        public static function setContainer(\Psr\Container\ContainerInterface $c): void
+        {
+            self::$container = $c;
+        }
+
+        /**
+         * Returns the service container. New code should have its services injected
+         * rather than fetching them from here.
+         *
+         * @return \Psr\Container\ContainerInterface
+         */
+        public static function container(): \Psr\Container\ContainerInterface
+        {
+            if (self::$container === null) {
+                throw new \LogicException('The service container has not been set: boot Idno through \Idno\Kernel.');
+            }
+
+            return self::$container;
         }
 
         /**

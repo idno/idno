@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Idno\Config\BootConfig;
 use Idno\Config\LegacyConfigLoader;
 use Idno\Config\SiteSettings;
+use Idno\Legacy\LegacyBootstrap;
+use Idno\Legacy\LegacyServiceFactory;
 use Idno\Legacy\LegacySiteSettings;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -21,15 +23,19 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     $projectDir = $builder->getParameter('kernel.project_dir');
 
-    // Only these directories are scanned; the rest of Idno/ is legacy code.
+    // Only these directories are scanned; the rest of Idno/ is legacy code. The excluded
+    // files are wired explicitly below, or are not services at all.
+    $excludes = [
+        'Config' => ['BootConfig.php'],
+        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
+    ];
     foreach (['Kernel', 'Config', 'Http', 'Console', 'Legacy'] as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
         // fileExists() records the check as a container resource, so creating the
         // directory later triggers a recompile in debug mode.
         if ($builder->fileExists($path)) {
             $services->load('Idno\\' . $dir . '\\', $path . '/')
-                // Wired explicitly below.
-                ->exclude([$path . '/BootConfig.php', $path . '/LegacySiteSettings.php']);
+                ->exclude(array_map(static fn (string $file): string => $path . '/' . $file, $excludes[$dir] ?? []));
         }
     }
 
@@ -40,10 +46,49 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->args(['%kernel.project_dir%'])
         ->public();
 
-    // Idno\Core\Config is not a service yet; the factory reads it from the legacy
-    // singleton when SiteSettings is first requested.
+    // The legacy application's services. Each is built at runtime, when first fetched, by
+    // the LegacyServiceFactory method named after its Idno::site() accessor; Idno::init()
+    // fetches them in its original order. They are public because legacy code fetches them
+    // with Idno::container()->get(). No instance or configuration value is ever compiled
+    // into the cached container.
+    $services->set(LegacyServiceFactory::class)->autowire(false)->autoconfigure(false);
+    $legacyServices = [
+        \Idno\Core\PageHandler::class => 'routes',
+        \Idno\Core\EventDispatcher::class => 'events',
+        \Idno\Core\Config::class => 'config',
+        \Idno\Core\DataConcierge::class => 'db',
+        \Idno\Files\FileSystem::class => 'filesystem',
+        \Idno\Core\Logging::class => 'logging',
+        \Idno\Core\Session::class => 'session',
+        \Idno\Core\Actions::class => 'actions',
+        \Idno\Core\Template::class => 'template',
+        \Idno\Core\Language::class => 'language',
+        \Idno\Core\Syndication::class => 'syndication',
+        \Idno\Core\Reader::class => 'reader',
+        \Idno\Core\HelperRobot::class => 'helperRobot',
+        \Idno\Core\EventQueue::class => 'queue',
+        \Idno\Stats\StatisticsCollector::class => 'statistics',
+        \Idno\Caching\PersistentCache::class => 'cache',
+        \Idno\Core\Plugins::class => 'plugins',
+        \Idno\Core\Themes::class => 'themes',
+    ];
+    foreach ($legacyServices as $id => $method) {
+        $services->set($id)
+            ->factory([service(LegacyServiceFactory::class), $method])
+            ->autowire(false)
+            ->autoconfigure(false)
+            ->public();
+    }
+    // Config reads the same BootConfig as the rest of the container.
+    $services->get(\Idno\Core\Config::class)->args([service(BootConfig::class)]);
+
+    $services->set(LegacyBootstrap::class)
+        ->args([service('service_container')])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+
     $services->set(LegacySiteSettings::class)
-        ->factory([LegacySiteSettings::class, 'fromLegacySite'])
-        ->args([service(BootConfig::class)]);
+        ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);
     $services->alias(SiteSettings::class, LegacySiteSettings::class)->public();
 };

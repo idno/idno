@@ -1,0 +1,99 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Idno\Legacy;
+
+use Idno\Config\BootConfig;
+use Psr\Container\ContainerInterface;
+
+/**
+ * Boots the legacy Idno application: what Idno/start.php did after autoloading.
+ *
+ * The console (idno.php, which defines IDNO_CONSOLE) never ran start.php: it only
+ * constructed the core components. The steps start.php added around them are therefore
+ * skipped for the console, so neither entry point changes behaviour.
+ */
+final class LegacyBootstrap
+{
+    private bool $booted = false;
+
+    public function __construct(private readonly ContainerInterface $container)
+    {
+    }
+
+    /**
+     * Idempotent.
+     *
+     * @throws NotInstalledException when there is no configuration yet
+     */
+    public function boot(): void
+    {
+        if ($this->booted) {
+            return;
+        }
+
+        if ($this->container->get(BootConfig::class)->isDefault()) {
+            throw new NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
+        }
+
+        $console = defined('IDNO_CONSOLE');
+
+        if (!$console) {
+            FatalErrorPage::register();
+            $this->defineSubdirectory();
+
+            // Set time limit if we're using less
+            if (ini_get('max_execution_time') < 120 && ini_get('safe_mode')) {
+                set_time_limit(120);
+            }
+
+            // Shims
+            require_once dirname(__DIR__) . '/shims.php';
+
+            // Register the idno-templates folder as the place to look for templates in Bonita
+            \Idno\Core\Bonita\Main::additionalPath(dirname(__DIR__, 2));
+        }
+
+        \Idno\Core\Idno::setContainer($this->container);
+
+        // Init main system classes
+        new \Idno\Core\Idno();
+        new \Idno\Core\Account();
+        new \Idno\Core\Admin();
+        new \Idno\Core\Webfinger();
+        new \Idno\Core\Webmention();
+        new \Idno\Core\PubSubHubbub();
+        if (!$console) {
+            new \Idno\Core\LinkPreview();
+        }
+
+        $this->booted = true;
+    }
+
+    /**
+     * This is a good time to see if we're running in a subdirectory
+     */
+    private function defineSubdirectory(): void
+    {
+        if (!defined('IDNO_UNIT_TEST')) {
+            if (!empty($_SERVER['PHP_SELF'])) {
+                if ($subdir = dirname($_SERVER['PHP_SELF'])) {
+                    if ($subdir != DIRECTORY_SEPARATOR) {
+                        if (substr($subdir, -1) == DIRECTORY_SEPARATOR) {
+                            $subdir = substr($subdir, 0, -1);
+                        }
+                        if (substr($subdir, 0, 1) == DIRECTORY_SEPARATOR) {
+                            $subdir = substr($subdir, 1);
+                        }
+                        $subdir = str_replace(DIRECTORY_SEPARATOR, '/', $subdir);
+                        define('IDNO_SUBDIRECTORY', $subdir);
+                        if (!defined('KNOWN_SUBDIRECTORY')) {
+                            define('KNOWN_SUBDIRECTORY', IDNO_SUBDIRECTORY);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

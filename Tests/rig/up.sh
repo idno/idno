@@ -38,12 +38,14 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
 else
     # error_reporting mirrors a stock production php.ini (what CI's Apache uses). With
     # pedantic_mode on, any reported deprecation (e.g. dynamic properties) is thrown as an exception.
+    # APP_ENV/APP_DEBUG run the kernel in test/debug mode, so a changed service definition
+    # is picked up without clearing the compiled container by hand.
     rm -f "$PID_FILE"
     if nc -z "$HOST" "$PORT" 2>/dev/null; then
         echo "Port $PORT on $HOST is already in use by another process; not starting the web server." >&2
         exit 1
     fi
-    nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
+    APP_ENV=test APP_DEBUG=1 nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
     echo $! > "$PID_FILE"
     started=0
     for _ in $(seq 1 30); do

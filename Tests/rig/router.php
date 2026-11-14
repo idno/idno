@@ -26,6 +26,13 @@ if ($file !== false
 }
 
 chdir($root);
+// The built-in server does not copy the environment into $_SERVER (as Apache's SetEnv or
+// nginx's fastcgi_param would), so pass on the kernel settings up.sh starts it with.
+foreach (['APP_ENV', 'APP_DEBUG'] as $name) {
+    if (!isset($_SERVER[$name]) && getenv($name) !== false) {
+        $_SERVER[$name] = getenv($name);
+    }
+}
 // Idno derives its subdirectory from PHP_SELF, which the built-in server sets to the request path.
 $_SERVER['PHP_SELF'] = '/index.php';
 $_SERVER['SCRIPT_NAME'] = '/index.php';

@@ -40,8 +40,15 @@ if (!$port) {
 }
 $_SERVER['SERVER_PORT'] = $port;
 
+// Boot the kernel in the test environment, in debug mode so that a changed service
+// definition is picked up without clearing the compiled container by hand.
+$_SERVER['APP_ENV'] = 'test';
+$_SERVER['APP_DEBUG'] = '1';
+putenv('APP_ENV=test');
+putenv('APP_DEBUG=1');
+
 try {
-    // Load Idno framework
+    // Load Idno framework (boots the kernel, which boots the legacy application)
     include_once dirname(dirname(__FILE__)) . '/Idno/start.php';
 
 } catch (Exception $ex) {

@@ -47,7 +47,8 @@ Idno/                          Core framework
   Common/                      Base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Singletons & services (Idno, Config, Session, Webmention, etc.)
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
-  Legacy/                      Adapters wrapping legacy objects for the container (LegacySiteSettings)
+  Legacy/                      Bridge between the kernel and the legacy app (LegacyBootstrap,
+                               LegacyServiceFactory, LegacySiteSettings, FatalErrorPage)
   Data/                        Database backends (Mongo.php, MySQL.php, AbstractSQL.php)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in page handlers (Account, Admin, Entity, Feed, etc.)
@@ -57,6 +58,23 @@ ConsolePlugins/                CLI service plugins (EventQueueService, CronServi
 Themes/                        Visual themes (Cherwell, Solo, Kandinsky, etc.)
 Tests/                         Core unit tests
 ```
+
+### Kernel and services
+
+- `Idno/start.php` (web, tests) and `idno.php` (console) boot the Symfony kernel
+  (`Idno\Kernel`, configured in `config/`), which boots the legacy application through
+  `Idno\Legacy\LegacyBootstrap`. HTTP routing is still the legacy router in `index.php`.
+- The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
+  public container services built at runtime, when first fetched, by
+  `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
+  fetches them in its original order, so `Idno::site()->db()` and
+  `$container->get(\Idno\Core\DataConcierge::class)` are the same object.
+- New code should have services injected rather than calling `Idno::site()`.
+- The compiled container lives in `<cache base>/<env>/<build>` (cache base: `IDNO_CACHE_DIR`,
+  else `var/cache`, else a private temp dir; build number from `version.idno`), so an
+  upgrade never reuses an old container. `APP_ENV` / `APP_DEBUG`
+  select the environment (default `prod`, no debug); PHPUnit and the test rig use
+  `test` with debug on.
 
 ### Key design patterns
 
