@@ -523,7 +523,7 @@ namespace Idno\Common {
 
                 /*
                  * TODO: find a more granular way to do this. But some Idno functions depend on
-                 * redirection to other sites (eg an Idno hub).
+                 * redirection to other sites.
 
                 if (!Entity::isLocalUUID($location)) {
                     throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_('Attempted to redirect page to a non local URL.'));

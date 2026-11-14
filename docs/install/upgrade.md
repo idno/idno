@@ -29,3 +29,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 
 !!! warning "New directories: block web access to /var, /config and /bin"
     Idno now keeps its compiled cache and logs in `var/`, and its framework configuration in `config/` and `bin/`. These must not be reachable from the web. The bundled `.htaccess` file and the sample Apache configs in `warmup/webserver-configs/` already deny them. If you maintain your own `.htaccess`, add `RewriteRule ^(var|config|bin)(/|$) - [F]` before the front-controller rewrite. If you use nginx or Caddy, add the same three deny rules yourself. For nginx, add `location ^~ /var/ { deny all; }`, `location ^~ /config/ { deny all; }` and `location ^~ /bin/ { deny all; }`. Use the `^~` form: a plain or regex location would be overridden by your `.php` and static-file locations. For Caddy: `@private path /var/* /config/* /bin/*` followed by `respond @private 403`.
+
+## Removed in 2.0
+
+* Known hub integration removed; the `idno_hub` and `known_hub` settings are ignored.

@@ -6,52 +6,8 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
     use Idno\Entities\User;
     use IdnoPlugins\IndiePub\Pages\IndieAuth\Token;
 
-    use DOMDocument;
-    use DOMXPath;
-
     class Endpoint extends \Idno\Common\Page
     {
-
-        /**
-         * Fetch syndication endpoints from an Idno hub.
-         *
-         * @param array $account_strings flat list of syndication
-         *   IDs
-         * @param array $account_data list of complex account data
-         *   conforming to
-         *   http://micropub.net/draft/#syndication-targets
-         */
-        private function getServiceAccountsFromHub(&$account_strings, &$account_data)
-        {
-            if (\Idno\Core\Idno::site()->hub()) {
-                $result = \Idno\Core\Idno::site()->hub()->makeCall('hub/user/syndication', [
-                    'content_type' => 'note',
-                ]);
-
-                if (!empty($result['content'])) {
-                    $content = $result['content'];
-
-                    // parse value from the inputs with name="syndication[]".
-                    // TODO consider serving JSON in addition to HTML from hub?
-                    $doc = new DOMDocument();
-                    $doc->loadHTML($content);
-                    $toggles = (new DOMXPath($doc))->query('//*[@name="syndication[]"]');
-
-                    foreach ($toggles as $toggle) {
-                        $uid  = $toggle->getAttribute('value');
-
-                        $account = strip_tags($toggle->getAttribute('data-on'));
-                        $service = ucwords(explode('::', $uid, 2)[0]);
-
-                        $name =  "$account on $service";
-                        $name = trim(preg_replace('/\s+/u', ' ', $name));
-
-                        $account_strings[] = $uid;
-                        $account_data[]    = ['uid' => $uid, 'name' => $name];
-                    }
-                }
-            }
-        }
 
         function get($params = array())
         {
@@ -59,7 +15,6 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             if ($query = trim($this->getInput('q'))) {
                 $account_strings = \Idno\Core\Idno::site()->syndication()->getServiceAccountStrings();
                 $account_data    = \Idno\Core\Idno::site()->syndication()->getServiceAccountData();
-                $this->getServiceAccountsFromHub($account_strings, $account_data);
 
                 switch ($query) {
                     case 'config':

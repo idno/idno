@@ -35,7 +35,6 @@ namespace Idno\Pages\Account\Settings {
                     'title'   => \Idno\Core\Idno::site()->config()->getTitle(),
                     'version' => \Idno\Core\Version::version(),
                     'public'  => \Idno\Core\Idno::site()->config()->isPublicSite(),
-                    'hub'     => \Idno\Core\Idno::site()->config()->idno_hub ?? \Idno\Core\Idno::site()->config()->known_hub,
                     'email'   => $email,
                     'message' => $message
                     )

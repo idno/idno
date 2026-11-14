@@ -224,10 +224,6 @@ namespace Idno\Core {
             unset($array['proxy_string']);
             unset($array['proxy_type']);
             unset($array['disable_ssl_verify']);
-            unset($array['idno_hub']);
-            unset($array['idno_hubs']);
-            unset($array['known_hub']);
-            unset($array['known_hubs']);
             unset($array['directloadplugins']);
             unset($array['bypass_fulltext_search']);
             unset($array['filter_shell']);
@@ -261,10 +257,6 @@ namespace Idno\Core {
             $this->feed                      = $this->getDisplayURL() . 'content/all/?_t=rss';
             $this->indieweb_citation         = false;
             $this->indieweb_reference        = false;
-            $this->idno_hub                  = false;
-            $this->idno_hubs                 = [];
-            $this->known_hub                 = false;
-            $this->known_hubs                = [];
             $this->hub                       = 'https://withknown.superfeedr.com/';
             $this->session_path              = session_save_path(); // Session path when not storing sessions in the database
             $this->session_hash_function     = 'sha256'; // Default hash function

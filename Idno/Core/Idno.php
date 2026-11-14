@@ -36,7 +36,6 @@ namespace Idno\Core {
         /* @var \Psr\Container\ContainerInterface $container */
         private static $container;
         private $currentPage;
-        private $idno_hub;
         private $helper_robot;
         private $reader;
         private $cache;
@@ -119,21 +118,6 @@ namespace Idno\Core {
                         . 'Try setting url="http://yourdomain.com/" in your config.ini to remove this message'
                     );
                 }
-            }
-
-            // Connect to an Idno hub if one is listed in the configuration file
-            // (and this isn't the hub!)
-            if (empty(site()->session()->hub_connect)) {
-                site()->session()->hub_connect = 0;
-            }
-            $hub_url = !empty($this->config->idno_hub) ? $this->config->idno_hub : (!empty($this->config->known_hub) ? $this->config->known_hub : false);
-            if (!empty($hub_url)
-                && !substr_count($_SERVER['REQUEST_URI'], '.')
-                && $hub_url != $this->config->url
-            ) {
-                site()->session()->hub_connect     = time();
-                \Idno\Core\Idno::site()->idno_hub = new \Idno\Core\Hub($hub_url);
-                \Idno\Core\Idno::site()->hub()->connect();
             }
 
             User::registerEvents();
@@ -291,16 +275,6 @@ namespace Idno\Core {
         function &filesystem() : ? \Idno\Files\FileSystem
         {
             return $this->filesystem;
-        }
-
-        /**
-         * Returns the current Idno hub
-         *
-         * @return \Idno\Core\Hub
-         */
-        function &hub() : ?Hub
-        {
-            return $this->idno_hub;
         }
 
         /**
