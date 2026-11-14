@@ -29,20 +29,15 @@ if (file_exists(dirname(dirname(__FILE__)) . '/vendor/autoload.php')) {
 }
 
 // Host for the purposes of extra paths
-if (!empty($_SERVER['HTTP_HOST'])) {
-    $host = strtolower($_SERVER['HTTP_HOST']);
-    $host = str_replace('www.', '', $host);
-    define('IDNO_MULTITENANT_HOST', $host);
-    if (!defined('KNOWN_MULTITENANT_HOST')) {
-        define('KNOWN_MULTITENANT_HOST', IDNO_MULTITENANT_HOST);
-    }
-}
+\Idno\Legacy\LegacyBootstrap::defineMultitenantHost();
 
 // Boot the Symfony kernel, which boots the legacy application
-// (see \Idno\Legacy\LegacyBootstrap).
+// (see \Idno\Legacy\LegacyBootstrap). This only boots: HTTP requests are handled by
+// index.php (\Idno\Http\FrontController); code that includes this file gets a booted
+// legacy application.
 try {
-    (new \Idno\Kernel($_SERVER['APP_ENV'] ?? 'prod', (bool) ($_SERVER['APP_DEBUG'] ?? false)))->boot();
+    \Idno\Kernel::fromGlobals()->boot();
 } catch (\Idno\Legacy\NotInstalledException $e) {
-    header('Location: ./warmup/');
+    \Idno\Http\FrontController::notInstalledResponse()->send();
     exit; // Load the installer
 }

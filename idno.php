@@ -30,7 +30,7 @@ function &application()
 
 // Boot Idno: the Symfony kernel boots the legacy application (see \Idno\Legacy\LegacyBootstrap)
 try {
-    (new \Idno\Kernel($_SERVER['APP_ENV'] ?? 'prod', (bool) ($_SERVER['APP_DEBUG'] ?? false)))->boot();
+    \Idno\Kernel::fromGlobals()->boot();
 } catch (\Idno\Legacy\NotInstalledException $e) {
     fwrite(STDERR, "Idno is not installed yet: run the installer (warmup/ in a browser, or warmup/CLI/CLIInstaller.php) first.\n");
     exit(1);

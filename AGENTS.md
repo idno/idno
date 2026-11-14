@@ -42,28 +42,166 @@ php -l path/to/File.php
 
 ## Architecture
 
+Idno is a legacy PHP application running inside a Symfony 8 kernel (`Idno\Kernel`). The
+legacy application (its services, router, page classes and templates) still does almost
+all of the work; it is being moved onto Symfony step by step, keeping the site working.
+
 ```
-Idno/                          Core framework
-  Common/                      Base classes (Entity, Page, Plugin, ContentType, Theme)
-  Core/                        Singletons & services (Idno, Config, Session, Webmention, etc.)
+index.php                      HTTP front controller (every web request)
+idno.php                       Console (CLI) entry point
+Idno/
+  Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
+  Kernel/                      Cache directory and code fingerprint for the compiled container
+  Http/                        FrontController (what index.php runs)
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
-  Legacy/                      Bridge between the kernel and the legacy app (LegacyBootstrap,
-                               LegacyServiceFactory, LegacySiteSettings, FatalErrorPage)
+  Legacy/                      Shims between the kernel and the legacy application (see below)
+  start.php                    Boots the legacy application for code that includes it (tests, scripts)
+  Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
+  Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
   Data/                        Database backends (Mongo.php, MySQL.php, AbstractSQL.php)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
-  Pages/                       Built-in page handlers (Account, Admin, Entity, Feed, etc.)
-
+  Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
+config/                        Kernel configuration: bundles.php, services.php, routes.php,
+                               packages/ (framework, monolog), routes/test/ (test-only routes)
+templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
 Themes/                        Visual themes (Cherwell, Solo, Kandinsky, etc.)
-Tests/                         Core unit tests
+Tests/                         Unit, kernel (Tests/Kernel) and black-box characterisation tests;
+                               Tests/Fixtures holds test-only controllers
 ```
+
+### Entry points
+
+These entry points build the kernel, with `Idno\Kernel::fromGlobals()`: environment from
+`APP_ENV` (default `prod`), debug from `APP_DEBUG` (`1`/`true`/`on`/`yes` are true;
+anything else, or unset, is false), both read from `$_SERVER`.
+
+- **`index.php`** (HTTP): every web request. See the request lifecycle below.
+- **`Idno/start.php`** (boot only): boots the kernel and so the legacy application, and
+  returns. Used by `Tests/_bootstrap.php` and by third-party scripts that need
+  `Idno::site()`. It does not handle a request. On a site with no configuration it sends
+  the same redirect to `./warmup/` as `index.php` and exits.
+- **`idno.php`** (CLI): the Symfony Console application with the legacy console plugins.
+  It defines `IDNO_CONSOLE`, which makes `LegacyBootstrap` skip the web-only boot steps.
+  There is no `bin/console` yet. `known.php` is a backwards-compatibility wrapper that
+  just includes `idno.php`.
+
+These run WITHOUT the kernel or the container, so installer code cannot use container
+services, `Idno::site()` or `Idno::container()`:
+
+- **`warmup/index.php`** (web installer, a separate web entry point that the web server
+  serves directly): loads `vendor/autoload.php` and `warmup/WebInstaller.php` only.
+- **`warmup/CLI/CLIInstaller.php`** (command-line installer): loads `vendor/autoload.php` only.
+
+### Request lifecycle
+
+1. `index.php` checks the PHP version, registers the fatal-error page
+   (`Idno\Legacy\FatalErrorPage`), loads the autoloader, defines the multitenant host,
+   then runs `Idno\Http\FrontController`.
+2. `FrontController::requestFromGlobals()` builds the Symfony `Request` (it never parses
+   the body, so `php://input` stays readable for legacy code), and
+   `FrontController::handle()` calls `Kernel::handle()`.
+3. The kernel boots: the container is built (or loaded from cache) and the legacy
+   application is booted by `Idno\Legacy\LegacyBootstrap` (configuration, `Idno::site()`,
+   plugins, the legacy session — `session_start()` happens here, before routing). A site
+   with no configuration throws `NotInstalledException`, which `FrontController` turns
+   into the redirect to `./warmup/`.
+4. Symfony's router matches the request. Attribute-routed controllers under `Idno\`
+   (and, in the `test` environment only, `Tests\Fixtures\`) are tried first. Anything
+   they do not match goes to the lowest-priority catch-all route `idno_legacy`
+   (`/{path}`, any path, any HTTP method): `Idno\Legacy\LegacyController`.
+5. `LegacyController` returns an `Idno\Legacy\LegacyResponse`: a streamed response that
+   sends no status line and no headers of its own. Symfony's response listeners still
+   modify the object (they set a charset, and `X-Robots-Tag: noindex` in debug mode), but
+   that has no effect, because `LegacyResponse` sends none of it. When `index.php` sends it, its callback runs
+   `Idno\Legacy\LegacyDispatcher::dispatch()`, which is the old `index.php` routing:
+   registers the Toro `404` hook, adds the `/` route under the site's subdirectory if
+   any, and calls `PageHandler::serve()`. The legacy router (Toro) then runs the matching
+   `Idno\Common\Page` class, which reads the superglobals and writes the response itself
+   with `header()`, `http_response_code()`, `echo` and often `exit`.
+6. If the page returns rather than exits, `index.php` calls `Kernel::terminate()`. Pages
+   that `exit` skip it, so nothing essential may live in a `kernel.terminate` listener.
+
+Because legacy pages run while the response is sent (after `Kernel::handle()` has
+returned), an exception thrown by a legacy page is handled by the legacy exception
+handler (`Page::exception()`, the 500 page), never by Symfony. If the kernel fails
+before a controller is chosen because Symfony rejects the request itself (a
+`BadRequestHttpException`: a malformed Host header, an invalid `X-HTTP-Method-Override`),
+`Idno\Legacy\LegacyFallbackListener` logs a warning through the legacy logger
+(`Idno\Core\Logging`, so the site's log level and line format apply; the request-derived
+detail is stripped of control characters and cut to 200 bytes) and hands the request to
+the legacy router, so such requests are served exactly as before. Any other
+exception before routing (a broken route definition, a failing listener) and any
+exception thrown by a new-style controller is handled by Symfony: it is logged and shown
+as Symfony's error page.
+
+### Adding a route (the new way)
+
+New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
+
+- Put a controller class with a `#[Symfony\Component\Routing\Attribute\Route]`
+  attribute in a directory that `config/routes.php` imports attribute routes from
+  (today only `Idno/Legacy/`; add a new directory, e.g. `Idno/Http/Controller/`, to
+  `config/routes.php` AND to `CodeFingerprint::SERVICE_DIRECTORIES` so the container
+  and route cache are rebuilt when it changes).
+- It always wins over the legacy catch-all, whatever the path: that route has priority
+  `-1000`. So a new route also shadows any legacy page at the same path, but only for
+  the HTTP methods it accepts: a request with another method still reaches the legacy
+  router. For GET and HEAD, Symfony also answers the trailing-slash variant of the path
+  (`/foo/` for `/foo`, and the reverse) with a 301 redirect to the route's own path.
+- It must return a `Symfony\Component\HttpFoundation\Response`, and must take its input
+  from the `Request` (inject it as an argument), never from `$_GET`, `$_POST`,
+  `$_SERVER` or other superglobals, and must not call `header()`, `echo` or `exit`.
+- The `Request` is built without parsing the body (see `FrontController::requestFromGlobals()`),
+  so `$request->request` is empty for form-encoded `PUT`, `PATCH` and `DELETE` requests
+  (it is filled for `POST`). Read the raw body with `$request->getContent()` and parse it
+  yourself (e.g. `parse_str()` or `json_decode()`).
+- Do not assume a clean header slate: the legacy application boots before routing, and
+  the headers it has already set (`Set-Cookie`, `Expires`, `P3P`, `Link`, a
+  `Cache-Control`, `Pragma: no-cache`) are sent with your response, alongside the response's own headers
+  (so there can be two `Cache-Control` headers).
+- Mark it `#[AsController]` (or register it as a service) when it needs constructor
+  injection; services are autowired from the container.
+- A test-only route goes in `Tests/Fixtures/` (loaded by `config/routes/test/fixtures.php`
+  in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
+  example, pinned by `Tests/Characterisation/KernelRoutingTest`.
+
+### Legacy pages and routes (still supported)
+
+Existing `Idno\Common\Page` classes keep working unchanged: plugins and core still
+register them with `Idno::site()->routes()->addRoute($pattern, $handlerClass)` (Toro-style
+regex patterns, see `Idno\Core\PageHandler`), and they implement `getContent()` /
+`postContent()` / `putContent()` / `deleteContent()`. They are reached through the
+catch-all described above. Do not add new ones; add a controller instead.
+
+`Idno\Legacy\` is where the shims between the kernel and the legacy application live
+(`LegacyBootstrap`, `LegacyServiceFactory`, `LegacySiteSettings`, `LegacyController`,
+`LegacyDispatcher`, `LegacyResponse`, `LegacyFallbackListener`, `FatalErrorPage`,
+`VerbatimLogFormatter`, `NotInstalledException`). They
+exist to be removed as the legacy code is replaced. New code must not depend on anything
+in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected services.
 
 ### Kernel and services
 
-- `Idno/start.php` (web, tests) and `idno.php` (console) boot the Symfony kernel
-  (`Idno\Kernel`, configured in `config/`), which boots the legacy application through
-  `Idno\Legacy\LegacyBootstrap`. HTTP routing is still the legacy router in `index.php`.
+- `Idno\Kernel` is configured by `config/` (`bundles.php`: FrameworkBundle and
+  MonologBundle; `packages/framework.php`: Symfony's session and error handling are
+  disabled, the legacy application owns both; `services.php`; `routes.php`).
+  `Kernel::boot()` boots the legacy application through `Idno\Legacy\LegacyBootstrap`
+  (pass `bootLegacy: false` to the constructor to boot the kernel alone, as some tests do).
+- The legacy application is a process-wide singleton (`Idno::site()`, `Idno::container()`,
+  constants, shutdown functions). `LegacyBootstrap::boot()` is idempotent per process: once
+  any kernel has booted it, booting another kernel leaves the first one's container and
+  site in place. The trap: every kernel's container still builds its OWN legacy services
+  through `LegacyServiceFactory` (a new, empty `PageHandler`, a new `Config`, ...). Only
+  the first kernel booted in a process has legacy services wired to `Idno::site()`. In a
+  second kernel, anything injected with `PageHandler` or `Config` gets objects that are not
+  `Idno::site()`'s, and `LegacyDispatcher::dispatch()` throws a `\LogicException` rather
+  than serve 404s from an empty route table.
+- `config/services.php` scans `Idno/<dir>` for each directory in
+  `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
+  `Console`, `Legacy`) and registers the classes as autowired, autoconfigured services,
+  except the files it excludes (classes that are not services, or that are wired by hand).
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -83,9 +221,20 @@ Tests/                         Core unit tests
   file changes. So new code in scanned directories should not inherit constructor
   signatures from legacy classes, and if in doubt delete `var/cache/`. When you add a
   directory that the container scans for services OR that `config/routes.php` imports
-  attribute routes from, add it to `CodeFingerprint::SERVICE_DIRECTORIES`. `APP_ENV` /
-  `APP_DEBUG` select the environment (default `prod`, no debug); PHPUnit and the test rig use
-  `test` with debug on.
+  attribute routes from, add it to `CodeFingerprint::SERVICE_DIRECTORIES`. In debug mode
+  the route cache is also revalidated against its source files on each request.
+- PHPUnit and the test rig run the kernel with `APP_ENV=test` and `APP_DEBUG=1`; the
+  default is `prod` without debug.
+- Testing: in PHPUnit, `Tests/_bootstrap.php` (through `Idno/start.php`) has already
+  booted the one kernel that owns the legacy application. To test a new controller
+  in-process, either use `new \Idno\Kernel('test', true, bootLegacy: false)` and call
+  `$kernel->handle(Request::create(...))` (fine as long as the controller does not need
+  legacy services), or test it black-box over HTTP. Do not boot a second kernel with
+  legacy and expect its legacy services to be `Idno::site()`'s (see above). Legacy pages
+  are tested black-box only, through the characterisation harness
+  (`Tests/Characterisation/`, `$this->site()->request(...)` against the test rig).
+- Logging goes through Monolog (`config/packages/monolog.php`): the `idno` channel writes
+  each line verbatim with `error_log()`. See Code Style.
 
 ### Key design patterns
 
@@ -93,15 +242,16 @@ Tests/                         Core unit tests
   Entities are stored as documents (MongoDB) or serialized blobs (MySQL). Key
   methods: `save()`, `delete()`, `getByUUID()`, `getActivityStreamsObjectType()`,
   `getFormattedContent()`.
-- **Plugin system**: Plugins extend `Idno\Common\Plugin`, register routes via
+- **Plugin system**: Plugins extend `Idno\Common\Plugin`, register legacy routes via
   `registerPages()`, and content types via `registerContentTypes()`. They hook
   into events (`saved`, `updated`, `deleted`, `syndicate`, etc.) using the
-  Symfony EventDispatcher.
-- **Page routing**: Toro-style regex routing. Routes registered via
-  `Idno::site()->routes()->addRoute($pattern, $handlerClass)`. Page handlers
-  extend `Idno\Common\Page` with `getContent()` / `postContent()` methods.
-- **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
-  via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
+  Symfony EventDispatcher (wrapped by `Idno\Core\EventDispatcher`).
+- **Template system**: templates are `.tpl.php` files (PHP), found in `templates/<type>/`
+  and in plugin and theme `templates/` directories, and rendered by the Bonita engine
+  (`Idno\Core\Bonita`, through `Idno\Core\DefaultTemplate`). The site's template service
+  is `Idno\Core\HybridTwigTemplate`, which could also render Twig templates, but there are
+  none: Twig is not in use. Templates are extended via `extendTemplate()` to inject plugin
+  UI into shell chrome, admin menus, etc.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
   (`ConsolePlugins/EventQueueService`) polling for pending

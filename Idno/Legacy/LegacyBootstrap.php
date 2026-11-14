@@ -23,7 +23,11 @@ final class LegacyBootstrap
     }
 
     /**
-     * Idempotent.
+     * Idempotent per process: the legacy application is a process-wide singleton
+     * (Idno::site(), Idno::container(), constants, shutdown functions), so once any
+     * kernel has booted it, booting again from this or another kernel does nothing and
+     * leaves the first container in place. (The configuration check still comes first;
+     * it changes nothing.)
      *
      * @throws NotInstalledException when there is no configuration yet
      */
@@ -35,6 +39,12 @@ final class LegacyBootstrap
 
         if ($this->container->get(BootConfig::class)->isDefault()) {
             throw new NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
+        }
+
+        if (\Idno\Core\Idno::site() !== null) {
+            $this->booted = true;
+
+            return;
         }
 
         $console = defined('IDNO_CONSOLE');
@@ -69,6 +79,23 @@ final class LegacyBootstrap
         }
 
         $this->booted = true;
+    }
+
+    /**
+     * Defines IDNO_MULTITENANT_HOST (and KNOWN_MULTITENANT_HOST) from the request's Host
+     * header, for the purposes of extra paths. Called by the web entry points (index.php,
+     * Idno/start.php) before the kernel boots; moved unchanged from Idno/start.php.
+     */
+    public static function defineMultitenantHost(): void
+    {
+        if (!empty($_SERVER['HTTP_HOST']) && !defined('IDNO_MULTITENANT_HOST')) {
+            $host = strtolower($_SERVER['HTTP_HOST']);
+            $host = str_replace('www.', '', $host);
+            define('IDNO_MULTITENANT_HOST', $host);
+            if (!defined('KNOWN_MULTITENANT_HOST')) {
+                define('KNOWN_MULTITENANT_HOST', IDNO_MULTITENANT_HOST);
+            }
+        }
     }
 
     /**

@@ -1,11 +1,11 @@
 <?php
 
 /**
- * Idno index page and router.
- * It all starts here!
+ * Idno front controller: every HTTP request starts here.
  *
- * If you're wondering what this is all about, you could do worse than
- * check out the README.md file.
+ * The Symfony kernel (Idno\Kernel) handles the request. Routes defined the new way
+ * (controllers with #[Route] attributes) are matched first; everything else is served by
+ * the legacy router through Idno\Legacy\LegacyController. See AGENTS.md.
  *
  * Project homepage:    https://idno.co/
  * Project repo:        https://github.com/idno/idno
@@ -25,38 +25,34 @@ if (version_compare(phpversion(), '8.4', '<')) {
     exit;
 }
 
-// Load the idno framework
+// Register a function to catch premature shutdowns and output some friendlier text.
+// Registered first, before the autoloader exists, so that it also covers the kernel boot.
+require_once __DIR__ . '/Idno/Legacy/FatalErrorPage.php';
+\Idno\Legacy\FatalErrorPage::register();
 
-require_once dirname(__FILE__) . '/Idno/start.php';
+// Load external libraries
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    include_once __DIR__ . '/vendor/autoload.php';
+} else {
+    http_response_code(500);
 
-// Get page routes
+    $title = 'Installation incomplete';
+    $heading = 'Your Idno installation is incomplete!';
+    $body = '<p>It looks like you\'re running Idno directly from a GitHub checkout. You need to run "composer install" to fetch other required packages!</p>';
+    $helplink = "<a href=\"http://docs.idno.co/en/latest/install/instructions/\">Read installation instructions.</a>";
 
-$routes = \Idno\Core\Idno::site()->routes();
-
-// Get subdirectory
-
-$url = \Idno\Core\Idno::site()->config()->getURL();
-$path = parse_url($url, PHP_URL_PATH);
-if (substr($path, -1) == '/') {
-    $path = substr($path, 0, -1);
+    include __DIR__ . '/statics/error-page.php';
+    exit();
 }
-if (!empty($path)) {
-    if (!empty($routes['/'])) {
-        $routes[$path . '/'] = $routes['/'];
-    }
-}
 
-// Manage routing
+// Host for the purposes of extra paths
+\Idno\Legacy\LegacyBootstrap::defineMultitenantHost();
 
-\Idno\Core\PageHandler::hook(
-    '404', function ($params = array()) {
-        http_response_code(404);
-        $t = \Idno\Core\Idno::site()->template();
-
-        // Take over page detection
-        \Idno\Core\Idno::site()->template()->autodetectTemplateType();
-
-        (new \Idno\Pages\Homepage())->noContent();
-    }
-);
-\Idno\Core\PageHandler::serve($routes);
+// Handle the request. FrontController::handle() boots the kernel, which boots the legacy
+// application (Idno\Legacy\LegacyBootstrap); a site with no configuration yet is
+// redirected to the installer.
+$kernel   = \Idno\Kernel::fromGlobals();
+$request  = \Idno\Http\FrontController::requestFromGlobals();
+$response = \Idno\Http\FrontController::handle($kernel, $request);
+$response->send();
+$kernel->terminate($request, $response);

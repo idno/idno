@@ -22,6 +22,22 @@ class Kernel extends BaseKernel
         parent::__construct($environment, $debug);
     }
 
+    /**
+     * The kernel the entry points (index.php, Idno/start.php, idno.php) run: environment
+     * from APP_ENV (default "prod"), debug from APP_DEBUG ("1", "true", "on", "yes" are
+     * true; anything else, or unset, is false). Both are read from $_SERVER.
+     */
+    public static function fromGlobals(): self
+    {
+        $environment = $_SERVER['APP_ENV'] ?? '';
+        $debug = $_SERVER['APP_DEBUG'] ?? false;
+
+        return new self(
+            is_string($environment) && $environment !== '' ? $environment : 'prod',
+            filter_var($debug, FILTER_VALIDATE_BOOLEAN)
+        );
+    }
+
     public function getProjectDir(): string
     {
         return dirname(__DIR__);

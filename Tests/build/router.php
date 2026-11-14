@@ -40,6 +40,14 @@ if ($path !== '/' && is_file($root . $path) && !preg_match('#\.php$#', $path)) {
     return false;
 }
 
+// The built-in server does not copy the environment into $_SERVER (as Apache's SetEnv or
+// nginx's fastcgi_param would), so pass on the kernel settings the server was started with.
+foreach (['APP_ENV', 'APP_DEBUG'] as $name) {
+    if (!isset($_SERVER[$name]) && getenv($name) !== false) {
+        $_SERVER[$name] = getenv($name);
+    }
+}
+
 // Everything else goes through the front controller. The built-in server sets
 // PHP_SELF and SCRIPT_NAME to the requested path; Apache would set them to
 // /index.php, and Idno uses PHP_SELF to work out whether it is in a subdirectory.

@@ -29,7 +29,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // code. The excluded files are wired explicitly below, or are not services at all.
     $excludes = [
         'Config' => ['BootConfig.php'],
-        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
+        // Static methods only, used by index.php before the container exists.
+        'Http' => ['FrontController.php'],
+        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;

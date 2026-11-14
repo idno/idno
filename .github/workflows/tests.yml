@@ -101,7 +101,11 @@ jobs:
           sudo systemctl stop apache2 2>/dev/null || true
           sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
 
-          PHP_CLI_SERVER_WORKERS=8 nohup php -S 0.0.0.0:80 -t "${{ github.workspace }}" \
+          # APP_ENV/APP_DEBUG: run the kernel in the test environment (as PHPUnit does),
+          # which also enables the test-only routes in Tests/Fixtures; Tests/build/router.php
+          # copies them into $_SERVER. var/ (the compiled container) is in the workspace,
+          # which this user owns, so the server can write it.
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S 0.0.0.0:80 -t "${{ github.workspace }}" \
             "${{ github.workspace }}/Tests/build/router.php" \
             > "${{ github.workspace }}/php-server.log" 2>&1 &
 
