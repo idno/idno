@@ -35,6 +35,19 @@ namespace Tests\Characterisation {
             $this->assertFalse($this->statusExists($body . '-unknown'));
         }
 
+        public function testFollowerExistsFindsStoredFollowerOnly(): void
+        {
+            $actor    = 'https://remote.invalid/u/' . uniqid();
+            $follower = new \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower();
+            $this->registerFixture($follower);
+            $follower->actor_uri = $actor;
+            $follower->user_uuid = $this->user()->getUUID();
+            $follower->save(true);
+
+            $this->assertTrue($this->followerExists($actor));
+            $this->assertFalse($this->followerExists($actor . '-unknown'));
+        }
+
         public function testFailingFixtureCleanupDoesNotStopOthersAndIsReported(): void
         {
             $broken = new class extends \IdnoPlugins\Status\Status {

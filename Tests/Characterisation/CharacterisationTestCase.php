@@ -87,6 +87,15 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * Whether an ActivityPub follower record exists for this remote actor
+         * (any local user). Lets a test prove a request did not create one.
+         */
+        protected function followerExists(string $actorUri): bool
+        {
+            return \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower::getOne(['actor_uri' => $actorUri]) !== false;
+        }
+
+        /**
          * Strip the site's base URL from an absolute URL.
          */
         protected function path(string $absoluteUrl): string
