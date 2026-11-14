@@ -8,6 +8,8 @@ Upgrading Idno is designed to be very simple.
 
 That's it!
 
+Upgrades need no cache clearing, because the compiled cache is keyed by the code it was built from; old directories under `var/cache/` can be deleted at any time.
+
 !!! note "GitHub users"
     If you're using a direct checkout from GitHub (rather than using one of the prepared packages), you need to update any dependencies using ```composer update```
 

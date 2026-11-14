@@ -11,8 +11,15 @@ final class KernelBootTest extends TestCase
 {
     private ?Kernel $kernel = null;
 
+    /** @var array<string, int> */
+    private array $mtimesToRestore = [];
+
     protected function tearDown(): void
     {
+        foreach ($this->mtimesToRestore as $file => $mtime) {
+            touch($file, $mtime);
+        }
+        $this->mtimesToRestore = [];
         $this->kernel?->shutdown();
         $this->kernel = null;
     }
@@ -118,7 +125,92 @@ final class KernelBootTest extends TestCase
         $this->kernel = new Kernel('test', true, bootLegacy: false);
         $build = parse_ini_file($this->kernel->getProjectDir() . '/version.idno')['build'];
 
-        $this->assertStringEndsWith('/test/' . $build, $this->kernel->getCacheDir());
+        $this->assertStringContainsString('/test/' . $build . '-', $this->kernel->getCacheDir());
+    }
+
+    public function testCacheDirEndsWithBuildAndFingerprint(): void
+    {
+        $kernel = new Kernel('test', true, bootLegacy: false);
+        $build = parse_ini_file($kernel->getProjectDir() . '/version.idno')['build'];
+
+        $this->assertSame(1, preg_match('/^' . preg_quote((string) $build, '/') . '-[0-9a-f]{12}$/', basename($kernel->getCacheDir())));
+    }
+
+    public function testCacheDirIsMemoisedPerInstance(): void
+    {
+        $projectDir = sys_get_temp_dir() . '/idno-test-memo-' . bin2hex(random_bytes(6));
+        mkdir($projectDir . '/config', 0777, true);
+        $input = $projectDir . '/config/services.php';
+        file_put_contents($input, '<?php return 1;');
+        touch($input, 1_700_000_000);
+        $previous = $_SERVER['IDNO_CACHE_DIR'] ?? null;
+        $_SERVER['IDNO_CACHE_DIR'] = $projectDir . '/cache';
+        try {
+            $make = static fn (): Kernel => new class ('test', true, false, $projectDir) extends Kernel {
+                public function __construct(string $environment, bool $debug, bool $bootLegacy, private readonly string $dir)
+                {
+                    parent::__construct($environment, $debug, $bootLegacy);
+                }
+
+                public function getProjectDir(): string
+                {
+                    return $this->dir;
+                }
+            };
+
+            $kernel = $make();
+            $first = $kernel->getCacheDir();
+
+            // CodeFingerprint stats files directly; clearstatcache() here makes sure the
+            // difference below comes from the kernel's memoisation, not from stale stat data.
+            touch($input, 1_700_000_999);
+            clearstatcache();
+
+            $this->assertSame($first, $kernel->getCacheDir());
+            $this->assertNotSame($first, $make()->getCacheDir());
+        } finally {
+            if ($previous === null) {
+                unset($_SERVER['IDNO_CACHE_DIR']);
+            } else {
+                $_SERVER['IDNO_CACHE_DIR'] = $previous;
+            }
+            $this->removeDir($projectDir);
+        }
+    }
+
+    public function testEditingAScannedFileChangesTheCompiledContainerDirectory(): void
+    {
+        $file = dirname(__DIR__, 2) . '/Idno/Kernel/CacheDirResolver.php';
+        $original = filemtime($file);
+        $this->assertNotFalse($original);
+        $this->mtimesToRestore[$file] = $original;
+
+        $first = $this->cacheDirInCleanProcess();
+        touch($file, $original + 100);
+        clearstatcache();
+        $second = $this->cacheDirInCleanProcess();
+
+        $this->assertNotSame($first, $second);
+        $this->assertSame(1, preg_match('/-[0-9a-f]{12}$/', $first));
+        $this->assertSame(1, preg_match('/-[0-9a-f]{12}$/', $second));
+    }
+
+    private function cacheDirInCleanProcess(): string
+    {
+        $base = sys_get_temp_dir() . '/idno-test-fp-' . bin2hex(random_bytes(6));
+        $command = 'IDNO_CACHE_DIR=' . escapeshellarg($base) . ' ' . escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 '
+            . escapeshellarg(__DIR__ . '/boot_cache_dir.php') . ' 2>&1';
+        $output = [];
+        $code = 0;
+        exec($command, $output, $code);
+        $this->removeDir($base);
+
+        $this->assertSame(0, $code, 'Subprocess failed: ' . implode("\n", $output));
+        $decoded = json_decode(implode("\n", $output), true);
+        $this->assertIsArray($decoded, 'Subprocess output was not JSON: ' . implode("\n", $output));
+        $this->assertTrue($decoded['booted']);
+
+        return $decoded['cache_dir'];
     }
 
     public function testCacheDirFallsBackToDevWithoutAVersionFile(): void
@@ -140,7 +232,8 @@ final class KernelBootTest extends TestCase
                 }
             };
 
-            $this->assertSame($projectDir . '/cache/test/dev', $kernel->getCacheDir());
+            $this->assertSame($projectDir . '/cache/test', dirname($kernel->getCacheDir()));
+            $this->assertSame(1, preg_match('/^dev-[0-9a-f]{12}$/', basename($kernel->getCacheDir())));
         } finally {
             if ($previous === null) {
                 unset($_SERVER['IDNO_CACHE_DIR']);

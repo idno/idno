@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Idno\Config\BootConfig;
 use Idno\Config\LegacyConfigLoader;
 use Idno\Config\SiteSettings;
+use Idno\Kernel\CodeFingerprint;
 use Idno\Legacy\LegacyBootstrap;
 use Idno\Legacy\LegacyServiceFactory;
 use Idno\Legacy\LegacySiteSettings;
@@ -23,13 +24,14 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     $projectDir = $builder->getParameter('kernel.project_dir');
 
-    // Only these directories are scanned; the rest of Idno/ is legacy code. The excluded
-    // files are wired explicitly below, or are not services at all.
+    // Only the directories in CodeFingerprint::SERVICE_DIRECTORIES are scanned (the same list
+    // keys the cache directory, so it is not repeated here); the rest of Idno/ is legacy
+    // code. The excluded files are wired explicitly below, or are not services at all.
     $excludes = [
         'Config' => ['BootConfig.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
-    foreach (['Kernel', 'Config', 'Http', 'Console', 'Legacy'] as $dir) {
+    foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
         // fileExists() records the check as a container resource, so creating the
         // directory later triggers a recompile in debug mode.

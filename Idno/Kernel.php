@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno;
 
 use Idno\Kernel\CacheDirResolver;
+use Idno\Kernel\CodeFingerprint;
 use Idno\Legacy\LegacyBootstrap;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
@@ -36,12 +37,14 @@ class Kernel extends BaseKernel
     }
 
     /**
-     * Includes the Idno build number, so that an upgrade made by overwriting the files
-     * never reuses a container compiled for the previous version.
+     * Includes the Idno build number and a fingerprint of the container's input files, so
+     * that overwriting the files, or changing code without changing the build number,
+     * never reuses a container compiled from different code.
      */
     public function getCacheDir(): string
     {
-        return $this->cacheDir ??= $this->baseDir() . '/' . $this->environment . '/' . $this->buildNumber();
+        return $this->cacheDir ??= $this->baseDir() . '/' . $this->environment . '/' . $this->buildNumber()
+            . '-' . CodeFingerprint::compute($this->getProjectDir());
     }
 
     public function getLogDir(): string

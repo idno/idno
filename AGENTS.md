@@ -70,10 +70,15 @@ Tests/                         Core unit tests
   fetches them in its original order, so `Idno::site()->db()` and
   `$container->get(\Idno\Core\DataConcierge::class)` are the same object.
 - New code should have services injected rather than calling `Idno::site()`.
-- The compiled container lives in `<cache base>/<env>/<build>` (cache base: `IDNO_CACHE_DIR`,
-  else `var/cache`, else a private temp dir; build number from `version.idno`), so an
-  upgrade never reuses an old container. `APP_ENV` / `APP_DEBUG`
-  select the environment (default `prod`, no debug); PHPUnit and the test rig use
+- The compiled container lives in `<cache base>/<env>/<build>-<fingerprint>` (cache base:
+  `IDNO_CACHE_DIR`, else `var/cache`, else a private temp dir; build number from
+  `version.idno`). The fingerprint (`Idno\Kernel\CodeFingerprint`) hashes the path, size
+  and mtime of `version.idno`, `config/*.php` (not `reference.php`), the PHP files in the
+  directories the container scans, and `vendor/composer/installed.php`, so it changes
+  whenever those change and there is never a need to clear the cache after changing code.
+  When adding a NEW directory that the container scans for services, add it to
+  `CodeFingerprint::SERVICE_DIRECTORIES`, which `config/services.php` also reads. `APP_ENV` /
+  `APP_DEBUG` select the environment (default `prod`, no debug); PHPUnit and the test rig use
   `test` with debug on.
 
 ### Key design patterns
