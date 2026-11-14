@@ -146,10 +146,43 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
 
         $this->assertSame($web['plugins_stored'], $console['plugins_stored']);
         $this->assertSame($web['themes_stored'], $console['themes_stored']);
-        $this->assertSame(['ActivityPub', 'Bridgy', 'Checkin', 'Event', 'IndiePub', 'Like', 'Media', 'Photo', 'StandardSiteSync', 'StaticPages', 'Status', 'Styles', 'Text', 'Webhooks'], $web['plugins_stored']);
+        // Derived from the filesystem and the configuration, not hard-coded: the test rig and
+        // CI (Tests/build/config_*.ini) configure their own plugin lists.
+        $this->assertSame($this->pluginsUnderTheProjectRoot(), $web['plugins_stored']);
         $this->assertSame(['', 'Twenty26'], $web['themes_stored']);
-        $this->assertSame(['Status', 'Text', 'Photo', 'IndiePub', 'ActivityPub', 'Like', 'Checkin', 'Media', 'Event', 'Bridgy', 'StaticPages', 'Webhooks'], $web['plugins_loaded'], 'load order');
-        $this->assertSame($web['plugins_loaded'], $console['plugins_loaded']);
+
+        $configured = (array) \Idno\Core\Idno::site()->config()->plugins;
+        $expectedLoaded = array_values(array_intersect(array_unique($configured), $web['plugins_stored']));
+        $loaded = $web['plugins_loaded'];
+        sort($expectedLoaded);
+        sort($loaded);
+        $this->assertNotEmpty($loaded);
+        $this->assertSame($expectedLoaded, $loaded, 'the configured plugins that exist under the project root');
+        $this->assertSame($web['plugins_loaded'], $console['plugins_loaded'], 'same plugins, in the same load order');
+    }
+
+    /**
+     * The plugin directories under the project root's IdnoPlugins/ (those with a plugin.ini or
+     * package.json, minus any "antiplugins"), sorted as Plugins::getStored() sorts them.
+     *
+     * @return list<string>
+     */
+    private function pluginsUnderTheProjectRoot(): array
+    {
+        $root = dirname(__DIR__, 2) . '/IdnoPlugins';
+        $denied = (array) \Idno\Core\Idno::site()->config()->antiplugins;
+        $plugins = [];
+        foreach (scandir($root) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..' || !is_dir($root . '/' . $entry) || in_array($entry, $denied, true)) {
+                continue;
+            }
+            if (is_file($root . '/' . $entry . '/plugin.ini') || is_file($root . '/' . $entry . '/package.json')) {
+                $plugins[$entry] = true;
+            }
+        }
+        ksort($plugins);
+
+        return array_keys($plugins);
     }
 
     /**

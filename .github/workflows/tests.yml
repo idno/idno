@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: ['*']
   push:
-    branches: [dev, stable]
+    branches: [dev, stable, '2.x']
 
 jobs:
   phpcs:
@@ -97,7 +97,9 @@ jobs:
           # binary as the tests. This avoids depending on which mod_php packages
           # the runner's Ubuntu release happens to ship.
 
-          # The tests expect the site on port 80; let the runner user bind it
+          # The tests expect the site at http://localhost/ (PHPUnit's default IDNO_DOMAIN and
+          # IDNO_PORT, and the url set in Tests/build/config_*.ini); let the runner user bind port 80.
+          # Bind to localhost, not 0.0.0.0: the built-in server sets SERVER_NAME to the bind address.
           sudo systemctl stop apache2 2>/dev/null || true
           sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
 
@@ -105,7 +107,7 @@ jobs:
           # which also enables the test-only routes in Tests/Fixtures; Tests/build/router.php
           # copies them into $_SERVER. var/ (the compiled container) is in the workspace,
           # which this user owns, so the server can write it.
-          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S 0.0.0.0:80 -t "${{ github.workspace }}" \
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
             "${{ github.workspace }}/Tests/build/router.php" \
             > "${{ github.workspace }}/php-server.log" 2>&1 &
 
