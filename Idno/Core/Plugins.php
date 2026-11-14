@@ -168,31 +168,6 @@ namespace Idno\Core {
                     }
                 }
             }
-            if (defined('IDNO_MULTITENANT_HOST')) {
-                $host = IDNO_MULTITENANT_HOST;
-                if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins')) {
-                    if ($folders = scandir(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins')) {
-                        foreach ($folders as $folder) {
-                            if ($folder != '.' && $folder != '..') {
-                                if ($this->isAllowed($folder)) {
-
-                                    // See if we can load some values from a package.json
-                                    if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins/' . $folder . '/package.json')) {
-                                        $plugins[$folder]= [];
-                                        $plugins[$folder]['Plugin description'] = array_replace_recursive($plugins[$folder], json_decode(file_get_contents(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins/' . $folder . '/package.json'), true));
-                                    }
-
-                                    // Get stuff from plugin.ini
-                                    if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins/' . $folder . '/plugin.ini')) {
-                                        $plugins[$folder]= [];
-                                        $plugins[$folder] = array_replace_recursive($plugins[$folder], $plugins[$folder] = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins/' . $folder . '/plugin.ini', true));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
             ksort($plugins);
 
             return $plugins;
@@ -317,16 +292,11 @@ namespace Idno\Core {
         public function exists($plugin)
         {
 
-            if (defined('IDNO_MULTITENANT_HOST')) {
-                $host = IDNO_MULTITENANT_HOST;
-            }
-
             if (!preg_match('/^[a-zA-Z0-9]+$/', $plugin)) {
                 return false;
             }
             if ((file_exists(\Idno\Core\Idno::site()->config()->path . '/IdnoPlugins/' . $plugin))
                 || (!empty(\Idno\Core\Idno::site()->config()->external_plugin_path) && file_exists(\Idno\Core\Idno::site()->config()->external_plugin_path . '/IdnoPlugins/' . $plugin))
-                || (!empty($host) && file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/IdnoPlugins/' . $plugin))
             ) {
                  return true;
             }

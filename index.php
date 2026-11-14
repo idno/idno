@@ -45,9 +45,6 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
     exit();
 }
 
-// Host for the purposes of extra paths
-\Idno\Legacy\LegacyBootstrap::defineMultitenantHost();
-
 // Handle the request. FrontController::handle() boots the kernel, which boots the legacy
 // application (Idno\Legacy\LegacyBootstrap); a site with no configuration yet is
 // redirected to the installer.

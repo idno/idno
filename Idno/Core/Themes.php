@@ -24,12 +24,8 @@ namespace Idno\Core {
 
             if (!empty(site()->config()->theme)) {
                 $this->theme = site()->config()->theme;
-                if (defined('IDNO_MULTITENANT_HOST')) {
-                    $host = IDNO_MULTITENANT_HOST;
-                    if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes/' . $this->theme)) {
-                        \Idno\Core\Bonita\Main::additionalPath(site()->config()->path . '/hosts/' . $host . '/Themes/' . $this->theme);
-                        $config = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes/' . $this->theme . '/theme.ini', true);
-                    } else if (file_exists(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini')) {
+                if ($this->requestHasHostHeader()) {
+                    if (file_exists(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini')) {
                         \Idno\Core\Bonita\Main::additionalPath(site()->config()->path . '/Themes/' . $this->theme);
                         $config = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini', true);
                     }
@@ -66,6 +62,21 @@ namespace Idno\Core {
         }
 
         /**
+         * Whether this process is serving a request that carries a Host header.
+         *
+         * Preserved legacy condition: the configured theme is loaded only in that case, so a
+         * theme is loaded for web requests but not on the console, which has no Host header.
+         * (It used to be tested by whether a multi-tenant host constant, defined from the Host
+         * header, existed.)
+         *
+         * @return bool
+         */
+        private function requestHasHostHeader()
+        {
+            return !empty($_SERVER['HTTP_HOST']);
+        }
+
+        /**
          * Retrieves the array of loaded theme objects
          *
          * @return array
@@ -91,22 +102,6 @@ namespace Idno\Core {
                                 $themes[$folder]                              = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $folder . '/theme.ini', true);
                                 $themes[$folder]['Theme description']['path'] = \Idno\Core\Idno::site()->config()->path . '/Themes/' . $folder . '/';
                                 $themes[$folder]['Theme description']['url']  = \Idno\Core\Idno::site()->config()->getURL() . 'Themes/' . $folder . '/';
-                            }
-                        }
-                    }
-                }
-            }
-            if (defined('IDNO_MULTITENANT_HOST')) {
-                $host = IDNO_MULTITENANT_HOST;
-                if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes')) {
-                    if ($folders = scandir(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes')) {
-                        foreach ($folders as $folder) {
-                            if ($folder != '.' && $folder != '..') {
-                                if (file_exists(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes/' . $folder . '/theme.ini')) {
-                                    $themes[$folder]                              = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes/' . $folder . '/theme.ini', true);
-                                    $themes[$folder]['Theme description']['path'] = \Idno\Core\Idno::site()->config()->path . '/hosts/' . $host . '/Themes/' . $folder . '/';
-                                    $themes[$folder]['Theme description']['url']  = \Idno\Core\Idno::site()->config()->getURL() . 'hosts/' . $host . '/Themes/' . $folder . '/';
-                                }
                             }
                         }
                     }

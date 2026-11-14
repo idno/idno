@@ -34,7 +34,6 @@ namespace Idno\Core {
             'hiddenplugins'          => array(),
             'items_per_page'         => 10, // Default items per page
             'experimental'           => false, // A common way to enable experimental functions still in development
-            'multitenant'            => false,
             'default_config'         => true, // This is a trip-switch - changed to false if configuration is loaded from an ini file / the db
             'loglevel'               => 5,
             'multi_syndication'      => true,
@@ -271,22 +270,6 @@ namespace Idno\Core {
 
             if (substr($this->host, 0, 4) == 'www.') {
                 $this->host = substr($this->host, 4);
-            }
-
-            if ($this->multitenant) {
-                $dbname       = $this->dbname;
-                $host         = $this->host;
-                $this->dbname = preg_replace('/[^0-9a-z\.\-\_]/i', '', $host);
-
-                // Idno now defaults to not including periods in database names for multitenant installs. Add
-                // 'multitenant_periods = true' to config.ini if you wish to override this.
-                if (empty($this->multitenant_periods)) {
-                    $this->dbname = str_replace('.', '_', $this->dbname);
-                }
-
-                if (empty($this->dbname)) {
-                    $this->dbname = $dbname;
-                }
             }
 
             if (!empty($this->initial_plugins)) {

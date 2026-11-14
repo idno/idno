@@ -100,3 +100,6 @@ configbackup.ini
 /var/*
 !/var/.htaccess
 /config/reference.php
+
+# Per-host plugin/theme directories were removed; RemovedFeaturesTest creates one transiently
+/hosts/

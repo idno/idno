@@ -7,12 +7,6 @@ However, sometimes you may wish to add values here.
 
 Config.ini files use the [INI file format](https://en.wikipedia.org/wiki/INI_file).
 
-!!! note "Per-domain configuration"
-    You can also use ```yourdomain.ini```, in addition to ```config.ini```: for example, if your site was stored at yourdomain.com, you could have a supplemental
-    config.ini file at yourdomain.com.ini. This is most useful in combination with the **multitenant** setting. 
-
-    Per domain configuration files are loaded after ```config.ini``` is processed.
-
 ## Example config.ini file
 
     database = 'MySQL'
@@ -105,13 +99,6 @@ Triggers whether plugins should allow site users to connect more than one syndic
 by default.
 
     multi_syndication = false
-
-**multitenant**<br>
-Allows you to power more than one Idno site from the same installation. If this is the case, Idno will expect the
-database name to be the site host. "www" is always stripped, so for example, if the website address was www.yourdomain.com,
-Idno would expect the database name to be yourdomain.com. In most cases, you should leave the default value here.
-
-    multitenant = true
 
 **prerequisiteplugins[]**<br>
 A list of plugins that must be loaded before all other plugins. Like alwaysplugins, these will always be loaded, and

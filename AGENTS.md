@@ -76,7 +76,9 @@ config/                        Kernel configuration: bundles.php, services.php, 
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
-Themes/                        Visual themes (Cherwell, Solo, Kandinsky, etc.)
+Themes/                        Visual themes (Cherwell, Solo, Kandinsky, etc.); plugins and themes
+                               are discovered only in IdnoPlugins/ and Themes/ under the project root
+                               (no per-host directories)
 Tests/                         Unit, kernel (Tests/Kernel) and black-box characterisation tests;
                                Tests/Fixtures holds test-only controllers
 ```
@@ -111,7 +113,7 @@ services, `Idno::site()` or `Idno::container()`:
 ### Request lifecycle
 
 1. `index.php` checks the PHP version, registers the fatal-error page
-   (`Idno\Legacy\FatalErrorPage`), loads the autoloader, defines the multitenant host,
+   (`Idno\Legacy\FatalErrorPage`), loads the autoloader,
    then runs `Idno\Http\FrontController`.
 2. `FrontController::requestFromGlobals()` builds the Symfony `Request` (it never parses
    the body, so `php://input` stays readable for legacy code), and

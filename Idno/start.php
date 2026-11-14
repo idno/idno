@@ -28,9 +28,6 @@ if (file_exists(dirname(dirname(__FILE__)) . '/vendor/autoload.php')) {
     exit();
 }
 
-// Host for the purposes of extra paths
-\Idno\Legacy\LegacyBootstrap::defineMultitenantHost();
-
 // Boot the Symfony kernel, which boots the legacy application
 // (see \Idno\Legacy\LegacyBootstrap). This only boots: HTTP requests are handled by
 // index.php (\Idno\Http\FrontController); code that includes this file gets a booted

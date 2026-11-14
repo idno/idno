@@ -82,23 +82,6 @@ final class LegacyBootstrap
     }
 
     /**
-     * Defines IDNO_MULTITENANT_HOST (and KNOWN_MULTITENANT_HOST) from the request's Host
-     * header, for the purposes of extra paths. Called by the web entry points (index.php,
-     * Idno/start.php) before the kernel boots; moved unchanged from Idno/start.php.
-     */
-    public static function defineMultitenantHost(): void
-    {
-        if (!empty($_SERVER['HTTP_HOST']) && !defined('IDNO_MULTITENANT_HOST')) {
-            $host = strtolower($_SERVER['HTTP_HOST']);
-            $host = str_replace('www.', '', $host);
-            define('IDNO_MULTITENANT_HOST', $host);
-            if (!defined('KNOWN_MULTITENANT_HOST')) {
-                define('KNOWN_MULTITENANT_HOST', IDNO_MULTITENANT_HOST);
-            }
-        }
-    }
-
-    /**
      * This is a good time to see if we're running in a subdirectory
      */
     private function defineSubdirectory(): void

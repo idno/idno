@@ -33,3 +33,4 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 ## Removed in 2.0
 
 * Known hub integration removed; the `idno_hub` and `known_hub` settings are ignored.
+* Multi-tenant host directories (`hosts/<domain>/`) are no longer read: plugins and themes are loaded only from `IdnoPlugins/` and `Themes/`, and the `multitenant` setting is ignored.

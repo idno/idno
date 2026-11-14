@@ -31,9 +31,6 @@ namespace Idno\Pages\Admin {
             $this->adminGatekeeper(); // Admins only
             $plugin = $this->getInput('plugin');
             $action = $this->getInput('plugin_action');
-            if (defined('IDNO_MULTITENANT_HOST')) {
-                $host = IDNO_MULTITENANT_HOST;
-            }
             if (preg_match('/^[a-zA-Z0-9]+$/', $plugin)
                 && (\Idno\Core\Idno::site()->plugins()->exists($plugin))
             ) {
