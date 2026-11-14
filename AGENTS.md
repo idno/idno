@@ -62,7 +62,8 @@ Idno/
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
-                               packages/ (framework, monolog), routes/test/ (test-only routes)
+                               packages/ (framework, monolog), routes/test/ (test-only routes),
+                               services_test.php (test-only services)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
@@ -234,7 +235,11 @@ in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected se
   are tested black-box only, through the characterisation harness
   (`Tests/Characterisation/`, `$this->site()->request(...)` against the test rig).
 - Logging goes through Monolog (`config/packages/monolog.php`): the `idno` channel writes
-  each line verbatim with `error_log()`. See Code Style.
+  each line verbatim with `error_log()`. The site's log level and the line format
+  (`Idno (<host>): <level> - <message>`) are still applied by `Idno\Core\Logging`, so
+  `config/services.php` aliases `Psr\Log\LoggerInterface` to that service for application
+  code; Symfony's own services keep the `logger` / `monolog.logger.*` services they name.
+  See Code Style.
 
 ### Key design patterns
 
@@ -372,9 +377,14 @@ Each content plugin has an `Entry.php` entity class that defines
 - Entity properties are dynamic (magic `__get`/`__set` via `$this->attributes` array)
 - Plugins use braced namespace blocks: `namespace IdnoPlugins\Foo { class Main extends \Idno\Common\Plugin { } }`
 - Core uses indented namespace blocks (historical style)
-- New code injects `Psr\Log\LoggerInterface` (the Monolog `idno` channel, `monolog.logger.idno`) for logging.
-  `\Idno\Core\Idno::site()->logging()` (`info()` / `warning()` / `error()`) is legacy: it keeps
-  working, filters by the site's log level, and writes through that same channel.
+- New code logs by type-hinting `Psr\Log\LoggerInterface` in its constructor. Autowiring gives
+  the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
+  format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
+  directly, and never call `error_log()`: both bypass the log level.
+- Never put request data or other untrusted input into a log message without replacing control
+  characters and bounding its length (see `Idno\Legacy\LegacyFallbackListener`).
+- `\Idno\Core\Idno::site()->logging()` is the legacy accessor for the same object; do not use
+  it in new code.
 - Always pass `$overrideAccess = true` to `save()` on system-level entities (queue events, followers)
   to bypass `canEdit()` checks when no user session exists
 

@@ -87,6 +87,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->get(\Idno\Core\Config::class)->args([service(BootConfig::class)]);
     // Logging writes through the "idno" Monolog channel (config/packages/monolog.php).
     $services->get(\Idno\Core\Logging::class)->args([service('monolog.logger.idno')]);
+    // Autowiring Psr\Log\LoggerInterface gives application code this level-aware logger, not
+    // the raw channel (which would bypass the site's log level and line format). Symfony's own
+    // services name the "logger" / "monolog.logger.*" services they use, so are unaffected.
+    $services->alias(\Psr\Log\LoggerInterface::class, \Idno\Core\Logging::class);
 
     $services->set(LegacyBootstrap::class)
         ->args([service('service_container')])
