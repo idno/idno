@@ -46,6 +46,8 @@ php -l path/to/File.php
 Idno/                          Core framework
   Common/                      Base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Singletons & services (Idno, Config, Session, Webmention, etc.)
+  Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
+  Legacy/                      Adapters wrapping legacy objects for the container (LegacySiteSettings)
   Data/                        Database backends (Mongo.php, MySQL.php, AbstractSQL.php)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in page handlers (Account, Admin, Entity, Feed, etc.)
@@ -196,6 +198,33 @@ Each content plugin has an `Entry.php` entity class that defines
   to bypass `canEdit()` checks when no user session exists
 
 ## Configuration
+
+Configuration has two layers.
+
+- **Boot config** (`Idno\Config\BootConfig`, read by `Idno\Config\LegacyConfigLoader`):
+  `config.ini`, `config.json` and environment variables. Immutable, read-only at
+  runtime. `Idno\Core\Config` takes it through its constructor
+  (`new Config(?BootConfig $bootConfig = null)`; null builds one from the project
+  directory, `$_SERVER` and `$_ENV`). In the Symfony container `BootConfig` is built
+  by a factory at runtime, so no value is ever compiled into the cached container.
+- **Site settings** (`Idno\Config\SiteSettings`, implemented by
+  `Idno\Legacy\LegacySiteSettings` over `Idno\Core\Config`): admin-editable settings
+  stored in the database. `isOverridden($key)` is true when the boot config has that
+  key; `set()` on such a key throws `\LogicException`. A setting pinned in a file or the
+  environment always overrides the database value and cannot be changed in the admin UI.
+
+Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoaderTest.php`):
+
+1. `IDNO_*` environment variables from `$_SERVER` (key = lower-cased name without the
+   prefix, e.g. `IDNO_DBNAME` -> `dbname`; `IDNO_DOMAIN` -> `domain`)
+2. `KNOWN_*` variables from `$_SERVER`, only for keys not already set
+3. Special variables from `$_ENV`: `IDNO_DATABASE_URL`, `CLOUDCUBE_URL`,
+   `IDNO_AWS_S3_*`, `IDNO_UPLOAD_PATH` (each with a `KNOWN_` fallback)
+4. `configuration/config.json`, then root `config.json`
+5. root `config.ini`, then `configuration/config.ini`
+
+`path` and `host` can never be set; `uploadpath` always ends in a single `/`. The
+former per-host `{host}.ini` file is no longer read.
 
 - Primary config: `config.ini` (INI format, gitignored)
 - Environment variables: loaded from `.env` via `vlucas/phpdotenv`

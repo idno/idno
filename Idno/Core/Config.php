@@ -52,6 +52,28 @@ namespace Idno\Core {
         public $ini_config = array();
 
         /**
+         * Configuration pinned by config.ini, config.json and the environment.
+         *
+         * @var \Idno\Config\BootConfig
+         */
+        protected $bootConfig;
+
+        /**
+         * @param \Idno\Config\BootConfig|null $bootConfig Boot configuration; when null it is read from the
+         *                                                  project directory, $_SERVER and $_ENV.
+         */
+        function __construct(?\Idno\Config\BootConfig $bootConfig = null)
+        {
+            // Must be set before the parent constructor, which calls init() and so loadIniFiles().
+            $this->bootConfig = $bootConfig ?? (new \Idno\Config\LegacyConfigLoader())->load(
+                dirname(dirname(dirname(__FILE__))),
+                $_SERVER,
+                $_ENV
+            );
+            parent::__construct();
+        }
+
+        /**
          * We're overloading the "get" method for the configuration
          * class, so you can simply check $config->property to get
          * a configuration value.
@@ -161,116 +183,15 @@ namespace Idno\Core {
         }
 
         /**
-         * Load configuration from ini files
+         * Load configuration from the boot configuration (config.ini, config.json
+         * and environment variables, read by \Idno\Config\LegacyConfigLoader).
          */
         function loadIniFiles()
         {
-            if (empty($this->ini_config)) {
+            $this->ini_config = $this->bootConfig->all();
 
-                $this->ini_config = array();
-
-                foreach ([
-                    $this->path,                    // Check old location (Warning: @deprecated and will be removed in future installs)
-                    $this->path . '/configuration'  // Check for configuration in the new location
-                ] as $path) {
-
-                    if ($config = @parse_ini_file($path . '/config.ini', true)) {
-                        if (!empty($config)) {
-                            $this->default_config = false;
-                            $this->ini_config     = array_replace_recursive($config, $this->ini_config);
-                        }
-                    }
-                    if (file_exists($path . '/config.json')) {
-                        if ($json = file_get_contents($path . '/config.json')) {
-                            if ($json = json_decode($json, true)) {
-                                if (!empty($json)) {
-                                    $this->default_config = false;
-                                    $this->ini_config     = array_replace_recursive($this->ini_config, $json);
-                                }
-                            }
-                        }
-                    }
-                    $dbUrl = $_ENV['IDNO_DATABASE_URL'] ?? $_ENV['KNOWN_DATABASE_URL'] ?? null;
-                    if ($dbUrl) {
-                        $parsed = parse_url($dbUrl);
-                        $this->ini_config['database'] = $parsed['scheme'];
-                        $this->ini_config['dbname'] = basename($parsed['path']);
-                        $this->ini_config['dbuser'] = $parsed['user'];
-                        $this->ini_config['dbpass'] = $parsed['pass'];
-                        $this->ini_config['dbhost'] = $parsed['host'];
-                        $this->ini_config['dbport'] = $parsed['port'];
-                    }
-
-                    $cloudcube = array_key_exists('CLOUDCUBE_URL', $_ENV);
-                    $aws_s3 = array_key_exists('IDNO_AWS_S3_BUCKET', $_ENV) || array_key_exists('KNOWN_AWS_S3_BUCKET', $_ENV);
-                    $bucket = '';
-
-                    if ($cloudcube) {
-                        $parsed = parse_url($_ENV['CLOUDCUBE_URL']);
-                        $host_parts = explode('.', $parsed['host']);
-                        $bucket = $host_parts[0];
-                        $this->ini_config['aws_key'] = $_ENV['CLOUDCUBE_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['CLOUDCUBE_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $bucket == 'cloud-cube-eu' ? 'eu-west-1' : 'us-east-1';
-                        $path = $parsed['path'];
-                    } elseif ($aws_s3) {
-                        $bucket = $_ENV['IDNO_AWS_S3_BUCKET'] ?? $_ENV['KNOWN_AWS_S3_BUCKET'];
-                        $this->ini_config['aws_key'] = $_ENV['IDNO_AWS_S3_ACCESS_KEY_ID'] ?? $_ENV['KNOWN_AWS_S3_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['IDNO_AWS_S3_SECRET_ACCESS_KEY'] ?? $_ENV['KNOWN_AWS_S3_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'];
-                        $path = str_replace('//', '/', '/'.($_ENV['IDNO_AWS_S3_PATH_PREFIX'] ?? $_ENV['KNOWN_AWS_S3_PATH_PREFIX']));
-                    }
-
-                    if (($cloudcube || $aws_s3) && (!empty($bucket))) {
-                        $this->ini_config['filesystem'] = 'local';
-                        $this->ini_config['uploadpath'] = "s3://{$bucket}{$path}";
-                    }
-
-                    $awsRegion = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'] ?? null;
-                    if ($awsRegion) {
-                        $this->ini_config['aws_region'] = $awsRegion;
-                    }
-
-                    $uploadPath = $_ENV['IDNO_UPLOAD_PATH'] ?? $_ENV['KNOWN_UPLOAD_PATH'] ?? null;
-                    if ($uploadPath) {
-                        $this->ini_config['uploadpath'] = $uploadPath;
-                    }
-
-                    // Per domain configuration
-                    if ($config = @parse_ini_file($path . '/' . $this->host . '.ini', true)) {
-                        unset($this->ini_config['initial_plugins']);  // Don't let plugin settings be merged
-                        unset($this->ini_config['alwaysplugins']);
-                        unset($this->ini_config['antiplugins']);
-                        $this->ini_config = array_replace_recursive($this->ini_config, $config);
-                    }
-                }
-
-                // Check environment variables and set as appropriate
-                // IDNO_ prefixed variables take precedence over KNOWN_ prefixed ones
-                foreach ($_SERVER as $name => $val) {
-                    if (substr($name, 0, 5) == 'IDNO_') {
-                        $configName = strtolower(str_replace('IDNO_', '', $name));
-                        $this->ini_config[$configName] = $val;
-                    }
-                }
-                // Backwards compat: also process KNOWN_ but don't override IDNO_ values
-                foreach ($_SERVER as $name => $val) {
-                    if (substr($name, 0, 6) == 'KNOWN_') {
-                        $configName = strtolower(str_replace('KNOWN_', '', $name));
-                        if (!isset($this->ini_config[$configName])) {
-                            $this->ini_config[$configName] = $val;
-                        }
-                    }
-                }
-
-                // Perform some sanity checks on some user contributed settings
-                if (isset($this->ini_config['uploadpath'])) {
-                    $this->ini_config['uploadpath'] = rtrim($this->ini_config['uploadpath'], ' /') . '/'; // End trailing slash insanity once and for all
-                }
-                unset($this->ini_config['path']); // Path should always be derived
-                unset($this->ini_config['host']); // Host should always come from URL
+            if (!$this->bootConfig->isDefault()) {
+                $this->default_config = false;
             }
 
             if (!empty($this->ini_config)) {
