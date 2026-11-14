@@ -91,6 +91,19 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * Absolute short URL of an entity. The short code is generated lazily and
+         * its internal save() is refused without a session, so persist it here
+         * for the web server to see.
+         */
+        protected function shortUrl(\Idno\Common\Entity $entity): string
+        {
+            $short = $entity->getShortURL();
+            $entity->save(true);
+
+            return $short;
+        }
+
+        /**
          * Track an entity for deletion in tearDown(). Called before saving so a
          * partially failed save is still cleaned up.
          */

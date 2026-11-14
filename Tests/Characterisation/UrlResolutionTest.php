@@ -26,12 +26,8 @@ namespace Tests\Characterisation {
         public function testShortlinkRedirectsToPermalink(): void
         {
             $s = $this->createStatus($this->user(), 'characterisation #pinned');
-            // The shortlink route takes the entity's short code, not its ID. The code is
-            // generated lazily, and its internal save() is refused without a session, so
-            // persist it explicitly for the web server to see.
-            $short = $s->getShortURL();
-            $s->save(true);
-            $r = $this->site()->request('GET', $this->path($short));
+            // The shortlink route takes the entity's short code, not its ID.
+            $r = $this->site()->request('GET', $this->path($this->shortUrl($s)));
 
             $this->assertSame(301, $r->status);
             $this->assertSame($s->getURL(), $r->header('Location'));
@@ -78,7 +74,7 @@ namespace Tests\Characterisation {
             $this->assertSame(200, $this->site()->request('GET', 'profile/testuser/')->status);
         }
 
-        public function testUnknownEntityIs404(): void
+        public function testUnknownEntityIsGone(): void
         {
             // Despite the name, an unknown entity answers 410 Gone (Page::goneContent()), not 404.
             $this->assertSame(410, $this->site()->request('GET', 'view/000000000000000000000000')->status);
