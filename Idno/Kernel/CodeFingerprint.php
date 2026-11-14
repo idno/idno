@@ -9,7 +9,8 @@ namespace Idno\Kernel;
  * recompiled whenever that code changes, with no cache to clear by hand.
  *
  * It hashes each input file's project-relative path, size and modification time, never
- * its contents, because it runs on every request.
+ * its contents, because it runs on every request. It does not depend on where the project
+ * is: Idno\Kernel::getCacheDir() mixes in the project directory's real path.
  */
 final class CodeFingerprint
 {

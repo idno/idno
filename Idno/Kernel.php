@@ -53,14 +53,24 @@ class Kernel extends BaseKernel
     }
 
     /**
-     * Includes the Idno build number and a fingerprint of the container's input files, so
-     * that overwriting the files, or changing code without changing the build number,
-     * never reuses a container compiled from different code.
+     * "<cache base>/<env>/<build>-<key>". The key hashes the code fingerprint of the
+     * container's input files together with the project directory's real path, so that
+     * overwriting the files, or changing code without changing the build number, never
+     * reuses a container compiled from different code, and two installs sharing one cache
+     * base (IDNO_CACHE_DIR) never share a container: it holds the project directory's
+     * absolute path, and so reads that install's config.ini.
      */
     public function getCacheDir(): string
     {
-        return $this->cacheDir ??= $this->baseDir() . '/' . $this->environment . '/' . $this->buildNumber()
-            . '-' . CodeFingerprint::compute($this->getProjectDir());
+        if ($this->cacheDir !== null) {
+            return $this->cacheDir;
+        }
+
+        $projectDir = $this->getProjectDir();
+        $realProjectDir = realpath($projectDir);
+        $key = substr(sha1(CodeFingerprint::compute($projectDir) . "\0" . ($realProjectDir !== false ? $realProjectDir : $projectDir)), 0, 12);
+
+        return $this->cacheDir = $this->baseDir() . '/' . $this->environment . '/' . $this->buildNumber() . '-' . $key;
     }
 
     public function getLogDir(): string
