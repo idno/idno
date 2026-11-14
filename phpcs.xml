@@ -36,8 +36,13 @@
 
     <rule ref="Generic.PHP.ForbiddenFunctions">
         <properties>
-            <property name="forbiddenFunctions" type="array"
-                value="sizeof=>count,delete=>unset,print_r=>null,var_export=>null,die=>null"/>
+            <property name="forbiddenFunctions" type="array">
+                <element key="sizeof" value="count"/>
+                <element key="delete" value="unset"/>
+                <element key="print_r" value="null"/>
+                <element key="var_export" value="null"/>
+                <element key="die" value="null"/>
+            </property>
         </properties>
     </rule>
 

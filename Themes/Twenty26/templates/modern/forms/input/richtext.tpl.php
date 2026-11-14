@@ -47,7 +47,7 @@
         </button>
         <div class="idno-editor-toolbar-divider"></div>
         <button type="button" class="idno-editor-toolbar-btn" title="Code block" x-on:click="editor.chain().focus().toggleCodeBlock().run()" :class="{ 'active': editor?.isActive('codeBlock') }">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
         </button>
         <button type="button" class="idno-editor-toolbar-btn" title="Horizontal rule" x-on:click="editor.chain().focus().setHorizontalRule().run()">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>
