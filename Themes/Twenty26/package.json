@@ -8,7 +8,7 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.0.0",
+    "@tailwindcss/postcss": "^4.3.5",
     "tailwindcss": "^4.0.0",
     "vite": "^6.4.5"
   },
@@ -20,7 +20,7 @@
     "@tiptap/extension-placeholder": "^3.34.0",
     "@tiptap/pm": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0",
-    "alpinejs": "^3.14.0",
+    "alpinejs": "^3.17.5",
     "lucide": "^0.460.0"
   }
 }
