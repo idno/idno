@@ -16,6 +16,24 @@ namespace Idno\Core {
         public $themes = array(); // Array containing instantiated theme controllers
 
         /**
+         * Themes that are no longer bundled; a site configured to use one uses Twenty26 instead.
+         */
+        public const RETIRED = ['Black', 'Cherwell', 'ElkinsPark', 'Fauvists', 'Green', 'Kandinsky', 'MarketStreet', 'Solo'];
+
+        /**
+         * The theme to load for a configured theme name: Twenty26 for a retired theme, otherwise
+         * the name unchanged (including the empty string, meaning no theme, and the name of a
+         * theme that is merely missing).
+         *
+         * @param  string $configured
+         * @return string
+         */
+        public static function resolve(string $configured): string
+        {
+            return in_array($configured, self::RETIRED, true) ? 'Twenty26' : $configured;
+        }
+
+        /**
          * On initialization, the theme management class loads the current theme and sets it as
          * a template directory
          */
@@ -23,7 +41,7 @@ namespace Idno\Core {
         {
 
             if (!empty(site()->config()->theme)) {
-                $this->theme = site()->config()->theme;
+                $this->theme = self::resolve(site()->config()->theme);
                 if ($this->requestHasHostHeader()) {
                     if (file_exists(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini')) {
                         \Idno\Core\Bonita\Main::additionalPath(site()->config()->path . '/Themes/' . $this->theme);
@@ -59,6 +77,28 @@ namespace Idno\Core {
                 }
             }
 
+        }
+
+        /**
+         * If the configured theme is a retired one, saves the replacement in the site
+         * configuration and tells the administrator, once. Does nothing unless the current
+         * user is an admin on a web request, so visitors never write the configuration and
+         * see no message. It runs after the user is authenticated (Idno::__construct), which
+         * is after init(): the session user is not known when this class is built.
+         *
+         * @return void
+         */
+        public function announceRetiredTheme()
+        {
+            $configured = (string)site()->config()->theme;
+            if (!$this->requestHasHostHeader() || !in_array($configured, self::RETIRED, true) || !site()->session()->isAdmin()) {
+                return;
+            }
+            $theme = self::resolve($configured);
+            site()->config()->config['theme'] = $theme;
+            site()->config()->theme           = $theme;
+            site()->config()->save();
+            site()->session()->addMessage(site()->language()->_('The %s theme has been retired. Your site now uses Idno 2026.', [$configured]));
         }
 
         /**

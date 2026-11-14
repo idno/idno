@@ -47,6 +47,7 @@ namespace Idno\Core {
             parent::__construct();
             // auth the user after all the plugins and pages have registered so they can respond to events
             $this->session()->tryAuthUser();
+            $this->themes()->announceRetiredTheme();
             $this->upgrade();
         }
 

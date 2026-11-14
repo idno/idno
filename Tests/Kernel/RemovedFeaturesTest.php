@@ -147,7 +147,7 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
         $this->assertSame($web['plugins_stored'], $console['plugins_stored']);
         $this->assertSame($web['themes_stored'], $console['themes_stored']);
         $this->assertSame(['ActivityPub', 'Bridgy', 'Checkin', 'Event', 'IndiePub', 'Like', 'Media', 'Photo', 'StandardSiteSync', 'StaticPages', 'Status', 'Styles', 'Text', 'Webhooks'], $web['plugins_stored']);
-        $this->assertSame(['', 'Black', 'Cherwell', 'ElkinsPark', 'Fauvists', 'Green', 'Kandinsky', 'MarketStreet', 'Solo', 'Twenty26'], $web['themes_stored']);
+        $this->assertSame(['', 'Twenty26'], $web['themes_stored']);
         $this->assertSame(['Status', 'Text', 'Photo', 'IndiePub', 'ActivityPub', 'Like', 'Checkin', 'Media', 'Event', 'Bridgy', 'StaticPages', 'Webhooks'], $web['plugins_loaded'], 'load order');
         $this->assertSame($web['plugins_loaded'], $console['plugins_loaded']);
     }

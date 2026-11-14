@@ -1,1 +1,0 @@
-<li <?php if ($_SERVER['REQUEST_URI'] == '/admin/cherwell/') echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/cherwell/"><?= \Idno\Core\Idno::site()->language()->_('Set Background'); ?></a></li>

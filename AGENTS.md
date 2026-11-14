@@ -76,7 +76,10 @@ config/                        Kernel configuration: bundles.php, services.php, 
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
-Themes/                        Visual themes (Cherwell, Solo, Kandinsky, etc.); plugins and themes
+Themes/                        Visual themes; Twenty26 (Idno 2026) is the only bundled theme. A site
+                               configured with a retired theme (Themes::RETIRED) is resolved to Twenty26
+                               at load; the setting is saved, and the admin told, when an admin next
+                               loads a page (Themes::announceRetiredTheme()). Plugins and themes
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
 Tests/                         Unit, kernel (Tests/Kernel) and black-box characterisation tests;

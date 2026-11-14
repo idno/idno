@@ -77,4 +77,4 @@ Finally, you'd create a normal static CSS file in `/Themes/PDXCarpet/css/default
 
 ## Reference themes
 
-Idno ships with several reference themes. We recommend you take a look at the `Solo` theme to see how a simple alternative theme is put together.
+Idno ships with one theme, `Twenty26` (Idno 2026). We recommend you take a look at it to see how a theme is put together. The older themes (`Black`, `Cherwell`, `ElkinsPark`, `Fauvists`, `Green`, `Kandinsky`, `MarketStreet` and `Solo`) were removed in 2.0.

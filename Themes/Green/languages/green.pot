@@ -1,8 +1,0 @@
-#: ./templates/default/entity/User.tpl.php:54
-msgid "A profile helps you describe yourself to other people on the site and on the web. You haven\'t described yourself yet."
-msgstr ""
-
-#: ./templates/default/entity/User.tpl.php:55
-msgid "Click here to fill in your profile information."
-msgstr ""
-
