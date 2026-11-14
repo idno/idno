@@ -13,16 +13,45 @@ use PHPUnit\Framework\TestCase;
 final class BootConfigServiceTest extends TestCase
 {
     private ?Kernel $kernel = null;
+    private ?string $cacheDir = null;
+    private mixed $previousCacheDir = null;
 
     protected function tearDown(): void
     {
         unset($_SERVER['IDNO_BOOTCONFIG_SENTINEL']);
         $this->kernel?->shutdown();
         $this->kernel = null;
+        if ($this->cacheDir !== null) {
+            $this->removeDir($this->cacheDir);
+            $this->cacheDir = null;
+            if ($this->previousCacheDir === null) {
+                unset($_SERVER['IDNO_CACHE_DIR']);
+            } else {
+                $_SERVER['IDNO_CACHE_DIR'] = $this->previousCacheDir;
+            }
+        }
+    }
+
+    private function removeDir(string $path): void
+    {
+        if (is_dir($path) && !is_link($path)) {
+            foreach (scandir($path) ?: [] as $entry) {
+                if ($entry !== '.' && $entry !== '..') {
+                    $this->removeDir($path . '/' . $entry);
+                }
+            }
+            rmdir($path);
+        } elseif (file_exists($path) || is_link($path)) {
+            unlink($path);
+        }
     }
 
     private function boot(): Kernel
     {
+        // A fresh cache directory forces the container to be compiled during this test.
+        $this->previousCacheDir = $_SERVER['IDNO_CACHE_DIR'] ?? null;
+        $this->cacheDir = sys_get_temp_dir() . '/idno-test-cache-' . bin2hex(random_bytes(6));
+        $_SERVER['IDNO_CACHE_DIR'] = $this->cacheDir;
         $this->kernel = new Kernel('test', true, bootLegacy: false);
         $this->kernel->boot();
         return $this->kernel;

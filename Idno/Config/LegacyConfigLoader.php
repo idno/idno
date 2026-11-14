@@ -74,7 +74,7 @@ final class LegacyConfigLoader
 
         if (isset($config['uploadpath'])) {
             // End trailing slash insanity once and for all
-            $config['uploadpath'] = rtrim($config['uploadpath'], ' /') . '/';
+            $config['uploadpath'] = rtrim((string) $config['uploadpath'], ' /') . '/';
         }
         unset($config['path']); // Path should always be derived
         unset($config['host']); // Host should always come from the URL
@@ -92,7 +92,7 @@ final class LegacyConfigLoader
     {
         $dbUrl = $env['IDNO_DATABASE_URL'] ?? $env['KNOWN_DATABASE_URL'] ?? null;
         if ($dbUrl) {
-            $parsed = parse_url($dbUrl);
+            $parsed = parse_url((string) $dbUrl);
             $config['database'] = $parsed['scheme'] ?? null;
             $config['dbname']   = basename($parsed['path'] ?? '');
             $config['dbuser']   = $parsed['user'] ?? null;
@@ -107,7 +107,7 @@ final class LegacyConfigLoader
         $s3Path    = '';
 
         if ($cloudcube) {
-            $parsed    = parse_url($env['CLOUDCUBE_URL']);
+            $parsed    = parse_url((string) $env['CLOUDCUBE_URL']);
             $hostParts = explode('.', $parsed['host'] ?? '');
             $bucket    = $hostParts[0];
             $config['aws_key']    = $env['CLOUDCUBE_ACCESS_KEY_ID'] ?? null;

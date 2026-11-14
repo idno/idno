@@ -210,18 +210,24 @@ Configuration has two layers.
 - **Site settings** (`Idno\Config\SiteSettings`, implemented by
   `Idno\Legacy\LegacySiteSettings` over `Idno\Core\Config`): admin-editable settings
   stored in the database. `isOverridden($key)` is true when the boot config has that
-  key; `set()` on such a key throws `\LogicException`. A setting pinned in a file or the
-  environment always overrides the database value and cannot be changed in the admin UI.
+  key. A value pinned in a file or environment variable overrides the stored one on
+  every load, so changing it in the admin UI has no effect (the admin UI can still save
+  it; the saved value is simply overridden). New code should use
+  `SiteSettings::set()`, which refuses overridden keys with a `\LogicException`.
 
 Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoaderTest.php`):
 
 1. `IDNO_*` environment variables from `$_SERVER` (key = lower-cased name without the
    prefix, e.g. `IDNO_DBNAME` -> `dbname`; `IDNO_DOMAIN` -> `domain`)
-2. `KNOWN_*` variables from `$_SERVER`, only for keys not already set
-3. Special variables from `$_ENV`: `IDNO_DATABASE_URL`, `CLOUDCUBE_URL`,
-   `IDNO_AWS_S3_*`, `IDNO_UPLOAD_PATH` (each with a `KNOWN_` fallback)
-4. `configuration/config.json`, then root `config.json`
-5. root `config.ini`, then `configuration/config.ini`
+2. Special variables from `$_ENV`: `IDNO_DATABASE_URL`, `CLOUDCUBE_URL`,
+   `IDNO_AWS_S3_*`, `IDNO_UPLOAD_PATH` (each with a `KNOWN_` fallback; `IDNO_` wins).
+   Within this group `IDNO_UPLOAD_PATH` beats the S3-derived `uploadpath`.
+3. `configuration/config.json`
+4. root `config.json`
+5. root `config.ini`
+6. `configuration/config.ini`
+7. `KNOWN_*` variables from `$_SERVER`: fallback only, filling keys that no other
+   source set
 
 `path` and `host` can never be set; `uploadpath` always ends in a single `/`. The
 former per-host `{host}.ini` file is no longer read.

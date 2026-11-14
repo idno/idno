@@ -142,6 +142,81 @@ final class LegacyConfigLoaderTest extends TestCase
         $this->assertTrue($config->isDefault());
     }
 
+    public function testIniBeatsKnownEnv(): void
+    {
+        $dir = $this->project(['configuration/config.ini' => "dbname = 'a'\n"]);
+        $this->assertSame('a', $this->load($dir, ['KNOWN_DBNAME' => 'k'])->get('dbname'));
+    }
+
+    public function testEnvironmentSpecialsBeatKnownEnv(): void
+    {
+        $config = $this->load($this->project(), ['KNOWN_DBNAME' => 'k'], ['IDNO_DATABASE_URL' => 'mysql://u:p@h/fromurl']);
+        $this->assertSame('fromurl', $config->get('dbname'));
+    }
+
+    public function testIdnoEnvBeatsEnvironmentSpecials(): void
+    {
+        $config = $this->load($this->project(), ['IDNO_DBNAME' => 'fromidno'], ['IDNO_DATABASE_URL' => 'mysql://u:p@h/fromurl']);
+        $this->assertSame('fromidno', $config->get('dbname'));
+    }
+
+    public function testIdnoDatabaseUrlBeatsKnownDatabaseUrl(): void
+    {
+        $config = $this->load($this->project(), [], [
+            'IDNO_DATABASE_URL'  => 'mysql://u:p@h/idnodb',
+            'KNOWN_DATABASE_URL' => 'mysql://u:p@h/knowndb',
+        ]);
+        $this->assertSame('idnodb', $config->get('dbname'));
+    }
+
+    public function testUploadPathEnvBeatsS3UploadPath(): void
+    {
+        $config = $this->load($this->project(), [], [
+            'IDNO_AWS_S3_BUCKET' => 'b',
+            'IDNO_UPLOAD_PATH'   => '/explicit',
+        ]);
+        $this->assertSame('/explicit/', $config->get('uploadpath'));
+    }
+
+    public function testConfigurationJsonBeatsRootJson(): void
+    {
+        $dir = $this->project([
+            'config.json'               => '{"dbname":"rootjson"}',
+            'configuration/config.json' => '{"dbname":"confjson"}',
+        ]);
+        $this->assertSame('confjson', $this->load($dir)->get('dbname'));
+    }
+
+    public function testRootJsonBeatsRootIni(): void
+    {
+        $dir = $this->project([
+            'config.ini'  => "dbname = 'rootini'\n",
+            'config.json' => '{"dbname":"rootjson"}',
+        ]);
+        $this->assertSame('rootjson', $this->load($dir)->get('dbname'));
+    }
+
+    public function testRootJsonBeatsConfigurationIni(): void
+    {
+        $dir = $this->project([
+            'config.json'              => '{"dbname":"rootjson"}',
+            'configuration/config.ini' => "dbname = 'confini'\n",
+        ]);
+        $this->assertSame('rootjson', $this->load($dir)->get('dbname'));
+    }
+
+    public function testNonStringUploadPathFromJsonIsCoerced(): void
+    {
+        $dir = $this->project(['configuration/config.json' => '{"uploadpath":5}']);
+        $this->assertSame('5/', $this->load($dir)->get('uploadpath'));
+    }
+
+    public function testBooleanUploadPathFromJsonIsCoerced(): void
+    {
+        $dir = $this->project(['configuration/config.json' => '{"uploadpath":true}']);
+        $this->assertSame('1/', $this->load($dir)->get('uploadpath'));
+    }
+
     public function testUploadPathGetsTrailingSlash(): void
     {
         $dir = $this->project(['configuration/config.ini' => "uploadpath = '/data/up'\n"]);
