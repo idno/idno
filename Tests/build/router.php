@@ -40,7 +40,10 @@ if ($path !== '/' && is_file($root . $path) && !preg_match('#\.php$#', $path)) {
     return false;
 }
 
-// Everything else goes through the front controller
+// Everything else goes through the front controller. The built-in server sets
+// PHP_SELF and SCRIPT_NAME to the requested path; Apache would set them to
+// /index.php, and Idno uses PHP_SELF to work out whether it is in a subdirectory.
+$_SERVER['PHP_SELF']        = '/index.php';
 $_SERVER['SCRIPT_NAME']     = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $root . '/index.php';
 require $root . '/index.php';
