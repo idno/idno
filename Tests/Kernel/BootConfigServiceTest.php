@@ -18,7 +18,7 @@ final class BootConfigServiceTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_SERVER['IDNO_BOOTCONFIG_SENTINEL']);
+        unset($_SERVER['IDNO_BOOTCONFIG_SENTINEL'], $_SERVER['APP_SECRET'], $_SERVER['IDNO_KERNEL_SECRET']);
         $this->kernel?->shutdown();
         $this->kernel = null;
         if ($this->cacheDir !== null) {
@@ -82,6 +82,25 @@ final class BootConfigServiceTest extends TestCase
             }
         }
         $this->assertGreaterThan(0, $compiled, 'expected compiled container files in the cache directory');
+    }
+
+    public function testTheKernelSecretComesFromAppSecretAndStaysOutOfTheBootConfig(): void
+    {
+        // Symfony's conventional name, so the IDNO_* sweep into the legacy config (which is
+        // saved to the database and shown on the diagnostics page) never picks it up.
+        $_SERVER['APP_SECRET'] = 'app-secret-sentinel';
+        $kernel = $this->boot();
+
+        $this->assertSame('app-secret-sentinel', $kernel->getContainer()->getParameter('kernel.secret'));
+        $boot = $kernel->getContainer()->get(BootConfig::class);
+        $this->assertNotContains('app-secret-sentinel', $boot->all());
+        $this->assertFalse($boot->has('app_secret'));
+        $this->assertFalse($boot->has('kernel_secret'));
+    }
+
+    public function testTheKernelSecretHasAHarmlessDefault(): void
+    {
+        $this->assertNotSame('', (string) $this->boot()->getContainer()->getParameter('kernel.secret'));
     }
 
     public function testSiteSettingsIsAliasedToTheLegacyImplementation(): void

@@ -296,13 +296,14 @@ namespace Idno\Core {
         }
 
         /**
-         * Check the PHP version.
+         * Check the PHP version: 8.4 or later, as index.php and composer.json require.
          *
+         * @param  string|null $version The version to check; the running PHP's by default.
          * @return 'ok','fail','warn'
          */
-        public static function checkPHPVersion()
+        public static function checkPHPVersion($version = null)
         {
-            if (version_compare(phpversion(), '8.1') >= 0) {
+            if (version_compare($version ?? phpversion(), '8.4') >= 0) {
                 return 'ok';
             } else {
                 return 'fail';

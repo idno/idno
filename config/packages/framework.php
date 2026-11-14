@@ -6,8 +6,9 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 
 return static function (ContainerConfigurator $container): void {
     $container->extension('framework', [
-        // Not a real secret: nothing in this phase uses it. Override with IDNO_KERNEL_SECRET if that changes.
-        'secret' => '%env(default:idno.kernel_secret_placeholder:IDNO_KERNEL_SECRET)%',
+        // Not a real secret: nothing in this phase uses it. Set APP_SECRET if that changes. Not an
+        // IDNO_* variable: those are copied into the legacy config, which is saved to the database.
+        'secret' => '%env(default:idno.kernel_secret_placeholder:APP_SECRET)%',
         'http_method_override' => false,
         'handle_all_throwables' => false,
         // The legacy application owns sessions and error handling for now.
