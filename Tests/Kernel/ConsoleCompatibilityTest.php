@@ -27,7 +27,9 @@ final class ConsoleCompatibilityTest extends TestCase
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $root,
-            ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089', 'PATH' => (string) getenv('PATH')]
+            // IDNO_PROXY_STRING sends every outbound request (the "version" command's check for a
+            // newer build on GitHub) to a closed local port, so it fails at once and never leaves the machine.
+            ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089', 'IDNO_PROXY_STRING' => '127.0.0.1:9', 'PATH' => (string) getenv('PATH')]
         );
         $this->assertIsResource($process);
         $stdout = (string) stream_get_contents($pipes[1]);

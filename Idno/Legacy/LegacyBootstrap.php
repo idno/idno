@@ -10,7 +10,7 @@ use Psr\Container\ContainerInterface;
 /**
  * Boots the legacy Idno application: what Idno/start.php did after autoloading.
  *
- * The console (idno.php, which defines IDNO_CONSOLE) never ran start.php: it only
+ * The console (bin/console, which defines IDNO_CONSOLE) never ran start.php: it only
  * constructed the core components. The steps start.php added around them are therefore
  * skipped for the console, so neither entry point changes behaviour.
  */

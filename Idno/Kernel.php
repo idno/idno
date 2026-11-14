@@ -23,7 +23,7 @@ class Kernel extends BaseKernel
     }
 
     /**
-     * The kernel the entry points (index.php, Idno/start.php, idno.php) run: environment
+     * The kernel the entry points (index.php, Idno/start.php, bin/console) run: environment
      * from APP_ENV (default "prod"), debug from APP_DEBUG ("1", "true", "on", "yes" are
      * true; anything else, or unset, is false). Both are read from $_SERVER.
      */

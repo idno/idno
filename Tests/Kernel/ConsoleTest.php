@@ -17,6 +17,10 @@ use Symfony\Component\Console\Tester\ApplicationTester;
  * In-process tests use the kernel PHPUnit's bootstrap booted (the only one whose legacy
  * services are Idno::site()'s). PHPUnit's bootstrap boots the web path, so anything that
  * depends on the console path (IDNO_CONSOLE) runs in a subprocess.
+ *
+ * No test here uses the network: the "version" command asks GitHub for the latest build, so
+ * it is not run here (Tests/Kernel/ConsoleCompatibilityTest runs it with the remote check
+ * routed to a closed local port).
  */
 final class ConsoleTest extends TestCase
 {
@@ -101,28 +105,6 @@ final class ConsoleTest extends TestCase
         $this->assertSame($app->get('version'), $app->get('version'));
     }
 
-    public function testVersionCommandPrintsVersion(): void
-    {
-        // The command checks GitHub for a newer build and logs about it: keep that log out of the test output.
-        $previous = ini_get('error_log');
-        $logFile = tempnam(sys_get_temp_dir(), 'idno-log-');
-        ini_set('error_log', $logFile);
-        try {
-            $app = $this->application();
-            $app->setAutoExit(false);
-            $tester = new ApplicationTester($app);
-
-            $code = $tester->run(['command' => 'version']);
-        } finally {
-            ini_set('error_log', $previous === false ? '' : $previous);
-            @unlink($logFile);
-        }
-
-        $this->assertSame(0, $code);
-        $version = parse_ini_file(dirname(__DIR__, 2) . '/version.idno');
-        $this->assertStringContainsString("version = '" . $version['version'] . "'", $tester->getDisplay());
-    }
-
     public function testApplicationFunctionAndGlobalPointAtTheApplication(): void
     {
         $app = $this->application();
@@ -139,18 +121,18 @@ final class ConsoleTest extends TestCase
 
     public function testIdnoPhpStillWorks(): void
     {
-        [$code, $out] = $this->cli('idno.php', ['version']);
+        [$code, $out] = $this->cli('idno.php', ['example', 'hello']);
 
         $this->assertSame(0, $code);
-        $this->assertStringContainsString("version = '", $out);
+        $this->assertStringContainsString('hello', $out);
     }
 
     public function testKnownPhpStillWorks(): void
     {
-        [$code, $out] = $this->cli('known.php', ['version']);
+        [$code, $out] = $this->cli('known.php', ['example', 'hello']);
 
         $this->assertSame(0, $code);
-        $this->assertStringContainsString("version = '", $out);
+        $this->assertStringContainsString('hello', $out);
     }
 
     public function testBinConsoleOffersSymfonyAndLegacyCommands(): void
@@ -171,14 +153,6 @@ final class ConsoleTest extends TestCase
         );
 
         $this->assertSame($names('bin/console'), $names('idno.php'));
-    }
-
-    public function testBinConsoleVersionExitsZero(): void
-    {
-        [$code, $out] = $this->cli('bin/console', ['version']);
-
-        $this->assertSame(0, $code);
-        $this->assertStringContainsString("version = '", $out);
     }
 
     public function testUnknownCommandExitsOne(): void
@@ -204,12 +178,13 @@ require getenv('IDNO_TEST_BIN_CONSOLE');
 PHP;
         file_put_contents($probe, $script);
         try {
-            [$code, $out] = $this->cli($probe, ['version'], ['IDNO_TEST_BIN_CONSOLE' => dirname(__DIR__, 2) . '/bin/console']);
+            [$code, $out] = $this->cli($probe, ['example', 'hello'], ['IDNO_TEST_BIN_CONSOLE' => dirname(__DIR__, 2) . '/bin/console']);
         } finally {
             @unlink($probe);
         }
 
         $this->assertSame(0, $code);
+        $this->assertStringContainsString('hello', $out);
         $this->assertStringContainsString('CONSOLE=yes SUBDIR=no', $out);
     }
 

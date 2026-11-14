@@ -92,7 +92,9 @@ anything else, or unset, is false), both read from `$_SERVER`.
 - **`bin/console`** (CLI): defines `IDNO_CONSOLE` (before the kernel boots, because it makes
   `LegacyBootstrap` skip the web-only boot steps), boots the kernel, and runs
   `Idno\Console\Application`, a subclass of FrameworkBundle's console application. On a
-  site with no configuration it prints one line to stderr and exits 1. `idno.php` and
+  site with no configuration it prints one line to stderr and exits 1; on any other
+  exception while booting it prints `Idno could not start: <exception class>: <message>`
+  to stderr and exits 1 (it does not carry on). `idno.php` and
   `known.php` are aliases that just require `bin/console`; use either. See "Console
   commands" below.
 
@@ -178,6 +180,12 @@ New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
 
 ### Console commands
 
+The console's environment and debug flag come from the `APP_ENV` and `APP_DEBUG` environment
+variables, through `Kernel::fromGlobals()`, e.g. `APP_ENV=test APP_DEBUG=1 php bin/console ...`.
+Symfony's `--env`/`-e`, `--no-debug` and `--profile` options are listed by `--help` but have no
+effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`,
+`--no-debug` or `--profile`: they are global options now.
+
 `php bin/console list` shows Symfony's own commands (`cache:clear`, `debug:router`,
 `debug:container`, ...) next to Idno's, in one application.
 
@@ -203,7 +211,9 @@ New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
   the global `application()` function that legacy console plugins call; it returns the
   application, which is also the global `$console`).
 - In-process tests must not boot a second legacy kernel to run commands: build the
-  application from `Idno::container()->get('kernel')` and use `ApplicationTester`. PHPUnit's
+  application from `Idno::container()->get('kernel')` and use `ApplicationTester`. No test
+  may use the network: the `version` command checks GitHub for a newer build, so run it only in
+  a subprocess with `IDNO_PROXY_STRING=127.0.0.1:9` (see `ConsoleCompatibilityTest`). PHPUnit's
   bootstrap boots the web path and does not define `IDNO_CONSOLE`, so test anything that
   depends on the console path in a subprocess.
 
