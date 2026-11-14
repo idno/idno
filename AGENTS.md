@@ -72,12 +72,18 @@ Tests/                         Core unit tests
 - New code should have services injected rather than calling `Idno::site()`.
 - The compiled container lives in `<cache base>/<env>/<build>-<fingerprint>` (cache base:
   `IDNO_CACHE_DIR`, else `var/cache`, else a private temp dir; build number from
-  `version.idno`). The fingerprint (`Idno\Kernel\CodeFingerprint`) hashes the path, size
-  and mtime of `version.idno`, `config/*.php` (not `reference.php`), the PHP files in the
-  directories the container scans, and `vendor/composer/installed.php`, so it changes
-  whenever those change and there is never a need to clear the cache after changing code.
-  When adding a NEW directory that the container scans for services, add it to
-  `CodeFingerprint::SERVICE_DIRECTORIES`, which `config/services.php` also reads. `APP_ENV` /
+  `version.idno`). It is rebuilt automatically when any of these change (the fingerprint,
+  `Idno\Kernel\CodeFingerprint`): `version.idno`, `Idno/Kernel.php`, any PHP file under
+  `config/` (recursively, except the generated `reference.php`), any PHP file under the
+  directories in `CodeFingerprint::SERVICE_DIRECTORIES`, or the installed packages.
+  Known limits: detection uses file path, size and modification time, not contents, so an
+  edit that keeps both (same size within the same second, or a deploy that normalises
+  mtimes) is not detected; and a class in a scanned directory that extends or uses a class,
+  interface or trait OUTSIDE the scanned directories is not rebuilt when only that outside
+  file changes. So new code in scanned directories should not inherit constructor
+  signatures from legacy classes, and if in doubt delete `var/cache/`. When you add a
+  directory that the container scans for services OR that `config/routes.php` imports
+  attribute routes from, add it to `CodeFingerprint::SERVICE_DIRECTORIES`. `APP_ENV` /
   `APP_DEBUG` select the environment (default `prod`, no debug); PHPUnit and the test rig use
   `test` with debug on.
 

@@ -15,7 +15,8 @@ final class CodeFingerprint
 {
     /**
      * The directories under Idno/ that the container scans for services (config/services.php).
-     * This is the one place the list is defined; add a new scanned directory here.
+     * This is the one place the list is defined; add a directory here when the container
+     * scans it for services or config/routes.php imports attribute routes from it.
      *
      * @var list<string>
      */
@@ -23,9 +24,9 @@ final class CodeFingerprint
 
     /**
      * A short, stable identifier for the code the container is compiled from:
-     * 12 lowercase hex characters. Inputs are version.idno, the PHP files in config/
+     * 12 lowercase hex characters. Inputs are version.idno, Idno/Kernel.php, the PHP files in config/
      * (except the generated config/reference.php), the PHP files in each scanned
-     * directory, and vendor/composer/installed.php. Missing inputs are skipped.
+     * directory (unreadable ones are skipped), and vendor/composer/installed.php. Missing inputs are skipped.
      *
      * PHP caches stat results within a process; a long-running caller that expects to
      * see edits made during its own lifetime must call clearstatcache() first.
@@ -34,7 +35,7 @@ final class CodeFingerprint
     {
         $entries = [];
 
-        foreach (['version.idno', 'vendor/composer/installed.php'] as $file) {
+        foreach (['version.idno', 'Idno/Kernel.php', 'vendor/composer/installed.php'] as $file) {
             self::add($entries, $projectDir, $file);
         }
 
@@ -48,9 +49,16 @@ final class CodeFingerprint
             if (!is_dir($root)) {
                 continue;
             }
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
-            );
+            try {
+                // CATCH_GET_CHILD skips a subdirectory that cannot be read instead of throwing.
+                $iterator = new \RecursiveIteratorIterator(
+                    new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+                    \RecursiveIteratorIterator::LEAVES_ONLY,
+                    \RecursiveIteratorIterator::CATCH_GET_CHILD
+                );
+            } catch (\UnexpectedValueException) {
+                continue; // The root itself is unreadable: it contributes nothing.
+            }
             foreach ($iterator as $file) {
                 if ($file->getExtension() !== 'php') {
                     continue;

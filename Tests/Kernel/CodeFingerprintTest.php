@@ -12,8 +12,15 @@ final class CodeFingerprintTest extends TestCase
     /** @var list<string> */
     private array $dirs = [];
 
+    /** @var list<string> */
+    private array $unreadable = [];
+
     protected function tearDown(): void
     {
+        foreach ($this->unreadable as $path) {
+            @chmod($path, 0755);
+        }
+        $this->unreadable = [];
         foreach ($this->dirs as $dir) {
             $this->removeDir($dir);
         }
@@ -68,6 +75,7 @@ final class CodeFingerprintTest extends TestCase
         $dir = $this->tempDir();
         $this->write($dir, 'version.idno', "version = '1'\nbuild = 1\n");
         $this->write($dir, 'config/services.php', '<?php return 1;');
+        $this->write($dir, 'Idno/Kernel.php', '<?php class K {}');
         $this->write($dir, 'Idno/Kernel/A.php', '<?php class A {}');
         $this->write($dir, 'vendor/composer/installed.php', '<?php return [];');
 
@@ -211,5 +219,46 @@ final class CodeFingerprintTest extends TestCase
         }
 
         $this->assertSame($this->compute($first), $this->compute($second));
+    }
+
+    public function testChangesWhenTheKernelClassFileChanges(): void
+    {
+        $dir = $this->project();
+        $before = $this->compute($dir);
+
+        touch($dir . '/Idno/Kernel.php', 1_700_000_700);
+
+        $this->assertNotSame($before, $this->compute($dir));
+    }
+
+    public function testUnreadableSubdirectoryIsSkipped(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('Permissions are not enforced for root.');
+        }
+        $dir = $this->project();
+        $this->write($dir, 'config/sub/inner.php', '<?php return 1;');
+        $before = $this->compute($dir);
+
+        $this->unreadable[] = $dir . '/config/sub';
+        chmod($dir . '/config/sub', 0000);
+        $after = $this->compute($dir);
+
+        $this->assertSame(1, preg_match('/^[0-9a-f]{12}$/', $after));
+        $this->assertNotSame($before, $after);
+
+        // Other files in the same root still count.
+        $this->write($dir, 'config/services.php', '<?php return 99999;', 1_700_000_300);
+        $this->assertNotSame($after, $this->compute($dir));
+    }
+
+    public function testRouteImportDirectoriesAreAllFingerprinted(): void
+    {
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/config/routes.php');
+        $this->assertSame(1, preg_match_all("#/Idno/(\\w+)'#", $source, $matches), 'routes.php no longer names an Idno/ directory in the expected form');
+
+        foreach ($matches[1] as $name) {
+            $this->assertContains($name, CodeFingerprint::SERVICE_DIRECTORIES);
+        }
     }
 }
