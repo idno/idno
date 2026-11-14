@@ -616,6 +616,39 @@ namespace Idno\Common {
         }
 
         /**
+         * Is this entity unpublished (a draft, for example) and so hidden from a given user?
+         * An entity whose publish status is set and is not "published" can only be seen by its
+         * owner and by site admins, whatever its access setting. An entity with no publish
+         * status counts as published.
+         *
+         * @param string $user_id The UUID of the user to check (default: the currently logged-in user)
+         * @return bool True if the user must not see this entity because it is unpublished
+         */
+        public function isHiddenByPublishStatus($user_id = '')
+        {
+            $status = $this->getPublishStatus();
+            if (empty($status) || $status == 'published') return false;
+
+            $session = \Idno\Core\Idno::site()->session();
+            $current_user_id = $session ? $session->currentUserUUID() : false;
+            if (empty($user_id)) {
+                $user_id = $current_user_id;
+            }
+            if (empty($user_id)) return true;
+
+            if ($this->getOwnerID() == $user_id) return false;
+
+            if ($user_id == $current_user_id) {
+                return !$session->isAdmin();
+            }
+            if (($user = User::getByUUID($user_id)) && $user->isAdmin()) {
+                return false;
+            }
+
+            return true;
+        }
+
+        /**
          * Return whether this object is in your ACLs.
          * @return bool: True if this object is in your ACLS, false if not (and by deduction, you're seeing this because you're an admin)
          */
@@ -1741,6 +1774,10 @@ namespace Idno\Common {
             if (empty($user_id)) {
                 $user_id = \Idno\Core\Idno::site()->session()->currentUserUUID();
             }
+
+            // Unpublished entities are for their owner and admins only, whatever their access setting
+            if ($this->isHiddenByPublishStatus($user_id)) return false;
+
             $access = $this->getAccess();
 
             if ($access == 'PUBLIC') return true;

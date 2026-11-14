@@ -44,13 +44,9 @@ namespace Tests\Characterisation {
 
             $r = $this->site()->request('GET', $this->path($draft->getURL()));
 
-            // Remove this branch once the draft-exposure fix is on this branch; from then on a
-            // regression must fail, not report incomplete.
-            if (str_contains($r->body, $marker)) {
-                $this->markTestIncomplete('KNOWN ISSUE (reported 2026-11-13): a draft with PUBLIC access is served to anonymous visitors at its permalink. Entity::canRead() does not consider publish status.');
-            }
-
-            $this->assertNotSame(200, $r->status);
+            // A draft is hidden from everyone but its owner and admins, whatever its access
+            // setting: it answers exactly like a private post (fixed in idno/idno#3403).
+            $this->assertSame(410, $r->status);
             $this->assertStringNotContainsString($marker, $r->body);
         }
 

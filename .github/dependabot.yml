@@ -11,3 +11,28 @@ updates:
     versions:
     - ">= 4.a"
     - "< 5"
+- package-ecosystem: npm
+  directory: "/Themes/Twenty26"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 5
+  groups:
+    # One PR for all security fixes, instead of one per advisory.
+    twenty26-security:
+      applies-to: security-updates
+      patterns:
+      - "*"
+    # The editor packages must move together (including @tiptap/pm).
+    twenty26-tiptap:
+      patterns:
+      - "@tiptap/*"
+    # Everything else: minor and patch updates in one PR. Major updates
+    # still arrive as individual PRs.
+    twenty26-minor-and-patch:
+      patterns:
+      - "*"
+      exclude-patterns:
+      - "@tiptap/*"
+      update-types:
+      - minor
+      - patch
