@@ -28,9 +28,7 @@ jobs:
 
   phpunit:
     name: PHPUnit (PHP ${{ matrix.php }} / ${{ matrix.db }})
-    # Pinned: ubuntu-latest (26.04) has no libapache2-mod-php8.3/8.4 packages,
-    # and Apache fails to start there with mod_php 8.5.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -77,7 +75,7 @@ jobs:
         run: composer require mongodb/mongodb --no-interaction
 
       - name: Install system packages
-        run: sudo apt-get update && sudo apt-get install -y libapache2-mod-php${{ matrix.php }} libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
       - name: Configure MySQL database
         if: matrix.db == 'mysql'
@@ -93,46 +91,35 @@ jobs:
         run: |
           cp Tests/build/config_default.ini configuration/config.ini
 
-      - name: Set up htaccess
-        run: cp warmup/webserver-configs/htaccess.dist .htaccess
-
-      - name: Start Apache with mod_php
+      - name: Start web server
         run: |
-          # Enable the PHP module and required Apache modules
-          sudo a2dismod mpm_event 2>/dev/null || true
-          sudo a2enmod mpm_prefork php${{ matrix.php }} rewrite headers access_compat
+          # Serve the checkout with PHP's built-in web server, using the same PHP
+          # binary as the tests. This avoids depending on which mod_php packages
+          # the runner's Ubuntu release happens to ship.
 
-          # Run Apache as the runner user (same approach as Travis CI)
-          sudo sed -i 's/export APACHE_RUN_USER=www-data/export APACHE_RUN_USER=runner/' /etc/apache2/envvars
-          sudo sed -i 's/export APACHE_RUN_GROUP=www-data/export APACHE_RUN_GROUP=runner/' /etc/apache2/envvars
+          # The tests expect the site on port 80; let the runner user bind it
+          sudo systemctl stop apache2 2>/dev/null || true
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
 
-          # Write vhost pointing at the checkout directory
-          echo '<VirtualHost *:80>
-            ServerName localhost
-            DocumentRoot ${{ github.workspace }}
-            <Directory "${{ github.workspace }}">
-              Options FollowSymLinks MultiViews
-              AllowOverride All
-              Require all granted
-            </Directory>
-            ErrorLog ${{ github.workspace }}/apache-error.log
-            CustomLog ${{ github.workspace }}/apache-access.log combined
-          </VirtualHost>' | sudo tee /etc/apache2/sites-available/000-default.conf > /dev/null
+          PHP_CLI_SERVER_WORKERS=8 nohup php -S 0.0.0.0:80 -t "${{ github.workspace }}" \
+            "${{ github.workspace }}/Tests/build/router.php" \
+            > "${{ github.workspace }}/php-server.log" 2>&1 &
 
-          # Make the workspace traversable
-          sudo chmod 755 /home/runner /home/runner/work
-
-          # Restart Apache
-          sudo systemctl restart apache2
-
-          # Verify PHP is working through Apache
-          echo '<?php phpinfo();' > ${{ github.workspace }}/phpinfo_test.php
-          curl -s http://localhost/phpinfo_test.php | head -5
-          rm ${{ github.workspace }}/phpinfo_test.php
+          # Wait for the server to accept connections
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost/; then
+              echo "Web server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Web server did not start"
+          cat "${{ github.workspace }}/php-server.log"
+          exit 1
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit
 
-      - name: Show Apache error log on failure
+      - name: Show web server log on failure
         if: failure()
-        run: cat ${{ github.workspace }}/apache-error.log 2>/dev/null || true
+        run: tail -n 200 ${{ github.workspace }}/php-server.log 2>/dev/null || true
