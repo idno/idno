@@ -33,6 +33,10 @@ php vendor/bin/phpunit IdnoPlugins/ActivityPub/Tests/
 
 # PHP syntax check
 php -l path/to/File.php
+
+# The command line (Symfony's commands and the legacy console plugins; idno.php is an alias)
+php bin/console list
+php bin/console version
 ```
 
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`)
@@ -48,11 +52,13 @@ all of the work; it is being moved onto Symfony step by step, keeping the site w
 
 ```
 index.php                      HTTP front controller (every web request)
-idno.php                       Console (CLI) entry point
+bin/console                    Console (CLI) entry point
+idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
   Kernel/                      Cache directory and code fingerprint for the compiled container
   Http/                        FrontController (what index.php runs)
+  Console/                     Idno\Console\Application, the CLI application (see Entry points)
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
   Legacy/                      Shims between the kernel and the legacy application (see below)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
@@ -83,10 +89,12 @@ anything else, or unset, is false), both read from `$_SERVER`.
   returns. Used by `Tests/_bootstrap.php` and by third-party scripts that need
   `Idno::site()`. It does not handle a request. On a site with no configuration it sends
   the same redirect to `./warmup/` as `index.php` and exits.
-- **`idno.php`** (CLI): the Symfony Console application with the legacy console plugins.
-  It defines `IDNO_CONSOLE`, which makes `LegacyBootstrap` skip the web-only boot steps.
-  There is no `bin/console` yet. `known.php` is a backwards-compatibility wrapper that
-  just includes `idno.php`.
+- **`bin/console`** (CLI): defines `IDNO_CONSOLE` (before the kernel boots, because it makes
+  `LegacyBootstrap` skip the web-only boot steps), boots the kernel, and runs
+  `Idno\Console\Application`, a subclass of FrameworkBundle's console application. On a
+  site with no configuration it prints one line to stderr and exits 1. `idno.php` and
+  `known.php` are aliases that just require `bin/console`; use either. See "Console
+  commands" below.
 
 These run WITHOUT the kernel or the container, so installer code cannot use container
 services, `Idno::site()` or `Idno::container()`:
@@ -167,6 +175,37 @@ New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
 - A test-only route goes in `Tests/Fixtures/` (loaded by `config/routes/test/fixtures.php`
   in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
   example, pinned by `Tests/Characterisation/KernelRoutingTest`.
+
+### Console commands
+
+`php bin/console list` shows Symfony's own commands (`cache:clear`, `debug:router`,
+`debug:container`, ...) next to Idno's, in one application.
+
+- **Adding a command (the new way)**: a class under `Idno/` that extends Symfony's
+  `Command` and has the `#[Symfony\Component\Console\Attribute\AsCommand]` attribute,
+  in a directory the container scans (`Idno/Console/` is the place; see
+  `CodeFingerprint::SERVICE_DIRECTORIES`). It is autowired and autoconfigured, so it is
+  tagged `console.command` and discovered automatically; take its dependencies in the
+  constructor and put the work in `__invoke()` (or `execute()`). It must return an int.
+  `Tests/Fixtures/ProbeCommand` (`idno:test:probe`, registered in `config/services_test.php`)
+  is the test-environment-only example, pinned by `Tests/Kernel/ConsoleTest`; it is absent
+  in `prod`. Console code may take a `Psr\Log\LoggerInterface`: the console always boots the
+  legacy application.
+- **Legacy console plugins still work**: `Idno\Common\ConsolePlugin` subclasses
+  (`getCommand()`, `getDescription()`, `getParameters()`, `execute()`) are found by
+  `Idno\Console\Application` once the kernel (and so the legacy application) has booted,
+  in this order: `ConsolePlugins/<Name>/Main.php` and `ConsolePlugins/<Name>.php`, then
+  `IdnoPlugins/<Name>/ConsoleMain.php` and `IdnoPlugins/<Name>/Console/*.php`. A legacy
+  `execute()` that returns nothing exits 0. Do not add new ones; add a command class.
+  The built-in `version` command is also registered there.
+- `Idno\Console\Application` takes the kernel, so it is excluded from the container's
+  service scan in `config/services.php` (as is `Idno/Console/functions.php`, which defines
+  the global `application()` function that legacy console plugins call; it returns the
+  application, which is also the global `$console`).
+- In-process tests must not boot a second legacy kernel to run commands: build the
+  application from `Idno::container()->get('kernel')` and use `ApplicationTester`. PHPUnit's
+  bootstrap boots the web path and does not define `IDNO_CONSOLE`, so test anything that
+  depends on the console path in a subprocess.
 
 ### Legacy pages and routes (still supported)
 

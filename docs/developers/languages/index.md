@@ -17,20 +17,20 @@ translations to your code.
 The first step, after you've used ```\Idno\Core\Idno::site()->language()->_()``` to write your strings, is to generate a POT template
 translation file.
 
-From the Idno project root, run:
+From the Idno project root, run (`php idno.php` works as an alias for `php bin/console`):
 
 ```bash
 # Extract strings for core Idno
-php idno.php build-lang core
+php bin/console build-lang core
 
 # Extract strings for a specific plugin
-php idno.php build-lang plugin:Status
+php bin/console build-lang plugin:Status
 
 # Extract strings for a specific theme
-php idno.php build-lang theme:Cherwell
+php bin/console build-lang theme:Cherwell
 
 # Extract strings for everything (core + all plugins + all themes)
-php idno.php build-lang all
+php bin/console build-lang all
 ```
 
 This will parse all PHP files in the target and extract translatable strings into the appropriate ```.pot``` file.
@@ -41,7 +41,7 @@ The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all 
     You can also run ```grunt build-lang``` from the project root or from any plugin/theme directory, which will invoke the same command.
 
 !!! note "Note"
-    If you have added a new translation string to Idno's core code or templates, run ```php idno.php build-lang core``` to update the ```idno.pot``` file.
+    If you have added a new translation string to Idno's core code or templates, run ```php bin/console build-lang core``` to update the ```idno.pot``` file.
 
 
 ### Creating your translation

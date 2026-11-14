@@ -31,6 +31,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // Static methods only, used by index.php before the container exists.
         'Http' => ['FrontController.php'],
+        // Takes the kernel (so cannot be a container service); functions.php is not a class.
+        'Console' => ['Application.php', 'functions.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

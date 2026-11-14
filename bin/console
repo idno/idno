@@ -1,0 +1,34 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * The Idno command line: Symfony's console commands and the legacy console plugins.
+ * idno.php and known.php are aliases that run this file.
+ */
+
+// Must be defined before the kernel boots: the legacy boot skips its web-only steps for the console.
+define('IDNO_CONSOLE', 'true');
+if (!defined('KNOWN_CONSOLE')) {
+    define('KNOWN_CONSOLE', IDNO_CONSOLE);
+}
+
+// Load external libraries
+if (file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
+    include_once dirname(__DIR__) . '/vendor/autoload.php';
+} else {
+    die('Could not find autoload.php, did you run "composer install" ..?');
+}
+
+// Boot Idno: the Symfony kernel boots the legacy application (see \Idno\Legacy\LegacyBootstrap)
+$kernel = \Idno\Kernel::fromGlobals();
+try {
+    $kernel->boot();
+} catch (\Idno\Legacy\NotInstalledException $e) {
+    fwrite(STDERR, "Idno is not installed yet: run the installer (warmup/ in a browser, or warmup/CLI/CLIInstaller.php) first.\n");
+    exit(1);
+} catch (\Exception $e) {
+    error_log($e->getMessage());
+}
+
+$console = new \Idno\Console\Application($kernel);
+$console->run();

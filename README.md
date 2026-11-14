@@ -53,8 +53,10 @@ processed inline during the web request.
 #### 2. Start the event queue worker
 
 ```bash
-sudo -u www-data IDNO_DOMAIN='your.domain' ./idno.php service-event-queue
+sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-event-queue
 ```
+
+(`./idno.php` still works as an alias for `./bin/console`.)
 
 | Option       | Default   | Description                                |
 |--------------|-----------|--------------------------------------------|
@@ -89,7 +91,7 @@ Type=simple
 User=www-data
 Environment=IDNO_DOMAIN=your.domain
 WorkingDirectory=/var/www/idno
-ExecStart=/var/www/idno/idno.php service-event-queue #replace with your path
+ExecStart=/var/www/idno/bin/console service-event-queue #replace with your path
 Restart=always
 RestartSec=5
 
@@ -118,7 +120,7 @@ instead. The `--once` flag makes the worker process one batch of pending events
 and exit, which is ideal for cron:
 
 ```
-* * * * * sudo -u www-data IDNO_DOMAIN='your.domain' /var/www/idno/idno.php service-event-queue --once >> /var/log/idno-queue.log 2>&1
+* * * * * sudo -u www-data IDNO_DOMAIN='your.domain' /var/www/idno/bin/console service-event-queue --once >> /var/log/idno-queue.log 2>&1
 ```
 
 This processes pending events once per minute. Events may take up to 60 seconds
@@ -130,7 +132,7 @@ If you need periodic background tasks (triggered via `cron/minute`,
 `cron/hourly`, and `cron/daily` events), start the cron service the same way:
 
 ```bash
-sudo -u www-data IDNO_DOMAIN='your.domain' ./idno.php service-cron
+sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-cron
 ```
 
 You can create a second systemd unit (`idno-cron.service`) following the same

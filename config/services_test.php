@@ -6,6 +6,7 @@ use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Tests\Fixtures\LoggerConsumer;
+use Tests\Fixtures\ProbeCommand;
 
 /**
  * Test-environment only (the kernel loads config/services_<env>.php for the active
@@ -18,6 +19,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()
         ->defaults()->autowire()->autoconfigure()
         ->set(LoggerConsumer::class)->public();
+
+    // A new-style console command: autoconfigure tags it from its #[AsCommand] attribute.
+    $container->services()
+        ->defaults()->autowire()->autoconfigure()
+        ->set(ProbeCommand::class);
 
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();
