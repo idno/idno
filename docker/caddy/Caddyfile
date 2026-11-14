@@ -5,6 +5,12 @@
 	# our root is in /srv
 	root * /app
 
+	# Never serve or run the cache, kernel configuration, command-line scripts, tests, docs,
+	# site configuration, uploads or git metadata (the same rules as .htaccess; see
+	# docs/install/upgrade.md). Case-insensitive.
+	@denied path_regexp denied (?i)^/((var|config|bin|tests|docs|warmup/cli|configuration|uploads|\.git|\.github)(/|$)|(idno|known)\.php$)
+	respond @denied 403
+
         # Rewrites
         rewrite /js/canary.js /js/known.min.js
         @css path_regexp css ^/css/[0-9]+/(.*)$

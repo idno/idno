@@ -1,4 +1,5 @@
-FROM php:8.3.7-fpm-alpine
+# Idno requires PHP 8.4 (composer.json, index.php)
+FROM php:8.4-fpm-alpine
 
 LABEL maintainer="Jim Winstead <jimw@trainedmonkey.com>"
 

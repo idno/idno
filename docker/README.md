@@ -15,8 +15,11 @@ User name: known (or whatever you set in .env)
 Password: whatever you set in .env
 Server: db
 
-The 'configuration' and 'Uploads' directories are wide open so the webserver
+The 'configuration', 'Uploads' and 'var' directories are wide open so the webserver
 can write to them because Docker user/permission management is a headache.
+
+The image runs PHP 8.4, which Idno requires. It sets opcache.validate_timestamps=0, so
+restart the idno container after changing any PHP file (see docs/install/upgrade.md).
 
 Jim Winstead <jimw@trainedmonkey.com>
 June 3, 2024
