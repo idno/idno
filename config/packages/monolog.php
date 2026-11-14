@@ -2,15 +2,14 @@
 
 declare(strict_types=1);
 
-use Monolog\Formatter\LineFormatter;
+use Idno\Legacy\VerbatimLogFormatter;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 return static function (ContainerConfigurator $container): void {
     // Idno\Core\Logging builds the complete line ("Idno (host): level - message") and
-    // filters by the site's log level, so this channel writes the message as it is.
+    // filters by the site's log level, so this channel writes the message verbatim.
     $container->services()
-        ->set('idno.log_formatter', LineFormatter::class)
-        ->args(['%%message%%', null, true, true])
+        ->set('idno.log_formatter', VerbatimLogFormatter::class)
         ->private();
 
     $container->extension('monolog', [

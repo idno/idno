@@ -60,6 +60,78 @@ final class LoggingTest extends TestCase
         $this->assertSame(["Idno ($host): error - first", "Idno ($host): error - second"], $this->lines());
     }
 
+    /**
+     * @return array<string, array{0: string, 1: array<string, mixed>, 2: list<string>}>
+     */
+    public static function verbatimMessages(): array
+    {
+        return [
+            'channel placeholder' => ['a %channel% b', [], ['a %channel% b']],
+            'level_name and level' => ['x %level_name% %level% y', [], ['x %level_name% %level% y']],
+            'datetime' => ['at %datetime%', [], ['at %datetime%']],
+            'message' => ['m %message% m', [], ['m %message% m']],
+            'context and extra' => ['%context.foo% %extra.bar% z', [], ['%context.foo% %extra.bar% z']],
+            'literal percent' => ['100%', [], ['100%']],
+            'brace placeholder without context' => ['hello {name}', [], ['hello {name}']],
+            'empty message' => ['', [], ['']],
+            'trailing whitespace' => ["tail \t ", [], ['tail']],
+            'context beside percent' => ['%channel%', ['k' => '%level%'], ['%channel% {"k":"%level%"}']],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @param list<string>         $expected message portion of each line
+     *
+     * @dataProvider verbatimMessages
+     */
+    public function testMessagesAreWrittenVerbatim(string $message, array $context, array $expected): void
+    {
+        Idno::site()->logging()->error($message, $context);
+
+        $host = Idno::site()->config()->host;
+        $this->assertSame(array_map(static fn (string $m): string => "Idno ($host): error - $m", $expected), $this->lines());
+    }
+
+    public function testLevelsAboveDebugBehaveAsDebug(): void
+    {
+        Idno::site()->logging()->setLogLevel(5);
+        Idno::site()->logging()->debug('deep');
+
+        // Above LEVEL_DEBUG nothing is filtered, and no trace is appended (only exactly LEVEL_DEBUG adds one).
+        $host = Idno::site()->config()->host;
+        $this->assertSame(["Idno ($host): debug - deep"], $this->lines());
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: bool}>
+     */
+    public static function psrLevels(): array
+    {
+        return [
+            'emergency at error' => ['emergency', Logging::LEVEL_ERROR, true],
+            'alert at error' => ['alert', Logging::LEVEL_ERROR, true],
+            'critical at error' => ['critical', Logging::LEVEL_ERROR, true],
+            'critical at off' => ['critical', Logging::LEVEL_OFF, false],
+            'notice at warning' => ['notice', Logging::LEVEL_WARNING, false],
+            'notice at info' => ['notice', Logging::LEVEL_INFO, true],
+            'warning at warning' => ['warning', Logging::LEVEL_WARNING, true],
+            'warning at error' => ['warning', Logging::LEVEL_ERROR, false],
+        ];
+    }
+
+    /**
+     * @dataProvider psrLevels
+     */
+    public function testPsrLevelsPrintAndFilterAsBefore(string $level, int $siteLevel, bool $written): void
+    {
+        Idno::site()->logging()->setLogLevel($siteLevel);
+        Idno::site()->logging()->$level('lvl');
+
+        $host = Idno::site()->config()->host;
+        $this->assertSame($written ? ["Idno ($host): $level - lvl"] : [], $this->lines());
+    }
+
     public function testLevelFilterSuppressesLowerLevels(): void
     {
         Idno::site()->logging()->setLogLevel(Logging::LEVEL_ERROR);
