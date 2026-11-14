@@ -19,7 +19,7 @@ namespace Tests\Characterisation {
 
         public function request(string $method, string $path, array $headers = [], string|array|null $body = null): SiteResponse
         {
-            $responseHeaders = [];
+            $headerLines = [];
             $ch              = curl_init($this->baseUrl . ltrim($path, '/'));
 
             $requestHeaders = [];
@@ -34,11 +34,8 @@ namespace Tests\Characterisation {
                 CURLOPT_COOKIEFILE     => '',
                 CURLOPT_TIMEOUT        => 30,
                 CURLOPT_HTTPHEADER     => $requestHeaders,
-                CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$responseHeaders) {
-                    $parts = explode(':', $line, 2);
-                    if (count($parts) === 2) {
-                        $responseHeaders[trim($parts[0])] = trim($parts[1]);
-                    }
+                CURLOPT_HEADERFUNCTION => function ($ch, $line) use (&$headerLines) {
+                    $headerLines[] = $line;
 
                     return strlen($line);
                 },
@@ -60,7 +57,35 @@ namespace Tests\Characterisation {
             $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
 
-            return new SiteResponse($status, $responseHeaders, (string)$content);
+            return new SiteResponse($status, self::parseHeaderLines($headerLines), (string)$content);
+        }
+
+        /**
+         * Parse raw header lines (as curl delivers them) into a lowercase-keyed map.
+         * Repeated headers are joined with ', '. A new status line (e.g. after
+         * '100 Continue') discards headers gathered so far.
+         *
+         * @param string[] $lines
+         * @return array<string,string>
+         */
+        public static function parseHeaderLines(array $lines): array
+        {
+            $headers = [];
+            foreach ($lines as $line) {
+                if (str_starts_with($line, 'HTTP/')) {
+                    $headers = [];
+                    continue;
+                }
+                $parts = explode(':', $line, 2);
+                if (count($parts) !== 2) {
+                    continue;
+                }
+                $name  = strtolower(trim($parts[0]));
+                $value = trim($parts[1]);
+                $headers[$name] = isset($headers[$name]) ? $headers[$name] . ', ' . $value : $value;
+            }
+
+            return $headers;
         }
     }
 

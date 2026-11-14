@@ -26,6 +26,27 @@ namespace Tests\Characterisation {
             $this->assertFalse(\Idno\Common\Entity::getByUUID($uuid));
         }
 
+        public function testFailingFixtureCleanupDoesNotStopOthersAndIsReported(): void
+        {
+            $broken = new class extends \IdnoPlugins\Status\Status {
+                public function getUUID()
+                {
+                    throw new \RuntimeException('cleanup boom');
+                }
+            };
+            $this->registerFixture($broken);
+            $good = $this->createStatus($this->user(), 'cleanup survivor');
+            $uuid = $good->getUUID();
+
+            try {
+                $this->tearDown();
+                $this->fail('tearDown should rethrow the cleanup failure');
+            } catch (\RuntimeException $e) {
+                $this->assertSame('cleanup boom', $e->getMessage());
+            }
+            $this->assertFalse(\Idno\Common\Entity::getByUUID($uuid));
+        }
+
     }
 
 }

@@ -25,18 +25,30 @@ namespace Tests\Characterisation {
         protected function tearDown(): void
         {
             // Idempotent: may be called explicitly by a test and again by PHPUnit.
-            foreach ($this->fixtures as $entity) {
-                // Reload: the web server may have changed the stored entity.
-                $uuid = $entity->getUUID();
-                \Idno\Common\Entity::invalidateCache($uuid);
-                $fresh = \Idno\Common\Entity::getByUUID($uuid);
-                if ($fresh instanceof \Idno\Common\Entity) {
-                    $fresh->delete();
+            $first = null;
+            try {
+                foreach ($this->fixtures as $entity) {
+                    try {
+                        // Reload: the web server may have changed the stored entity.
+                        $uuid = $entity->getUUID();
+                        \Idno\Common\Entity::invalidateCache($uuid);
+                        $fresh = \Idno\Common\Entity::getByUUID($uuid);
+                        if ($fresh instanceof \Idno\Common\Entity) {
+                            $fresh->delete();
+                        }
+                        \Idno\Common\Entity::invalidateCache($uuid);
+                    } catch (\Throwable $e) {
+                        $first ??= $e;
+                    }
                 }
-                \Idno\Common\Entity::invalidateCache($uuid);
+            } finally {
+                $this->fixtures = [];
+                parent::tearDown();
             }
-            $this->fixtures = [];
-            parent::tearDown();
+            // A leftover fixture is worse than a red test.
+            if ($first !== null) {
+                throw $first;
+            }
         }
 
         protected function site(): SiteClient
@@ -78,14 +90,23 @@ namespace Tests\Characterisation {
             return $absoluteUrl;
         }
 
+        /**
+         * Track an entity for deletion in tearDown(). Called before saving so a
+         * partially failed save is still cleaned up.
+         */
+        protected function registerFixture(\Idno\Common\Entity $entity): void
+        {
+            $this->fixtures[] = $entity;
+        }
+
         private function saveFixture(\Idno\Common\Entity $entity, \Idno\Entities\User $owner, string $access, string $publishStatus): \Idno\Common\Entity
         {
+            $this->registerFixture($entity);
             $entity->setOwner($owner);
             // 'PUBLIC' for public; otherwise the access group id, e.g. the owner's UUID for private.
             $entity->setAccess($access);
             $entity->setPublishStatus($publishStatus);
             $entity->save(true);
-            $this->fixtures[] = $entity;
 
             return $entity;
         }
