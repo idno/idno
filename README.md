@@ -202,7 +202,7 @@ Third party libraries are licensed separately.
 * MediaElement.js, a cross-browser media player, which is distributed under the MIT License. Source: https://github.com/johndyer/mediaelement
 * Simplepie, a feed parser, which is distributed under the BSD 3-Clause License. Source: https://github.com/simplepie/simplepie/
 * Bootstrap Toggle, which is distributed under the MIT License. Source: http://www.bootstraptoggle.com/
-* TinyMCE, a rich text editor, which is distributed under the LGPL License. Source: https://github.com/tinymce/tinymce
+* TinyMCE, a rich text editor, which is distributed under the GPL License (version 2 or later). Source: https://github.com/tinymce/tinymce
 * The Paypal Bootstrap Accessibility Plugin, which is distributed under the BSD 3-Clause License. Source: https://github.com/paypal/bootstrap-accessibility-plugin
 * HTMLPurifier, which is distributed under the LGPL License. Source: http://htmlpurifier.org
 * Wavesurfer, which is distrubuted under a Creative Commons Attribution 3.0 Unported License. Source: https://github.com/katspaugh/wavesurfer.js

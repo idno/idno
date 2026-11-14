@@ -60,6 +60,7 @@ if (!empty($vars['label'])) {
     function makeRichText(container) {
         $(container).tinymce({
             selector: 'textarea',
+            license_key: 'gpl',
             statusbar: false,
             <?php if (!empty($vars['wordcount'])) {
                 ?>statusbar: true, <?php

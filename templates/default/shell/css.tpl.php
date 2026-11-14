@@ -9,8 +9,6 @@
 <link rel="stylesheet" type="text/css"
       href="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>vendor/idno/mentionjs/recommended-styles.css">
 
-<link rel="stylesheet" type="text/css"
-      href="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>vendor/npm-asset/eonasdan-bootstrap-datetimepicker/build/css/bootstrap-datetimepicker.min.css">
 
 <?php
     // Load style assets
