@@ -28,7 +28,9 @@ jobs:
 
   phpunit:
     name: PHPUnit (PHP ${{ matrix.php }} / ${{ matrix.db }})
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest (26.04) has no libapache2-mod-php8.3/8.4 packages,
+    # and Apache fails to start there with mod_php 8.5.
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
