@@ -44,6 +44,8 @@ namespace Tests\Characterisation {
 
             $r = $this->site()->request('GET', $this->path($draft->getURL()));
 
+            // Remove this branch once the draft-exposure fix is on this branch; from then on a
+            // regression must fail, not report incomplete.
             if (str_contains($r->body, $marker)) {
                 $this->markTestIncomplete('KNOWN ISSUE (reported 2026-11-13): a draft with PUBLIC access is served to anonymous visitors at its permalink. Entity::canRead() does not consider publish status.');
             }

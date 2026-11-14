@@ -30,7 +30,7 @@ Now, you are able to pass these options to the installer:
 ./CLIInstaller install config.ini /path/to/manifest
 ```
 
-You'll also notice I'm specifying the ```config.ini``` ini file to write to, you can write this config to other files as necessary, which is handy if you're using per-domain configuration.
+The first argument names the file to write in `configuration/`. It must be `config.ini`: Idno no longer reads per-domain configuration files (`configuration/<domain>.ini`), so the installer refuses any other name.
 
 # Other options
 
@@ -46,10 +46,10 @@ If you just want to check that your server has the necessary requirements to run
 
 ## Generate config from manifest
 
-If you want to generate a config file, but without going through the full install (useful if you want to generate a new domain config in a script), you can use the following command to do so
+If you want to generate a config file, but without going through the full install (useful in a provisioning script), you can use the following command to do so
 
 ```
 ./CLIInstaller.php makeconfig /path/to/manifest 
 ```
 
-This will output the new config to stdOut. You can save it to an ini file as appropriate!
+This will output the new config to stdOut. Save it as `configuration/config.ini`.

@@ -7,8 +7,8 @@ use Symfony\Component\Routing\RouteCollection;
 
 /**
  * Test-environment only (Symfony loads config/routes/<env>/*.php for the active environment):
- * attribute routes from Tests/Fixtures, which a later task creates. See config/routes.php for
- * why the collection is built by hand.
+ * attribute routes from Tests/Fixtures (e.g. PingController, ThrowingController). See
+ * config/routes.php for why the collection is built by hand.
  *
  * @var \Symfony\Component\Routing\Loader\PhpFileLoader $loader
  */

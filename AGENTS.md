@@ -22,30 +22,37 @@ composer test:up      # start the rig (creates configuration/config.ini if absen
 composer test         # run the full suite (core + plugins)
 composer test:down    # stop the rig
 
-# Without the composer script, set the rig's environment yourself:
-#   IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit
+# Run one directory or file (a plugin's tests, the kernel tests, ...)
+composer test -- IdnoPlugins/ActivityPub/Tests/
+composer test -- Tests/Kernel
 
-# CI only (CI's php.ini already excludes deprecations; locally this fails on PHP 8.5, use `composer test`)
-php vendor/bin/phpunit
-
-# Run a single plugin's tests
-php vendor/bin/phpunit IdnoPlugins/ActivityPub/Tests/
-
-# PHP syntax check
+# Coding standard and PHP syntax check
+vendor/bin/phpcs -n
 php -l path/to/File.php
 
-# The command line (Symfony's commands and the legacy console plugins; idno.php is an alias)
-php bin/console list
-php bin/console version
-
-# Against the test rig (its config turns on pedantic_mode), run the console like the tests
+# The command line (Symfony's commands and the legacy console plugins), against the test rig
 composer console -- list
 ```
 
+- `composer test` is `IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit`:
+  the rig's address, and PHP deprecations excluded (on PHP 8.5 legacy code emits them, and the rig's
+  `pedantic_mode` turns them into exceptions). Do not run bare `vendor/bin/phpunit` locally. CI
+  (`.github/workflows/tests.yml`) does run bare `vendor/bin/phpunit`, because its php.ini already
+  excludes deprecations.
+- Likewise run the console as `composer console -- <command>` against the rig; on a site without
+  `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
+  "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`)
-- Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT`
+- Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT` (default `localhost`, 80)
 - Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
+- CI does not use the rig: it copies `Tests/build/config_mysql.ini` (or `config_default.ini` for the
+  MongoDB jobs) to `configuration/config.ini` and serves the site at `http://localhost/` with
+  `php -S localhost:80` and `Tests/build/router.php`, on a fresh database. Tests must not assume a
+  particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
+  or stored content beyond what both the rig's and CI's configurations provide; derive expectations
+  from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
+  `Tests/rig/config.ini` and `Tests/build/config_*.ini` in step.
 
 ## Architecture
 
@@ -55,7 +62,7 @@ all of the work; it is being moved onto Symfony step by step, keeping the site w
 
 ```
 index.php                      HTTP front controller (every web request)
-bin/console                    Console (CLI) entry point
+bin/console                    Console (CLI) entry point (refuses to run under a web server)
 idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
@@ -73,6 +80,9 @@ Idno/
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
                                packages/ (framework, monolog), routes/test/ (test-only routes),
                                services_test.php (test-only services)
+var/                           The compiled container (var/cache/); must be writable by the web server
+                               (or set IDNO_CACHE_DIR). config/, bin/, var/ and Tests/ each hold a
+                               deny-all .htaccess; none of them may be served (see Code Style)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
@@ -84,7 +94,8 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
 Tests/                         Unit, kernel (Tests/Kernel) and black-box characterisation tests;
-                               Tests/Fixtures holds test-only controllers
+                               Tests/Fixtures holds test-only controllers, a command and a service;
+                               Tests/rig/ is the local test rig, Tests/build/ the CI configs and router
 ```
 
 ### Entry points
@@ -98,14 +109,15 @@ anything else, or unset, is false), both read from `$_SERVER`.
   returns. Used by `Tests/_bootstrap.php` and by third-party scripts that need
   `Idno::site()`. It does not handle a request. On a site with no configuration it sends
   the same redirect to `./warmup/` as `index.php` and exits.
-- **`bin/console`** (CLI): defines `IDNO_CONSOLE` (before the kernel boots, because it makes
+- **`bin/console`** (CLI): first refuses to run under any SAPI but `cli` or `phpdbg` (a web
+  server that executes it gets a 404 with an empty body). It then defines `IDNO_CONSOLE` (before the kernel boots, because it makes
   `LegacyBootstrap` skip the web-only boot steps), boots the kernel, and runs
   `Idno\Console\Application`, a subclass of FrameworkBundle's console application. On a
   site with no configuration it prints one line to stderr and exits 1; on any other
   exception while booting it prints `Idno could not start: <exception class>: <message>`
   to stderr and exits 1 (it does not carry on). `idno.php` and
-  `known.php` are aliases that just require `bin/console`; use either. See "Console
-  commands" below.
+  `known.php` are aliases that repeat the SAPI check and require `bin/console`; use either.
+  See "Console commands" below.
 
 These run WITHOUT the kernel or the container, so installer code cannot use container
 services, `Idno::site()` or `Idno::container()`:
@@ -113,6 +125,8 @@ services, `Idno::site()` or `Idno::container()`:
 - **`warmup/index.php`** (web installer, a separate web entry point that the web server
   serves directly): loads `vendor/autoload.php` and `warmup/WebInstaller.php` only.
 - **`warmup/CLI/CLIInstaller.php`** (command-line installer): loads `vendor/autoload.php` only.
+  It writes `configuration/config.ini` only; per-domain config files are no longer read, so
+  `install <name>` refuses any other name.
 
 ### Request lifecycle
 
@@ -151,14 +165,25 @@ before a controller is chosen because Symfony rejects the request itself (a
 `Idno\Legacy\LegacyFallbackListener` logs a warning through the legacy logger
 (`Idno\Core\Logging`, so the site's log level and line format apply; the request-derived
 detail is stripped of control characters and cut to 200 bytes) and hands the request to
-the legacy router, so such requests are served exactly as before. Any other
+the legacy router, so such requests are served exactly as before. (The listener receives the
+logger as a service closure and fetches it only then: building it needs the legacy
+application, and in a second kernel would replace the PHP error handler.) Any other
 exception before routing (a broken route definition, a failing listener) and any
-exception thrown by a new-style controller is handled by Symfony: it is logged and shown
-as Symfony's error page.
+exception thrown by a new-style controller is handled by Symfony: it is logged to PHP's
+error log by the `symfony` Monolog handler (see "Kernel and services") and shown as
+Symfony's error page.
 
 ### Adding a route (the new way)
 
-New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
+New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
+limit: **there is no session authentication, access control or CSRF protection for
+new-style controllers yet** (Symfony Security arrives in a later phase). Legacy `Page`
+classes get the logged-in user, `gatekeeper()`/`adminGatekeeper()` and CSRF token checks
+on POST automatically; a controller gets none of them. Until then, any endpoint that needs
+a logged-in user, checks permissions, or accepts a state-changing request from a browser
+MUST remain a legacy `Idno\Common\Page`. New-style controllers are only for public,
+read-only endpoints, or endpoints that authenticate each request themselves (e.g. a signed
+request or a bearer token).
 
 - Put a controller class with a `#[Symfony\Component\Routing\Attribute\Route]`
   attribute in a directory that `config/routes.php` imports attribute routes from
@@ -185,7 +210,8 @@ New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes:
   injection; services are autowired from the container.
 - A test-only route goes in `Tests/Fixtures/` (loaded by `config/routes/test/fixtures.php`
   in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
-  example, pinned by `Tests/Characterisation/KernelRoutingTest`.
+  example, pinned by `Tests/Characterisation/KernelRoutingTest`; `ThrowingController`
+  (`/_test/throw`) throws, for `Tests/Kernel/KernelExceptionTest`.
 
 ### Console commands
 
@@ -247,6 +273,11 @@ catch-all described above. Do not add new ones; add a controller instead.
 `VerbatimLogFormatter`, `NotInstalledException`). They
 exist to be removed as the legacy code is replaced. New code must not depend on anything
 in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected services.
+The only classes outside `Idno\Legacy\` (and outside the legacy `Idno\Core`, `Idno\Common`,
+... code) that reference it are `Idno\Kernel` and `Idno\Http\FrontController`, for wiring;
+the entry points (`index.php`, `bin/console`, `Idno/start.php`) and the kernel configuration
+(`config/services.php`, `config/routes.php`, `config/packages/monolog.php`) wire it too. No
+other new code may.
 
 ### Kernel and services
 
@@ -274,21 +305,34 @@ in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected se
   fetches them in its original order, so `Idno::site()->db()` and
   `$container->get(\Idno\Core\DataConcierge::class)` are the same object.
 - New code should have services injected rather than calling `Idno::site()`.
-- The compiled container lives in `<cache base>/<env>/<build>-<fingerprint>` (cache base:
-  `IDNO_CACHE_DIR`, else `var/cache`, else a private temp dir; build number from
-  `version.idno`). It is rebuilt automatically when any of these change (the fingerprint,
-  `Idno\Kernel\CodeFingerprint`): `version.idno`, `Idno/Kernel.php`, any PHP file under
+- The compiled container lives in `<cache base>/<env>/<build>-<key>` (cache base:
+  `IDNO_CACHE_DIR`, else `var/cache`, else a private per-project temp dir; build number from
+  `version.idno`). The key (`Kernel::getCacheDir()`) hashes the code fingerprint together with
+  the project directory's real path, because the compiled container holds that absolute path
+  (it reads that install's `config.ini`): two installs sharing one `IDNO_CACHE_DIR` never share
+  a container, even with identical files. The fingerprint itself
+  (`Idno\Kernel\CodeFingerprint`) does not depend on where the project is. The container is
+  rebuilt automatically when any of these change: `version.idno`, `Idno/Kernel.php`, any PHP file under
   `config/` (recursively, except the generated `reference.php`), any PHP file under the
-  directories in `CodeFingerprint::SERVICE_DIRECTORIES`, or the installed packages.
-  Known limits: detection uses file path, size and modification time, not contents, so an
-  edit that keeps both (same size within the same second, or a deploy that normalises
-  mtimes) is not detected; and a class in a scanned directory that extends or uses a class,
-  interface or trait OUTSIDE the scanned directories is not rebuilt when only that outside
-  file changes. So new code in scanned directories should not inherit constructor
-  signatures from legacy classes, and if in doubt delete `var/cache/`. When you add a
-  directory that the container scans for services OR that `config/routes.php` imports
-  attribute routes from, add it to `CodeFingerprint::SERVICE_DIRECTORIES`. In debug mode
-  the route cache is also revalidated against its source files on each request.
+  directories in `CodeFingerprint::SERVICE_DIRECTORIES`, or the installed packages. When you
+  add a directory that the container scans for services OR that `config/routes.php` imports
+  attribute routes from, add it to `CodeFingerprint::SERVICE_DIRECTORIES`. In debug mode the
+  route cache is also revalidated against its source files on each request. Deleting
+  everything under `var/cache/` is always safe. Known limits:
+  - detection uses file path, size and modification time, not contents, so an edit that
+    keeps both (same size within the same second, or a deploy that normalises mtimes) is
+    not detected;
+  - a class in a scanned directory that extends or uses a class, interface or trait OUTSIDE
+    the scanned directories is not rebuilt when only that outside file changes, so new code
+    in scanned directories should not inherit constructor signatures from legacy classes;
+  - the fingerprint is computed from the files on disk, but the code that compiles the
+    container comes from opcache. On a server with `opcache.validate_timestamps=0` a request
+    between replacing the files and restarting PHP can compile old definitions into the new
+    fingerprint's directory, which is then never revalidated. Restart PHP (or reset opcache)
+    immediately after replacing files, and if the site reports a container error after a
+    deploy, delete everything under `var/cache/` (see `docs/install/upgrade.md`).
+
+  If in doubt, delete `var/cache/`.
 - PHPUnit and the test rig run the kernel with `APP_ENV=test` and `APP_DEBUG=1`; the
   default is `prod` without debug.
 - Testing: in PHPUnit, `Tests/_bootstrap.php` (through `Idno/start.php`) has already
@@ -301,12 +345,21 @@ in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected se
   legacy and expect its legacy services to be `Idno::site()`'s (see above). Legacy pages
   are tested black-box only, through the characterisation harness
   (`Tests/Characterisation/`, `$this->site()->request(...)` against the test rig).
-- Logging goes through Monolog (`config/packages/monolog.php`): the `idno` channel writes
-  each line verbatim with `error_log()`. The site's log level and the line format
-  (`Idno (<host>): <level> - <message>`) are still applied by `Idno\Core\Logging`, so
-  `config/services.php` aliases `Psr\Log\LoggerInterface` to that service for application
-  code; Symfony's own services keep the `logger` / `monolog.logger.*` services they name.
-  See Code Style.
+- Logging goes through Monolog (`config/packages/monolog.php`), to PHP's error log
+  (`error_log()`, as before Monolog; nothing is written under `var/`). Two handlers, neither
+  of which registers a PHP error handler: `idno` writes each line of the `idno` channel
+  verbatim. The site's log level and the line format (`Idno (<host>): <level> - <message>`)
+  are still applied by `Idno\Core\Logging`, so `config/services.php` aliases
+  `Psr\Log\LoggerInterface` to that service for application code. `symfony` writes every
+  other channel (`request`, `console`, `php`, ...: Symfony's own services, which keep the
+  `logger` / `monolog.logger.*` services they name) at `warning` and above, in Monolog's
+  standard line format with channel and level. An ordinary legacy request logs nothing
+  through it; an exception Symfony handles (before routing, or from a new-style controller)
+  is one `request.CRITICAL` line (`request.ERROR` for an HTTP exception below 500), and a
+  console command that fails is one `console.CRITICAL` line (on stderr when PHP's
+  `error_log` setting is unset). A test that makes Symfony handle an exception should point
+  `error_log` at a temporary file (`ini_set()`) to keep it out of the test output, as
+  `Tests/Kernel/KernelExceptionTest` does. See Code Style.
 
 ### Key design patterns
 
@@ -441,9 +494,36 @@ Each content plugin has an `Entry.php` entity class that defines
 
 - PHP 8.4+ and Symfony 8 (`^8.0`) required; uses PSR-4 autoloading (`Idno\`, `IdnoPlugins\`, `Themes\`, `ConsolePlugins\`)
 - Namespace hierarchy matches directory structure exactly
+- `vendor/bin/phpcs -n` must pass (`phpcs.xml`; CI runs it)
 - Entity properties are dynamic (magic `__get`/`__set` via `$this->attributes` array)
 - Plugins use braced namespace blocks: `namespace IdnoPlugins\Foo { class Main extends \Idno\Common\Plugin { } }`
-- Core uses indented namespace blocks (historical style)
+- Legacy core uses indented namespace blocks (historical style); edits to legacy files keep
+  that file's style and stay minimal
+
+### New code conventions
+
+New code (the kernel, `Idno\Config`, `Idno\Http`, `Idno\Console`, controllers, commands
+and services), unlike the legacy code. New tests follow the first three points too, but may
+reach into the legacy application (`Idno::site()`) where that is what they test.
+
+- `declare(strict_types=1);` and a file-scoped namespace (`namespace Idno\Foo;`, no braces)
+- typed properties, parameters and return types
+- classes `final` by default
+- dependencies by constructor injection (autowired); no `Idno::site()`, `Idno::container()`
+  or other service lookups
+- no superglobals (`$_GET`, `$_POST`, `$_SERVER`, ...): take input from the `Request`. Only
+  the boundary that builds the kernel and the request reads them (`Kernel::fromGlobals()`,
+  `FrontController::requestFromGlobals()`)
+- no dependency on `Idno\Legacy\` (see "Legacy pages and routes")
+- a new top-level directory that must not be served (code, configuration, data), or a new
+  script meant to be run from the command line, needs
+  deny rules in the root `.htaccess`, every sample config in `warmup/webserver-configs/`,
+  `docker/caddy/Caddyfile`, `Tests/rig/router.php` and `Tests/build/router.php` (and a
+  `Require all denied` `.htaccess` in the directory, as `var/`, `config/`, `bin/` and
+  `Tests/` have), plus a SAPI guard at the top of each command-line script: under any SAPI
+  but `cli`/`phpdbg`, `http_response_code(404)` and `exit` before loading anything (see
+  `bin/console`). Scripts for PHP's built-in web server (routers) allow `cli-server` only.
+  `Tests/Kernel/SapiGuardTest` and `Tests/Characterisation/DeniedPathsTest` pin these.
 - New code logs by type-hinting `Psr\Log\LoggerInterface` in its constructor. Autowiring gives
   the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
   format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
@@ -498,10 +578,17 @@ Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoade
    source set
 
 `path` and `host` can never be set; `uploadpath` always ends in a single `/`. The
-former per-host `{host}.ini` file is no longer read.
+former per-host `configuration/{host}.ini` file is no longer read (silently: the upgrade
+notes in `docs/install/upgrade.md` tell sites to move its settings into `config.ini`), and
+the CLI installer no longer writes one.
 
-- Primary config: `config.ini` (INI format, gitignored)
-- Environment variables: loaded from `.env` via `vlucas/phpdotenv`
+- Primary config: `configuration/config.ini` (INI format, gitignored)
+- Environment variables come from the web server or the process environment. A `.env` file
+  in the project root is loaded (with `vlucas/phpdotenv`) only by `Tests/_bootstrap.php`, i.e.
+  under PHPUnit; the web front controller and the console do not read it.
+- The Symfony kernel's `framework.secret` comes from `APP_SECRET` (a harmless default is used
+  when it is unset; nothing uses it yet). It is deliberately not an `IDNO_*` variable: those
+  are copied into the legacy config, which is saved to the database.
 - Key settings: `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
   `filesystem`, `uploadpath`, `site_secret`
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
@@ -511,7 +598,10 @@ former per-host `{host}.ini` file is no longer read.
 
 - Entity access control via `canEdit()` / `canRead()` / access groups
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
-- CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
+- CSRF tokens on all form POSTs to legacy pages (inbox endpoints bypass via `post()` override).
+  New-style controllers have no authentication or CSRF protection yet (see "Adding a route")
+- Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
+  denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - HTML sanitization via HTMLPurifier
 - SSRF protection: call `\Idno\Core\UrlValidator::isSafeUrl($url)` before any server-side
   fetch of a URL supplied by a remote party (webmention sources, ActivityPub actors,
