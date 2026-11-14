@@ -2,19 +2,24 @@
 
 declare(strict_types=1);
 
-use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+use Symfony\Component\Config\Resource\FileExistenceResource;
+use Symfony\Component\Routing\RouteCollection;
 
-return static function (RoutingConfigurator $routes, \Idno\Kernel $kernel): void {
-    $projectDir = $kernel->getProjectDir();
+/**
+ * Attribute routes for the legacy-adapter layer (Idno/Legacy, created in a later task).
+ *
+ * $loader is the Symfony PhpFileLoader that includes this file. The collection is built by
+ * hand so it can record a FileExistenceResource: creating the directory later then
+ * invalidates the compiled routes in debug mode, instead of silently missing them.
+ *
+ * @var \Symfony\Component\Routing\Loader\PhpFileLoader $loader
+ */
+$dir = dirname(__DIR__) . '/Idno/Legacy';
 
-    $dirs = [$projectDir . '/Idno/Legacy'];
-    if ($kernel->getEnvironment() === 'test') {
-        $dirs[] = $projectDir . '/Tests/Fixtures';
-    }
+$collection = new RouteCollection();
+$collection->addResource(new FileExistenceResource($dir));
+if (is_dir($dir)) {
+    $collection->addCollection($loader->import($dir, 'attribute'));
+}
 
-    foreach ($dirs as $dir) {
-        if (is_dir($dir)) {
-            $routes->import($dir, 'attribute');
-        }
-    }
-};
+return $collection;

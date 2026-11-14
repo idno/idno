@@ -39,22 +39,54 @@ final class KernelBootTest extends TestCase
         $this->assertFileExists($this->boot()->getProjectDir() . '/version.idno');
     }
 
-    public function testBootDoesNotRegisterErrorOrExceptionHandlers(): void
+    /**
+     * @return array{error_unchanged: bool, exception_unchanged: bool}
+     */
+    private function bootInCleanProcess(string $scenario): array
     {
-        $errorBefore = set_error_handler(static fn (): bool => false);
-        restore_error_handler();
-        $exceptionBefore = set_exception_handler(null);
-        restore_exception_handler();
+        $cacheDir = sys_get_temp_dir() . '/idno-test-handlers-' . bin2hex(random_bytes(6));
+        $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 '
+            . escapeshellarg(__DIR__ . '/boot_handlers.php') . ' ' . escapeshellarg($scenario) . ' 2>&1';
+        $output = [];
+        $code = 0;
+        exec('IDNO_CACHE_DIR=' . escapeshellarg($cacheDir) . ' ' . $command, $output, $code);
+        $this->removeDir($cacheDir);
 
-        $this->boot();
+        $decoded = json_decode(implode("\n", $output), true);
+        $this->assertIsArray($decoded, 'Subprocess output was not JSON: ' . implode("\n", $output));
+        $this->assertSame(0, $code);
 
-        $errorAfter = set_error_handler(static fn (): bool => false);
-        restore_error_handler();
-        $exceptionAfter = set_exception_handler(null);
-        restore_exception_handler();
+        return $decoded;
+    }
 
-        $this->assertSame($errorBefore, $errorAfter);
-        $this->assertSame($exceptionBefore, $exceptionAfter);
+    private function removeDir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        ) as $file) {
+            $file->isDir() && !$file->isLink() ? @rmdir($file->getPathname()) : @unlink($file->getPathname());
+        }
+        @rmdir($dir);
+    }
+
+    public function testBootInstallsNoHandlersWhenNoneWereSet(): void
+    {
+        $this->assertSame(
+            ['error_unchanged' => true, 'exception_unchanged' => true],
+            $this->bootInCleanProcess('none')
+        );
+    }
+
+    public function testBootLeavesExistingHandlersInPlace(): void
+    {
+        $this->assertSame(
+            ['error_unchanged' => true, 'exception_unchanged' => true],
+            $this->bootInCleanProcess('custom')
+        );
     }
 
     public function testCompiledContainerContainsNoSecrets(): void

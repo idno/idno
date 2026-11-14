@@ -52,7 +52,10 @@ if ($scanned_directory = array_diff(scandir($directory), array('..', '.'))) {
                     $console->register($c->getCommand())
                         ->setDescription($c->getDescription())
                         ->setDefinition($c->getParameters())
-                        ->setCode([$c, 'execute']);
+                        ->setCode(
+                            // Symfony Console 8 requires an int exit code; legacy plugins return nothing.
+                            fn (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int => (int) ($c->execute($input, $output) ?? 0)
+                        );
                 }
             }
         } else {
@@ -64,7 +67,10 @@ if ($scanned_directory = array_diff(scandir($directory), array('..', '.'))) {
                     $console->register($c->getCommand())
                         ->setDescription($c->getDescription())
                         ->setDefinition($c->getParameters())
-                        ->setCode([$c, 'execute']);
+                        ->setCode(
+                            // Symfony Console 8 requires an int exit code; legacy plugins return nothing.
+                            fn (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int => (int) ($c->execute($input, $output) ?? 0)
+                        );
                 }
             }
         }
@@ -83,7 +89,10 @@ if ($scanned_directory = array_diff(scandir($directory), array('..', '.'))) {
                     $console->register($c->getCommand())
                         ->setDescription($c->getDescription())
                         ->setDefinition($c->getParameters())
-                        ->setCode([$c, 'execute']);
+                        ->setCode(
+                            // Symfony Console 8 requires an int exit code; legacy plugins return nothing.
+                            fn (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int => (int) ($c->execute($input, $output) ?? 0)
+                        );
                 }
             }
 
@@ -99,7 +108,10 @@ if ($scanned_directory = array_diff(scandir($directory), array('..', '.'))) {
                             $console->register($c->getCommand())
                                 ->setDescription($c->getDescription())
                                 ->setDefinition($c->getParameters())
-                                ->setCode([$c, 'execute']);
+                                ->setCode(
+                            // Symfony Console 8 requires an int exit code; legacy plugins return nothing.
+                            fn (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int => (int) ($c->execute($input, $output) ?? 0)
+                        );
                         }
                     }
                 }
@@ -113,7 +125,7 @@ $console
     ->setDescription(\Idno\Core\Idno::site()->language()->_('Returns the current Idno version as defined in version.idno'))
     ->setDefinition([])
     ->setCode(
-        function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output) {
+        function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
             $output->writeln(file_get_contents(dirname(__FILE__) . '/version.idno'));
 
             $remoteVersion = \Idno\Core\RemoteVersion::build();
@@ -121,6 +133,8 @@ $console
                 $version = \Idno\Core\RemoteVersion::version();
                 $output->writeln(\Idno\Core\Idno::site()->language()->_("WARNING: Your build of Idno is behind the latest version from Github (%s - %s). If you're having problems, you may want to try updating to the latest version.\nUpdate now: https://github.com/idno/idno\n", [$version, $remoteVersion]));
             }
+
+            return 0;
         }
     );
 

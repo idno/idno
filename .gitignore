@@ -99,3 +99,4 @@ configbackup.ini
 
 /var/*
 !/var/.htaccess
+/config/reference.php

@@ -79,10 +79,11 @@ class CLIInstaller extends \Idno\Core\Installer
                 ]
             )
             ->setCode(
-                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output) {
+                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
 
                     $this->requirements($input, $output);
 
+                    return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
             );
 
@@ -95,7 +96,7 @@ class CLIInstaller extends \Idno\Core\Installer
                 ]
             )
             ->setCode(
-                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output) {
+                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
 
                     if ($filename = $input->getArgument('manifest')) {
                         if (file_exists($filename)) {
@@ -114,6 +115,7 @@ class CLIInstaller extends \Idno\Core\Installer
                         ]
                     );
 
+                    return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
             );
 
@@ -126,7 +128,7 @@ class CLIInstaller extends \Idno\Core\Installer
                 ]
             )
             ->setCode(
-                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output) {
+                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
 
                     if ($fp = fopen($input->getArgument('manifest'), 'w')) {
 
@@ -137,9 +139,13 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     } else {
 
-                        $output->writeln("Couldn't open " . $input->getArgument('filename'));
+                        $output->writeln("Couldn't open " . $input->getArgument('manifest'));
+
+                        return \Symfony\Component\Console\Command\Command::FAILURE;
 
                     }
+
+                    return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
             );
 
@@ -153,7 +159,7 @@ class CLIInstaller extends \Idno\Core\Installer
                 ]
             )
             ->setCode(
-                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output) {
+                function (\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output): int {
 
                     $helper = new Symfony\Component\Console\Helper\QuestionHelper();
 
@@ -249,6 +255,8 @@ class CLIInstaller extends \Idno\Core\Installer
                     $this->writeConfig($ini_file, $config_name);
 
                     $output->writeln("Your site should now be installed. Visit your site to create your first user!");
+
+                    return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
             );
 

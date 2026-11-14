@@ -12,6 +12,8 @@ class Kernel extends BaseKernel
 {
     use MicroKernelTrait;
 
+    private ?string $baseDir = null;
+
     public function __construct(string $environment, bool $debug, private readonly bool $bootLegacy = true)
     {
         parent::__construct($environment, $debug);
@@ -34,8 +36,12 @@ class Kernel extends BaseKernel
 
     private function baseDir(): string
     {
+        if ($this->baseDir !== null) {
+            return $this->baseDir;
+        }
+
         $override = $_SERVER['IDNO_CACHE_DIR'] ?? $_ENV['IDNO_CACHE_DIR'] ?? getenv('IDNO_CACHE_DIR');
 
-        return CacheDirResolver::resolve($this->getProjectDir(), is_string($override) ? $override : null);
+        return $this->baseDir = CacheDirResolver::resolve($this->getProjectDir(), is_string($override) ? $override : null);
     }
 }

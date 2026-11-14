@@ -5,6 +5,7 @@
     #RewriteBase /
 
     RewriteRule ^\.git(|hub)/ - [F]
+    RewriteRule ^(var|config|bin)(/|$) - [F]
 
     RewriteCond %{HTTP:Authorization} ^(.+)$
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]

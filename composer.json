@@ -58,7 +58,8 @@
         "ramsey/uuid": "^4.1",
         "composer/installers": "^2",
         "vlucas/phpdotenv": "^5.3",
-        "landrok/activitypub": "^0.7.1"
+        "landrok/activitypub": "^0.7.1",
+        "symfony/runtime": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,
@@ -105,7 +106,8 @@
     ],
     "config": {
         "allow-plugins": {
-            "composer/installers": true
+            "composer/installers": true,
+            "symfony/runtime": true
         }
     },
     "scripts": {

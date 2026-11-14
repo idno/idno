@@ -74,10 +74,56 @@ final class CacheDirResolverTest extends TestCase
             $this->markTestSkipped('Directory permissions are not enforced (running as root?).');
         }
 
-        $this->assertSame(
-            sys_get_temp_dir() . '/idno-' . substr(sha1($project), 0, 12),
-            CacheDirResolver::resolve($project, null)
-        );
+        $fallback = sys_get_temp_dir() . '/idno-' . substr(sha1($project), 0, 12);
+        $this->assertSame($fallback, CacheDirResolver::resolve($project, null));
+        $this->assertSame(0700, fileperms($fallback) & 0777);
+    }
+
+    public function testFallbackThatIsGroupOrWorldWritableIsRejected(): void
+    {
+        $project = $this->tempDir();
+        chmod($project, 0555);
+        if (is_writable($project)) {
+            $this->markTestSkipped('Directory permissions are not enforced (running as root?).');
+        }
+        $fallback = sys_get_temp_dir() . '/idno-' . substr(sha1($project), 0, 12);
+        mkdir($fallback, 0777);
+        chmod($fallback, 0777);
+
+        try {
+            CacheDirResolver::resolve($project, null);
+            $this->fail('Expected a RuntimeException');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString($fallback, $e->getMessage());
+        }
+    }
+
+    public function testExceptionNamesAllLocationsWhenNothingIsUsable(): void
+    {
+        $project = $this->tempDir();
+        chmod($project, 0555);
+        if (is_writable($project)) {
+            $this->markTestSkipped('Directory permissions are not enforced (running as root?).');
+        }
+        $fallback = sys_get_temp_dir() . '/idno-' . substr(sha1($project), 0, 12);
+        mkdir($fallback, 0777);
+        chmod($fallback, 0777);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('#/proc/nonexistent/x.*' . preg_quote($project . '/var/cache', '#') . '.*' . preg_quote($fallback, '#') . '.*IDNO_CACHE_DIR#');
+        CacheDirResolver::resolve($project, '/proc/nonexistent/x');
+    }
+
+    public function testOverrideThatExistsButIsNotWritableIsSkipped(): void
+    {
+        $project = $this->tempDir();
+        $override = $this->tempDir();
+        chmod($override, 0555);
+        if (is_writable($override)) {
+            $this->markTestSkipped('Directory permissions are not enforced (running as root?).');
+        }
+
+        $this->assertSame($project . '/var/cache', CacheDirResolver::resolve($project, $override));
     }
 
     public function testUnusableOverrideIsSkipped(): void
