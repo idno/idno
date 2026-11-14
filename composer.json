@@ -86,7 +86,7 @@
     "require-dev": {
         "mapkyca/mapkyca-known-docker": "^1.0",
         "codeception/aspect-mock": "*",
-        "squizlabs/php_codesniffer": "3.*"
+        "squizlabs/php_codesniffer": "4.*"
     },
     "extra": {
         "unused": [
