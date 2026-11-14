@@ -13,6 +13,9 @@ namespace Tests\Pages {
 
         private $toDelete = [];
 
+        /// Whether a test changed the saved site configuration and needs it restored
+        private $pinnedFilePathHost = false;
+
         public function tearDown(): void
         {
             $old = $this->swapUser($this->admin());
@@ -21,6 +24,12 @@ namespace Tests\Pages {
             }
             $this->toDelete = [];
             $this->swapUser($old);
+
+            if ($this->pinnedFilePathHost) {
+                Idno::site()->config()->file_path_host = null;
+                Idno::site()->config()->save();
+                $this->pinnedFilePathHost = false;
+            }
         }
 
         public function testAnonymousRequestForPublicDraftIsGone()
@@ -62,6 +71,13 @@ namespace Tests\Pages {
         {
             $old = $this->swapUser($this->user());
             $filesystem = Idno::site()->filesystem();
+
+            // Local file storage lives in a directory named after the site's host, and the web
+            // server can know the site by a different host name than this process does. Pin the
+            // directory name in the saved configuration so both look in the same place.
+            Idno::site()->config()->file_path_host = Idno::site()->config()->pathHost();
+            Idno::site()->config()->save();
+            $this->pinnedFilePathHost = true;
 
             $marker = 'attachmentmarker' . md5(rand() . microtime(true));
             $urls = [];
