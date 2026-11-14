@@ -40,7 +40,7 @@
         "symfony/console": "~7.1",
         "symfony/http-foundation": "~7.0",
         "symfony/cache": "~7.0",
-        "simplepie/simplepie": "1.8.1",
+        "simplepie/simplepie": "1.9.0",
         "mapkyca/mrclay_autop_known": "^1.0",
         "npm-asset/underscore": "~1.13",
         "npm-asset/bootstrap-accessibility-plugin": "^1.0",
