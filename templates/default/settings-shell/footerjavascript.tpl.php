@@ -43,10 +43,6 @@ if ($lang == 'pt_BR' || substr($lang, 0, 2) == 'zh') {
         type="text/javascript"></script> -->
 
 
-<script
-    src="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>vendor/npm-asset/moment/min/moment-with-locales.min.js"></script>
-<script
-    src="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>vendor/npm-asset/eonasdan-bootstrap-datetimepicker/build/js/bootstrap-datetimepicker.min.js"></script>
 
         
 <?php
