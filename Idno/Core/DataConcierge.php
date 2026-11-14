@@ -124,6 +124,24 @@ namespace Idno\Core {
         }
 
         /**
+         * Should a retrieved object be left out of getObjects() results because it is
+         * unpublished (a draft, for example) and the current user is neither its owner nor
+         * an admin? This makes an unpublished entity as invisible as one the user has no
+         * access to. Nothing is hidden while access controls are being ignored.
+         *
+         * @param  \Idno\Common\Entity|false $object
+         * @return bool
+         */
+        protected function isHiddenByPublishStatus($object)
+        {
+            if ($this->getIgnoreAccess()) {
+                return false;
+            }
+
+            return ($object instanceof \Idno\Common\Entity) && $object->isHiddenByPublishStatus();
+        }
+
+        /**
          * Check if the database connection is still alive and reconnect
          * if it has timed out.  Long-running processes (e.g. the async
          * event queue worker) may hold a connection open for longer than

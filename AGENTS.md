@@ -199,6 +199,12 @@ Each content plugin has an `Entry.php` entity class that defines
 ## Security
 
 - Entity access control via `canEdit()` / `canRead()` / access groups
+- Unpublished entities: an entity whose publish status is set and is not `published`
+  (a draft, for example) is visible only to its owner and to site admins, whatever its
+  access setting. `Entity::isHiddenByPublishStatus()` holds the rule; `canRead()` applies
+  it, and `getObjects()` in both database backends leaves such entities out of lookups
+  (unless `setIgnoreAccess(true)` is in effect), so they are not found, exactly like
+  entities the user has no access to. An empty publish status counts as published.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
 - HTML sanitization via HTMLPurifier
