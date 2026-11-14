@@ -8,7 +8,7 @@ Unit tests will automatically be run when you submit a pull request on GitHub. Y
 
 ## Running unit tests on your local machine
 
-The tests need a MySQL database and a running copy of the site, because some of them make real HTTP requests to it. The repository includes a test rig that provides both: MySQL in a Docker container, and PHP's built-in web server. You need Docker (or a compatible runtime such as OrbStack) and PHP 8.3 or later with the extensions listed in `composer.json`.
+The tests need a MySQL database and a running copy of the site, because some of them make real HTTP requests to it. The repository includes a test rig that provides both: MySQL in a Docker container, and PHP's built-in web server. You need Docker (or a compatible runtime such as OrbStack) and PHP 8.4 or later with the extensions listed in `composer.json`.
 
 ```bash
 composer install

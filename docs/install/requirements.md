@@ -4,7 +4,7 @@ Idno _requires_ the following server components:
 
 + A Web Server that supports URL rewriting (Apache + mod_rewrite recommended).
 + If you are using Apache, you also need to make sure support for .htaccess is enabled (using [the AllowOverride All directive](https://help.ubuntu.com/community/EnablingUseOfApacheHtaccessFiles)).
-+ PHP 8.2 or above.
++ PHP 8.4 or above.
 + MySQL 5+ / MariaDB or MongoDB. We recommend MySQL.
 
 Idno can either be installed at the root of a domain or subdomain, or in a subdirectory.

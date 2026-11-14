@@ -96,3 +96,6 @@ configbackup.ini
 /Tests/rig/.server.pid
 /Tests/rig/.server.log
 /Tests/rig/baseline.xml
+
+/var/*
+!/var/.htaccess

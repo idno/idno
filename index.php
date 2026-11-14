@@ -15,7 +15,7 @@
  */
 
 // Check PHP version first of all
-if (version_compare(phpversion(), '7.2', '<')) {
+if (version_compare(phpversion(), '8.4', '<')) {
     http_response_code(500);
     $body = "Sorry, this version of PHP (".phpversion().") is not supported. This probably means that you should update your server to the latest stable PHP release.";
     $heading = "PHP Version not supported";

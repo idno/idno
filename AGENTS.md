@@ -186,7 +186,7 @@ Each content plugin has an `Entry.php` entity class that defines
 
 ## Code Style
 
-- PHP 8.2+ required; uses PSR-4 autoloading (`Idno\`, `IdnoPlugins\`, `Themes\`, `ConsolePlugins\`)
+- PHP 8.4+ and Symfony 8 (`^8.0`) required; uses PSR-4 autoloading (`Idno\`, `IdnoPlugins\`, `Themes\`, `ConsolePlugins\`)
 - Namespace hierarchy matches directory structure exactly
 - Entity properties are dynamic (magic `__get`/`__set` via `$this->attributes` array)
 - Plugins use braced namespace blocks: `namespace IdnoPlugins\Foo { class Main extends \Idno\Common\Plugin { } }`

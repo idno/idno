@@ -11,6 +11,12 @@ $root = dirname(__DIR__, 2);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $file = realpath($root . rawurldecode($path));
 
+// Mirror the deny rules in warmup/webserver-configs: never serve these directories.
+if (preg_match('#^/(var|config|bin)(/|$)#', '/' . ltrim(rawurldecode($path), '/'))) {
+    http_response_code(403);
+    return true;
+}
+
 if ($file !== false
     && is_file($file)
     && str_starts_with($file, $root . DIRECTORY_SEPARATOR)
