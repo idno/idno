@@ -90,6 +90,16 @@ final class LegacyServiceFactory
 
     public function logging(\Psr\Log\LoggerInterface $logger): \Idno\Core\Logging
     {
+        // Logging reads the site's config, so it needs Idno::$site. Psr\Log\LoggerInterface
+        // autowires to this service, which makes it easy to ask for it too early.
+        if (Idno::site() === null) {
+            throw new \LogicException(
+                'The logger needs the legacy application, which has not booted yet. '
+                . 'Usual causes: the kernel was built with bootLegacy: false, or a service that takes '
+                . 'Psr\\Log\\LoggerInterface is being built during kernel boot (for example by a kernel.request listener).'
+            );
+        }
+
         return new \Idno\Core\Logging($logger);
     }
 

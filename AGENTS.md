@@ -230,7 +230,9 @@ in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected se
   booted the one kernel that owns the legacy application. To test a new controller
   in-process, either use `new \Idno\Kernel('test', true, bootLegacy: false)` and call
   `$kernel->handle(Request::create(...))` (fine as long as the controller does not need
-  legacy services), or test it black-box over HTTP. Do not boot a second kernel with
+  legacy services; a controller that takes `Psr\Log\LoggerInterface` does need them, since that
+  logger is backed by the legacy application: construct it directly with a `Psr\Log\NullLogger`
+  in a unit test instead, until the level filter moves into Monolog in a later phase), or test it black-box over HTTP. Do not boot a second kernel with
   legacy and expect its legacy services to be `Idno::site()`'s (see above). Legacy pages
   are tested black-box only, through the characterisation harness
   (`Tests/Characterisation/`, `$this->site()->request(...)` against the test rig).
@@ -381,6 +383,16 @@ Each content plugin has an `Entry.php` entity class that defines
   the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
   format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
   directly, and never call `error_log()`: both bypass the log level.
+- `Psr\Log\LoggerInterface $idno` / `$idnoLogger` (and any other channel-named argument, such as
+  `$request` or `$consoleLogger`) hand out the raw Monolog channel and bypass the log level and
+  line format: do not use channel-named logger arguments.
+- Temporary restriction: that logger is backed by the legacy application, so it exists only once
+  legacy has booted. A service that takes `Psr\Log\LoggerInterface` cannot be constructed in a
+  `bootLegacy: false` kernel, nor by anything Symfony instantiates during kernel boot (such as a
+  `kernel.request` listener built at boot); `LegacyServiceFactory::logging()` throws a
+  `\LogicException` saying so. In a unit test, pass a `Psr\Log\NullLogger` (or a test double) to the
+  class's constructor directly. The restriction goes away when the level filter moves into Monolog
+  in a later phase.
 - Never put request data or other untrusted input into a log message without replacing control
   characters and bounding its length (see `Idno\Legacy\LegacyFallbackListener`).
 - `\Idno\Core\Idno::site()->logging()` is the legacy accessor for the same object; do not use

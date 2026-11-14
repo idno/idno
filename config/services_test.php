@@ -19,6 +19,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->defaults()->autowire()->autoconfigure()
         ->set(LoggerConsumer::class)->public();
 
-    // "logger" is private; this public alias lets a test check which service it is.
+    // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();
+    $container->services()->alias('idno.test.monolog_logger', 'monolog.logger')->public();
 };

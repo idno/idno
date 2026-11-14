@@ -50,6 +50,11 @@ final class LoggerAutowiringTest extends TestCase
 
     public function testAutowiredLoggerHonoursTheSiteLogLevel(): void
     {
+        Idno::site()->logging()->setLogLevel(Logging::LEVEL_ERROR);
+        $this->fixture()->logger->error('written');
+        $this->assertCount(1, file($this->logFile, FILE_IGNORE_NEW_LINES));
+
+        file_put_contents($this->logFile, '');
         Idno::site()->logging()->setLogLevel(Logging::LEVEL_OFF);
         $this->fixture()->logger->error('nope');
 
@@ -76,8 +81,10 @@ final class LoggerAutowiringTest extends TestCase
         $kernel->boot();
         try {
             $logger = $kernel->getContainer()->get('idno.test.framework_logger');
+            $container = $kernel->getContainer();
             $this->assertNotInstanceOf(Logging::class, $logger);
-            $this->assertInstanceOf(\Psr\Log\LoggerInterface::class, $logger);
+            $this->assertSame($container->get('idno.test.monolog_logger'), $logger);
+            $this->assertNotSame($container->get('monolog.logger.idno'), $logger);
         } finally {
             $kernel->shutdown();
         }
@@ -97,20 +104,53 @@ final class LoggerAutowiringTest extends TestCase
         $this->assertSame(['logging_initialized' => false], json_decode(implode("\n", $output), true), implode("\n", $output));
     }
 
-    public function testFixtureServiceDoesNotExistInProd(): void
+    public function testFixtureServiceExistsInTestButNotInProd(): void
     {
-        $base = sys_get_temp_dir() . '/idno-test-logging-prod-' . bin2hex(random_bytes(6));
-        $script = 'require "vendor/autoload.php"; $k = new \Idno\Kernel("prod", false, bootLegacy: false); $k->boot();'
-            . ' echo json_encode(["has" => $k->getContainer()->has(\'' . addslashes(LoggerConsumer::class) . '\')]);';
-        $command = 'IDNO_CACHE_DIR=' . escapeshellarg($base) . ' ' . escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -r '
-            . escapeshellarg($script) . ' 2>&1';
+        $this->assertSame(['has' => true], $this->hasFixtureIn('test', true));
+        $this->assertSame(['has' => false], $this->hasFixtureIn('prod', false));
+    }
+
+    public function testLoggerNeedsTheLegacyApplicationToHaveBooted(): void
+    {
+        $base = sys_get_temp_dir() . '/idno-test-logging-early-' . bin2hex(random_bytes(6));
+        $script = 'require "vendor/autoload.php"; $k = new \\Idno\\Kernel("test", true, bootLegacy: false); $k->boot();'
+            . ' try { $k->getContainer()->get(\'' . addslashes(LoggerConsumer::class) . '\'); echo json_encode(["thrown" => null]); }'
+            . ' catch (\\Throwable $e) { echo json_encode(["thrown" => get_class($e), "message" => $e->getMessage()]); }';
         $output = [];
         $code = 0;
-        exec('cd ' . escapeshellarg(dirname(__DIR__, 2)) . ' && ' . $command, $output, $code);
+        $command = 'cd ' . escapeshellarg(dirname(__DIR__, 2)) . ' && IDNO_CACHE_DIR=' . escapeshellarg($base) . ' '
+            . escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -r ' . escapeshellarg($script) . ' 2>&1';
+        exec($command, $output, $code);
         $this->removeDir($base);
 
         $this->assertSame(0, $code, 'Subprocess failed: ' . implode("\n", $output));
-        $this->assertSame(['has' => false], json_decode(implode("\n", $output), true), implode("\n", $output));
+        $decoded = json_decode(implode("\n", $output), true);
+        $this->assertIsArray($decoded, implode("\n", $output));
+        $this->assertSame(\LogicException::class, $decoded['thrown']);
+        $this->assertStringStartsWith('The logger needs the legacy application, which has not booted yet.', $decoded['message']);
+        $this->assertStringContainsString('bootLegacy: false', $decoded['message']);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function hasFixtureIn(string $environment, bool $debug): array
+    {
+        $base = sys_get_temp_dir() . '/idno-test-logging-env-' . bin2hex(random_bytes(6));
+        $script = 'require "vendor/autoload.php"; $k = new \\Idno\\Kernel("' . $environment . '", ' . ($debug ? 'true' : 'false') . ', bootLegacy: false); $k->boot();'
+            . ' echo json_encode(["has" => $k->getContainer()->has(\'' . addslashes(LoggerConsumer::class) . '\')]);';
+        $output = [];
+        $code = 0;
+        $command = 'cd ' . escapeshellarg(dirname(__DIR__, 2)) . ' && IDNO_CACHE_DIR=' . escapeshellarg($base) . ' '
+            . escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -r ' . escapeshellarg($script) . ' 2>&1';
+        exec($command, $output, $code);
+        $this->removeDir($base);
+
+        $this->assertSame(0, $code, 'Subprocess failed: ' . implode("\n", $output));
+        $decoded = json_decode(implode("\n", $output), true);
+        $this->assertIsArray($decoded, implode("\n", $output));
+
+        return $decoded;
     }
 
     private function removeDir(string $dir): void
