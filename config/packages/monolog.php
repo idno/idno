@@ -23,6 +23,16 @@ return static function (ContainerConfigurator $container): void {
                 'channels' => ['idno'],
                 'formatter' => 'idno.log_formatter',
             ],
+            // Symfony's own records (the request, console, php ... channels): exceptions that
+            // Symfony handles, before routing or from a new-style controller, would otherwise
+            // be logged nowhere. Warning and above, in Monolog's standard line format (with
+            // channel and level), to PHP's error log like the "idno" channel. It registers no
+            // error handler.
+            'symfony' => [
+                'type' => 'error_log',
+                'level' => 'warning',
+                'channels' => ['!idno'],
+            ],
         ],
     ]);
 };

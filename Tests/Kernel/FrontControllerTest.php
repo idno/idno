@@ -181,8 +181,22 @@ final class FrontControllerTest extends TestCase
             4096
         );
 
-        $response = FrontController::handle($this->kernel, Request::create('/'));
+        // Symfony logs the exception to PHP's error log: keep it out of the test output. The
+        // listener must not build a second legacy logger, which would replace the PHP error handler.
+        $log = tempnam(sys_get_temp_dir(), 'idno-test-log-');
+        $previousLog = ini_set('error_log', $log);
+        $handler = set_error_handler(null);
+        restore_error_handler();
+        try {
+            $response = FrontController::handle($this->kernel, Request::create('/'));
+            $handlerAfter = set_error_handler(null);
+            restore_error_handler();
+        } finally {
+            ini_set('error_log', (string) $previousLog);
+            unlink($log);
+        }
 
+        $this->assertSame($handler, $handlerAfter, 'the PHP error handler was replaced');
         $this->assertNotInstanceOf(LegacyResponse::class, $response);
         // Symfony's error page for the RuntimeException.
         $this->assertSame(500, $response->getStatusCode());

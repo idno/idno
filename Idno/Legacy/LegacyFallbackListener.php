@@ -6,7 +6,7 @@ namespace Idno\Legacy;
 
 use Idno\Core\Logging;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -19,8 +19,10 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * X-HTTP-Method-Override) and ConflictingHeadersException into. The legacy front
  * controller served such requests, so they are still served exactly as before. Each one is
  * logged as a warning through the legacy logger (Idno\Core\Logging), so the site's log
- * level and line format apply. The listener is instantiated lazily, when kernel.exception
- * is first dispatched (inside Kernel::handle(), after the legacy boot has built the logger).
+ * level and line format apply. The logger is injected as a closure and fetched only when
+ * the listener takes over a request: the listener is built for every kernel.exception,
+ * and building the logger needs the legacy application (and, in a second kernel, would
+ * replace the process's PHP error handler).
  *
  * Every other exception is left to Symfony, so that, for example, a broken route
  * definition fails loudly instead of being served as a legacy page. Exceptions thrown by
@@ -32,7 +34,10 @@ final class LegacyFallbackListener
     /** The longest exception detail written to the log, in bytes. */
     public const MAX_DETAIL_LENGTH = 200;
 
-    public function __construct(private readonly LegacyController $controller, #[Autowire(service: Logging::class)] private readonly LoggerInterface $logger)
+    /**
+     * @param \Closure(): LoggerInterface $logger
+     */
+    public function __construct(private readonly LegacyController $controller, #[AutowireServiceClosure(Logging::class)] private readonly \Closure $logger)
     {
     }
 
@@ -51,7 +56,7 @@ final class LegacyFallbackListener
         // The message can contain request data (e.g. the Host header): no context array, and
         // the detail is stripped of control characters and bounded.
         $cause = $exception->getPrevious() ?? $exception;
-        $this->logger->warning(sprintf(
+        ($this->logger)()->warning(sprintf(
             'Request rejected by Symfony before routing (%s), served by the legacy router instead: %s',
             (new \ReflectionClass($cause))->getShortName(),
             self::sanitise($exception->getMessage())

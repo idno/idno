@@ -63,21 +63,29 @@ final class FatalErrorPage
 
                     include dirname(__DIR__, 2) . '/statics/error-page.php';
 
-                    $stats = \Idno\Core\Idno::site()->statistics();
-                    if (!empty($stats)) {
-                        $stats->increment("error.fatal");
+                    // The page also covers the kernel boot, when the legacy application (or even
+                    // the autoloader) may not exist yet: then the error goes to PHP's error log.
+                    $site = class_exists(\Idno\Core\Idno::class) ? \Idno\Core\Idno::site() : null;
+
+                    if ($site !== null) {
+                        $stats = $site->statistics();
+                        if (!empty($stats)) {
+                            $stats->increment("error.fatal");
+                        }
                     }
 
-                    if (isset(\Idno\Core\Idno::site()->logging) && \Idno\Core\Idno::site()->logging) {
-                        \Idno\Core\Idno::site()->logging()->error($error_message);
+                    if ($site !== null && isset($site->logging) && $site->logging) {
+                        $site->logging()->error($error_message);
                     } else {
                         error_log($error_message);
                     }
 
-                    try {
-                        \Idno\Core\Logging::oopsAlert($error_message, 'Oh no! Idno experienced a problem!');
-                    } catch (\Exception $ex) {
-                        error_log($ex->getMessage());
+                    if ($site !== null) {
+                        try {
+                            \Idno\Core\Logging::oopsAlert($error_message, 'Oh no! Idno experienced a problem!');
+                        } catch (\Exception $ex) {
+                            error_log($ex->getMessage());
+                        }
                     }
 
                     exit;
