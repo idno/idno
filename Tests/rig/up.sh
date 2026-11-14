@@ -38,12 +38,29 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
 else
     # error_reporting mirrors a stock production php.ini (what CI's Apache uses). With
     # pedantic_mode on, any reported deprecation (e.g. dynamic properties) is thrown as an exception.
+    rm -f "$PID_FILE"
+    if nc -z "$HOST" "$PORT" 2>/dev/null; then
+        echo "Port $PORT on $HOST is already in use by another process; not starting the web server." >&2
+        exit 1
+    fi
     nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
     echo $! > "$PID_FILE"
+    started=0
     for _ in $(seq 1 30); do
-        curl -s -o /dev/null "http://$HOST:$PORT/" && break
+        kill -0 "$(cat "$PID_FILE")" 2>/dev/null || break
+        if curl -s -o /dev/null "http://$HOST:$PORT/"; then
+            started=1
+            break
+        fi
         sleep 0.5
     done
+    if [ "$started" != 1 ] || ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
+        echo "The web server failed to start on http://$HOST:$PORT/. Last lines of Tests/rig/.server.log:" >&2
+        tail -n 20 "$RIG_DIR/.server.log" >&2 || true
+        kill "$(cat "$PID_FILE")" 2>/dev/null || true
+        rm -f "$PID_FILE"
+        exit 1
+    fi
 fi
 
 echo "Test rig up: http://$HOST:$PORT/ (MySQL on 127.0.0.1:33306, database known_unittest)"

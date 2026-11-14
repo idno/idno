@@ -25,7 +25,7 @@ composer test:down    # stop the rig
 # Without the composer script, set the rig's environment yourself:
 #   IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit
 
-# Run the full test suite (core + plugins) against an already-configured environment
+# CI only (CI's php.ini already excludes deprecations; locally this fails on PHP 8.5, use `composer test`)
 php vendor/bin/phpunit
 
 # Run a single plugin's tests
