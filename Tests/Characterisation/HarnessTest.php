@@ -35,6 +35,38 @@ namespace Tests\Characterisation {
             $this->assertFalse($this->statusExists($body . '-unknown'));
         }
 
+        public function testRegisterEntityAtUrlFindsEntityAndRemovesItAfterTest(): void
+        {
+            $status = $this->createStatus($this->user(), 'entity-at-url-' . uniqid());
+            $uuid   = $status->getUUID();
+
+            $found = $this->registerEntityAtUrl($status->getURL());
+            $this->assertSame($uuid, $found->getUUID());
+
+            $this->tearDown();
+            $this->assertFalse(\Idno\Common\Entity::getByUUID($uuid));
+        }
+
+        public function testIssuedMicropubTokenIsStoredOnUserAndRemovedAfterTest(): void
+        {
+            $token = $this->issueMicropubToken($this->user(), 'create update');
+
+            $stored = $this->storedTokens();
+            $this->assertArrayHasKey($token, $stored);
+            $this->assertSame('create update', $stored[$token]['scope']);
+
+            $this->tearDown();
+            $this->assertArrayNotHasKey($token, $this->storedTokens());
+        }
+
+        private function storedTokens(): array
+        {
+            \Idno\Common\Entity::invalidateCache($this->user()->getUUID());
+            $user = \Idno\Common\Entity::getByUUID($this->user()->getUUID());
+
+            return $user->indieauth_tokens ?: [];
+        }
+
         public function testFollowerExistsFindsStoredFollowerOnly(): void
         {
             $actor    = 'https://remote.invalid/u/' . uniqid();

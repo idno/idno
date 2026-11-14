@@ -14,6 +14,9 @@ namespace Tests\Characterisation {
         /** @var \Idno\Common\Entity[] Entities created by fixture helpers */
         private array $fixtures = [];
 
+        /** @var array<int,array{0:string,1:string}> [user UUID, token] pairs issued by issueMicropubToken() */
+        private array $tokens = [];
+
         protected function setUp(): void
         {
             parent::setUp();
@@ -27,6 +30,20 @@ namespace Tests\Characterisation {
             // Idempotent: may be called explicitly by a test and again by PHPUnit.
             $first = null;
             try {
+                foreach ($this->tokens as [$userUuid, $token]) {
+                    try {
+                        $user = $this->freshUser($userUuid);
+                        $held = $user->indieauth_tokens;
+                        if (is_array($held) && isset($held[$token])) {
+                            unset($held[$token]);
+                            $user->indieauth_tokens = $held;
+                            $user->save(true);
+                            $this->refreshSharedUser($user);
+                        }
+                    } catch (\Throwable $e) {
+                        $first ??= $e;
+                    }
+                }
                 foreach ($this->fixtures as $entity) {
                     try {
                         // Reload: the web server may have changed the stored entity.
@@ -42,6 +59,7 @@ namespace Tests\Characterisation {
                     }
                 }
             } finally {
+                $this->tokens   = [];
                 $this->fixtures = [];
                 parent::tearDown();
             }
@@ -93,6 +111,73 @@ namespace Tests\Characterisation {
         protected function followerExists(string $actorUri): bool
         {
             return \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower::getOne(['actor_uri' => $actorUri]) !== false;
+        }
+
+        /**
+         * Store an IndieAuth access token on the user, exactly as the token
+         * endpoint does, and return it for use as a Bearer token. Removed again
+         * in tearDown().
+         */
+        protected function issueMicropubToken(\Idno\Entities\User $user, string $scope = 'create'): string
+        {
+            $token = md5(uniqid('token', true));
+            // Register first so a failed save is still cleaned up.
+            $this->tokens[] = [$user->getUUID(), $token];
+
+            $fresh = $this->freshUser($user->getUUID());
+            $held  = $fresh->indieauth_tokens;
+            if (!is_array($held)) {
+                $held = [];
+            }
+            $held[$token] = [
+                'me'           => $this->site()->baseUrl(),
+                'redirect_uri' => 'https://client.invalid/cb',
+                'scope'        => $scope,
+                'client_id'    => 'https://client.invalid/',
+                'issued_at'    => time(),
+                'nonce'        => mt_rand(1000000, pow(2, 30)),
+            ];
+            $fresh->indieauth_tokens = $held;
+            $fresh->save(true);
+            $this->refreshSharedUser($fresh);
+
+            return $token;
+        }
+
+        /**
+         * Find the entity stored at a URL (for example a Location header from a
+         * Micropub create) and register it for deletion in tearDown(). Fails the
+         * test if there is no such entity.
+         */
+        protected function registerEntityAtUrl(string $absoluteUrl): \Idno\Common\Entity
+        {
+            $slug   = basename((string)parse_url($absoluteUrl, PHP_URL_PATH));
+            $entity = \Idno\Common\Entity::getBySlug($slug);
+            $this->assertInstanceOf(\Idno\Common\Entity::class, $entity, "No entity stored at $absoluteUrl");
+            $this->registerFixture($entity);
+            $this->assertSame($absoluteUrl, $entity->getURL());
+
+            return $entity;
+        }
+
+        private function freshUser(string $uuid): \Idno\Entities\User
+        {
+            \Idno\Common\Entity::invalidateCache($uuid);
+            $user = \Idno\Common\Entity::getByUUID($uuid);
+            $this->assertInstanceOf(\Idno\Entities\User::class, $user);
+
+            return $user;
+        }
+
+        /**
+         * Keep the shared test user object in step with what is stored, so a
+         * later save of it does not resurrect a removed token.
+         */
+        private function refreshSharedUser(\Idno\Entities\User $fresh): void
+        {
+            if (static::$testUser && static::$testUser->getUUID() === $fresh->getUUID()) {
+                static::$testUser = $fresh;
+            }
         }
 
         /**
