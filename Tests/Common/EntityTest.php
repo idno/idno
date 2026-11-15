@@ -91,6 +91,55 @@ class EntityTest extends \Tests\IdnoTestCase
     }
 
     /**
+     * A post whose body has a multi-byte character across the 255th byte (where the
+     * MySQL back-end cuts the copy of each field that it indexes) is saved and can be
+     * loaded again with its body unchanged.
+     */
+    function testSaveMultiByteBodyAcrossIndexLimit()
+    {
+        $body = str_repeat('é', 200) . ' ' . md5(time() . rand(0, 9999));
+
+        $entity = new \IdnoPlugins\Status\Status();
+        $entity->setOwner($this->user());
+        $entity->setAccess('PUBLIC');
+        $entity->body = $body;
+        $id = $entity->save(true);
+        $this->toDelete[] = $entity;
+
+        $this->assertNotEmpty($id, 'save() should have returned the ID of the saved post.');
+
+        $loaded = \IdnoPlugins\Status\Status::getByID($id);
+        $this->assertInstanceOf('\IdnoPlugins\Status\Status', $loaded, 'The saved post should have been retrievable by ID.');
+        $this->assertSame($body, $loaded->body, 'The body of the saved post should be unchanged.');
+    }
+
+    /**
+     * Updating an existing post with such a body stores the new version.
+     */
+    function testUpdateWithMultiByteBodyAcrossIndexLimit()
+    {
+        $unique = md5(time() . rand(0, 9999));
+
+        $entity = new \IdnoPlugins\Status\Status();
+        $entity->setOwner($this->user());
+        $entity->setAccess('PUBLIC');
+        $entity->body = 'The first version ' . $unique;
+        $id = $entity->save(true);
+        $this->toDelete[] = $entity;
+
+        $this->assertNotEmpty($id, 'save() should have returned the ID of the saved post.');
+
+        $body = 'a' . str_repeat('日', 100) . ' ' . $unique;
+        $entity->body = $body;
+        $this->assertEquals($id, $entity->save(true), 'save() should have returned the ID of the updated post.');
+
+        $loaded = \IdnoPlugins\Status\Status::getByID($id);
+        $this->assertInstanceOf('\IdnoPlugins\Status\Status', $loaded, 'The updated post should have been retrievable by ID.');
+        $this->assertSame($body, $loaded->body, 'The body of the updated post should be the new version.');
+    }
+
+
+    /**
      * Send a simple reply and make sure it gets collected.
      */
     function testAddWebmentions_SimpleReply()

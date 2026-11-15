@@ -345,8 +345,8 @@ namespace Idno\Data {
                             if (empty($value)) {
                                 $value = 0;
                             }
-                            if (strlen($value) > 255) { // We only need to store the first 255 characters
-                                $value = substr($value, 0, 255);
+                            if (strlen($value) > 255) { // We only need to store the first 255 bytes, cut on a character boundary so the value stays valid UTF-8
+                                $value = mb_strcut($value, 0, 255, 'UTF-8');
                             }
                             if ($statement = $client->prepare("insert into {$collection}_metadata set `_id` = :id, `name` = :name, `value` = :value")) {
                                 $statement->execute(array(':id' => $array['_id'], ':name' => $key, ':value' => $value));
@@ -357,6 +357,7 @@ namespace Idno\Data {
                 $client->commit();
             } catch (\Exception $e) {
                 \Idno\Core\Idno::site()->logging()->error($e->getMessage());
+                $retval = false; // Nothing was stored, so the record must not be reported as saved
                 $client->rollback();
             }
 
