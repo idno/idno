@@ -6,8 +6,10 @@ namespace Idno;
 
 use Idno\Kernel\CacheDirResolver;
 use Idno\Kernel\CodeFingerprint;
+use Idno\Kernel\DoctrineTrimPass;
 use Idno\Legacy\LegacyBootstrap;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 
 class Kernel extends BaseKernel
@@ -41,6 +43,15 @@ class Kernel extends BaseKernel
     public function getProjectDir(): string
     {
         return dirname(__DIR__);
+    }
+
+    /**
+     * Removes the console commands and the request listener DoctrineBundle registers that Idno
+     * does not use (see DoctrineTrimPass).
+     */
+    protected function build(ContainerBuilder $container): void
+    {
+        $container->addCompilerPass(new DoctrineTrimPass());
     }
 
     public function boot(): void

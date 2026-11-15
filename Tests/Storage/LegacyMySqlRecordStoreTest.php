@@ -17,6 +17,16 @@ final class LegacyMySqlRecordStoreTest extends RecordStoreContract
 {
     private string|false $previousErrorLog = false;
 
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+        // MySQL-bound: on a site whose database is not MySQL (the CI MongoDB job) there is nothing to test.
+        $config = \Idno\Core\Idno::container()->get(\Idno\Config\BootConfig::class)->all();
+        if (\Idno\Storage\ConnectionParameters::driverFamily($config) !== 'mysql') {
+            self::markTestSkipped('The site\'s database is not MySQL.');
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -29,7 +29,10 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - ownsPrivateDatabase (true): the store is private to the test;
  *  - expectArrayInSearchFieldsToRaise, expectArrayBodyToRaise (false): ruling P5;
  *  - expectFailedQueryCountToFail (false): ruling P6;
- *  - expectMidCharacterCutToLoseTheRecord (false): ruling P7.
+ *  - expectMidCharacterCutToLoseTheRecord (false): ruling P7;
+ *  - expectFourByteCharactersToBeRejected (false): no utf8mb3 limit, an emoji is stored and indexed;
+ *  - expectRejectedMetadataToReportSuccess (false): ruling P7 (nothing is ever rejected here anyway);
+ *  - expectBooleanModeSearch (false): ruling P8, long terms are words matched as substrings.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
 {
@@ -75,6 +78,21 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
     }
 
     protected function expectMidCharacterCutToLoseTheRecord(): bool
+    {
+        return false;
+    }
+
+    protected function expectFourByteCharactersToBeRejected(): bool
+    {
+        return false;
+    }
+
+    protected function expectRejectedMetadataToReportSuccess(): bool
+    {
+        return false;
+    }
+
+    protected function expectBooleanModeSearch(): bool
     {
         return false;
     }

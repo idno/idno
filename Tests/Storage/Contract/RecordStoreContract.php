@@ -124,6 +124,43 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
+     * Whether a four-byte UTF-8 character (an emoji) makes a save fail. MySQL: the schema's tables
+     * are `utf8` (utf8mb3, at most three bytes a character) and so is the connection, so strict
+     * MySQL rejects the character in the search text or in a metadata value, the transaction is
+     * rolled back and nothing is stored (the document column is binary and would take it). Stores
+     * without that limit (in memory, SQLite) store and index it: they override this to false.
+     */
+    protected function expectFourByteCharactersToBeRejected(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a save whose METADATA rows the database rejects still returns the id. Legacy:
+     * saveRecord() sets its return value after the search row and before the metadata rows, so a
+     * rejected metadata value rolls the transaction back and the id is returned anyway (the
+     * data-loss bug of the mid-character cut, deliberately not pinned). By ruling (P7) the new
+     * implementations return false whenever the transaction did not commit: they override this to false.
+     */
+    protected function expectRejectedMetadataToReportSuccess(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a search term of more than 5 bytes is a MySQL boolean-mode full-text query: its
+     * operators apply (`+hello -world` excludes records with "world"), and a term the boolean
+     * parser cannot parse (`abc@def.com`, `hello-`, ...) fails the query (error 1064), which the
+     * legacy backend reports as no records (count per expectFailedQueryCountToFail()). Backends
+     * without full-text search (in memory, SQLite) match the words as substrings (ruling P8),
+     * where operators are plain characters and every term can run: they override this to false.
+     */
+    protected function expectBooleanModeSearch(): bool
+    {
+        return true;
+    }
+
+    /**
      * The site id a record gets when it is saved without one (legacy: the uuid of
      * Idno::site()->site_details(), which is null when the site has no Site entity).
      */
@@ -1446,5 +1483,121 @@ abstract class RecordStoreContract extends TestCase
         } else {
             $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])));
         }
+    }
+
+    // ------------------------------------------------ four-byte characters (Task 4)
+
+    public function testAFourByteCharacterInTheBodyIsRejectedOrStored(): void
+    {
+        $original = $this->put($this->r(['body' => 'a plain body']));
+        $update = $original;
+        $update['body'] = "a body with an emoji \u{1F600} in it";
+        $fresh = $this->r(['body' => "\u{1F600}"]);
+        $this->track($fresh['_id']);
+
+        if ($this->expectFourByteCharactersToBeRejected()) {
+            // The search row is written before the metadata rows: it is rejected first, and the
+            // save fails (legacy included).
+            $this->assertFalse($this->store()->save('entities', $update), 'an update');
+            $this->assertSameRecord($original, $this->store()->findById('entities', $original['_id']), 'the previous version stays');
+            $this->assertMatches(['body' => 'a plain body'], [$original]);
+            $this->assertFalse($this->store()->save('entities', $fresh), 'an insert');
+            $this->assertNull($this->store()->findById('entities', $fresh['_id']));
+        } else {
+            $this->assertSame($original['_id'], $this->store()->save('entities', $update));
+            $this->assertSameRecord($update, $this->store()->findById('entities', $original['_id']));
+            $this->assertMatches(['body' => $update['body']], [$update]);
+            $this->assertMatches(['$search' => ['emoji']], [$update]);
+            $this->assertSame($fresh['_id'], $this->store()->save('entities', $fresh));
+            $this->assertSameRecord($fresh, $this->store()->findById('entities', $fresh['_id']));
+        }
+    }
+
+    public function testAFourByteCharacterInAnIndexedFieldIsRejectedOrStored(): void
+    {
+        if ($this->expectFourByteCharactersToBeRejected() && $this->expectRejectedMetadataToReportSuccess()) {
+            $this->markTestSkipped('The legacy backend returns the id of a record whose metadata row was rejected and not stored (not pinned).');
+        }
+
+        // `note` is not part of the search text: only its metadata row holds the character.
+        $original = $this->put($this->r(['note' => 'plain']));
+        $update = $original;
+        $update['note'] = "\u{1F600} smile";
+        $fresh = $this->r(['note' => "smile \u{1F600}"]);
+        $this->track($fresh['_id']);
+
+        if ($this->expectFourByteCharactersToBeRejected()) {
+            $this->assertFalse($this->store()->save('entities', $update), 'an update');
+            $this->assertSameRecord($original, $this->store()->findById('entities', $original['_id']), 'the previous version stays');
+            $this->assertMatches(['note' => 'plain'], [$original]);
+            $this->assertFalse($this->store()->save('entities', $fresh), 'an insert');
+            $this->assertNull($this->store()->findById('entities', $fresh['_id']));
+            $this->assertNull($this->store()->findByUuid('entities', $fresh['uuid']));
+        } else {
+            $this->assertSame($original['_id'], $this->store()->save('entities', $update));
+            $this->assertSameRecord($update, $this->store()->findById('entities', $original['_id']));
+            $this->assertMatches(['note' => $update['note']], [$update]);
+            $this->assertSame($fresh['_id'], $this->store()->save('entities', $fresh));
+            $this->assertMatches(['note' => $fresh['note']], [$fresh]);
+        }
+    }
+
+    // ------------------------------------------------ boolean-mode search terms (Task 4 fix round 1)
+
+    /**
+     * Terms longer than 5 bytes that MySQL's boolean-mode full-text parser rejects (error 1064).
+     *
+     * @return array<string, array{string}>
+     */
+    public static function unparsableBooleanSearchTerms(): array
+    {
+        return [
+            'an email address' => ['abc@def.com'],
+            'a trailing operator' => ['hello-'],
+            'two operators' => ['foo +-bar'],
+            'a leading @' => ['@hello'],
+            'unbalanced parentheses' => ['(((abc'],
+            'a word and operators' => ['test ~-'],
+        ];
+    }
+
+    /**
+     * @dataProvider unparsableBooleanSearchTerms
+     */
+    public function testASearchTermTheBooleanParserRejectsFailsTheQuery(string $term): void
+    {
+        // The record holds the term (and so its words): an empty result comes from the failure.
+        $record = $this->put($this->r(['body' => 'before ' . $term . ' after']));
+        $this->put($this->r(['body' => 'nothing related']));
+        $query = ['$search' => [$term]];
+
+        if (!$this->expectBooleanModeSearch()) {
+            $this->assertMatches($query, [$record], $term);
+
+            return;
+        }
+        $this->assertSame([], $this->ids($query), $term);
+        $this->assertNotEmpty($this->ids([]), 'the records exist');
+        if ($this->expectFailedQueryCountToFail()) {
+            $failed = false;
+            try {
+                $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
+            } catch (\Throwable) {
+                $failed = true;
+            }
+            $this->assertTrue($failed, 'count() fails for ' . $term);
+        } else {
+            $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), $term);
+        }
+    }
+
+    public function testABooleanSearchTermTheParserAcceptsAppliesItsOperators(): void
+    {
+        $there = $this->put($this->r(['body' => 'hello there friend']));
+        $this->put($this->r(['body' => 'hello world friend']));
+
+        // MySQL: +hello -world finds the records with "hello" and without "world". Without boolean
+        // mode the words '+hello' and '-world' are substrings no record contains.
+        $this->assertMatches(['$search' => ['+hello -world']], $this->expectBooleanModeSearch() ? [$there] : []);
     }
 }

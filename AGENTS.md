@@ -55,7 +55,9 @@ composer console -- list
   bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
   Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
   **Everything else** (`composer test`) needs the rig: kernel tests (`Tests/Kernel`),
-  the storage contract bound to MySQL (`Tests/Storage`; the contract itself,
+  the storage contract bound to MySQL (`Tests/Storage`: against today's backend,
+  `LegacyMySqlRecordStoreTest`, and against `DbalRecordStore`, `DbalMySqlRecordStoreTest`, which
+  also tests the DBAL connection service; the contract itself,
   `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and also runs against the
   in-memory store in `Tests/Unit/Storage`), the black-box characterisation suite
   (`Tests/Characterisation`, which drives the running site over HTTP) and the plugin tests.
@@ -82,7 +84,7 @@ bin/console                    Console (CLI) entry point (refuses to run under a
 idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
-  Kernel/                      Cache directory and code fingerprint for the compiled container
+  Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass
   Http/                        FrontController (what index.php runs)
   Console/                     Idno\Console\Application, the CLI application (see Entry points)
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -96,11 +98,15 @@ Idno/
                                arrays); RecordIndex (the metadata rows, search text and columns an SQL store
                                derives from a record, exactly as MySQL::saveRecord() does); RecordDefaults
                                (what a store fills in: _id, uuid, siteid); InMemoryRecordStore, the reference
-                               implementation the storage contract also holds to MySQL's behaviour
+                               implementation the storage contract also holds to MySQL's behaviour;
+                               DbalRecordStore, the RecordStore on a Doctrine DBAL connection over the legacy
+                               schema, with what is engine-specific in Platform/ (Dialect, MySqlDialect);
+                               ConnectionParameters (legacy database settings -> DBAL parameters) and
+                               BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
-                               packages/ (framework, monolog), routes/test/ (test-only routes),
+                               packages/ (framework, monolog, doctrine), routes/test/ (test-only routes),
                                services_test.php (test-only services)
 var/                           The compiled container (var/cache/); must be writable by the web server
                                (or set IDNO_CACHE_DIR). config/, bin/, var/ and Tests/ each hold a
@@ -303,9 +309,10 @@ other new code may.
 
 ### Kernel and services
 
-- `Idno\Kernel` is configured by `config/` (`bundles.php`: FrameworkBundle and
-  MonologBundle; `packages/framework.php`: Symfony's session and error handling are
-  disabled, the legacy application owns both; `services.php`; `routes.php`).
+- `Idno\Kernel` is configured by `config/` (`bundles.php`: FrameworkBundle, MonologBundle
+  and DoctrineBundle (DBAL only, no ORM); `packages/framework.php`: Symfony's session and error
+  handling are disabled, the legacy application owns both; `packages/doctrine.php`: the DBAL
+  connection, see below; `services.php`; `routes.php`).
   `Kernel::boot()` boots the legacy application through `Idno\Legacy\LegacyBootstrap`
   (pass `bootLegacy: false` to the constructor to boot the kernel alone, as some tests do).
 - The legacy application is a process-wide singleton (`Idno::site()`, `Idno::container()`,
@@ -322,10 +329,48 @@ other new code may.
   `Console`, `Legacy`, `Storage`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
-  must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`: `Criteria.php`,
-  `Criterion/`, `FixedRecordDefaults.php`, `InMemoryRecordStore.php`, `RecordDefaults.php` and
-  `RecordIndex.php`), or the container will try to autowire them. `RecordStore` implementations are
-  not registered as services yet.
+  must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
+  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `FixedRecordDefaults.php`,
+  `Platform/`, `RecordDefaults.php` and `RecordIndex.php`), or the container will try to autowire
+  them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`) are
+  excluded too: they are not registered as services yet. `BootConfigConnectionFactory.php` is
+  excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
+  `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
+- The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
+  autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
+  `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
+  the service is first fetched, replaces the parameters with `ConnectionParameters::fromLegacyConfig()`
+  of the `BootConfig` (plus the `RDS_*` environment variables for `beanstalk-mysql`), so no
+  configuration value is compiled into the container. It reproduces the legacy connection
+  exactly: DSN charset `utf8` (MySQL's three-byte utf8mb3, what the schema's tables are; do not
+  change it to utf8mb4 before the schema changes), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
+  `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. The service is
+  lazy: fetching it does not connect (the first query does). On a site whose `database` is MongoDB
+  or a plugin backend, the container compiles and the kernel boots as before, but fetching the
+  service throws a `\LogicException`: nothing may fetch the connection while the kernel boots (no
+  `kernel.request` listener, no service built at boot), and code that uses it must only run on an
+  SQL site. Query logging and profiling are off (`config/packages/doctrine.php`). DoctrineBundle
+  brings only the connection: `Idno\Kernel\DoctrineTrimPass` (a compiler pass added in
+  `Kernel::build()`) removes every console command the bundle registers (no `doctrine:*` or
+  `dbal:*` command exists; `dbal:run-sql` and `doctrine:database:drop` would act on the site's
+  database) and its idle-connection `kernel.request` listener. `Tests/Kernel/DoctrineTrimTest`
+  pins both in the test and prod containers. Do not add them back.
+- SQL against the legacy tables (`DbalRecordStore`): bind EVERY value as a string, as the legacy
+  backend does (true is '1', false '', numbers their text, null NULL); the contract pins behaviour
+  that depends on it (`$lt` on a document field compares text, `created` operands that are not
+  datetime literals make MySQL fail the query). Never interpolate a value; identifiers are
+  collection names reduced to `[a-zA-Z0-9_]` and quoted by the `Dialect`. A collection exists
+  when its three tables do (`<name>`, `<name>_metadata`, `<name>_search`, listed once and again
+  when a name is not found, without regard to case when the server's `lower_case_table_names`
+  is not 0); any other name gives false, null, `[]` or 0 without querying it. A SELECT the
+  database rejects for its operand matches nothing (`Dialect::isRejectedOperand()`; on MySQL,
+  error 1525 for a `created` operand that is not a datetime, and error 1064 only for a statement
+  holding a boolean-mode full-text search, whose parser rejects terms such as `abc@def.com`);
+  every other driver error (lost connection, broken SQL) propagates. A write returns false when
+  the database refuses the record's data (`Dialect::isRefusedData()`, an allowlist: constraint
+  violations, deadlock and lock-wait, and on MySQL 1292, 1366, 1406), after `save()` has rolled
+  its transaction back; every other error propagates. So `save()` returns the id only when its
+  transaction committed, false when the data was refused, and throws otherwise.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -412,7 +457,9 @@ other new code may.
 ### Database
 
 - **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
-- **MySQL** (`Idno\Data\MySQL` extends `AbstractSQL`) — stores entities as JSON blobs
+- **MySQL** (`Idno\Data\MySQL` extends `AbstractSQL`) — stores entities as JSON blobs. The same
+  tables are also reachable through `Idno\Storage\DbalRecordStore` on the DBAL connection (see
+  "Kernel and services"); nothing uses that store yet.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 ## Content Plugins
