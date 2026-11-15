@@ -10,10 +10,21 @@ namespace Idno\Storage\Criterion;
  */
 final class AnyOf implements Criterion
 {
+    /** @var list<Criterion> */
+    public readonly array $children;
+
     /**
-     * @param list<Criterion> $children
+     * @param array<int|string, Criterion> $children Kept in order, as a list.
+     *
+     * @throws \InvalidArgumentException when a child is not a Criterion
      */
-    public function __construct(public readonly array $children)
+    public function __construct(array $children)
     {
+        foreach ($children as $child) {
+            if (!$child instanceof Criterion) {
+                throw new \InvalidArgumentException(sprintf('%s children must be Criterion objects, %s given.', self::class, get_debug_type($child)));
+            }
+        }
+        $this->children = array_values($children);
     }
 }

@@ -23,6 +23,10 @@ use Idno\Storage\Criterion\Search;
  * oddities (listed on the method). Value objects here are deliberately not coerced: later
  * code reproduces the legacy "everything is bound as a string" behaviour at evaluation time.
  *
+ * The round-trip guarantee of toLegacyArray() covers trees produced by fromLegacyArray();
+ * for a tree built by hand that has no faithful legacy form (an operand legacy code would
+ * drop as empty, two AnyOf siblings, a nested AllOf) it throws rather than change the query.
+ *
  * This class is a value object, not a container service (see config/services.php).
  */
 final class Criteria
@@ -80,7 +84,8 @@ final class Criteria
      *
      * @return array<int|string, mixed>
      *
-     * @throws \LogicException for a tree that has no legacy array form (such as a nested AllOf)
+     * @throws \LogicException for a tree that has no faithful legacy array form (such as a
+     *                          nested AllOf, two AnyOf siblings, or an operand legacy code ignores as empty)
      */
     public function toLegacyArray(): array
     {
@@ -167,6 +172,23 @@ final class Criteria
     }
 
     /**
+     * Legacy code drops an operator with an empty operand and a search with an empty term,
+     * so a node holding one has no faithful legacy form.
+     */
+    private static function assertWritable(Criterion $child): void
+    {
+        $empty = match (true) {
+            $child instanceof NotEquals, $child instanceof LessThan, $child instanceof GreaterThan => empty($child->value),
+            $child instanceof In, $child instanceof NotIn => empty($child->values),
+            $child instanceof Search => empty($child->query),
+            default => false,
+        };
+        if ($empty) {
+            throw new \LogicException('No legacy form for ' . $child::class . ' with an empty operand: legacy code ignores it.');
+        }
+    }
+
+    /**
      * @param list<Criterion> $children
      *
      * @return array<int|string, mixed>
@@ -175,6 +197,7 @@ final class Criteria
     {
         $out = [];
         foreach ($children as $child) {
+            self::assertWritable($child);
             [$key, $fragment] = match (true) {
                 $child instanceof Equals => [$child->field, $child->value],
                 $child instanceof NotEquals => [$child->field, ['$not' => $child->value]],
@@ -187,10 +210,11 @@ final class Criteria
                 default => throw new \LogicException('No legacy array form for ' . get_debug_type($child) . '.'),
             };
 
-            // The operators on one field share one array entry.
+            // The operators on one field share one array entry. A '$or' is never merged: two
+            // AnyOf siblings mean AND, and one merged '$or' would mean OR.
             if (!array_key_exists($key, $out)) {
                 $out[$key] = $fragment;
-            } elseif (is_array($out[$key]) && is_array($fragment) && array_intersect_key($out[$key], $fragment) === []) {
+            } elseif ($key !== '$or' && is_array($out[$key]) && is_array($fragment) && array_intersect_key($out[$key], $fragment) === []) {
                 $out[$key] += $fragment;
             } else {
                 throw new \LogicException(sprintf('The criteria for "%s" have no legacy array form.', $key));

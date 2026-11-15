@@ -463,4 +463,72 @@ final class CriteriaTest extends TestCase
         $this->expectException(\LogicException::class);
         (new Criteria(new AllOf([new Equals('a', 1), new Equals('a', 2)])))->toLegacyArray();
     }
+
+    public function testTwoAnyOfSiblingsHaveNoLegacyForm(): void
+    {
+        // AND of two ORs: one merged '$or' would mean a different query.
+        $this->expectException(\LogicException::class);
+        (new Criteria(new AllOf([new AnyOf([new Equals('a', 1)]), new AnyOf([new Equals('b', 2)])])))->toLegacyArray();
+    }
+
+    public function testAnAnyOfBesideAnEqualsOnTheOrFieldHasNoLegacyForm(): void
+    {
+        $this->expectException(\LogicException::class);
+        (new Criteria(new AllOf([new Equals('$or', 'x'), new AnyOf([new Equals('a', 1)])])))->toLegacyArray();
+    }
+
+    /**
+     * @return array<string, array{Criterion}>
+     */
+    public static function nodesLegacyCodeWouldIgnore(): array
+    {
+        return [
+            'LessThan 0' => [new LessThan('n', 0)],
+            'LessThan empty string' => [new LessThan('n', '')],
+            'GreaterThan "0"' => [new GreaterThan('n', '0')],
+            'GreaterThan null' => [new GreaterThan('n', null)],
+            'NotEquals false' => [new NotEquals('n', false)],
+            'NotEquals ""' => [new NotEquals('n', '')],
+            'In []' => [new In('n', [])],
+            'NotIn []' => [new NotIn('n', [])],
+            'Search ""' => [new Search('')],
+            'Search "0"' => [new Search('0')],
+        ];
+    }
+
+    /**
+     * @dataProvider nodesLegacyCodeWouldIgnore
+     */
+    public function testANodeLegacyCodeWouldIgnoreHasNoLegacyForm(Criterion $node): void
+    {
+        $this->expectException(\LogicException::class);
+        (new Criteria(new AllOf([$node])))->toLegacyArray();
+    }
+
+    public function testAnEqualsWithAnEmptyValueStillWrites(): void
+    {
+        $tree = new AllOf([new Equals('a', ''), new Equals('b', 0), new Equals('c', false)]);
+        $this->assertSame(['a' => '', 'b' => 0, 'c' => false], (new Criteria($tree))->toLegacyArray());
+    }
+
+    public function testAllOfAndAnyOfHoldAList(): void
+    {
+        $a = new Equals('a', 1);
+        $b = new Equals('b', 2);
+        $this->assertSame([$a, $b], (new AllOf(['x' => $a, 5 => $b]))->children);
+        $this->assertSame([$a, $b], (new AnyOf(['x' => $a, 5 => $b]))->children);
+        $this->assertEquals(new AllOf([$a, $b]), new AllOf(['x' => $a, 'y' => $b]));
+    }
+
+    public function testAllOfAndAnyOfRejectAChildThatIsNotACriterion(): void
+    {
+        foreach ([AllOf::class, AnyOf::class] as $class) {
+            try {
+                new $class([new Equals('a', 1), 'b']);
+                $this->fail("$class accepted a string child");
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
 }
