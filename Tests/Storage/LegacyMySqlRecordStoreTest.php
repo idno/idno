@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Storage;
 
-use Tests\Storage\Contract\LegacyBackendBinding;
+use Idno\Storage\RecordStore;
 use Tests\Storage\Contract\RecordStoreContract;
-use Tests\Storage\Contract\RecordStoreUnderTest;
 
 /**
  * Runs the record storage contract against today's backend, Idno\Data\MySQL,
@@ -33,7 +32,7 @@ final class LegacyMySqlRecordStoreTest extends RecordStoreContract
         parent::tearDown();
     }
 
-    protected function store(): RecordStoreUnderTest
+    protected function store(): RecordStore
     {
         return new LegacyBackendBinding();
     }

@@ -2,14 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Tests\Storage\Contract;
+namespace Tests\Storage;
+
+use Idno\Storage\Criteria;
+use Idno\Storage\RecordStore;
 
 /**
- * Adapter used only by tests: today's Idno::site()->db() behind the contract's
- * storage interface. It translates the legacy return conventions (false for
- * "nothing found") into the interface's (null, empty array) and nothing else.
+ * Adapter used only by tests: today's Idno::site()->db() behind RecordStore. It
+ * translates Criteria back into the legacy search array (toLegacyArray()) and the
+ * legacy return conventions (false for "nothing found") into the interface's
+ * (null, empty array) and nothing else.
  */
-final class LegacyBackendBinding implements RecordStoreUnderTest
+final class LegacyBackendBinding implements RecordStore
 {
     public function save(string $collection, array $record): string|false
     {
@@ -39,16 +43,16 @@ final class LegacyBackendBinding implements RecordStoreUnderTest
         return is_array($record) ? $record : null;
     }
 
-    public function find(string $collection, array $legacySearch, int $limit, int $offset): array
+    public function find(string $collection, Criteria $criteria, int $limit, int $offset): array
     {
-        $records = \Idno\Core\Idno::site()->db()->getRecords([], $legacySearch, $limit, $offset, $collection);
+        $records = \Idno\Core\Idno::site()->db()->getRecords([], $criteria->toLegacyArray(), $limit, $offset, $collection);
 
         return is_array($records) ? $records : [];
     }
 
-    public function count(string $collection, array $legacySearch): int
+    public function count(string $collection, Criteria $criteria): int
     {
-        $count = \Idno\Core\Idno::site()->db()->countRecords($legacySearch, $collection);
+        $count = \Idno\Core\Idno::site()->db()->countRecords($criteria->toLegacyArray(), $collection);
         if ($count === false) {
             throw new \RuntimeException('countRecords() failed');
         }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Storage\Contract;
 
+use Idno\Storage\Criteria;
+use Idno\Storage\RecordStore;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -14,6 +16,9 @@ use PHPUnit\Framework\TestCase;
  * backend may legitimately differ, the expectation is routed through a
  * protected method whose default is today's MySQL value, so a binding
  * overrides the expectation rather than weakening the test.
+ *
+ * The queries in the tests are written as the legacy search arrays (readable, and the form
+ * today's callers use); criteria() turns them into the Criteria the RecordStore takes.
  *
  * This class must not depend on the booted legacy application.
  *
@@ -36,7 +41,10 @@ abstract class RecordStoreContract extends TestCase
 
     private int $counter = 0;
 
-    abstract protected function store(): RecordStoreUnderTest;
+    /**
+     * The store under test. Must return the same instance every time within one test.
+     */
+    abstract protected function store(): RecordStore;
 
     /**
      * Generates a record id. Bindings without the legacy application override this.
@@ -93,11 +101,13 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether a long (more than 5 bytes) multi-word search term matches a record that has
-     * ANY of the words. MySQL boolean-mode full-text search ORs the words; a substring
-     * backend would look for the whole phrase.
+     * Whether a value whose 255th byte falls in the middle of a multibyte character loses the
+     * record. Legacy: substr() cuts the character in half, MySQL rejects the invalid string, the
+     * transaction is rolled back and saveRecord() still returns the id (a data-loss bug that is
+     * deliberately not pinned). By ruling (P7) the new implementations cut on a character
+     * boundary and store the record: they override this to false.
      */
-    protected function expectLongMultiWordSearchToMatchAnyWord(): bool
+    protected function expectMidCharacterCutToLoseTheRecord(): bool
     {
         return true;
     }
@@ -201,11 +211,19 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
+     * The Criteria for a legacy search array.
+     */
+    protected function criteria(array $legacySearch): Criteria
+    {
+        return Criteria::fromLegacyArray($legacySearch);
+    }
+
+    /**
      * @return list<string> ids of this test's records matching the criteria, newest first
      */
     protected function ids(array $criteria, string $collection = 'entities', int $limit = 100, int $offset = 0): array
     {
-        $found = $this->store()->find($collection, $criteria + [self::MARKER_FIELD => $this->marker], $limit, $offset);
+        $found = $this->store()->find($collection, $this->criteria($criteria + [self::MARKER_FIELD => $this->marker]), $limit, $offset);
 
         return array_map(static fn (array $record): string => $record['_id'], $found);
     }
@@ -223,7 +241,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSame($expected, $actual, $message . ' ' . json_encode($criteria));
         $this->assertSame(
             count($expected),
-            $this->store()->count('entities', $criteria + [self::MARKER_FIELD => $this->marker]),
+            $this->store()->count('entities', $this->criteria($criteria + [self::MARKER_FIELD => $this->marker])),
             'count() ' . $message . ' ' . json_encode($criteria)
         );
     }
@@ -553,13 +571,13 @@ abstract class RecordStoreContract extends TestCase
         if ($this->expectMongoStyleOrCountToFail()) {
             $failed = false;
             try {
-                $this->store()->count('entities', $malformed);
+                $this->store()->count('entities', $this->criteria($malformed));
             } catch (\Throwable) {
                 $failed = true;
             }
             $this->assertTrue($failed, 'count() with a malformed $or fails');
         } else {
-            $this->assertSame(0, $this->store()->count('entities', $malformed));
+            $this->assertSame(0, $this->store()->count('entities', $this->criteria($malformed)));
         }
     }
 
@@ -658,7 +676,7 @@ abstract class RecordStoreContract extends TestCase
     public function testFindWithNoMatchesReturnsEmptyList(): void
     {
         $this->assertSame([], $this->ids(['slug' => 'does-not-exist']));
-        $this->assertSame(0, $this->store()->count('entities', ['slug' => 'does-not-exist', self::MARKER_FIELD => $this->marker]));
+        $this->assertSame(0, $this->store()->count('entities', $this->criteria(['slug' => 'does-not-exist', self::MARKER_FIELD => $this->marker])));
     }
 
     public function testCountMatchesFind(): void
@@ -667,14 +685,14 @@ abstract class RecordStoreContract extends TestCase
         $b = $this->put($this->r(['slug' => 'b', 'labels' => ['red']]));
         $this->put($this->r(['slug' => 'c']));
 
-        $this->assertSame(3, $this->store()->count('entities', [self::MARKER_FIELD => $this->marker]));
-        $this->assertSame(2, $this->store()->count('entities', ['labels' => 'red', self::MARKER_FIELD => $this->marker]));
+        $this->assertSame(3, $this->store()->count('entities', $this->criteria([self::MARKER_FIELD => $this->marker])));
+        $this->assertSame(2, $this->store()->count('entities', $this->criteria(['labels' => 'red', self::MARKER_FIELD => $this->marker])));
         // Distinct records, not matching rows: two matching tags still count once.
-        $this->assertSame(1, $this->store()->count('entities', ['labels' => ['$in' => ['red', 'blue']], 'slug' => 'a', self::MARKER_FIELD => $this->marker]));
+        $this->assertSame(1, $this->store()->count('entities', $this->criteria(['labels' => ['$in' => ['red', 'blue']], 'slug' => 'a', self::MARKER_FIELD => $this->marker])));
         $this->assertMatches(['labels' => ['$in' => ['red', 'blue']]], [$a, $b]);
-        $this->assertSame(0, $this->store()->count('entities', ['slug' => 'zzz', self::MARKER_FIELD => $this->marker]));
+        $this->assertSame(0, $this->store()->count('entities', $this->criteria(['slug' => 'zzz', self::MARKER_FIELD => $this->marker])));
         // count() ignores paging by definition; find() with a small limit does not.
-        $this->assertCount(1, $this->store()->find('entities', [self::MARKER_FIELD => $this->marker], 1, 0));
+        $this->assertCount(1, $this->store()->find('entities', $this->criteria([self::MARKER_FIELD => $this->marker]), 1, 0));
     }
 
     // ----------------------------------------------------------------- deleting
@@ -719,7 +737,7 @@ abstract class RecordStoreContract extends TestCase
         $this->put($this->r(['slug' => 'b']));
         $this->assertTrue($this->store()->deleteAll('entities'));
 
-        $this->assertSame(0, $this->store()->count('entities', []));
+        $this->assertSame(0, $this->store()->count('entities', Criteria::all()));
         $this->assertNull($this->store()->findLatest('entities'));
     }
 
@@ -747,7 +765,7 @@ abstract class RecordStoreContract extends TestCase
             $this->assertNull($this->store()->findById($name, $record['_id']), $name);
             $this->assertNull($this->store()->findByUuid($name, $record['uuid']), $name);
             $this->assertNull($this->store()->findLatest($name), $name);
-            $this->assertSame([], $this->store()->find($name, [], 10, 0), $name);
+            $this->assertSame([], $this->store()->find($name, Criteria::all(), 10, 0), $name);
         }
     }
 
@@ -904,6 +922,11 @@ abstract class RecordStoreContract extends TestCase
             $this->assertNull($this->store()->findById('entities', $record['_id']));
         } else {
             $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+            // Stored and indexed like any list (its elements are findable)...
+            $this->assertMatches(['body' => 'x'], [$record]);
+            // ...but the body adds nothing to the search text (not even the word "Array").
+            $this->assertMatches(['$search' => ['array']], []);
+            $this->assertMatches(['$search' => ['x']], []);
         }
     }
 
@@ -921,10 +944,25 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSame($prefix . 'bbbb', $this->store()->findById('entities', $record['_id'])['note']);
     }
 
-    // Known, deliberately NOT pinned: a multibyte value whose 255th byte falls in the middle of
-    // a character (for example 200 times 'é') is cut in half by substr(); MySQL rejects the
-    // invalid string, the transaction is rolled back, and saveRecord() STILL RETURNS THE ID
-    // although nothing was stored. That is data loss, reported in the fix report.
+    public function testAValueCutInTheMiddleOfAMultibyteCharacterIsStoredAndIndexedUpToTheCharacterBefore(): void
+    {
+        // Legacy: 200 times 'é' is 400 bytes; the cut at byte 255 lands inside the 128th
+        // character, MySQL rejects the half character, the record is NOT stored, and
+        // saveRecord() still returns the id. That data loss is deliberately not pinned.
+        if ($this->expectMidCharacterCutToLoseTheRecord()) {
+            $this->markTestSkipped('The legacy backend loses a record whose indexed value is cut in the middle of a character (not pinned).');
+        }
+
+        $value = str_repeat('é', 200);
+        $record = $this->put($this->r(['note' => $value]));
+
+        // The record is stored byte for byte...
+        $this->assertSame($value, $this->store()->findById('entities', $record['_id'])['note']);
+        // ...and indexed up to the last whole character that fits in 255 bytes: 127 of them, 254 bytes.
+        $this->assertMatches(['note' => str_repeat('é', 127)], [$record]);
+        $this->assertMatches(['note' => str_repeat('é', 128)], []);
+        $this->assertMatches(['note' => $value], []);
+    }
 
     public function testSearchTermLengthIsCountedInBytes(): void
     {
@@ -990,9 +1028,9 @@ abstract class RecordStoreContract extends TestCase
         $both = $this->put($this->r(['body' => 'platypus and capybara together']));
         $neither = $this->put($this->r(['body' => 'only wombat here']));
 
-        // MySQL boolean mode matches records with ANY of the words.
-        $expected = $this->expectLongMultiWordSearchToMatchAnyWord() ? [$platypus, $capybara, $both] : [$both];
-        $this->assertMatches(['$search' => ['platypus capybara']], $expected);
+        // A term of more than 5 bytes is looked for word by word, and a record matches when it
+        // has ANY of the words (MySQL boolean mode ORs them; the other stores do the same).
+        $this->assertMatches(['$search' => ['platypus capybara']], [$platypus, $capybara, $both]);
         $this->assertNotContains($neither['_id'], $this->ids(['$search' => ['platypus capybara']]));
     }
 
@@ -1141,7 +1179,8 @@ abstract class RecordStoreContract extends TestCase
 
         // MySQL rejects a bare integer as a TIMESTAMP ("Incorrect TIMESTAMP value");
         // the error is logged and find() answers with an empty list, not with the
-        // records that a numeric comparison would find. (count() fails too.)
+        // records that a numeric comparison would find. (count() is not asserted here: legacy
+        // fails it, the in-memory store counts 0.)
         $this->assertSame([], $this->ids(['created' => ['$lt' => self::BASE_TIME + 1000]]));
         $this->assertSame([], $this->ids(['created' => ['$gt' => self::BASE_TIME]]));
         // Positive control: the datetime string form finds the record.
