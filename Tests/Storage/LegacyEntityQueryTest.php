@@ -9,12 +9,29 @@ use Idno\Core\Idno;
 use Tests\Storage\Contract\EntityQueryContract;
 
 /**
- * The entity query contract against today's code: Idno::site()->db()'s getObjects(), countObjects()
- * and getObject() (Idno\Data\AbstractSQL and Idno\Core\DataConcierge on MySQL).
+ * The entity query contract against the legacy code: getObjects(), countObjects() and getObject() of
+ * the legacy MySQL backend (Idno\Data\AbstractSQL and Idno\Core\DataConcierge on MySQL). Since
+ * Task 7 Idno::site()->db() is the storage adapter, so the test constructs the legacy backend itself
+ * and runs the legacy object's own methods. The contract sets the ignore-access flag on db(); each
+ * call copies it to the legacy object's own flag, which is what its getObjects() reads. Deleted with
+ * the legacy backend.
  */
 final class LegacyEntityQueryTest extends EntityQueryContract
 {
+    private static ?\Idno\Data\MySQL $legacy = null;
+
     private string|false $previousErrorLog = false;
+
+    /**
+     * The legacy MySQL backend (built once for the class), with db()'s ignore-access flag.
+     */
+    private static function legacy(): \Idno\Data\MySQL
+    {
+        self::$legacy ??= new \Idno\Data\MySQL();
+        self::$legacy->setIgnoreAccess(Idno::site()->db()->getIgnoreAccess());
+
+        return self::$legacy;
+    }
 
     protected function setUp(): void
     {
@@ -33,7 +50,7 @@ final class LegacyEntityQueryTest extends EntityQueryContract
 
     protected function findEntities(array $types, array $search, int $limit = 10, int $offset = 0, array $readGroups = []): array
     {
-        $result = Idno::site()->db()->getObjects($types, $search, [], $limit, $offset, 'entities', $readGroups);
+        $result = self::legacy()->getObjects($types, $search, [], $limit, $offset, 'entities', $readGroups);
         $this->assertIsArray($result);
 
         return $result;
@@ -41,7 +58,7 @@ final class LegacyEntityQueryTest extends EntityQueryContract
 
     protected function countEntities(array $types, array $search): int
     {
-        $result = Idno::site()->db()->countObjects($types, $search);
+        $result = self::legacy()->countObjects($types, $search);
         $this->assertIsInt($result);
 
         return $result;
@@ -49,7 +66,7 @@ final class LegacyEntityQueryTest extends EntityQueryContract
 
     protected function findOneByUuid(string $uuid): ?Entity
     {
-        $result = Idno::site()->db()->getObject($uuid);
+        $result = self::legacy()->getObject($uuid);
         if ($result === false) {
             return null;
         }
@@ -62,7 +79,7 @@ final class LegacyEntityQueryTest extends EntityQueryContract
     {
         // OBSERVED: what the repository's null stands for.
         $this->asAnonymous();
-        $this->assertFalse(Idno::site()->db()->getObject('http://unknown.test/view/' . bin2hex(random_bytes(8))));
-        $this->assertFalse(Idno::site()->db()->getObject($this->uuid('s_priv')));
+        $this->assertFalse(self::legacy()->getObject('http://unknown.test/view/' . bin2hex(random_bytes(8))));
+        $this->assertFalse(self::legacy()->getObject($this->uuid('s_priv')));
     }
 }

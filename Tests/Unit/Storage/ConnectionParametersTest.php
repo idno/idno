@@ -87,12 +87,46 @@ final class ConnectionParametersTest extends TestCase
         }
     }
 
+    /**
+     * Ruling P16: a name that is no loadable backend class is what the legacy componentFactory()
+     * falls back to MySQL for, so it is MySQL (this test pinned a \LogicException before Task 7).
+     */
     public function testUnknownDriverName(): void
     {
-        $this->assertSame('other', ConnectionParameters::driverFamily(['database' => 'SomePluginBackend']));
+        $this->assertSame('mysql', ConnectionParameters::driverFamily(['database' => 'SomePluginBackend']));
+        $this->assertNull(ConnectionParameters::backendClass(['database' => 'SomePluginBackend']));
+        $this->assertSame('pdo_mysql', ConnectionParameters::fromLegacyConfig(['database' => 'SomePluginBackend', 'dbhost' => 'db.example.test'], [])['driver']);
+        $this->assertSame('db.example.test', ConnectionParameters::fromLegacyConfig(['database' => 'SomePluginBackend', 'dbhost' => 'db.example.test'], [])['host']);
+    }
+
+    /**
+     * A loadable backend class (componentFactory(): a full class name, or a class in Idno\Data\, that
+     * extends Idno\Core\DataConcierge) is built as before and has no DBAL connection.
+     */
+    public function testALoadableBackendClassIsOther(): void
+    {
+        foreach ([PluginBackendFixture::class => PluginBackendFixture::class, 'Idno\\Data\\Mongo' => 'Idno\\Data\\Mongo'] as $database => $class) {
+            $this->assertSame('other', ConnectionParameters::driverFamily(['database' => $database]), $database);
+            $this->assertSame($class, ConnectionParameters::backendClass(['database' => $database]), $database);
+        }
         $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('"SomePluginBackend"');
-        ConnectionParameters::fromLegacyConfig(['database' => 'SomePluginBackend'], []);
+        $this->expectExceptionMessage('not an SQL database');
+        ConnectionParameters::fromLegacyConfig(['database' => PluginBackendFixture::class], []);
+    }
+
+    /**
+     * Names componentFactory() cannot build a backend from fall back to MySQL: a class that is not a
+     * backend, an empty value, and the legacy MySQL backend's own class name (which is MySQL).
+     */
+    public function testNamesThatAreNoBackendClassAreMysql(): void
+    {
+        foreach (['Idno\\Entities\\User', 'stdClass', '', 'Idno\\Data\\MySQL', '\\Idno\\Data\\MySQL', 'Idno\\Data\\mysql'] as $database) {
+            $this->assertSame('mysql', ConnectionParameters::driverFamily(['database' => $database]), $database);
+            $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
+        }
+        foreach (['mysql', 'sqlite', 'mongo'] as $database) {
+            $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
+        }
     }
 
     public function testCharsetAndOptionsMatchLegacy(): void

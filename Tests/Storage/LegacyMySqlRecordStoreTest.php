@@ -9,13 +9,24 @@ use Idno\Storage\RecordStore;
 use Tests\Storage\Contract\RecordStoreContract;
 
 /**
- * Runs the record storage contract against today's backend, Idno\Data\MySQL,
- * reached through Idno::site()->db(). It needs the booted legacy application
- * (the normal rig suite); the contract itself does not.
+ * Runs the record storage contract against the legacy backend, Idno\Data\MySQL. Since Task 7
+ * Idno::site()->db() is the storage adapter, so the test constructs the legacy backend itself
+ * (its own PDO connection to the site's database). It needs the booted legacy application
+ * (the normal rig suite); the contract itself does not. Deleted with the legacy backend.
  */
 final class LegacyMySqlRecordStoreTest extends RecordStoreContract
 {
+    private static ?\Idno\Data\MySQL $legacy = null;
+
     private string|false $previousErrorLog = false;
+
+    /**
+     * The legacy MySQL backend, built once for the class.
+     */
+    private static function legacy(): \Idno\Data\MySQL
+    {
+        return self::$legacy ??= new \Idno\Data\MySQL();
+    }
 
     public static function setUpBeforeClass(): void
     {
@@ -45,12 +56,12 @@ final class LegacyMySqlRecordStoreTest extends RecordStoreContract
 
     protected function store(): RecordStore
     {
-        return new LegacyBackendBinding();
+        return new LegacyBackendBinding(self::legacy());
     }
 
     protected function newId(): string
     {
-        return \Idno\Core\Idno::site()->db()->generateID();
+        return self::legacy()->generateID();
     }
 
     protected function currentSiteId(): ?string
@@ -155,7 +166,7 @@ final class LegacyMySqlRecordStoreTest extends RecordStoreContract
     public function testARawLegacyArrayOnMysqlReturnsWhatItsParsedCriteriaReturns(array $raw, string $kind): void
     {
         $total = $this->rawShapeFixture();
-        $db = \Idno\Core\Idno::site()->db();
+        $db = self::legacy();
         $raw += ['contract_marker' => $this->marker];
 
         $rawRecords = $db->getRecords([], $raw, 100, 0, 'entities');

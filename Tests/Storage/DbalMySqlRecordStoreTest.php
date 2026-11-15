@@ -219,7 +219,7 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
      */
     public static function nonSqlDatabases(): array
     {
-        return ['mongo' => ['mongo'], 'mongodb' => ['MongoDB'], 'a plugin backend' => ['SomePluginBackend']];
+        return ['mongo' => ['mongo'], 'mongodb' => ['MongoDB'], 'a plugin backend' => [\Tests\Unit\Storage\PluginBackendFixture::class]];
     }
 
     /**
@@ -243,7 +243,9 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
     public function testTheSessionMatchesTheLegacyConnection(): void
     {
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results';
-        $legacy = \Idno\Core\Idno::site()->db()->getClient()->query($query)->fetch(\PDO::FETCH_NUM);
+        // A legacy backend built for the test (its own connection): since Task 7 db() is the adapter,
+        // whose client IS the DBAL connection's PDO, so comparing with it would prove nothing.
+        $legacy = (new \Idno\Data\MySQL())->getClient()->query($query)->fetch(\PDO::FETCH_NUM);
 
         $dbal = self::connection()->fetchNumeric($query);
 

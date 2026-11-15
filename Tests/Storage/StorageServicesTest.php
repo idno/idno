@@ -118,8 +118,9 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->assertInstanceOf(MySqlDialect::class, self::property($store, 'dialect'));
         $this->assertSame($container->get('database_connection'), self::property($store, 'connection'));
         $this->assertInstanceOf(LegacyRecordDefaults::class, self::property($store, 'defaults'));
-        $this->assertSame((bool) Idno::site()->config()->boolean_search, self::property($store, 'booleanSearch'));
-        $this->assertSame((bool) Idno::site()->config()->bypass_fulltext_search, self::property($store, 'bypassFulltext'));
+        // Read from the legacy config each time a search is built (Task 7 fix M1; was: read once).
+        $this->assertSame((bool) Idno::site()->config()->boolean_search, self::property($store, 'booleanSearch')());
+        $this->assertSame((bool) Idno::site()->config()->bypass_fulltext_search, self::property($store, 'bypassFulltext')());
         $uncurl = self::property($store, 'uncurlQuotes');
         $this->assertSame(Idno::site()->language()->uncurlQuotes("\u{201C}a\u{2019}"), $uncurl("\u{201C}a\u{2019}"));
 
@@ -212,7 +213,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
      */
     public static function databasesWithoutAStore(): array
     {
-        return ['mongo' => ['mongo'], 'mongodb' => ['MongoDB'], 'a plugin backend' => ['SomePluginBackend']];
+        return ['mongo' => ['mongo'], 'mongodb' => ['MongoDB'], 'a plugin backend' => [\Tests\Unit\Storage\PluginBackendFixture::class]];
     }
 
     /**

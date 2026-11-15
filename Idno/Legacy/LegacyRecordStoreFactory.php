@@ -19,10 +19,12 @@ use Idno\Storage\RecordStore;
  * configuration: MySqlDialect for MySQL, SqliteDialect on the same connection for SQLite),
  * LegacyRecordDefaults, the legacy quote normaliser for the search text (Language::uncurlQuotes(),
  * as MySQL::saveRecord() applies it) and the site's `boolean_search` / `bypass_fulltext_search`
- * settings as they are when the store is built.
+ * settings, read from the legacy config each time a search condition is built (as the legacy
+ * backend read them per query).
  *
- * Any other database (MongoDB, a backend supplied by a plugin) has no record store: create() throws
- * a \LogicException, without touching the connection. It needs the legacy application, so it must
+ * Any other database (MongoDB, or a loadable backend class supplied by a plugin: see
+ * ConnectionParameters::driverFamily(), which also makes a `database` name that is no loadable class
+ * MySQL) has no record store: create() throws a \LogicException, without touching the connection. It needs the legacy application, so it must
  * not be called before the legacy application has booted.
  */
 final class LegacyRecordStoreFactory
@@ -55,15 +57,16 @@ final class LegacyRecordStoreFactory
 
         $connection = ($this->connection)();
         $dialect = $family === 'mysql' ? new MySqlDialect() : new SqliteDialect($connection);
-        $config = $site->config();
 
         return new DbalRecordStore(
             $connection,
             $dialect,
             $this->defaults,
             static fn (string $text): string => (string) Idno::site()->language()->uncurlQuotes($text),
-            (bool) $config->boolean_search,
-            (bool) $config->bypass_fulltext_search,
+            // Read when each search runs, as the legacy backend read them (after the stored config is
+            // merged, and whatever a plugin changes at runtime).
+            static fn (): bool => (bool) Idno::site()->config()->boolean_search,
+            static fn (): bool => (bool) Idno::site()->config()->bypass_fulltext_search,
         );
     }
 }

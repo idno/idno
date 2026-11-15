@@ -82,16 +82,18 @@ final class DbalRecordStore implements RecordStore
 
     /**
      * @param \Closure(string): string $uncurlQuotes   the quote normaliser applied to the search text (Language::uncurlQuotes())
-     * @param bool                     $booleanSearch  the site's `boolean_search` setting
-     * @param bool                     $bypassFulltext the site's `bypass_fulltext_search` setting
+     * @param bool|\Closure(): bool     $booleanSearch  the site's `boolean_search` setting, or a closure that
+     *                                                   reads it: called each time a search condition is built
+     * @param bool|\Closure(): bool     $bypassFulltext the site's `bypass_fulltext_search` setting, or a
+     *                                                   closure, likewise
      */
     public function __construct(
         private readonly Connection $connection,
         private readonly Dialect $dialect,
         private readonly RecordDefaults $defaults,
         private readonly \Closure $uncurlQuotes,
-        private readonly bool $booleanSearch,
-        private readonly bool $bypassFulltext,
+        private readonly bool|\Closure $booleanSearch,
+        private readonly bool|\Closure $bypassFulltext,
     )
     {
     }
@@ -308,6 +310,14 @@ final class DbalRecordStore implements RecordStore
         return is_array($record) ? $record : null;
     }
 
+    /**
+     * A search setting: the bool, or what the closure returns now.
+     */
+    private static function setting(bool|\Closure $setting): bool
+    {
+        return is_bool($setting) ? $setting : (bool) $setting();
+    }
+
     private function rollBack(): void
     {
         if (!$this->connection->isTransactionActive()) {
@@ -435,7 +445,7 @@ final class DbalRecordStore implements RecordStore
                 return null;
             }
             $context->search = true;
-            [$sql, $params, $parsed] = $this->dialect->searchCondition('srch.' . $this->dialect->quoteIdentifier('search'), $criterion->query, $this->booleanSearch, $this->bypassFulltext);
+            [$sql, $params, $parsed] = $this->dialect->searchCondition('srch.' . $this->dialect->quoteIdentifier('search'), $criterion->query, self::setting($this->booleanSearch), self::setting($this->bypassFulltext));
             array_push($context->params, ...$params);
             $context->parsedSearchTerm = $context->parsedSearchTerm || $parsed;
 

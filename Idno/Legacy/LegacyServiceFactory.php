@@ -23,6 +23,25 @@ use Idno\Core\Idno;
  */
 final class LegacyServiceFactory
 {
+    /**
+     * The services db() builds RepositoryDataConcierge from on a MySQL or SQLite site, as service
+     * closures: nothing is fetched unless db() needs it, and the record store, the repository and the
+     * logger only when the adapter first uses them (they need services Idno::init() builds after db()).
+     *
+     * @param (\Closure(): \Doctrine\DBAL\Connection)|null          $connection the `database_connection` service
+     * @param (\Closure(): \Idno\Storage\RecordStore)|null          $recordStore
+     * @param (\Closure(): \Idno\Storage\EntityRepository)|null     $repository
+     * @param (\Closure(): \Psr\Log\LoggerInterface)|null           $logger     the site's logger (Idno\Core\Logging)
+     */
+    public function __construct(
+        private readonly ?\Closure $connection = null,
+        private readonly ?\Closure $recordStore = null,
+        private readonly ?\Closure $repository = null,
+        private readonly ?\Closure $logger = null,
+    )
+    {
+    }
+
     public function routes(): \Idno\Core\PageHandler
     {
         return new \Idno\Core\PageHandler();
@@ -47,8 +66,6 @@ final class LegacyServiceFactory
             case 'mongo':
             case 'mongodb':
                 return new \Idno\Data\Mongo();
-            case 'mysql':
-                return new \Idno\Data\MySQL();
             case 'beanstalk-mysql': // A special instance of MYSQL designed for use with Amazon Elastic Beanstalk
                 $config->dbhost = $_SERVER['RDS_HOSTNAME'];
                 $config->dbuser = $_SERVER['RDS_USERNAME'];
@@ -57,10 +74,39 @@ final class LegacyServiceFactory
                 if (empty($config->dbname)) {
                     $config->dbname = $_SERVER['RDS_DB_NAME'];
                 }
-                return new \Idno\Data\MySQL();
-            default:
-                return $site->componentFactory($config->database, "Idno\\Core\\DataConcierge", "Idno\\Data\\", "Idno\\Data\\MySQL");
+                return $this->repositoryDataConcierge('mysql', $config);
         }
+
+        // What any other value means is decided in one place (ConnectionParameters::driverFamily(),
+        // which the DBAL connection and the record store use too): 'mysql' and 'sqlite' are served
+        // by the storage layer, and so is a name that is no loadable backend class (componentFactory()
+        // would fall back to MySQL for it); a loadable backend class is built as before.
+        $family = \Idno\Storage\ConnectionParameters::driverFamily(['database' => $config->database]);
+        if ($family === 'mysql' || $family === 'sqlite') {
+            return $this->repositoryDataConcierge($family, $config);
+        }
+
+        return $site->componentFactory($config->database, "Idno\\Core\\DataConcierge", "Idno\\Data\\", "Idno\\Data\\MySQL");
+    }
+
+    /**
+     * The db() service of a MySQL or SQLite site. Fetches the DBAL connection (which does not connect
+     * by itself); RepositoryDataConcierge connects when it is constructed.
+     */
+    private function repositoryDataConcierge(string $family, \Idno\Core\Config $config): RepositoryDataConcierge
+    {
+        if ($this->connection === null || $this->recordStore === null || $this->repository === null || $this->logger === null) {
+            throw new \LogicException('LegacyServiceFactory needs the connection, record store, repository and logger services to build the db() service of an SQL site.');
+        }
+
+        return new RepositoryDataConcierge(
+            $family,
+            ($this->connection)(),
+            $this->recordStore,
+            $this->repository,
+            $this->logger,
+            $config->dbname === null ? null : (string) $config->dbname,
+        );
     }
 
     public function filesystem(): ?\Idno\Files\FileSystem

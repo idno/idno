@@ -50,7 +50,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
-        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
+        // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
+        // LegacySchemaUpgrader and LegacySqlMaintenance.
+        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -74,7 +76,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // fetches them in its original order. They are public because legacy code fetches them
     // with Idno::container()->get(). No instance or configuration value is ever compiled
     // into the cached container.
-    $services->set(LegacyServiceFactory::class)->autowire(false)->autoconfigure(false);
+    // db() builds Idno\Legacy\RepositoryDataConcierge on a MySQL or SQLite site from these service
+    // closures (nothing is fetched on other sites; the store, repository and logger only at first use).
+    $services->set(LegacyServiceFactory::class)
+        ->args([
+            service_closure('database_connection'),
+            service_closure(RecordStore::class),
+            service_closure(EntityRepository::class),
+            service_closure(\Psr\Log\LoggerInterface::class),
+        ])
+        ->autowire(false)
+        ->autoconfigure(false);
     $legacyServices = [
         \Idno\Core\PageHandler::class => 'routes',
         \Idno\Core\EventDispatcher::class => 'events',

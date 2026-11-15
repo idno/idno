@@ -21,6 +21,11 @@ final class ConnectionParameters
     /** The settings the legacy Config falls back to when the configuration does not set them. */
     private const LEGACY_DEFAULTS = ['database' => 'mysql', 'dbname' => 'idno'];
 
+    /** What the legacy Idno::componentFactory() loads a database backend as (see backendClass()). */
+    private const LEGACY_BACKEND_BASE = 'Idno\\Core\\DataConcierge';
+    private const LEGACY_BACKEND_NAMESPACE = 'Idno\\Data\\';
+    private const LEGACY_SQL_BACKEND = 'Idno\\Data\\MySQL';
+
     /** The DBAL parameters that identify the database; fromLegacyConfig() sets every one it needs. */
     public const IDENTITY_KEYS = ['driver', 'driverClass', 'url', 'host', 'port', 'unix_socket', 'dbname', 'user', 'password', 'charset', 'path', 'memory', 'driverOptions'];
 
@@ -34,7 +39,7 @@ final class ConnectionParameters
      * @return array<string, mixed>
      *
      * @throws \LogicException when the configured database is not an SQL database (MongoDB, or a
-     *                          backend supplied by a plugin)
+     *                          loadable backend class supplied by a plugin; see driverFamily())
      */
     public static function fromLegacyConfig(array $config, array $server): array
     {
@@ -88,7 +93,17 @@ final class ConnectionParameters
     }
 
     /**
-     * 'mysql' | 'sqlite' | 'mongo' | 'other' — from the legacy `database` value, case-insensitively.
+     * What the legacy `database` value means: 'mysql' | 'sqlite' | 'mongo' | 'other'. This is the one
+     * place that decides it, for the legacy db() service (Idno\Legacy\LegacyServiceFactory::db()), the
+     * DBAL connection (BootConfigConnectionFactory) and the record store (LegacyRecordStoreFactory).
+     *
+     *  - 'mysql', 'beanstalk-mysql' (case-insensitive, trimmed) → 'mysql'; 'sqlite' → 'sqlite';
+     *    'mongo', 'mongodb' → 'mongo';
+     *  - any other value is a backend class name, as the legacy Idno::componentFactory() reads it:
+     *    when backendClass() finds a loadable backend class of that name, 'other' (the class is
+     *    built as before, and has no DBAL connection or record store);
+     *  - otherwise 'mysql': componentFactory() falls back to the MySQL backend for a name it cannot
+     *    load, so such a site has always run on MySQL.
      *
      * @param array<string, mixed> $config
      */
@@ -98,8 +113,44 @@ final class ConnectionParameters
             'mysql', 'beanstalk-mysql' => 'mysql',
             'sqlite' => 'sqlite',
             'mongo', 'mongodb' => 'mongo',
-            default => 'other',
+            default => self::backendClass($config) === null ? 'mysql' : 'other',
         };
+    }
+
+    /**
+     * The backend class the legacy Idno::componentFactory() would build for the `database` value,
+     * or null when it would fall back to the MySQL backend (or when the value is one of the names
+     * driverFamily() knows). componentFactory() takes the value untrimmed and with its case: first as
+     * a full class name that extends the backend base class, then as a class in the backend
+     * namespace that does. The legacy MySQL backend itself counts as no class: it is MySQL.
+     *
+     * Only the names of the legacy classes are used (class_exists(), is_subclass_of()); nothing of
+     * the legacy application is called.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function backendClass(array $config): ?string
+    {
+        $database = ($config + self::LEGACY_DEFAULTS)['database'] ?? null;
+        if (!is_scalar($database) || in_array(self::name(['database' => $database]), ['mysql', 'beanstalk-mysql', 'sqlite', 'mongo', 'mongodb'], true)) {
+            return null;
+        }
+        $database = (string) $database;
+        if ($database === '') {
+            return null;
+        }
+
+        $class = null;
+        if (class_exists($database) && is_subclass_of($database, self::LEGACY_BACKEND_BASE)) {
+            $class = $database;
+        } elseif (class_exists(self::LEGACY_BACKEND_NAMESPACE . $database) && is_subclass_of(self::LEGACY_BACKEND_NAMESPACE . $database, self::LEGACY_BACKEND_BASE)) {
+            $class = self::LEGACY_BACKEND_NAMESPACE . $database;
+        }
+        if ($class === null || strcasecmp(ltrim($class, '\\'), self::LEGACY_SQL_BACKEND) === 0) {
+            return null;
+        }
+
+        return $class;
     }
 
     /**

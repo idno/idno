@@ -172,7 +172,7 @@ namespace Idno\Core {
 
             \Idno\Core\Idno::site()->logging()->debug("Generating export records...");
             $db = \Idno\Core\Idno::site()->db();
-            if ($db instanceof \Idno\Data\AbstractSQL) {
+            if ($db instanceof \Idno\Data\AbstractSQL || $db instanceof \Idno\Legacy\RepositoryDataConcierge) {
                 $export_ext = 'sql';
             } else {
                 $export_ext = 'json';
