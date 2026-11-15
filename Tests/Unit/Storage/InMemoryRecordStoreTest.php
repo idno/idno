@@ -28,7 +28,7 @@ use Tests\Storage\Contract\RecordStoreContract;
  *    a substring match on each of its words;
  *  - ownsPrivateDatabase (true): the store is private to the test;
  *  - expectArrayInSearchFieldsToRaise, expectArrayBodyToRaise (false): ruling P5;
- *  - expectMongoStyleOrCountToFail (false): ruling P6;
+ *  - expectFailedQueryCountToFail (false): ruling P6;
  *  - expectMidCharacterCutToLoseTheRecord (false): ruling P7.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
@@ -69,7 +69,7 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         return false;
     }
 
-    protected function expectMongoStyleOrCountToFail(): bool
+    protected function expectFailedQueryCountToFail(): bool
     {
         return false;
     }
@@ -192,7 +192,7 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         $this->store->save('entities', ['_id' => 'a', 'created' => 1686700000, 'slug' => 'x']);
         $valid = date('Y-m-d H:i:s', 1686700000);
 
-        foreach ([1686700000, '1686700000', '2023-06-14', '2023-02-30 00:00:00', '2023-06-14 24:00:00', true, 1.5, ''] as $bad) {
+        foreach ([1686700000, '1686700000', '2023-02-30 00:00:00', '2023-06-14 24:00:00', '24:00:00', true, 1.5, '', '2023-06-14 00:00:00.1234567', '2023-06-14x'] as $bad) {
             $this->assertSame([], $this->ids2(new Criteria(new AllOf([new GreaterThan('created', $bad)]))), json_encode($bad));
             $this->assertSame(0, $this->store->count('entities', new Criteria(new AllOf([new LessThan('created', $bad)]))));
             $this->assertSame([], $this->ids2(new Criteria(new AllOf([new In('created', [$valid, $bad])]))));
@@ -200,9 +200,32 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
             // The whole query fails, also when the bad operand is in an alternative that is not needed.
             $this->assertSame([], $this->ids2(new Criteria(new AllOf([new AnyOf([new Equals('slug', 'x'), new Equals('created', $bad)])]))));
         }
-        // A well-formed datetime is fine, and NULL is not an error (it is just never equal).
+        // Other literals that MySQL accepts are fine (the contract pins the list), and NULL is not an error (it is just never equal).
         $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([new Equals('created', $valid)]))));
         $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([new AnyOf([new Equals('slug', 'x'), new Equals('created', null)])]))));
+    }
+
+    public function testASearchOutsideTheTopLevelMatchesNothingWhereverItIs(): void
+    {
+        $this->store->save('entities', ['_id' => 'a', 'title' => 'xxabcxx', 'slug' => 'x']);
+        $top = new Search('abc');
+
+        $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([$top, new Equals('slug', 'x')]))));
+        foreach ([new AnyOf([$top]), new AnyOf([$top, new Equals('slug', 'x')]), new AllOf([$top]), new AnyOf([new AllOf([$top])])] as $nested) {
+            $criteria = new Criteria(new AllOf([$nested]));
+            $this->assertSame([], $this->ids2($criteria), $nested::class);
+            $this->assertSame(0, $this->store->count('entities', $criteria));
+        }
+    }
+
+    public function testFractionsAndDateOnlyOperandsOnCreated(): void
+    {
+        $this->store->save('entities', ['_id' => 'a', 'created' => strtotime('2023-06-14 00:00:00')]);
+
+        $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([new GreaterThan('created', '2023-06-13')]))));
+        $this->assertSame([], $this->ids2(new Criteria(new AllOf([new GreaterThan('created', '2023-06-14')]))));
+        $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([new LessThan('created', '2023-06-14 00:00:00.000001')]))));
+        $this->assertSame(['a'], $this->ids2(new Criteria(new AllOf([new Equals('created', '2023-06-14 00:00:00.0')]))));
     }
 
     public function testANullOperandIsNeverTrue(): void

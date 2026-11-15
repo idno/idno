@@ -225,6 +225,19 @@ final class RecordIndexTest extends TestCase
         RecordIndex::columns(['created' => 'yesterday']);
     }
 
+    public function testCreatedThatIsAFloatOutsideTheIntegerRangeIsRejected(): void
+    {
+        foreach ([1e20, -1e20, NAN, INF, '1e20'] as $created) {
+            try {
+                RecordIndex::columns(['created' => $created]);
+                $this->fail('Expected an InvalidArgumentException for ' . json_encode($created));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertSame('1970-01-01 00:16:40', RecordIndex::columns(['created' => '1e3'])['created']);
+    }
+
     public function testWithoutCreatedTheGivenTimeIsUsed(): void
     {
         $this->assertSame('1970-01-01 00:01:40', RecordIndex::columns([], 100)['created']);

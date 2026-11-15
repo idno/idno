@@ -122,7 +122,7 @@ final class RecordIndex
     /**
      * The column values saveRecord() writes to the main table. entity_subtype defaults to
      * 'Idno\Common\Entity', publish_status to 'published', created to the time $now; a given
-     * `created` (an integer, float or numeric string timestamp) is formatted as
+     * `created` (an integer, a float or numeric string that fits an integer) is formatted as
      * 'Y-m-d H:i:s' in the PHP default timezone at this moment. siteid is null when the record
      * has none (it is not a queryable column).
      *
@@ -163,7 +163,10 @@ final class RecordIndex
         if (empty($record['publish_status'])) {
             $record['publish_status'] = self::DEFAULT_PUBLISH_STATUS;
         }
-        $record['created'] = date(self::DATETIME_FORMAT, empty($record['created']) ? $now : self::timestamp($record['created']));
+        $created = $record['created'] ?? null;
+        // (empty() of NAN is a warning: NAN is not empty, it is not a timestamp.)
+        $missing = !(is_float($created) && is_nan($created)) && empty($created);
+        $record['created'] = date(self::DATETIME_FORMAT, $missing ? $now : self::timestamp($created));
 
         return $record;
     }
@@ -176,8 +179,15 @@ final class RecordIndex
         if (is_int($created)) {
             return $created;
         }
-        if (is_float($created) || is_bool($created) || (is_string($created) && is_numeric($created))) {
+        if (is_bool($created)) {
             return (int) $created;
+        }
+        if (is_float($created) || (is_string($created) && is_numeric($created))) {
+            $number = $created + 0;
+            // A float that does not fit an integer (or is NAN or infinite) is no timestamp.
+            if (is_int($number) || (is_float($number) && is_finite($number) && $number >= -9.2233720368547758E18 && $number < 9.2233720368547758E18)) {
+                return (int) $number;
+            }
         }
 
         throw new \InvalidArgumentException('`created` must be a timestamp, ' . get_debug_type($created) . ' given.');

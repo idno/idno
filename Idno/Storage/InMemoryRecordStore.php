@@ -28,18 +28,28 @@ use Idno\Storage\Criterion\Search;
  *    every parameter is bound as a string: true is '1', false is '', an integer its decimal
  *    string. A null operand is NULL: no comparison with it is ever true.
  *  - Text comparison ignores case (MySQL's default collation), for field names as well as
- *    values; `$lt` and `$gt` compare as text ('10' is less than '5'). Not emulated: accent
- *    insensitivity ('e' = 'é') and trailing-space padding, and the exact collation order of
- *    punctuation against letters (letters are compared by their lower-case bytes).
+ *    values; `$lt` and `$gt` compare as text ('10' is less than '5'). Text is folded to UPPER
+ *    case before it is compared, as utf8mb3_general_ci does, so the ASCII characters between Z
+ *    and a (`[ \ ] ^ _` and the backtick) sort after the letters ('a_' is greater than 'aZ').
+ *    Not emulated: accent insensitivity ('e' = 'é'), trailing-space padding, and the collation
+ *    weights of non-ASCII characters.
  *  - The fields uuid, _id, entity_subtype, owner, publish_status and created are compared
  *    against the record's columns; every other field against its metadata rows. Each criterion
  *    is evaluated independently against the rows, so on a list field two criteria may be
  *    satisfied by different elements, and a record without the field satisfies none of them
  *    ($not and $not-$in included).
- *  - `created` is compared as the text 'Y-m-d H:i:s'. An operand for it that is not such a
- *    datetime (an integer timestamp, say) makes MySQL fail the whole query, which the legacy
- *    backend reports as no records: here the query matches nothing, find() gives [] and count()
- *    0, wherever in the criteria that operand is.
+ *  - `created` is compared as a datetime. The operand may be written 'Y-m-d H:i:s', with
+ *    unpadded fields ('2023-6-4 1:2:3'), date only (midnight), with a 'T' instead of the space,
+ *    and with up to six fractional digits (compared exactly, no rounding: '..:00.5' is greater
+ *    than a record created at '..:00'). An operand for it that is anything else (an integer
+ *    timestamp, '', '2023-02-30 00:00:00', '24:00:00', true) makes MySQL fail the whole query,
+ *    which the legacy backend reports as no records: here the query matches nothing, find()
+ *    gives [] and count() 0, wherever in the criteria that operand is. Known limit: MySQL
+ *    accepts more literal forms (a time without seconds, 'Ymd', a trailing space or time zone
+ *    suffix, more than six fractional digits); this store treats them as failures too.
+ *  - A Search anywhere but directly under the top level (inside an AnyOf or a nested AllOf) makes
+ *    the whole query match nothing: MySQL joins the search table only for a top-level `$search`
+ *    and fails the query otherwise.
  *  - An AnyOf with no children matches nothing (the MongoDB list form of `$or`); an AllOf with
  *    none matches everything. An In or NotIn with no values (which the legacy parser never
  *    produces) is the mathematical one: In matches nothing, NotIn every record that has the field.
@@ -48,7 +58,9 @@ use Idno\Storage\Criterion\Search;
  *    boolean mode; its operators + - * " ( ) < > ~ are NOT emulated and are plain characters
  *    here, and neither are stop words or the minimum word length). A term of at most 5 bytes is
  *    one substring, matched like SQL `LIKE '%term%'`: '%' and '_' are wildcards and a backslash
- *    escapes the next character.
+ *    escapes the next character (a trailing backslash is a literal here; in MySQL it escapes the
+ *    closing '%'). MySQL's full-text parser also splits words on punctuation ('xx,hello' finds
+ *    "hello world" there); here words are split on whitespace only.
  *  - Results are distinct records ordered by `created` descending (ties in insertion order),
  *    then paged; a limit of 0 or less, or a negative offset, finds nothing. count() is the number
  *    find() returns unpaged.
@@ -257,14 +269,15 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * MySQL fails a query that compares `created` with something that is not a datetime; the
-     * legacy backend then reports no records.
+     * MySQL fails a query that compares `created` with something that is not a datetime, or that
+     * has a `$search` anywhere but at the top level; the legacy backend then reports no records.
      */
-    private static function isExecutable(Criterion $criterion): bool
+    private static function isExecutable(Criterion $criterion, bool $isRoot = true, bool $topLevel = false): bool
     {
         if ($criterion instanceof AllOf || $criterion instanceof AnyOf) {
             foreach ($criterion->children as $child) {
-                if (!self::isExecutable($child)) {
+                // Only the children of the root are at the top level.
+                if (!self::isExecutable($child, false, $isRoot)) {
                     return false;
                 }
             }
@@ -272,7 +285,7 @@ final class InMemoryRecordStore implements RecordStore
             return true;
         }
         if ($criterion instanceof Search) {
-            return true;
+            return $topLevel;
         }
         if ($criterion->field !== 'created') {
             return true;
@@ -280,7 +293,7 @@ final class InMemoryRecordStore implements RecordStore
         $operands = $criterion instanceof In || $criterion instanceof NotIn ? $criterion->values : [$criterion->value];
         foreach ($operands as $operand) {
             $text = self::operand($operand);
-            if ($text !== null && !self::isDatetime($text)) {
+            if ($text !== null && self::datetime($text) === null) {
                 return false;
             }
         }
@@ -288,13 +301,24 @@ final class InMemoryRecordStore implements RecordStore
         return true;
     }
 
-    private static function isDatetime(string $text): bool
+    /**
+     * The datetime literal in the form the stored `created` strings have, plus '.ffffff' when the
+     * fraction is not zero (so a plain string comparison orders it correctly), or null when MySQL
+     * would reject the literal (or it is one of the forms this store does not support).
+     */
+    private static function datetime(string $text): ?string
     {
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/', $text, $m) !== 1) {
-            return false;
+        $matched = preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,6}))?)?$/', $text, $m);
+        if ($matched !== 1) {
+            return null;
         }
+        [$year, $month, $day, $hour, $minute, $second] = [(int) $m[1], (int) $m[2], (int) $m[3], (int) ($m[4] ?? 0), (int) ($m[5] ?? 0), (int) ($m[6] ?? 0)];
+        if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
+            return null;
+        }
+        $fraction = rtrim($m[7] ?? '', '0');
 
-        return checkdate((int) $m[2], (int) $m[3], (int) $m[1]) && (int) $m[4] < 24 && (int) $m[5] < 60 && (int) $m[6] < 60;
+        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second) . ($fraction === '' ? '' : '.' . $fraction);
     }
 
     /**
@@ -325,14 +349,15 @@ final class InMemoryRecordStore implements RecordStore
         }
 
         $values = self::valuesOf($entry, $criterion->field);
+        $field = $criterion->field;
 
         return match (true) {
-            $criterion instanceof Equals => self::any($values, $criterion->value, static fn (string $v, string $o): bool => self::equal($v, $o)),
-            $criterion instanceof NotEquals => self::any($values, $criterion->value, static fn (string $v, string $o): bool => !self::equal($v, $o)),
-            $criterion instanceof LessThan => self::any($values, $criterion->value, static fn (string $v, string $o): bool => self::compare($v, $o) < 0),
-            $criterion instanceof GreaterThan => self::any($values, $criterion->value, static fn (string $v, string $o): bool => self::compare($v, $o) > 0),
-            $criterion instanceof In => self::matchesIn($values, $criterion->values),
-            $criterion instanceof NotIn => self::matchesNotIn($values, $criterion->values),
+            $criterion instanceof Equals => self::any($values, self::operand($criterion->value, $field), static fn (string $v, string $o): bool => self::equal($v, $o)),
+            $criterion instanceof NotEquals => self::any($values, self::operand($criterion->value, $field), static fn (string $v, string $o): bool => !self::equal($v, $o)),
+            $criterion instanceof LessThan => self::any($values, self::operand($criterion->value, $field), static fn (string $v, string $o): bool => self::compare($v, $o) < 0),
+            $criterion instanceof GreaterThan => self::any($values, self::operand($criterion->value, $field), static fn (string $v, string $o): bool => self::compare($v, $o) > 0),
+            $criterion instanceof In => self::matchesIn($values, array_map(static fn (string|int|float|bool|null $o): ?string => self::operand($o, $field), $criterion->values)),
+            $criterion instanceof NotIn => self::matchesNotIn($values, array_map(static fn (string|int|float|bool|null $o): ?string => self::operand($o, $field), $criterion->values)),
             default => throw new \LogicException('Unknown criterion ' . get_debug_type($criterion) . '.'),
         };
     }
@@ -366,9 +391,8 @@ final class InMemoryRecordStore implements RecordStore
      * @param list<string>                      $values
      * @param callable(string, string): bool    $test
      */
-    private static function any(array $values, string|int|float|bool|null $operand, callable $test): bool
+    private static function any(array $values, ?string $text, callable $test): bool
     {
-        $text = self::operand($operand);
         if ($text === null) {
             return false;
         }
@@ -382,14 +406,13 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * @param list<string>                         $values
-     * @param list<string|int|float|bool|null>     $operands
+     * @param list<string>     $values
+     * @param list<?string>    $texts
      */
-    private static function matchesIn(array $values, array $operands): bool
+    private static function matchesIn(array $values, array $texts): bool
     {
         foreach ($values as $value) {
-            foreach ($operands as $operand) {
-                $text = self::operand($operand);
+            foreach ($texts as $text) {
                 if ($text !== null && self::equal($value, $text)) {
                     return true;
                 }
@@ -402,12 +425,11 @@ final class InMemoryRecordStore implements RecordStore
     /**
      * SQL's `not in`: a NULL in the list makes it unknown for every value that is not in the list.
      *
-     * @param list<string>                         $values
-     * @param list<string|int|float|bool|null>     $operands
+     * @param list<string>     $values
+     * @param list<?string>    $texts
      */
-    private static function matchesNotIn(array $values, array $operands): bool
+    private static function matchesNotIn(array $values, array $texts): bool
     {
-        $texts = array_map(self::operand(...), $operands);
         if (in_array(null, $texts, true)) {
             return false;
         }
@@ -427,19 +449,22 @@ final class InMemoryRecordStore implements RecordStore
     /**
      * The operand as MySQL sees it with every parameter bound as a string.
      */
-    private static function operand(string|int|float|bool|null $operand): ?string
+    private static function operand(string|int|float|bool|null $operand, ?string $field = null): ?string
     {
-        return match (true) {
+        $text = match (true) {
             $operand === null => null,
             $operand === true => '1',
             $operand === false => '',
             default => (string) $operand,
         };
+
+        // A datetime operand is compared in its canonical form (a query with an invalid one never gets here).
+        return $field === 'created' && $text !== null ? (self::datetime($text) ?? $text) : $text;
     }
 
     private static function fold(string $text): string
     {
-        return mb_strtolower($text, 'UTF-8');
+        return mb_strtoupper($text, 'UTF-8');
     }
 
     private static function equal(string $a, string $b): bool

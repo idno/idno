@@ -113,11 +113,12 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether count() with a malformed criteria (the MongoDB list form of $or) fails.
-     * Legacy: invalid SQL, countRecords() returns false (the binding throws). By ruling
-     * (P6) the new implementations match nothing: count() is 0, and they override this to false.
+     * Whether count() of a query the backend cannot run fails. Legacy: invalid SQL (the MongoDB
+     * list form of $or, a `$search` below the top level) or a rejected value (a `created`
+     * operand that is not a datetime): countRecords() returns false (the binding throws). By
+     * ruling (P6) the new implementations match nothing: count() is 0, and they override this to false.
      */
-    protected function expectMongoStyleOrCountToFail(): bool
+    protected function expectFailedQueryCountToFail(): bool
     {
         return true;
     }
@@ -564,11 +565,11 @@ abstract class RecordStoreContract extends TestCase
         // The MongoDB list-of-conditions form is not understood: it compiles to
         // invalid SQL, the error is logged, and find() answers with an empty list
         // (not a match-everything). count() fails; by ruling the new implementations
-        // match nothing and count 0 (hook expectMongoStyleOrCountToFail()).
+        // match nothing and count 0 (hook expectFailedQueryCountToFail()).
         $this->assertSame([], $this->ids(['$or' => [['slug' => 'a'], ['slug' => 'b']]]));
         $this->assertNotEmpty($this->ids([]), 'the records exist; only the malformed $or query fails');
         $malformed = ['$or' => [['slug' => 'a'], ['slug' => 'b']], self::MARKER_FIELD => $this->marker];
-        if ($this->expectMongoStyleOrCountToFail()) {
+        if ($this->expectFailedQueryCountToFail()) {
             $failed = false;
             try {
                 $this->store()->count('entities', $this->criteria($malformed));
@@ -1300,5 +1301,150 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['ts' => ['$lt' => 5000]], [$big, $huge]);
         $this->assertMatches(['ts' => ['$gt' => 5000]], [$small]);
         $this->assertMatches(['ts' => 1000], [$big]);
+    }
+
+    // ------------------------------------------- datetime literals (fix round 1)
+
+    /**
+     * Three records at 2023-06-14 00:00:00, 00:00:01 and 12:30:45 (PHP default timezone, the
+     * one `created` is formatted in), A, B and C.
+     *
+     * @return array{array, array, array}
+     */
+    private function threeRecordsOnOneDay(): array
+    {
+        $midnight = strtotime('2023-06-14 00:00:00');
+
+        return [
+            $this->put($this->r(['created' => $midnight])),
+            $this->put($this->r(['created' => $midnight + 1])),
+            $this->put($this->r(['created' => $midnight + 12 * 3600 + 30 * 60 + 45])),
+        ];
+    }
+
+    /**
+     * Literals MySQL accepts for a `created` operand, with what `=`, `$lt` and `$gt` find among
+     * A (00:00:00), B (00:00:01) and C (12:30:45). A fraction is compared exactly (no rounding).
+     *
+     * @return array<string, array{string, list<string>, list<string>, list<string>}>
+     */
+    public static function acceptedDatetimeLiterals(): array
+    {
+        return [
+            'date only is midnight' => ['2023-06-14', ['A'], [], ['B', 'C']],
+            'unpadded fields' => ['2023-6-14 0:0:0', ['A'], [], ['B', 'C']],
+            'unpadded time' => ['2023-06-14 1:2:3', [], ['A', 'B'], ['C']],
+            'T separator' => ['2023-06-14T00:00:00', ['A'], [], ['B', 'C']],
+            'fraction above the second' => ['2023-06-14 00:00:00.5', [], ['A'], ['B', 'C']],
+            'fraction below half is not rounded' => ['2023-06-14 12:30:45.4', [], ['A', 'B', 'C'], []],
+            'zero fraction is the second' => ['2023-06-14 00:00:00.000', ['A'], [], ['B', 'C']],
+        ];
+    }
+
+    /**
+     * @dataProvider acceptedDatetimeLiterals
+     *
+     * @param list<string> $equal
+     * @param list<string> $less
+     * @param list<string> $greater
+     */
+    public function testCreatedAcceptsTheDatetimeLiteralsMysqlAccepts(string $literal, array $equal, array $less, array $greater): void
+    {
+        $records = array_combine(['A', 'B', 'C'], $this->threeRecordsOnOneDay());
+        $pick = static fn (array $names): array => array_map(static fn (string $name): array => $records[$name], $names);
+
+        $this->assertMatches(['created' => $literal], $pick($equal), $literal);
+        $this->assertMatches(['created' => ['$lt' => $literal]], $pick($less), $literal);
+        $this->assertMatches(['created' => ['$gt' => $literal]], $pick($greater), $literal);
+        $this->assertMatches(['created' => ['$in' => [$literal]]], $pick($equal), $literal);
+    }
+
+    /**
+     * Literals MySQL rejects ("Incorrect TIMESTAMP value", error 1525) for a `created` operand:
+     * the query fails, which the legacy backend reports as no records.
+     *
+     * @return array<string, array{string|int|float|bool}>
+     */
+    public static function rejectedDatetimeLiterals(): array
+    {
+        return [
+            'integer timestamp' => [1686700100],
+            'timestamp as text' => ['1686700100'],
+            'empty string' => [''],
+            'decimal text' => ['1.5'],
+            'one' => ['1'],
+            'true (bound as 1)' => [true],
+            'day that does not exist' => ['2023-02-30 00:00:00'],
+            'time only' => ['24:00:00'],
+            'hour 24' => ['2023-06-14 24:00:00'],
+        ];
+    }
+
+    /**
+     * @dataProvider rejectedDatetimeLiterals
+     */
+    public function testCreatedRejectsTheLiteralsMysqlRejects(string|int|float|bool $literal): void
+    {
+        $this->threeRecordsOnOneDay();
+        // `$lt` and `$gt` with an empty operand add no condition, so '' is only an equality.
+        $queries = [['created' => $literal], ['created' => ['$in' => [$literal]]]];
+        if ($literal !== '') {
+            $queries[] = ['created' => ['$lt' => $literal]];
+            $queries[] = ['created' => ['$gt' => $literal]];
+        }
+
+        foreach ($queries as $query) {
+            $this->assertSame([], $this->ids($query), json_encode($query));
+            $this->assertNotEmpty($this->ids([]), 'the records exist');
+            if ($this->expectFailedQueryCountToFail()) {
+                $failed = false;
+                try {
+                    $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
+                } catch (\Throwable) {
+                    $failed = true;
+                }
+                $this->assertTrue($failed, 'count() fails for ' . json_encode($query));
+            } else {
+                $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), json_encode($query));
+            }
+        }
+    }
+
+    // ------------------------------------------------------ collation weights
+
+    public function testTextComparisonFoldsToUpperCase(): void
+    {
+        $underscore = $this->put($this->r(['slug' => 'a_']));
+        $letter = $this->put($this->r(['slug' => 'aZ']));
+
+        // Folded to upper case, '_' (between Z and a in ASCII) sorts after every letter.
+        $this->assertMatches(['slug' => ['$gt' => 'aZ']], [$underscore]);
+        $this->assertMatches(['slug' => ['$lt' => 'a_']], [$letter]);
+        $this->assertMatches(['slug' => ['$gt' => 'a_']], []);
+    }
+
+    // ------------------------------------------------- search below the top level
+
+    public function testASearchBelowTheTopLevelFailsTheQuery(): void
+    {
+        $record = $this->put($this->r(['title' => 'xxabcxx', 'slug' => 'x']));
+
+        // Positive control: the same search at the top level finds it.
+        $this->assertMatches(['$search' => ['abc']], [$record]);
+        // MySQL joins the search table only for a top-level `$search`: inside `$or` the query
+        // fails (find gives [], count fails; the new stores match nothing, count 0).
+        $query = ['$or' => ['$search' => ['abc'], 'slug' => 'x']];
+        $this->assertSame([], $this->ids($query));
+        if ($this->expectFailedQueryCountToFail()) {
+            $failed = false;
+            try {
+                $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
+            } catch (\Throwable) {
+                $failed = true;
+            }
+            $this->assertTrue($failed, 'count() fails');
+        } else {
+            $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])));
+        }
     }
 }
