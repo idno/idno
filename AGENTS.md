@@ -19,8 +19,11 @@ composer install
 
 # Local test rig: MySQL in Docker (127.0.0.1:33306) + php -S web server (http://127.0.0.1:8089/)
 composer test:up      # start the rig (creates configuration/config.ini if absent; never overwrites)
-composer test         # run the full suite (core + plugins)
+composer test         # run the full suite (core + plugins + unit tier); needs the rig
 composer test:down    # stop the rig
+
+# The dependency-free unit tier (Tests/Unit/): needs no rig, no database, no configuration
+composer test:unit
 
 # Run one directory or file (a plugin's tests, the kernel tests, ...)
 composer test -- IdnoPlugins/ActivityPub/Tests/
@@ -42,7 +45,18 @@ composer console -- list
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
-- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`)
+- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`) for `composer test`;
+  `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
+  for `composer test:unit`
+- Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's
+  autoloader. `Tests/_bootstrap_unit.php` loads only `vendor/autoload.php`: a unit test must not
+  use `Idno::site()`, boot the kernel, read `configuration/` or the environment's site settings,
+  open a database, touch the network, or need the web server. It must not depend on which
+  bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
+  Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
+  **Everything else** (`composer test`) needs the rig: kernel tests (`Tests/Kernel`),
+  the storage contract (`Tests/Storage`), the black-box characterisation suite
+  (`Tests/Characterisation`, which drives the running site over HTTP) and the plugin tests.
 - Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT` (default `localhost`, 80)
 - Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
@@ -75,6 +89,8 @@ Idno/
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
   Data/                        Database backends (Mongo.php, MySQL.php, AbstractSQL.php)
+  Storage/                     The storage interface (modern style). So far only the query model:
+                               Criteria and Criterion/* (value objects parsed from the legacy search arrays)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -93,7 +109,7 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                config.ini or the environment is never saved or announced, only resolved. Plugins and themes
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
-Tests/                         Unit, kernel (Tests/Kernel) and black-box characterisation tests;
+Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel) and black-box characterisation tests;
                                Tests/Fixtures holds test-only controllers, a command and a service;
                                Tests/rig/ is the local test rig, Tests/build/ the CI configs and router
 ```
@@ -297,8 +313,11 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`) and registers the classes as autowired, autoconfigured services,
-  except the files it excludes (classes that are not services, or that are wired by hand).
+  `Console`, `Legacy`, `Storage`) and registers the classes as autowired, autoconfigured
+  services, except the files it excludes (classes that are not services, or that are wired
+  by hand). Value objects and static helpers in a scanned directory are not services and
+  must be added to the `$excludes` map in `config/services.php` (today `Idno/Storage/Criteria.php`
+  and `Idno/Storage/Criterion/`), or the container will try to autowire them.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`

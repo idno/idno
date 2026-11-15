@@ -33,6 +33,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Http' => ['FrontController.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
+        // Value objects (a query tree and its nodes), built with new, not services.
+        'Storage' => ['Criteria.php', 'Criterion'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

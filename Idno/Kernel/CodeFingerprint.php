@@ -21,7 +21,7 @@ final class CodeFingerprint
      *
      * @var list<string>
      */
-    public const SERVICE_DIRECTORIES = ['Kernel', 'Config', 'Http', 'Console', 'Legacy'];
+    public const SERVICE_DIRECTORIES = ['Kernel', 'Config', 'Http', 'Console', 'Legacy', 'Storage'];
 
     /**
      * A short, stable identifier for the code the container is compiled from:
