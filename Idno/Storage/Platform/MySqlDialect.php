@@ -57,6 +57,14 @@ final class MySqlDialect implements Dialect
         return [$column . ' like ?', ['%' . $term . '%'], false];
     }
 
+    /**
+     * Unchanged: MySQL itself rejects a `created` operand that is not a datetime (error 1525).
+     */
+    public function columnValue(string $column, string $value): ?string
+    {
+        return $value;
+    }
+
     public function tableNamesQuery(): string
     {
         return 'show tables';

@@ -22,7 +22,9 @@ use Idno\Storage\Criterion\Search;
  *
  * It does not interpret criteria against the raw record. Like the SQL stores, it evaluates them
  * against what RecordIndex derives when a record is saved (the metadata rows, the search text and
- * the columns), so the rules are SQL's, not PHP's:
+ * the columns), so the rules are SQL's, not PHP's. The ones MySQL applies by itself (the
+ * `created` literals, case folding, search) are in MySqlSemantics, which the SQLite dialect
+ * shares:
  *
  *  - Operands and indexed values are compared AS STRINGS, the way MySQL compares them when
  *    every parameter is bound as a string: true is '1', false is '', an integer its decimal
@@ -83,9 +85,6 @@ final class InMemoryRecordStore implements RecordStore
 
     /** The fields queried on the columns of the main table, not on the metadata rows. */
     private const COLUMN_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
-
-    /** Search terms longer than this many bytes are matched word by word. */
-    private const SHORT_SEARCH_BYTES = 5;
 
     /**
      * @var array<string, array<string, array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string}>>
@@ -293,32 +292,12 @@ final class InMemoryRecordStore implements RecordStore
         $operands = $criterion instanceof In || $criterion instanceof NotIn ? $criterion->values : [$criterion->value];
         foreach ($operands as $operand) {
             $text = self::operand($operand);
-            if ($text !== null && self::datetime($text) === null) {
+            if ($text !== null && MySqlSemantics::datetime($text) === null) {
                 return false;
             }
         }
 
         return true;
-    }
-
-    /**
-     * The datetime literal in the form the stored `created` strings have, plus '.ffffff' when the
-     * fraction is not zero (so a plain string comparison orders it correctly), or null when MySQL
-     * would reject the literal (or it is one of the forms this store does not support).
-     */
-    private static function datetime(string $text): ?string
-    {
-        $matched = preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2})(?:\.(\d{1,6}))?)?$/', $text, $m);
-        if ($matched !== 1) {
-            return null;
-        }
-        [$year, $month, $day, $hour, $minute, $second] = [(int) $m[1], (int) $m[2], (int) $m[3], (int) ($m[4] ?? 0), (int) ($m[5] ?? 0), (int) ($m[6] ?? 0)];
-        if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
-            return null;
-        }
-        $fraction = rtrim($m[7] ?? '', '0');
-
-        return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second) . ($fraction === '' ? '' : '.' . $fraction);
     }
 
     /**
@@ -345,7 +324,7 @@ final class InMemoryRecordStore implements RecordStore
             return false;
         }
         if ($criterion instanceof Search) {
-            return self::searchMatches($criterion->query, $entry['search']);
+            return MySqlSemantics::searchMatches($criterion->query, $entry['search']);
         }
 
         $values = self::valuesOf($entry, $criterion->field);
@@ -459,61 +438,16 @@ final class InMemoryRecordStore implements RecordStore
         };
 
         // A datetime operand is compared in its canonical form (a query with an invalid one never gets here).
-        return $field === 'created' && $text !== null ? (self::datetime($text) ?? $text) : $text;
-    }
-
-    private static function fold(string $text): string
-    {
-        return mb_strtoupper($text, 'UTF-8');
+        return $field === 'created' && $text !== null ? (MySqlSemantics::datetime($text) ?? $text) : $text;
     }
 
     private static function equal(string $a, string $b): bool
     {
-        return self::fold($a) === self::fold($b);
+        return MySqlSemantics::compare($a, $b) === 0;
     }
 
     private static function compare(string $a, string $b): int
     {
-        return strcmp(self::fold($a), self::fold($b));
-    }
-
-    private static function searchMatches(string $term, string $searchText): bool
-    {
-        $text = self::fold($searchText);
-        if (strlen($term) > self::SHORT_SEARCH_BYTES) {
-            foreach (preg_split('/\s+/u', trim($term), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $word) {
-                if (str_contains($text, self::fold($word))) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        return preg_match(self::likePattern(self::fold($term)), $text) === 1;
-    }
-
-    /**
-     * The regular expression for SQL `LIKE '%term%'`.
-     */
-    private static function likePattern(string $term): string
-    {
-        $pattern = '';
-        $length = strlen($term);
-        for ($i = 0; $i < $length; $i++) {
-            $char = $term[$i];
-            if ($char === '\\' && $i + 1 < $length) {
-                $char = $term[++$i];
-                $pattern .= preg_quote($char, '/');
-            } elseif ($char === '%') {
-                $pattern .= '.*';
-            } elseif ($char === '_') {
-                $pattern .= '.';
-            } else {
-                $pattern .= preg_quote($char, '/');
-            }
-        }
-
-        return '/' . $pattern . '/su';
+        return MySqlSemantics::compare($a, $b);
     }
 }

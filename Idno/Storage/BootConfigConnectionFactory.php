@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\ConnectionFactory;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Idno\Config\BootConfig;
+use Idno\Storage\Platform\SqliteConnectionSetup;
 
 /**
  * Decorates DoctrineBundle's connection factory (`doctrine.dbal.connection_factory`, see
@@ -16,6 +17,10 @@ use Idno\Config\BootConfig;
  * configuration. They are resolved at runtime, when the connection service is first fetched,
  * so no credential is compiled into the cached container. Building the connection does not
  * connect (DBAL connects on the first query).
+ *
+ * For an SQLite site it also adds SqliteConnectionSetup to the connection's middlewares (on a
+ * copy of the Configuration), so that every physical connection is set up for SqliteDialect when
+ * it connects. A MySQL connection is built exactly as before.
  *
  * This class is wired by hand in config/services.php, not by the directory scan.
  */
@@ -43,6 +48,11 @@ final class BootConfigConnectionFactory
         $legacy = ConnectionParameters::fromLegacyConfig($this->bootConfig->all(), array_filter($this->server, static fn (mixed $value): bool => $value !== null));
         foreach (ConnectionParameters::IDENTITY_KEYS as $key) {
             unset($params[$key]);
+        }
+
+        if ($legacy['driver'] === 'pdo_sqlite') {
+            $config = clone ($config ?? new Configuration());
+            $config->setMiddlewares([...$config->getMiddlewares(), new SqliteConnectionSetup()]);
         }
 
         return $this->inner->createConnection($legacy + $params, $config, $mappingTypes);

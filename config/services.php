@@ -37,10 +37,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, the record index derivation, the
-        // defaults a store fills in, the connection parameters, the SQL dialects) and the
-        // RecordStore implementations, built with new, not services: the stores are wired by the
-        // code that chooses the backend. BootConfigConnectionFactory is wired by hand below.
-        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        // defaults a store fills in, the connection parameters, the rules MySQL applies that the
+        // other stores reproduce, the SQL dialects and the SQLite connection setup middleware) and
+        // the RecordStore implementations, built with new, not services: the stores are wired by
+        // the code that chooses the backend. BootConfigConnectionFactory is wired by hand below.
+        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -111,7 +112,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The DBAL connection (DoctrineBundle's `database_connection`, config/packages/doctrine.php)
     // gets its parameters at runtime: this decorator of the bundle's connection factory derives
     // them from the boot configuration when the connection is first fetched (and throws a
-    // \LogicException for a site whose database is not SQL). The RDS_* variables are read for a
+    // \LogicException for a site whose database is not SQL; on an SQLite site it adds the
+    // SqliteConnectionSetup middleware). The RDS_* variables are read for a
     // `beanstalk-mysql` site, as LegacyServiceFactory::db() reads them. Fetching the connection
     // does not connect; nothing may fetch it while the kernel boots.
     $services->set(BootConfigConnectionFactory::class)

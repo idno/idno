@@ -63,7 +63,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: >-
-            curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql,
+            curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
             session, simplexml, openssl, gettext, mongodb
           tools: composer
 

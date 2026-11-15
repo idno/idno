@@ -22,7 +22,7 @@ composer test:up      # start the rig (creates configuration/config.ini if absen
 composer test         # run the full suite (core + plugins + unit tier); needs the rig
 composer test:down    # stop the rig
 
-# The dependency-free unit tier (Tests/Unit/): needs no rig, no database, no configuration
+# The dependency-free unit tier (Tests/Unit/): needs no rig, no database server, no configuration
 composer test:unit
 
 # Run one directory or file (a plugin's tests, the kernel tests, ...)
@@ -49,9 +49,12 @@ composer console -- list
   `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
   for `composer test:unit`
 - Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's
-  autoloader. `Tests/_bootstrap_unit.php` loads only `vendor/autoload.php`: a unit test must not
-  use `Idno::site()`, boot the kernel, read `configuration/` or the environment's site settings,
-  open a database, touch the network, or need the web server. It must not depend on which
+  autoloader (and the PHP extensions `composer.json` requires, `pdo_sqlite` included).
+  `Tests/_bootstrap_unit.php` loads only `vendor/autoload.php`: a unit test must not use
+  `Idno::site()`, boot the kernel, read `configuration/` or the environment's site settings,
+  connect to a database SERVER, open a database FILE outside a temporary directory it creates and
+  removes, touch the network, or need the web server. An in-memory SQLite database (`:memory:`) is
+  allowed: the storage contract runs on one in the unit tier. It must not depend on which
   bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
   Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
   **Everything else** (`composer test`) needs the rig: kernel tests (`Tests/Kernel`),
@@ -59,7 +62,9 @@ composer console -- list
   `LegacyMySqlRecordStoreTest`, and against `DbalRecordStore`, `DbalMySqlRecordStoreTest`, which
   also tests the DBAL connection service; the contract itself,
   `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and also runs against the
-  in-memory store in `Tests/Unit/Storage`), the black-box characterisation suite
+  in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; the
+  SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
+  `SqliteConcurrencyTest`, are in `Tests/Storage`), the black-box characterisation suite
   (`Tests/Characterisation`, which drives the running site over HTTP) and the plugin tests.
 - Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT` (default `localhost`, 80)
 - Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
@@ -99,8 +104,12 @@ Idno/
                                derives from a record, exactly as MySQL::saveRecord() does); RecordDefaults
                                (what a store fills in: _id, uuid, siteid); InMemoryRecordStore, the reference
                                implementation the storage contract also holds to MySQL's behaviour;
-                               DbalRecordStore, the RecordStore on a Doctrine DBAL connection over the legacy
-                               schema, with what is engine-specific in Platform/ (Dialect, MySqlDialect);
+                               MySqlSemantics (the rules MySQL applies by itself, in PHP, shared by the
+                               in-memory store and the SQLite dialect: `created` literals, upper-case text
+                               folding, search); DbalRecordStore, the RecordStore on a Doctrine DBAL connection
+                               over the legacy schema, with what is engine-specific in Platform/ (Dialect,
+                               MySqlDialect, SqliteDialect, and SqliteConnectionSetup, the DBAL middleware
+                               that sets up every SQLite connection);
                                ConnectionParameters (legacy database settings -> DBAL parameters) and
                                BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
@@ -331,7 +340,7 @@ other new code may.
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `FixedRecordDefaults.php`,
-  `Platform/`, `RecordDefaults.php` and `RecordIndex.php`), or the container will try to autowire
+  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`) are
   excluded too: they are not registered as services yet. `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
@@ -344,7 +353,10 @@ other new code may.
   configuration value is compiled into the container. It reproduces the legacy connection
   exactly: DSN charset `utf8` (MySQL's three-byte utf8mb3, what the schema's tables are; do not
   change it to utf8mb4 before the schema changes), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
-  `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. The service is
+  `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. On a site whose
+  `database` is `sqlite` (`dbname` is the database file's path, or `:memory:`), the factory also
+  adds `Idno\Storage\Platform\SqliteConnectionSetup` to the connection's middlewares; a MySQL
+  connection is built exactly as before. The service is
   lazy: fetching it does not connect (the first query does). On a site whose `database` is MongoDB
   or a plugin backend, the container compiles and the kernel boots as before, but fetching the
   service throws a `\LogicException`: nothing may fetch the connection while the kernel boots (no
@@ -371,6 +383,27 @@ other new code may.
   violations, deadlock and lock-wait, and on MySQL 1292, 1366, 1406), after `save()` has rolled
   its transaction back; every other error propagates. So `save()` returns the id only when its
   transaction committed, false when the data was refused, and throws otherwise.
+- SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
+  3.35 or later through `pdo_sqlite`): the same store, held to the same contract with the in-memory
+  store's hook values. Every SQLite connection the store uses MUST have
+  `SqliteConnectionSetup` among its DBAL middlewares (the `database_connection` service of an
+  SQLite site has it; a connection you build yourself needs
+  `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
+  `Tests/Unit/Storage/SqliteTestDatabase` does): on each new physical connection it sets
+  `busy_timeout = 5000`, `journal_mode = WAL` and `foreign_keys = ON` and registers the `idno_ci`
+  collation (text folded to upper case, `MySqlSemantics::compare()`) and the `idno_search()`
+  function; without them the schema cannot even be loaded ("no such collation sequence"). Do not
+  repeat MySQL's rules in SQL or PHP: `MySqlSemantics` is their one copy. Differences from MySQL:
+  search never uses a full-text index (ruling P8: a term over 5 bytes matches any of its words as
+  a case-insensitive substring, whatever `boolean_search` and `bypass_fulltext_search` say; no
+  boolean operators, no parse errors); four-byte characters are stored; a `created` operand MySQL
+  would reject is caught by `Dialect::columnValue()` before the query is built (the query matches
+  nothing, as on MySQL); lengths are not enforced (a field name over 64 characters is stored, MySQL
+  refuses it); table (collection) names ignore case; in `site` and `config`, whose `_id` is not
+  unique, the foreign keys of `_search`/`_metadata` are triggers (SQLite cannot reference a
+  non-unique column) that cascade as InnoDB does. A write that cannot get the write lock within
+  the busy timeout ("database is locked") is refused data: `save()` returns false. Nothing
+  creates the SQLite schema for a site yet (no installer or rig support).
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -460,6 +493,9 @@ other new code may.
 - **MySQL** (`Idno\Data\MySQL` extends `AbstractSQL`) — stores entities as JSON blobs. The same
   tables are also reachable through `Idno\Storage\DbalRecordStore` on the DBAL connection (see
   "Kernel and services"); nothing uses that store yet.
+- **SQLite** — only through `Idno\Storage\DbalRecordStore` with `SqliteDialect` (schema:
+  `warmup/schemas/sqlite/sqlite.sql`); there is no legacy SQLite backend, and nothing installs the
+  schema or selects SQLite for a site yet.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 ## Content Plugins

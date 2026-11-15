@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Tests\Storage;
+namespace Tests\Unit\Storage;
 
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
@@ -14,10 +14,10 @@ use Idno\Storage\Platform\MySqlDialect;
 use PHPUnit\Framework\TestCase;
 
 /**
- * How DbalRecordStore decides that a collection exists, on an in-memory SQLite database (no MySQL
- * server needed, but it opens a database, so it is not in the unit tier; skipped without
- * pdo_sqlite). Only reads are used: the statements are MySQL's, the table listing and the case
- * rule come from a test dialect. Independent of the site's database.
+ * How DbalRecordStore decides that a collection exists, on an in-memory SQLite database (no
+ * server needed, so it is in the unit tier; skipped without pdo_sqlite). Only reads are used: the
+ * statements are MySQL's, the table listing and the case rule come from a test dialect.
+ * Independent of the site's database.
  */
 final class DbalRecordStoreCollectionsTest extends TestCase
 {
@@ -58,6 +58,11 @@ final class DbalRecordStoreCollectionsTest extends TestCase
             public function searchCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
             {
                 return $this->mysql->searchCondition($column, $term, $booleanSearch, $bypassFulltext);
+            }
+
+            public function columnValue(string $column, string $value): ?string
+            {
+                return $this->mysql->columnValue($column, $value);
             }
 
             public function tableNamesQuery(): string

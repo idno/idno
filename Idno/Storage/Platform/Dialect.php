@@ -49,6 +49,16 @@ interface Dialect
     public function searchCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array;
 
     /**
+     * The value to bind for an operand compared with a column of the main table (uuid, _id,
+     * entity_subtype, owner, publish_status, created; the operand already as the string it is
+     * bound as), or null when the database would reject it as an operand for that column: the
+     * query then matches nothing (find() gives [], count() 0) and is not sent. A database that
+     * rejects such operands itself (MySQL) returns the value unchanged and reports the error
+     * through isRejectedOperand().
+     */
+    public function columnValue(string $column, string $value): ?string;
+
+    /**
      * A query whose first column lists the names of the tables in the connection's database.
      */
     public function tableNamesQuery(): string;

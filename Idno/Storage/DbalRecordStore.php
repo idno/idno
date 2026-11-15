@@ -24,7 +24,8 @@ use Idno\Storage\Platform\Dialect;
  * the JSON document in `contents`), `<collection>_metadata` (one name/value row per indexed
  * value) and `<collection>_search` (the search text).
  *
- * It runs the statements Idno\Data\MySQL runs today, with what is engine-specific in the Dialect:
+ * It runs the statements Idno\Data\MySQL runs today, with what is engine-specific in the Dialect
+ * (MySqlDialect, SqliteDialect):
  *
  *  - save(): in one transaction, an upsert of the main row, an upsert of the search row, the
  *    deletion of the metadata rows and the insertion of the new ones. What is written is derived
@@ -46,6 +47,8 @@ use Idno\Storage\Platform\Dialect;
  *    an In with no values is false, a NotIn with none requires only that the field exists);
  *  - a Search anywhere but directly under the root is recognised and not run (legacy joins the
  *    search table only for a top-level `$search`, so MySQL fails the query);
+ *  - an operand on a column of the main table that the Dialect says the database rejects
+ *    (Dialect::columnValue(): on SQLite, a `created` operand that is not a datetime) is not run;
  *  - an operand the database rejects is run, and the driver error the Dialect recognises
  *    (Dialect::isRejectedOperand()) is caught. On MySQL: a `created` operand that is not a
  *    datetime (error 1525), and a search term the boolean-mode full-text parser cannot parse
@@ -452,9 +455,21 @@ final class DbalRecordStore implements RecordStore
                 // In nothing is false; not in nothing is true for the one value a column always has.
                 return $criterion instanceof In ? '(1 = 0)' : '(1 = 1)';
             }
+            $values = [];
+            foreach ($operands as $operand) {
+                $value = self::bind($operand);
+                if ($value !== null) {
+                    $value = $this->dialect->columnValue($field, $value);
+                    if ($value === null) {
+                        // An operand the database rejects for this column: the query cannot run.
+                        return null;
+                    }
+                }
+                $values[] = $value;
+            }
             $column = $this->table($name) . '.' . $this->dialect->quoteIdentifier($field);
 
-            return '(' . $column . ' ' . $operator . ' ' . $this->operands($operands, $isList, $context) . ')';
+            return '(' . $column . ' ' . $operator . ' ' . $this->operands($values, $isList, $context) . ')';
         }
 
         if ($criterion instanceof In && $operands === []) {
@@ -468,22 +483,22 @@ final class DbalRecordStore implements RecordStore
             return '(' . $nameMatches . ')';
         }
 
-        return '(' . $nameMatches . ' and ' . $alias . '.' . $this->dialect->quoteIdentifier('value') . ' ' . $operator . ' ' . $this->operands($operands, $isList, $context) . ')';
+        return '(' . $nameMatches . ' and ' . $alias . '.' . $this->dialect->quoteIdentifier('value') . ' ' . $operator . ' ' . $this->operands(array_map(self::bind(...), $operands), $isList, $context) . ')';
     }
 
     /**
-     * The placeholders for the operands (a parenthesised list for in / not in), their values
-     * appended to the context's parameters as strings.
+     * The placeholders for the bound operands (a parenthesised list for in / not in), their
+     * values appended to the context's parameters.
      *
-     * @param list<string|int|float|bool|null>                        $operands
+     * @param list<?string>                                                                  $values
      * @param object{joins: int, search: bool, parsedSearchTerm: bool, params: list<?string>} $context
      */
-    private function operands(array $operands, bool $isList, object $context): string
+    private function operands(array $values, bool $isList, object $context): string
     {
-        foreach ($operands as $operand) {
-            $context->params[] = self::bind($operand);
+        foreach ($values as $value) {
+            $context->params[] = $value;
         }
-        $placeholders = implode(', ', array_fill(0, count($operands), '?'));
+        $placeholders = implode(', ', array_fill(0, count($values), '?'));
 
         return $isList ? '(' . $placeholders . ')' : $placeholders;
     }
