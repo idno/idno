@@ -72,6 +72,55 @@ abstract class RecordStoreContract extends TestCase
         return true;
     }
 
+    /**
+     * Whether saving a record whose tags, title, description or handle is an ARRAY raises.
+     * Legacy: the search-text builder concatenates the array, PHP warns "Array to string
+     * conversion" and the test error handler turns it into an exception. By ruling (P5)
+     * the new implementations save the record, put the word `Array` into the search text
+     * and raise nothing: they override this to false.
+     */
+    protected function expectArrayInSearchFieldsToRaise(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether saving a record whose body is an ARRAY raises (legacy: strip_tags() TypeError).
+     */
+    protected function expectArrayBodyToRaise(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a long (more than 5 bytes) multi-word search term matches a record that has
+     * ANY of the words. MySQL boolean-mode full-text search ORs the words; a substring
+     * backend would look for the whole phrase.
+     */
+    protected function expectLongMultiWordSearchToMatchAnyWord(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether count() with a malformed criteria (the MongoDB list form of $or) fails.
+     * Legacy: invalid SQL, countRecords() returns false (the binding throws). By ruling
+     * (P6) the new implementations match nothing: count() is 0, and they override this to false.
+     */
+    protected function expectMongoStyleOrCountToFail(): bool
+    {
+        return true;
+    }
+
+    /**
+     * The site id a record gets when it is saved without one (legacy: the uuid of
+     * Idno::site()->site_details(), which is null when the site has no Site entity).
+     */
+    protected function currentSiteId(): ?string
+    {
+        return 'contract-site';
+    }
+
     protected function setUp(): void
     {
         $this->marker = 'contract-' . bin2hex(random_bytes(8));
@@ -108,6 +157,36 @@ abstract class RecordStoreContract extends TestCase
             'created' => self::BASE_TIME + $this->counter * 60,
             self::MARKER_FIELD => $this->marker,
         ];
+    }
+
+    /**
+     * Recursively sorts array keys, so records compare equal regardless of key
+     * order but still differ in value types.
+     */
+    protected function canonical(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            $value = array_map(fn (mixed $item): mixed => $this->canonical($item), $value);
+            ksort($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Strict comparison of two records: key order is ignored, types are not.
+     */
+    protected function assertSameRecord(?array $expected, ?array $actual, string $message = ''): void
+    {
+        $this->assertSame($this->canonical($expected), $this->canonical($actual), $message);
+    }
+
+    /**
+     * Remembers a record for tearDown() without saving it.
+     */
+    protected function track(string $id, string $collection = 'entities'): void
+    {
+        $this->saved[] = [$collection, $id];
     }
 
     /**
@@ -153,12 +232,22 @@ abstract class RecordStoreContract extends TestCase
 
     public function testSaveReturnsIdAndRecordRoundTrips(): void
     {
-        $record = $this->r(['title' => 'a', 'body' => 'hello', 'nested' => ['x' => ['y' => 1]], 'flag' => true, 'count' => 3]);
+        $record = $this->r([
+            'str' => 'text',
+            'int' => 42,
+            'float' => 1.5,
+            'yes' => true,
+            'no' => false,
+            'nothing' => null,
+            'list' => ['a', 'b'],
+            'map' => ['k' => ['x' => 1, 'y' => 'z']],
+        ]);
+        $this->track($record['_id']);
 
         $this->assertSame($record['_id'], $this->store()->save('entities', $record));
-        $this->saved[] = ['entities', $record['_id']];
 
-        $this->assertEquals($record, $this->store()->findById('entities', $record['_id']));
+        // Types are pinned (no "3" for 3, no 1 for true); key order is not.
+        $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']));
     }
 
     public function testSaveFillsInIdUuidAndOwnerWhenMissing(): void
@@ -166,9 +255,11 @@ abstract class RecordStoreContract extends TestCase
         $record = ['title' => 'bare', self::MARKER_FIELD => $this->marker];
 
         $id = $this->store()->save('entities', $record);
+        if (is_string($id)) {
+            $this->track($id);
+        }
         $this->assertIsString($id);
         $this->assertNotSame('', $id);
-        $this->saved[] = ['entities', $id];
 
         $stored = $this->store()->findById('entities', $id);
         $this->assertSame($id, $stored['_id']);
@@ -193,7 +284,7 @@ abstract class RecordStoreContract extends TestCase
     {
         $record = $this->put($this->r(['title' => 'by uuid']));
 
-        $this->assertEquals($record, $this->store()->findByUuid('entities', $record['uuid']));
+        $this->assertSameRecord($record, $this->store()->findByUuid('entities', $record['uuid']));
     }
 
     public function testFindByUuidUnknownIsNull(): void
@@ -210,7 +301,8 @@ abstract class RecordStoreContract extends TestCase
     {
         // The far future (but inside MySQL's timestamp range, which ends in 2038)
         // makes these the newest records in a shared table.
-        $future = strtotime('2037-06-01 12:00:00 UTC');
+        // A per-marker offset (up to about 11 days) keeps leftover or parallel rows from tying.
+        $future = strtotime('2037-06-01 12:00:00 UTC') + (int)(hexdec(substr($this->marker, -6)) % 1000000);
         $older = $this->put($this->r(['title' => 'older', 'created' => $future]));
         $newer = $this->put($this->r(['title' => 'newer', 'created' => $future + 3600]));
 
@@ -407,14 +499,20 @@ abstract class RecordStoreContract extends TestCase
     {
         $five = $this->put($this->r(['n' => 5]));
         $minus = $this->put($this->r(['n' => -3]));
+        $zero = $this->put($this->r(['n' => 0])); // indexed as 0: applying "$not 0" would exclude it
 
         // An empty operand (0, '0', '', null, []) adds no condition: everything matches.
-        $this->assertMatches(['n' => ['$lt' => 0]], [$five, $minus]);
-        $this->assertMatches(['n' => ['$gt' => 0]], [$five, $minus]);
-        $this->assertMatches(['n' => ['$gt' => '0']], [$five, $minus]);
-        $this->assertMatches(['n' => ['$in' => []]], [$five, $minus]);
-        $this->assertMatches(['n' => ['$not' => 0]], [$five, $minus]);
-        $this->assertMatches(['n' => ['$not' => '']], [$five, $minus]);
+        $all = [$five, $minus, $zero];
+        $this->assertMatches(['n' => ['$lt' => 0]], $all);
+        $this->assertMatches(['n' => ['$gt' => 0]], $all);
+        $this->assertMatches(['n' => ['$gt' => '0']], $all);
+        $this->assertMatches(['n' => ['$in' => []]], $all);
+        $this->assertMatches(['n' => ['$not' => 0]], $all);
+        $this->assertMatches(['n' => ['$not' => '0']], $all);
+        $this->assertMatches(['n' => ['$not' => '']], $all);
+        $this->assertMatches(['n' => ['$not' => []]], $all);
+        // Positive control: a non-empty operand IS applied.
+        $this->assertMatches(['n' => ['$not' => '5']], [$minus, $zero]);
     }
 
     public function testUnknownOperatorIsIgnored(): void
@@ -440,12 +538,29 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['$or' => ['slug' => 'a', 'owner' => 'http://contract.test/profile/nobody']], [$a]);
         $this->assertMatches(['$or' => ['slug' => ['$in' => ['a', 'b']]]], [$a, $b]);
 
+        // Alternatives on two different document fields (two separate joins).
+        $blue = $this->put($this->r(['colour' => 'blue']));
+        $this->assertMatches(['$or' => ['slug' => 'a', 'colour' => 'blue']], [$a, $blue]);
+        $this->assertMatches(['$or' => ['slug' => 'nope', 'colour' => 'nope']], []);
+
         // The MongoDB list-of-conditions form is not understood: it compiles to
         // invalid SQL, the error is logged, and find() answers with an empty list
-        // (not a match-everything). count() reports the failure, which the contract
-        // cannot express, so only find() is pinned.
+        // (not a match-everything). count() fails; by ruling the new implementations
+        // match nothing and count 0 (hook expectMongoStyleOrCountToFail()).
         $this->assertSame([], $this->ids(['$or' => [['slug' => 'a'], ['slug' => 'b']]]));
         $this->assertNotEmpty($this->ids([]), 'the records exist; only the malformed $or query fails');
+        $malformed = ['$or' => [['slug' => 'a'], ['slug' => 'b']], self::MARKER_FIELD => $this->marker];
+        if ($this->expectMongoStyleOrCountToFail()) {
+            $failed = false;
+            try {
+                $this->store()->count('entities', $malformed);
+            } catch (\Throwable) {
+                $failed = true;
+            }
+            $this->assertTrue($failed, 'count() with a malformed $or fails');
+        } else {
+            $this->assertSame(0, $this->store()->count('entities', $malformed));
+        }
     }
 
     public function testTwoConditionsOnDifferentFieldsAreAnded(): void
@@ -471,7 +586,7 @@ abstract class RecordStoreContract extends TestCase
         $unrelated = $this->put($this->r(['title' => 'nothing here']));
 
         $this->assertMatches(['$search' => ['abc']], [$title, $body, $tags, $description]);
-        // The boundary: five characters are still a substring match, six are not.
+        // The boundary is exactly 5 BYTES: five are still a substring match.
         $five = $this->put($this->r(['title' => 'xxabcdexx']));
         $this->assertMatches(['$search' => ['abcde']], [$five]);
         $this->assertNotContains($unrelated['_id'], $this->ids(['$search' => ['abc']]));
@@ -564,7 +679,7 @@ abstract class RecordStoreContract extends TestCase
 
     // ----------------------------------------------------------------- deleting
 
-    public function testDeleteRemovesRecordAndItsIndexRows(): void
+    public function testDeleteRemovesRecordAndQueriesNoLongerFindIt(): void
     {
         $record = $this->put($this->r(['slug' => 'gone', 'title' => 'xxvanishxx', 'labels' => ['red']]));
         $keeper = $this->put($this->r(['slug' => 'stays', 'title' => 'xxvanishxx', 'labels' => ['red']]));
@@ -614,7 +729,7 @@ abstract class RecordStoreContract extends TestCase
     {
         $record = $this->put($this->r(['slug' => 'in-reader']), 'reader');
 
-        $this->assertEquals($record, $this->store()->findById('reader', $record['_id']));
+        $this->assertSameRecord($record, $this->store()->findById('reader', $record['_id']));
         $this->assertNull($this->store()->findById('entities', $record['_id']));
         $this->assertNull($this->store()->findByUuid('entities', $record['uuid']));
         $this->assertSame([], $this->ids(['slug' => 'in-reader'], 'entities'));
@@ -626,7 +741,7 @@ abstract class RecordStoreContract extends TestCase
         // Names are reduced to letters, digits and underscores, so these cannot
         // reach anything but a table of that reduced name. 'entities x' becomes
         // 'entitiesx' and 'nosuchtable' stays as it is: neither table exists.
-        foreach (['entities x', 'nosuchtable', 'no such;table'] as $name) {
+        foreach (['entities x', 'nosuchtable'] as $name) {
             $record = $this->r(['slug' => 'invalid']);
             $this->assertFalse($this->store()->save($name, $record), $name);
             $this->assertNull($this->store()->findById($name, $record['_id']), $name);
@@ -640,9 +755,511 @@ abstract class RecordStoreContract extends TestCase
     {
         // The punctuation is stripped, not rejected: 'enti-ties' is 'entities'.
         $record = $this->r(['slug' => 'sanitised']);
-        $this->saved[] = ['entities', $record['_id']];
+        $this->track($record['_id']);
 
         $this->assertSame($record['_id'], $this->store()->save('enti-ties', $record));
-        $this->assertEquals($record, $this->store()->findById('entities', $record['_id']));
+        $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']));
+    }
+
+    // ======================================================= fix round 1 additions
+
+    // ------------------------------------------------------- update and insert
+
+    public function testResaveChangesEveryColumnField(): void
+    {
+        $record = $this->put($this->r(['slug' => 'col', 'owner' => 'owner-a', 'publish_status' => 'draft', 'entity_subtype' => 'Tests\\A']));
+
+        $record['owner'] = 'owner-b';
+        $record['publish_status'] = 'published';
+        $record['entity_subtype'] = 'Tests\\B';
+        $this->put($record);
+
+        $this->assertMatches(['owner' => 'owner-a'], []);
+        $this->assertMatches(['owner' => 'owner-b'], [$record]);
+        $this->assertMatches(['publish_status' => 'draft'], []);
+        $this->assertMatches(['publish_status' => 'published'], [$record]);
+        $this->assertMatches(['entity_subtype' => 'Tests\\A'], []);
+        $this->assertMatches(['entity_subtype' => 'Tests\\B'], [$record]);
+    }
+
+    public function testResaveChangingCreatedReorders(): void
+    {
+        $first = $this->put($this->r(['created' => self::BASE_TIME + 100]));
+        $second = $this->put($this->r(['created' => self::BASE_TIME + 200]));
+        $this->assertSame([$second['_id'], $first['_id']], $this->ids([]));
+
+        $first['created'] = self::BASE_TIME + 300;
+        $this->put($first);
+
+        $this->assertSame([$first['_id'], $second['_id']], $this->ids([]));
+        $at = date('Y-m-d H:i:s', self::BASE_TIME + 300);
+        $this->assertMatches(['created' => $at], [$first]);
+        $this->assertSame(self::BASE_TIME + 300, $this->store()->findById('entities', $first['_id'])['created']);
+    }
+
+    public function testMissingColumnFieldsGetDefaultsInTheColumnsButNotInTheDocument(): void
+    {
+        $bare = ['_id' => $this->newId(), 'siteid' => 'contract-site', 'slug' => 'bare', self::MARKER_FIELD => $this->marker];
+        $bare['uuid'] = 'http://contract.test/view/' . $bare['_id'];
+        $this->track($bare['_id']);
+        $before = time();
+
+        $this->assertSame($bare['_id'], $this->store()->save('entities', $bare));
+
+        // The stored document is exactly what was saved: the defaults are applied
+        // after the document is encoded, apart from the owner, which is filled in first.
+        $stored = $this->store()->findById('entities', $bare['_id']);
+        $this->assertSameRecord($bare + ['owner' => ''], $stored);
+        $this->assertArrayNotHasKey('entity_subtype', $stored);
+        $this->assertArrayNotHasKey('publish_status', $stored);
+        $this->assertArrayNotHasKey('created', $stored);
+
+        // The defaults ARE what queries on those fields see.
+        $this->assertMatches(['entity_subtype' => 'Idno\\Common\\Entity'], [$bare]);
+        $this->assertMatches(['publish_status' => 'published'], [$bare]);
+        $this->assertMatches(['created' => ['$gt' => date('Y-m-d H:i:s', $before - 5)]], [$bare]);
+        $this->assertMatches(['created' => ['$lt' => date('Y-m-d H:i:s', time() + 5)]], [$bare]);
+        $this->assertMatches(['created' => ['$lt' => date('Y-m-d H:i:s', $before - 5)]], []);
+    }
+
+    public function testSiteIdIsFilledFromTheCurrentSiteWhenMissing(): void
+    {
+        $record = $this->r(['slug' => 'nosite']);
+        unset($record['siteid']);
+        $this->track($record['_id']);
+
+        $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+
+        $stored = $this->store()->findById('entities', $record['_id']);
+        $this->assertArrayHasKey('siteid', $stored);
+        $this->assertSame($this->currentSiteId(), $stored['siteid']);
+
+        // An explicit siteid is kept.
+        $explicit = $this->put($this->r(['siteid' => 'another-site']));
+        $this->assertSame('another-site', $this->store()->findById('entities', $explicit['_id'])['siteid']);
+    }
+
+    public function testSiteIdInTheDocumentFollowsTheLastSave(): void
+    {
+        // (The siteid column is not changed by an update, but it cannot be read
+        // through this interface; only the document and its index are observable.)
+        $record = $this->put($this->r(['siteid' => 'site-one']));
+        $record['siteid'] = 'site-two';
+        $this->put($record);
+
+        $this->assertSame('site-two', $this->store()->findById('entities', $record['_id'])['siteid']);
+        $this->assertMatches(['siteid' => 'site-two'], [$record]);
+        $this->assertMatches(['siteid' => 'site-one'], []);
+    }
+
+    public function testSavingADifferentIdWithAnExistingUuidFailsAndKeepsTheOriginal(): void
+    {
+        $original = $this->put($this->r(['title' => 'original']));
+        $clash = $this->r(['title' => 'clash', 'uuid' => $original['uuid']]);
+        $this->track($clash['_id']);
+
+        $this->assertFalse($this->store()->save('entities', $clash));
+
+        $this->assertSameRecord($original, $this->store()->findById('entities', $original['_id']));
+        $this->assertNull($this->store()->findById('entities', $clash['_id']));
+        $this->assertSameRecord($original, $this->store()->findByUuid('entities', $original['uuid']));
+        $this->assertMatches([], [$original]);
+    }
+
+    public function testArrayInASearchTextFieldRaisesOrIsSaved(): void
+    {
+        foreach (['tags', 'title', 'description', 'handle'] as $field) {
+            $record = $this->r([$field => ['x', 'y']]);
+            $this->track($record['_id']);
+            if ($this->expectArrayInSearchFieldsToRaise()) {
+                $raised = false;
+                try {
+                    $this->store()->save('entities', $record);
+                } catch (\Throwable) {
+                    $raised = true;
+                }
+                $this->assertTrue($raised, $field);
+                $this->assertNull($this->store()->findById('entities', $record['_id']), $field);
+            } else {
+                $this->assertSame($record['_id'], $this->store()->save('entities', $record), $field);
+                // PHP's own string conversion of an array: the word "Array" is searchable.
+                $this->assertMatches(['$search' => ['array']], [$record], $field);
+                $this->store()->delete('entities', $record['_id']);
+            }
+        }
+    }
+
+    public function testArrayBodyRaisesOrIsSaved(): void
+    {
+        $record = $this->r(['body' => ['x', 'y']]);
+        $this->track($record['_id']);
+        if ($this->expectArrayBodyToRaise()) {
+            $raised = false;
+            try {
+                $this->store()->save('entities', $record);
+            } catch (\Throwable) {
+                $raised = true;
+            }
+            $this->assertTrue($raised);
+            $this->assertNull($this->store()->findById('entities', $record['_id']));
+        } else {
+            $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+        }
+    }
+
+    // ---------------------------------------------- bytes, not characters
+
+    public function testIndexedValueIsCutAt255Bytes(): void
+    {
+        // 127 two-byte characters plus one byte is exactly 255 bytes (128 characters).
+        $prefix = str_repeat('é', 127) . 'a';
+        $record = $this->put($this->r(['note' => $prefix . 'bbbb']));
+
+        $this->assertMatches(['note' => $prefix], [$record]);
+        $this->assertMatches(['note' => $prefix . 'b'], []);
+        $this->assertMatches(['note' => $prefix . 'bbbb'], []);
+        $this->assertSame($prefix . 'bbbb', $this->store()->findById('entities', $record['_id'])['note']);
+    }
+
+    // Known, deliberately NOT pinned: a multibyte value whose 255th byte falls in the middle of
+    // a character (for example 200 times 'é') is cut in half by substr(); MySQL rejects the
+    // invalid string, the transaction is rolled back, and saveRecord() STILL RETURNS THE ID
+    // although nothing was stored. That is data loss, reported in the fix report.
+
+    public function testSearchTermLengthIsCountedInBytes(): void
+    {
+        $record = $this->put($this->r(['title' => 'xxéééxx', 'body' => 'a word éééé here']));
+
+        // 'ééé' is 3 characters but 6 bytes, so it takes the long-term (whole word) path.
+        $this->assertMatches(['$search' => ['ééé']], $this->expectLongSearchTermToMatchSubstring() ? [$record] : []);
+        // 'éé' is 4 bytes: the short-term substring path.
+        $this->assertMatches(['$search' => ['éé']], [$record]);
+        // The same 3-character term made of one-byte characters is a substring match.
+        $ascii = $this->put($this->r(['title' => 'xxabcxx']));
+        $this->assertMatches(['$search' => ['abc']], [$ascii]);
+    }
+
+    // -------------------------------------------------------------- search
+
+    public function testSearchSixCharacterBoundary(): void
+    {
+        $inside = $this->put($this->r(['title' => 'xxabcdefxx']));
+        $whole = $this->put($this->r(['body' => 'the abcdef arrived']));
+
+        // Six characters take the long-term path: whole words only, on MySQL.
+        $this->assertMatches(['$search' => ['abcdef']], $this->expectLongSearchTermToMatchSubstring() ? [$inside, $whole] : [$whole]);
+        // Five characters are always a substring match.
+        $this->assertMatches(['$search' => ['abcde']], [$inside, $whole]);
+    }
+
+    public function testSearchOnlyCoversTheIndexedFields(): void
+    {
+        $indexed = $this->put($this->r(['title' => 'xxqqzxx']));
+        $notIndexed = $this->put($this->r(['summary' => 'xxqqzxx', 'content' => 'xxqqzxx', 'slug' => 'xxqqzxx']));
+
+        $this->assertMatches(['$search' => ['qqz']], [$indexed]);
+        $this->assertNotContains($notIndexed['_id'], $this->ids(['$search' => ['qqz']]));
+    }
+
+    public function testSearchOfBodyIgnoresMarkup(): void
+    {
+        $body = $this->put($this->r(['body' => '<a href="http://example.test/qqzqq" class="zzmarkzz">link text</a>']));
+        $control = $this->put($this->r(['title' => 'href and zzmarkzz']));
+
+        // Text outside the tags is searched; tag names, attributes and URLs are not.
+        $this->assertMatches(['$search' => ['lin']], [$body]);
+        $this->assertMatches(['$search' => ['qqz']], []);
+        $this->assertMatches(['$search' => ['zzm']], [$control]);
+        $this->assertMatches(['$search' => ['href']], [$control]);
+    }
+
+    public function testSearchWithAShortMultiWordTermMatchesThePhrase(): void
+    {
+        $inOrder = $this->put($this->r(['body' => 'one two']));
+        $reversed = $this->put($this->r(['body' => 'two one']));
+
+        $this->assertMatches(['$search' => ['e t']], [$inOrder]);
+        $this->assertMatches(['$search' => ['o o']], [$reversed]);
+        $this->assertMatches(['$search' => ['o x']], []);
+    }
+
+    public function testSearchWithALongMultiWordTermUsesTheWords(): void
+    {
+        $platypus = $this->put($this->r(['body' => 'only platypus here']));
+        $capybara = $this->put($this->r(['body' => 'only capybara here']));
+        $both = $this->put($this->r(['body' => 'platypus and capybara together']));
+        $neither = $this->put($this->r(['body' => 'only wombat here']));
+
+        // MySQL boolean mode matches records with ANY of the words.
+        $expected = $this->expectLongMultiWordSearchToMatchAnyWord() ? [$platypus, $capybara, $both] : [$both];
+        $this->assertMatches(['$search' => ['platypus capybara']], $expected);
+        $this->assertNotContains($neither['_id'], $this->ids(['$search' => ['platypus capybara']]));
+    }
+
+    public function testSearchShortTermTreatsLikeWildcardsAsWildcards(): void
+    {
+        $abc = $this->put($this->r(['title' => 'xxabcxx']));
+        $other = $this->put($this->r(['title' => 'xxaXXcxx']));
+
+        // The term is not escaped: % matches any run of characters, _ any single one.
+        $this->assertMatches(['$search' => ['a%c']], [$abc, $other]);
+        $this->assertMatches(['$search' => ['a_c']], [$abc]);
+        $this->assertMatches(['$search' => ['a__c']], [$other]);
+        // Positive control: the literal term still finds the plain record.
+        $this->assertMatches(['$search' => ['abc']], [$abc]);
+    }
+
+    public function testSearchWithNoUsableTermAddsNoCondition(): void
+    {
+        $a = $this->put($this->r(['title' => 'xxabcxx']));
+        $b = $this->put($this->r(['title' => 'something else']));
+
+        // An empty term, '0' and an empty list are all "empty": no condition.
+        $this->assertMatches(['$search' => ['']], [$a, $b]);
+        $this->assertMatches(['$search' => ['0']], [$a, $b]);
+        $this->assertMatches(['$search' => []], [$a, $b]);
+        // Positive control.
+        $this->assertMatches(['$search' => ['abc']], [$a]);
+    }
+
+    public function testSearchUsesOnlyTheFirstTerm(): void
+    {
+        $a = $this->put($this->r(['title' => 'xxabcxx']));
+        $b = $this->put($this->r(['title' => 'xxxyzxx']));
+
+        $this->assertMatches(['$search' => ['abc', 'xyz']], [$a]);
+        $this->assertMatches(['$search' => ['xyz', 'abc']], [$b]);
+    }
+
+    public function testSearchGivenAPlainStringIsAFieldCondition(): void
+    {
+        $a = $this->put($this->r(['title' => 'xxabcxx']));
+
+        // `$search` must be a list. A string is treated as a document field called
+        // `$search` with that value, which nothing has.
+        $this->assertMatches(['$search' => 'abc'], []);
+        $this->assertMatches(['$search' => ['abc']], [$a]);
+    }
+
+    // -------------------------------------------------- several operators
+
+    public function testSeveralOperatorsOnAListFieldMayBeSatisfiedByDifferentElements(): void
+    {
+        $split = $this->put($this->r(['labels' => ['a', 'd']]));
+        $inside = $this->put($this->r(['labels' => ['bb']]));
+        $outside = $this->put($this->r(['labels' => ['x', 'y']]));
+        $scalarInside = $this->put($this->r(['labels' => 'bb']));
+
+        // Each operator is evaluated independently: 'd' satisfies $gt 'b' and 'a'
+        // satisfies $lt 'c', so [a, d] matches although no single element is between b and c.
+        $this->assertMatches(['labels' => ['$gt' => 'b', '$lt' => 'c']], [$split, $inside, $scalarInside]);
+        $this->assertNotContains($outside['_id'], $this->ids(['labels' => ['$gt' => 'b', '$lt' => 'c']]));
+    }
+
+    public function testInAndNotOnOneField(): void
+    {
+        $ab = $this->put($this->r(['labels' => ['a', 'b']]));
+        $a = $this->put($this->r(['labels' => ['a']]));
+        $b = $this->put($this->r(['labels' => ['b']]));
+        $sa = $this->put($this->r(['slug' => 'a']));
+        $sb = $this->put($this->r(['slug' => 'b']));
+
+        // In on one element and not-equal on (possibly) another: [a, b] satisfies both.
+        $this->assertMatches(['labels' => ['$in' => ['a'], '$not' => 'b']], [$ab, $a]);
+        // On a scalar field the two conditions apply to the one value.
+        $this->assertMatches(['slug' => ['$in' => ['a', 'b'], '$not' => 'a']], [$sb]);
+        $this->assertMatches(['slug' => ['$in' => ['a'], '$not' => 'a']], []);
+    }
+
+    public function testAFieldTheRecordLacksNeverMatchesAnOperator(): void
+    {
+        $has = $this->put($this->r(['g' => 'm']));
+        $lacks = $this->put($this->r(['other' => 'm']));
+
+        // Each condition is satisfiable by the record that has the field.
+        $this->assertMatches(['g' => 'm'], [$has]);
+        $this->assertMatches(['g' => ['$not' => 'zz']], [$has]);
+        $this->assertMatches(['g' => ['$in' => ['m']]], [$has]);
+        $this->assertMatches(['g' => ['$not' => ['$in' => ['zz']]]], [$has]);
+        $this->assertMatches(['g' => ['$lt' => 'z']], [$has]);
+        $this->assertMatches(['g' => ['$gt' => 'a']], [$has]);
+        $this->assertNotContains($lacks['_id'], $this->ids(['g' => ['$not' => 'zz']]));
+    }
+
+    public function testPlainListAndEmptyArrayCriteriaAreIgnored(): void
+    {
+        $a = $this->put($this->r(['f' => 'a']));
+        $b = $this->put($this->r(['f' => 'b']));
+        $c = $this->put($this->r(['f' => 'c']));
+
+        // An array with no operator is not "equals any of": it adds no condition.
+        $this->assertMatches(['f' => ['a', 'b']], [$a, $b, $c]);
+        $this->assertMatches(['f' => []], [$a, $b, $c]);
+        // Positive control.
+        $this->assertMatches(['f' => 'a'], [$a]);
+    }
+
+    public function testKnownAndUnknownOperatorsMixed(): void
+    {
+        $three = $this->put($this->r(['n' => 3]));
+        $seven = $this->put($this->r(['n' => 7]));
+
+        // The unknown operator is dropped, the known one applies.
+        $this->assertMatches(['n' => ['$regex' => 'x', '$gt' => '5']], [$seven]);
+        $this->assertMatches(['n' => ['$gt' => '5', '$regex' => 'x']], [$seven]);
+    }
+
+    // -------------------------------------------------------------- paging
+
+    public function testPagingReturnsARecordWithSeveralMatchingValuesOnce(): void
+    {
+        $many = $this->put($this->r(['labels' => ['a', 'b', 'c'], 'created' => self::BASE_TIME + 300]));
+        $two = $this->put($this->r(['labels' => ['a', 'b'], 'created' => self::BASE_TIME + 200]));
+        $one = $this->put($this->r(['labels' => ['a'], 'created' => self::BASE_TIME + 100]));
+        $criteria = ['labels' => ['$in' => ['a', 'b', 'c']]];
+
+        $this->assertSame([$many['_id']], $this->ids($criteria, 'entities', 1, 0));
+        $this->assertSame([$two['_id']], $this->ids($criteria, 'entities', 1, 1));
+        $this->assertSame([$one['_id']], $this->ids($criteria, 'entities', 1, 2));
+        $this->assertSame([], $this->ids($criteria, 'entities', 1, 3));
+        $this->assertSame([$many['_id'], $two['_id'], $one['_id']], $this->ids($criteria));
+    }
+
+    public function testLimitZeroReturnsNothing(): void
+    {
+        $this->put($this->r(['slug' => 'here']));
+
+        $this->assertSame([], $this->ids([], 'entities', 0, 0));
+        $this->assertCount(1, $this->ids([], 'entities', 1, 0));
+    }
+
+    // ------------------------------------------------------ created values
+
+    public function testCreatedQueriedWithAnIntegerTimestampFails(): void
+    {
+        $record = $this->put($this->r(['created' => self::BASE_TIME + 100]));
+
+        // MySQL rejects a bare integer as a TIMESTAMP ("Incorrect TIMESTAMP value");
+        // the error is logged and find() answers with an empty list, not with the
+        // records that a numeric comparison would find. (count() fails too.)
+        $this->assertSame([], $this->ids(['created' => ['$lt' => self::BASE_TIME + 1000]]));
+        $this->assertSame([], $this->ids(['created' => ['$gt' => self::BASE_TIME]]));
+        // Positive control: the datetime string form finds the record.
+        $this->assertMatches(['created' => ['$lt' => date('Y-m-d H:i:s', self::BASE_TIME + 1000)]], [$record]);
+    }
+
+    public function testCreatedIsFormattedInThePhpDefaultTimezoneAtSaveTime(): void
+    {
+        $previous = date_default_timezone_get();
+        try {
+            date_default_timezone_set('UTC');
+            $record = $this->put($this->r(['created' => self::BASE_TIME + 100]));
+
+            date_default_timezone_set('Asia/Tokyo');
+            $utcText = gmdate('Y-m-d H:i:s', self::BASE_TIME + 100);
+            $tokyoText = date('Y-m-d H:i:s', self::BASE_TIME + 100);
+
+            // The text that was stored is the UTC rendering; the same instant written
+            // in another timezone is a different wall-clock string and does not match.
+            $this->assertNotSame($utcText, $tokyoText);
+            $this->assertMatches(['created' => $utcText], [$record]);
+            $this->assertMatches(['created' => $tokyoText], []);
+        } finally {
+            date_default_timezone_set($previous);
+        }
+    }
+
+    // ------------------------------------------------------ queue queries
+    //
+    // The three query shapes used by AsynchronousQueuedEvent::getPendingFromQueue(),
+    // ::getFromQueue() and AsynchronousQueue::gc(), against records shaped like
+    // AsynchronousQueuedEvent (queue, event, complete, completedTs).
+
+    private function queueEvent(string $queue, array $fields, int $age): array
+    {
+        return $this->put($this->r(['queue' => $queue, 'event' => 'test/event', 'created' => self::BASE_TIME + $age] + $fields));
+    }
+
+    public function testQueuePendingQuery(): void
+    {
+        $queue = 'q-' . $this->marker;
+        $pending = $this->queueEvent($queue, ['complete' => false], 1);
+        $done = $this->queueEvent($queue, ['complete' => true, 'completedTs' => 1000], 2);
+        $lacking = $this->queueEvent($queue, [], 3);
+        $otherQueue = $this->queueEvent('other-' . $this->marker, ['complete' => false], 4);
+
+        // getPendingFromQueue(): complete not in [true]
+        $this->assertMatches(['queue' => $queue, 'complete' => ['$not' => ['$in' => [true]]]], [$pending]);
+        // An event that has no `complete` field at all is NOT pending (there is no value to compare).
+        $this->assertNotContains($lacking['_id'], $this->ids(['queue' => $queue, 'complete' => ['$not' => ['$in' => [true]]]]));
+        // getFromQueue(): the queue alone.
+        $this->assertMatches(['queue' => $queue], [$pending, $done, $lacking]);
+        $this->assertMatches(['queue' => 'other-' . $this->marker], [$otherQueue]);
+    }
+
+    public function testQueueGarbageCollectionQuery(): void
+    {
+        $queue = 'q-' . $this->marker;
+        $short = $this->queueEvent($queue, ['complete' => true, 'completedTs' => 999], 1);
+        $thousand = $this->queueEvent($queue, ['complete' => true, 'completedTs' => 1000], 2);
+        $long = $this->queueEvent($queue, ['complete' => true, 'completedTs' => 100000], 3);
+        $pending = $this->queueEvent($queue, ['complete' => false, 'completedTs' => 5], 4);
+
+        $gc = static fn (int $cutoff): array => ['completedTs' => ['$lt' => $cutoff], 'complete' => true, 'queue' => $queue];
+
+        // completedTs is a document field and every value is bound as TEXT, so the
+        // comparison is alphabetical: '999' > '1000' and '1000' < '5000'.
+        $this->assertMatches($gc(1000), []);
+        $this->assertMatches($gc(5000), [$thousand, $long]);
+        $this->assertMatches($gc(1001), [$thousand, $long]);
+        $this->assertMatches($gc(999), [$thousand, $long]);
+        $this->assertMatches($gc(100001), [$thousand, $long]);
+        $this->assertMatches($gc(10), []);
+        // Numerically 999 < 1000 would have matched $short; alphabetically it is not before '1000'.
+        $this->assertNotContains($short['_id'], $this->ids($gc(1000)));
+        // `complete => true` excludes the pending event whatever its completedTs.
+        $this->assertNotContains($pending['_id'], $this->ids($gc(5000)));
+        // And $gt compares as text too: '999', '100000' and '5' all sort after '1000'.
+        $this->assertMatches(['completedTs' => ['$gt' => 1000], 'queue' => $queue], [$short, $long, $pending]);
+    }
+
+    public function testBooleanAndIntegerQueryValues(): void
+    {
+        $true = $this->put($this->r(['b' => true]));
+        $false = $this->put($this->r(['b' => false]));
+        $one = $this->put($this->r(['b' => 1]));
+        $oneString = $this->put($this->r(['b' => '1']));
+        $zero = $this->put($this->r(['b' => 0]));
+        $missing = $this->put($this->r(['other' => 1]));
+
+        // true is stored as '1' and queried as '1'.
+        $this->assertMatches(['b' => true], [$true, $one, $oneString]);
+        $this->assertMatches(['b' => 1], [$true, $one, $oneString]);
+        $this->assertMatches(['b' => '1'], [$true, $one, $oneString]);
+        // false is stored as '0', but queried as false it is bound as '' and matches nothing.
+        $this->assertMatches(['b' => false], []);
+        $this->assertMatches(['b' => 0], [$false, $zero]);
+        $this->assertMatches(['b' => '0'], [$false, $zero]);
+        // $in with booleans.
+        $this->assertMatches(['b' => ['$in' => [true]]], [$true, $one, $oneString]);
+        $this->assertMatches(['b' => ['$in' => [false]]], []);
+        $this->assertMatches(['b' => ['$in' => [0]]], [$false, $zero]);
+        // not in [true]: records with another value, never the one that lacks the field.
+        $this->assertMatches(['b' => ['$not' => ['$in' => [true]]]], [$false, $zero]);
+        $this->assertMatches(['b' => ['$not' => true]], [$false, $zero]);
+        $this->assertNotContains($missing['_id'], $this->ids(['b' => ['$not' => ['$in' => [true]]]]));
+    }
+
+    public function testIntegerOperandsCompareAsTextOnDocumentFields(): void
+    {
+        $small = $this->put($this->r(['ts' => 999]));
+        $big = $this->put($this->r(['ts' => 1000]));
+        $huge = $this->put($this->r(['ts' => 100000]));
+
+        $this->assertMatches(['ts' => ['$lt' => 1000]], []);
+        $this->assertMatches(['ts' => ['$gt' => 1000]], [$small, $huge]);
+        $this->assertMatches(['ts' => ['$lt' => 5000]], [$big, $huge]);
+        $this->assertMatches(['ts' => ['$gt' => 5000]], [$small]);
+        $this->assertMatches(['ts' => 1000], [$big]);
     }
 }

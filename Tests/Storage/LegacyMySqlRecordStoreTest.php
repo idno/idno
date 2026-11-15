@@ -43,6 +43,13 @@ final class LegacyMySqlRecordStoreTest extends RecordStoreContract
         return \Idno\Core\Idno::site()->db()->generateID();
     }
 
+    protected function currentSiteId(): ?string
+    {
+        $site = \Idno\Core\Idno::site()->site_details();
+
+        return $site ? $site->uuid() : null;
+    }
+
     // deleteAll() stays skipped here (ownsPrivateDatabase() is false): this
     // binding shares the rig's database, where emptying a collection would
     // destroy other tests' fixtures and the site's own configuration.
