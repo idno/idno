@@ -74,6 +74,33 @@ Tests/                         Core unit tests
 - **MySQL** (`Idno\Data\MySQL` extends `AbstractSQL`) — stores entities as JSON blobs
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
+#### MySQL schema
+
+- Each collection (`site`, `config`, `entities`, `reader`) is three tables: the main
+  table with the JSON document in `contents`, `<collection>_search` with the text for
+  full-text search, and `<collection>_metadata` with one row per field (cut to 255
+  bytes) for queries.
+- `warmup/schemas/mysql/mysql.sql` creates a new installation. The dated files beside it
+  are upgrades: `MySQL::checkAndUpgradeSchema()` runs on every connection and applies,
+  in order, each file newer than the `schema` row of the `versions` table. To change the
+  schema, add a dated file that ends by recording its date in `versions`, add the date
+  to the list in `checkAndUpgradeSchema()`, and make the same change in `mysql.sql`
+  (including its version line). `Tests/Data/MySQLUtf8mb4Test.php` checks that the two
+  agree.
+- An upgrade that fails is logged and tried again from the top on the next connection,
+  and MySQL can't roll back an `ALTER TABLE`, so every statement in an upgrade file
+  must be safe to apply to a table it has already changed.
+- Character sets: the connection is `utf8mb4`. The columns that hold text written by
+  people, `<collection>_search.search` and `<collection>_metadata.value`, are `utf8mb4`
+  with the `utf8mb4_unicode_520_ci` collation (`general_ci` and `unicode_ci` treat all
+  emoji as equal). Every other column is `utf8`, which MySQL reads as `utf8mb3`, and
+  holds ASCII only: identifiers, URLs, class and field names. Don't put free text in
+  them: a 4-byte character can't be stored there, and comparing one to such a column
+  is an SQL error (1267).
+- Index keys must fit 767 bytes, the limit of the InnoDB row formats that older
+  installations still have: at most 191 characters of a `utf8mb4` column, 255 of a
+  `utf8` one.
+
 ## Content Plugins
 
 | Plugin | Content type | ActivityPub type | Routes |
