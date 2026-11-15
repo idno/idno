@@ -1,6 +1,10 @@
 --
 -- Base Idno schema
 --
+-- The search text and the indexed values are utf8mb4, so they can hold any Unicode
+-- character, emoji included. Everything else is ASCII (identifiers, URLs, class and field
+-- names) and stays in utf8 with its shorter index keys. See 2026111401.sql.
+--
 
 --
 -- Table structure for table `config`
@@ -27,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `site` (
 
 CREATE TABLE IF NOT EXISTS `site_search` (
   `_id` varchar(36) NOT NULL,
-  `search` longtext NOT NULL,
+  `search` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
   PRIMARY KEY (`_id`),
   FULLTEXT KEY `search` (`search`),
   CONSTRAINT `ss_id_id` FOREIGN KEY (`_id`) REFERENCES `site` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -36,8 +40,8 @@ CREATE TABLE IF NOT EXISTS `site_search` (
 CREATE TABLE IF NOT EXISTS `site_metadata` (
   `_id` varchar(36) NOT NULL,
   `name` varchar(64) NOT NULL,
-  `value` text NOT NULL,
-  KEY `value` (`value`(255)),
+  `value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  KEY `value` (`value`(191)),
   KEY `name` (`name`),
   KEY (`_id`),
   CONSTRAINT `sm_id_id` FOREIGN KEY (`_id`) REFERENCES `site` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -63,7 +67,7 @@ CREATE TABLE IF NOT EXISTS `config` (
 
 CREATE TABLE IF NOT EXISTS `config_search` (
   `_id` varchar(36) NOT NULL,
-  `search` longtext NOT NULL,
+  `search` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
   PRIMARY KEY (`_id`),
   FULLTEXT KEY `search` (`search`),
   CONSTRAINT `cs_id_id` FOREIGN KEY (`_id`) REFERENCES `config` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -72,8 +76,8 @@ CREATE TABLE IF NOT EXISTS `config_search` (
 CREATE TABLE IF NOT EXISTS `config_metadata` (
   `_id` varchar(36) NOT NULL,
   `name` varchar(64) NOT NULL,
-  `value` text NOT NULL,
-  KEY `value` (`value`(255)),
+  `value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  KEY `value` (`value`(191)),
   KEY `name` (`name`),
   KEY (`_id`),
   CONSTRAINT `cm_id_id` FOREIGN KEY (`_id`) REFERENCES `config` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -105,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `entities` (
 
 CREATE TABLE IF NOT EXISTS `entities_search` (
   `_id` varchar(36) NOT NULL,
-  `search` longtext NOT NULL,
+  `search` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
   PRIMARY KEY (`_id`),
   FULLTEXT KEY `search` (`search`),
   CONSTRAINT `es_id_id` FOREIGN KEY (`_id`) REFERENCES `entities` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -114,8 +118,8 @@ CREATE TABLE IF NOT EXISTS `entities_search` (
 CREATE TABLE IF NOT EXISTS `entities_metadata` (
   `_id` varchar(36) NOT NULL,
   `name` varchar(64) NOT NULL,
-  `value` text NOT NULL,
-  KEY `value` (`value`(255)),
+  `value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  KEY `value` (`value`(191)),
   KEY `name` (`name`),
   KEY (`_id`),
   CONSTRAINT `em_id_id` FOREIGN KEY (`_id`) REFERENCES `entities` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -146,7 +150,7 @@ CREATE TABLE IF NOT EXISTS `reader` (
 
 CREATE TABLE IF NOT EXISTS `reader_search` (
   `_id` varchar(36) NOT NULL,
-  `search` longtext NOT NULL,
+  `search` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
   PRIMARY KEY (`_id`),
   FULLTEXT KEY `search` (`search`),
   CONSTRAINT `rs_id_id` FOREIGN KEY (`_id`) REFERENCES `reader` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -155,8 +159,8 @@ CREATE TABLE IF NOT EXISTS `reader_search` (
 CREATE TABLE IF NOT EXISTS `reader_metadata` (
   `_id` varchar(36) NOT NULL,
   `name` varchar(64) NOT NULL,
-  `value` text NOT NULL,
-  KEY `value` (`value`(255)),
+  `value` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  KEY `value` (`value`(191)),
   KEY `name` (`name`),
   KEY (`_id`),
   CONSTRAINT `rm_id_id` FOREIGN KEY (`_id`) REFERENCES `reader` (`_id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -186,4 +190,4 @@ CREATE TABLE IF NOT EXISTS `session` (
     PRIMARY KEY (`session_id`)
 ) COLLATE utf8_bin, ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-REPLACE INTO `versions` VALUES('schema', '2020120201');
+REPLACE INTO `versions` VALUES('schema', '2026111401');

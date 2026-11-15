@@ -47,11 +47,14 @@ namespace Idno\Data {
         /**
          * Build the PDO connection string for this MySQL instance.
          *
+         * The connection is utf8mb4, which is UTF-8 in full. MySQL's "utf8" is utf8mb3,
+         * which can't carry a 4-byte character such as an emoji.
+         *
          * @return string
          */
         private function buildConnectionString()
         {
-            $connection_string = 'mysql:host=' . $this->dbhost . ';dbname=' . $this->dbname . ';charset=utf8';
+            $connection_string = 'mysql:host=' . $this->dbhost . ';dbname=' . $this->dbname . ';charset=utf8mb4';
             if (!empty($this->dbport)) {
                 $connection_string .= ';port=' . $this->dbport;
             }
@@ -119,6 +122,7 @@ namespace Idno\Data {
                             2020111301,
                             2020120201,
                             2020120301,
+                            2026111401, // Search text and indexed values to utf8mb4
                         ] as $date) {
                             if ($basedate < $date) {
                                 try {
