@@ -64,7 +64,12 @@ composer console -- list
   `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and also runs against the
   in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; the
   SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
-  `SqliteConcurrencyTest`, are in `Tests/Storage`), the black-box characterisation suite
+  `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
+  `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against today's
+  `getObjects()`/`countObjects()`/`getObject()` in `LegacyEntityQueryTest` and against
+  `EntityRepository` in `EntityRepositoryTest`; the storage services are tested in
+  `StorageServicesTest`, and `EntityRepository::count()`'s criteria in the unit tier,
+  `Tests/Unit/Storage/EntityRepositoryCriteriaTest`), the black-box characterisation suite
   (`Tests/Characterisation`, which drives the running site over HTTP) and the plugin tests.
 - Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT` (default `localhost`, 80)
 - Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
@@ -111,7 +116,10 @@ Idno/
                                MySqlDialect, SqliteDialect, and SqliteConnectionSetup, the DBAL middleware
                                that sets up every SQLite connection);
                                ConnectionParameters (legacy database settings -> DBAL parameters) and
-                               BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime)
+                               BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime);
+                               EntityRepository (entities on a RecordStore, with the legacy access rules),
+                               EntityQuery (its query) and AccessContext (who is asking; FixedAccessContext
+                               for tests)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -307,7 +315,8 @@ catch-all described above. Do not add new ones; add a controller instead.
 `Idno\Legacy\` is where the shims between the kernel and the legacy application live
 (`LegacyBootstrap`, `LegacyServiceFactory`, `LegacySiteSettings`, `LegacyController`,
 `LegacyDispatcher`, `LegacyResponse`, `LegacyFallbackListener`, `FatalErrorPage`,
-`VerbatimLogFormatter`, `NotInstalledException`). They
+`VerbatimLogFormatter`, `NotInstalledException`, and for storage `LegacyRecordStoreFactory`,
+`LegacyRecordDefaults`, `LegacyAccessContext`). They
 exist to be removed as the legacy code is replaced. New code must not depend on anything
 in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected services.
 The only classes outside `Idno\Legacy\` (and outside the legacy `Idno\Core`, `Idno\Common`,
@@ -339,10 +348,12 @@ other new code may.
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
-  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `FixedRecordDefaults.php`,
-  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`), or the container will try to autowire
+  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityQuery.php`,
+  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `MySqlSemantics.php`, `Platform/`,
+  `RecordDefaults.php` and `RecordIndex.php`), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`) are
-  excluded too: they are not registered as services yet. `BootConfigConnectionFactory.php` is
+  excluded too: the container's `RecordStore` is built by a factory (see the storage services
+  below). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
   `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
@@ -429,6 +440,53 @@ other new code may.
   - A write that cannot get the write lock within the busy timeout ("database is locked") is
     refused data: `save()` returns false. Nothing creates the SQLite schema for a site yet (no
     installer or rig support).
+- The storage services, public, all built at runtime when first fetched: `Idno\Storage\RecordStore`
+  (a `DbalRecordStore` built by `Idno\Legacy\LegacyRecordStoreFactory`: on the `database_connection`
+  service, `MySqlDialect` for a MySQL site and `SqliteDialect` on the same connection for an SQLite
+  site, `Idno\Legacy\LegacyRecordDefaults` (what `MySQL::saveRecord()` fills in), the legacy quote
+  normaliser, and the site's `boolean_search` / `bypass_fulltext_search` as they are when the store
+  is built; on any other database it throws a `\LogicException` without touching the connection),
+  `Idno\Storage\AccessContext` (`Idno\Legacy\LegacyAccessContext`: the legacy session's user,
+  admin status and read groups, and the `db()` service's ignore-access flag, read at each call;
+  with no session object it is anonymous with read groups `['PUBLIC']`) and
+  `Idno\Storage\EntityRepository` (autowired from those two and the logger). Like the logger, they
+  need the legacy application: do not fetch them in a `bootLegacy: false` kernel or while the kernel
+  boots (nothing does; the container compiles and the kernel boots on every database, MongoDB
+  included). `Idno::site()->db()` and the legacy `Entity::get*()` finders do not use them yet.
+- Querying entities in new code: inject `Idno\Storage\EntityRepository` and query with an
+  `EntityQuery` (class names, a `Criteria`, limit, offset, collection, read groups); never call
+  `Idno::site()->db()` and never write SQL against the table names. `find()`, `findOneByUuid()`
+  and `hydrate()` build legacy entities, so they need the legacy application (without it, hydration
+  fails, is logged, and `find()` returns `[]`); only `count()` and the criteria it builds can be
+  unit-tested without it, with `Idno\Storage\FixedAccessContext` (constructor-set user, admin flag,
+  read groups, ignore-access; not a service) on an `InMemoryRecordStore`
+  (`Tests/Unit/Storage/EntityRepositoryCriteriaTest`). The rules it applies are today's
+  `getObjects()` / `countObjects()` / `getObject()` (pinned by `EntityQueryContract` against both),
+  with the two deliberate differences marked below:
+  - types match the stored class name exactly (no leading backslash, no subclasses); a leading `!`
+    excludes; with one inclusion, exclusions are dropped;
+  - unless the user is an admin, `access` must be one of the query's `readGroups` or, when it gives
+    none, the user's (`PUBLIC`, `SITE` when logged on, the user's uuid, their access groups). Access
+    goes by the `access` value only: an owner does not find their own entity in a group they are not
+    a member of;
+  - the `Criteria` is merged OVER those conditions: a top-level condition on `access` or
+    `entity_subtype` REPLACES the repository's, so it can widen what a user reads. Pass one only
+    when your code has already decided what the user may see. DIFFERENCE (ruling P14): a value that
+    parses to no condition (`[]`, `['$in' => []]`, an operator with an empty operand) is no
+    condition, so the viewer's read groups (or the types) stay; legacy drops the filter entirely;
+  - `find()`: with ignore-access on there is no access condition; the page is cut in the database,
+    then records whose class does not exist and unpublished entities the user may not see (only owner
+    and admins see them) are dropped, so a page can come back short. The publish-status rule is
+    computed from the AccessContext; an entity class overriding `isHiddenByPublishStatus()` is not
+    consulted. DIFFERENCE: legacy `getObjects()` returns `false` in place of a record whose class does
+    not exist; `find()` returns entities only;
+  - `count()` applies the access condition but NOT the publish-status rule (drafts are counted), does
+    NOT honour ignore-access, and counts records whose class does not exist (as `countObjects()`); it
+    does honour `readGroups`;
+  - `findOneByUuid()` is `getObject()`: the entity's own `canRead()` decides (it reads the legacy
+    session, not the AccessContext, and ignores ignore-access); null where `getObject()` gives false;
+  - `save()` / `delete()` only write to the store (`saveObject()` / `deleteRecord()`): events,
+    permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -516,8 +574,9 @@ other new code may.
 
 - **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
 - **MySQL** (`Idno\Data\MySQL` extends `AbstractSQL`) — stores entities as JSON blobs. The same
-  tables are also reachable through `Idno\Storage\DbalRecordStore` on the DBAL connection (see
-  "Kernel and services"); nothing uses that store yet.
+  tables are also reachable through `Idno\Storage\DbalRecordStore` on the DBAL connection, and
+  entities through `Idno\Storage\EntityRepository` (see "Kernel and services"); legacy code does not
+  use them yet.
 - **SQLite** — only through `Idno\Storage\DbalRecordStore` with `SqliteDialect` (schema:
   `warmup/schemas/sqlite/sqlite.sql`), for tests and development in this phase; there is no legacy
   SQLite backend, and nothing installs the schema or selects SQLite for a site yet. See the SQLite
@@ -738,7 +797,9 @@ the CLI installer no longer writes one.
   access setting. `Entity::isHiddenByPublishStatus()` holds the rule; `canRead()` applies
   it, and `getObjects()` in both database backends leaves such entities out of lookups
   (unless `setIgnoreAccess(true)` is in effect), so they are not found, exactly like
-  entities the user has no access to. An empty publish status counts as published.
+  entities the user has no access to; `EntityRepository::find()` does the same. An empty
+  publish status counts as published. Counts (`countObjects()`, `EntityRepository::count()`) do
+  NOT apply this rule: drafts the user cannot see are counted.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs to legacy pages (inbox endpoints bypass via `post()` override).
   New-style controllers have no authentication or CSRF protection yet (see "Adding a route")

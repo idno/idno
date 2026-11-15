@@ -6,14 +6,21 @@ use Idno\Config\BootConfig;
 use Idno\Config\LegacyConfigLoader;
 use Idno\Config\SiteSettings;
 use Idno\Kernel\CodeFingerprint;
+use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyBootstrap;
+use Idno\Legacy\LegacyRecordDefaults;
+use Idno\Legacy\LegacyRecordStoreFactory;
 use Idno\Legacy\LegacyServiceFactory;
 use Idno\Legacy\LegacySiteSettings;
+use Idno\Storage\AccessContext;
 use Idno\Storage\BootConfigConnectionFactory;
+use Idno\Storage\EntityRepository;
+use Idno\Storage\RecordStore;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service_closure;
 
 return static function (ContainerConfigurator $container, ContainerBuilder $builder): void {
     $container->parameters()->set('idno.kernel_secret_placeholder', 'idno-kernel-placeholder-not-a-secret');
@@ -36,12 +43,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Http' => ['FrontController.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
-        // Value and helper classes (a query tree and its nodes, the record index derivation, the
-        // defaults a store fills in, the connection parameters, the rules MySQL applies that the
-        // other stores reproduce, the SQL dialects and the SQLite connection setup middleware) and
-        // the RecordStore implementations, built with new, not services: the stores are wired by
-        // the code that chooses the backend. BootConfigConnectionFactory is wired by hand below.
-        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        // Value and helper classes (a query tree and its nodes, an entity query, the record index
+        // derivation, the defaults a store fills in, the connection parameters, the rules MySQL
+        // applies that the other stores reproduce, the SQL dialects and the SQLite connection setup
+        // middleware), the test doubles (FixedRecordDefaults, FixedAccessContext) and the
+        // RecordStore implementations, built with new, not services: the container's RecordStore is
+        // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
+        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'NotInstalledException.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -131,6 +139,26 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ])
         ->autowire(false)
         ->autoconfigure(false);
+
+    // The storage services. All three need the legacy application (the record store reads its
+    // settings and the site URL, the access context its session and ignore-access flag), so, like
+    // the logger, they must not be fetched before it has booted, nor in a kernel built with
+    // bootLegacy: false; nothing fetches them while the kernel boots. They are public because
+    // legacy code will fetch them with Idno::container()->get(). Nothing from the configuration is
+    // compiled in: the store is built by LegacyRecordStoreFactory when first fetched, and throws a
+    // \LogicException on a site whose database is neither MySQL nor SQLite (the connection is
+    // fetched only after that check).
+    // Set explicitly (not only found by the scan), like LegacySiteSettings below, so the
+    // definitions exist whatever the scan finds.
+    $services->set(LegacyRecordDefaults::class);
+    $services->set(LegacyAccessContext::class);
+    $services->set(LegacyRecordStoreFactory::class)
+        ->args([service_closure('database_connection'), service(BootConfig::class), service(LegacyRecordDefaults::class)]);
+    $services->set(RecordStore::class)
+        ->factory([service(LegacyRecordStoreFactory::class), 'create'])
+        ->public();
+    $services->alias(AccessContext::class, LegacyAccessContext::class)->public();
+    $services->set(EntityRepository::class)->public();
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

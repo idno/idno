@@ -65,7 +65,8 @@ final class SqliteDialect implements Dialect
 
     /**
      * @param Connection $connection the connection the store uses, on which the dialect reads a
-     *                               table's indexes (once per table) to choose the upsert's conflict target
+     *                               table's indexes (once per table) to choose the upsert's conflict target;
+     *                               it must be the same Connection object the DbalRecordStore is given
      */
     public function __construct(private readonly Connection $connection)
     {
