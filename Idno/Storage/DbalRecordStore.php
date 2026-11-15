@@ -126,15 +126,19 @@ final class DbalRecordStore implements RecordStore
         $rows = RecordIndex::metadataRows($record, $now);
         $search = RecordIndex::searchText($record, $this->uncurlQuotes);
 
+        // Built before the transaction: a dialect may read the schema to build them (SQLite reads
+        // the table's indexes), and on SQLite a read would make the transaction a reader, which
+        // then cannot wait for another connection's write lock.
+        [$mainSql, $mainPlaceholders] = $this->dialect->upsert($name, self::INSERT_COLUMNS, self::UPDATE_COLUMNS);
+        [$searchSql, $searchPlaceholders] = $this->dialect->upsert($name . '_search', ['_id', 'search'], ['search']);
+
         try {
             $this->connection->beginTransaction();
             try {
-                [$sql, $placeholders] = $this->dialect->upsert($name, self::INSERT_COLUMNS, self::UPDATE_COLUMNS);
-                $this->connection->executeStatement($sql, array_map(static fn (string $column): ?string => $values[$column], $placeholders));
+                $this->connection->executeStatement($mainSql, array_map(static fn (string $column): ?string => $values[$column], $mainPlaceholders));
 
                 $searchValues = ['_id' => $values['_id'], 'search' => $search];
-                [$sql, $placeholders] = $this->dialect->upsert($name . '_search', ['_id', 'search'], ['search']);
-                $this->connection->executeStatement($sql, array_map(static fn (string $column): string => $searchValues[$column], $placeholders));
+                $this->connection->executeStatement($searchSql, array_map(static fn (string $column): string => $searchValues[$column], $searchPlaceholders));
 
                 $metadata = $this->table($name . '_metadata');
                 $this->connection->executeStatement('delete from ' . $metadata . ' where ' . $this->dialect->quoteIdentifier('_id') . ' = ?', [$values['_id']]);

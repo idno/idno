@@ -384,26 +384,51 @@ other new code may.
   its transaction back; every other error propagates. So `save()` returns the id only when its
   transaction committed, false when the data was refused, and throws otherwise.
 - SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
-  3.35 or later through `pdo_sqlite`): the same store, held to the same contract with the in-memory
-  store's hook values. Every SQLite connection the store uses MUST have
-  `SqliteConnectionSetup` among its DBAL middlewares (the `database_connection` service of an
-  SQLite site has it; a connection you build yourself needs
-  `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
-  `Tests/Unit/Storage/SqliteTestDatabase` does): on each new physical connection it sets
-  `busy_timeout = 5000`, `journal_mode = WAL` and `foreign_keys = ON` and registers the `idno_ci`
-  collation (text folded to upper case, `MySqlSemantics::compare()`) and the `idno_search()`
-  function; without them the schema cannot even be loaded ("no such collation sequence"). Do not
-  repeat MySQL's rules in SQL or PHP: `MySqlSemantics` is their one copy. Differences from MySQL:
-  search never uses a full-text index (ruling P8: a term over 5 bytes matches any of its words as
-  a case-insensitive substring, whatever `boolean_search` and `bypass_fulltext_search` say; no
-  boolean operators, no parse errors); four-byte characters are stored; a `created` operand MySQL
-  would reject is caught by `Dialect::columnValue()` before the query is built (the query matches
-  nothing, as on MySQL); lengths are not enforced (a field name over 64 characters is stored, MySQL
-  refuses it); table (collection) names ignore case; in `site` and `config`, whose `_id` is not
-  unique, the foreign keys of `_search`/`_metadata` are triggers (SQLite cannot reference a
-  non-unique column) that cascade as InnoDB does. A write that cannot get the write lock within
-  the busy timeout ("database is locked") is refused data: `save()` returns false. Nothing
-  creates the SQLite schema for a site yet (no installer or rig support).
+  3.24 or later through `pdo_sqlite`; the connection setup refuses an older library): the same
+  store, held to the same contract with the in-memory store's hook values. **In this phase SQLite
+  is for tests and development only**: no site is installed on it (the installer does not create
+  SQLite sites). Every SQLite connection the store uses MUST have `SqliteConnectionSetup` among its
+  DBAL middlewares (the `database_connection` service of an SQLite site has it; a connection you
+  build yourself needs `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
+  `Tests/Unit/Storage/SqliteTestDatabase` does; the middleware refuses any connection that is not
+  `Pdo\Sqlite`): on each new physical connection it sets `busy_timeout = 5000`,
+  `journal_mode = WAL` and `foreign_keys = ON` and registers the `idno_ci` collation (text folded
+  to upper case, `MySqlSemantics::compare()`) and the `idno_search()` function. The dialect is
+  built for the store's connection, `new SqliteDialect($connection)`: it reads each table's indexes
+  there once to name the upsert's conflict target. Do not repeat MySQL's rules in SQL or PHP:
+  `MySqlSemantics` is their one copy.
+  - Limits of the database file (the `idno_ci` collation; also in the schema's header): outside a
+    set-up connection (e.g. the `sqlite3` command line) every SELECT, INSERT, UPDATE or DELETE on
+    the collection tables and `versions`, `PRAGMA integrity_check`/`quick_check` and `VACUUM` fail
+    with "no such collation sequence: idno_ci" (only `session` is usable), and a `.dump` cannot be
+    loaded into a plain `sqlite3`. A backup that works: a copy of the file with its `-wal`/`-shm`
+    files while no writer is active, or `sqlite3`'s `.backup`. Checks, VACUUM, REINDEX and restores
+    only through a set-up connection. The collation's order comes from PHP's mbstring case tables,
+    which PHP releases change: after a PHP upgrade, run `PRAGMA integrity_check` and
+    `REINDEX idno_ci` through a set-up connection.
+  - WAL needs shared memory between the processes using the file: never put the database on a
+    network filesystem (NFS, SMB).
+  - Differences from MySQL: search never uses a full-text index (ruling P8: a term over 5 bytes
+    matches any of its words as a case-insensitive substring, whatever `boolean_search` and
+    `bypass_fulltext_search` say; no boolean operators, no parse errors); four-byte characters are
+    stored; a `created` operand MySQL would reject is caught by `Dialect::columnValue()` before the
+    query is built (the query matches nothing, as on MySQL); lengths are not enforced (a field name
+    over 64 characters is stored, MySQL refuses it); table (collection) names ignore case; case
+    folding is full Unicode (`mb_strtoupper`), so it equates strings MySQL's `utf8mb3_general_ci`
+    keeps apart (`'ß'` = `'SS'`, `'ﬁ'` = `'FI'`, `'ǅ'` = `'Ǆ'`): uuids `straße` and `STRASSE` clash
+    on SQLite and not on MySQL; in `site` and `config`, whose `_id` is not unique, the foreign keys
+    of `_search`/`_metadata` are triggers (SQLite cannot reference a non-unique column) that cascade
+    as InnoDB does. The upsert names its conflict target (`_id` where a unique index is on `_id`
+    alone: `entities`, `reader`, the `_search` tables; else the primary key, `uuid`: `site`,
+    `config`), where MySQL's `on duplicate key update` takes whichever key conflicts. The outcome
+    differs in one case: in `entities`/`reader`, an existing record re-saved with ANOTHER existing
+    record's uuid is refused on SQLite (false, both rows intact), while MySQL overwrites the other
+    record's row with this document and returns the id. Re-saves, a new record with an existing
+    uuid (false on both), an existing record with a new uuid, and every case in `site`/`config` are
+    the same on both (pinned in `DbalSqliteRecordStoreTest`).
+  - A write that cannot get the write lock within the busy timeout ("database is locked") is
+    refused data: `save()` returns false. Nothing creates the SQLite schema for a site yet (no
+    installer or rig support).
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -494,8 +519,9 @@ other new code may.
   tables are also reachable through `Idno\Storage\DbalRecordStore` on the DBAL connection (see
   "Kernel and services"); nothing uses that store yet.
 - **SQLite** — only through `Idno\Storage\DbalRecordStore` with `SqliteDialect` (schema:
-  `warmup/schemas/sqlite/sqlite.sql`); there is no legacy SQLite backend, and nothing installs the
-  schema or selects SQLite for a site yet.
+  `warmup/schemas/sqlite/sqlite.sql`), for tests and development in this phase; there is no legacy
+  SQLite backend, and nothing installs the schema or selects SQLite for a site yet. See the SQLite
+  bullet under "Kernel and services" for the limits of the database file.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 ## Content Plugins

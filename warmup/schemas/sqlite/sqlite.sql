@@ -10,6 +10,27 @@
 -- statement ends with a semicolon at the end of a line and no statement has one inside a line
 -- break, so it can be split on ";\n" as the legacy installer splits the MySQL schema.
 --
+-- SQLite support is, in this phase, for tests and development: no site is installed on it.
+--
+-- LIMITS OF A DATABASE BUILT FROM THIS SCHEMA (because of the `idno_ci` collation):
+--  - Outside a connection set up by SqliteConnectionSetup (for example the `sqlite3` command
+--    line) every statement that touches a table with an `idno_ci` column fails with "no such
+--    collation sequence: idno_ci": any SELECT, INSERT, UPDATE or DELETE on site, config,
+--    entities, reader, their _search and _metadata tables, and versions; PRAGMA integrity_check
+--    and quick_check; VACUUM. Only the `session` table is usable there. `.dump` writes a dump,
+--    but loading it into a plain `sqlite3` fails at the first CREATE TABLE.
+--  - What works: copying the database file together with its -wal and -shm files while no
+--    writer is active, and the `sqlite3` `.backup` command (a page copy). Checks, VACUUM,
+--    REINDEX and restoring a dump work only through a connection set up by
+--    SqliteConnectionSetup.
+--  - The collation's order comes from PHP's mbstring case tables (mb_strtoupper), which PHP
+--    releases change (8.3 and 8.4 did). An index built under one PHP version may be mis-ordered
+--    under another for the characters whose case mapping changed, so lookups and unique checks
+--    on them can be missed: after a PHP upgrade run PRAGMA integrity_check and REINDEX idno_ci
+--    through a set-up connection.
+--  - Full Unicode case folding equates strings MySQL keeps apart ('ß' = 'SS', 'ﬁ' = 'FI'), so
+--    unique keys can clash on SQLite where they do not on MySQL.
+--
 -- Differences from MySQL, all deliberate:
 --  - no full-text index: search terms are matched by the `idno_search` function (ruling P8).
 --  - `created` is text ('Y-m-d H:i:s', compared byte by byte), not a timestamp: the dialect

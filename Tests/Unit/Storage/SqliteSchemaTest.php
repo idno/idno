@@ -7,6 +7,7 @@ namespace Tests\Unit\Storage;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Idno\Storage\Platform\SqliteDialect;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -136,6 +137,27 @@ final class SqliteSchemaTest extends TestCase
             }
             $this->assertCount(count($definition['foreign']), array_unique(array_merge(array_keys($declared), array_keys($definition['foreign']))), $table . ': no other foreign keys');
         }
+    }
+
+    public function testEveryTextColumnOfTheEntityTablesUsesTheCaseFoldingCollation(): void
+    {
+        // The deliberate exceptions: `created` (canonical datetime text, compared byte by byte),
+        // `contents` (the document, a blob), `search` (only read by idno_search(), which folds
+        // itself), and the whole `session` table (binary, as MySQL's utf8_bin).
+        $exceptions = ['created', 'contents', 'search'];
+        $checked = 0;
+        foreach ($this->connection->fetchAllKeyValue("select name, sql from sqlite_master where type = 'table' and name <> 'session' order by name") as $table => $sql) {
+            preg_match_all('/^\s*"(\w+)" (\w+)(?:\(\d+\))?(.*?),?$/m', (string) $sql, $columns, PREG_SET_ORDER);
+            $this->assertNotEmpty($columns, $table);
+            foreach ($columns as [, $column, , $rest]) {
+                $collated = str_contains($rest, 'COLLATE ' . SqliteDialect::COLLATION);
+                $this->assertSame(!in_array($column, $exceptions, true), $collated, $table . '.' . $column);
+                $checked++;
+            }
+        }
+        $this->assertSame(4 * (8 + 2 + 3) + 2, $checked, 'every column of the four collections and versions');
+        $session = (string) $this->connection->fetchOne("select sql from sqlite_master where name = 'session'");
+        $this->assertStringNotContainsString('COLLATE', $session);
     }
 
     /**

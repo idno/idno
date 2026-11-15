@@ -115,7 +115,7 @@ final class SqliteConnectionTest extends TestCase
     {
         $connection = $this->connection('sqlite', $this->dir . '/site.sqlite');
         SqliteTestDatabase::loadSchema($connection);
-        $store = new DbalRecordStore($connection, new SqliteDialect(), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
+        $store = new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
 
         $id = $store->save('entities', ['title' => 'A platypus', 'slug' => 'Red', 'created' => 1686700000]);
 

@@ -12,8 +12,9 @@ use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
 /**
  * A DBAL driver middleware that sets up every new SQLite connection for SqliteDialect
  * (SqliteDialect::setUpConnection(): the pragmas, the collation, the search function) when it
- * connects: once per physical connection, never before the first query. A connection to another
- * database passes through untouched.
+ * connects: once per physical connection, never before the first query. Any connection that is
+ * not pdo_sqlite's (`Pdo\Sqlite`) is refused with a \LogicException: the middleware must only be
+ * given to SQLite connections (BootConfigConnectionFactory adds it only to those).
  *
  * BootConfigConnectionFactory adds it to the `database_connection` service of an SQLite site;
  * code that builds its own SQLite connection for DbalRecordStore adds it to the connection's
@@ -30,11 +31,10 @@ final class SqliteConnectionSetup implements Middleware
             {
                 $connection = parent::connect($params);
                 $native = $connection->getNativeConnection();
-                if ($native instanceof \Pdo\Sqlite) {
-                    SqliteDialect::setUpConnection($native);
-                } elseif ($native instanceof \SQLite3) {
-                    throw new \LogicException('SQLite storage needs the pdo_sqlite DBAL driver, not sqlite3.');
+                if (!$native instanceof \Pdo\Sqlite) {
+                    throw new \LogicException(sprintf('SqliteConnectionSetup is for SQLite connections through the pdo_sqlite driver, but the connection is a %s.', get_debug_type($native)));
                 }
+                SqliteDialect::setUpConnection($native);
 
                 return $connection;
             }

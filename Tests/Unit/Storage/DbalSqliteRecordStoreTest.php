@@ -53,7 +53,7 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
     {
         return new DbalRecordStore(
             $connection,
-            new SqliteDialect(),
+            new SqliteDialect($connection),
             new FixedRecordDefaults('http://contract.test/', $this->currentSiteId(), fn (): string => $this->newId()),
             static fn (string $text): string => $text,
             true,
@@ -238,11 +238,129 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
         $marker = new Equals('contract_marker', $this->marker);
 
         foreach ([[true, false], [false, false], [true, true], [false, true]] as [$boolean, $bypass]) {
-            $store = new DbalRecordStore($this->connection, new SqliteDialect(), new FixedRecordDefaults(), static fn (string $s): string => $s, $boolean, $bypass);
+            $store = new DbalRecordStore($this->connection, new SqliteDialect($this->connection), new FixedRecordDefaults(), static fn (string $s): string => $s, $boolean, $bypass);
             $this->assertCount(1, $store->find('entities', new Criteria(new AllOf([$marker, new Search('platypu')])), 10, 0));
             // No boolean mode: '+platypuses' and '-sentence' are plain words no record contains.
             $this->assertCount(0, $store->find('entities', new Criteria(new AllOf([$marker, new Search('+platypuses -sentence')])), 10, 0));
         }
         $this->assertNotNull($this->store->findById('entities', $record['_id']));
+    }
+
+    // ------------------------------------------------ the upsert when keys clash
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function clashCollections(): array
+    {
+        return ['entities (unique _id)' => ['entities'], 'site (_id not unique)' => ['site']];
+    }
+
+    /**
+     * Records a (uuid u-a, title A) and b (uuid u-b, title B) in the collection.
+     */
+    private function twoRecords(string $collection): void
+    {
+        foreach (['a' => 'A', 'b' => 'B'] as $id => $title) {
+            $this->assertSame($id, $this->store->save($collection, ['_id' => $id, 'uuid' => 'u-' . $id, 'title' => $title, 'created' => 1686700000]));
+        }
+    }
+
+    /**
+     * Every main row of the collection (uuid, _id, and the _id, uuid and title of its document),
+     * and the search text and `title` metadata of each _id, so that a test sees both rows whole.
+     *
+     * @return array{main: list<string>, search: list<list<string>>, title: list<list<string>>}
+     */
+    private function rows(string $collection): array
+    {
+        $main = [];
+        foreach ($this->connection->fetchAllAssociative('select uuid, _id, contents from ' . $collection . ' order by uuid') as $row) {
+            $document = json_decode($row['contents'], true);
+            $main[] = $row['uuid'] . ' ' . $row['_id'] . ' {' . $document['_id'] . ' ' . $document['uuid'] . ' ' . $document['title'] . '}';
+        }
+
+        return [
+            'main' => $main,
+            'search' => $this->connection->fetchAllNumeric('select _id, search from ' . $collection . '_search order by _id'),
+            'title' => $this->connection->fetchAllNumeric('select _id, value from ' . $collection . "_metadata where name = 'title' order by _id"),
+        ];
+    }
+
+    /**
+     * @return array{main: list<string>, search: list<list<string>>, title: list<list<string>>}
+     */
+    private static function untouched(): array
+    {
+        return ['main' => ['u-a a {a u-a A}', 'u-b b {b u-b B}'], 'search' => [['a', 'a '], ['b', 'b ']], 'title' => [['a', 'A'], ['b', 'B']]];
+    }
+
+    /**
+     * @dataProvider clashCollections
+     */
+    public function testAReSaveUpdatesInPlace(string $collection): void
+    {
+        $this->twoRecords($collection);
+
+        $this->assertSame('b', $this->store->save($collection, ['_id' => 'b', 'uuid' => 'u-b', 'title' => 'B2', 'created' => 1686700000]));
+
+        $this->assertSame(['main' => ['u-a a {a u-a A}', 'u-b b {b u-b B2}'], 'search' => [['a', 'a '], ['b', 'b2 ']], 'title' => [['a', 'A'], ['b', 'B2']]], $this->rows($collection));
+    }
+
+    /**
+     * Record b re-saved with record a's uuid. entities: refused, both rows intact (MySQL instead
+     * overwrites a's row with b's document and returns 'b'). site: a's row is overwritten with
+     * b's document and 'b' is returned, exactly as on MySQL (observed on the rig through
+     * DbalRecordStore), because only the uuid conflicts there.
+     *
+     * @dataProvider clashCollections
+     */
+    public function testAnExistingRecordSavedWithAnotherRecordsUuid(string $collection): void
+    {
+        $this->twoRecords($collection);
+
+        $result = $this->store->save($collection, ['_id' => 'b', 'uuid' => 'u-a', 'title' => 'B2', 'created' => 1686700000]);
+
+        if ($collection === 'entities') {
+            $this->assertFalse($result);
+            $this->assertSame(self::untouched(), $this->rows($collection));
+        } else {
+            $this->assertSame('b', $result);
+            $this->assertSame(['main' => ['u-a a {b u-a B2}', 'u-b b {b u-b B}'], 'search' => [['a', 'a '], ['b', 'b2 ']], 'title' => [['a', 'A'], ['b', 'B2']]], $this->rows($collection));
+        }
+    }
+
+    /**
+     * A new record with an existing uuid: refused on both, as on MySQL (the shared contract pins
+     * it for entities).
+     *
+     * @dataProvider clashCollections
+     */
+    public function testANewRecordSavedWithAnExistingUuidIsRefused(string $collection): void
+    {
+        $this->twoRecords($collection);
+
+        $this->assertFalse($this->store->save($collection, ['_id' => 'c', 'uuid' => 'u-a', 'title' => 'C', 'created' => 1686700000]));
+
+        $this->assertSame(self::untouched(), $this->rows($collection));
+    }
+
+    /**
+     * An existing record re-saved with a new uuid (the site's URL changed). entities: the row's
+     * uuid changes. site: a second row is added for the same _id (the old row keeps its old
+     * document) and the index rows follow the new save. Both as on MySQL (observed on the rig).
+     *
+     * @dataProvider clashCollections
+     */
+    public function testAnExistingRecordSavedWithANewUuid(string $collection): void
+    {
+        $this->twoRecords($collection);
+
+        $this->assertSame('b', $this->store->save($collection, ['_id' => 'b', 'uuid' => 'u-new', 'title' => 'B2', 'created' => 1686700000]));
+
+        $main = $collection === 'entities'
+            ? ['u-a a {a u-a A}', 'u-new b {b u-new B2}']
+            : ['u-a a {a u-a A}', 'u-b b {b u-b B}', 'u-new b {b u-new B2}'];
+        $this->assertSame(['main' => $main, 'search' => [['a', 'a '], ['b', 'b2 ']], 'title' => [['a', 'A'], ['b', 'B2']]], $this->rows($collection));
     }
 }

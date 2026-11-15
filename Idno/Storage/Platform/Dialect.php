@@ -26,7 +26,9 @@ interface Dialect
 
     /**
      * An insert of one row that updates the existing row instead when the row conflicts with one
-     * already in the table on any unique key.
+     * already in the table on a unique key (MySQL: any unique key; SQLite: the one it names, see
+     * SqliteDialect). It may query the connection (once per table): the
+     * store calls it before it begins its transaction.
      *
      * @param list<string> $insertColumns the columns given values
      * @param list<string> $updateColumns the columns set again when the row exists

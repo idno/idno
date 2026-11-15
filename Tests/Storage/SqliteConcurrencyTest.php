@@ -42,7 +42,7 @@ final class SqliteConcurrencyTest extends TestCase
 
     private static function store(Connection $connection): DbalRecordStore
     {
-        return new DbalRecordStore($connection, new SqliteDialect(), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
+        return new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
     }
 
     public function testAReaderSeesTheLastCommitWhileAWriteIsInProgress(): void

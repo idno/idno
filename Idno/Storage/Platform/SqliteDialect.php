@@ -4,19 +4,27 @@ declare(strict_types=1);
 
 namespace Idno\Storage\Platform;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ConstraintViolationException;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Idno\Storage\MySqlSemantics;
 
 /**
- * SQLite (3.35 or later, through pdo_sqlite), over warmup/schemas/sqlite/sqlite.sql, behaving as
+ * SQLite (3.24 or later, through pdo_sqlite), over warmup/schemas/sqlite/sqlite.sql, behaving as
  * the storage contract pins MySQL's behaviour, with the in-memory store's answers where MySQL's
  * cannot be had without a full-text index:
  *
- *  - the upsert is `insert ... on conflict do update set <column> = excluded.<column>`, with no
- *    conflict target, so like MySQL's `on duplicate key update` it updates the row that conflicts
- *    on any unique key;
+ *  - the upsert is `insert ... on conflict (<key>) do update set <column> = excluded.<column>`,
+ *    with a NAMED conflict target, read once per table from the table's own indexes on the
+ *    connection the dialect is given: `_id` when the table has a unique index on `_id` alone
+ *    (entities, reader, every `_search` table), else its primary key (uuid: site, config). A
+ *    conflict on another unique key is an error (the save is refused), never an update of the row
+ *    that holds that key. Compared with MySQL's `on duplicate key update`, which updates the row of
+ *    whichever key conflicts: the same outcome everywhere except one case, an existing `_id`
+ *    re-saved with ANOTHER existing record's uuid in `entities`/`reader`, where MySQL overwrites
+ *    the other record's row with this document and returns the id, and SQLite refuses (false, both
+ *    rows unchanged). In site and config both overwrite (pinned in DbalSqliteRecordStoreTest);
  *  - text compares as MySQL's utf8mb3_general_ci does for ASCII: the schema's text columns use the
  *    `idno_ci` collation (MySqlSemantics::compare(), folded to upper case: 'Red' = 'red', 'a_' >
  *    'aZ'), and every value is bound as text into columns with text affinity, so numbers compare
@@ -32,9 +40,11 @@ use Idno\Storage\MySqlSemantics;
  *
  * The collation and the function exist only on a connection set up by setUpConnection(), which
  * SqliteConnectionSetup (a DBAL driver middleware) runs once on every new connection; the schema
- * cannot be loaded or used without it.
+ * cannot be loaded or used without it (see the header of sqlite.sql for what that means for
+ * maintenance).
  *
- * A value object, not a container service (see config/services.php).
+ * Built with new, for one connection (the one the store uses), not a container service (see
+ * config/services.php).
  */
 final class SqliteDialect implements Dialect
 {
@@ -47,13 +57,30 @@ final class SqliteDialect implements Dialect
     /** How long a write waits for another connection's write lock before it fails. */
     public const BUSY_TIMEOUT_MILLISECONDS = 5000;
 
+    /** The oldest SQLite with `insert ... on conflict (...) do update` (the upsert). */
+    public const MINIMUM_VERSION = '3.24.0';
+
+    /** @var array<string, list<string>> the conflict target of each table, by lower-cased name */
+    private array $conflictTargets = [];
+
+    /**
+     * @param Connection $connection the connection the store uses, on which the dialect reads a
+     *                               table's indexes (once per table) to choose the upsert's conflict target
+     */
+    public function __construct(private readonly Connection $connection)
+    {
+    }
+
     /**
      * Sets up a new connection: waits for locks (busy_timeout), uses write-ahead logging (a no-op
      * for an in-memory database), enforces foreign keys, and registers the collation and the
      * search function.
+     *
+     * @throws \LogicException when the SQLite library is older than MINIMUM_VERSION
      */
     public static function setUpConnection(\Pdo\Sqlite $connection): void
     {
+        self::checkVersion((string) $connection->query('select sqlite_version()')->fetchColumn());
         $connection->exec('PRAGMA busy_timeout = ' . self::BUSY_TIMEOUT_MILLISECONDS);
         $connection->exec('PRAGMA journal_mode = WAL');
         $connection->exec('PRAGMA foreign_keys = ON');
@@ -66,6 +93,16 @@ final class SqliteDialect implements Dialect
         );
     }
 
+    /**
+     * @throws \LogicException when the version is older than MINIMUM_VERSION
+     */
+    public static function checkVersion(string $version): void
+    {
+        if (version_compare($version, self::MINIMUM_VERSION, '<')) {
+            throw new \LogicException(sprintf('SQLite storage needs SQLite %s or later; this PHP uses SQLite %s.', self::MINIMUM_VERSION, $version));
+        }
+    }
+
     public function quoteIdentifier(string $name): string
     {
         return '"' . str_replace('"', '""', $name) . '"';
@@ -76,10 +113,43 @@ final class SqliteDialect implements Dialect
         $sql = 'insert into ' . $this->quoteIdentifier($table)
             . ' (' . implode(', ', array_map($this->quoteIdentifier(...), $insertColumns)) . ')'
             . ' values (' . implode(', ', array_fill(0, count($insertColumns), '?')) . ')'
-            . ' on conflict do update set '
+            . ' on conflict (' . implode(', ', array_map($this->quoteIdentifier(...), $this->conflictTarget($table))) . ') do update set '
             . implode(', ', array_map(fn (string $column): string => $this->quoteIdentifier($column) . ' = excluded.' . $this->quoteIdentifier($column), $updateColumns));
 
         return [$sql, $insertColumns];
+    }
+
+    /**
+     * The columns of the table's unique index on `_id` alone, if it has one, else of its primary key.
+     *
+     * @return list<string>
+     *
+     * @throws \LogicException when the table has neither
+     */
+    private function conflictTarget(string $table): array
+    {
+        $key = strtolower($table);
+        if (isset($this->conflictTargets[$key])) {
+            return $this->conflictTargets[$key];
+        }
+        $primary = [];
+        foreach ($this->connection->fetchAllAssociative('select name, "unique", origin, partial from pragma_index_list(?)', [$table]) as $index) {
+            if ((int) $index['unique'] !== 1 || (int) $index['partial'] !== 0) {
+                continue;
+            }
+            $columns = array_map('strval', $this->connection->fetchFirstColumn('select name from pragma_index_info(?) order by seqno', [$index['name']]));
+            if ($columns === ['_id']) {
+                return $this->conflictTargets[$key] = $columns;
+            }
+            if ($index['origin'] === 'pk') {
+                $primary = $columns;
+            }
+        }
+        if ($primary === []) {
+            throw new \LogicException(sprintf('The table "%s" has no unique key on _id and no primary key to upsert on.', $table));
+        }
+
+        return $this->conflictTargets[$key] = $primary;
     }
 
     public function searchCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
