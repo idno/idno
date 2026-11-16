@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno\Upgrade;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use Idno\Storage\Platform\Dialect;
 
 /**
@@ -222,14 +223,6 @@ final class LegacySource
     }
 
     /**
-     * Whether the table has a row after $after (from the first when null).
-     */
-    public function hasRowAfter(string $table, ?string $after): bool
-    {
-        return $this->uuidsAfter($table, $after, 1) !== [];
-    }
-
-    /**
      * The rows of a table (0 when it does not exist): only when the copier makes a progress row.
      */
     public function count(string $table): int
@@ -238,20 +231,46 @@ final class LegacySource
     }
 
     /**
-     * Renames every table to its new name in ONE statement (atomic on MySQL 8 and MariaDB 10.6).
+     * Renames every table to its new name in ONE statement (atomic on MySQL 8 and MariaDB 10.6),
+     * waiting at most $waitSeconds for the tables: the session's `lock_wait_timeout` is set for that
+     * one statement and restored afterwards (also when it fails). False when the wait ran out (MySQL
+     * and MariaDB both raise error 1205 for a RENAME TABLE that waited for a metadata lock): nothing
+     * was renamed. Every other failure is thrown.
      *
      * @param array<string, string> $names old name => new name
      */
-    public function rename(array $names): void
+    public function rename(array $names, int $waitSeconds): bool
     {
         if ($names === []) {
-            return;
+            return true;
         }
         $pairs = [];
         foreach ($names as $from => $to) {
             $pairs[] = $this->q($from) . ' to ' . $this->q($to);
         }
-        $this->connection->executeStatement('rename table ' . implode(', ', $pairs));
+        $previous = (int) $this->connection->fetchOne('select @@session.lock_wait_timeout');
+        $this->connection->executeStatement('set session lock_wait_timeout = ' . max(1, $waitSeconds));
+        $failure = null;
+        try {
+            $this->connection->executeStatement('rename table ' . implode(', ', $pairs));
+
+            return true;
+        } catch (LockWaitTimeoutException) {
+            return false;
+        } catch (\Throwable $e) {
+            $failure = $e;
+
+            throw $e;
+        } finally {
+            try {
+                $this->connection->executeStatement('set session lock_wait_timeout = ' . max(1, $previous));
+            } catch (\Throwable $restore) {
+                if ($failure === null) {
+                    throw $restore;
+                }
+                // The failure of the rename is what the caller needs (a lost connection fails both).
+            }
+        }
     }
 
     private function after(string $table, ?string $after): string

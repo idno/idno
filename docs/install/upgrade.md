@@ -54,7 +54,16 @@ work in short steps and reloads your site by itself when it is done.
 
   It does the whole upgrade in one run, printing what it does, and does nothing when the database is
   up to date. `php bin/console idno:upgrade --status` shows where the upgrade stands without changing
-  anything.
+  anything. Run it as the user your web server runs as (for example `sudo -u www-data php bin/console
+  idno:upgrade`): it creates cache directories under `var/` (and, on SQLite, a lock file beside the
+  database) that the web server must be able to write to afterwards. If the database cannot be
+  reached, the command prints Idno's database error page and stops, as every command does.
+* If the page says **"The old tables are in use by something else, such as a database backup or an
+  old Idno process, so they cannot be renamed yet."**, the copy is done and the upgrade is waiting to
+  rename the old tables, which something else is reading or writing (a nightly backup that is still
+  running, or an Idno process you have not stopped). Nothing is wrong: the upgrade goes on by itself
+  when that has finished. If it does not, stop the old Idno processes. (`idno:upgrade` waits up to a
+  minute, then stops with the same sentence; run it again later.)
 
 A new installation, and any later release that changes the database, shows the same page for a few
 seconds ("Idno is setting up its database", "Idno is updating its database").
@@ -78,13 +87,16 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
       read.
     * *the database refused the document: ...*: the database server will not store it. The most
       likely case is a record nested more deeply than the server allows: MariaDB accepts JSON nested
-      at most 32 levels deep (MySQL 100).
+      at most 31 levels deep (MySQL 100).
     * *its uuid equals that of the copied record ...*: two records whose addresses differ only in a
       way the new database treats as equal. The new database compares text the way the last 1.x
       versions compared post contents: ignoring capital letters, accents and trailing spaces, and
       treating `ß` as `ss`. So `…/straße` and `…/strasse` are now the same address. The first one
       copied is kept; the other is listed here.
     * *its _id ... is that of the copied record ...*: two records with the same internal id.
+    * A row that had no search text in the old database (its row in the `_search` table was missing)
+      is copied with empty search text: it is not found by the site's search until it is saved again
+      (edit and save the post).
     * *superseded configuration*: an older copy of your site's settings. Idno 1.x could keep several;
       the newest became your settings. This one is normal and needs nothing from you.
     * *cannot be the settings: ...*: a settings record that the new settings table cannot hold.
@@ -102,7 +114,10 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
   page creates Idno's own indexes, not the plugins'. A plugin's indexes are created when you enable
   the plugin on the admin Plugins page, or for every enabled plugin when you run
   `php bin/console idno:upgrade` once. Without a shell, disable and enable each plugin again. Until
-  then some plugin pages may be slower on a large site; they always show the right content.
+  then some plugin pages may be slower on a large site. They show the same content with and without
+  the indexes as long as the plugin's records hold a single value in each field it declares, which is
+  what declaring an index promises; a record that holds a list in such a field (a plugin that broke
+  that promise) is found by the plugin's lookups only until the index exists.
 * **Review what was not carried over.** Site administrators see a "Legacy tables" entry in the
   admin menu while there are legacy tables or rows that were not carried over. The page
   (`/admin/legacytables/`) lists the old tables with their row counts, and every row that was not
@@ -163,13 +178,15 @@ prints them (on a `Detail:` line). After you have dealt with the cause, load the
   for you, because opening the upgraded site would hide everything written to the 1.x site since,
   and nothing was changed. Choose one:
     * **to upgrade the 1.x site again** (the usual case after going back to 1.x for a while): remove
-      the tables whose names begin with `idno_`, then load the page again. The upgrade starts afresh
+      ALL the tables whose names begin with `idno_`, then load the page again. If you miss one that
+      holds rows, the upgrade does not start and says which (the message "The 1.x tables cannot be
+      copied: ... already hold data"); remove it too. The upgrade starts afresh
       from the 1.x tables. **Back up the database first**: removing the `idno_` tables throws away
       everything written to the upgraded site since its upgrade (posts, comments, likes, users'
       changes, settings). If the earlier upgrade's `legacy_` tables are still there as well (you
       restored a backup of the 1.x tables rather than renaming the `legacy_` ones back), the new
-      upgrade stops when it tries to rename the 1.x tables, because their `legacy_` names are taken
-      (the message "The 1.x tables cannot be renamed"). Those `legacy_` tables are the earlier
+      upgrade does not start, because the `legacy_` names the 1.x tables would be renamed to are
+      taken (the message "The 1.x tables cannot be renamed"; nothing is copied). Those `legacy_` tables are the earlier
       upgrade's copy of the old site. Once you are sure the restored 1.x tables are the data you want,
       move the old `legacy_` set out of the way with your database tool, for example by renaming it
       (`RENAME TABLE legacy_entities TO earlier_entities, legacy_entities_metadata TO
@@ -201,8 +218,20 @@ prints them (on a `Detail:` line). After you have dealt with the cause, load the
 * **"The upgrade began without the 1.x table ..., but ... exists now"**: an old Idno process created
   a table during the upgrade. Stop every old process, check the table named in the message and move
   or remove it; the upgrade then goes on.
-* **"The 1.x tables cannot be renamed: X and legacy_X both exist."** Before renaming, the upgrade
-  found a `legacy_` table it did not make. The tables without the prefix hold your site and are what
+* **"The 1.x tables cannot be copied: ... already hold data, but no upgrade is on record."** The
+  upgrade was about to start copying, and some of the new tables (`idno_entities`, `idno_reader`,
+  `idno_site`, `idno_settings`, `idno_upgrade_rejects`) already hold rows. Nothing was changed, and
+  the upgrade does not start while they do: copying beside them would keep their older rows instead of
+  your 1.x rows wherever the two share a record. Two usual causes:
+    * the rows are left over from an earlier upgrade attempt you do not want (you removed its `idno_`
+      tables by hand and missed one): back up the database, then remove ALL the tables whose names
+      begin with `idno_`, not only the ones named, and load the page again;
+    * the database belongs to a site you use on this version, and the 1.x tables were restored into
+      it: they must not be in this database. Move the 1.x tables to a database of their own (and
+      upgrade that one), or remove them.
+* **"The 1.x tables cannot be renamed: X and legacy_X both exist."** The upgrade found a `legacy_`
+  table it did not make, either before it started copying (then nothing at all was copied) or when
+  it was about to rename the old tables. The tables without the prefix hold your site and are what
   the upgrade is copying. Examine both before moving anything: find out what made the `legacy_` table
   and what it holds (an earlier attempt, a backup someone loaded, another application). Only once you
   are sure it is not your site's data, move it out of this database or rename it; the upgrade then
@@ -250,13 +279,14 @@ copies are there) until you either go back to 1.x or remove one of the two sets.
 are only in the new tables: going back to the old tables loses them. Restoring your backup loses them
 too.
 
-**Upgrading again later.** If you went back to Idno 1.x and want to upgrade again, first delete the
-new tables, whose names begin with `idno_` (or restore the backup you made before the first
-upgrade). If you do not, the new version finds both a finished upgrade and your 1.x tables, and stops
+**Upgrading again later.** If you went back to Idno 1.x and want to upgrade again, first delete ALL
+the new tables, whose names begin with `idno_` (or restore the backup you made before the first
+upgrade). If you miss one that holds rows, the new upgrade does not start: it stops with "The 1.x
+tables cannot be copied: ... already hold data" and names it, and changes nothing. If you do not, the new version finds both a finished upgrade and your 1.x tables, and stops
 with the message "This database holds a site already upgraded to this version of Idno and, again,
 the tables of an Idno 1.x site ..." instead of opening the old copy (see "If the upgrade stops").
-If you went back before the upgrade had finished, delete the `idno_` tables too: otherwise the upgrade
-carries on from where it stopped and misses changes made in 1.x to rows it had already copied.
+If you went back before the upgrade had finished, delete all the `idno_` tables too: otherwise the
+upgrade carries on from where it stopped and misses changes made in 1.x to rows it had already copied.
 
 Once the `legacy_` tables are deleted, the upgrade can only be undone from your backup.
 
@@ -336,6 +366,20 @@ its schema migrations (`Idno/Storage/Migrations/`, run by the upgrade page and `
   and the rows it could not carry, with their contents).
 * `legacy_<name>`: the 1.x tables after the upgrade, until the site's admin deletes them.
 
+**Lookups on fields that are not declared read every document.** In 1.x every field of every record
+had a row in the `_metadata` tables, with an index. Now a lookup on a document field
+(`getOne(['my_field' => $value])`) uses an index only when the field is declared indexed (below);
+otherwise it reads the documents of the types it asks for (about 0.7 seconds per 100,000 entities on
+MySQL 8). If your plugin looks records up by a field of its own, declare it.
+
+**Database exports.** `db()->exportRecords()` now exports the new tables: `insert into idno_entities
+(...)` statements, and for `config` the rows of `idno_settings`. Such an export cannot be loaded into
+a 1.x database.
+
+**The daily optimisation** (`/service/db/optimise`, run once a day from an admin's home page) now
+runs `ANALYZE TABLE` on the new tables, which refreshes the statistics without rebuilding them;
+`OPTIMIZE TABLE` would rebuild the whole table, holding up writes meanwhile.
+
 **Raw SQL against these tables is not supported.** Their layout belongs to Idno and changes through
 migrations from one release to the next. Legacy plugin code keeps using `Idno::site()->db()` and the
 entity finders (`Entity::getOne()`, `getFromX()`, ...); new code takes `Idno\Storage\EntityRepository`
@@ -378,7 +422,7 @@ classes in these ways, all deliberate:
 
 * **A query MySQL cannot run counts 0.** A search the old code turned into invalid SQL, or that MySQL rejected for its value (for example a `created` value that is not a date, which is now checked before the query is sent, on every database), finds nothing as before, but `countRecords()` and `countObjects()` now return `0` instead of `false`.
 * **Fewer error-log lines.** Those unanswerable queries, and any query or write on a collection (table) that does not exist, are no longer logged; database errors on queries that do run are logged as before.
-* **A save the database refuses returns `false`.** `saveRecord()` and `saveObject()` return the id only when the record was really stored. When the database refuses the data (for example a record with another record's `uuid`, new or re-saved, or, on MySQL and MariaDB, an `_id` longer than 36 characters), they return `false` and store nothing (an update leaves the previous version, and the other record is untouched). The old code returned the id even though nothing was stored, so `Entity::save()` reported success and fired `saved` or `updated` (and federated the post); now it returns `false` and fires neither. Check the return value of `save()`. (The old code on MySQL also overwrote the other record when an existing record was re-saved with its `uuid`.)
+* **A save the database refuses returns `false`.** `saveRecord()` and `saveObject()` return the id only when the record was really stored. When the database refuses the data (for example a record with another record's `uuid`, new or re-saved, or, on MySQL and MariaDB, an `_id` longer than 36 characters or a record nested more than 100 levels deep, 31 on MariaDB), they return `false` and store nothing (an update leaves the previous version, and the other record is untouched). The old code returned the id even though nothing was stored, so `Entity::save()` reported success and fired `saved` or `updated` (and federated the post); now it returns `false` and fires neither. Check the return value of `save()`. (The old code on MySQL also overwrote the other record when an existing record was re-saved with its `uuid`.)
 * **An empty condition on `access` or `entity_subtype` no longer removes the filter.** A search array passed to `getObjects()`, `countObjects()` or `getFromX()` whose `access` or `entity_subtype` condition comes to nothing (`[]`, `['$in' => []]`, an operator with an empty value) used to remove the reader's access check (or the type filter) entirely; it is now ignored, so the reader's access groups (or the requested types) still apply. A non-empty condition on those fields still replaces the default one, as before.
 * **Records whose class no longer exists are left out.** `getObjects()` no longer returns `false` in their place (`getFromX()` already left them out). Counts still include them.
 * **`isHiddenByPublishStatus()` overrides are not consulted by `getObjects()`.** Drafts and other unpublished entities are hidden by the standard rule (visible to their owner and to admins only); an entity class that overrides `isHiddenByPublishStatus()` still has its override applied by `canRead()`, but not when entities are looked up.
@@ -404,5 +448,5 @@ The new tables also change what some queries match:
 * **Dates in queries are read in the time zone of the query.** `created` is now stored as a timestamp, and a date such as `'2024-06-01 12:00:00'` in a query is read in PHP's default time zone when the query runs (the old code compared it with the date as it was written in the time zone of the save). A `created` value that is not a date finds nothing, on every database.
 * **Decimal numbers are compared as their JSON text.** A number still finds itself, but the string `'0.3'` no longer finds the number `0.1 + 0.2` (stored as `0.30000000000000004`). On MySQL 8 (not MariaDB or SQLite) a number that JSON writes in exponent form (`1.0e+25`) is not found by the same number.
 * **Settings.** The `config` collection holds one document (saving another replaces it), and a settings key that ends in a space is refused.
-* **Indexed fields match plain values only.** A field that an entity class declares as indexed (`#[IndexedField]`) no longer finds an item where that field holds a list or an object.
+* **Indexed fields match plain values only.** A field that an entity class declares as indexed (`#[IndexedField]`) no longer finds an item where that field holds a list or an object, once its index exists. Declare only fields that hold one value in every record of the collection, whatever class stored it.
 * As before, a whole decimal number (`1.0`) reads back as the integer `1`.

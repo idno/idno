@@ -461,15 +461,22 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   (`entities: 1500 of 12000 copied`) and `The 1.x data is copied.`, or `Nothing to do: the schema is
   up to date.`; it exits 0 once the schema is current, and 1 with the public message on stderr (and
   the private detail on a `Detail:` line, the one place it is shown) for a 1.x database too old to
-  copy, an unsupported database server, a lock held for over 60 seconds by another process, steps
-  that change nothing, or an error. An unreachable database opens the gate, so the console boots the
-  legacy application, whose database adapter prints its database error page on stdout and exits 0,
-  as before: the command (and `--status`) never runs then. `--status`
+  copy, an unsupported database server, a lock held for over 60 seconds by another process, 1.x
+  tables still in use by something else after the same 60 seconds, steps that change nothing, or an
+  error. An unreachable database opens the gate, so the console boots the legacy application, whose
+  database adapter prints its database error page on stdout and ends the process with exit 0, as for
+  every command: `idno:upgrade` and `--status` are never reached then, and print no trace (pinned in
+  a subprocess, on a closed port or an SQLite file in a missing directory, by
+  `UpgradeCommandTest::testWithTheDatabaseDownTheLegacyErrorPageEndsTheRun`). Where the command is
+  reached with the database unreachable (in-process), both print `PublicMessage::unreachable()` on
+  stderr and exit 1 (`Tests/Unit/Upgrade/UpgradeCommandUnreachableTest`). `--status`
   prints `Schema status: <status>` (the `SchemaStatus` value), the pending migrations (`Pending
   migration: <version>`, or `No migration is pending.`) and, for a 1.x database, the copy's phase,
-  counts, stored error and its detail, and changes nothing. It exits 1, with the public message on stderr, for an unsupported database server, a
-  1.x database too old to upgrade, renamed 1.x tables with no upgrade on record, and the 1.x tables
-  beside a completed upgrade (exit 0 for every other status). It runs whether or not the legacy application booted
+  counts, stored error and its detail, and changes nothing. It exits 1, with the public message on
+  stderr (`PublicMessage::forStatus()`), for the statuses that refuse the upgrade
+  (`SchemaStatus::refusesTheUpgrade()`: an unsupported database server, a 1.x database too old to
+  upgrade, renamed 1.x tables with no upgrade on record, the 1.x tables beside a completed upgrade)
+  and for an unreachable database (exit 0 for every other status). It runs whether or not the legacy application booted
   (with the gate closed it does not), so it takes no logger and nothing from the legacy application.
   It reports the migrations THIS run executed (`SchemaMigrator::migrate()` returns them), never one
   another process ran meanwhile; while another process holds the `UpgradeLock` it says so once and
@@ -658,7 +665,8 @@ other new code may.
   (built by `Idno\Legacy\LegacyRecordStoreFactory`: a `SettingsRecordStore`, which serves the
   collection `config` from `idno_settings`, over a `JsonRecordStore`, which serves every other
   collection from its `idno_<collection>` table, both on the `database_connection` service with
-  `MySqlDialect` for a MySQL or MariaDB site and `SqliteDialect` for an SQLite site,
+  the dialect `DialectFactory` builds (the one mapping from the `database` setting to a dialect:
+  `MySqlDialect` for a MySQL or MariaDB site, `SqliteDialect` for an SQLite site),
   `Idno\Legacy\LegacyRecordDefaults` (what the old backend's `saveRecord()` filled in), the
   container's `TypeMap` (`AttributeTypeMap`, the entities' aliases) and `SchemaCatalog` (public,
   shared with `IndexedFields`, which forgets it when it creates an index), the legacy quote
@@ -687,12 +695,17 @@ other new code may.
   `DataConcierge`'s. It holds no SQL and never creates or changes the schema (the upgrade does):
   `getVersions()` is one object, label `schema`, whose value is `SchemaMigrator::latest()` (the
   newest schema migration executed, `'0'` when none; false, written to PHP's error log, when it
-  cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (`optimize table` on
-  `idno_entities`, `idno_reader`, `idno_site`, `idno_settings` and `idno_sessions` on MySQL and
-  MariaDB, `pragma optimize` on SQLite; false, as before), `exportRecords()` (a page of a
-  collection's table as `insert into idno_<collection> (...) values (...);` lines, `config` from
-  `idno_settings`, its own columns only, never a generated `ix_` column; '' past the end; false,
-  logged, for a name that is no collection) and the connection check of `reconnectIfNeeded()` are in
+  cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (the daily
+  `/service/db/optimise` an admin's home page triggers: `analyze table` on `idno_entities`,
+  `idno_reader`, `idno_site`, `idno_settings` and `idno_sessions` on MySQL and MariaDB, which
+  refreshes the index statistics without rebuilding the table or blocking writes (observed on both),
+  never `optimize table`, which on InnoDB rebuilds the whole table, full-text index and generated
+  columns included, and holds up writes meanwhile; `pragma optimize` on SQLite; false, as before;
+  the statements are pinned by `Tests/Unit/Legacy/LegacySqlMaintenanceTest`), `exportRecords()` (a
+  page of a collection's table as `insert into idno_<collection> (...) values (...);` lines,
+  `config` from `idno_settings`, its own columns only, never a generated `ix_` column; '' past the
+  end; false, logged, for a name that is no collection; such an export cannot be loaded into a 1.x
+  database) and the connection check of `reconnectIfNeeded()` are in
   `Idno\Legacy\LegacySqlMaintenance`, all on the shared connection. `getClient()` is the native PDO
   of the `database_connection` service (asked of the connection on each call, never a kept copy: a
   `Pdo\Mysql` on MySQL, a `Pdo\Sqlite` on SQLite), and `handleSession()` installs the same
@@ -756,7 +769,8 @@ other new code may.
       interface stays free of logging policy;
     - DIFFERENCE (refused saves): `saveRecord()`/`saveObject()` return the id only when the record was stored. A
       save the database refuses (another record's uuid, on a new record or on a re-save; an `_id`
-      longer than the 36 characters of MySQL's `id` column, ...) returns false and stores nothing (an
+      longer than the 36 characters of MySQL's `id` column; on MySQL and MariaDB a document nested
+      deeper than their JSON functions accept, 100 levels and 31, ...) returns false and stores nothing (an
       update leaves the previous version, and the other record is intact). The old backend returned
       the id of a save it had rolled back when a metadata row failed, so `Entity::save()` reported
       success and fired `saved`/`updated` (and federation) for a record that was not stored; now it
@@ -823,7 +837,13 @@ other new code may.
       MariaDB) a float that JSON writes in exponent form (`1.0e+25`) is not found by the same float,
       only by MySQL's own text of it (`9.999999999999999e24`);
     - DIFFERENCE (declared indexed fields): a field with a declared index (`#[IndexedField]`) matches
-      scalar values only: a record whose field holds a list or an object is not found by a query on it;
+      scalar values only: a record whose field holds a list or an object is not found by a query on it
+      (before its index exists it is; results are the same with and without the index only while every
+      record holds single values in the field, which is what a declaration promises);
+    - DIFFERENCE (undeclared fields): a lookup on a document field that is NOT declared is served by
+      no index (1.x had the metadata table for every field): it reads the documents of the matching
+      types (measured at about 0.7 s per 100,000 entities on MySQL 8), so a field hot code looks up
+      should be declared;
     - DIFFERENCE (settings): `config` holds one document (saving another `_id` replaces it), and a
       settings key ending in a space is refused (false, the previous document intact);
     - (unchanged, stated once) a whole float (`1.0`) reads back as the integer `1`, as before.
@@ -840,7 +860,8 @@ other new code may.
     `SchemaMigrator::probe()`, `select version from idno_migrations union all select case when
     completed_at is null then '#incomplete' else '#complete' end from idno_upgrade_progress` (the
     second part only when the progress table exists). Only a database with the three 1.x `entities`
-    tables and no complete upgrade on record costs more (the 1.x version is read). Pinned by
+    tables and no complete upgrade on record costs more (the 1.x version is read), and so do the
+    closed states that tell the owner to remove tables (the catalog read again once). Pinned by
     `UpgradeEndToEndTest::testTheHomepageStatementsArePinned` (the DBAL statements of a homepage
     request: the catalog, the probe, then the legacy application's, 13 on the fixture site, the same
     after a completed upgrade, with its `legacy_` tables deleted, with 1.x tables recreated, with
@@ -997,14 +1018,16 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
 - `doctrine/migrations` is used as a library only (no bundle, no console command, no configuration
   file): `Idno\Storage\SchemaMigrator` (a container service; it takes only the DBAL `Connection` and
   queries nothing when constructed; the schema gate fetches it at boot on an SQL site, for
-  `hasPending()`) builds a
+  `probe()`) builds a
   `DependencyFactory` on that connection with the migrations namespace `Idno\Storage\Migrations`,
   the directory `Idno/Storage/Migrations/` and the metadata table `idno_migrations` (created by
   `migrate()`). `pending()` lists the versions not yet executed (`'20261115000000'`, the numeric
-  part of the class name; asking creates nothing), `hasPending()` is `pending() !== []` with ONE
-  statement (`select version from idno_migrations`, compared with the `Version*.php` files of
-  `Idno/Storage/Migrations/`; the table must exist: the schema gate asks only when the catalog lists
-  it), `migrate()` executes them and returns the versions it executed (a no-op, `[]`, when none is
+  part of the class name; asking creates nothing), `probe($progressTable)` is what the schema gate
+  asks: ONE statement (`select version from idno_migrations`, compared with the `Version*.php` files
+  of `Idno/Storage/Migrations/`, `union all` one marker per row of the upgrade's progress table when
+  it is given) saying whether a migration is pending and whether an upgrade is on record, complete or
+  not; the table must exist: the gate asks only when the catalog lists it; `hasPending()` is its
+  `pending` alone (`pending() !== []`), `migrate()` executes them and returns the versions it executed (a no-op, `[]`, when none is
   pending), `latest()` is the newest executed version, `'0'` when none. It writes no output.
 - Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
   (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
@@ -1014,6 +1037,15 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
   safe to repeat (`CREATE TABLE IF NOT EXISTS`, and on SQLite `CREATE INDEX IF NOT EXISTS`), so that
   the next run completes the schema (pinned by `testAnInterruptedBaselineCanBeRunAgain` on SQLite
   and MySQL).
+- A migration that must ALTER a table that already holds rows (a new column or index on
+  `idno_entities`, say) has no recipe yet, and needs a design of its own before it is written. Two
+  constraints are known. MySQL has no `ADD COLUMN IF NOT EXISTS` or `ADD INDEX IF NOT EXISTS`
+  (MariaDB has both), so to be safe to repeat such a migration must read the catalog first
+  (`information_schema.columns` / `.statistics`, or `SchemaCatalog`) and skip what exists, as
+  `IndexedFields` does for the declared indexes. And an ALTER of a large table can take far longer
+  than a web step's budget (`UpgradeRunner::STEP_SECONDS`, 5 s) and longer than PHP's
+  `max_execution_time`; the migrations run inside one step, so such a migration cannot simply be
+  added to the list (the declared indexes are created one per step for this reason).
 - The baseline, `Version20261115000000` (irreversible), creates: `idno_entities`, `idno_reader`,
   `idno_site` (one row per document: `id`, `uuid` (unique), `type`, `owner`, `created` (epoch
   seconds, `BIGINT`), `publish_status`, `data` (the document's JSON text, `LONGTEXT` `utf8mb4_bin`),
@@ -1122,9 +1154,25 @@ name in `config/services.php`).
   `testTheOneXEntitiesTablesBesideACompletedUpgradeCloseTheGate`) and
   `UpgradeEndToEndTest`. The copier's own idea of "there is a 1.x database here"
   (`UpgradeProgress::$noLegacyDatabase`) uses the same evidence.
-- Closed for `Empty`, `PendingMigrations`, `Legacy`, `LegacyTooOld`, `RenamedWithoutRecord`,
-  `OneXBesideCompletedUpgrade` and `UnsupportedServer`; open
-  for `Current`, `Unreachable` and `NotApplicable`.
+- The table list is read before the probe, and the catalog keeps it for the request, so a list
+  read before another process's step renamed the 1.x tables can disagree with a probe that already
+  says complete. Before `SchemaState::status()` reports `OneXBesideCompletedUpgrade` or
+  `RenamedWithoutRecord` on a migrated database (the statuses that tell the owner to remove tables),
+  it forgets the catalog, reads it again (one more statement, only then) and decides again with the
+  same probe (pinned by
+  `SchemaStateTest::testAStaleTableListIsReadAgainBeforeTellingTheOwnerToRemoveTables`).
+- What each status means is decided in ONE place, by exhaustive `match`es (no `default`): on
+  `SchemaStatus`, `closesTheGate()` (closed for `Empty`, `PendingMigrations`, `Legacy`,
+  `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade` and `UnsupportedServer`; open
+  for `Current`, `Unreachable` and `NotApplicable`), `advancesBySteps()` (`Empty`,
+  `PendingMigrations`, `Legacy`: the page has its script and form, the runner works) and
+  `refusesTheUpgrade()` (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`,
+  `OneXBesideCompletedUpgrade`: nothing is done until a person acts; no script and no form, the
+  plain text `Idno cannot start: <why>`, `idno:upgrade` and `--status` exit 1); and the public
+  message of a status is `PublicMessage::forStatus($status, $serverRefusal)` (the four refused states
+  and `Unreachable`; none for the others). The page, the plain text, the runner and the command all
+  use them; a new status must be decided there, and `Tests/Unit/Upgrade/SchemaStatusTest` lists every
+  case, so adding one without deciding it fails.
 - `Unreachable` is final for the request (and the process): `Idno\Storage\Platform\ConnectFailureIsFinal`,
   a DBAL middleware `BootConfigConnectionFactory` adds last to the site's connection, makes every
   later connect attempt of a connection whose FIRST attempt failed fail with that same failure,
@@ -1159,8 +1207,8 @@ name in `config/services.php`).
   is replaced by the root), never from stored configuration.
 - Errors shown to anyone are `Idno\Upgrade\PublicMessage`s only: the page and the step's JSON are
   served to anonymous visitors. A PublicMessage can only be made by its named constructors (fixed
-  templates whose parameters are table names of `LEGACY_TABLES`, plain or `legacy_`, counts and
-  version numbers). A failure that carries anything else (a record's uuid, document data, a driver or
+  templates whose parameters are table names of `LEGACY_TABLES`, plain or `legacy_`, the fixed
+  `idno_` names of `LegacyDataCopier::MUST_BE_EMPTY`, counts and version numbers). A failure that carries anything else (a record's uuid, document data, a driver or
   exception message, a file path, a connection detail) is shown as `PublicMessage::stopped()` ("The
   upgrade stopped. The details are in the server's error log, and php bin/console idno:upgrade
   --status shows them."); its detail is logged on the `upgrade` channel, stored apart (the copier's
@@ -1175,8 +1223,14 @@ name in `config/services.php`).
   not carried over, that the old tables are kept (renamed `legacy_<name>`) and nothing in them is
   changed, and where to look if it stops (the stored public error is shown). Its script POSTs the step
   URL until `current` and reloads; on `error`, `too_old` or `unsupported` it stops and shows the
-  message; on a network failure or an answer that is not JSON it retries after 2 s, doubling to 60 s;
-  never more than one request a second. A `<noscript>` form posts `?html=1`. `LegacyTooOld`,
+  message; on a network failure, a 503 answer or an answer that is not JSON it retries after 2 s,
+  doubling to 60 s (or the answer's `Retry-After`, at most 60 s, when that is longer); after
+  `UpgradePage::MAX_ANSWERS_NOT_JSON` (5) answers in a row that are not JSON (a PHP fatal error
+  during a step returns an HTML page) it stops with `PublicMessage::stopped()`; a `working` answer's
+  message (the rename waiting for the 1.x tables) is shown once `UpgradePage::NOTICE_AFTER` (3)
+  answers in a row have carried it; never more than one request a second. The script's constants and
+  messages are pinned by `UpgradePageTest::testTheScriptsLimitsAndMessages`; its behaviour in a
+  browser is not run by the test suite. A `<noscript>` form posts `?html=1`. `LegacyTooOld`,
   `UnsupportedServer`, `RenamedWithoutRecord` and `OneXBesideCompletedUpgrade` have no script and no
   form. Everything from the database or the request is
   escaped (HTML in the markup, JSON with HTML characters escaped in the script, `textContent` only).
@@ -1209,7 +1263,9 @@ name in `config/services.php`).
   indexes), never silently "no plugins".
 - `UpgradeRunner::step($deadline)` (a public service, built when first fetched; the web step): the
   status (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade`,
-  `Unreachable` stop at once: `unsupported`, `too_old`, `error`, `error`, `error`; `Current` and `NotApplicable` are `current`, nothing done, no lock); the `UpgradeLock`
+  `Unreachable` stop at once: `unsupported`, `too_old`, `error`, `error`, `error`, with
+  `PublicMessage::forStatus()`; `Current` and `NotApplicable` are `current`, nothing done, no lock;
+  one exhaustive `match`, `answer()`, used before and after the work); the `UpgradeLock`
   without waiting (not got: `working` with `locked`, nothing done; the copy's progress when it can be
   read, else none, never an error), held around everything that follows so that two processes never
   migrate or create indexes at once (`LegacyDataCopier::step()` works under a lock its caller holds
@@ -1217,8 +1273,10 @@ name in `config/services.php`).
   checked after each index created (one index, its one or two DDL statements, is the unit: with a
   deadline already past a step creates exactly one index and reports `working`); for a 1.x database,
   once nothing is pending and the deadline has not passed (or the step did nothing else), one copier
-  step until the deadline; then the status again: `current`, `working`, or `error`. An error the
-  copier returns is never dropped, and `LegacyDataCopier::progress()` itself reports an impossible
+  step until the deadline; then the status again: `current`, `working`, or `error`. A copier step
+  whose rename waited for the 1.x tables and gave up (its progress carries the notice
+  `PublicMessage::tablesInUse()`, see "Copying a 1.x database") is `working` with that notice as the
+  message: never an error, nothing stored. An error the copier returns is never dropped, and `LegacyDataCopier::progress()` itself reports an impossible
   state the tables alone show (one no step could store: no progress row yet). It never throws: an
   exception is logged on `upgrade` (the copier logs its own) and reported as `error` with
   `PublicMessage::stopped()` and the private `detail`. The result is `array{status, progress:
@@ -1232,11 +1290,14 @@ name in `config/services.php`).
   tries again every half second, and gives up after 60 seconds (`PublicMessage::lockHeld()`, exit 1).
   It also gives up after `STALLED_STEPS` (5) steps in a row that changed nothing (no count, cursor or
   phase moved, no line reported: no migration or index), whatever the status says
-  (`PublicMessage::noProgress()`, exit 1).
+  (`PublicMessage::noProgress()`, exit 1). Steps whose rename waited for the 1.x tables are not
+  counted as stalled: it prints `Waiting: <the notice>` once, steps again, and gives up after the same
+  60 seconds with the notice as the error (exit 1; nothing is stored, and the next run carries on).
 - `UpgradeController` (`POST /_upgrade/step`): see "Adding a route" for its safety conditions. Its
   JSON: `status` (`current`, `working`, `too_old`, `unsupported`, `error`), `message`, `phase`,
   `collections` (an object, `{}` when empty; per collection `source`, `copied`, `rejected`, `done`)
-  and `error` (the copier's public error); HTTP 500 for `error`, 503 for an unreachable database,
+  and `error` (the copier's public error); a `working` answer's `message` is the notice of a rename
+  that waited (or, with 503, the unreachable message); HTTP 500 for `error`, 503 for an unreachable database,
   200 otherwise; never a document, a rejected row or private detail. Its time budget is
   `UpgradeRunner::STEP_SECONDS` (5); in the test environment only, `config/services_test.php` lets
   `IDNO_TEST_UPGRADE_STEP_SECONDS` shorten it (no request can).
@@ -1247,8 +1308,9 @@ name in `config/services.php`).
   (a `doctrine.middleware`: with `IDNO_TEST_FAIL_FIRST_CONNECTION=1` the first connection attempt
   fails, as a server refusing one connection would).
 - Tests: `Tests/Unit/Upgrade/` (`SchemaStateTest` with the evidence rule, the version rule and the
-  MongoDB case, `UpgradeRunnerTest` on SQLite files, `UpgradeGateListenerTest`, `UpgradeControllerTest`,
-  `UpgradePageTest`), `Tests/Unit/Storage/ConnectFailureIsFinalTest`, `Tests/Kernel/SchemaGateBootTest`
+  MongoDB case, `SchemaStatusTest` (every status decided), `UpgradeRunnerTest` on SQLite files,
+  `UpgradeGateListenerTest`, `UpgradeControllerTest`, `UpgradePageTest`,
+  `UpgradeCommandUnreachableTest`), `Tests/Unit/Storage/ConnectFailureIsFinalTest`, `Tests/Kernel/SchemaGateBootTest`
   (`Idno/start.php` and the console, closed and open, in subprocesses) and
   `Tests/Upgrade/UpgradeEndToEndTest`: `php -S` on a free port (never 8089) in a subprocess with
   `PHP_CLI_SERVER_WORKERS=2`, through a router of the test's own that passes `IDNO_DBNAME`, `IDNO_URL`,
@@ -1282,13 +1344,37 @@ collection: `source_rows`, `source_existed`, `copied`, `rejected`, `position` (t
 `verify_cursor`, `error` (a `PublicMessage`'s text), `error_detail` (the private detail of a
 failure: an exception's class and message; null for an impossible state), `completed_at`):
 
+0. **Start** (a 1.x database and no progress row at all): the copy starts only when it can finish.
+   A `legacy_<name>` beside its `<name>` (the rename could never be made) stops it with
+   `PublicMessage::renameBlocked()`, and so does any row in a table of
+   `LegacyDataCopier::MUST_BE_EMPTY` (`idno_entities`, `idno_reader`, `idno_site`, `idno_settings`,
+   `idno_upgrade_rejects`; one `select 1 ... limit 1` each, never a count) with
+   `PublicMessage::newTablesNotEmpty()` naming them: rows there are an earlier upgrade's (one of its
+   `idno_` tables missed when they were removed by hand) or a site in use (a 1.x backup restored into
+   a used 2.x site's database: `idno_site`/`idno_settings` hold rows as soon as it has been used), and
+   a copy beside them would reject every 1.x row sharing an `_id` or uuid with one of them and keep the
+   older one (and the verify pass would count leftover rejects as accounted for). Nothing is written
+   (no progress row), so every step says it again; `progress()` finds it from the tables too; never
+   complete; `idno:upgrade` exits 1. A copy that has begun (progress rows) is never checked again for
+   this: its own rows are in those tables.
 1. **Copy**: per collection, a keyset pass by `uuid` over `<c>`, in batches; then the config.
 2. **Rename**: when every keyset pass has reached its end, the progress rows are marked ready
    (`verify_cursor` set, one transaction), then ONE `RENAME TABLE` moves every table of
    `LEGACY_TABLES` that exists to `legacy_<name>`. From then on no process of the old version can
-   write the source. A `legacy_<name>` that exists beside its `<name>` blocks it: nothing is renamed,
+   write the source. A `legacy_<name>` that exists beside its `<name>` blocks it (checked again here:
+   one may appear after the start): nothing is renamed,
    and the error names both and says that someone who knows what the `legacy_` table holds must check
-   it and move or remove it (it does not claim the rows were copied).
+   it and move or remove it (it does not claim the rows were copied). The rename waits for the tables
+   at most `RENAME_WAIT_SECONDS` (2): the session's `lock_wait_timeout` is set for that statement
+   only and restored afterwards, also on failure (the server's default is a year). Anything holding a
+   metadata lock on a 1.x table (a backup's `mysqldump --single-transaction`, an old process's open
+   transaction or slow query) makes it give up with error 1205 on MySQL 8 and MariaDB 10.6 alike
+   (DBAL's `LockWaitTimeoutException`; observed on both): not an error. Nothing is renamed or stored,
+   the step returns its progress with the notice `PublicMessage::tablesInUse()` (the old tables are
+   in use by something else, such as a backup or an old Idno process; the upgrade goes on when that
+   has finished), and the next step, the progress rows still marked ready, tries again. Pinned by
+   `LegacyDataCopierTest::testARenameThatWaitsForTheOneXTablesGivesUpAndTheNextStepRenames` and
+   `UpgradeEndToEndTest::testTablesInUseHoldUpTheRenameWithoutStoppingTheUpgrade`.
 3. **Verify**: a second keyset pass by `uuid` over the now immutable `legacy_<c>`, `VERIFY_BATCH`
    (2,000) uuids at a time, with its own cursor: the uuids that are neither in `idno_<c>` nor among the
    collection's rejects, by EXACT bytes, are copied or rejected by the same code as phase 1 (at most
@@ -1308,7 +1394,8 @@ What it guarantees:
   count when the upgrade began), copied, rejected, done; `complete`; `error`; and `phase`
   (`NOT_STARTED`, `COPYING`, `VERIFYING`, `COMPLETE`; "stopped" is `error !== null`), and
   `noLegacyDatabase`: no table of `LEGACY_TABLES` under either name and no upgrade begun, in which case
-  `step()` writes nothing at all (not even a progress row; `idno_settings` untouched).
+  `step()` writes nothing at all (not even a progress row; `idno_settings` untouched); and `notice`,
+  set only on the progress `step()` returns when its rename waited and gave up.
   `legacySchemaVersion()` is the `schema` row of `versions`, or of `legacy_versions` after the rename,
   or null. `completion()` is null when no upgrade has begun (no progress row), false while one runs,
   true once complete: ONE statement on `idno_upgrade_progress` (which must exist), for the schema gate. `step()` leaves the lock as it found it: when its caller already holds the lock, it works
@@ -1346,7 +1433,7 @@ What it guarantees:
   `contents` bytes and a reason of at most 255 characters): contents not valid UTF-8, not JSON,
   nested deeper than PHP's 512 levels, not an object or array, or a row the database refuses
   (`Dialect::isRefusedData()`, except lock waits and deadlocks, which are thrown and retried by the
-  next step): a document its JSON functions refuse (too deep: MySQL allows 100 levels, MariaDB 32), a
+  next step): a document its JSON functions refuse (too deep: MySQL allows 100 nested objects or arrays, MariaDB 31), a
   value a generated column cannot hold, an `_id` that is that of a copied row, or a `uuid` equal to a
   copied row's under the new collation (`utf8mb4_unicode_520_ci`: `…/straße` and `…/strasse` were
   different in 1.x). Of two such rows the one copied first is kept: in the copy pass the first in the
@@ -1503,7 +1590,13 @@ lower-cased) when the catalog lists that table and `c` is not in `JsonRecordStor
 collection, and no statement is sent for it. The catalog is read once: code that creates a table
 afterwards calls `SchemaCatalog::forget()`.
 
-- `save()` is ONE upsert on `id` (`Dialect::upsertById()`): `data` is `json_encode($record)` with
+- `save()` is ONE upsert on `id` (`Dialect::upsertById()`), preceded by one check: a document nested
+  deeper (in objects and arrays, the document itself the first) than the server's JSON functions
+  accept (`Dialect::jsonDepthLimit()`: MySQL 8 100, MariaDB 10.6 31, observed; none on SQLite, whose
+  1000 is beyond `json_encode()`'s 512) is refused data, false, before anything is written: a table
+  without generated columns would store it, under any `sql_mode`, and every query on a document
+  field of the collection would then fail with error 3157/4040 (pinned by
+  `JsonMySqlRecordStoreTest::testADocumentTooDeepForTheServerIsRefusedAndQueriesStillWork`). `data` is `json_encode($record)` with
   the old store's flags (none), so a document copied byte for byte from a 1.x `contents` reads the same;
   `type` is `TypeMap::typeFor()` of `entity_subtype` (default `Idno\Common\Entity`), `created` the
   timestamp (`RecordIndex::created()`), `search` `RecordIndex::searchText()`. A record is read back
@@ -1639,9 +1732,12 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   not exist (nothing created, nothing reported), creates what is missing (idempotent; an interrupted
   creation is completed; a column or index a concurrent request made first, `Dialect::isAlreadyDefined()`,
   is no failure), calls `SchemaCatalog::forget()`, and returns the `collection.field` names it
-  created. An index is never dropped or altered: a removed declaration leaves its index, and a
+  created. An index is never dropped or altered: a removed declaration leaves its index (and with it
+  the scalar-only matching of that field, until the database is recreated; the rig's databases must
+  be recreated, `composer test:down` then `test:up...`, after a declaration is removed), and a
   declaration whose options differ from the existing index changes nothing and is listed by
-  `conflicts()` (of the last call). Every declaration is read and validated before any DDL.
+  `conflicts()` (of the last call). So a RELEASED declaration can never be withdrawn by deleting the
+  attribute: that needs a migration that drops the column and its index. Every declaration is read and validated before any DDL.
   `reconcileDirectory($dir)` reconciles what `EntityClassFinder::in($dir)` finds: PHP files with a
   line that starts (after indentation) with `#[AsEntity` or `#[IndexedField` (imported or fully
   qualified; a mention in a comment or docblock does not count), the class name derived
@@ -1656,13 +1752,20 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   message, and the plugin is enabled anyway), and by `php bin/console idno:upgrade` for every enabled
   plugin, after the schema is current and any copy has finished (a failure is a warning: the plugin is
   skipped). The upgrade page never creates them: a site upgraded only through the browser has no
-  plugin indexes until one of those happens (slower plugin queries, never wrong results). A plugin's
+  plugin indexes until one of those happens: slower plugin queries, and the same results as long as
+  every record of the collection holds a single value in each declared field, which is what a
+  declaration promises; a record holding a list or object in a declared field is matched by queries
+  on that field only until the index exists (so two upgraded copies of the same data can answer
+  differently where that promise is broken). A plugin's
   failure never closes the site; a plugin that is there but not enabled is never reconciled by the
   upgrade. On a
   database without the tables (a 1.x site not yet upgraded) enabling a plugin creates nothing (pinned
   by `Tests/Kernel/PluginIndexedFieldsTest`, on private databases).
-- Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`): `Idno\Common\Entity`: `access`,
-  `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email`, `admin`; `Site`: `domain`;
+- Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`, and by `UpgradeCommandTest::CORE_INDEXES`): `Idno\Common\Entity`: `access`,
+  `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email` (not `admin`: `AccessGroup`, in
+  the same collection, stores `admin`, `read` and `write` as lists of user uuids, and
+  `User::getXAccessGroupIDs('admin')` looks groups up by them; pinned by
+  `Tests/Data/AccessGroupPermissionLookupTest`); `Site`: `domain`;
   `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`;
   `Reader\Feed`, `Reader\Subscription`, `Reader\FeedItem`: `feed_url`. A new declaration on a core
   class ships with a new, empty migration, so that sites reconcile it on upgrade.
@@ -1673,7 +1776,8 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
 - A warning for anyone declaring a field: a declaration applies to the whole collection table, not
   to one class's entities. A field with a declared index matches scalar values only, so declaring a
   field that other code stores lists or objects in changes what queries on that field match, for
-  everyone.
+  everyone. Before declaring one, grep where the field is assigned (`->field =`, `['field']`,
+  `'field' =>`) in `Idno/` and `IdnoPlugins/`, for EVERY class of the collection.
 - Plugin authors: `docs/developers/plugins/indexed-fields.md`.
 
 ## Content Plugins

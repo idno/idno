@@ -17,7 +17,8 @@ use Psr\Log\LoggerInterface;
  * A step, in this order:
  *
  *  1. The status (SchemaState, read afresh). UnsupportedServer, LegacyTooOld, RenamedWithoutRecord,
- *     OneXBesideCompletedUpgrade and Unreachable stop here (nothing is written; status `unsupported`, `too_old` or `error`); Current and
+ *     OneXBesideCompletedUpgrade and Unreachable stop here (nothing is written; status `unsupported`,
+ *     `too_old` or `error`, with PublicMessage::forStatus()); Current and
  *     NotApplicable are `current`: a step does nothing for either. run() differs for Current: its
  *     first step that gets the lock re-checks the CORE declared indexes of a current database. Once
  *     a run's step reports `current`, run() goes on to the plugin phase (finishWithPlugins()).
@@ -39,7 +40,9 @@ use Psr\Log\LoggerInterface;
  *  4. For a 1.x database, once nothing is pending and the deadline has not passed (or nothing was
  *     done yet in this step): one LegacyDataCopier::step() until the deadline.
  *  5. The status again: `current`, `working`, or `error` with the copier's error (never dropped: the
- *     error the copier returns, or one progress() finds from the tables alone).
+ *     error the copier returns, or one progress() finds from the tables alone). A copier step whose
+ *     rename waited for the 1.x tables and gave up is `working` with its notice as the message
+ *     (PublicMessage::tablesInUse()): never an error, nothing stored.
  *
  * A step never throws: an exception is logged on the `upgrade` channel (the copier logs its own) and
  * reported as `error` with PublicMessage::stopped() as the message (safe to show anyone) and the
@@ -92,7 +95,9 @@ final class UpgradeRunner
      * never makes a 1.x row a reject). The plugin phase never changes the result: when it cannot get
      * the lock within the wait the run is still `current`, with a warning.
      * While another process holds the lock it says so once and tries again every half second, and gives up after the lock wait (60 seconds) with an
-     * error; it also gives up after STALLED_STEPS steps in a row that changed nothing.
+     * error; it also gives up after STALLED_STEPS steps in a row that changed nothing. While the
+     * rename waits for the 1.x tables (a step's notice, PublicMessage::tablesInUse()) it says so once
+     * (`Waiting: ...`) and steps again, and gives up after the same wait with that message.
      *
      * @param callable(string): void $onProgress
      *
@@ -102,6 +107,7 @@ final class UpgradeRunner
     {
         $reconciled = false;
         $waitingSince = null;
+        $tablesBusySince = null;
         $stalled = 0;
         $previous = null;
         while (true) {
@@ -133,6 +139,21 @@ final class UpgradeRunner
             if ($result['status'] !== 'working') {
                 return $result;
             }
+            if ($result['progress']?->notice !== null) {
+                // The rename waited for the 1.x tables (a backup, an old process): wait as for the
+                // lock, then give up with the reason.
+                if ($tablesBusySince === null) {
+                    $tablesBusySince = microtime(true);
+                    $onProgress('Waiting: ' . $result['progress']->notice);
+                }
+                if (microtime(true) - $tablesBusySince >= $this->lockWaitSeconds) {
+                    return self::result('error', $result['progress'], $result['progress']->notice);
+                }
+                $stalled = 0;
+                $previous = null;
+                continue;
+            }
+            $tablesBusySince = null;
             // Whatever the status says: steps that move nothing (no count, cursor or phase, no
             // migration or index) would loop for ever.
             $state = serialize([$result['progress']?->collections, $result['progress']?->cursors, $result['progress']?->phase]);
@@ -196,28 +217,10 @@ final class UpgradeRunner
         $copying = false;
         try {
             $status = $this->state->status();
-            switch ($status) {
-                case SchemaStatus::NotApplicable:
-                    return self::result('current');
-                case SchemaStatus::Unreachable:
-                    return self::result('error', null, PublicMessage::unreachable()->text);
-                case SchemaStatus::UnsupportedServer:
-                    return self::result('unsupported', null, ($this->state->refusal() ?? PublicMessage::serverRequirement())->text);
-                case SchemaStatus::LegacyTooOld:
-                    return self::result('too_old', null, PublicMessage::tooOld()->text);
-                case SchemaStatus::RenamedWithoutRecord:
-                    return self::result('error', null, PublicMessage::renamedWithoutRecord()->text);
-                case SchemaStatus::OneXBesideCompletedUpgrade:
-                    return self::result('error', null, PublicMessage::oneXBesideCompletedUpgrade()->text);
-                case SchemaStatus::Current:
-                    if (!$reconcile) {
-                        return self::result('current');
-                    }
-                    break;
-                case SchemaStatus::Empty:
-                case SchemaStatus::PendingMigrations:
-                case SchemaStatus::Legacy:
-                    break;
+            // A current database is re-checked (the core indexes) when run() asks for it.
+            $answer = $status === SchemaStatus::Current && $reconcile ? null : $this->answer($status);
+            if ($answer !== null) {
+                return $answer;
             }
 
             if (!$this->lock->acquire()) {
@@ -246,6 +249,10 @@ final class UpgradeRunner
                         if ($after->error !== null) {
                             return self::result('error', $after, $after->error, $after->errorDetail);
                         }
+                        if ($after->notice !== null) {
+                            // Not an error: the next step tries again (the rename waited for the 1.x tables).
+                            return self::result('working', $after, $after->notice);
+                        }
                     }
                 }
             } finally {
@@ -258,16 +265,7 @@ final class UpgradeRunner
 
             $now = $this->state->status();
 
-            return match ($now) {
-                SchemaStatus::Current, SchemaStatus::NotApplicable => self::result('current'),
-                SchemaStatus::UnsupportedServer => self::result('unsupported', null, ($this->state->refusal() ?? PublicMessage::serverRequirement())->text),
-                SchemaStatus::LegacyTooOld => self::result('too_old', null, PublicMessage::tooOld()->text),
-                SchemaStatus::RenamedWithoutRecord => self::result('error', null, PublicMessage::renamedWithoutRecord()->text),
-                SchemaStatus::OneXBesideCompletedUpgrade => self::result('error', null, PublicMessage::oneXBesideCompletedUpgrade()->text),
-                SchemaStatus::Unreachable => self::result('error', null, PublicMessage::unreachable()->text),
-                SchemaStatus::Legacy => $this->legacyResult(),
-                default => self::result('working'),
-            };
+            return $this->answer($now) ?? ($now === SchemaStatus::Legacy ? $this->legacyResult() : self::result('working'));
         } catch (\Throwable $e) {
             $detail = LegacyDataCopier::clean($e::class . ': ' . $e->getMessage());
             if (!$copying) {
@@ -285,6 +283,25 @@ final class UpgradeRunner
 
             return self::result('error', $progress, PublicMessage::stopped()->text, $progress?->errorDetail ?? $detail);
         }
+    }
+
+    /**
+     * What a step answers for a status without doing anything, or null when the upgrade advances by
+     * steps in it (SchemaStatus::advancesBySteps()). The message is PublicMessage::forStatus().
+     *
+     * @return array{status: 'current'|'too_old'|'unsupported'|'error', progress: null, message: ?string, detail: null, locked: false}|null
+     */
+    private function answer(SchemaStatus $status): ?array
+    {
+        $message = PublicMessage::forStatus($status, $status === SchemaStatus::UnsupportedServer ? $this->state->refusal() : null)?->text;
+
+        return match ($status) {
+            SchemaStatus::Current, SchemaStatus::NotApplicable => self::result('current'),
+            SchemaStatus::UnsupportedServer => self::result('unsupported', null, $message),
+            SchemaStatus::LegacyTooOld => self::result('too_old', null, $message),
+            SchemaStatus::RenamedWithoutRecord, SchemaStatus::OneXBesideCompletedUpgrade, SchemaStatus::Unreachable => self::result('error', null, $message),
+            SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy => null,
+        };
     }
 
     /**

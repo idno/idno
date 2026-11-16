@@ -187,4 +187,26 @@ final class UpgradePageTest extends TestCase
         self::assertSame("Idno is upgrading its database.\n", UpgradePage::text(SchemaStatus::Empty));
         self::assertStringContainsString('1.6.4', UpgradePage::text(SchemaStatus::LegacyTooOld));
     }
+
+    /**
+     * The script's limits and messages (its behaviour in a browser is not run by the test suite):
+     * it honours Retry-After, stops with the generic sentence after MAX_ANSWERS_NOT_JSON answers that
+     * are not JSON, and shows a step's notice after NOTICE_AFTER answers that carried it.
+     */
+    public function testTheScriptsLimitsAndMessages(): void
+    {
+        $html = UpgradePage::html(SchemaStatus::Legacy, null, '', self::NONCE);
+        $encoded = (string) json_encode(\Idno\Upgrade\PublicMessage::stopped()->text, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES);
+
+        self::assertSame(5, UpgradePage::MAX_ANSWERS_NOT_JSON);
+        self::assertSame(3, UpgradePage::NOTICE_AFTER);
+        self::assertStringContainsString('var maxGarbled = 5;', $html);
+        self::assertStringContainsString('var noticeAfter = 3;', $html);
+        self::assertStringContainsString('var stoppedText = ' . $encoded . ';', $html);
+        self::assertStringContainsString("response.headers.get('Retry-After')", $html);
+        self::assertStringContainsString('answer.response.status === 503', $html);
+        self::assertStringContainsString('if (garbled >= maxGarbled) { stop(stoppedText); return; }', $html);
+        self::assertStringContainsString('Math.min(60000, 2000 * Math.pow(2, failures - 1))', $html);
+        self::assertStringNotContainsString('eval(', $html);
+    }
 }

@@ -260,6 +260,14 @@ final class SqliteDialect implements Dialect
      * lock wait timeout. Everything else (a missing table, a read-only or corrupt database, disk
      * full) propagates.
      */
+    /**
+     * SQLite's JSON functions accept 1000 levels (observed on 3.51), more than json_encode() writes (512).
+     */
+    public function jsonDepthLimit(Connection $connection): ?int
+    {
+        return null;
+    }
+
     public function isRefusedData(DriverException $exception): bool
     {
         return $exception instanceof ConstraintViolationException

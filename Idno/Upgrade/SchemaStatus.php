@@ -28,8 +28,18 @@ namespace Idno\Upgrade;
  *    three mean an undo or a restored backup: opening the site on the earlier copy would drop
  *    everything written to the 1.x site since. Nothing is done until someone removes one set.
  *
- * The gate is closed (the legacy application does not boot) for Empty, PendingMigrations, Legacy,
- * LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade and UnsupportedServer; open for Current, Unreachable and NotApplicable.
+ * What each status means for every entry point is decided here, once, by exhaustive matches (a new
+ * case that does not say fails to compile its match, and SchemaStatusTest pins every case):
+ *
+ *  - closesTheGate(): the legacy application does not boot. Closed for Empty, PendingMigrations,
+ *    Legacy, LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade and UnsupportedServer;
+ *    open for Current, Unreachable and NotApplicable.
+ *  - advancesBySteps(): the upgrade moves on by steps (the page has its script and form, the runner
+ *    works): Empty, PendingMigrations and Legacy.
+ *  - refusesTheUpgrade(): nothing is done until a person acts outside Idno (the page has no script
+ *    and no form, `Idno cannot start: <why>` in plain text, `idno:upgrade` and its `--status` exit
+ *    1): UnsupportedServer, LegacyTooOld, RenamedWithoutRecord and OneXBesideCompletedUpgrade.
+ *  - the public message a status carries: PublicMessage::forStatus().
  */
 enum SchemaStatus: string
 {
@@ -52,6 +62,30 @@ enum SchemaStatus: string
         return match ($this) {
             self::Empty, self::PendingMigrations, self::Legacy, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::UnsupportedServer => true,
             self::Current, self::Unreachable, self::NotApplicable => false,
+        };
+    }
+
+    /**
+     * Whether the upgrade moves on by steps in this state (the upgrade page's script and form, the
+     * runner's work).
+     */
+    public function advancesBySteps(): bool
+    {
+        return match ($this) {
+            self::Empty, self::PendingMigrations, self::Legacy => true,
+            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::Current, self::Unreachable, self::NotApplicable => false,
+        };
+    }
+
+    /**
+     * Whether the upgrade is refused in this state until a person acts outside Idno (a newer
+     * database server, an older Idno first, tables moved or removed).
+     */
+    public function refusesTheUpgrade(): bool
+    {
+        return match ($this) {
+            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade => true,
+            self::Empty, self::PendingMigrations, self::Legacy, self::Current, self::Unreachable, self::NotApplicable => false,
         };
     }
 }

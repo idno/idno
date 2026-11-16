@@ -159,7 +159,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame('current', $this->runner()->step(microtime(true) + 5)['status']);
         self::assertSame([], (new SchemaMigrator($this->db()))->pending());
         $catalog = new SchemaCatalog($this->db());
-        foreach (['access', 'admin', 'handle', 'email', 'slug'] as $field) {
+        foreach (['access', 'handle', 'email', 'slug'] as $field) {
             self::assertContains($field, $catalog->indexedFields('entities'), $field);
         }
     }
@@ -641,6 +641,10 @@ final class UpgradeRunnerTest extends TestCase
                 public function tables(): array
                 {
                     return $this->tables;
+                }
+
+                public function forget(): void
+                {
                 }
             },
             static fn (): object => new class ($complete) {

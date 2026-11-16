@@ -253,7 +253,12 @@ final class UpgradeEndToEndTest extends TestCase
     public function testAStoppedUpgradeShowsWhy(): void
     {
         $this->oneXSite(30);
-        $this->runner()->step(microtime(true) - 1);
+        // Until the copy has begun (a legacy_ table there before it begins stops it at once, with
+        // nothing stored): one unit of work per step.
+        for ($i = 0; $i < 100 && $this->copier()->progress()->phase === UpgradeProgress::NOT_STARTED; ++$i) {
+            $this->runner()->step(microtime(true) - 1);
+        }
+        $this->assertSame(UpgradeProgress::COPYING, $this->copier()->progress()->phase);
         // Something else made a legacy_ table beside its 1.x table: the rename is blocked.
         $this->db()->executeStatement('create table legacy_versions like versions');
         $this->startServer();
@@ -275,6 +280,93 @@ final class UpgradeEndToEndTest extends TestCase
         $form = $this->request('POST', '/_upgrade/step?html=1', ['Referer: https://elsewhere.example/']);
         $this->assertSame(303, $form['status']);
         $this->assertSame('/', $form['headers']['location'] ?? null);
+    }
+
+    /**
+     * A copy about to start beside rows already in the new tables (here the settings of a site in
+     * use) stops before anything is written: the step's JSON, the page and `idno:upgrade` say why.
+     */
+    public function testACopyBesideRowsInTheNewTablesNeverStarts(): void
+    {
+        $this->oneXSite(30);
+        $this->fixture?->prepareNewSchema();
+        $this->db()->executeStatement("insert into idno_settings (name, value, position) values ('title', '\"A site in use\"', 0)");
+        $message = \Idno\Upgrade\PublicMessage::newTablesNotEmpty(['idno_settings'])->text;
+        $this->startServer();
+
+        $answer = $this->request('POST', '/_upgrade/step', ['Accept: application/json']);
+        $data = json_decode($answer['body'], true);
+        $this->assertSame(500, $answer['status'], $answer['body']);
+        $this->assertSame('error', $data['status'] ?? null);
+        $this->assertSame($message, $data['message'] ?? null);
+
+        $page = $this->request('GET', '/', ['Accept: text/html']);
+        $this->assertSame(503, $page['status']);
+        $this->assertStringContainsString(htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'), $page['body']);
+
+        [$exit, , $stderr] = $this->console('idno:upgrade');
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString($message, $stderr);
+        $this->assertSame(0, (int) $this->db()->fetchOne('select count(*) from idno_upgrade_progress'), 'no upgrade begun');
+        $this->assertSame(0, (int) $this->db()->fetchOne('select count(*) from idno_entities'), 'nothing copied');
+    }
+
+    /**
+     * While something holds the 1.x tables (an open transaction that has read one, as a backup's
+     * does), the rename gives up after its short wait: the step answers `working` with the reason as
+     * its message (HTTP 200, no error stored), and the upgrade finishes once they are free.
+     * `idno:upgrade` waits as for the lock and then gives up with that reason.
+     */
+    public function testTablesInUseHoldUpTheRenameWithoutStoppingTheUpgrade(): void
+    {
+        $this->oneXSite(30);
+        $holder = $this->connect();
+        $holder->beginTransaction();
+        $holder->fetchAllAssociative('select * from entities limit 1');
+        $notice = \Idno\Upgrade\PublicMessage::tablesInUse()->text;
+        try {
+            $this->holdUpTheRename($holder, $notice);
+        } finally {
+            // Never leave the tables held: dropping the database would wait for them.
+            if ($holder->isTransactionActive()) {
+                $holder->rollBack();
+            }
+            $holder->close();
+        }
+        $statuses = $this->stepUntilCurrent();
+        $this->assertSame('current', end($statuses));
+        $this->assertContains('legacy_entities', $this->tables());
+    }
+
+    private function holdUpTheRename(Connection $holder, string $notice): void
+    {
+
+        $lines = [];
+        $started = microtime(true);
+        $result = $this->runner(lockWait: 3.0)->run(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        });
+        $this->assertSame('error', $result['status']);
+        $this->assertSame($notice, $result['message']);
+        $this->assertContains('Waiting: ' . $notice, $lines);
+        $this->assertLessThan(30.0, microtime(true) - $started, 'it gives up');
+        $this->assertContains('entities', $this->tables(), 'nothing renamed');
+        $this->assertNull($this->copier()->progress()->error, 'nothing stored as an error');
+
+        $this->startServer();
+        $seen = false;
+        for ($i = 0; $i < 10 && !$seen; ++$i) {
+            $answer = $this->request('POST', '/_upgrade/step', ['Accept: application/json']);
+            $data = json_decode($answer['body'], true);
+            $this->assertSame(200, $answer['status'], $answer['body']);
+            $this->assertSame('working', $data['status'] ?? null, $answer['body']);
+            $this->assertNull($data['error'] ?? null);
+            $seen = ($data['message'] ?? null) === $notice;
+        }
+        $this->assertTrue($seen, 'a step said why it could not go on');
+        $this->assertNotContains('legacy_entities', $this->tables());
+
+        $holder->commit();
     }
 
     /**
@@ -575,6 +667,50 @@ final class UpgradeEndToEndTest extends TestCase
         $post = $this->request('GET', '/view/' . $site['post'], ['Accept: text/html']);
         $this->assertSame(200, $post['status']);
         $this->assertStringContainsString($site['body'], $post['body']);
+    }
+
+    /**
+     * A delete blocked by a foreign key from a table outside the fourteen (a 1.x plugin's table that
+     * referenced `entities` followed the rename): the console says what it deleted before the error,
+     * names the referencing table and constraint, and exits 1; the admin page says a table outside
+     * the 1.x tables refers to the legacy table, and deletes nothing more.
+     */
+    public function testADeleteBlockedByAnotherTablesForeignKeyIsExplainedOnTheConsoleAndThePage(): void
+    {
+        $password = bin2hex(random_bytes(12));
+        $this->fixture = LegacyFixture::create('e2e');
+        $this->connection = $this->fixture->connection;
+        $this->dbname = (string) $this->connection->getDatabase();
+        $site = $this->fixture->insertSite($this->url, plugins: ['Status', 'Text'], password: $password, theme: 'Twenty26');
+        $this->fixture->insertMany('entities', 3);
+        $this->runner()->run(static function (string $line): void {
+        });
+        $this->assertTrue($this->copier()->progress()->complete);
+        $this->db()->executeStatement('create table plugin_things (id int primary key, entity_id varchar(36) character set utf8, constraint plugin_things_entity foreign key (entity_id) references legacy_entities (_id)) engine=InnoDB');
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy', '--yes');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString('Deleted before the error: legacy_entities_metadata, legacy_entities_search, ', $stdout);
+        $this->assertStringContainsString('legacy_entities', $stderr);
+        $this->assertStringContainsString('plugin_things', $stderr);
+        $this->assertStringContainsString('plugin_things_entity', $stderr);
+        $this->assertStringContainsString('Deal with that table first; running the command again cannot succeed until then.', $stderr);
+        $this->assertContains('legacy_entities', $this->tables());
+        $remaining = $this->tables();
+
+        $this->startServer();
+        $cookie = $this->logIn($site['handle'], $password);
+        $html = ['Accept: text/html', 'Cookie: ' . $cookie];
+        $page = $this->request('GET', '/admin/legacytables/', $html);
+        $this->assertSame(200, $page['status'], substr($page['body'], 0, 2000) . $this->log());
+        $token = $this->formToken($page['body'], 'admin/legacytables/');
+        $refused = $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query($token + ['confirm' => 'delete']));
+        $this->assertSame(302, $refused['status'], $refused['body'] . $this->log());
+        $this->assertSame($remaining, $this->tables(), 'nothing more deleted');
+        $after = $this->request('GET', '/admin/legacytables/', $html)['body'];
+        $this->assertStringContainsString('A table outside the Idno 1.x tables refers to the legacy table legacy_entities (it has a foreign key into it)', $after);
+        $this->assertStringNotContainsString('Deleted ', $after);
+        $this->db()->executeStatement('drop table plugin_things');
     }
 
     /**
@@ -1070,7 +1206,7 @@ final class UpgradeEndToEndTest extends TestCase
      * @param list<string>|null $plugins       the enabled plugins (alwaysplugins), instead of the rig's configuration
      * @param string|null       $pluginsRoot   the plugins directory, instead of IdnoPlugins/
      */
-    private function runner(?array $plugins = null, ?string $pluginsRoot = null): UpgradeRunner
+    private function runner(?array $plugins = null, ?string $pluginsRoot = null, float $lockWait = 60.0): UpgradeRunner
     {
         $connection = $this->db();
         $catalog = new SchemaCatalog($connection);
@@ -1089,7 +1225,7 @@ final class UpgradeEndToEndTest extends TestCase
         // private database's stored list.
         $enabled = new \Idno\Upgrade\EnabledPlugins($plugins === null ? Idno::container()->get(BootConfig::class) : new BootConfig(['alwaysplugins' => $plugins], false), $connection);
 
-        return new UpgradeRunner($state, $migrator, new IndexedFields($connection, new MySqlDialect(), $catalog), $catalog, $copier, $lock, $enabled, new NullLogger(), dirname(__DIR__, 2), 60.0, null, $pluginsRoot);
+        return new UpgradeRunner($state, $migrator, new IndexedFields($connection, new MySqlDialect(), $catalog), $catalog, $copier, $lock, $enabled, new NullLogger(), dirname(__DIR__, 2), $lockWait, null, $pluginsRoot);
     }
 
     // ------------------------------------------------------------------ the server and the console

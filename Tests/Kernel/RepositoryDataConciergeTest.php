@@ -892,8 +892,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * optimize() optimizes the tables of the schema migrations (MySQL's `optimize table`, SQLite's
-     * `pragma optimize`) and returns false, as before; exportRecords() exports a page of a
+     * optimize() refreshes the statistics of the tables of the schema migrations (MySQL's and
+     * MariaDB's `analyze table`, SQLite's `pragma optimize`; the statements are pinned in
+     * Tests/Unit/Legacy/LegacySqlMaintenanceTest) and returns false, as before; exportRecords() exports a page of a
      * collection's table as `insert` statements.
      */
     public function testOptimizeAndExportRunOnTheSharedConnection(): void

@@ -225,7 +225,7 @@ final class SchemaStateTest extends TestCase
 
         $this->asked = [];
         self::assertSame(SchemaStatus::RenamedWithoutRecord, $this->state('mysql', [...$renamed, ...self::NEW_SCHEMA])->status(), 'a migrated database with no progress row');
-        self::assertSame(['version' => 1, 'tables' => 1, 'probe' => 1], $this->asked);
+        self::assertSame(['version' => 1, 'tables' => 2, 'probe' => 1, 'forget' => 1], $this->asked, 'the catalog read again before telling the owner to remove tables');
 
         self::assertSame(SchemaStatus::Current, $this->state('mysql', [...$renamed, ...self::NEW_SCHEMA], completion: true)->status(), 'a complete upgrade');
         self::assertSame(SchemaStatus::Legacy, $this->state('mysql', [...$renamed, ...self::NEW_SCHEMA], completion: false)->status(), 'an upgrade in progress');
@@ -235,8 +235,8 @@ final class SchemaStateTest extends TestCase
      * After a COMPLETE upgrade, `entities`, `entities_metadata` AND `entities_search` present again
      * mean an undo or a restored backup (a booting 1.x process re-creates the last two, never
      * `entities`): closed, with
-     * its own status, decided from the catalog and the probe alone. SQLite never asks about 1.x
-     * tables.
+     * its own status, decided from the catalog (read again once before it is reported) and the probe
+     * alone. SQLite never asks about 1.x tables.
      */
     public function testTheOneXEntitiesTablesBesideACompletedUpgradeCloseTheGate(): void
     {
@@ -244,13 +244,37 @@ final class SchemaStateTest extends TestCase
         foreach (['legacy_ tables deleted' => [], 'legacy_ tables kept' => ['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search']] as $case => $legacy) {
             $this->asked = [];
             self::assertSame(SchemaStatus::OneXBesideCompletedUpgrade, $this->state('mysql', [...$restored, ...$legacy, ...self::NEW_SCHEMA], completion: true, legacyVersion: 2020120301)->status(), $case);
-            self::assertSame(['version' => 1, 'tables' => 1, 'probe' => 1], $this->asked, $case . ': nothing beyond the probe');
+            self::assertSame(['version' => 1, 'tables' => 2, 'probe' => 1, 'forget' => 1], $this->asked, $case . ': nothing beyond the probe and the catalog read again');
         }
         self::assertTrue(SchemaStatus::OneXBesideCompletedUpgrade->closesTheGate());
         self::assertTrue(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata', 'entities_search'], true));
         self::assertFalse(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata', 'entities_search'], false));
         self::assertFalse(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata'], true));
         self::assertSame(SchemaStatus::Current, $this->state('sqlite', [...$restored, ...self::NEW_SCHEMA], completion: true)->status(), 'SQLite never asks about 1.x tables');
+    }
+
+    /**
+     * The table list is read before the probe, and a request may reuse a list read before another
+     * step renamed the 1.x tables: the probe then says complete while the list still shows the 1.x
+     * `entities` tables. Before telling the owner to remove tables (OneXBesideCompletedUpgrade,
+     * RenamedWithoutRecord), the catalog is read again once and the status decided again.
+     */
+    public function testAStaleTableListIsReadAgainBeforeTellingTheOwnerToRemoveTables(): void
+    {
+        $oneX = ['entities', 'entities_metadata', 'entities_search', 'versions'];
+        $renamed = ['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search', 'legacy_versions'];
+
+        $this->asked = [];
+        $state = $this->state('mysql', [], completion: true, legacyVersion: 2020120301, reads: [[...$oneX, ...self::NEW_SCHEMA], [...$renamed, ...self::NEW_SCHEMA]]);
+        self::assertSame(SchemaStatus::Current, $state->status(), 'the fresh list shows the rename: a completed upgrade');
+        self::assertSame(['version' => 1, 'tables' => 2, 'probe' => 1, 'forget' => 1], $this->asked);
+
+        $this->asked = [];
+        $state = $this->state('mysql', [], completion: null, reads: [[...$renamed, ...self::NEW_SCHEMA], [...self::NEW_SCHEMA]]);
+        self::assertSame(SchemaStatus::Current, $state->status(), 'the renamed tables are gone from the fresh list');
+        self::assertSame(['version' => 1, 'tables' => 2, 'probe' => 1, 'forget' => 1], $this->asked);
+
+        self::assertSame(SchemaStatus::OneXBesideCompletedUpgrade, $this->state('mysql', [...$oneX, ...self::NEW_SCHEMA], completion: true, legacyVersion: 2020120301)->status(), 'still there when read again: reported');
     }
 
     public function testTheEvidenceRule(): void
@@ -419,10 +443,12 @@ final class SchemaStateTest extends TestCase
     private const NEW_SCHEMA = ['idno_entities', 'idno_migrations', 'idno_reader', 'idno_sessions', 'idno_settings', 'idno_site', 'idno_upgrade_progress', 'idno_upgrade_rejects'];
 
     /**
-     * @param list<string> $tables
+     * @param list<string>            $tables
+     * @param list<list<string>>|null $reads  what each read of the catalog finds, in turn (the last one again once they run out); default: $tables every time
      */
-    private function state(string $database, array $tables, bool $pending = false, ?int $legacyVersion = null, ?bool $completion = null, string $server = '8.0.46'): SchemaState
+    private function state(string $database, array $tables, bool $pending = false, ?int $legacyVersion = null, ?bool $completion = null, string $server = '8.0.46', ?array $reads = null): SchemaState
     {
+        $reads ??= [$tables];
         $asked = &$this->asked;
         $count = static function (string $what) use (&$asked): void {
             $asked[$what] = ($asked[$what] ?? 0) + 1;
@@ -442,18 +468,33 @@ final class SchemaStateTest extends TestCase
                     return $this->server;
                 }
             },
-            static fn (): object => new class ($tables, $count) {
-                /** @param list<string> $tables */
-                public function __construct(private readonly array $tables, private readonly \Closure $count)
+            static fn (): object => new class ($reads, $count) {
+                private int $read = 0;
+
+                private bool $kept = false;
+
+                /** @param list<list<string>> $reads */
+                public function __construct(private readonly array $reads, private readonly \Closure $count)
                 {
                 }
 
                 /** @return list<string> */
                 public function tables(): array
                 {
-                    ($this->count)('tables');
+                    // Kept until forget(), as the real catalog does.
+                    if (!$this->kept) {
+                        ($this->count)('tables');
+                        $this->kept = true;
+                        ++$this->read;
+                    }
 
-                    return $this->tables;
+                    return $this->reads[min($this->read, count($this->reads)) - 1];
+                }
+
+                public function forget(): void
+                {
+                    ($this->count)('forget');
+                    $this->kept = false;
                 }
             },
             static fn (): object => new class ($pending, $completion, $count) {

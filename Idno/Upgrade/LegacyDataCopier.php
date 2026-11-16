@@ -97,6 +97,21 @@ final class LegacyDataCopier
     /** The tables the new schema must have before anything is copied. */
     private const REQUIRED_TABLES = ['idno_entities', 'idno_reader', 'idno_site', SettingsRecordStore::TABLE, self::PROGRESS, RowWriter::REJECTS];
 
+    /**
+     * The tables of the new schema that must hold no rows when a copy starts (a 1.x database and no
+     * upgrade on record): rows there are an earlier copy or a site in use, and copying beside them
+     * would reject every 1.x row they share an `_id` or uuid with, and keep theirs.
+     */
+    public const MUST_BE_EMPTY = ['idno_entities', 'idno_reader', 'idno_site', SettingsRecordStore::TABLE, RowWriter::REJECTS];
+
+    /**
+     * How long the rename waits for the 1.x tables (MySQL's and MariaDB's `lock_wait_timeout`, in
+     * seconds, for that one statement): well inside a step's budget. Something holding them (a
+     * backup's open transaction, an old process's query) makes it give up, and the next step tries
+     * again.
+     */
+    public const RENAME_WAIT_SECONDS = 2;
+
     /** The longest text kept in the error column and written to the log, in bytes. */
     private const MAX_MESSAGE_BYTES = 1000;
 
@@ -290,6 +305,8 @@ final class LegacyDataCopier
             $state = $this->phase($tables, $rows);
             if ($state instanceof PublicMessage) {
                 $error = $state->text;
+            } elseif ($state === 'copy' && $rows === []) {
+                $error = $this->refusalToStart($tables)?->text;
             }
         }
         $phase = match (true) {
@@ -358,6 +375,14 @@ final class LegacyDataCopier
             // An impossible state: say what was found, touch nothing else.
             return $this->stopped($phase);
         }
+        if ($phase === 'copy' && $rows === []) {
+            // A copy is about to start: never beside rows it would merge with, nor when the rename
+            // could never be made. Nothing is written (no progress row), so every step says it again.
+            $refusal = $this->refusalToStart($source->tables());
+            if ($refusal !== null) {
+                return $this->stopped($refusal);
+            }
+        }
         if ($phase === 'copy') {
             $this->initialise($source, $rows);
         }
@@ -413,7 +438,14 @@ final class LegacyDataCopier
                     $names[$table] = 'legacy_' . $table;
                 }
             }
-            $source->rename($names);
+            if (!$source->rename($names, self::RENAME_WAIT_SECONDS)) {
+                // Something holds the 1.x tables (a backup's transaction, an old process's query):
+                // not an error, nothing was renamed, and the next step tries again.
+                $this->logger->info('The rename of the 1.x tables waited ' . self::RENAME_WAIT_SECONDS . ' seconds for them and gave up: something else is using them. The next step tries again.');
+                $progress = $this->progress();
+
+                return new UpgradeProgress($progress->collections, $progress->complete, $progress->error, $progress->phase, $progress->noLegacyDatabase, $progress->errorDetail, $progress->cursors, PublicMessage::tablesInUse()->text);
+            }
             $worked = true;
             $source = LegacySource::read($this->connection, $this->dialect);
             $appeared = $this->appeared($source->tables(), $this->progressRows());
@@ -623,18 +655,51 @@ final class LegacyDataCopier
      */
     private function renameIsPossible(LegacySource $source): bool
     {
-        $blocking = [];
-        foreach (self::LEGACY_TABLES as $table) {
-            if ($source->has($table) && $source->has('legacy_' . $table)) {
-                $blocking[] = $table;
-            }
-        }
+        $blocking = self::blockingRename($source->tables());
         if ($blocking === []) {
             return true;
         }
         $this->storeError(PublicMessage::renameBlocked($blocking));
 
         return false;
+    }
+
+    /**
+     * The 1.x tables (lower case names) whose `legacy_<name>` exists beside them: they block the
+     * rename.
+     *
+     * @param list<string> $tables
+     *
+     * @return list<string>
+     */
+    private static function blockingRename(array $tables): array
+    {
+        return array_values(array_filter(self::LEGACY_TABLES, static fn (string $table): bool => in_array($table, $tables, true) && in_array('legacy_' . $table, $tables, true)));
+    }
+
+    /**
+     * Why a copy that is about to start (a 1.x database, no progress row) must not: a `legacy_<name>`
+     * beside its 1.x table (the rename could never be made; checked again at the rename), or a table
+     * of MUST_BE_EMPTY that holds rows (an earlier copy, or a site in use: copying would reject every
+     * 1.x row sharing an `_id` or uuid with one of them and keep the older one). Null when it may
+     * start. At most one `select 1 ... limit 1` per table of MUST_BE_EMPTY; it writes nothing.
+     *
+     * @param list<string> $tables
+     */
+    private function refusalToStart(array $tables): ?PublicMessage
+    {
+        $blocking = self::blockingRename($tables);
+        if ($blocking !== []) {
+            return PublicMessage::renameBlocked($blocking);
+        }
+        $holding = [];
+        foreach (self::MUST_BE_EMPTY as $table) {
+            if (in_array($table, $tables, true) && $this->connection->fetchOne('select 1 from ' . $this->q($table) . ' limit 1') !== false) {
+                $holding[] = $table;
+            }
+        }
+
+        return $holding === [] ? null : PublicMessage::newTablesNotEmpty($holding);
     }
 
     /**

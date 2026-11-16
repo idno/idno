@@ -9,7 +9,7 @@ use Doctrine\DBAL\Connection;
 
 /**
  * The SQL the legacy db() API needs beyond the record store, for RepositoryDataConcierge:
- * optimize(), exportRecords() and the connection check of reconnectIfNeeded() (from the old
+ * optimize() (statistics, not a rebuild), exportRecords() and the connection check of reconnectIfNeeded() (from the old
  * backend, Idno\Data\MySQL, since removed), on the tables of the schema migrations. It runs on the
  * native PDO of the shared DBAL connection.
  *
@@ -21,9 +21,13 @@ final class LegacySqlMaintenance
     public const TABLES = ['idno_entities', 'idno_reader', 'idno_site', 'idno_settings', 'idno_sessions'];
 
     /**
-     * Optimize tables - this can reduce overall database storage space and query time: MySQL's and
-     * MariaDB's `optimize table` on each of TABLES, SQLite's `pragma optimize`. A failure is written
-     * to PHP's error log and ends the work. Always false, as the old backend's.
+     * The legacy daily "optimise" (an admin's home page triggers /service/db/optimise once a day):
+     * on MySQL and MariaDB `analyze table` on each of TABLES, which refreshes the index statistics
+     * the query planner uses without rebuilding the table or blocking writes; SQLite's
+     * `pragma optimize`. Not `optimize table`: on InnoDB that rebuilds the whole table (a copy that
+     * holds up writes, and with the full-text index and the generated columns of the collection
+     * tables a long one). A failure is written to PHP's error log and ends the work. Always false,
+     * as the old backend's.
      *
      * @return bool
      */
@@ -34,7 +38,7 @@ final class LegacySqlMaintenance
                 $client->query('pragma optimize');
             } else {
                 foreach (self::TABLES as $table) {
-                    $client->query("optimize table {$table}");
+                    $client->query("analyze table {$table}")->fetchAll();
                 }
             }
         } catch (\Exception $e) {

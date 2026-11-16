@@ -93,11 +93,32 @@ final class SchemaState
             }
         }
 
-        $tables = ($this->catalog)()->tables();
+        $catalog = ($this->catalog)();
+        $tables = $catalog->tables();
         $migrated = in_array(SchemaMigrator::METADATA_TABLE, $tables, true);
         $probe = $migrated
             ? ($this->migrator)()->probe(in_array(LegacyDataCopier::PROGRESS_TABLE, $tables, true) ? LegacyDataCopier::PROGRESS_TABLE : null)
             : ['pending' => true, 'incomplete' => false, 'complete' => false];
+        $status = $this->decide($family, $tables, $migrated, $probe);
+        if ($migrated && in_array($status, [SchemaStatus::OneXBesideCompletedUpgrade, SchemaStatus::RenamedWithoutRecord], true)) {
+            // The list was read before the probe (and may have been read earlier in this request,
+            // before another step renamed the 1.x tables): before telling the owner to remove
+            // tables, read the catalog again once, and decide again with the probe.
+            $catalog->forget();
+            $status = $this->decide($family, $catalog->tables(), $migrated, $probe);
+        }
+
+        return $status;
+    }
+
+    /**
+     * Steps 6 and 7 for these tables and this probe.
+     *
+     * @param list<string>                                          $tables
+     * @param array{pending: bool, incomplete: bool, complete: bool} $probe
+     */
+    private function decide(string $family, array $tables, bool $migrated, array $probe): SchemaStatus
+    {
         if ($family === 'mysql') {
             if ($probe['incomplete']) {
                 return SchemaStatus::Legacy;

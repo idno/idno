@@ -44,7 +44,7 @@ final class UpgradeCommandTest extends TestCase
 
     /** The indexes the classes under Idno/ declare (#[IndexedField]), per collection. */
     private const CORE_INDEXES = [
-        'entities' => ['access', 'admin', 'canonical', 'code', 'email', 'handle', 'queue', 'shorturl', 'slug', 'source_url', 'url'],
+        'entities' => ['access', 'canonical', 'code', 'email', 'handle', 'queue', 'shorturl', 'slug', 'source_url', 'url'],
         'reader' => ['access', 'canonical', 'feed_url', 'shorturl', 'slug', 'url'],
         'site' => ['access', 'canonical', 'domain', 'shorturl', 'slug', 'url'],
     ];
@@ -199,6 +199,38 @@ final class UpgradeCommandTest extends TestCase
         $this->assertStringNotContainsString(\Idno\Upgrade\SchemaGate::CLOSED_MESSAGE, $stderr);
     }
 
+    /**
+     * With the database down (on MySQL a closed port, on SQLite a file in a directory that does not
+     * exist), `idno:upgrade` and `idno:upgrade --status` are never reached: the gate is open for an
+     * unreachable database, so the console boots the legacy application, whose database adapter
+     * prints its database error page on stdout and ends the process with exit 0, as for every other
+     * command. No exception, no trace, no `Schema status` line, nothing created.
+     */
+    public function testWithTheDatabaseDownTheLegacyErrorPageEndsTheRun(): void
+    {
+        if ($this->directory === null) {
+            $socket = stream_socket_server('tcp://127.0.0.1:0');
+            self::assertNotFalse($socket);
+            $port = (int) substr((string) strrchr((string) stream_socket_get_name($socket, false), ':'), 1);
+            fclose($socket);
+            $environment = ['IDNO_DBHOST' => '127.0.0.1', 'IDNO_DBPORT' => (string) $port];
+        } else {
+            $environment = ['IDNO_DBNAME' => $this->directory . '/no-such-directory/site.sqlite'];
+        }
+
+        foreach ([['idno:upgrade'], ['idno:upgrade', '--status']] as $arguments) {
+            [$exit, $stdout, $stderr] = $this->consoleWith($environment, ...$arguments);
+
+            $this->assertSame(0, $exit, implode(' ', $arguments) . "\nstdout: $stdout\nstderr: $stderr");
+            $this->assertStringContainsString('We couldn\'t connect to the database', $stdout, implode(' ', $arguments));
+            $this->assertStringNotContainsString('Schema status', $stdout);
+            foreach (['Exception', 'Stack trace', '#0 '] as $trace) {
+                $this->assertStringNotContainsString($trace, $stdout . $stderr, implode(' ', $arguments));
+            }
+        }
+        $this->assertSame([], $this->catalog()->tables(), 'nothing was created');
+    }
+
     private function connection(): Connection
     {
         self::assertNotNull($this->connection);
@@ -218,6 +250,18 @@ final class UpgradeCommandTest extends TestCase
      */
     private function console(string ...$arguments): array
     {
+        return $this->consoleWith([], ...$arguments);
+    }
+
+    /**
+     * console() with more environment variables.
+     *
+     * @param array<string, string> $environment
+     *
+     * @return array{0: int, 1: string, 2: string} the exit code, stdout and stderr
+     */
+    private function consoleWith(array $environment, string ...$arguments): array
+    {
         $root = dirname(__DIR__, 2);
         $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr -d log_errors=0 '
             . escapeshellarg($root . '/bin/console')
@@ -236,6 +280,7 @@ final class UpgradeCommandTest extends TestCase
                 // Any outbound request goes to a closed local port.
                 'IDNO_PROXY_STRING' => '127.0.0.1:9',
                 'PATH' => (string) getenv('PATH'),
+                ...$environment,
             ],
         );
         $this->assertIsResource($process);

@@ -8,8 +8,8 @@ namespace Idno\Upgrade;
  * A message about the upgrade that may be shown to anyone: the upgrade page and the step endpoint's
  * JSON are served to anonymous visitors while the site is closed. It can only be made from the fixed
  * templates below, whose parameters are safe by construction: table names (kept only when they are
- * names of LegacyDataCopier::LEGACY_TABLES, under their 1.x name or `legacy_`), counts and version
- * numbers. Anything else (a record's uuid, document data, a driver or exception message, a file path,
+ * names of LegacyDataCopier::LEGACY_TABLES, under their 1.x name or `legacy_`, or the fixed `idno_`
+ * names of LegacyDataCopier::MUST_BE_EMPTY), counts and version numbers. Anything else (a record's uuid, document data, a driver or exception message, a file path,
  * a connection detail) is never in one: it is private detail, logged on the `upgrade` channel, stored
  * beside the public message (`error_detail`) and shown by `idno:upgrade` only; the public side of such
  * a failure is stopped().
@@ -20,6 +20,25 @@ final class PublicMessage
 {
     private function __construct(public readonly string $text)
     {
+    }
+
+    /**
+     * The message a schema status carries, the one mapping every entry point uses: the refused states
+     * (SchemaStatus::refusesTheUpgrade()) and Unreachable have one; the others none.
+     *
+     * @param self|null $serverRefusal for UnsupportedServer: what is required and what was found
+     *                                 (SchemaState::refusal()); without it, what is required
+     */
+    public static function forStatus(SchemaStatus $status, ?self $serverRefusal = null): ?self
+    {
+        return match ($status) {
+            SchemaStatus::UnsupportedServer => $serverRefusal ?? self::serverRequirement(),
+            SchemaStatus::LegacyTooOld => self::tooOld(),
+            SchemaStatus::RenamedWithoutRecord => self::renamedWithoutRecord(),
+            SchemaStatus::OneXBesideCompletedUpgrade => self::oneXBesideCompletedUpgrade(),
+            SchemaStatus::Unreachable => self::unreachable(),
+            SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy, SchemaStatus::Current, SchemaStatus::NotApplicable => null,
+        };
     }
 
     /**
@@ -180,6 +199,34 @@ final class PublicMessage
             $one ? 'it' : 'them',
             $one ? 'it is' : 'they are',
         ));
+    }
+
+    /**
+     * A copy is about to start (a 1.x database, no upgrade on record) and tables of the new schema
+     * already hold rows: copying would merge the 1.x site into whatever they hold.
+     *
+     * @param list<string> $tables names of LegacyDataCopier::MUST_BE_EMPTY (any other name is left out)
+     */
+    public static function newTablesNotEmpty(array $tables): self
+    {
+        $names = array_values(array_intersect($tables, LegacyDataCopier::MUST_BE_EMPTY));
+        $one = count($names) === 1;
+
+        return new self(sprintf(
+            'The 1.x tables cannot be copied: %s already %s data, but no upgrade is on record. Nothing was changed. If that data is left over from an earlier upgrade attempt you do not want, back up the database and remove ALL the tables whose names begin with idno_ (not only %s); the upgrade then starts again. If it is a site you use, the 1.x tables (entities, entities_metadata, entities_search, ...) must not be in this database: move them to a database of their own.',
+            $names === [] ? 'tables of the new schema' : implode(', ', $names),
+            $one ? 'holds' : 'hold',
+            $one ? 'this one' : 'these',
+        ));
+    }
+
+    /**
+     * The rename of the 1.x tables waited for them and gave up: something else is using them. Not an
+     * error: the next step tries again.
+     */
+    public static function tablesInUse(): self
+    {
+        return new self('The old tables are in use by something else, such as a database backup or an old Idno process, so they cannot be renamed yet. The upgrade goes on by itself when that has finished.');
     }
 
     /**

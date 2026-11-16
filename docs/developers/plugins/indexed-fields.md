@@ -69,8 +69,10 @@ Idno distinguishes two kinds of declaration.
   browser has no plugin indexes until `php bin/console idno:upgrade` is run or the plugin is disabled
   and enabled again in the admin panel. A plugin's indexes can never keep a site closed.
 
-Indexes are never needed for correctness: every query works without them, only more slowly on a
-large site.
+Every query works without the indexes, only more slowly on a large site, and gives the same
+results as long as every record of the collection holds a single value in each declared field
+(see "What an index changes"): a site upgraded through the browser, whose plugin indexes do not
+exist yet, then answers exactly as one that has them.
 
 **A warning for plugin authors.** An index belongs to the whole collection table, not to your
 plugin's entities: every entity stored in that collection shares it. A field with a declared index
@@ -82,16 +84,28 @@ Creating an index on a large table takes a while, once.
 
 ## What an index changes
 
-An index is never needed for a query to be correct: every query gives the same records with or
-without it, with one exception. **An indexed field matches scalar values only.** A field that
-holds a list or an object (`['a', 'b']`) is matched by any of its values when it has no index;
-once it is indexed, a record whose field holds a list or an object is not found by a query on that
-field at all. Only declare fields that hold a single string, number or boolean.
+**An indexed field matches scalar values only.** A field that holds a list or an object
+(`['a', 'b']`) is matched by any of its values when it has no index; once it is indexed, a record
+whose field holds a list or an object is not found by a query on that field at all. So every query
+gives the same records with and without the index exactly when the declared field holds a single
+string, number or boolean (or nothing) in every record of the collection; that is what a declaration
+promises. Where a record breaks it, queries on that field find the record only until the index
+exists, and two copies of the same data, one with the index and one without, answer differently.
+Only declare fields that hold a single value, and check every class that stores records in the same
+collection: Idno itself does not index `admin`, because users store it as a boolean but access
+groups, in the same collection, store it as a list of user addresses.
+
+Conversely, a field you look up that is NOT declared is served by no index: the lookup reads the
+documents of the types it asks for (about 0.7 seconds per 100,000 entities on MySQL 8). Declare the
+fields your plugin looks records up by.
 
 ## Indexes are never dropped
 
-Idno never drops or changes an index. If you remove a declaration, the index stays (it does no
-harm, beyond the space it takes). If you declare an indexed field again with other options (unique
+Idno never drops or changes an index. If you remove a declaration, the index stays, and so does its
+rule: the field still matches scalar values only on every database that has the index (a development
+database keeps that behaviour until it is recreated). So once a declaration has been released, it
+cannot be withdrawn by deleting the attribute: that needs a schema migration that drops the column
+and its index (a migration of Idno itself: plugins cannot ship one), so choose declarations with care. If you declare an indexed field again with other options (unique
 where it was not, another length), nothing changes: the existing index stays as it is, and the
 difference is logged as a warning when the plugin is enabled.
 

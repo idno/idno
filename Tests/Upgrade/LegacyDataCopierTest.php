@@ -334,10 +334,16 @@ final class LegacyDataCopierTest extends TestCase
         self::assertSame(['source' => 1200, 'copied' => 1201, 'rejected' => 0, 'done' => true], $progress->collections['entities']);
     }
 
+    /**
+     * A `legacy_<name>` that appears beside its 1.x table once the copy has begun still blocks the
+     * rename (the check when the copy starts is not the only one).
+     */
     public function testAnExistingLegacyTableBlocksTheRename(): void
     {
         $fixture = $this->fixture();
         $fixture->insert('entities', ['title' => 'A post']);
+        // One unit of work: the progress rows and the first batch.
+        $this->copier()->step(microtime(true) - 1);
         $fixture->connection->executeStatement('create table legacy_entities (x int)');
 
         $progress = $this->copier()->step(microtime(true) + self::FAR);
@@ -379,6 +385,138 @@ final class LegacyDataCopierTest extends TestCase
         self::assertStringContainsString('without the prefix hold this site', $error);
         self::assertStringNotContainsString('remove them', $error);
         self::assertStringNotContainsString('remove it', $error);
+    }
+
+    /**
+     * A `legacy_<name>` beside its 1.x table when the copy is about to start stops it before any row
+     * is copied (the rename could never be made): the same message as at the rename, nothing written,
+     * on every step.
+     */
+    public function testAnExistingLegacyTableStopsTheCopyBeforeAnyRowIsCopied(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 10);
+        $fixture->connection->executeStatement('create table legacy_versions like versions');
+        $before = $this->rowCounts();
+        $copier = $this->copier();
+
+        foreach ([$copier->step(microtime(true) + self::FAR), $copier->step(microtime(true) + self::FAR), $copier->progress()] as $progress) {
+            self::assertSame(\Idno\Upgrade\PublicMessage::renameBlocked(['versions'])->text, $progress->error);
+            self::assertSame(UpgradeProgress::NOT_STARTED, $progress->phase);
+            self::assertSame(0, $progress->collections['entities']['copied']);
+            self::assertFalse($progress->complete);
+        }
+        self::assertSame($before, $this->rowCounts(), 'nothing was written: no progress row, no copied row');
+
+        // Moved away: the copy starts.
+        $fixture->connection->executeStatement('drop table legacy_versions');
+        $progress = $this->complete($copier);
+        self::assertSame(10, $progress->collections['entities']['copied']);
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function rowsInTheNewTables(): iterable
+    {
+        $document = "'{\"_id\": \"000000000000000000000001\"}'";
+        foreach (['idno_entities', 'idno_reader', 'idno_site'] as $table) {
+            yield $table => [$table, 'insert into ' . $table . " (id, uuid, type, owner, created, publish_status, data, search) values ('000000000000000000000001', 'http://elsewhere.test/view/1', 'status', '', 1700000000, 'published', " . $document . ", '')"];
+        }
+        yield 'idno_settings' => ['idno_settings', "insert into idno_settings (name, value, position) values ('title', '\"A site in use\"', 0)"];
+        yield 'idno_upgrade_rejects' => ['idno_upgrade_rejects', "insert into idno_upgrade_rejects (collection, legacy_uuid, legacy_id, reason, contents) values ('entities', 'http://elsewhere.test/view/1', '1', 'left over', '{}')"];
+    }
+
+    /**
+     * A copy never starts while a table of the new schema holds rows (an earlier upgrade's tables,
+     * one of them missed when they were removed by hand; or a site in use whose database the 1.x
+     * tables were restored into): every 1.x row sharing an `_id` or uuid with one of them would be
+     * rejected and the older copy kept. It stops before anything is written, naming the table, on
+     * every step, and the 1.x tables are untouched.
+     *
+     * @dataProvider rowsInTheNewTables
+     */
+    public function testACopyDoesNotStartWhileATableOfTheNewSchemaHoldsRows(string $table, string $insert): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 10);
+        $fixture->insert('config', ['title' => 'The 1.x site']);
+        $fixture->connection->executeStatement($insert);
+        $before = $this->rowCounts();
+        $oneX = array_values(array_intersect(LegacyDataCopier::LEGACY_TABLES, $this->tables()));
+        $sums = $this->checksums($oneX);
+        $copier = $this->copier();
+
+        foreach ([$copier->step(microtime(true) + self::FAR), $copier->step(microtime(true) + self::FAR), $copier->progress()] as $progress) {
+            self::assertSame(\Idno\Upgrade\PublicMessage::newTablesNotEmpty([$table])->text, $progress->error);
+            self::assertStringContainsString($table . ' already holds data', (string) $progress->error);
+            self::assertStringContainsString('remove ALL the tables whose names begin with idno_', (string) $progress->error);
+            self::assertSame(UpgradeProgress::NOT_STARTED, $progress->phase);
+            self::assertFalse($progress->complete);
+        }
+        self::assertSame($before, $this->rowCounts(), 'nothing was written');
+        self::assertSame($sums, $this->checksums($oneX), 'the 1.x tables are untouched');
+    }
+
+    /**
+     * The check is for a copy that is about to START: a copy that has begun (progress rows, rows
+     * already copied into the new tables) goes on to completion.
+     */
+    public function testACopyThatHasBegunGoesOnWithRowsInTheNewTables(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', LegacyDataCopier::BATCH + 100);
+        $copier = $this->copier();
+
+        $progress = $copier->step(microtime(true) - 1);
+        self::assertNull($progress->error);
+        self::assertSame(LegacyDataCopier::BATCH, $progress->collections['entities']['copied']);
+        self::assertSame(LegacyDataCopier::BATCH, (int) $fixture->connection->fetchOne('select count(*) from idno_entities'));
+
+        $progress = $this->complete($copier);
+        self::assertNull($progress->error);
+        self::assertSame(LegacyDataCopier::BATCH + 100, $progress->collections['entities']['copied']);
+    }
+
+    /**
+     * The rename waits for the 1.x tables at most RENAME_WAIT_SECONDS (the session's
+     * `lock_wait_timeout`, for that statement only): while another session holds them (an open
+     * transaction that has read one, as a backup's does) the step gives up within the bound, reports
+     * the notice, stores no error and renames nothing; once they are free the next step renames and
+     * the upgrade completes.
+     */
+    public function testARenameThatWaitsForTheOneXTablesGivesUpAndTheNextStepRenames(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 10);
+        $copier = $this->copier();
+        $timeout = (string) $fixture->connection->fetchOne('select @@session.lock_wait_timeout');
+        $other = $this->connect();
+        $other->beginTransaction();
+        $other->fetchAllAssociative('select * from entities limit 1');
+
+        foreach ([1, 2] as $attempt) {
+            $started = microtime(true);
+            $progress = $copier->step(microtime(true) + self::FAR);
+            $took = microtime(true) - $started;
+
+            self::assertLessThan(LegacyDataCopier::RENAME_WAIT_SECONDS + 3, $took, 'attempt ' . $attempt . ': bounded');
+            self::assertNull($progress->error, 'attempt ' . $attempt . ': not an error');
+            self::assertSame(\Idno\Upgrade\PublicMessage::tablesInUse()->text, $progress->notice);
+            self::assertFalse($progress->complete);
+            self::assertSame(UpgradeProgress::COPYING, $progress->phase);
+            self::assertContains('entities', $this->tables());
+            self::assertNotContains('legacy_entities', $this->tables(), 'nothing is renamed');
+            self::assertNull($copier->progress()->error, 'nothing is stored as an error');
+            self::assertNull($copier->progress()->notice, 'only the step that waited reports it');
+            self::assertSame($timeout, (string) $fixture->connection->fetchOne('select @@session.lock_wait_timeout'), 'the session\'s timeout is restored');
+        }
+
+        $other->commit();
+        $progress = $this->complete($copier);
+        self::assertNull($progress->notice);
+        self::assertContains('legacy_entities', $this->tables());
+        self::assertSame(10, $progress->collections['entities']['copied']);
     }
 
     /**

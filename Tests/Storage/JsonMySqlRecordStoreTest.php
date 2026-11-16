@@ -147,6 +147,54 @@ final class JsonMySqlRecordStoreTest extends RecordStoreContract
         }
     }
 
+    /**
+     * A document nested deeper than the server's JSON functions accept (counted in nested objects and
+     * arrays, the document itself the first: MySQL 8 accepts 100, MariaDB 10.6 accepts 31, found by
+     * observation) is refused by save(): false, nothing stored, under the connection's own sql_mode
+     * and with sql_mode '' (a server that is not strict), whether or not the collection's table has
+     * generated columns that would refuse it (this one has none). A stored document too deep for
+     * JSON_TABLE would make every query on a document field of its collection fail; a query on a
+     * document field still works afterwards. The deepest document the server accepts is stored and
+     * found.
+     */
+    public function testADocumentTooDeepForTheServerIsRefusedAndQueriesStillWork(): void
+    {
+        $connection = self::$connection;
+        self::assertNotNull($connection);
+        $limit = self::isMariaDb() ? 31 : 100;
+        self::assertSame($limit, (new MySqlDialect())->jsonDepthLimit($connection));
+        // A document of $levels nested objects (itself the first).
+        $document = function (int $levels, string $title): array {
+            $value = 'bottom';
+            for ($i = 2; $i < $levels; ++$i) {
+                $value = ['n' => $value];
+            }
+
+            return ['_id' => $this->newId(), 'title' => $title, 'entity_subtype' => 'Deep', 'deep' => $levels > 1 ? ['n' => $value] : $value];
+        };
+        $mode = (string) $connection->fetchOne('select @@session.sql_mode');
+        $store = $this->store();
+        try {
+            foreach ([$mode, ''] as $sqlMode) {
+                $connection->executeStatement('set session sql_mode = ?', [$sqlMode]);
+                foreach ([$limit + 1, $limit + 20] as $levels) {
+                    $tooDeep = $document($levels, 'too deep');
+
+                    self::assertFalse($store->save('entities', $tooDeep), 'sql_mode "' . $sqlMode . '", ' . $levels . ' levels: refused');
+                    self::assertSame(0, (int) $connection->fetchOne('select count(*) from idno_entities where id = ?', [$tooDeep['_id']]), 'nothing stored');
+                }
+                self::assertSame([], $store->find('entities', Criteria::fromLegacyArray(['entity_subtype' => 'Deep', 'title' => 'too deep']), 10, 0), 'a document-field query works');
+                $deepest = $document($limit, 'deepest');
+                self::assertSame($deepest['_id'], $store->save('entities', $deepest), 'sql_mode "' . $sqlMode . '": ' . $limit . ' levels are accepted');
+                self::assertSame($deepest['deep'], $store->findById('entities', $deepest['_id'])['deep'] ?? null);
+                self::assertSame([$deepest['_id']], array_column($store->find('entities', Criteria::fromLegacyArray(['entity_subtype' => 'Deep', 'title' => 'deepest']), 10, 0), '_id'), 'found by a document field');
+                $store->delete('entities', $deepest['_id']);
+            }
+        } finally {
+            $connection->executeStatement('set session sql_mode = ?', [$mode]);
+        }
+    }
+
     public function testSavingTheSameRecordAgainReturnsItsId(): void
     {
         // The upsert changes no row (MySQL reports 0 affected rows), and the record is there.

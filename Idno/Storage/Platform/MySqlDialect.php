@@ -10,6 +10,7 @@ use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Idno\Storage\Attribute\IndexedField;
+use Idno\Storage\MySqlSemantics;
 
 /**
  * MySQL 8.0 and MariaDB 10.6, over the tables of the schema migrations: `insert ... on duplicate
@@ -26,9 +27,6 @@ final class MySqlDialect implements Dialect
      * character (emoji), as the 1.x schema's document values and search text had.
      */
     public const COLLATION = 'utf8mb4_unicode_520_ci';
-
-    /** Search terms longer than this many bytes use the full-text index. */
-    private const SHORT_SEARCH_BYTES = 5;
 
     /** ER_PARSE_ERROR: also what the boolean-mode full-text parser raises for a term it cannot parse. */
     private const ER_PARSE_ERROR = 1064;
@@ -49,7 +47,7 @@ final class MySqlDialect implements Dialect
     private const MYSQL_JSON_REFUSALS = [3140, 3141, 3157];
 
     /**
-     * MariaDB's: ER_JSON_BAD_CHR (4035) to ER_JSON_DEPTH (4040, deeper than 32 levels), syntax,
+     * MariaDB's: ER_JSON_BAD_CHR (4035) to ER_JSON_DEPTH (4040, 32 nested objects or arrays or more), syntax,
      * escaping and end-of-text errors among them. MySQL uses some of these numbers for other errors,
      * so they count only when the message speaks of JSON.
      */
@@ -65,7 +63,8 @@ final class MySqlDialect implements Dialect
 
     public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
     {
-        if (strlen($term) > self::SHORT_SEARCH_BYTES && !$bypassFulltext) {
+        // Search terms longer than MySqlSemantics::SHORT_SEARCH_BYTES use the full-text index.
+        if (strlen($term) > MySqlSemantics::SHORT_SEARCH_BYTES && !$bypassFulltext) {
             return ['match (' . $column . ') against (?' . ($booleanSearch ? ' in boolean mode' : '') . ')', [$term], $booleanSearch];
         }
 
@@ -244,6 +243,15 @@ final class MySqlDialect implements Dialect
      * A constraint, a lock wait or deadlock, a value the column cannot hold (1292, 1366, 1406), or a
      * document the server's JSON functions refuse (MYSQL_JSON_REFUSALS, MARIADB_JSON_REFUSALS).
      */
+    /**
+     * MySQL 8 accepts 100 nested objects and arrays (ER_JSON_DOCUMENT_TOO_DEEP beyond), MariaDB 10.6
+     * 31 (ER_JSON_DEPTH, "Limit of 32", from 32): observed, and pinned by JsonMySqlRecordStoreTest.
+     */
+    public function jsonDepthLimit(Connection $connection): ?int
+    {
+        return $connection->getDatabasePlatform() instanceof MariaDBPlatform ? 31 : 100;
+    }
+
     public function isRefusedData(DriverException $exception): bool
     {
         $code = $exception->getCode();

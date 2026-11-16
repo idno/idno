@@ -56,10 +56,10 @@ final class SchemaMigrator
 
     /**
      * Whether a migration on disk has not been executed: pending() !== [], answered with ONE
-     * statement (the executed versions, from `idno_migrations`, which must exist: the schema gate
-     * asks this only when the catalog lists it) compared with the migration classes in
-     * Idno/Storage/Migrations/, without doctrine/migrations' machinery. It is asked on every
-     * request.
+     * statement (the executed versions, from `idno_migrations`, which must exist) compared with the
+     * migration classes in Idno/Storage/Migrations/, without doctrine/migrations' machinery. It is
+     * probe()'s `pending` without a progress table (the schema gate asks probe(), which also reads
+     * the upgrade's progress rows in the same statement).
      */
     public function hasPending(): bool
     {

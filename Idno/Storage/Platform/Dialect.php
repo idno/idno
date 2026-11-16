@@ -152,4 +152,12 @@ interface Dialect
      * full table, a missing table, broken SQL) is not about the record and propagates.
      */
     public function isRefusedData(DriverException $exception): bool;
+
+    /**
+     * The deepest document (in nested objects and arrays, the document itself the first) the
+     * engine's JSON functions accept, or null when the engine sets no limit below PHP's own (512).
+     * The store refuses a deeper document before writing it: once stored, it would make every query
+     * on a document field of its collection fail.
+     */
+    public function jsonDepthLimit(Connection $connection): ?int;
 }

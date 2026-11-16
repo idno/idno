@@ -248,7 +248,7 @@ final class EntityAliasesTest extends TestCase
 
             return $fields;
         };
-        self::assertSame($sorted([...$entity, 'actor_uri', 'admin', 'category', 'code', 'email', 'handle', 'queue', 'source_url', 'user_uuid']), $catalog->indexedFields('entities'));
+        self::assertSame($sorted([...$entity, 'actor_uri', 'category', 'code', 'email', 'handle', 'queue', 'source_url', 'user_uuid']), $catalog->indexedFields('entities'));
         self::assertSame($sorted([...$entity, 'feed_url']), $catalog->indexedFields('reader'));
         self::assertSame($sorted([...$entity, 'domain']), $catalog->indexedFields('site'));
         // A real index of the expected name behind every one (information_schema.statistics on

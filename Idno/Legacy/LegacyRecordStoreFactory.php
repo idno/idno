@@ -8,9 +8,8 @@ use Doctrine\DBAL\Connection;
 use Idno\Config\BootConfig;
 use Idno\Core\Idno;
 use Idno\Storage\ConnectionParameters;
+use Idno\Storage\DialectFactory;
 use Idno\Storage\JsonRecordStore;
-use Idno\Storage\Platform\MySqlDialect;
-use Idno\Storage\Platform\SqliteDialect;
 use Idno\Storage\RecordStore;
 use Idno\Storage\SchemaCatalog;
 use Idno\Storage\SettingsRecordStore;
@@ -20,8 +19,8 @@ use Idno\Storage\TypeMap;
  * Builds the container's RecordStore at runtime, when it is first fetched: a SettingsRecordStore
  * (the collection `config` in `idno_settings`) over a JsonRecordStore (every other collection in
  * its table `idno_<collection>`), both on the `database_connection` service, with the dialect of
- * the site's database (from the boot configuration: MySqlDialect for MySQL and MariaDB,
- * SqliteDialect for SQLite), LegacyRecordDefaults, the container's TypeMap (the entities'
+ * the site's database (DialectFactory, from the boot configuration: MySqlDialect for MySQL and
+ * MariaDB, SqliteDialect for SQLite), LegacyRecordDefaults, the container's TypeMap (the entities'
  * aliases) and SchemaCatalog (shared with IndexedFields, which tells it when it creates an index),
  * the legacy quote normaliser for the search text (Language::uncurlQuotes(), as the old backend's
  * saveRecord() applied it) and the site's `boolean_search` / `bypass_fulltext_search` settings,
@@ -66,7 +65,8 @@ final class LegacyRecordStoreFactory
         }
 
         $connection = ($this->connection)();
-        $dialect = $family === 'mysql' ? new MySqlDialect() : new SqliteDialect();
+        // The one mapping from the database to its dialect (the container's Dialect is built by it too).
+        $dialect = (new DialectFactory($this->bootConfig))->create();
         $documents = new JsonRecordStore(
             $connection,
             $dialect,

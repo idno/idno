@@ -27,6 +27,9 @@ namespace Idno\Upgrade;
  *    COMPLETE. "Stopped with an error" is $error !== null in any phase but COMPLETE.
  *  - $noLegacyDatabase: there is nothing to upgrade here: no table of a 1.x database (under its own
  *    name or renamed `legacy_<name>`) and no upgrade begun. step() then does nothing at all.
+ *  - $notice: why the last step could not move on although nothing is wrong, as a PublicMessage's
+ *    text (PublicMessage::tablesInUse(): the rename waited for the 1.x tables and gave up), or null.
+ *    Never an error: the next step tries again. Only the step that waited reports it.
  *
  * A value object, not a container service.
  */
@@ -53,6 +56,7 @@ final class UpgradeProgress
         public readonly bool $noLegacyDatabase = false,
         public readonly ?string $errorDetail = null,
         public readonly array $cursors = [],
+        public readonly ?string $notice = null,
     )
     {
     }

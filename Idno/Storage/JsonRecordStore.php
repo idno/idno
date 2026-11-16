@@ -115,6 +115,13 @@ final class JsonRecordStore implements RecordStore
         if ($data === false) {
             return false;
         }
+        $depthLimit = $this->dialect->jsonDepthLimit($this->connection);
+        if ($depthLimit !== null && self::levels(json_decode($data, true)) > $depthLimit) {
+            // Deeper than the server's JSON functions accept: refused data, before it is written. A
+            // table without generated columns would store it, and every query on a document field
+            // of the collection would then fail.
+            return false;
+        }
 
         $now = time();
         $columns = RecordIndex::columns($record, $now);
@@ -416,13 +423,11 @@ final class JsonRecordStore implements RecordStore
             $criterion instanceof NotIn => ['not in', $criterion->values],
             default => throw new \LogicException('Unknown criterion ' . get_debug_type($criterion) . '.'),
         };
-        $values = array_map(self::bind(...), $operands);
-
         if (isset(self::FIELD_COLUMNS[$criterion->field])) {
-            return $this->columnCondition($criterion->field, $operator, $values, $context);
+            return $this->columnCondition($criterion->field, $operator, array_map(self::bind(...), $operands), $context);
         }
 
-        if ($operator === 'in' && $values === []) {
+        if ($operator === 'in' && $operands === []) {
             return '(1 = 0)';
         }
         // A float is compared as the text of its query value (RecordIndex::floatText()), so it finds itself.
@@ -582,6 +587,24 @@ final class JsonRecordStore implements RecordStore
     /**
      * The operand as the old store bound it: as a string (PDO's conversion), null as NULL.
      */
+    /**
+     * The nesting of a decoded document in objects and arrays (the document itself is 1; a scalar 0).
+     */
+    private static function levels(mixed $value): int
+    {
+        if (!is_array($value)) {
+            return 0;
+        }
+        $deepest = 0;
+        foreach ($value as $item) {
+            if (is_array($item)) {
+                $deepest = max($deepest, self::levels($item));
+            }
+        }
+
+        return 1 + $deepest;
+    }
+
     private static function bind(string|int|float|bool|null $operand): ?string
     {
         return match (true) {

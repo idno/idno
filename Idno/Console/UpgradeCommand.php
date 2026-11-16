@@ -114,14 +114,12 @@ final class UpgradeCommand extends Command
         $output->writeln('Schema status: ' . $status->value);
         // The states the upgrade refuses until someone acts outside Idno: --status prints the same
         // public message as the page and exits 1, as the upgrade itself does (a script can tell
-        // "needs a person" from "fine, or will finish by itself").
-        $refused = match ($status) {
-            SchemaStatus::UnsupportedServer => $this->state->refusal() ?? PublicMessage::serverRequirement(),
-            SchemaStatus::LegacyTooOld => PublicMessage::tooOld(),
-            SchemaStatus::RenamedWithoutRecord => PublicMessage::renamedWithoutRecord(),
-            SchemaStatus::OneXBesideCompletedUpgrade => PublicMessage::oneXBesideCompletedUpgrade(),
-            default => null,
-        };
+        // "needs a person" from "fine, or will finish by itself"). An unreachable database likewise
+        // (in a console process the legacy application normally ends the run first, with its
+        // database error page).
+        $refused = $status->refusesTheUpgrade() || $status === SchemaStatus::Unreachable
+            ? PublicMessage::forStatus($status, $this->state->refusal())
+            : null;
         if ($refused !== null) {
             $errors->writeln($refused->text, OutputInterface::OUTPUT_PLAIN);
 

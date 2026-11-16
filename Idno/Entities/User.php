@@ -15,7 +15,6 @@ namespace Idno\Entities {
     #[\Idno\Storage\Attribute\AsEntity('user')]
     #[\Idno\Storage\Attribute\IndexedField('handle')]
     #[\Idno\Storage\Attribute\IndexedField('email')]
-    #[\Idno\Storage\Attribute\IndexedField('admin')]
     class User extends \Idno\Common\Entity
         implements \Idno\Common\JSONLDSerialisable
     {
