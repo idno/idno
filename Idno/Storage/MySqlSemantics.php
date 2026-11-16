@@ -13,8 +13,10 @@ namespace Idno\Storage;
  *
  *  - datetime(): which literals MySQL accepts for the `created` column, in a form whose plain
  *    string comparison orders them correctly against the stored values;
- *  - fold() and compare(): text comparison as `utf8mb3_general_ci` does it for ASCII (folded to
- *    UPPER case, so `[ \ ] ^ _` and the backtick sort after the letters: 'a_' > 'aZ');
+ *  - fold() and compare(): text comparison as `utf8mb3_general_ci` (MySQL's identifier columns)
+ *    does it for ASCII (folded to UPPER case, so `[ \ ] ^ _` and the backtick sort after the
+ *    letters: 'a_' > 'aZ'). MySQL's indexed values are `utf8mb4_unicode_520_ci`, which orders
+ *    punctuation before the letters; that order is not reproduced here;
  *  - searchMatches(): the search rule of the stores without a full-text index (in memory, SQLite).
  *
  * The known differences from MySQL are listed on InMemoryRecordStore.

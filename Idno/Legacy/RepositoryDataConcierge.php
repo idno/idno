@@ -710,7 +710,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         if ($this->family === 'sqlite') {
             return 'sqlite:' . $config->dbname;
         }
-        $connection_string = 'mysql:host=' . $config->dbhost . ';dbname=' . $config->dbname . ';charset=utf8';
+        $connection_string = 'mysql:host=' . $config->dbhost . ';dbname=' . $config->dbname . ';charset=utf8mb4';
         if (!empty($config->dbport)) {
             $connection_string .= ';port=' . $config->dbport;
         }

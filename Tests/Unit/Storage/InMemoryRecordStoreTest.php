@@ -27,7 +27,8 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - expectLongSearchTermToMatchSubstring (true): there is no full-text index, a long term is
  *    a substring match on each of its words;
  *  - ownsPrivateDatabase (true): the store is private to the test;
- *  - expectFourByteCharactersToBeRejected (false): no utf8mb3 limit, an emoji is stored and indexed;
+ *  - expectTextToSortFoldedToUpperCase (true): text is ordered folded to upper case
+ *    (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci;
  *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
@@ -58,9 +59,9 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         return true;
     }
 
-    protected function expectFourByteCharactersToBeRejected(): bool
+    protected function expectTextToSortFoldedToUpperCase(): bool
     {
-        return false;
+        return true;
     }
 
     protected function expectBooleanModeSearch(): bool

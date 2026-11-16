@@ -31,7 +31,8 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - ownsPrivateDatabase (true);
  *  - expectLongSearchTermToMatchSubstring (true), expectBooleanModeSearch (false): no
  *    full-text index; a long term's words are matched as substrings;
- *  - expectFourByteCharactersToBeRejected (false): SQLite stores any UTF-8.
+ *  - expectTextToSortFoldedToUpperCase (true): the `idno_ci` collation orders text folded to
+ *    upper case (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci.
  */
 final class DbalSqliteRecordStoreTest extends RecordStoreContract
 {
@@ -73,9 +74,9 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
         return true;
     }
 
-    protected function expectFourByteCharactersToBeRejected(): bool
+    protected function expectTextToSortFoldedToUpperCase(): bool
     {
-        return false;
+        return true;
     }
 
     protected function expectBooleanModeSearch(): bool

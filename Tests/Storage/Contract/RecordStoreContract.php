@@ -84,15 +84,28 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether a four-byte UTF-8 character (an emoji) makes a save fail. MySQL: the schema's tables
-     * are `utf8` (utf8mb3, at most three bytes a character) and so is the connection, so strict
-     * MySQL rejects the character in the search text or in a metadata value, the transaction is
-     * rolled back and nothing is stored (the document column is binary and would take it). Stores
-     * without that limit (in memory, SQLite) store and index it: they override this to false.
+     * Whether a four-byte UTF-8 character (an emoji) makes a save fail. No store today: on MySQL
+     * the connection is utf8mb4 and so are the columns that hold the search text and the indexed
+     * values (schema 2026111401), so the character is stored and indexed, as in memory and on
+     * SQLite. A MySQL database whose search and metadata columns are still `utf8` (utf8mb3, before
+     * that upgrade) refuses it in strict mode, the transaction is rolled back and nothing is stored:
+     * a binding on such a database overrides this to true.
      */
     protected function expectFourByteCharactersToBeRejected(): bool
     {
-        return true;
+        return false;
+    }
+
+    /**
+     * Whether text values are ordered as the in-memory store and SQLite order them: folded to upper
+     * case and compared code point by code point (MySqlSemantics::compare()), so `_` (between `Z`
+     * and `a` in ASCII) sorts after every letter. MySQL orders the indexed values by their column's
+     * collation, utf8mb4_unicode_520_ci (the Unicode Collation Algorithm), where punctuation sorts
+     * before every letter. The in-memory and SQLite bindings override this to true.
+     */
+    protected function expectTextToSortFoldedToUpperCase(): bool
+    {
+        return false;
     }
 
     /**
@@ -1357,10 +1370,18 @@ abstract class RecordStoreContract extends TestCase
         $underscore = $this->put($this->r(['slug' => 'a_']));
         $letter = $this->put($this->r(['slug' => 'aZ']));
 
-        // Folded to upper case, '_' (between Z and a in ASCII) sorts after every letter.
-        $this->assertMatches(['slug' => ['$gt' => 'aZ']], [$underscore]);
-        $this->assertMatches(['slug' => ['$lt' => 'a_']], [$letter]);
-        $this->assertMatches(['slug' => ['$gt' => 'a_']], []);
+        if ($this->expectTextToSortFoldedToUpperCase()) {
+            // Folded to upper case, '_' (between Z and a in ASCII) sorts after every letter.
+            $this->assertMatches(['slug' => ['$gt' => 'aZ']], [$underscore]);
+            $this->assertMatches(['slug' => ['$lt' => 'a_']], [$letter]);
+            $this->assertMatches(['slug' => ['$gt' => 'a_']], []);
+        } else {
+            // utf8mb4_unicode_520_ci: '_' sorts before every letter, whatever its case.
+            $this->assertMatches(['slug' => ['$gt' => 'aZ']], []);
+            $this->assertMatches(['slug' => ['$lt' => 'a_']], []);
+            $this->assertMatches(['slug' => ['$gt' => 'a_']], [$letter]);
+            $this->assertMatches(['slug' => ['$lt' => 'aZ']], [$underscore]);
+        }
     }
 
     // ------------------------------------------------- search below the top level

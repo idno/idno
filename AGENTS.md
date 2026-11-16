@@ -65,7 +65,8 @@ composer console -- list
   in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; its
   expectations are the MySQL store's, and the hooks a binding overrides are only where the
   databases really differ: `expectLongSearchTermToMatchSubstring`, `expectBooleanModeSearch`,
-  `expectFourByteCharactersToBeRejected`, `expectTextComparisonToIgnoreCase`); the
+  `expectFourByteCharactersToBeRejected`, `expectTextComparisonToIgnoreCase`,
+  `expectTextToSortFoldedToUpperCase`); the
   SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
   `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against
@@ -92,7 +93,8 @@ composer console -- list
     `known_unittest`, schema `warmup/schemas/mysql/mysql.sql` (as before); the upload directory is
     in the same per-checkout temporary directory. Use it for anything that touches the SQL dialect,
     search (MySQL's full-text index), the schema upgrader (`LegacySchemaUpgrader`) or MySQL's
-    refusals (4-byte characters in `utf8mb3`, error codes): the tests bound to those skip on SQLite
+    refusals (field names over 64 characters, 4-byte characters compared with a `utf8mb3` column,
+    error codes): the tests bound to those skip on SQLite
     and say why. Run the whole suite on MySQL before merging such a change (CI runs SQLite, MySQL
     and MongoDB).
   - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
@@ -115,8 +117,9 @@ composer console -- list
   - On SQLite, these skip, each with its reason: the storage contract against `DbalRecordStore` on
     the rig's MySQL (`DbalMySqlRecordStoreTest`; the contract runs on SQLite in the unit tier,
     `DbalSqliteRecordStoreTest`), and the `RepositoryDataConciergeTest` cases that need MySQL
-    (`requireMysql()`: the old backend's MySQL connection and session-row formats, `utf8mb3` refusals,
-    full-text settings, `database` names that mean MySQL). `EntityRepositoryTest` runs on both. Nothing
+    (`requireMysql()`: the old backend's MySQL connection and session-row formats, MySQL's refusals,
+    full-text settings, the character sets of the schema and its upgrade to utf8mb4, `database`
+    names that mean MySQL). `EntityRepositoryTest` runs on both. Nothing
     else skips (the unreachable-database tests run on both: a closed port on MySQL, a database file
     in a missing directory on SQLite); the characterisation suite runs in full on both.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
@@ -421,8 +424,8 @@ other new code may.
   the service is first fetched, replaces the parameters with `ConnectionParameters::fromLegacyConfig()`
   of the `BootConfig` (plus the `RDS_*` environment variables for `beanstalk-mysql`), so no
   configuration value is compiled into the container. It reproduces the legacy connection
-  exactly: DSN charset `utf8` (MySQL's three-byte utf8mb3, what the schema's tables are; do not
-  change it to utf8mb4 before the schema changes), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
+  exactly: DSN charset `utf8mb4` (the search text and indexed values are utf8mb4 since schema
+  2026111401; see "MySQL schema" under "Database"), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
   `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. On a site whose
   `database` is `sqlite` (`dbname` is the database file's path, or `:memory:`), the factory also
   adds `Idno\Storage\Platform\SqliteConnectionSetup` to the connection's middlewares; a MySQL
@@ -505,8 +508,11 @@ other new code may.
     query is built (the query matches nothing, as on MySQL); lengths are not enforced (a field name
     over 64 characters is stored, MySQL refuses it); table (collection) names ignore case; case
     folding is full Unicode (`mb_strtoupper`), so it equates strings MySQL's `utf8mb3_general_ci`
-    keeps apart (`'ß'` = `'SS'`, `'ﬁ'` = `'FI'`, `'ǅ'` = `'Ǆ'`): uuids `straße` and `STRASSE` clash
-    on SQLite and not on MySQL; in `site` and `config`, whose `_id` is not unique, the foreign keys
+    (the identifier columns) keeps apart (`'ß'` = `'SS'`, `'ﬁ'` = `'FI'`, `'ǅ'` = `'Ǆ'`): uuids
+    `straße` and `STRASSE` clash on SQLite and not on MySQL; text is ordered folded to upper case,
+    where MySQL orders the indexed values by `utf8mb4_unicode_520_ci` (punctuation such as `_`
+    sorts before the letters on MySQL and after them on SQLite: the contract hook
+    `expectTextToSortFoldedToUpperCase`); in `site` and `config`, whose `_id` is not unique, the foreign keys
     of `_search`/`_metadata` are triggers (SQLite cannot reference a non-unique column) that cascade
     as InnoDB does. The upsert names its conflict target (`_id` where a unique index is on `_id`
     alone: `entities`, `reader`, the `_search` tables; else the primary key, `uuid`: `site`,
@@ -611,8 +617,8 @@ other new code may.
       MySQL's error for each. `RecordStore` does not tell the adapter why it found nothing, and its
       interface stays free of logging policy;
     - DIFFERENCE (refused saves): `saveRecord()`/`saveObject()` return the id only when the record was stored. A
-      save the database refuses (a 4-byte character in a field on the utf8mb3 metadata table, a field
-      name over 64 characters, ...) returns false and stores nothing (an update leaves the previous
+      save the database refuses (a field name over 64 characters, a 4-byte character in a field on a
+      metadata table still in utf8mb3, ...) returns false and stores nothing (an update leaves the previous
       version). The old backend returned the id of a save it had rolled back when a metadata row
       failed, so `Entity::save()` reported success and fired `saved`/`updated` (and federation) for a
       record that was not stored; now it returns false and fires neither;
@@ -772,6 +778,37 @@ other new code may.
   schema for a site); it is to become a supported production database in a later release. See the SQLite
   bullet under "Kernel and services" for the limits of the database file.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
+
+#### MySQL schema
+
+- Each collection (`site`, `config`, `entities`, `reader`) is three tables: the main
+  table with the JSON document in `contents`, `<collection>_search` with the text for
+  full-text search, and `<collection>_metadata` with one row per field (cut to 255
+  bytes) for queries.
+- `warmup/schemas/mysql/mysql.sql` creates a new installation. The dated files beside it
+  are upgrades: `Idno\Legacy\LegacySchemaUpgrader::upgrade()` runs on every connection (when
+  the `db()` adapter is built) and applies, in order, each file listed in
+  `LegacySchemaUpgrader::UPGRADES` that is newer than the `schema` row of the `versions` table.
+  To change the schema, add a dated file that ends by recording its date in `versions`, add
+  the date to `UPGRADES`, make the same change in `mysql.sql` (including its version line),
+  and set the version row of `warmup/schemas/sqlite/sqlite.sql` to the same date.
+  `RepositoryDataConciergeTest` checks that an upgraded database and a new one agree.
+- An upgrade that fails is logged and tried again from the top on the next connection,
+  and MySQL can't roll back an `ALTER TABLE`, so every statement in an upgrade file
+  must be safe to apply to a table it has already changed.
+- Character sets: the connection is `utf8mb4`. The columns that hold text written by
+  people, `<collection>_search.search` and `<collection>_metadata.value`, are `utf8mb4`
+  with the `utf8mb4_unicode_520_ci` collation (`general_ci` and `unicode_ci` treat all
+  emoji as equal). Every other column is `utf8`, which MySQL reads as `utf8mb3`, and
+  holds ASCII only: identifiers, URLs, class and field names. Don't put free text in
+  them: a 4-byte character can't be stored there, and comparing one to such a column
+  is an SQL error (1267). `DbalRecordStore` lets that error propagate (it is not one of
+  `MySqlDialect::isRejectedOperand()`'s); the `db()` adapter logs it and returns its failure
+  value, as the old backend did (pinned in `RepositoryDataConciergeTest`). In-memory and on
+  SQLite such a query simply finds nothing.
+- Index keys must fit 767 bytes, the limit of the InnoDB row formats that older
+  installations still have: at most 191 characters of a `utf8mb4` column, 255 of a
+  `utf8` one.
 
 ## Content Plugins
 

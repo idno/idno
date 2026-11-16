@@ -31,10 +31,12 @@ use Idno\Storage\Criterion\Search;
  *    string. A null operand is NULL: no comparison with it is ever true.
  *  - Text comparison ignores case (MySQL's default collation), for field names as well as
  *    values; `$lt` and `$gt` compare as text ('10' is less than '5'). Text is folded to UPPER
- *    case before it is compared, as utf8mb3_general_ci does, so the ASCII characters between Z
- *    and a (`[ \ ] ^ _` and the backtick) sort after the letters ('a_' is greater than 'aZ').
- *    Not emulated: accent insensitivity ('e' = 'é'), trailing-space padding, and the collation
- *    weights of non-ASCII characters.
+ *    case before it is compared, as utf8mb3_general_ci (MySQL's identifier columns) does, so the
+ *    ASCII characters between Z and a (`[ \ ] ^ _` and the backtick) sort after the letters
+ *    ('a_' is greater than 'aZ'). MySQL's indexed values are utf8mb4_unicode_520_ci, which sorts
+ *    punctuation before the letters: that order is not emulated (the contract hook
+ *    expectTextToSortFoldedToUpperCase). Not emulated either: accent insensitivity ('e' = 'é'),
+ *    trailing-space padding, and the collation weights of non-ASCII characters.
  *  - The fields uuid, _id, entity_subtype, owner, publish_status and created are compared
  *    against the record's columns; every other field against its metadata rows. Each criterion
  *    is evaluated independently against the rows, so on a list field two criteria may be

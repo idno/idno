@@ -231,7 +231,5 @@ CREATE TABLE IF NOT EXISTS "session" (
   PRIMARY KEY ("session_id")
 );
 
--- The version a MySQL database reaches when this schema is installed: mysql.sql is 2020120201,
--- and the MySQL backend then applies 2020120301 (the site_search table, here above, and setting
--- siteid on existing rows, of which a new database has none). There is no SQLite upgrade path.
-REPLACE INTO "versions" VALUES ('schema', '2020120301');
+-- The version of mysql.sql, which this schema matches. There is no SQLite upgrade path.
+REPLACE INTO "versions" VALUES ('schema', '2026111401');

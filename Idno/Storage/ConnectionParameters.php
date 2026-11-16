@@ -10,8 +10,9 @@ namespace Idno\Storage;
  * The parameters reproduce the connection the old SQL backend opened (Idno\Data\MySQL's
  * buildConnectionString() and createPDOConnection(), since removed; and the
  * `beanstalk-mysql` mapping in Idno\Legacy\LegacyServiceFactory::db()): the same host, port,
- * database, user and password, the DSN charset `utf8` (MySQL's three-byte utf8mb3, which the
- * schema's tables use) and the same PDO attributes. Nothing is "improved": the connection must
+ * database, user and password, the DSN charset `utf8mb4` (UTF-8 in full: the schema's search text
+ * and indexed values are utf8mb4, so a four-byte character such as an emoji reaches them intact)
+ * and the same PDO attributes. Nothing is "improved": the connection must
  * behave exactly like the legacy one, session variables included.
  *
  * This class is a static helper, not a container service (see config/services.php).
@@ -84,7 +85,7 @@ final class ConnectionParameters
             'dbname' => self::text($config['dbname'] ?? null),
             'user' => self::text($config['dbuser'] ?? null),
             'password' => self::text($config['dbpass'] ?? null),
-            'charset' => 'utf8',
+            'charset' => 'utf8mb4',
             'driverOptions' => [
                 \Pdo\Mysql::ATTR_LOCAL_INFILE => 1,
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,

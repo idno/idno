@@ -31,7 +31,8 @@ use Tests\Storage\Contract\RecordStoreContract;
  * deleteAll() stays skipped (ownsPrivateDatabase() is false) and the contract cleans up by marker.
  *
  * It overrides no expectation hook: the contract's defaults are this binding's values (MySQL:
- * whole-word boolean-mode full-text search, utf8mb3 refusing four-byte characters).
+ * whole-word boolean-mode full-text search, four-byte characters stored in the utf8mb4 search
+ * and metadata columns, text ordered by utf8mb4_unicode_520_ci).
  */
 final class DbalMySqlRecordStoreTest extends RecordStoreContract
 {
@@ -217,20 +218,21 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
     {
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results';
         // What a connection of the legacy backend (Idno\Data\MySQL, since removed) answered on
-        // the rig's MySQL 8, observed on the commit before its removal.
+        // the rig's MySQL 8, observed on the commit before its removal, with the character set its
+        // DSN asked for last, utf8mb4 (observed on the rig's MySQL 8).
         $legacy = [
             'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
             'SYSTEM',
-            'utf8mb3',
-            'utf8mb3_general_ci',
-            'utf8mb3',
-            'utf8mb3',
+            'utf8mb4',
+            'utf8mb4_general_ci',
+            'utf8mb4',
+            'utf8mb4',
         ];
 
         $dbal = self::connection()->fetchNumeric($query);
 
         $this->assertSame($legacy, $dbal);
-        $this->assertSame(['utf8mb3', 'utf8mb3_general_ci'], [$dbal[2], $dbal[3]]);
+        $this->assertSame(['utf8mb4', 'utf8mb4_general_ci'], [$dbal[2], $dbal[3]]);
         $native = self::connection()->getNativeConnection();
         $this->assertSame(1, $native->getAttribute(\PDO::ATTR_EMULATE_PREPARES) ? 1 : 0, 'prepared statements are emulated, as legacy');
     }
@@ -253,7 +255,8 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
 
     public function testAFailedSaveRollsBackAndLeavesTheConnectionUsable(): void
     {
-        $record = $this->r(['note' => "\u{1F600}"]);
+        // `name` is varchar(64): the metadata row is refused after the main and search rows are written.
+        $record = $this->r(['note' => 'refused', str_repeat('n', 65) => 'v']);
         $this->track($record['_id']);
         $connection = self::connection();
         $level = $connection->getTransactionNestingLevel();

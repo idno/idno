@@ -58,7 +58,7 @@ final class ConnectionParametersTest extends TestCase
         // ...and from RDS_DB_NAME when it is empty.
         $this->assertSame('rds_db', ConnectionParameters::fromLegacyConfig($config + ['dbname' => ''], $server)['dbname']);
         $this->assertSame(self::LEGACY_OPTIONS, $params['driverOptions']);
-        $this->assertSame('utf8', $params['charset']);
+        $this->assertSame('utf8mb4', $params['charset']);
     }
 
     public function testSqlite(): void
@@ -132,7 +132,7 @@ final class ConnectionParametersTest extends TestCase
 
     public function testCharsetAndOptionsMatchLegacy(): void
     {
-        // 'mysql:host=db.example.test;dbname=idno_site;charset=utf8;port=3306', user, password,
+        // 'mysql:host=db.example.test;dbname=idno_site;charset=utf8mb4;port=3306', user, password,
         // [PDO::MYSQL_ATTR_LOCAL_INFILE => 1], then ATTR_ERRMODE => ERRMODE_EXCEPTION.
         $config = [
             'database' => 'MySQL',
@@ -151,7 +151,7 @@ final class ConnectionParametersTest extends TestCase
             'dbname' => 'idno_site',
             'user' => 'idno',
             'password' => 'p@ss;word',
-            'charset' => 'utf8',
+            'charset' => 'utf8mb4',
             'driverOptions' => self::LEGACY_OPTIONS,
         ], ConnectionParameters::fromLegacyConfig($config, ['RDS_HOSTNAME' => 'not used for mysql']));
     }

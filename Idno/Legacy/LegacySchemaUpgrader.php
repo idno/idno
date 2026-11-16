@@ -37,6 +37,7 @@ final class LegacySchemaUpgrader
         2020111301,
         2020120201,
         2020120301,
+        2026111401, // Search text and indexed values to utf8mb4
     ];
 
     /**

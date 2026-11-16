@@ -86,7 +86,7 @@ final class SqliteSchemaTest extends TestCase
 
         $this->assertSame('1', (string) $this->connection->fetchOne('select count(*) from entities'));
         $this->assertSame('1', (string) $this->connection->fetchOne('select count(*) from entities_search'));
-        $this->assertSame([['schema', '2020120301']], $this->connection->fetchAllNumeric('select label, value from versions'));
+        $this->assertSame([['schema', '2026111401']], $this->connection->fetchAllNumeric('select label, value from versions'));
     }
 
     public function testEveryTableColumnKeyAndIndexOfTheMysqlSchemaExists(): void
