@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Idno\Storage;
 
 /**
- * What a SQL store derives from a record to make it queryable: the same three things today's
- * Idno\Data\MySQL::saveRecord() writes next to the document, reproduced exactly.
+ * What a SQL store derives from a record to make it queryable: the same three things the old
+ * backend's Idno\Data\MySQL::saveRecord() (removed in phase 2a) wrote next to the document, reproduced exactly.
  *
  *  - metadataRows(): the rows of `<collection>_metadata`, which equality, $in, $not, $lt and $gt
  *    on document fields run against;

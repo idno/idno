@@ -16,11 +16,10 @@ use Tests\Storage\Contract\EntityQueryContract;
 
 /**
  * The entity query contract against EntityRepository over the container's RecordStore (a
- * DbalRecordStore on the rig's database, MySQL or SQLite) with LegacyAccessContext: the same expectations as
- * LegacyEntityQueryTest, except two deliberate differences, each behind a hook: find() returns entities
- * only (expectUnhydratableRecordAsFalse()), and a caller condition on `access` or `entity_subtype` that
- * parses to nothing leaves the viewer's read groups or the types in force
- * (expectAnEmptyCallerConditionToRemoveTheFilter(), ruling P14).
+ * DbalRecordStore on the rig's database, MySQL or SQLite) with LegacyAccessContext: the legacy
+ * getObjects()/countObjects()/getObject() expectations, with the deliberate differences the contract
+ * pins (find() returns entities only, ruling P15; a caller condition on `access` or `entity_subtype`
+ * that parses to nothing leaves the viewer's read groups or the types in force, ruling P14).
  *
  * Plus what only the repository has: save(), delete() and hydrate().
  */
@@ -34,24 +33,6 @@ final class EntityRepositoryTest extends EntityQueryContract
         $this->assertInstanceOf(RecordStore::class, $store);
 
         return $this->repository ??= new EntityRepository($store, new LegacyAccessContext());
-    }
-
-    /**
-     * EntityRepository reproduces MySQL's semantics on SQLite too (MySqlSemantics, the SQLite dialect).
-     */
-    protected static function driverFamilies(): array
-    {
-        return ['mysql', 'sqlite'];
-    }
-
-    protected function expectUnhydratableRecordAsFalse(): bool
-    {
-        return false;
-    }
-
-    protected function expectAnEmptyCallerConditionToRemoveTheFilter(): bool
-    {
-        return false;
     }
 
     protected function findEntities(array $types, array $search, int $limit = 10, int $offset = 0, array $readGroups = []): array

@@ -24,7 +24,7 @@ use Idno\Storage\Platform\Dialect;
  * the JSON document in `contents`), `<collection>_metadata` (one name/value row per indexed
  * value) and `<collection>_search` (the search text).
  *
- * It runs the statements Idno\Data\MySQL runs today, with what is engine-specific in the Dialect
+ * It runs the statements the old backend, Idno\Data\MySQL (removed in phase 2a), ran, with what is engine-specific in the Dialect
  * (MySqlDialect, SqliteDialect):
  *
  *  - save(): in one transaction, an upsert of the main row, an upsert of the search row, the

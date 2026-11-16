@@ -51,21 +51,69 @@ final class SapiGuardTest extends TestCase
         return [$output, is_dir($this->cacheDir)];
     }
 
+    /** The directories whose PHP scripts (files that declare no class) are found by scripts(). */
+    private const SCRIPT_DIRECTORIES = ['Tests/Kernel', 'Tests/rig', 'Tests/Storage'];
+
+    /**
+     * The PHP scripts (files that declare no class, interface or trait) in SCRIPT_DIRECTORIES, from
+     * the filesystem, so a new helper cannot be missed: those guarded for PHP's built-in web server
+     * (`PHP_SAPI !== 'cli-server'`) are routers, every other one is a command-line script (and
+     * fails testCommandLineScriptExitsBeforeBootingUnderCgi if it has no guard).
+     *
+     * @return array{cli: list<string>, server: list<string>} paths relative to the project root
+     */
+    private static function scripts(): array
+    {
+        $root = dirname(__DIR__, 2);
+        $found = ['cli' => [], 'server' => []];
+        foreach (self::SCRIPT_DIRECTORIES as $directory) {
+            foreach (glob($root . '/' . $directory . '/*.php') ?: [] as $file) {
+                $source = (string) file_get_contents($file);
+                if (preg_match('/^\s*(final\s+|abstract\s+|readonly\s+)*(class|interface|trait|enum)\s/m', $source)) {
+                    continue;
+                }
+                $found[str_contains($source, "PHP_SAPI !== 'cli-server'") ? 'server' : 'cli'][] = $directory . '/' . basename($file);
+            }
+        }
+
+        return $found;
+    }
+
     /**
      * @return array<string, array{0: string}>
      */
     public static function commandLineScripts(): array
     {
-        return [
+        $scripts = [
             'bin/console' => ['bin/console'],
             'idno.php' => ['idno.php'],
             'known.php' => ['known.php'],
-            'boot_routes.php' => ['Tests/Kernel/boot_routes.php'],
-            'boot_cache_dir.php' => ['Tests/Kernel/boot_cache_dir.php'],
             '_bootstrap.php' => ['Tests/_bootstrap.php'],
-            'rig SQLite schema loader' => ['Tests/rig/sqlite_schema.php'],
-            'SQLite concurrency writer' => ['Tests/Storage/sqlite_writer.php'],
         ];
+        foreach (self::scripts()['cli'] as $script) {
+            $scripts[$script] = [$script];
+        }
+
+        return $scripts;
+    }
+
+    /**
+     * The derived lists hold the helpers known today (a guard against a broken scan that finds
+     * nothing), and every boot_*.php helper is in one of them.
+     */
+    public function testTheScriptListsAreDerivedFromTheFilesystem(): void
+    {
+        $scripts = self::scripts();
+        foreach (['Tests/Kernel/boot_routes.php', 'Tests/Kernel/boot_cache_dir.php', 'Tests/Kernel/boot_db_backend.php', 'Tests/rig/sqlite_schema.php', 'Tests/Storage/sqlite_writer.php'] as $script) {
+            $this->assertContains($script, $scripts['cli']);
+        }
+        foreach (['Tests/rig/router.php', 'Tests/Kernel/legacy_response_server.php', 'Tests/Kernel/boot_db_unreachable.php'] as $script) {
+            $this->assertContains($script, $scripts['server']);
+        }
+        $this->assertNotContains('Tests/Kernel/SapiGuardTest.php', [...$scripts['cli'], ...$scripts['server']], 'test classes are not scripts');
+        foreach (glob(dirname(__DIR__, 2) . '/Tests/Kernel/boot_*.php') ?: [] as $file) {
+            $this->assertContains('Tests/Kernel/' . basename($file), [...$scripts['cli'], ...$scripts['server']]);
+        }
     }
 
     /**
@@ -91,11 +139,12 @@ final class SapiGuardTest extends TestCase
      */
     public static function builtInServerScripts(): array
     {
-        return [
-            'rig router' => ['Tests/rig/router.php'],
-            'CI router' => ['Tests/build/router.php'],
-            'legacy response server' => ['Tests/Kernel/legacy_response_server.php'],
-        ];
+        $scripts = ['Tests/build/router.php' => ['Tests/build/router.php']];
+        foreach (self::scripts()['server'] as $script) {
+            $scripts[$script] = [$script];
+        }
+
+        return $scripts;
     }
 
     /**

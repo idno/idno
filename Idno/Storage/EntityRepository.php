@@ -12,8 +12,8 @@ use Psr\Log\NullLogger;
 
 /**
  * Entities (legacy Idno\Common\Entity objects) on a RecordStore, with the legacy access rules: what
- * Idno\Data\AbstractSQL::getObjects() / countObjects() and Idno\Core\DataConcierge::getObject(),
- * rowToEntity() and saveObject() do today on MySQL, as pinned by Tests/Storage/Contract/EntityQueryContract.
+ * the old backend's Idno\Data\AbstractSQL::getObjects() / countObjects() (removed in phase 2a) and
+ * Idno\Core\DataConcierge::getObject(), rowToEntity() and saveObject() did on MySQL, as pinned by Tests/Storage/Contract/EntityQueryContract.
  *
  * find() and count():
  *  - types: one included class is an equality on `entity_subtype` (any exclusions are then dropped);

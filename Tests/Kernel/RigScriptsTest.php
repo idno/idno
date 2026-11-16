@@ -23,8 +23,12 @@ final class RigScriptsTest extends TestCase
 
     private string $root = '';
 
+    /** The web server port of this test's scripts (IDNO_RIG_PORT), picked once per test. */
+    private int $port = 0;
+
     protected function setUp(): void
     {
+        $this->port = self::freePort();
         $this->root = (string) realpath(sys_get_temp_dir()) . '/idno-rig-test-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/Tests/rig', 0777, true);
         mkdir($this->root . '/bin');
@@ -78,7 +82,7 @@ final class RigScriptsTest extends TestCase
     private function runScript(string $script, string ...$args): array
     {
         $command = 'PATH=' . escapeshellarg($this->root . '/bin:' . (string) getenv('PATH')) . ' '
-            . 'IDNO_RIG_PORT=' . self::freePort() . ' '
+            . 'IDNO_RIG_PORT=' . $this->port . ' '
             . escapeshellarg($this->root . '/Tests/rig/' . $script);
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);

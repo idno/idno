@@ -31,9 +31,6 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - ownsPrivateDatabase (true);
  *  - expectLongSearchTermToMatchSubstring (true), expectBooleanModeSearch (false): ruling P8, no
  *    full-text index; a long term's words are matched as substrings;
- *  - expectArrayInSearchFieldsToRaise, expectArrayBodyToRaise (false): ruling P5;
- *  - expectFailedQueryCountToFail (false): ruling P6;
- *  - expectMidCharacterCutToLoseTheRecord, expectRejectedMetadataToReportSuccess (false): ruling P7;
  *  - expectFourByteCharactersToBeRejected (false): SQLite stores any UTF-8.
  */
 final class DbalSqliteRecordStoreTest extends RecordStoreContract
@@ -76,32 +73,7 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
         return true;
     }
 
-    protected function expectArrayInSearchFieldsToRaise(): bool
-    {
-        return false;
-    }
-
-    protected function expectArrayBodyToRaise(): bool
-    {
-        return false;
-    }
-
-    protected function expectFailedQueryCountToFail(): bool
-    {
-        return false;
-    }
-
-    protected function expectMidCharacterCutToLoseTheRecord(): bool
-    {
-        return false;
-    }
-
     protected function expectFourByteCharactersToBeRejected(): bool
-    {
-        return false;
-    }
-
-    protected function expectRejectedMetadataToReportSuccess(): bool
     {
         return false;
     }

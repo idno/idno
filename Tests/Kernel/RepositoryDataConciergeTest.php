@@ -33,9 +33,10 @@ use Tests\Unit\Storage\SqliteTestDatabase;
 final class RepositoryDataConciergeTest extends IdnoTestCase
 {
     /**
-     * Every public method of Idno\Data\MySQL (with those it inherits from AbstractSQL, DataConcierge
-     * and Component), captured from the class on the commit before Task 7, with its parameters
-     * (name => default, or no default when required) and whether it is static.
+     * Every public method of the old SQL backend, Idno\Data\MySQL (with those it inherits from
+     * AbstractSQL, DataConcierge and Component), captured from the class on the commit before Task 7,
+     * with its parameters (name => default, or no default when required) and whether it is static.
+     * The class was removed in Task 9; this list is what it had (checked against it until then).
      */
     private const OLD_BACKEND_METHODS = [
         'build_where_from_array' => [['params', 'variables', 'metadata_joins', 'non_md_variables', 'clause' => 'and', 'collection' => 'entities'], false],
@@ -195,17 +196,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
     }
 
-    public function testTheListOfOldMethodsIsComplete(): void
-    {
-        if (!class_exists(\Idno\Data\MySQL::class)) {
-            $this->markTestSkipped('The old backend has been deleted; the literal list above is what it had.');
-        }
-        $names = array_map(static fn (\ReflectionMethod $m): string => $m->getName(), (new \ReflectionClass(\Idno\Data\MySQL::class))->getMethods(\ReflectionMethod::IS_PUBLIC));
-        $names = array_values(array_diff($names, ['__construct']));
-        sort($names);
-        $this->assertSame(array_keys(self::OLD_BACKEND_METHODS), $names);
-    }
-
     public function testGetClientReturnsNativePdo(): void
     {
         $client = Idno::site()->db()->getClient();
@@ -219,20 +209,35 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * The shared connection has the session the legacy backend's own connection had (since db() is
-     * the adapter, DbalMySqlRecordStoreTest::testTheSessionMatchesTheLegacyConnection compares the
-     * shared connection with itself; this compares it with a legacy backend built for the test).
+     * The shared connection has the session and the PDO attributes the legacy backend's own
+     * connection had: what a connection of Idno\Data\MySQL (removed in Task 9) answered on the rig's
+     * MySQL 8, observed on the commit before its removal.
      */
     public function testTheConnectionMatchesTheLegacyBackendsConnection(): void
     {
-        $this->requireMysql('it compares the shared connection\'s MySQL session with a connection of the old backend (Idno\\Data\\MySQL).');
+        $this->requireMysql('it compares the shared connection\'s MySQL session with what a connection of the old MySQL backend had.');
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results, @@session.autocommit';
-        $legacy = (new \Idno\Data\MySQL())->getClient();
-        $this->assertNotSame($legacy, Idno::site()->db()->getClient());
+        $legacy = [
+            'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
+            'SYSTEM',
+            'utf8mb3',
+            'utf8mb3_general_ci',
+            'utf8mb3',
+            'utf8mb3',
+            1,
+        ];
+        $legacyAttributes = [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_EMULATE_PREPARES => true,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_BOTH,
+            \PDO::ATTR_CASE => \PDO::CASE_NATURAL,
+            \PDO::ATTR_ORACLE_NULLS => \PDO::NULL_NATURAL,
+            \PDO::ATTR_STRINGIFY_FETCHES => false,
+        ];
 
-        $this->assertSame($legacy->query($query)->fetch(\PDO::FETCH_NUM), Idno::site()->db()->getClient()->query($query)->fetch(\PDO::FETCH_NUM));
-        foreach ([\PDO::ATTR_ERRMODE, \PDO::ATTR_EMULATE_PREPARES, \PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::ATTR_CASE, \PDO::ATTR_ORACLE_NULLS, \PDO::ATTR_STRINGIFY_FETCHES] as $attribute) {
-            $this->assertSame($legacy->getAttribute($attribute), Idno::site()->db()->getClient()->getAttribute($attribute), 'PDO attribute ' . $attribute);
+        $this->assertSame($legacy, Idno::site()->db()->getClient()->query($query)->fetch(\PDO::FETCH_NUM));
+        foreach ($legacyAttributes as $attribute => $value) {
+            $this->assertSame($value, Idno::site()->db()->getClient()->getAttribute($attribute), 'PDO attribute ' . $attribute);
         }
     }
 
@@ -289,22 +294,17 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      * Ruling P7 (I1a): a save the database refuses returns false and stores nothing. The value is a
      * 4-byte character in a document field: the JSON document escapes it, so the main row and the
      * search row are written, and the rig's utf8mb3 metadata table refuses it.
-     * OBSERVED on the old backend: it returns the id (set before the metadata inserts) although it
-     * rolled the save back, and nothing is stored.
+     * (The old backend returned the id, set before the metadata inserts, although it rolled the
+     * save back and stored nothing; observed before Task 7, no longer testable since Task 9.)
      */
     public function testARefusedSaveReturnsFalseAndStoresNothing(): void
     {
-        $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores; it also runs the old backend.');
+        $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores.');
         $db = Idno::site()->db();
         $marker = 't7-' . bin2hex(random_bytes(6));
         $refused = ['t7marker' => $marker, 't7note' => "a seal \u{1F9AD}", 'access' => 'PUBLIC', 'created' => 1_700_000_000];
 
-        $legacy = new \Idno\Data\MySQL();
         $this->captureLog();
-        $legacyId = $legacy->saveRecord('entities', $refused);
-        $this->assertIsString($legacyId, 'OBSERVED: the old backend returns the id of the save it rolled back');
-        $this->assertFalse($legacy->getRecord($legacyId), 'OBSERVED: and stored nothing');
-
         $this->assertFalse($db->saveRecord('entities', $refused));
         $this->assertSame(0, $db->countRecords(['t7marker' => $marker]));
 
@@ -381,11 +381,14 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
                 $fired[] = $name;
             }
         };
-        $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_000);
         $dispatcher = (new \ReflectionProperty(\Idno\Core\EventDispatcher::class, 'dispatcher'))->getValue(Idno::site()->events());
         $dispatcher->addListener('saved', $listener);
         $dispatcher->addListener('updated', $listener);
         try {
+            $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_000);
+            $this->assertSame(['saved'], $fired, 'the control: the listeners see a successful save');
+            $fired = [];
+
             $clash = new Status();
             $clash->setOwner($this->user());
             $clash->body = 'Clashing ' . $marker;
@@ -463,7 +466,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * M6: a `database` name that is no class gets the adapter on MySQL (componentFactory() fell back
-     * to Idno\Data\MySQL).
+     * to the old MySQL backend, removed in Task 9).
      */
     public function testDbFallsBackToTheAdapterOnMysqlForANameThatIsNoClass(): void
     {
@@ -472,12 +475,41 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * The `database` values sites have been configured with keep working now that the old SQL backend
+     * (Idno\Data\MySQL, which componentFactory() built or fell back to) is gone: every MySQL name,
+     * the old backend's own class name (no class now: the fallback, MySQL), a name that is no class,
+     * and a loadable plugin backend class, each booted in a fresh process. (MongoDB names: see
+     * testMongoConfigStillSelectsTheMongoBackend, which needs no MongoDB server.)
+     */
+    public function testLegacyDriverNamesStillResolve(): void
+    {
+        $this->requireMysql('the MySQL names connect to the rig\'s MySQL server in a subprocess.');
+        $config = Idno::site()->config();
+        $rds = [
+            'RDS_HOSTNAME' => (string) $config->dbhost,
+            'RDS_PORT' => (string) $config->dbport,
+            'RDS_USERNAME' => (string) $config->dbuser,
+            'RDS_PASSWORD' => (string) $config->dbpass,
+            'RDS_DB_NAME' => (string) $config->dbname,
+        ];
+        $adapterOnMysql = ['class' => RepositoryDataConcierge::class, 'family' => 'mysql'];
+        foreach (['MySQL', 'mysql', ' MYSQL ', 'Idno\\Data\\MySQL', '\\Idno\\Data\\MySQL', 'NoSuchBackend'] as $database) {
+            $this->assertSame($adapterOnMysql, $this->bootWithDatabase($database), $database);
+        }
+        $this->assertSame($adapterOnMysql, $this->bootWithDatabase('beanstalk-mysql', $rds), 'beanstalk-mysql');
+        $this->assertSame(['class' => FixtureDataBackend::class, 'family' => 'other'], $this->bootWithDatabase(FixtureDataBackend::class));
+        $this->assertFalse(class_exists('Idno\\Data\\MySQL') || class_exists('Idno\\Data\\AbstractSQL'), 'the old SQL backend is gone');
+    }
+
+    /**
+     * @param array<string, string> $env more environment variables for the subprocess
+     *
      * @return array<string, string>
      */
-    private function bootWithDatabase(string $database): array
+    private function bootWithDatabase(string $database, array $env = []): array
     {
         $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr ' . escapeshellarg(__DIR__ . '/boot_db_backend.php');
-        [$exit, $stdout, $stderr] = self::runProcess($command, ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089', 'IDNO_DATABASE' => $database, 'IDNO_PROXY_STRING' => '127.0.0.1:9']);
+        [$exit, $stdout, $stderr] = self::runProcess($command, ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089', 'IDNO_DATABASE' => $database, 'IDNO_PROXY_STRING' => '127.0.0.1:9'] + $env);
         $lines = self::lines($stdout);
         $decoded = json_decode((string) end($lines), true);
         $this->assertIsArray($decoded, "boot_db_backend.php did not print JSON (exit $exit).\nstdout: $stdout\nstderr: $stderr");
@@ -758,13 +790,13 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * A user logged in before the deploy stays logged in: a session row written by the old backend
-     * (Idno\Data\MySQL::handleSession(), in a subprocess) is read by the adapter's handler when the
+     * A user logged in before the deploy stays logged in: a session row as the old backend wrote it
+     * (Idno\Data\MySQL::handleSession(), removed in Task 9) is read by the adapter's handler when the
      * site serves the next request with that cookie.
      */
     public function testASessionWrittenByTheOldBackendIsReadByTheAdapter(): void
     {
-        $this->requireMysql('the session is written by the old MySQL backend (Idno\\Data\\MySQL), in a subprocess.');
+        $this->requireMysql('the session row is in the format the old MySQL backend wrote on MySQL.');
         $user = $this->user();
         $this->assertSame(403, $this->get('account/settings/')['status'], 'anonymous visitors have no account settings');
 
@@ -781,6 +813,74 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         } finally {
             $this->deleteSession($sessionId);
         }
+    }
+
+    /**
+     * Ruling P17: a site whose `sessions_storage` names the removed old backend (Idno\Data\MySQL, with
+     * or without a leading backslash) keeps its database sessions: the db() service's handler (the
+     * `session` table, the same handler and options) on the shared connection, even with
+     * `sessions_database` off, and a session row the old backend wrote is still read. Before Task 9 the
+     * setting built a second connection (Idno\Data\MySQL) whose handler replaced the adapter's; any
+     * other `sessions_storage` value, and `sessions_database` alone, behave as before. Each case boots
+     * in a fresh process.
+     */
+    public function testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions(): void
+    {
+        $mysql = ConnectionParameters::driverFamily(Idno::container()->get(\Idno\Config\BootConfig::class)->all()) === 'mysql';
+        $uuid = $this->user()->getUUID();
+        $database = ['save_handler' => 'user', 'shared_lock' => $mysql ? true : null];
+        $files = ['save_handler' => 'files', 'shared_lock' => null];
+        $cases = [
+            'the old backend, sessions_database off' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'Idno\\Data\\MySQL'], $database],
+            'the old backend with a leading backslash' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => '\\Idno\\Data\\MySQL'], $database],
+            'the old backend, sessions_database on' => [['IDNO_SESSIONS_STORAGE' => 'Idno\\Data\\MySQL'], $database],
+            'sessions_database on, nothing else' => [[], $database],
+            'sessions_database off, nothing else' => [['IDNO_SESSIONS_DATABASE' => '0'], $files],
+            'sessions_database off, a class that does not exist' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'No\\Such\\Handler'], $files],
+            'sessions_database off, a class that is no session storage' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'stdClass'], $files],
+        ];
+        foreach ($cases as $case => [$env, $expected]) {
+            $sessionId = $this->legacySession($uuid);
+            $sessions = [$sessionId];
+            try {
+                $result = $this->bootWithSessionSettings($env, $sessionId);
+                $sessions[] = (string) $result['session_id'];
+                $this->assertSame($expected['save_handler'], $result['save_handler'], $case);
+                $this->assertSame($expected['shared_lock'], $result['shared_lock'], $case . ': the advisory lock is the shared connection\'s');
+                if ($expected['save_handler'] === 'user') {
+                    $this->assertSame($sessionId, $result['session_id'], $case);
+                    $this->assertSame($uuid, $result['read'], $case . ': the row the old backend wrote is read');
+                    $this->assertTrue($result['row'], $case . ': the session is written to the `session` table');
+                } else {
+                    $this->assertNull($result['read'], $case);
+                    $this->assertFalse($result['row'], $case . ': nothing is written to the `session` table');
+                }
+            } finally {
+                foreach (array_unique($sessions) as $id) {
+                    $this->deleteSession($id);
+                }
+            }
+        }
+    }
+
+    /**
+     * Runs Tests/Kernel/boot_session_storage.php with the given environment and session cookie.
+     *
+     * @param array<string, string> $env
+     *
+     * @return array<string, mixed>
+     */
+    private function bootWithSessionSettings(array $env, string $sessionId): array
+    {
+        $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr '
+            . escapeshellarg(__DIR__ . '/boot_session_storage.php') . ' '
+            . escapeshellarg((string) Idno::site()->config()->sessionname) . ' ' . escapeshellarg($sessionId);
+        [$exit, $stdout, $stderr] = self::runProcess($command, ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089', 'IDNO_PROXY_STRING' => '127.0.0.1:9'] + $env);
+        $lines = self::lines($stdout);
+        $decoded = json_decode((string) end($lines), true);
+        $this->assertIsArray($decoded, "boot_session_storage.php did not print JSON (exit $exit).\nstdout: $stdout\nstderr: $stderr");
+
+        return $decoded;
     }
 
     /**
@@ -1087,18 +1187,21 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Runs Tests/Kernel/boot_legacy_session.php: the old backend writes a session for the user.
+     * Writes a session for the user as the old backend's handler did, and returns its id. The row is
+     * the one Idno\Data\MySQL::handleSession() (a PdoSessionHandler with advisory locks) wrote for a
+     * session holding only `user_uuid`, observed on the commit before Task 9: a 32-character
+     * hexadecimal id, the PHP-serialised session (`user_uuid|s:<length>:"<uuid>";`), the time of the
+     * write in `session_time` and that time plus the session lifetime (604800 seconds on the rig) in
+     * `session_lifetime`.
      */
     private function legacySession(string $userUuid): string
     {
-        $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d display_errors=stderr '
-            . escapeshellarg(__DIR__ . '/boot_legacy_session.php') . ' ' . escapeshellarg($userUuid);
-        [$exit, $stdout, $stderr] = self::runProcess($command, ['IDNO_DOMAIN' => '127.0.0.1', 'IDNO_PORT' => '8089']);
-        $decoded = json_decode((string) trim($stdout), true);
-        $this->assertIsArray($decoded, "boot_legacy_session.php did not print JSON (exit $exit).\nstdout: $stdout\nstderr: $stderr");
-        $this->assertSame(\Idno\Data\MySQL::class, $decoded['writer']);
+        $sessionId = bin2hex(random_bytes(16));
+        $time = time();
+        $statement = Idno::site()->db()->getClient()->prepare('insert into session (session_id, session_value, session_lifetime, session_time) values (?, ?, ?, ?)');
+        $statement->execute([$sessionId, 'user_uuid|s:' . strlen($userUuid) . ':"' . $userUuid . '";', $time + 604800, $time]);
 
-        return (string) $decoded['session_id'];
+        return $sessionId;
     }
 
     /**

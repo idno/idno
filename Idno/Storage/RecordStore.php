@@ -8,7 +8,7 @@ namespace Idno\Storage;
  * Persistence of records (the JSON documents behind entities, reader items, configuration and
  * so on), grouped in named collections.
  *
- * The semantics are those of today's MySQL backend (Idno\Data\MySQL), odd corners included,
+ * The semantics are those of the old MySQL backend (Idno\Data\MySQL, removed in phase 2a), odd corners included,
  * as pinned by Tests/Storage/Contract/RecordStoreContract. A collection name is reduced to
  * letters, digits and underscores; a name that is not a known collection makes writes fail
  * (false) and reads find nothing, it never reaches another collection.

@@ -26,6 +26,80 @@ jobs:
       - name: Run phpcs
         run: vendor/bin/phpcs -n
 
+  unit:
+    # The dependency-free unit tier (Tests/Unit/, phpunit.unit.xml): nothing but PHP and Composer's
+    # autoloader, so no services, no configuration and no web server.
+    name: Unit tier (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: >-
+            curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
+            session, simplexml, openssl, gettext, mongodb
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run the unit tier
+        run: composer test:unit
+
+  phpunit-sqlite:
+    # The whole suite on SQLite, through the local test rig exactly as a developer runs it
+    # (docs/developers/testing.md): `composer test:up` writes configuration/config.ini, creates the
+    # database file and starts PHP's built-in web server on http://127.0.0.1:8089/; `composer test`
+    # runs PHPUnit against it. No service containers and no Docker.
+    name: PHPUnit (PHP ${{ matrix.php }} / sqlite)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: >-
+            curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
+            session, simplexml, openssl, gettext, mongodb
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: Start the test rig (SQLite)
+        run: composer test:up
+
+      - name: Run PHPUnit
+        run: composer test
+
+      - name: Show web server log on failure
+        if: failure()
+        run: tail -n 200 Tests/rig/.server.log 2>/dev/null || true
+
+      - name: Stop the test rig
+        if: always()
+        run: composer test:down
+
   phpunit:
     name: PHPUnit (PHP ${{ matrix.php }} / ${{ matrix.db }})
     runs-on: ubuntu-latest

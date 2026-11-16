@@ -11,11 +11,12 @@ use PHPUnit\Framework\TestCase;
 /**
  * Backend-independent contract for record storage.
  *
- * Every expectation here describes what today's MySQL backend (Idno\Data\MySQL)
- * does, odd corners included; other bindings must reproduce it. Where a
- * backend may legitimately differ, the expectation is routed through a
- * protected method whose default is today's MySQL value, so a binding
- * overrides the expectation rather than weakening the test.
+ * Every expectation here describes what the MySQL store (DbalRecordStore with MySqlDialect)
+ * does, odd corners included: the behaviour of the legacy MySQL backend this contract was first
+ * proven against (removed in phase 2a), except where a ruling changed it (P5, P6, P7: the new
+ * behaviour is pinned here). Other bindings must reproduce it. Where a backend may legitimately
+ * differ, the expectation is routed through a protected method whose default is the MySQL
+ * store's value, so a binding overrides the expectation rather than weakening the test.
  *
  * The queries in the tests are written as the legacy search arrays (readable, and the form
  * today's callers use); criteria() turns them into the Criteria the RecordStore takes.
@@ -47,7 +48,7 @@ abstract class RecordStoreContract extends TestCase
     abstract protected function store(): RecordStore;
 
     /**
-     * Generates a record id. Bindings without the legacy application override this.
+     * Generates a record id.
      */
     protected function newId(): string
     {
@@ -81,49 +82,6 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether saving a record whose tags, title, description or handle is an ARRAY raises.
-     * Legacy: the search-text builder concatenates the array, PHP warns "Array to string
-     * conversion" and the test error handler turns it into an exception. By ruling (P5)
-     * the new implementations save the record, put the word `Array` into the search text
-     * and raise nothing: they override this to false.
-     */
-    protected function expectArrayInSearchFieldsToRaise(): bool
-    {
-        return true;
-    }
-
-    /**
-     * Whether saving a record whose body is an ARRAY raises (legacy: strip_tags() TypeError).
-     */
-    protected function expectArrayBodyToRaise(): bool
-    {
-        return true;
-    }
-
-    /**
-     * Whether a value whose 255th byte falls in the middle of a multibyte character loses the
-     * record. Legacy: substr() cuts the character in half, MySQL rejects the invalid string, the
-     * transaction is rolled back and saveRecord() still returns the id (a data-loss bug that is
-     * deliberately not pinned). By ruling (P7) the new implementations cut on a character
-     * boundary and store the record: they override this to false.
-     */
-    protected function expectMidCharacterCutToLoseTheRecord(): bool
-    {
-        return true;
-    }
-
-    /**
-     * Whether count() of a query the backend cannot run fails. Legacy: invalid SQL (the MongoDB
-     * list form of $or, a `$search` below the top level) or a rejected value (a `created`
-     * operand that is not a datetime): countRecords() returns false (the binding throws). By
-     * ruling (P6) the new implementations match nothing: count() is 0, and they override this to false.
-     */
-    protected function expectFailedQueryCountToFail(): bool
-    {
-        return true;
-    }
-
-    /**
      * Whether a four-byte UTF-8 character (an emoji) makes a save fail. MySQL: the schema's tables
      * are `utf8` (utf8mb3, at most three bytes a character) and so is the connection, so strict
      * MySQL rejects the character in the search text or in a metadata value, the transaction is
@@ -136,22 +94,10 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether a save whose METADATA rows the database rejects still returns the id. Legacy:
-     * saveRecord() sets its return value after the search row and before the metadata rows, so a
-     * rejected metadata value rolls the transaction back and the id is returned anyway (the
-     * data-loss bug of the mid-character cut, deliberately not pinned). By ruling (P7) the new
-     * implementations return false whenever the transaction did not commit: they override this to false.
-     */
-    protected function expectRejectedMetadataToReportSuccess(): bool
-    {
-        return true;
-    }
-
-    /**
      * Whether a search term of more than 5 bytes is a MySQL boolean-mode full-text query: its
      * operators apply (`+hello -world` excludes records with "world"), and a term the boolean
      * parser cannot parse (`abc@def.com`, `hello-`, ...) fails the query (error 1064), which the
-     * legacy backend reports as no records (count per expectFailedQueryCountToFail()). Backends
+     * store reports as no records (count 0, ruling P6). Backends
      * without full-text search (in memory, SQLite) match the words as substrings (ruling P8),
      * where operators are plain characters and every term can run: they override this to false.
      */
@@ -161,8 +107,9 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * The site id a record gets when it is saved without one (legacy: the uuid of
-     * Idno::site()->site_details(), which is null when the site has no Site entity).
+     * The site id a record gets when it is saved without one: what the binding's RecordDefaults
+     * give (the bindings build FixedRecordDefaults with this value; on a site, LegacyRecordDefaults
+     * give the uuid of Idno::site()->site_details(), null when the site has no Site entity).
      */
     protected function currentSiteId(): ?string
     {
@@ -602,21 +549,11 @@ abstract class RecordStoreContract extends TestCase
         // The MongoDB list-of-conditions form is not understood: it compiles to
         // invalid SQL, the error is logged, and find() answers with an empty list
         // (not a match-everything). count() fails; by ruling the new implementations
-        // match nothing and count 0 (hook expectFailedQueryCountToFail()).
+        // match nothing and count 0 (ruling P6).
         $this->assertSame([], $this->ids(['$or' => [['slug' => 'a'], ['slug' => 'b']]]));
         $this->assertNotEmpty($this->ids([]), 'the records exist; only the malformed $or query fails');
         $malformed = ['$or' => [['slug' => 'a'], ['slug' => 'b']], self::MARKER_FIELD => $this->marker];
-        if ($this->expectFailedQueryCountToFail()) {
-            $failed = false;
-            try {
-                $this->store()->count('entities', $this->criteria($malformed));
-            } catch (\Throwable) {
-                $failed = true;
-            }
-            $this->assertTrue($failed, 'count() with a malformed $or fails');
-        } else {
-            $this->assertSame(0, $this->store()->count('entities', $this->criteria($malformed)));
-        }
+        $this->assertSame(0, $this->store()->count('entities', $this->criteria($malformed)));
     }
 
     public function testTwoConditionsOnDifferentFieldsAreAnded(): void
@@ -927,21 +864,10 @@ abstract class RecordStoreContract extends TestCase
         foreach (['tags', 'title', 'description', 'handle'] as $field) {
             $record = $this->r([$field => ['x', 'y']]);
             $this->track($record['_id']);
-            if ($this->expectArrayInSearchFieldsToRaise()) {
-                $raised = false;
-                try {
-                    $this->store()->save('entities', $record);
-                } catch (\Throwable) {
-                    $raised = true;
-                }
-                $this->assertTrue($raised, $field);
-                $this->assertNull($this->store()->findById('entities', $record['_id']), $field);
-            } else {
-                $this->assertSame($record['_id'], $this->store()->save('entities', $record), $field);
-                // PHP's own string conversion of an array: the word "Array" is searchable.
-                $this->assertMatches(['$search' => ['array']], [$record], $field);
-                $this->store()->delete('entities', $record['_id']);
-            }
+            $this->assertSame($record['_id'], $this->store()->save('entities', $record), $field);
+            // PHP's own string conversion of an array: the word "Array" is searchable.
+            $this->assertMatches(['$search' => ['array']], [$record], $field);
+            $this->store()->delete('entities', $record['_id']);
         }
     }
 
@@ -949,23 +875,12 @@ abstract class RecordStoreContract extends TestCase
     {
         $record = $this->r(['body' => ['x', 'y']]);
         $this->track($record['_id']);
-        if ($this->expectArrayBodyToRaise()) {
-            $raised = false;
-            try {
-                $this->store()->save('entities', $record);
-            } catch (\Throwable) {
-                $raised = true;
-            }
-            $this->assertTrue($raised);
-            $this->assertNull($this->store()->findById('entities', $record['_id']));
-        } else {
-            $this->assertSame($record['_id'], $this->store()->save('entities', $record));
-            // Stored and indexed like any list (its elements are findable)...
-            $this->assertMatches(['body' => 'x'], [$record]);
-            // ...but the body adds nothing to the search text (not even the word "Array").
-            $this->assertMatches(['$search' => ['array']], []);
-            $this->assertMatches(['$search' => ['x']], []);
-        }
+        $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+        // Stored and indexed like any list (its elements are findable)...
+        $this->assertMatches(['body' => 'x'], [$record]);
+        // ...but the body adds nothing to the search text (not even the word "Array").
+        $this->assertMatches(['$search' => ['array']], []);
+        $this->assertMatches(['$search' => ['x']], []);
     }
 
     // ---------------------------------------------- bytes, not characters
@@ -984,13 +899,9 @@ abstract class RecordStoreContract extends TestCase
 
     public function testAValueCutInTheMiddleOfAMultibyteCharacterIsStoredAndIndexedUpToTheCharacterBefore(): void
     {
-        // Legacy: 200 times 'é' is 400 bytes; the cut at byte 255 lands inside the 128th
-        // character, MySQL rejects the half character, the record is NOT stored, and
-        // saveRecord() still returns the id. That data loss is deliberately not pinned.
-        if ($this->expectMidCharacterCutToLoseTheRecord()) {
-            $this->markTestSkipped('The legacy backend loses a record whose indexed value is cut in the middle of a character (not pinned).');
-        }
-
+        // 200 times 'é' is 400 bytes; the cut at byte 255 lands inside the 128th character.
+        // Ruling P7: the index is cut on a character boundary and the record is stored (the
+        // legacy backend cut the character in half, MySQL rejected it, and the record was lost).
         $value = str_repeat('é', 200);
         $record = $this->put($this->r(['note' => $value]));
 
@@ -1217,8 +1128,8 @@ abstract class RecordStoreContract extends TestCase
 
         // MySQL rejects a bare integer as a TIMESTAMP ("Incorrect TIMESTAMP value");
         // the error is logged and find() answers with an empty list, not with the
-        // records that a numeric comparison would find. (count() is not asserted here: legacy
-        // fails it, the in-memory store counts 0.)
+        // records that a numeric comparison would find. (count() is not asserted here; it is 0,
+        // ruling P6, as testCreatedRejectsTheLiteralsMysqlRejects pins.)
         $this->assertSame([], $this->ids(['created' => ['$lt' => self::BASE_TIME + 1000]]));
         $this->assertSame([], $this->ids(['created' => ['$gt' => self::BASE_TIME]]));
         // Positive control: the datetime string form finds the record.
@@ -1398,7 +1309,7 @@ abstract class RecordStoreContract extends TestCase
 
     /**
      * Literals MySQL rejects ("Incorrect TIMESTAMP value", error 1525) for a `created` operand:
-     * the query fails, which the legacy backend reports as no records.
+     * the query fails, which the store reports as no records (count 0, ruling P6).
      *
      * @return array<string, array{string|int|float|bool}>
      */
@@ -1433,17 +1344,7 @@ abstract class RecordStoreContract extends TestCase
         foreach ($queries as $query) {
             $this->assertSame([], $this->ids($query), json_encode($query));
             $this->assertNotEmpty($this->ids([]), 'the records exist');
-            if ($this->expectFailedQueryCountToFail()) {
-                $failed = false;
-                try {
-                    $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
-                } catch (\Throwable) {
-                    $failed = true;
-                }
-                $this->assertTrue($failed, 'count() fails for ' . json_encode($query));
-            } else {
-                $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), json_encode($query));
-            }
+            $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), json_encode($query));
         }
     }
 
@@ -1472,17 +1373,7 @@ abstract class RecordStoreContract extends TestCase
         // fails (find gives [], count fails; the new stores match nothing, count 0).
         $query = ['$or' => ['$search' => ['abc'], 'slug' => 'x']];
         $this->assertSame([], $this->ids($query));
-        if ($this->expectFailedQueryCountToFail()) {
-            $failed = false;
-            try {
-                $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
-            } catch (\Throwable) {
-                $failed = true;
-            }
-            $this->assertTrue($failed, 'count() fails');
-        } else {
-            $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])));
-        }
+        $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])));
     }
 
     // ------------------------------------------------ four-byte characters (Task 4)
@@ -1515,10 +1406,6 @@ abstract class RecordStoreContract extends TestCase
 
     public function testAFourByteCharacterInAnIndexedFieldIsRejectedOrStored(): void
     {
-        if ($this->expectFourByteCharactersToBeRejected() && $this->expectRejectedMetadataToReportSuccess()) {
-            $this->markTestSkipped('The legacy backend returns the id of a record whose metadata row was rejected and not stored (not pinned).');
-        }
-
         // `note` is not part of the search text: only its metadata row holds the character.
         $original = $this->put($this->r(['note' => 'plain']));
         $update = $original;
@@ -1578,17 +1465,7 @@ abstract class RecordStoreContract extends TestCase
         }
         $this->assertSame([], $this->ids($query), $term);
         $this->assertNotEmpty($this->ids([]), 'the records exist');
-        if ($this->expectFailedQueryCountToFail()) {
-            $failed = false;
-            try {
-                $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker]));
-            } catch (\Throwable) {
-                $failed = true;
-            }
-            $this->assertTrue($failed, 'count() fails for ' . $term);
-        } else {
-            $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), $term);
-        }
+        $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])), $term);
     }
 
     public function testABooleanSearchTermTheParserAcceptsAppliesItsOperators(): void

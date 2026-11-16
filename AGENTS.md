@@ -59,18 +59,19 @@ composer console -- list
   bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
   Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
   **Everything else** (`composer test`) needs the rig, in either mode (see below): kernel tests (`Tests/Kernel`),
-  the storage contract bound to MySQL (`Tests/Storage`: against the legacy backend,
-  `LegacyMySqlRecordStoreTest`, which constructs `Idno\Data\MySQL` itself since `db()` is no longer
-  one, and against `DbalRecordStore`, `DbalMySqlRecordStoreTest`, which
-  also tests the DBAL connection service; the contract itself,
+  the storage contract bound to the rig's MySQL (`Tests/Storage/DbalMySqlRecordStoreTest`: `DbalRecordStore`
+  with `MySqlDialect` on the `database_connection` service, which it also tests; the contract itself,
   `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and also runs against the
-  in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; the
+  in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; its
+  expectations are the MySQL store's, and the hooks a binding overrides are only where the
+  databases really differ: `expectLongSearchTermToMatchSubstring`, `expectBooleanModeSearch`,
+  `expectFourByteCharactersToBeRejected`, `expectTextComparisonToIgnoreCase`); the
   SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
-  `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against the legacy backend's
-  `getObjects()`/`countObjects()`/`getObject()` in `LegacyEntityQueryTest` (also on an
-  `Idno\Data\MySQL` it constructs, with `db()`'s ignore-access flag copied to it; MySQL only) and against
-  `EntityRepository` in `EntityRepositoryTest` (MySQL and SQLite); the storage services are tested in
+  `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against
+  `EntityRepository` in `EntityRepositoryTest` (MySQL and SQLite; both contracts were first proven
+  against the old SQL backend, `Idno\Data\MySQL`, removed in phase 2a, and pin its behaviour as
+  literals, with the deliberate differences of the rulings); the storage services are tested in
   `StorageServicesTest`, and `EntityRepository::count()`'s criteria in the unit tier,
   `Tests/Unit/Storage/EntityRepositoryCriteriaTest`; the `db()` adapter in
   `Tests/Kernel/RepositoryDataConciergeTest`), the black-box characterisation suite
@@ -90,10 +91,10 @@ composer console -- list
   - **MySQL** (`composer test:up:mysql`): MySQL 8 in Docker on 127.0.0.1:33306, database
     `known_unittest`, schema `warmup/schemas/mysql/mysql.sql` (as before); the upload directory is
     in the same per-checkout temporary directory. Use it for anything that touches the SQL dialect,
-    search (MySQL's full-text index), the schema upgrader (`LegacySchemaUpgrader`), MySQL's
-    refusals (4-byte characters in `utf8mb3`, error codes) or the legacy MySQL backend: the tests
-    bound to those skip on SQLite and say why. Run the whole suite on MySQL before merging such a
-    change (CI runs MySQL and MongoDB, not SQLite).
+    search (MySQL's full-text index), the schema upgrader (`LegacySchemaUpgrader`) or MySQL's
+    refusals (4-byte characters in `utf8mb3`, error codes): the tests bound to those skip on SQLite
+    and say why. Run the whole suite on MySQL before merging such a change (CI runs SQLite, MySQL
+    and MongoDB).
   - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
     database). `composer test:down` stops whichever is running (it is safe when nothing is), deletes
     the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
@@ -111,24 +112,29 @@ composer console -- list
     rig writes the file when there is none and replaces one that carries the marker (that is how the
     mode switches); it never touches one without the marker (a developer's own): `up.sh` exits 1 and
     says so, before starting or stopping anything.
-  - On SQLite, these skip, each with its reason: the storage contract against the legacy MySQL
-    backend and against `DbalRecordStore` on the rig's MySQL (`LegacyMySqlRecordStoreTest`,
-    `DbalMySqlRecordStoreTest`; the contract runs on SQLite in the unit tier, `DbalSqliteRecordStoreTest`),
-    the entity query contract against the legacy backend (`LegacyEntityQueryTest`; `EntityRepositoryTest`
-    runs on both, `EntityQueryContract::driverFamilies()`), and the `RepositoryDataConciergeTest` cases
-    that need MySQL (`requireMysql()`: the old backend, `utf8mb3` refusals, full-text settings, a
-    `database` name that means MySQL). Nothing else skips (the unreachable-database tests run on
-    both: a closed port on MySQL, a database file in a missing directory on SQLite); the characterisation suite runs in full on both.
+  - On SQLite, these skip, each with its reason: the storage contract against `DbalRecordStore` on
+    the rig's MySQL (`DbalMySqlRecordStoreTest`; the contract runs on SQLite in the unit tier,
+    `DbalSqliteRecordStoreTest`), and the `RepositoryDataConciergeTest` cases that need MySQL
+    (`requireMysql()`: the old backend's MySQL connection and session-row formats, `utf8mb3` refusals,
+    full-text settings, `database` names that mean MySQL). `EntityRepositoryTest` runs on both. Nothing
+    else skips (the unreachable-database tests run on both: a closed port on MySQL, a database file
+    in a missing directory on SQLite); the characterisation suite runs in full on both.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
-- CI does not use the rig: it copies `Tests/build/config_mysql.ini` (or `config_default.ini` for the
-  MongoDB jobs) to `configuration/config.ini` and serves the site at `http://localhost/` with
-  `php -S localhost:80` and `Tests/build/router.php`, on a fresh database. Tests must not assume a
+- CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
+  (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
+  (`composer test:up`, then `composer test`; no service containers, no Docker); and the MySQL and
+  MongoDB jobs, which do not use the rig: they copy `Tests/build/config_mysql.ini` (or
+  `config_default.ini` for MongoDB) to `configuration/config.ini` and serve the site at
+  `http://localhost/` with `php -S localhost:80` and `Tests/build/router.php`, on a fresh database,
+  and run bare `vendor/bin/phpunit`. Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
   from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
   `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_*.ini` in step
-  (`Tests/Kernel/RigScriptsTest` checks the rig's two and the two CI uses, `config_mysql.ini` and
-  `config_default.ini`).
+  (`Tests/Kernel/RigScriptsTest` checks the rig's two and the two CI copies, `config_mysql.ini` and
+  `config_default.ini`; `config_pgsql.ini` and `.travis.yml` are stale and unused). Every test that
+  touches the database runs on MySQL and SQLite and either supports MongoDB or skips on it, saying
+  why (the storage-bound classes key their skips on `ConnectionParameters::driverFamily()`).
 
 ## Architecture
 
@@ -150,14 +156,13 @@ Idno/
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
-  Data/                        Legacy database backends: Mongo.php (a MongoDB site's db()); MySQL.php and
-                               AbstractSQL.php are no longer db() (on an SQL site that is
-                               Idno\Legacy\RepositoryDataConcierge); only a `sessions_storage` setting naming
-                               Idno\Data\MySQL still builds one (see the db() bullet); scheduled for deletion
+  Data/                        The legacy MongoDB backend, Mongo.php (a MongoDB site's db()); on an SQL site
+                               db() is Idno\Legacy\RepositoryDataConcierge (the old SQL backend that was here
+                               was removed in phase 2a, see the db() bullet)
   Storage/                     The storage interface (modern style): the RecordStore interface; the query
                                model (Criteria and Criterion/*, value objects parsed from the legacy search
                                arrays); RecordIndex (the metadata rows, search text and columns an SQL store
-                               derives from a record, exactly as MySQL::saveRecord() does); RecordDefaults
+                               derives from a record, exactly as the old backend's MySQL::saveRecord() did); RecordDefaults
                                (what a store fills in: _id, uuid, siteid); InMemoryRecordStore, the reference
                                implementation the storage contract also holds to MySQL's behaviour;
                                MySqlSemantics (the rules MySQL applies by itself, in PHP, shared by the
@@ -507,7 +512,7 @@ other new code may.
 - The storage services, public, all built at runtime when first fetched: `Idno\Storage\RecordStore`
   (a `DbalRecordStore` built by `Idno\Legacy\LegacyRecordStoreFactory`: on the `database_connection`
   service, `MySqlDialect` for a MySQL site and `SqliteDialect` on the same connection for an SQLite
-  site, `Idno\Legacy\LegacyRecordDefaults` (what `MySQL::saveRecord()` fills in), the legacy quote
+  site, `Idno\Legacy\LegacyRecordDefaults` (what the old backend's `saveRecord()` filled in), the legacy quote
   normaliser, and the site's `boolean_search` / `bypass_fulltext_search`, read from the legacy config
   each time a search condition is built, as the legacy backend did (`DbalRecordStore` takes each as a
   bool or a closure); on a MongoDB or `other` site it throws a `\LogicException` without touching the
@@ -524,26 +529,33 @@ other new code may.
   `LegacyServiceFactory::db()`: on a MongoDB site `Idno\Data\Mongo`, exactly as before; on a site whose
   `database` names a loadable backend class, that class (`componentFactory()`, as before); on a MySQL
   (`mysql`, `beanstalk-mysql`, or a name that is no loadable class) or SQLite site
-  `Idno\Legacy\RepositoryDataConcierge`, the adapter that serves the old SQL backend's public API
-  (`Idno\Data\MySQL` / `AbstractSQL`: same method names, parameters, defaults, return and failure
-  values, except `build_where_from_array()`, which nothing outside that backend called) from the
+  `Idno\Legacy\RepositoryDataConcierge`, the adapter that serves the public API of the old SQL backend
+  (removed in phase 2a: same method names, parameters, defaults, return and failure values, as
+  listed in `RepositoryDataConciergeTest::OLD_BACKEND_METHODS`, except `build_where_from_array()`,
+  which nothing outside that backend called) from the
   storage layer: records through the `RecordStore` service, `getObjects()`/`countObjects()`/`getObject()`
   through the `EntityRepository` service; `rowToEntity()`, `saveObject()` and `getAnyObject()` are
   `DataConcierge`'s. It holds no SQL: the schema upgrade and `getVersions()` are in
-  `Idno\Legacy\LegacySchemaUpgrader` (`MySQL::checkAndUpgradeSchema()` moved unchanged; a no-op on
-  SQLite), `optimize()`, `exportRecords()` and the connection check of `reconnectIfNeeded()` in
+  `Idno\Legacy\LegacySchemaUpgrader` (the old backend's `checkAndUpgradeSchema()` moved unchanged; a
+  no-op on SQLite), `optimize()`, `exportRecords()` and the connection check of `reconnectIfNeeded()` in
   `Idno\Legacy\LegacySqlMaintenance`, all on the shared connection. `getClient()` is the native PDO
   of the `database_connection` service, and `handleSession()` installs the same
   `PdoSessionHandler` with the same options on that PDO (advisory locks on MySQL; NONE on SQLite,
   which PdoSessionHandler refuses advisory locks on: parallel requests of one session race, so SQLite
   sessions are unsafe beyond tests and development, like SQLite itself in this phase), so a request
   opens ONE database connection and session rows written before the switch are read as before.
-  `Idno\Data\MySQL` and `AbstractSQL` are no longer `db()`: only the legacy-bound tests construct
-  them, and a site whose `sessions_storage` names `Idno\Data\MySQL` (a `SessionStorageInterface`
-  class `Idno\Core\Session` builds itself, `Session.php` 53–58) still gets one: a SECOND connection,
-  whose handler replaces the adapter's. Because `handleSession()` returns null (as the old backend's
-  did), that happens even with `sessions_database` on. Both classes are scheduled for deletion. The
-  facts to keep:
+  `handleSession()` returns null, as the old backend's did, so `Idno\Core\Session` goes on to its
+  `sessions_storage` step even when `sessions_database` (on by default) installed the handler.
+  The old SQL backend classes (`Idno\Data\MySQL`, `Idno\Data\AbstractSQL`) were removed in phase 2a.
+  A site whose `sessions_storage` setting names `Idno\Data\MySQL` (with or without a leading
+  backslash; it used to build a second connection whose handler replaced the adapter's) keeps its
+  database sessions: `Idno\Core\Session` calls the adapter's `handleSession()` instead, so the same
+  `session` table and handler are used on the shared connection, with `sessions_database` on or off
+  (ruling P17, pinned in
+  `RepositoryDataConciergeTest::testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions`;
+  on a MongoDB site the setting does nothing). Any other `sessions_storage` value behaves as before.
+  `database` values naming the old class (`Idno\Data\MySQL`) or any other name that is no class
+  mean MySQL, as they always did. The facts to keep:
   - Construction order: `Idno::init()` fetches `db()` early, before the logger, the session and the
     language exist. The adapter's constructor connects (as `MySQL::init()` did, at the same point
     of boot) and runs the schema upgrade; the record store, the repository and the logger are
@@ -711,8 +723,8 @@ other new code may.
 - **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
 - **MySQL** — stores entities as JSON blobs, through `Idno\Storage\DbalRecordStore` on the DBAL
   connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over it (see the `db()` bullet under
-  "Kernel and services"). The old backend (`Idno\Data\MySQL` extends `AbstractSQL`) is no longer
-  used at runtime and is scheduled for deletion.
+  "Kernel and services"). The hand-written SQL backend that preceded it was removed in phase 2a;
+  `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
 - **SQLite** — the same store with `SqliteDialect` (schema: `warmup/schemas/sqlite/sqlite.sql`);
   `database = sqlite` (with `dbname` the file's path) gives `db()` the same adapter. For tests and
   development in this phase (the default test rig runs on it; the installer does not create the

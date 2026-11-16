@@ -18,7 +18,7 @@ use Idno\Storage\Criterion\Search;
 /**
  * A storage query: a tree of Criterion nodes under an AllOf root.
  *
- * fromLegacyArray() mirrors Idno\Data\MySQL::build_where_from_array(), the interpreter of
+ * fromLegacyArray() mirrors Idno\Data\MySQL::build_where_from_array() (removed in phase 2a), the interpreter of
  * the search arrays legacy code passes to getObjects() and getRecords(), including its
  * oddities (listed on the method). Value objects here are deliberately not coerced: later
  * code reproduces the legacy "everything is bound as a string" behaviour at evaluation time.

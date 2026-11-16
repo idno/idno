@@ -30,10 +30,8 @@ use Tests\Storage\Contract\RecordStoreContract;
  * The store shares the rig's database (`known_unittest`, the tables the running site uses), so
  * deleteAll() stays skipped (ownsPrivateDatabase() is false) and the contract cleans up by marker.
  *
- * Hooks overridden, and why (every other one keeps the legacy MySQL value):
- *  - expectArrayInSearchFieldsToRaise, expectArrayBodyToRaise (false): ruling P5;
- *  - expectFailedQueryCountToFail (false): ruling P6;
- *  - expectMidCharacterCutToLoseTheRecord, expectRejectedMetadataToReportSuccess (false): ruling P7.
+ * It overrides no expectation hook: the contract's defaults are this binding's values (MySQL:
+ * whole-word boolean-mode full-text search, utf8mb3 refusing four-byte characters).
  */
 final class DbalMySqlRecordStoreTest extends RecordStoreContract
 {
@@ -96,31 +94,6 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
         self::assertInstanceOf(Connection::class, $connection);
 
         return $connection;
-    }
-
-    protected function expectArrayInSearchFieldsToRaise(): bool
-    {
-        return false;
-    }
-
-    protected function expectArrayBodyToRaise(): bool
-    {
-        return false;
-    }
-
-    protected function expectFailedQueryCountToFail(): bool
-    {
-        return false;
-    }
-
-    protected function expectMidCharacterCutToLoseTheRecord(): bool
-    {
-        return false;
-    }
-
-    protected function expectRejectedMetadataToReportSuccess(): bool
-    {
-        return false;
     }
 
     // ------------------------------------------------ the connection service
@@ -243,9 +216,16 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
     public function testTheSessionMatchesTheLegacyConnection(): void
     {
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results';
-        // A legacy backend built for the test (its own connection): since Task 7 db() is the adapter,
-        // whose client IS the DBAL connection's PDO, so comparing with it would prove nothing.
-        $legacy = (new \Idno\Data\MySQL())->getClient()->query($query)->fetch(\PDO::FETCH_NUM);
+        // What a connection of the legacy backend (Idno\Data\MySQL, removed in Task 9) answered on
+        // the rig's MySQL 8, observed on the commit before its removal.
+        $legacy = [
+            'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
+            'SYSTEM',
+            'utf8mb3',
+            'utf8mb3_general_ci',
+            'utf8mb3',
+            'utf8mb3',
+        ];
 
         $dbal = self::connection()->fetchNumeric($query);
 
@@ -382,6 +362,14 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
         $this->assertNotNull($this->store()->findById('entities', $record['_id']));
     }
 
+    /**
+     * The rows the store writes for a record are, but for the ids, the rows the legacy backend
+     * (Idno\Data\MySQL::saveRecord(), removed in Task 9) wrote for the same record: observed on the
+     * commit before its removal by saving this record with both and reading the rows back (ids and
+     * the test's marker replaced). The note is 120 characters (240 bytes): the legacy backend lost a
+     * record whose indexed value was cut in the middle of a character, so the observed record has
+     * none.
+     */
     public function testWhatTheStoreWritesEqualsWhatTheLegacyBackendWrites(): void
     {
         $record = $this->r([
@@ -389,36 +377,30 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
             'body' => "<p>Body #tag\r\nline</p>",
             'labels' => ['red', '', ['k' => 'v']],
             'pair' => ['a' => 'alpha'],
-            'note' => str_repeat('é', 200),
+            'note' => str_repeat('é', 120),
             'flag' => true,
             'nothing' => null,
         ]);
-        $legacyRecord = $record;
-        $legacyRecord['note'] = str_repeat('é', 120); // the legacy backend loses a record cut mid-character
-        $record['note'] = $legacyRecord['note'];
-        $legacyRecord['_id'] = $this->newId();
-        $legacyRecord['uuid'] = 'http://contract.test/view/' . $legacyRecord['_id'];
-        $this->track($legacyRecord['_id']);
-
         $this->put($record);
-        $this->assertSame($legacyRecord['_id'], (new LegacyBackendBinding())->save('entities', $legacyRecord));
 
-        // Everything but the ids is the same, row for row and in the same order.
-        $read = static function (string $id) use ($record, $legacyRecord): array {
-            $connection = self::connection();
-            $ids = [$record['_id'] => '<id>', $record['uuid'] => '<uuid>', $legacyRecord['_id'] => '<id>', $legacyRecord['uuid'] => '<uuid>'];
-            $main = $connection->fetchAssociative('select * from entities where _id = ?', [$id]);
-            $main['contents'] = json_decode($main['contents'], true);
+        $connection = self::connection();
+        $replace = [$record['_id'] => '<id>', $this->marker => '<marker>'];
+        $main = $connection->fetchAssociative('select * from entities where _id = ?', [$record['_id']]);
+        $main['contents'] = json_decode($main['contents'], true);
+        $written = array_map(
+            static fn (mixed $value): mixed => is_string($value) ? strtr($value, $replace) : $value,
+            [
+                'main' => json_encode($main),
+                'search' => $connection->fetchOne('select search from entities_search where _id = ?', [$record['_id']]),
+                'metadata' => json_encode($connection->fetchAllNumeric('select name, value from entities_metadata where _id = ?', [$record['_id']])),
+            ],
+        );
 
-            return array_map(
-                static fn (mixed $value): mixed => is_string($value) ? strtr($value, $ids) : $value,
-                [
-                    'main' => json_encode($main),
-                    'search' => $connection->fetchOne('select search from entities_search where _id = ?', [$id]),
-                    'metadata' => json_encode($connection->fetchAllNumeric('select name, value from entities_metadata where _id = ?', [$id])),
-                ],
-            );
-        };
-        $this->assertSame($read($legacyRecord['_id']), $read($record['_id']));
+        $note = str_repeat('\u00e9', 120);
+        $this->assertSame([
+            'main' => '{"uuid":"http:\/\/contract.test\/view\/<id>","_id":"<id>","siteid":"contract-site","owner":"http:\/\/contract.test\/profile\/owner","entity_subtype":"Tests\\\\Storage\\\\Contract\\\\Record","created":"2023-06-13 23:47:40","contents":{"title":"It\u2019s a <b>title<\/b>","body":"<p>Body #tag\r\nline<\/p>","labels":["red","",{"k":"v"}],"pair":{"a":"alpha"},"note":"' . $note . '","flag":true,"nothing":null,"_id":"<id>","uuid":"http:\/\/contract.test\/view\/<id>","siteid":"contract-site","owner":"http:\/\/contract.test\/profile\/owner","entity_subtype":"Tests\\\\Storage\\\\Contract\\\\Record","publish_status":"published","created":1686700060,"contract_marker":"<marker>"},"publish_status":"published"}',
+            'search' => "it's a <b>title</b> body  #tag \n line",
+            'metadata' => '[["title","It\u2019s a <b>title<\/b>"],["body","<p>Body #tag\r\nline<\/p>"],["labels","red"],["labels","0"],["labels","{\"k\":\"v\"}"],["pair","alpha"],["note","' . $note . '"],["flag","1"],["nothing","0"],["_id","<id>"],["uuid","http:\/\/contract.test\/view\/<id>"],["siteid","contract-site"],["owner","http:\/\/contract.test\/profile\/owner"],["entity_subtype","Tests\\\\Storage\\\\Contract\\\\Record"],["publish_status","published"],["created","2023-06-13 23:47:40"],["contract_marker","<marker>"]]',
+        ], $written);
     }
 }

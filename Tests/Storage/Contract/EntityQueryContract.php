@@ -13,12 +13,14 @@ use IdnoPlugins\Status\Status;
 use IdnoPlugins\Text\Entry;
 
 /**
- * What entity lookups return, and to whom: the behaviour of today's Idno\Data\AbstractSQL::getObjects(),
- * countObjects() and Idno\Core\DataConcierge::getObject() on MySQL, which EntityRepository reproduces.
+ * What entity lookups return, and to whom: the behaviour of the legacy getObjects(), countObjects() and
+ * getObject() of the old MySQL backend (Idno\Data\AbstractSQL and Idno\Core\DataConcierge on MySQL;
+ * this contract was first proven against it, and the backend was removed in phase 2a), which
+ * EntityRepository reproduces, with the deliberate differences pinned here (P14, P15, publish status).
  *
  * A binding supplies find(), count() and findOneByUuid(). The access context is always the legacy
- * session (the user logged on, the db() service's ignore-access flag): the legacy binding reads it
- * through getObjects(), the repository binding through Idno\Legacy\LegacyAccessContext.
+ * session (the user logged on, the db() service's ignore-access flag), which the repository binding
+ * reads through Idno\Legacy\LegacyAccessContext.
  *
  * The fixtures are created once per class through Entity::save(), owned by the regular test user
  * ("owner"), with `created` ten seconds apart so the order is fixed; every query is narrowed to them by
@@ -36,8 +38,8 @@ use IdnoPlugins\Text\Entry;
  *   e_pub        Text Entry, PUBLIC
  *   r_pub        Reply (a subclass of Status), PUBLIC
  *
- * These are MySQL's semantics: a binding runs on MySQL, and on another database only when it reproduces
- * them there (driverFamilies(); EntityRepository does on SQLite). On any other database it skips.
+ * These are MySQL's semantics, which EntityRepository reproduces on SQLite too (MySqlSemantics, the
+ * SQLite dialect): the contract runs on a MySQL or SQLite site and skips on any other database.
  */
 abstract class EntityQueryContract extends \Tests\IdnoTestCase
 {
@@ -65,7 +67,7 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
 
     /**
      * Entities of the given types (class names, '!' to exclude), matching the search, as the binding's
-     * find returns them (legacy: what getObjects() returns, `false` entries included).
+     * find returns them.
      *
      * @param list<string>          $types
      * @param array<string, mixed>  $search
@@ -86,45 +88,14 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
      */
     abstract protected function findOneByUuid(string $uuid): ?Entity;
 
-    /**
-     * Whether find() returns `false` in place of a stored record whose class does not exist
-     * (getObjects() does; EntityRepository::find() returns entities only).
-     */
-    protected function expectUnhydratableRecordAsFalse(): bool
-    {
-        return true;
-    }
-
-    /**
-     * Whether a caller's `access` or `entity_subtype` condition that parses to nothing (`[]`,
-     * `['$in' => []]`, `['$lt' => 0]`) removes the viewer's read-group (or type) condition, so the
-     * query is not filtered on that field at all. Legacy array_merge() does; EntityRepository keeps
-     * the viewer's read groups (or the requested types) in force (ruling P14).
-     */
-    protected function expectAnEmptyCallerConditionToRemoveTheFilter(): bool
-    {
-        return true;
-    }
-
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
         $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
         $family = \Idno\Storage\ConnectionParameters::driverFamily($config);
-        if (!in_array($family, static::driverFamilies(), true)) {
-            self::markTestSkipped(sprintf('The site\'s database (%s) is not one this binding runs on (%s).', $family, implode(', ', static::driverFamilies())));
+        if (!in_array($family, ['mysql', 'sqlite'], true)) {
+            self::markTestSkipped(sprintf('The site\'s database (%s) is not one this contract runs on (mysql, sqlite).', $family));
         }
-    }
-
-    /**
-     * The databases (ConnectionParameters::driverFamily()) the binding runs on. The expectations are
-     * MySQL's: a binding on another database must reproduce them there.
-     *
-     * @return list<string>
-     */
-    protected static function driverFamilies(): array
-    {
-        return ['mysql'];
     }
 
     protected function setUp(): void
@@ -519,9 +490,9 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     }
 
     /**
-     * OBSERVED on legacy: a caller's `access` that parses to no condition replaces the read groups
-     * with nothing, so an anonymous visitor finds every access level (drafts are still hidden). The
-     * repository keeps the read groups (ruling P14).
+     * Ruling P14: a caller's `access` that parses to no condition is no condition, so the read groups
+     * stay in force. (Legacy replaced the read groups with nothing, so an anonymous visitor found
+     * every access level, drafts still hidden.)
      *
      * @dataProvider emptyConditions
      *
@@ -532,17 +503,13 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
         $this->asAnonymous();
         $found = $this->uuids($this->findEntities([], $this->mine(['access' => $condition])));
         $counted = $this->countEntities([], $this->mine(['access' => $condition]));
-        if ($this->expectAnEmptyCallerConditionToRemoveTheFilter()) {
-            $this->assertSame($this->names('s_pub', 's_priv', 's_site', 's_group_in', 's_group_out', 'e_pub', 'r_pub'), $found);
-            $this->assertSame(8, $counted);
-        } else {
-            $this->assertSame($this->names('s_pub', 'e_pub', 'r_pub'), $found);
-            $this->assertSame(4, $counted);
-        }
+        $this->assertSame($this->names('s_pub', 'e_pub', 'r_pub'), $found);
+        $this->assertSame(4, $counted);
     }
 
     /**
-     * OBSERVED on legacy: the same for `entity_subtype`: the requested types are replaced by nothing.
+     * Ruling P14, the same for `entity_subtype`: the requested types stay in force. (Legacy replaced
+     * them by nothing.)
      *
      * @dataProvider emptyConditions
      *
@@ -553,13 +520,8 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
         $this->asAdmin();
         $found = $this->uuids($this->findEntities([self::ENTRY], $this->mine(['entity_subtype' => $condition])));
         $counted = $this->countEntities([self::ENTRY], $this->mine(['entity_subtype' => $condition]));
-        if ($this->expectAnEmptyCallerConditionToRemoveTheFilter()) {
-            $this->assertSame($this->names(...self::ALL), $found);
-            $this->assertSame(8, $counted);
-        } else {
-            $this->assertSame($this->names('e_pub'), $found);
-            $this->assertSame(1, $counted);
-        }
+        $this->assertSame($this->names('e_pub'), $found);
+        $this->assertSame(1, $counted);
     }
 
     // ------------------------------------------------ paging
@@ -662,7 +624,8 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
         try {
             $this->asAnonymous();
             $found = $this->findEntities([], [self::MARKER => $marker]);
-            $this->assertSame($this->expectUnhydratableRecordAsFalse() ? [false] : [], $found);
+            // Ruling P15: find() returns entities only (legacy getObjects() gave `false` in its place).
+            $this->assertSame([], $found);
             $this->assertSame(1, $this->countEntities([], [self::MARKER => $marker]));
             $this->assertNull($this->findOneByUuid((string) $stored['uuid']));
         } finally {

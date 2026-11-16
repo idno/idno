@@ -7,8 +7,8 @@ namespace Idno\Storage;
 /**
  * Translates the legacy database settings into Doctrine DBAL connection parameters.
  *
- * The parameters reproduce the connection the legacy backend opens today
- * (Idno\Data\MySQL::buildConnectionString() and createPDOConnection(), and the
+ * The parameters reproduce the connection the old SQL backend opened (Idno\Data\MySQL's
+ * buildConnectionString() and createPDOConnection(), removed in phase 2a; and the
  * `beanstalk-mysql` mapping in Idno\Legacy\LegacyServiceFactory::db()): the same host, port,
  * database, user and password, the DSN charset `utf8` (MySQL's three-byte utf8mb3, which the
  * schema's tables use) and the same PDO attributes. Nothing is "improved": the connection must
@@ -102,8 +102,8 @@ final class ConnectionParameters
      *  - any other value is a backend class name, as the legacy Idno::componentFactory() reads it:
      *    when backendClass() finds a loadable backend class of that name, 'other' (the class is
      *    built as before, and has no DBAL connection or record store);
-     *  - otherwise 'mysql': componentFactory() falls back to the MySQL backend for a name it cannot
-     *    load, so such a site has always run on MySQL.
+     *  - otherwise 'mysql': componentFactory() fell back to the old MySQL backend for a name it could
+     *    not load, so such a site has always run on MySQL (ruling P16).
      *
      * @param array<string, mixed> $config
      */
@@ -119,10 +119,12 @@ final class ConnectionParameters
 
     /**
      * The backend class the legacy Idno::componentFactory() would build for the `database` value,
-     * or null when it would fall back to the MySQL backend (or when the value is one of the names
-     * driverFamily() knows). componentFactory() takes the value untrimmed and with its case: first as
-     * a full class name that extends the backend base class, then as a class in the backend
-     * namespace that does. The legacy MySQL backend itself counts as no class: it is MySQL.
+     * or null when there is none (or when the value is one of the names driverFamily() knows): such a
+     * site is on MySQL. componentFactory() takes the value untrimmed and with its case: first as a
+     * full class name that extends the backend base class, then as a class in the backend namespace
+     * that does. The old SQL backend, Idno\Data\MySQL (removed in phase 2a), counts as no class: a
+     * site configured with it is on MySQL, as it always was, even where an upgrade by overwriting
+     * files has left the old class file behind.
      *
      * Only the names of the legacy classes are used (class_exists(), is_subclass_of()); nothing of
      * the legacy application is called.
