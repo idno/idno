@@ -117,9 +117,10 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether an array nested in a list (`['meta' => [['k' => 'v']]]`) is queryable as its JSON
-     * encoding (`{"k":"v"}`), and an associative array as the list of its values. A store on
-     * which nested arrays and objects are not queryable overrides this to false.
+     * Whether an element of a list or object that is itself an array or object
+     * (`['meta' => [['k' => 'v']]]`) is queryable as its JSON encoding (`{"k":"v"}`). A store on
+     * which such elements are not queryable overrides this to false. Either way a field holding a
+     * list or an associative array is queryable by its scalar values (never the keys).
      */
     protected function expectNestedArraysToMatchTheirJson(): bool
     {
@@ -152,6 +153,63 @@ abstract class RecordStoreContract extends TestCase
      * overrides this to false. ASCII case is ignored on every binding.
      */
     protected function expectNonAsciiCaseToBeIgnored(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a save is refused (false, nothing stored) when a document field NAME holds a
+     * four-byte character (an emoji). MySQL's metadata `name` column is utf8mb3: the MySQL binding
+     * of today's store overrides this to true. Elsewhere such a name is stored and queryable.
+     */
+    protected function expectFourByteCharactersInFieldNamesToBeRefused(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether a query on a document field finds the field whatever the case of its name (`colour`
+     * finds a field stored as `Colour`). Today's stores keep field names in an indexed column that
+     * compares ignoring case; a store that reads the field from the document by its exact name
+     * overrides this to false.
+     */
+    protected function expectFieldNamesToIgnoreCase(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether `created` is compared as the text it was formatted as when the record was saved (in
+     * the PHP default time zone of that moment), so that changing the time zone between the save
+     * and the query changes nothing. A store that keeps `created` as a timestamp and reads a
+     * query's datetime literal in the PHP default time zone of the query overrides this to false.
+     */
+    protected function expectCreatedToBeComparedInTheTimeZoneOfItsSave(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a float in a document field is queried as the text json_encode() writes for it (all
+     * its significant digits: 0.1 + 0.2 is `0.30000000000000004`) rather than as PHP's string
+     * conversion writes it (14 significant digits: `0.3`). A float OPERAND of a document-field
+     * condition is converted the same way as the stored value on every store, so a float always
+     * finds itself; only a string operand tells the two rules apart. Today's stores use the string
+     * conversion; a store that reads the value from the stored document overrides this to true.
+     */
+    protected function expectFloatsToMatchTheirJsonText(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether a float that json_encode() writes in exponent form (`1.0e+25`, `1.0e-5`) is queried as
+     * that text, and so found by a query for the same float. Every store does except one that reads
+     * it through MySQL's JSON functions, which parse the number and print it their own way
+     * (`9.999999999999999e24`, `0.00001`): there neither the text nor the float operand finds it,
+     * only MySQL's own text does. That binding overrides this to false.
+     */
+    protected function expectFloatsInExponentFormToMatchTheirJsonText(): bool
     {
         return true;
     }
@@ -497,31 +555,49 @@ abstract class RecordStoreContract extends TestCase
     public function testNestedArrayValueIsMatchedAsJson(): void
     {
         $listOfObjects = $this->put($this->r(['meta' => [['k' => 'v']]]));
+        $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
+        $objectOfObjects = $this->put($this->r(['deep' => ['a' => ['x' => 'y'], 'b' => 'flat']]));
+
+        // On every binding an associative array (a JSON object) is queryable like a list of its
+        // scalar values: not by its keys, not by its JSON encoding.
+        $this->assertMatches(['pair' => 'alpha'], [$assoc]);
+        $this->assertMatches(['pair' => 'beta'], [$assoc]);
+        $this->assertMatches(['pair' => ['$in' => ['beta', 'gamma']]], [$assoc]);
+        $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
+        $this->assertMatches(['pair' => 'a'], []);
+        $this->assertMatches(['deep' => 'flat'], [$objectOfObjects]);
+        $this->assertMatches(['deep' => 'a'], []);
 
         if ($this->expectNestedArraysToMatchTheirJson()) {
-            // An element that is itself an array is indexed as its JSON encoding.
+            // An element that is itself an array or object is indexed as its JSON encoding.
             $this->assertMatches(['meta' => '{"k":"v"}'], [$listOfObjects]);
-
-            // An associative array is NOT indexed as JSON: it is treated like a list of its values.
-            $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
-            $this->assertMatches(['pair' => 'alpha'], [$assoc]);
-            $this->assertMatches(['pair' => 'beta'], [$assoc]);
-            $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
-            // Keys are not indexed.
-            $this->assertMatches(['pair' => 'a'], []);
+            $this->assertMatches(['deep' => '{"x":"y"}'], [$objectOfObjects]);
         } else {
-            // A nested array is not queryable, whatever it is queried for; the record keeps it.
+            // An element that is itself an array or object is not queryable, whatever it is
+            // queried for; the record keeps it.
             $this->assertMatches(['meta' => '{"k":"v"}'], []);
             $this->assertMatches(['meta' => 'v'], []);
+            $this->assertMatches(['deep' => '{"x":"y"}'], []);
+            $this->assertMatches(['deep' => 'y'], []);
             $this->assertSameRecord($listOfObjects, $this->store()->findById('entities', $listOfObjects['_id']));
-
-            // Nor is a nested associative array (an object), by its JSON encoding or its values.
-            $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
-            $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
-            $this->assertMatches(['pair' => 'alpha'], []);
-            $this->assertSameRecord($assoc, $this->store()->findById('entities', $assoc['_id']));
-            $this->assertMatches([], [$listOfObjects, $assoc]);
+            $this->assertSameRecord($objectOfObjects, $this->store()->findById('entities', $objectOfObjects['_id']));
         }
+        $this->assertSameRecord($assoc, $this->store()->findById('entities', $assoc['_id']));
+    }
+
+    public function testEmptyValuesInAnObjectAreZeroAndTrueIsOne(): void
+    {
+        $empties = $this->put($this->r(['o' => ['a' => '', 'b' => null, 'c' => false, 'd' => 0, 'e' => true, 'f' => 'x']]));
+        $plain = $this->put($this->r(['o' => ['f' => 'x']]));
+
+        $this->assertMatches(['o' => '0'], [$empties]);
+        $this->assertMatches(['o' => 0], [$empties]);
+        $this->assertMatches(['o' => '1'], [$empties]);
+        $this->assertMatches(['o' => true], [$empties]);
+        $this->assertMatches(['o' => 'x'], [$empties, $plain]);
+        $this->assertMatches(['o' => ''], []);
+        $this->assertMatches(['o' => 'e'], []);
+        $this->assertMatches(['o' => ['$not' => 'x']], [$empties]);
     }
 
     // ------------------------------------------------- $in, $not, $not => $in
@@ -1270,8 +1346,14 @@ abstract class RecordStoreContract extends TestCase
             // The text that was stored is the UTC rendering; the same instant written
             // in another timezone is a different wall-clock string and does not match.
             $this->assertNotSame($utcText, $tokyoText);
-            $this->assertMatches(['created' => $utcText], [$record]);
-            $this->assertMatches(['created' => $tokyoText], []);
+            if ($this->expectCreatedToBeComparedInTheTimeZoneOfItsSave()) {
+                $this->assertMatches(['created' => $utcText], [$record]);
+                $this->assertMatches(['created' => $tokyoText], []);
+            } else {
+                // The literal is read in the time zone of the query: only the Tokyo text is that instant.
+                $this->assertMatches(['created' => $tokyoText], [$record]);
+                $this->assertMatches(['created' => $utcText], []);
+            }
         } finally {
             date_default_timezone_set($previous);
         }
@@ -1724,6 +1806,114 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['f' => 'ÉTÉ'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : [$upper]);
         $this->assertMatches(['f' => 'été'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : []);
         $this->assertMatches(['f' => 'Été'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : [$mixed]);
+    }
+
+    public function testFieldNamesWithPunctuationAddressExactlyThatField(): void
+    {
+        $names = ['a.b', 'q"uo\\te', 'sp ace', '$x', "new\nline", 'a/b', 'été', "it's", '[0]', '*'];
+        $fields = ['a' => ['b' => 'nested']];
+        foreach ($names as $i => $name) {
+            $fields[$name] = 'value-' . $i;
+        }
+        $record = $this->put($this->r($fields));
+        $other = $this->put($this->r(['a' => 'plain']));
+
+        foreach ($names as $i => $name) {
+            $this->assertMatches([$name => 'value-' . $i], [$record], json_encode($name));
+            $this->assertMatches([$name => ['$in' => ['value-' . $i]]], [$record], json_encode($name));
+            $this->assertMatches([$name => ['$not' => 'other']], [$record], json_encode($name));
+        }
+        // A dotted name is one top-level field, never a path into a nested one.
+        $this->assertMatches(['a.b' => 'nested'], []);
+        $this->assertMatches(['a' => 'plain'], [$other]);
+        $this->assertMatches(['a"' => 'value-1'], []);
+        $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']));
+    }
+
+    public function testAFourByteCharacterInAFieldName(): void
+    {
+        $record = $this->r(["smile \u{1F600}" => 'v']);
+        $this->track($record['_id']);
+
+        if ($this->expectFourByteCharactersInFieldNamesToBeRefused()) {
+            $this->assertFalse($this->store()->save('entities', $record));
+            $this->assertNull($this->store()->findById('entities', $record['_id']));
+        } else {
+            $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+            $this->assertMatches(["smile \u{1F600}" => 'v'], [$record]);
+            $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']));
+        }
+    }
+
+    public function testFieldNameCase(): void
+    {
+        $record = $this->put($this->r(['Colour' => 'red']));
+
+        $this->assertMatches(['Colour' => 'red'], [$record]);
+        $this->assertMatches(['colour' => 'red'], $this->expectFieldNamesToIgnoreCase() ? [$record] : []);
+        $this->assertMatches(['COLOUR' => ['$in' => ['red']]], $this->expectFieldNamesToIgnoreCase() ? [$record] : []);
+    }
+
+    public function testAFloatFindsItself(): void
+    {
+        $sum = 0.1 + 0.2;
+        $record = $this->put($this->r(['f' => $sum, 'l' => ['x', $sum], 'o' => ['k' => $sum]]));
+
+        foreach (['f', 'l', 'o'] as $field) {
+            $this->assertMatches([$field => $sum], [$record], $field);
+            $this->assertMatches([$field => ['$in' => [$sum, 'nope']]], [$record], $field);
+            $this->assertMatches([$field => ['$not' => ['$in' => [$sum]]]], $field === 'l' ? [$record] : [], $field);
+            $this->assertMatches([$field => ['$lt' => $sum]], [], $field);
+            $this->assertMatches([$field => ['$gt' => $sum]], $field === 'l' ? [$record] : [], $field);
+            // The operand is the same text as the value: '0.30000000000000004' on a store that
+            // queries a float as its JSON text, '0.3' (PHP's string conversion) on today's.
+            $this->assertMatches([$field => '0.3'], $this->expectFloatsToMatchTheirJsonText() ? [] : [$record], $field);
+            $this->assertMatches([$field => '0.30000000000000004'], $this->expectFloatsToMatchTheirJsonText() ? [$record] : [], $field);
+        }
+        $this->assertMatches(['f' => ['$not' => $sum]], []);
+    }
+
+    public function testAFloatInExponentFormFindsItselfOrNot(): void
+    {
+        $record = $this->put($this->r(['big' => 1.0E+25, 'tiny' => 1.0E-5]));
+
+        if ($this->expectFloatsInExponentFormToMatchTheirJsonText()) {
+            $this->assertMatches(['big' => 1.0E+25], [$record]);
+            $this->assertMatches(['tiny' => 1.0E-5], [$record]);
+            $this->assertMatches(['big' => ['$in' => [1.0E+25]]], [$record]);
+        } else {
+            // MySQL's JSON functions print the stored number their own way, so the float operand
+            // (json_encode()'s text) does not find it; MySQL's own text does.
+            $this->assertMatches(['big' => 1.0E+25], []);
+            $this->assertMatches(['tiny' => 1.0E-5], []);
+            $this->assertMatches(['big' => '9.999999999999999e24'], [$record]);
+            $this->assertMatches(['tiny' => '0.00001'], [$record]);
+        }
+    }
+
+    public function testFloatsAreQueriedAsText(): void
+    {
+        $sum = $this->put($this->r(['f' => 0.1 + 0.2]));
+        $half = $this->put($this->r(['f' => 1.5, 'l' => [2.5, 'x']]));
+        $exponent = $this->put($this->r(['big' => 1.0E+25, 'tiny' => 1.0E-5]));
+
+        $this->assertMatches(['f' => '1.5'], [$half]);
+        $this->assertMatches(['l' => '2.5'], [$half]);
+        $this->assertMatches(['f' => 1.5], [$half]);
+        if ($this->expectFloatsToMatchTheirJsonText()) {
+            $this->assertMatches(['f' => '0.30000000000000004'], [$sum]);
+            $this->assertMatches(['f' => '0.3'], []);
+        } else {
+            $this->assertMatches(['f' => '0.3'], [$sum]);
+            $this->assertMatches(['f' => '0.30000000000000004'], []);
+        }
+        $exponentMatches = $this->expectFloatsInExponentFormToMatchTheirJsonText() ? [$exponent] : [];
+        $this->assertMatches(['big' => '1.0e+25'], $exponentMatches);
+        $this->assertMatches(['big' => '1.0E+25'], $exponentMatches);
+        $this->assertMatches(['tiny' => '1.0e-5'], $exponentMatches);
+        // The records keep their numbers.
+        $this->assertSame(1.0E+25, $this->store()->findById('entities', $exponent['_id'])['big']);
+        $this->assertSame(0.1 + 0.2, $this->store()->findById('entities', $sum['_id'])['f']);
     }
 
     public function testEveryCollectionRoundTripsAndQueries(): void

@@ -30,12 +30,13 @@ use Tests\Storage\Contract\RecordStoreContract;
  * The store shares the rig's database (`known_unittest`, the tables the running site uses), so
  * deleteAll() stays skipped (ownsPrivateDatabase() is false) and the contract cleans up by marker.
  *
- * It overrides two expectation hooks; the contract's other defaults are this binding's values
+ * It overrides three expectation hooks; the contract's other defaults are this binding's values
  * (MySQL: whole-word boolean-mode full-text search, four-byte characters stored in the utf8mb4
  * search and metadata columns, text ordered by utf8mb4_unicode_520_ci, text compared ignoring the
  * case of non-ASCII letters):
  *  - expectLongFieldNamesToBeRefused (true): the metadata `name` column is a varchar(64);
- *  - expectUuidClashOnResaveToOverwrite (true): `on duplicate key update` takes the uuid key.
+ *  - expectUuidClashOnResaveToOverwrite (true): `on duplicate key update` takes the uuid key;
+ *  - expectFourByteCharactersInFieldNamesToBeRefused (true): the metadata `name` column is utf8mb3.
  * It writes to `entities` only (the contract's default collections()): a record in `site` or
  * `config` would be read by the running site.
  */
@@ -85,6 +86,11 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
     }
 
     protected function expectUuidClashOnResaveToOverwrite(): bool
+    {
+        return true;
+    }
+
+    protected function expectFourByteCharactersInFieldNamesToBeRefused(): bool
     {
         return true;
     }

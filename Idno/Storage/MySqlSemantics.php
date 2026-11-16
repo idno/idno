@@ -12,7 +12,9 @@ namespace Idno\Storage;
  * drift apart.
  *
  *  - datetime(): which literals MySQL accepts for the `created` column, in a form whose plain
- *    string comparison orders them correctly against the stored values;
+ *    string comparison orders them correctly against the stored values; epoch(): the same
+ *    literals as the timestamps JsonRecordStore compares its `created` column with (on every
+ *    engine: a literal it rejects makes the query match nothing);
  *  - fold() and compare(): text comparison as `utf8mb3_general_ci` (MySQL's identifier columns)
  *    does it for ASCII (folded to UPPER case, so `[ \ ] ^ _` and the backtick sort after the
  *    letters: 'a_' > 'aZ'). MySQL's indexed values are `utf8mb4_unicode_520_ci`, which orders
@@ -49,6 +51,32 @@ final class MySqlSemantics
         $fraction = rtrim($m[7] ?? '', '0');
 
         return sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second) . ($fraction === '' ? '' : '.' . $fraction);
+    }
+
+    /**
+     * The instant a datetime literal MySQL accepts (see datetime()) names, read in the PHP default
+     * time zone of this moment, as Unix seconds in decimal text: the integer, plus the fraction when
+     * it is not zero ('1686700000.5'; before 1970 '-99.75' for -100 seconds plus .25), so that a
+     * numeric comparison with a stored timestamp is exact. Null when MySQL would reject the literal.
+     */
+    public static function epoch(string $text): ?string
+    {
+        $datetime = self::datetime($text);
+        if ($datetime === null) {
+            return null;
+        }
+        [$whole, $fraction] = array_pad(explode('.', $datetime, 2), 2, '');
+        $seconds = (new \DateTimeImmutable($whole, new \DateTimeZone(date_default_timezone_get())))->getTimestamp();
+        if ($fraction === '') {
+            return (string) $seconds;
+        }
+        if ($seconds >= 0) {
+            return $seconds . '.' . $fraction;
+        }
+        // -100 + 0.25 is -99.75: one second fewer, and the fraction's complement.
+        $complement = str_pad((string) (10 ** strlen($fraction) - (int) $fraction), strlen($fraction), '0', STR_PAD_LEFT);
+
+        return '-' . (-$seconds - 1) . '.' . $complement;
     }
 
     /**

@@ -7,10 +7,12 @@ namespace Idno\Storage\Platform;
 use Doctrine\DBAL\Exception\DriverException;
 
 /**
- * What DbalRecordStore needs to know about one database engine: the SQL that is not portable
- * (identifier quoting, the upsert, the search predicate, the limit clause, the table listing)
- * and how to read its driver errors: which mean "this query cannot run with these operands",
- * which mean "the database refused this record", and (everything else) a broken database.
+ * What DbalRecordStore (the legacy schema) and JsonRecordStore (the tables `idno_<collection>`)
+ * need to know about one database engine: the SQL that is not portable (identifier quoting, the
+ * upserts, the search predicates, the comparison of document fields and text columns, the limit
+ * clause, the table listing) and how to read its driver errors: which mean "this query cannot run
+ * with these operands", which mean "the database refused this record", and (everything else) a
+ * broken database.
  *
  * Every statement the store builds uses positional `?` placeholders; every value is bound as a
  * string. A dialect never interpolates a value, only identifiers it has quoted.
@@ -75,6 +77,59 @@ interface Dialect
      * The clause that pages a query (the arguments are never negative).
      */
     public function limit(int $limit, int $offset): string;
+
+    // ------------------------------------------------ for JsonRecordStore (tables `idno_<collection>`)
+
+    /**
+     * An insert of one row into a collection table (columns id, uuid, ... with `id` its primary
+     * key and `uuid` unique) that replaces the row with the same `id` instead when there is one, and
+     * never changes another row: when another row holds the record's uuid, the statement either
+     * fails with a constraint violation (isRefusedData()) or affects no row (MySQL), and the store
+     * then finds that the record was not stored. Its placeholders take the columns' values in the
+     * order given.
+     *
+     * @param list<string> $columns every column of the table, `id` included
+     */
+    public function upsertById(string $table, array $columns): string;
+
+    /**
+     * A condition on the row aliased $alias of the collection table $table (both quoted) that holds
+     * when SOME query value of a top-level field of the row's JSON document (`data`) satisfies
+     * `<value> <operator> <operands>`. The field is named by its JSON path, `$.` followed by the
+     * name as json_encode() writes it (`$."title"`), bound as the condition's first placeholders.
+     *
+     * The query values are RecordIndex::queryValues()'s, computed in SQL from the document: a
+     * scalar is one value, a list or object one per element (member value, never its key) that is
+     * a scalar (an element that is an array or object gives none); a string is itself
+     * ('' is '0'), true is '1', false and null are '0', a number its text in the document (0 is
+     * '0'). Text compares ignoring case as the dialect's text columns do; `<` and `>` compare
+     * text folded to upper case.
+     *
+     * @param string $operator  one of =, !=, <, >, in, not in, and `is not` (with $operands `null`:
+     *                          the field has a value)
+     * @param string $operands  the SQL of the operands: `?`, `(?, ?)` or `null`
+     *
+     * @return array{string, int} the SQL, and how many placeholders for the field's path come
+     *                            before the operands' own placeholders
+     */
+    public function fieldCondition(string $table, string $alias, string $operator, string $operands): array;
+
+    /**
+     * A comparison of a text column of a collection table (qualified and quoted) with operands:
+     * `<column> <operator> <operands>`, where `<` and `>` compare text folded to upper case.
+     *
+     * @param string $operator one of =, !=, <, >, in, not in
+     */
+    public function textComparison(string $column, string $operator, string $operands): string;
+
+    /**
+     * The condition a search term puts on the `search` column of a collection table (qualified and
+     * quoted), as searchCondition() describes: the values of its placeholders, and whether the
+     * database parses the term (for isRejectedOperand()).
+     *
+     * @return array{string, list<string>, bool}
+     */
+    public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array;
 
     /**
      * Whether the error of a SELECT says that an operand of the query is not a value the

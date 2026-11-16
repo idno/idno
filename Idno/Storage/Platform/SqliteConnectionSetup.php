@@ -11,13 +11,15 @@ use Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware;
 
 /**
  * A DBAL driver middleware that sets up every new SQLite connection for SqliteDialect
- * (SqliteDialect::setUpConnection(): the pragmas, the collation, the search function) when it
- * connects: once per physical connection, never before the first query. Any connection that is
+ * (SqliteDialect::setUpConnection(): it refuses an SQLite library older than 3.38 or without the
+ * JSON functions with a \LogicException naming the version required and the one found, then sets
+ * the pragmas and registers the collation and the search function DbalRecordStore's schema needs)
+ * when it connects: once per physical connection, never before the first query. Any connection that is
  * not pdo_sqlite's (`Pdo\Sqlite`) is refused with a \LogicException: the middleware must only be
  * given to SQLite connections (BootConfigConnectionFactory adds it only to those).
  *
  * BootConfigConnectionFactory adds it to the `database_connection` service of an SQLite site;
- * code that builds its own SQLite connection for DbalRecordStore adds it to the connection's
+ * code that builds its own SQLite connection for DbalRecordStore or JsonRecordStore adds it to the connection's
  * Configuration (Configuration::setMiddlewares()).
  *
  * Built with new, not a container service (see config/services.php).

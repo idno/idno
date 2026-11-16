@@ -5,24 +5,33 @@ declare(strict_types=1);
 namespace Idno\Storage;
 
 /**
- * What a SQL store derives from a record to make it queryable: the same three things the old
- * backend's Idno\Data\MySQL::saveRecord() (since removed) wrote next to the document, reproduced exactly.
+ * What a store derives from a record to make it queryable.
+ *
+ * For the legacy schema (DbalRecordStore), the same three things the old backend's
+ * Idno\Data\MySQL::saveRecord() (since removed) wrote next to the document, reproduced exactly:
  *
  *  - metadataRows(): the rows of `<collection>_metadata`, which equality, $in, $not, $lt and $gt
  *    on document fields run against;
  *  - searchText(): the text of `<collection>_search`, which $search runs against;
  *  - columns(): the columns of the main table, which the fields of COLUMN_FIELDS are queried on.
  *
- * All three take the record AS IT IS ENCODED INTO THE DOCUMENT: that is, after the store has
+ * For the stores that read fields from the stored document (JsonRecordStore, InMemoryRecordStore),
+ * queryValues() (what a query on a document field is compared with: whole values, the scalar
+ * values of a list or object, elements that are arrays or objects not queryable),
+ * searchText() (the `search` column), and columns() and created() (the other columns).
+ *
+ * They take the record AS IT IS ENCODED INTO THE DOCUMENT: that is, after the store has
  * filled in a missing _id, siteid, uuid and owner, but before the defaults for entity_subtype,
  * publish_status and created, which these methods apply themselves (as saveRecord() does, after
  * encoding the document). A record read back from the database is therefore a valid input and
  * yields the rows that were written for it.
  *
- * The class is pure: no application state, no database. One difference from saveRecord() is
- * deliberate and pinned by the contract: a value is cut to 255 BYTES on a character boundary
- * (never in the middle of a multibyte character, which makes MySQL reject the row and today's
- * saveRecord() lose the record while reporting success).
+ * The class is pure: no application state, no database. metadataRows() has one deliberate
+ * difference from saveRecord(), pinned by the contract: a value is cut to 255 BYTES on a character
+ * boundary (never in the middle of a multibyte character, which makes MySQL reject the row and
+ * the old saveRecord() lose the record while reporting success). queryValues() cuts nothing: it
+ * follows the JSON store's rules, whose differences from today's store are listed on
+ * JsonRecordStore and in AGENTS.md.
  */
 final class RecordIndex
 {
@@ -80,6 +89,98 @@ final class RecordIndex
         }
 
         return $rows;
+    }
+
+    /**
+     * What a query on each top-level field of the record is compared with, by field name (exact,
+     * as the document holds it): the one definition the stores that read fields from the stored
+     * document (JsonRecordStore, whose dialects compute the same values in SQL, and
+     * InMemoryRecordStore) share.
+     *
+     *  - a scalar gives one value; a list or an associative array (a JSON object) gives one per
+     *    element (member value) that is a scalar, never its keys; an element that is itself an
+     *    array or object gives none;
+     *  - an empty value (`''`, null, false, 0, '0') is '0', true is '1', an integer its decimal
+     *    text, any other float floatText() (what the stored document holds), a string itself;
+     *  - nothing is cut: the whole value is compared.
+     *
+     * The defaults of columns() are applied first (so `created` is the formatted datetime), but the
+     * stores query the fields of COLUMN_FIELDS on their columns, not on these values.
+     *
+     * @param array<int|string, mixed> $record the record as it is encoded into the document
+     * @param int|null                 $now    the time used when the record has no `created` (default: now)
+     *
+     * @return array<string, list<string>>
+     *
+     * @throws \InvalidArgumentException when `created` is not a timestamp
+     */
+    public static function queryValues(array $record, ?int $now = null): array
+    {
+        $values = [];
+        foreach (self::withDefaults($record, $now ?? time()) as $key => $value) {
+            $elements = is_array($value) ? $value : [$value];
+            $texts = [];
+            foreach ($elements as $element) {
+                if (!is_array($element) && !is_object($element)) {
+                    $texts[] = self::queryText($element);
+                }
+            }
+            $values[(string) $key] = $texts;
+        }
+
+        return $values;
+    }
+
+    /**
+     * The record's `created` as a timestamp (the time $now when it has none).
+     *
+     * @param array<int|string, mixed> $record
+     *
+     * @throws \InvalidArgumentException when `created` is not a timestamp
+     */
+    public static function created(array $record, ?int $now = null): int
+    {
+        $created = $record['created'] ?? null;
+        // (empty() of NAN is a warning: NAN is not empty, it is not a timestamp.)
+        $missing = !(is_float($created) && is_nan($created)) && empty($created);
+
+        return $missing ? ($now ?? time()) : self::timestamp($created);
+    }
+
+    /**
+     * The text of a float in queryValues(), and of a float operand compared with it (the stores
+     * that use queryValues() convert operands with this, so that a float finds itself): '0' for
+     * zero, otherwise the text json_encode() writes, which is what the stored document holds
+     * (0.1 + 0.2 is `0.30000000000000004`, 1.0E+25 is `1.0e+25`), not PHP's 14-digit string
+     * conversion (`0.3`). A float that is not finite has no JSON text: ''.
+     */
+    public static function floatText(float $value): string
+    {
+        if (!is_finite($value)) {
+            return '';
+        }
+
+        return $value == 0.0 ? '0' : (string) json_encode($value);
+    }
+
+    /**
+     * The text a query compares a scalar with (see queryValues()).
+     */
+    private static function queryText(mixed $value): string
+    {
+        if (is_float($value)) {
+            // (A float that is not finite cannot be encoded, so such a record is never stored.)
+            return self::floatText($value);
+        }
+        if (empty($value)) {
+            return '0';
+        }
+
+        return match (true) {
+            $value === true => '1',
+            is_scalar($value) => (string) $value,
+            default => '',
+        };
     }
 
     /**
@@ -170,10 +271,7 @@ final class RecordIndex
         if (empty($record['publish_status'])) {
             $record['publish_status'] = self::DEFAULT_PUBLISH_STATUS;
         }
-        $created = $record['created'] ?? null;
-        // (empty() of NAN is a warning: NAN is not empty, it is not a timestamp.)
-        $missing = !(is_float($created) && is_nan($created)) && empty($created);
-        $record['created'] = date(self::DATETIME_FORMAT, $missing ? $now : self::timestamp($created));
+        $record['created'] = date(self::DATETIME_FORMAT, self::created($record, $now));
 
         return $record;
     }

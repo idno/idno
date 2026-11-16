@@ -46,12 +46,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
         // derivation, the defaults a store fills in, the connection parameters, the rules MySQL
         // applies that the other stores reproduce, the SQL dialects and the SQLite connection setup
-        // middleware), the test doubles (FixedRecordDefaults, FixedAccessContext) and the
-        // RecordStore implementations, built with new, not services: the container's RecordStore is
+        // middleware), the test doubles (FixedRecordDefaults, FixedAccessContext), the TypeMap
+        // without aliases (IdentityTypeMap; the TypeMap interface has no container implementation
+        // yet) and the RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
         // builds them); they are not services.
-        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySchemaUpgrader and LegacySqlMaintenance.
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],

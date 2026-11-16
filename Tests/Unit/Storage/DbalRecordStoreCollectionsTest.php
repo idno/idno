@@ -65,6 +65,26 @@ final class DbalRecordStoreCollectionsTest extends TestCase
                 return $this->mysql->columnValue($column, $value);
             }
 
+            public function upsertById(string $table, array $columns): string
+            {
+                return $this->mysql->upsertById($table, $columns);
+            }
+
+            public function fieldCondition(string $table, string $alias, string $operator, string $operands): array
+            {
+                return $this->mysql->fieldCondition($table, $alias, $operator, $operands);
+            }
+
+            public function textComparison(string $column, string $operator, string $operands): string
+            {
+                return $this->mysql->textComparison($column, $operator, $operands);
+            }
+
+            public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
+            {
+                return $this->mysql->searchTextCondition($column, $term, $booleanSearch, $bypassFulltext);
+            }
+
             public function tableNamesQuery(): string
             {
                 return "select name from sqlite_master where type = 'table'";

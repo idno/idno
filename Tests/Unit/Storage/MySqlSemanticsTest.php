@@ -24,6 +24,27 @@ final class MySqlSemanticsTest extends TestCase
         }
     }
 
+    public function testEpochReadsALiteralInTheDefaultTimeZone(): void
+    {
+        $previous = date_default_timezone_get();
+        try {
+            date_default_timezone_set('UTC');
+            $this->assertSame('1686700000', MySqlSemantics::epoch('2023-06-13 23:46:40'));
+            $this->assertSame('1686700000', MySqlSemantics::epoch('2023-6-13T23:46:40.000'));
+            $this->assertSame('1686700000.5', MySqlSemantics::epoch('2023-06-13 23:46:40.50'));
+            $this->assertSame('1686614400', MySqlSemantics::epoch('2023-06-13'));
+            $this->assertSame('-100', MySqlSemantics::epoch('1969-12-31 23:58:20'));
+            $this->assertSame('-99.75', MySqlSemantics::epoch('1969-12-31 23:58:20.25'));
+            $this->assertSame('-0.95', MySqlSemantics::epoch('1969-12-31 23:59:59.05'));
+            $this->assertNull(MySqlSemantics::epoch('1686700000'));
+            $this->assertNull(MySqlSemantics::epoch('2023-02-30'));
+            date_default_timezone_set('Asia/Tokyo');
+            $this->assertSame('1686667600', MySqlSemantics::epoch('2023-06-13 23:46:40'));
+        } finally {
+            date_default_timezone_set($previous);
+        }
+    }
+
     public function testTextIsComparedFoldedToUpperCase(): void
     {
         $this->assertSame(0, MySqlSemantics::compare('Red', 'rED'));

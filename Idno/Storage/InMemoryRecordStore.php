@@ -21,27 +21,31 @@ use Idno\Storage\Criterion\Search;
  * (Tests/Storage/Contract/RecordStoreContract) holds to the same behaviour as MySQL.
  *
  * It does not interpret criteria against the raw record. Like the SQL stores, it evaluates them
- * against what RecordIndex derives when a record is saved (the metadata rows, the search text and
- * the columns), so the rules are SQL's, not PHP's. The ones MySQL applies by itself (the
- * `created` literals, case folding, search) are in MySqlSemantics, which the SQLite dialect
- * shares:
+ * against what RecordIndex derives when a record is saved (the query values of each document
+ * field, the search text and the columns), so the rules are SQL's, not PHP's: those of
+ * JsonRecordStore, whose dialects compute the same query values from the stored document. The
+ * rules MySQL applies by itself (the `created` literals, case folding, search) are in
+ * MySqlSemantics:
  *
  *  - Operands and indexed values are compared AS STRINGS, the way MySQL compares them when
  *    every parameter is bound as a string: true is '1', false is '', an integer its decimal
  *    string. A null operand is NULL: no comparison with it is ever true.
- *  - Text comparison ignores case (MySQL's default collation), for field names as well as
- *    values; `$lt` and `$gt` compare as text ('10' is less than '5'). Text is folded to UPPER
+ *  - Text comparison ignores case (MySQL's default collation) for values; a field is found by
+ *    its exact name, as the document holds it (expectFieldNamesToIgnoreCase is false). `$lt`
+ *    and `$gt` compare as text ('10' is less than '5'). Text is folded to UPPER
  *    case before it is compared, as utf8mb3_general_ci (MySQL's identifier columns) does, so the
  *    ASCII characters between Z and a (`[ \ ] ^ _` and the backtick) sort after the letters
- *    ('a_' is greater than 'aZ'). MySQL's indexed values are utf8mb4_unicode_520_ci, which sorts
- *    punctuation before the letters: that order is not emulated (the contract hook
- *    expectTextToSortFoldedToUpperCase). Not emulated either: accent insensitivity ('e' = 'é'),
- *    trailing-space padding, and the collation weights of non-ASCII characters.
+ *    ('a_' is greater than 'aZ'), as utf8mb4_general_ci (JsonRecordStore on MySQL) orders them.
+ *    Not emulated: accent insensitivity ('e' = 'é'), trailing-space padding, and the collation
+ *    weights of non-ASCII characters.
  *  - The fields uuid, _id, entity_subtype, owner, publish_status and created are compared
- *    against the record's columns; every other field against its metadata rows. Each criterion
- *    is evaluated independently against the rows, so on a list field two criteria may be
- *    satisfied by different elements, and a record without the field satisfies none of them
- *    ($not and $not-$in included).
+ *    against the record's columns; every other field against its query values
+ *    (RecordIndex::queryValues(): whole values; the scalar elements of a list or member values
+ *    of an object; elements that are arrays or objects not at all; a float as json_encode()
+ *    writes it, and a float operand likewise, RecordIndex::floatText()). Each criterion is evaluated
+ *    independently against the values, so on a list field two criteria may be satisfied by
+ *    different elements, and a record without the field satisfies none of them ($not and
+ *    $not-$in included).
  *  - `created` is compared as a datetime. The operand may be written 'Y-m-d H:i:s', with
  *    unpadded fields ('2023-6-4 1:2:3'), date only (midnight), with a 'T' instead of the space,
  *    and with up to six fractional digits (compared exactly, no rounding: '..:00.5' is greater
@@ -65,8 +69,8 @@ use Idno\Storage\Criterion\Search;
  *    escapes the next character (a trailing backslash is a literal here; in MySQL it escapes the
  *    closing '%'). MySQL's full-text parser also splits words on punctuation ('xx,hello' finds
  *    "hello world" there); here words are split on whitespace only.
- *  - Results are distinct records ordered by `created` descending (ties in insertion order),
- *    then paged; a limit of 0 or less, or a negative offset, finds nothing. count() is the number
+ *  - Results are distinct records ordered by `created` descending, then by _id descending (as
+ *    text ignoring case), then paged; a limit of 0 or less, or a negative offset, finds nothing. count() is the number
  *    find() returns unpaged.
  *  - A record is stored as the JSON document legacy code would store, so types are exactly those
  *    json_encode()/json_decode() give back; a record that cannot be encoded (invalid UTF-8, NAN)
@@ -75,8 +79,9 @@ use Idno\Storage\Criterion\Search;
  *
  * Deliberately different from today's MySQL backend: an array in tags, title, description or
  * handle contributes `Array` to the search text and an array body nothing (MySQL's backend
- * raises); a value is cut at 255 bytes on a character boundary (MySQL's backend loses the record);
- * the MongoDB list form of `$or` counts 0 (MySQL's backend fails the count); there are no
+ * raises); values are compared whole, records with an equal `created` are ordered by _id, nested
+ * arrays and objects are not queryable, and field names are matched exactly (as JsonRecordStore
+ * does); the MongoDB list form of `$or` counts 0 (MySQL's backend fails the count); there are no
  * limits on the range of `created` (a MySQL timestamp ends in 2038) or on the length of a field
  * name (64 characters in MySQL).
  */
@@ -86,7 +91,7 @@ final class InMemoryRecordStore implements RecordStore
     public const DEFAULT_COLLECTIONS = ['entities', 'reader', 'config', 'session', 'site'];
 
     /**
-     * @var array<string, array<string, array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string}>>
+     * @var array<string, array<string, array{record: array<int|string, mixed>, columns: array<string, string|null>, values: array<string, list<string>>, search: string}>>
      */
     private array $collections = [];
 
@@ -155,7 +160,7 @@ final class InMemoryRecordStore implements RecordStore
         $this->collections[$name][$id] = [
             'record' => $document,
             'columns' => $columns,
-            'rows' => RecordIndex::metadataRows($record, $now),
+            'values' => RecordIndex::queryValues($record, $now),
             'search' => RecordIndex::searchText($record, $this->uncurl),
         ];
 
@@ -185,7 +190,7 @@ final class InMemoryRecordStore implements RecordStore
         $entries = $name === null ? [] : ($this->collections[$name] ?? []);
         $latest = null;
         foreach ($entries as $entry) {
-            if ($latest === null || strcmp((string) $entry['columns']['created'], (string) $latest['columns']['created']) > 0) {
+            if ($latest === null || self::newestFirst($entry, $latest) < 0) {
                 $latest = $entry;
             }
         }
@@ -199,8 +204,7 @@ final class InMemoryRecordStore implements RecordStore
             return [];
         }
         $matching = $this->matching($collection, $criteria);
-        // usort() is stable: records with the same `created` stay in insertion order.
-        usort($matching, static fn (array $a, array $b): int => strcmp((string) $b['columns']['created'], (string) $a['columns']['created']));
+        usort($matching, self::newestFirst(...));
 
         return array_values(array_map(
             static fn (array $entry): array => $entry['record'],
@@ -251,7 +255,7 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * @return list<array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string}>
+     * @return list<array{record: array<int|string, mixed>, columns: array<string, string|null>, values: array<string, list<string>>, search: string}>
      */
     private function matching(string $collection, Criteria $criteria): array
     {
@@ -300,7 +304,7 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * @param array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string} $entry
+     * @param array{record: array<int|string, mixed>, columns: array<string, string|null>, values: array<string, list<string>>, search: string} $entry
      */
     private function matches(Criterion $criterion, array $entry): bool
     {
@@ -341,9 +345,22 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * The values the record has for a field: its column, or its metadata rows.
+     * The order of find(): newest `created` first, then the greater _id first (compared as text
+     * ignoring case).
      *
-     * @param array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string} $entry
+     * @param array{columns: array<string, string|null>} $a
+     * @param array{columns: array<string, string|null>} $b
+     */
+    private static function newestFirst(array $a, array $b): int
+    {
+        return strcmp((string) $b['columns']['created'], (string) $a['columns']['created'])
+            ?: MySqlSemantics::compare((string) $b['columns']['_id'], (string) $a['columns']['_id']);
+    }
+
+    /**
+     * The values the record has for a field: its column, or its query values (by the field's exact name).
+     *
+     * @param array{record: array<int|string, mixed>, columns: array<string, string|null>, values: array<string, list<string>>, search: string} $entry
      *
      * @return list<string>
      */
@@ -352,14 +369,7 @@ final class InMemoryRecordStore implements RecordStore
         if (in_array($field, RecordIndex::COLUMN_FIELDS, true)) {
             return [(string) $entry['columns'][$field]];
         }
-        $values = [];
-        foreach ($entry['rows'] as $row) {
-            if (self::equal($row['name'], $field)) {
-                $values[] = $row['value'];
-            }
-        }
-
-        return $values;
+        return $entry['values'][$field] ?? [];
     }
 
     /**
@@ -425,7 +435,8 @@ final class InMemoryRecordStore implements RecordStore
     }
 
     /**
-     * The operand as MySQL sees it with every parameter bound as a string.
+     * The operand as MySQL sees it with every parameter bound as a string, except a float compared
+     * with a document field, which is RecordIndex::floatText(), as the field's query value is.
      */
     private static function operand(string|int|float|bool|null $operand, ?string $field = null): ?string
     {
@@ -433,6 +444,8 @@ final class InMemoryRecordStore implements RecordStore
             $operand === null => null,
             $operand === true => '1',
             $operand === false => '',
+            // A float compared with a document field is the text of its query value, so it finds itself.
+            is_float($operand) && $field !== null && !in_array($field, RecordIndex::COLUMN_FIELDS, true) => RecordIndex::floatText($operand),
             default => (string) $operand,
         };
 

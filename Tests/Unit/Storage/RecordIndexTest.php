@@ -265,6 +265,50 @@ final class RecordIndexTest extends TestCase
         $this->assertSame(['1', '-3', '0.3', '[]', "a\"b\\c"], array_column(array_slice($rows, 0, 5), 'value'));
     }
 
+    public function testQueryValuesAreWholeScalarsAndTheScalarElementsOfAListOrObject(): void
+    {
+        $long = str_repeat('é', 200);
+        $values = RecordIndex::queryValues([
+            'a' => '', 'b' => null, 'c' => false, 'd' => 0, 'e' => '0', 'f' => 0.0, 'g' => [], 'neg' => -0.0,
+            't' => true, 'i' => -3, 'sum' => 0.1 + 0.2, 'big' => 1.0E+25, 'tiny' => 1.0E-5, 'whole' => 2.0, 'zero' => '0.0',
+            'long' => $long, 'list' => ['x', 1, true, false, null, '', 1.5, ['nested'], ['k' => 'v']],
+            'object' => ['k' => 'v', 'l' => 'w'], 'sparse' => [1 => 'a'], 'Case' => 'kept', 'a.b' => 'dotted',
+            'emptyMembers' => ['a' => '', 'b' => null, 'c' => false, 'd' => 0, 'e' => true, 'f' => 'x', 'g' => ['nested']],
+        ], 1);
+
+        $this->assertSame([
+            'a' => ['0'], 'b' => ['0'], 'c' => ['0'], 'd' => ['0'], 'e' => ['0'], 'f' => ['0'], 'g' => [], 'neg' => ['0'],
+            't' => ['1'], 'i' => ['-3'], 'sum' => ['0.30000000000000004'], 'big' => ['1.0e+25'], 'tiny' => ['1.0e-5'], 'whole' => ['2'], 'zero' => ['0.0'],
+            'long' => [$long], 'list' => ['x', '1', '1', '0', '0', '0', '1.5'],
+            'object' => ['v', 'w'], 'sparse' => ['a'], 'Case' => ['kept'], 'a.b' => ['dotted'],
+            'emptyMembers' => ['0', '0', '0', '0', '1', 'x'],
+            'entity_subtype' => ['Idno\\Common\\Entity'], 'publish_status' => ['published'], 'created' => ['1970-01-01 00:00:01'],
+        ], $values);
+    }
+
+    public function testFloatTextIsWhatJsonEncodeWrites(): void
+    {
+        $this->assertSame('0.30000000000000004', RecordIndex::floatText(0.1 + 0.2));
+        $this->assertSame('1.0e+25', RecordIndex::floatText(1.0E+25));
+        $this->assertSame('1.0e-5', RecordIndex::floatText(1.0E-5));
+        $this->assertSame('2', RecordIndex::floatText(2.0));
+        $this->assertSame('-1.5', RecordIndex::floatText(-1.5));
+        $this->assertSame('0', RecordIndex::floatText(0.0));
+        $this->assertSame('0', RecordIndex::floatText(-0.0));
+        $this->assertSame('', RecordIndex::floatText(NAN));
+    }
+
+    public function testCreatedIsTheTimestampOrNow(): void
+    {
+        $this->assertSame(1686700000, RecordIndex::created(['created' => 1686700000]));
+        $this->assertSame(1686700000, RecordIndex::created(['created' => '1686700000.9']));
+        $this->assertSame(-100, RecordIndex::created(['created' => -100]));
+        $this->assertSame(42, RecordIndex::created([], 42));
+        $this->assertSame(42, RecordIndex::created(['created' => ''], 42));
+        $this->expectException(\InvalidArgumentException::class);
+        RecordIndex::created(['created' => 'yesterday']);
+    }
+
     public function testIntegerKeysBecomeNames(): void
     {
         $this->assertSame(['0', '1'], array_column(array_slice(RecordIndex::metadataRows(['x', 'y'], 1), 0, 2), 'name'));

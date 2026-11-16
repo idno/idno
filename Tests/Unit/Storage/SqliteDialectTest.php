@@ -99,18 +99,37 @@ final class SqliteDialectTest extends TestCase
 
     public function testTheMinimumSqliteVersion(): void
     {
-        foreach (['3.24.0', '3.24.1', '3.35.5', '3.51.2', '4.0.0'] as $version) {
+        foreach (['3.38.0', '3.38.5', '3.45.1', '3.51.2', '4.0.0'] as $version) {
             SqliteDialect::checkVersion($version);
+            SqliteDialect::checkVersion($version, true);
             $this->addToAssertionCount(1);
         }
-        foreach (['3.23.1', '3.8.11', '2.8.17'] as $version) {
+        foreach (['3.37.2', '3.24.0', '3.8.11', '2.8.17'] as $version) {
             try {
                 SqliteDialect::checkVersion($version);
                 $this->fail($version . ' should be refused');
             } catch (\LogicException $e) {
-                $this->assertSame('SQLite storage needs SQLite 3.24.0 or later; this PHP uses SQLite ' . $version . '.', $e->getMessage());
+                $this->assertSame('SQLite storage needs SQLite 3.38.0 or later with the JSON functions; this PHP uses SQLite ' . $version . '.', $e->getMessage());
             }
         }
+    }
+
+    public function testASqliteWithoutTheJsonFunctionsIsRefused(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('SQLite storage needs SQLite 3.38.0 or later with the JSON functions; this PHP uses SQLite 3.45.1 without them.');
+
+        SqliteDialect::checkVersion('3.45.1', false);
+    }
+
+    public function testTheConnectionSetupChecksTheLibraryItRunsOn(): void
+    {
+        // This PHP's SQLite passes (the test suite needs 3.38 or later); the check is the one above.
+        $pdo = new \Pdo\Sqlite('sqlite::memory:');
+        SqliteDialect::setUpConnection($pdo);
+
+        $this->assertSame(1, (int) $pdo->query("select json_valid('{}')")->fetchColumn());
+        $this->assertSame(5000, (int) $pdo->query('pragma busy_timeout')->fetchColumn());
     }
 
     public function testTheConnectionSetupRefusesAConnectionThatIsNotPdoSqlite(): void

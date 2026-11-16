@@ -11,7 +11,9 @@ use Doctrine\DBAL\Exception\RetryableException;
 use Idno\Storage\MySqlSemantics;
 
 /**
- * SQLite (3.24 or later, through pdo_sqlite), over warmup/schemas/sqlite/sqlite.sql, behaving as
+ * SQLite (3.38 or later with the JSON functions, through pdo_sqlite).
+ *
+ * For DbalRecordStore, over warmup/schemas/sqlite/sqlite.sql, behaving as
  * the storage contract pins MySQL's behaviour, with the in-memory store's answers where MySQL's
  * cannot be had without a full-text index:
  *
@@ -43,6 +45,13 @@ use Idno\Storage\MySqlSemantics;
  * cannot be loaded or used without it (see the header of sqlite.sql for what that means for
  * maintenance).
  *
+ * For JsonRecordStore, over the tables of the schema migrations (`idno_<collection>`), with
+ * built-in functions and collations only (upsertById(), fieldCondition(), textComparison(),
+ * searchTextCondition()): text compares with NOCASE, which ignores the case of ASCII letters only
+ * (`ÉTÉ` is not `été`, where MySQL and the in-memory store equate them); a document field is read
+ * with json_each() and `->`; search is `like` for terms of at most 5 bytes and a substring match
+ * of any word (instr()) for longer ones, ignoring ASCII case only.
+ *
  * Built with new, for one connection (the one the store uses), not a container service (see
  * config/services.php).
  */
@@ -57,8 +66,11 @@ final class SqliteDialect implements Dialect
     /** How long a write waits for another connection's write lock before it fails. */
     public const BUSY_TIMEOUT_MILLISECONDS = 5000;
 
-    /** The oldest SQLite with `insert ... on conflict (...) do update` (the upsert). */
-    public const MINIMUM_VERSION = '3.24.0';
+    /**
+     * The oldest SQLite the storage runs on: the JSON functions built in, and the `->` operator
+     * (JsonRecordStore), and `insert ... on conflict (...) do update` (the upserts).
+     */
+    public const MINIMUM_VERSION = '3.38.0';
 
     /** @var array<string, list<string>> the conflict target of each table, by lower-cased name */
     private array $conflictTargets = [];
@@ -77,11 +89,18 @@ final class SqliteDialect implements Dialect
      * for an in-memory database), enforces foreign keys, and registers the collation and the
      * search function.
      *
-     * @throws \LogicException when the SQLite library is older than MINIMUM_VERSION
+     * @throws \LogicException when the SQLite library is older than MINIMUM_VERSION or has no JSON functions
      */
     public static function setUpConnection(\Pdo\Sqlite $connection): void
     {
-        self::checkVersion((string) $connection->query('select sqlite_version()')->fetchColumn());
+        $version = (string) $connection->query('select sqlite_version()')->fetchColumn();
+        try {
+            $json = (int) $connection->query("select json_valid('{}')")->fetchColumn() === 1;
+        } catch (\PDOException) {
+            // A library built without the JSON functions (SQLITE_OMIT_JSON).
+            $json = false;
+        }
+        self::checkVersion($version, $json);
         $connection->exec('PRAGMA busy_timeout = ' . self::BUSY_TIMEOUT_MILLISECONDS);
         $connection->exec('PRAGMA journal_mode = WAL');
         $connection->exec('PRAGMA foreign_keys = ON');
@@ -95,12 +114,20 @@ final class SqliteDialect implements Dialect
     }
 
     /**
-     * @throws \LogicException when the version is older than MINIMUM_VERSION
+     * @param string $version the SQLite library's version
+     * @param bool   $json    whether the library has the JSON functions (`json_valid()`)
+     *
+     * @throws \LogicException when the version is older than MINIMUM_VERSION, or the JSON functions are missing
      */
-    public static function checkVersion(string $version): void
+    public static function checkVersion(string $version, bool $json = true): void
     {
-        if (version_compare($version, self::MINIMUM_VERSION, '<')) {
-            throw new \LogicException(sprintf('SQLite storage needs SQLite %s or later; this PHP uses SQLite %s.', self::MINIMUM_VERSION, $version));
+        if (version_compare($version, self::MINIMUM_VERSION, '<') || !$json) {
+            throw new \LogicException(sprintf(
+                'SQLite storage needs SQLite %s or later with the JSON functions; this PHP uses SQLite %s%s.',
+                self::MINIMUM_VERSION,
+                $version,
+                $json ? '' : ' without them',
+            ));
         }
     }
 
@@ -156,6 +183,88 @@ final class SqliteDialect implements Dialect
     public function searchCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
     {
         return [self::SEARCH_FUNCTION . '(' . $column . ', ?)', [$term], false];
+    }
+
+    /**
+     * `insert ... on conflict (id) do update`: a conflict on the uuid (another row's) is an error
+     * (the save is refused), never an update of that row.
+     */
+    public function upsertById(string $table, array $columns): string
+    {
+        $updates = [];
+        foreach ($columns as $column) {
+            if ($column !== 'id') {
+                $updates[] = $this->quoteIdentifier($column) . ' = excluded.' . $this->quoteIdentifier($column);
+            }
+        }
+
+        return 'insert into ' . $this->quoteIdentifier($table)
+            . ' (' . implode(', ', array_map($this->quoteIdentifier(...), $columns)) . ')'
+            . ' values (' . implode(', ', array_fill(0, count($columns), '?')) . ')'
+            . ' on conflict (' . $this->quoteIdentifier('id') . ') do update set ' . implode(', ', $updates);
+    }
+
+    /**
+     * `json_each()` over the field's value: one row for a scalar, one per element of an array or
+     * member of an object (its value, never its key; elements that are arrays or objects give no
+     * value). Built-in functions
+     * only. A real number is its text in the document (`->` gives the JSON text of a value; SQLite's
+     * own conversion of a real to text keeps 15 digits). Text compares with NOCASE (ASCII letters
+     * only); `<` and `>` compare upper() of both sides (ASCII only), so that text is ordered folded
+     * to upper case as MySQL's utf8mb4_general_ci orders it.
+     */
+    public function fieldCondition(string $table, string $alias, string $operator, string $operands): array
+    {
+        $document = $alias . '.' . $this->quoteIdentifier('data');
+        // The JSON text of the value: the scalar itself, an array element by its index, an object
+        // member by its key (quoted, so that any key is one label).
+        $raw = '(case when v.key is null then ' . $document . ' -> ?'
+            . ' when typeof(v.key) = \'integer\' then (' . $document . ' -> ?) -> v.key'
+            . ' else (' . $document . ' -> ?) -> (\'$.\' || json_quote(v.key)) end)';
+        $value = 'case v.type'
+            . ' when \'text\' then (case when v.atom = \'\' then \'0\' else v.atom end)'
+            . ' when \'true\' then \'1\' when \'false\' then \'0\' when \'null\' then \'0\''
+            . ' when \'integer\' then (case when v.atom = 0 then \'0\' else cast(v.atom as text) end)'
+            . ' when \'real\' then (case when v.atom = 0 then \'0\' else ' . $raw . ' end)'
+            . ' end';
+        $sql = 'exists (select 1 from json_each(' . $document . ', ?) as v where '
+            . $this->textComparison('(' . $value . ')', $operator, $operands) . ')';
+
+        return [$sql, 4];
+    }
+
+    /**
+     * NOCASE, except that `<` and `>` compare upper() of both sides in binary (ASCII only, as
+     * NOCASE), so that '_' sorts after the letters as in MySQL's utf8mb4_general_ci; NOCASE folds to
+     * lower case, where it sorts before them. (The explicit `collate binary` also overrides the
+     * NOCASE a column's collation would carry through upper().)
+     */
+    public function textComparison(string $column, string $operator, string $operands): string
+    {
+        if ($operator === '<' || $operator === '>') {
+            return 'upper(' . $column . ') collate binary ' . $operator . ' upper(' . $operands . ')';
+        }
+
+        return $column . ' collate nocase ' . $operator . ' ' . $operands;
+    }
+
+    /**
+     * Built-in functions only, whatever the site's `boolean_search` and `bypass_fulltext_search`:
+     * a term of at most 5 bytes is `like '%term%'` (with `\` escaping the next character, `%` and
+     * `_` wildcards), a longer one matches a text holding ANY of its words (split on whitespace) as a
+     * substring. Both ignore the case of ASCII letters only.
+     */
+    public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
+    {
+        if (strlen($term) <= MySqlSemantics::SHORT_SEARCH_BYTES) {
+            return [$column . ' like ? escape \'\\\'', ['%' . $term . '%'], false];
+        }
+        $words = preg_split('/\s+/u', trim($term), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if ($words === []) {
+            return ['(1 = 0)', [], false];
+        }
+
+        return ['(' . implode(' or ', array_fill(0, count($words), 'instr(lower(' . $column . '), lower(?)) > 0')) . ')', $words, false];
     }
 
     /**

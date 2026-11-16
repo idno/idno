@@ -67,7 +67,11 @@ composer console -- list
   expectations are the MySQL store's, and the hooks a binding overrides are only where the
   databases really differ: `expectLongSearchTermToMatchSubstring`, `expectBooleanModeSearch`,
   `expectFourByteCharactersToBeRejected`, `expectTextComparisonToIgnoreCase`,
-  `expectTextToSortFoldedToUpperCase`); the
+  `expectTextToSortFoldedToUpperCase`, or where the JSON store differs from today's (see "The JSON
+  record store" under "Database"); the contract also runs against `JsonRecordStore` on in-memory
+  SQLite in the unit tier (`Tests/Unit/Storage/JsonSqliteRecordStoreTest`) and on a private MySQL or
+  MariaDB database of the rig's server (`Tests/Storage/JsonMySqlRecordStoreTest`, which skips on
+  SQLite); the
   SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
   `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against
@@ -180,7 +184,8 @@ Idno/
   Storage/                     The storage interface (modern style): the RecordStore interface; the query
                                model (Criteria and Criterion/*, value objects parsed from the legacy search
                                arrays); RecordIndex (the metadata rows, search text and columns an SQL store
-                               derives from a record, exactly as the old backend's MySQL::saveRecord() did); RecordDefaults
+                               derives from a record, exactly as the old backend's MySQL::saveRecord() did,
+                               and the query values of the JSON store); RecordDefaults
                                (what a store fills in: _id, uuid, siteid); InMemoryRecordStore, the reference
                                implementation the storage contract also holds to MySQL's behaviour;
                                MySqlSemantics (the rules MySQL applies by itself, in PHP, shared by the
@@ -194,7 +199,11 @@ Idno/
                                EntityRepository (entities on a RecordStore, with the legacy access rules),
                                EntityQuery (its query) and AccessContext (who is asking; FixedAccessContext
                                for tests); SchemaMigrator (runs the schema migrations in Migrations/)
-                               and SchemaCatalog (the tables and indexed fields that exist)
+                               and SchemaCatalog (the tables and indexed fields that exist);
+                               JsonRecordStore, the RecordStore on the tables the migrations create (not
+                               used by the site yet), with TypeMap (a class's value in the `type` column)
+                               and IdentityTypeMap (no aliases); RecordIndex::queryValues() is what a
+                               query on a document field compares with, in that store and in memory
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -425,13 +434,14 @@ other new code may.
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityQuery.php`,
-  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `Migrations/` (the schema migrations),
+  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
   `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds), or the container will try to autowire
-  them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`) are
-  excluded too: the container's `RecordStore` is built by a factory (see the storage services
-  below). `BootConfigConnectionFactory.php` is
+  them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`,
+  `JsonRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
+  the storage services below). The `TypeMap` interface has no container implementation yet, so
+  nothing may autowire it. `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
   `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
@@ -492,7 +502,9 @@ other new code may.
   pins the throwing side (a failure on any statement of `save()` is thrown, rolled back, stores
   nothing and leaves the connection usable).
 - SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
-  3.24 or later through `pdo_sqlite`; the connection setup refuses an older library): the same
+  3.38 or later with the JSON functions, through `pdo_sqlite`; the connection setup refuses an older
+  library, or one built without `json_valid()`, with a `\LogicException` naming the version
+  required and the one found): the same
   store, held to the same contract with the in-memory store's hook values. **In this release SQLite
   is for tests and development only** (it is to become a supported production database in a later release): no
   site is installed on it (the installer does not create SQLite sites; the test rig's SQLite mode is
@@ -838,6 +850,8 @@ test made them.
   field names `[a-z0-9_]{1,48}`, returned without the prefix). It reads everything with ONE
   statement at the first question (`information_schema.columns` of the current database;
   `sqlite_master`) and keeps it until `forget()`: call that after DDL.
+- `Idno\Storage\JsonRecordStore` is the `RecordStore` on these tables (see "The JSON record store"
+  below). Nothing in the site builds it yet: the container's `RecordStore` is still `DbalRecordStore`.
 - Tests: `Tests\Storage\PrivateDatabase` makes migrated databases of a test's own.
   `sqliteMemory()` (an in-memory database with `SqliteConnectionSetup`) needs nothing but PHP and
   works in the unit tier; `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
@@ -846,6 +860,68 @@ test made them.
   skipping the test on an SQLite or MongoDB site; `drop()` removes either (call it in `tearDown()`;
   it refuses to drop the site's own database). `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
+
+#### The JSON record store (not used by the site yet)
+
+`Idno\Storage\JsonRecordStore` (built with new: the connection, a `Dialect`, `RecordDefaults`, a
+`TypeMap`, the `SchemaCatalog` of the same connection, the quote normaliser and the two search
+settings) keeps collection `c` in the table `idno_<c>` (the name reduced to `[a-zA-Z0-9_]` and
+lower-cased) when the catalog lists that table and `c` is not in `JsonRecordStore::SYSTEM_TABLES`
+(`settings`, `sessions`, `migrations`, `upgrade_progress`, `upgrade_rejects`); any other name is no
+collection, and no statement is sent for it. The catalog is read once: code that creates a table
+afterwards calls `SchemaCatalog::forget()`.
+
+- `save()` is ONE upsert on `id` (`Dialect::upsertById()`): `data` is `json_encode($record)` with
+  today's flags (none), so a document copied byte for byte from a 1.x `contents` reads the same;
+  `type` is `TypeMap::typeFor()` of `entity_subtype` (default `Idno\Common\Entity`), `created` the
+  timestamp (`RecordIndex::created()`), `search` `RecordIndex::searchText()`. A record is read back
+  as `json_decode($data, true)`, never rebuilt from the columns. On MySQL/MariaDB every update of
+  the upsert is guarded by `id = values(id)`, because `on duplicate key update` would otherwise update
+  the row of another record that holds the uuid; when the statement affects no row, the store checks
+  that the record is there (an identical re-save) or returns false (another record's uuid). Do not
+  give the connection `PDO::MYSQL_ATTR_FOUND_ROWS`: it changes what "no row" means.
+- Queries: `uuid`, `_id` (column `id`), `entity_subtype` (column `type`, each operand expanded
+  through `TypeMap::typesFor()`; `=` and `$not` become `in` and `not in`), `owner`,
+  `publish_status` and `created` are compared with their columns; a `created` operand is read by
+  `MySqlSemantics::epoch()` in the PHP default time zone of the query, and one with a fraction is
+  never sent (MySQL and MariaDB compare an integer column with a fractional operand inexactly): it
+  equals no record, `$lt` 10.5 is `<= 10`, `$gt` 10.5 is `> 10`. Any
+  other field is compared with its query values (`RecordIndex::queryValues()`), computed in SQL from
+  `data` by `Dialect::fieldCondition()`; the field's JSON path (`$.` and the name as `json_encode()`
+  writes it, so that it matches the document's keys byte for byte on MariaDB) is a bound parameter.
+  MySQL/MariaDB: a semi-join of the table with `JSON_TABLE` (not `EXISTS`: MySQL 8.0 evaluates a
+  `JSON_TABLE` in an `EXISTS` subquery without its outer row), text from `LONGTEXT CHARACTER SET
+  utf8mb4` columns (MariaDB's `JSON_UNQUOTE()` returns utf8mb3), compared `collate
+  utf8mb4_general_ci`. SQLite: `json_each()` and `->` (built-ins only), `collate nocase`, and
+  `upper(...) collate binary` for `$lt`/`$gt`. Order: `created` desc, `id` desc.
+- Search: today's rules on the `search` column (MySQL/MariaDB: the full-text index with the site's
+  `boolean_search` and `bypass_fulltext_search`; SQLite: `like` for terms of up to 5 bytes, `instr()`
+  for each word of a longer one, built-ins only, ASCII case only).
+- Errors: the `RecordStore` interface's contract (`Tests/Unit/Storage/JsonRecordStoreFailureTest`
+  pins the throwing side, the schema catalog's read included).
+- Differences from today's store, each a contract hook (in `RecordStoreContract`; the in-memory
+  store has the JSON store's value of every one, as on MariaDB, except the `created` time zone: it
+  keeps `created` as the text formatted at save time):
+  records with an equal `created` are ordered by `id` descending (`expectEqualCreatedToBeOrderedById`);
+  values are compared whole, never cut at 255 bytes (`expectValuesToBeCutAt255Bytes`); an element of
+  a list or object that is itself an array or object is not queryable, where today it is queried as
+  its JSON encoding (`expectNestedArraysToMatchTheirJson`; a field holding a list or an object is
+  queryable by its scalar values, never its keys, on every store, as today);
+  four-byte characters and field names over 64 characters are stored (`expectFourByteCharactersToBeRejected`,
+  `expectLongFieldNamesToBeRefused`); re-saving a record with another record's uuid is refused, both
+  records intact (`expectUuidClashOnResaveToOverwrite`); on SQLite, text ignores ASCII case only
+  (`expectNonAsciiCaseToBeIgnored`); a field is found by its exact name (`expectFieldNamesToIgnoreCase`);
+  `created` is a timestamp, so a query's datetime literal is read in the time zone of the query, not
+  compared with the text formatted at save time (`expectCreatedToBeComparedInTheTimeZoneOfItsSave`);
+  a float is queried as the text `json_encode()` wrote (`0.30000000000000004`, not PHP's 14-digit
+  `0.3`; `expectFloatsToMatchTheirJsonText`), and a float OPERAND of a document-field condition is
+  converted the same way (`RecordIndex::floatText()`, shared by the stored values and the operands
+  in the JSON and in-memory stores), so a float always finds itself, as it does today; only a string
+  operand such as `'0.3'` tells the rules apart. The exception: MySQL (not MariaDB) prints a number
+  in exponent form its own way (`9.999999999999999e24` for `1.0e+25`, `0.00001` for `1.0e-5`), so
+  there such a float is found neither by its text nor by the same float, only by MySQL's text
+  (`expectFloatsInExponentFormToMatchTheirJsonText`, the one hook whose value differs between MySQL
+  and MariaDB).
 
 #### MySQL schema
 

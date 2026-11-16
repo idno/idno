@@ -30,6 +30,11 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - expectTextToSortFoldedToUpperCase (true): text is ordered folded to upper case
  *    (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci;
  *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings;
+ *  - expectEqualCreatedToBeOrderedById (true), expectValuesToBeCutAt255Bytes (false),
+ *    expectNestedArraysToMatchTheirJson (false), expectFieldNamesToIgnoreCase (false),
+ *    expectFloatsToMatchTheirJsonText (true): it matches on RecordIndex::queryValues(), as
+ *    JsonRecordStore does (it keeps `created` as the text formatted at save time, so
+ *    expectCreatedToBeComparedInTheTimeZoneOfItsSave keeps its default, true);
  *  - collections: entities, reader, site and config, the collections of the legacy schema it serves.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
@@ -68,6 +73,31 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
     protected function expectBooleanModeSearch(): bool
     {
         return false;
+    }
+
+    protected function expectEqualCreatedToBeOrderedById(): bool
+    {
+        return true;
+    }
+
+    protected function expectValuesToBeCutAt255Bytes(): bool
+    {
+        return false;
+    }
+
+    protected function expectNestedArraysToMatchTheirJson(): bool
+    {
+        return false;
+    }
+
+    protected function expectFieldNamesToIgnoreCase(): bool
+    {
+        return false;
+    }
+
+    protected function expectFloatsToMatchTheirJsonText(): bool
+    {
+        return true;
     }
 
     protected function collections(): array
@@ -166,13 +196,15 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         $this->assertSame('b', $this->store->save('entities', ['_id' => 'b', 'uuid' => 'u1']));
     }
 
-    public function testTiesInCreatedStayInInsertionOrder(): void
+    public function testTiesInCreatedAreOrderedByIdDescending(): void
     {
-        foreach (['c', 'a', 'b'] as $id) {
+        foreach (['c', 'A', 'b', 'a_', 'aZ'] as $id) {
             $this->store->save('entities', ['_id' => $id, 'created' => 1686700000]);
         }
 
-        $this->assertSame(['c', 'a', 'b'], $this->ids2(Criteria::all()));
+        // Compared as text ignoring case, folded to upper case ('_' after the letters).
+        $this->assertSame(['c', 'b', 'a_', 'aZ', 'A'], $this->ids2(Criteria::all()));
+        $this->assertSame('c', $this->store->findLatest('entities')['_id']);
     }
 
     public function testNegativeLimitOrOffsetFindNothing(): void
@@ -242,27 +274,28 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         $all = static fn (\Idno\Storage\Criterion\Criterion ...$c): Criteria => new Criteria(new AllOf($c));
 
         $this->assertSame([], $this->ids2($all(new AnyOf([]))), 'an AnyOf with no children matches nothing');
-        $this->assertSame(['a', 'b'], $this->ids2($all(new AllOf([]))), 'an AllOf with no children matches everything');
+        $this->assertSame(['b', 'a'], $this->ids2($all(new AllOf([]))), 'an AllOf with no children matches everything');
         $this->assertSame(['a'], $this->ids2($all(new AnyOf([new Equals('g', 'y'), new Equals('g', 'nope')]), new Equals('f', 'x'))));
         $this->assertSame(['a'], $this->ids2($all(new AnyOf([new AllOf([new Equals('f', 'x'), new Equals('g', 'y')]), new Equals('g', 'nope')]))));
-        $this->assertSame(['a', 'b'], $this->ids2($all(new AnyOf([new AnyOf([new Equals('g', 'y')]), new Equals('g', 'z')]))));
+        $this->assertSame(['b', 'a'], $this->ids2($all(new AnyOf([new AnyOf([new Equals('g', 'y')]), new Equals('g', 'z')]))));
         $this->assertSame([], $this->ids2($all(new In('f', []))), 'In with no values matches nothing');
-        $this->assertSame(['a', 'b'], $this->ids2($all(new NotIn('f', []))), 'NotIn with no values matches records that have the field');
+        $this->assertSame(['b', 'a'], $this->ids2($all(new NotIn('f', []))), 'NotIn with no values matches records that have the field');
         $this->assertSame([], $this->ids2($all(new NotIn('missing', []))));
     }
 
-    public function testFieldNamesIgnoreCaseLikeEverythingElseInMysql(): void
+    public function testFieldNamesAreMatchedExactlyAndValuesIgnoringCase(): void
     {
         $this->store->save('entities', ['_id' => 'a', 'Slug' => 'x']);
 
-        $this->assertSame(['a'], $this->ids2(Criteria::fromLegacyArray(['slug' => 'x'])));
+        $this->assertSame(['a'], $this->ids2(Criteria::fromLegacyArray(['Slug' => 'X'])));
+        $this->assertSame([], $this->ids2(Criteria::fromLegacyArray(['slug' => 'x'])));
     }
 
     public function testValuesAreComparedAsStringsNotNumbers(): void
     {
         $this->store->save('entities', ['_id' => 'a', 'n' => 1.5, 'm' => '007']);
 
-        // 1.5 is '1.5'; '007' is not 7 and 1 is not '1.0'.
+        // 1.5 is '1.5'; '007' is not 7 and 1.5 is not '1.50'.
         $this->assertSame(['a'], $this->ids2(Criteria::fromLegacyArray(['n' => 1.5])));
         $this->assertSame(['a'], $this->ids2(Criteria::fromLegacyArray(['m' => '007'])));
         $this->assertSame([], $this->ids2(Criteria::fromLegacyArray(['m' => 7])));
