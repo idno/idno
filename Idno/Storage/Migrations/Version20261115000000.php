@@ -138,6 +138,7 @@ final class Version20261115000000 extends AbstractMigration
               position VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
               verify_cursor VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
               error TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
+              error_detail TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
               completed_at BIGINT NULL,
               PRIMARY KEY (collection)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
@@ -236,6 +237,7 @@ final class Version20261115000000 extends AbstractMigration
               position TEXT NULL,
               verify_cursor TEXT NULL,
               error TEXT NULL,
+              error_detail TEXT NULL,
               completed_at INTEGER NULL,
               PRIMARY KEY (collection)
             )

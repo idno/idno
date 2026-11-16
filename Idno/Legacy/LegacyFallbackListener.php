@@ -24,6 +24,9 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * and building the logger needs the legacy application (and, in a second kernel, would
  * replace the process's PHP error handler).
  *
+ * While the legacy application is not booted (the schema gate is closed) every exception is left
+ * to Symfony: there is no legacy router to serve the request.
+ *
  * Every other exception is left to Symfony, so that, for example, a broken route
  * definition fails loudly instead of being served as a legacy page. Exceptions thrown by
  * a controller (any request that has a "_controller") are also left to Symfony. Exceptions
@@ -49,6 +52,9 @@ final class LegacyFallbackListener
         if (!$event->isMainRequest()
             || !$exception instanceof BadRequestHttpException
             || $event->getRequest()->attributes->has('_controller')
+            // While the schema gate is closed the legacy application has not booted: there is no
+            // legacy router (nor logger) to hand the request to, so Symfony answers it (a 400).
+            || \Idno\Core\Idno::site() === null
         ) {
             return;
         }

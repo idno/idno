@@ -32,8 +32,9 @@ Options:
   never conflict. Think twice: a save that breaks the rule fails, and `save()` returns false. And if
   records with duplicate values exist already when the index is created, the database refuses to
   create it: no index is made, the error is logged, and the administrator who enabled the plugin
-  sees an error message. The plugin stays enabled; remove the duplicates, then disable and enable it again (or
-  run the upgrade) to create the index.
+  sees an error message (or `php bin/console idno:upgrade` prints a warning). The plugin stays
+  enabled; remove the duplicates, then disable and enable it again (or run `php bin/console
+  idno:upgrade`) to create the index.
 * `length: 1..255` (MySQL and MariaDB only): how many characters of the value the index holds
   (default 255). Queries always compare the whole value; only the index is shorter. A unique field
   is unique on those first characters. SQLite indexes the whole value and ignores it.
@@ -46,15 +47,36 @@ effect through its subclasses. `\Idno\Common\Entity` already declares `access`, 
 
 ## When the index is created
 
-* When an administrator enables your plugin, Idno creates the indexes its entity classes declare. If
-  that fails, the administrator sees a message and the error is logged; the plugin is enabled
-  anyway, and the site works without the index.
-* When a site upgrades (the upgrade page, or `php bin/console idno:upgrade`), Idno creates the
-  indexes that the core and the enabled plugins declare.
+Idno distinguishes two kinds of declaration.
 
-If you add a declaration to a plugin that sites already have enabled, the index is created at the
-next of those events. A new declaration on a class that ships with Idno itself comes with an empty
-schema migration, so that every site runs the upgrade and gets the index.
+* **Core declarations** (classes under `Idno/`) are created by the upgrade itself, before it copies
+  anything, whether the site is upgraded through the upgrade page in a browser or with
+  `php bin/console idno:upgrade`. A new declaration on a core class must come with a new, empty
+  schema migration (a class in `Idno/Storage/Migrations/` with its own version and no SQL, like
+  `Version20261115000001`): that pending migration is what closes the site for the upgrade and makes
+  every existing site create the index. The upgrade records the newest pending migration only once
+  nothing is left to create.
+* **Plugin declarations**, including those of the plugins bundled with Idno (`StaticPages`:
+  `category`; `ActivityPub`: `actor_uri`, `user_uuid`), are created:
+  * when an administrator enables the plugin in the admin panel. If that fails, the administrator
+    sees a message and the error is logged; the plugin is enabled anyway;
+  * by `php bin/console idno:upgrade`, for every enabled plugin, as the last thing it does, once the
+    database is up to date and any copy of a 1.x site has finished. If a plugin's indexes cannot be
+    created, the command prints a warning, logs the details, skips that plugin and carries on. A
+    plugin that is installed but not enabled is not touched.
+
+  The upgrade page in a browser never creates a plugin's indexes. A site upgraded only through the
+  browser has no plugin indexes until `php bin/console idno:upgrade` is run or the plugin is disabled
+  and enabled again in the admin panel. A plugin's indexes can never keep a site closed.
+
+Indexes are never needed for correctness: every query works without them, only more slowly on a
+large site.
+
+**A warning for plugin authors.** An index belongs to the whole collection table, not to your
+plugin's entities: every entity stored in that collection shares it. A field with a declared index
+matches scalar values only, so declaring a field that other code (core, or another plugin) stores
+lists or objects in changes what queries on that field match, for everyone. Choose field names your
+plugin owns.
 
 Creating an index on a large table takes a while, once.
 

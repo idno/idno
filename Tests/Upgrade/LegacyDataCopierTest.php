@@ -190,10 +190,12 @@ final class LegacyDataCopierTest extends TestCase
         self::assertSame('500', (string) $row['copied']);
         self::assertSame($position, $row['position'], 'the position is that of the last committed batch');
         self::assertSame(500, (int) $fixture->connection->fetchOne('select count(*) from idno_entities'));
-        self::assertStringContainsString('disk I/O error', (string) $row['error']);
+        self::assertSame(\Idno\Upgrade\PublicMessage::stopped()->text, (string) $row['error']);
+        self::assertStringContainsString('disk I/O error', (string) $row['error_detail'], 'the driver message is private detail');
 
         $progress = $this->complete($copier);
         self::assertNull($progress->error, 'a step that works clears the error');
+        self::assertNull($progress->errorDetail);
         $copied = $fixture->connection->fetchFirstColumn('select id from idno_entities order by id');
         sort($ids);
         self::assertSame($ids, $copied);
@@ -704,6 +706,7 @@ final class LegacyDataCopierTest extends TestCase
     {
         yield 'legacy_config' => ['legacy_config'];
         yield 'legacy_entities' => ['legacy_entities'];
+        yield 'legacy_entities_search (dropped by hand mid-upgrade)' => ['legacy_entities_search'];
     }
 
     /**
@@ -733,6 +736,206 @@ final class LegacyDataCopierTest extends TestCase
             self::assertSame($settings, $this->settingsRows());
             self::assertSame($before, $this->rowCounts());
         }
+        self::assertSame([null, null, null, null], $fixture->connection->fetchFirstColumn('select completed_at from idno_upgrade_progress'));
+        // Stored, and public-safe: a PublicMessage naming the table, no private detail.
+        $row = $this->progressRow('entities');
+        self::assertStringContainsString($table, (string) $row['error']);
+        self::assertNull($row['error_detail']);
+        self::assertStringContainsString($table, (string) $copier->progress()->error);
+    }
+
+    /**
+     * A collection whose 1.x table did not exist when the upgrade began (`source_existed` 0) and
+     * that appears later (an old-version process recreating its tables during the upgrade) is
+     * renamed with the others and then never read: its rows would be neither copied nor rejected.
+     * In the verify pass that is an impossible state: stopped with an error naming the table,
+     * nothing written, never complete.
+     */
+    public function testASourceThatAppearsDuringTheUpgradeStopsIt(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->connection->executeStatement('drop table reader_search, reader_metadata');
+        $fixture->connection->executeStatement('drop table reader');
+        $fixture->insertMany('entities', 30);
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+        $copier->step(microtime(true) - 1);
+        self::assertSame('0', (string) $fixture->connection->fetchOne("select source_existed from idno_upgrade_progress where collection = 'reader'"));
+        foreach (['reader' => 'entities', 'reader_metadata' => 'entities_metadata', 'reader_search' => 'entities_search'] as $table => $like) {
+            $fixture->connection->executeStatement('create table ' . $table . ' like ' . $like);
+        }
+        $feed = $fixture->insert('reader', ['entity_subtype' => 'Idno\\Entities\\Reader\\Feed', 'feed_url' => 'https://feed.example/']);
+
+        $progress = null;
+        for ($i = 0; $i < 10; ++$i) {
+            $progress = $copier->step(microtime(true) + self::FAR);
+            if ($progress->error !== null || $progress->complete) {
+                break;
+            }
+        }
+
+        self::assertNotNull($progress);
+        self::assertFalse($progress->complete);
+        self::assertNotNull($progress->error);
+        self::assertStringContainsString('legacy_reader', $progress->error);
+        self::assertStringContainsString('Nothing was changed', $progress->error);
+        $before = $this->rowCounts();
+        $again = $copier->step(microtime(true) + self::FAR);
+        self::assertFalse($again->complete);
+        self::assertNotNull($again->error);
+        self::assertSame($before, $this->rowCounts());
+        self::assertNull($this->store()->findByUuid('reader', $feed['uuid']));
+        self::assertFalse($copier->completion());
+    }
+
+    /**
+     * completion(): null before any upgrade began, false while it runs, true once it is complete;
+     * one statement, on the progress table (which the caller knows exists).
+     */
+    public function testCompletion(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 30);
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+
+        self::assertNull($copier->completion());
+        $copier->step(microtime(true) - 1);
+        self::assertFalse($copier->completion());
+        $this->complete($copier);
+        self::assertTrue($copier->completion());
+    }
+
+    /**
+     * In the copy phase a 1.x table dropped by hand (here `entities_metadata`, which the copy does not
+     * read) stops the upgrade with a public-safe message naming it: the gate stays closed (an upgrade
+     * on record and not complete) and the copier says why.
+     */
+    public function testAOneXTableDroppedByHandInTheCopyPhaseIsNamed(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 600);
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+        $copier->step(microtime(true) - 1);
+        $this->dropTable('entities_metadata');
+
+        $progress = $copier->step(microtime(true) + self::FAR);
+
+        self::assertNotNull($progress->error);
+        self::assertStringContainsString('entities_metadata', $progress->error);
+        self::assertNull($progress->errorDetail);
+        self::assertFalse($progress->complete);
+    }
+
+    /**
+     * The one evidence rule: tables with 1.x names that are not a 1.x database (another
+     * application's `config`, `session`, `versions`) are no 1.x copy to report.
+     */
+    public function testForeignOneXNamesAreNoLegacyDatabase(): void
+    {
+        $connection = PrivateDatabase::mysql('upgrade');
+        $this->connections[] = $connection;
+        try {
+            $connection->executeStatement('create table config (x int)');
+            $connection->executeStatement('create table session (x int)');
+            $connection->executeStatement('create table versions (label varchar(10), value varchar(10))');
+            $copier = new LegacyDataCopier($connection, new MySqlDialect(), new AttributeTypeMap(), new UpgradeLock($connection));
+
+            self::assertTrue($copier->progress()->noLegacyDatabase);
+            self::assertTrue($copier->step(microtime(true) + self::FAR)->noLegacyDatabase);
+            self::assertSame(0, (int) $connection->fetchOne('select count(*) from idno_upgrade_progress'));
+        } finally {
+            array_pop($this->connections);
+            PrivateDatabase::drop($connection);
+        }
+    }
+
+    /**
+     * A progress table made before `error_detail` existed (a development database) fails with a
+     * message that says so, not with an undefined-key warning.
+     */
+    public function testAProgressTableWithoutTheDetailColumnSaysSo(): void
+    {
+        $fixture = $this->fixture();
+        $copier = $this->copier();
+        $copier->step(microtime(true) - 1);
+        $fixture->connection->executeStatement('alter table idno_upgrade_progress drop column error_detail');
+
+        try {
+            $copier->progress();
+            self::fail('A progress table without error_detail is refused.');
+        } catch (\LogicException $e) {
+            self::assertStringContainsString('error_detail', $e->getMessage());
+        }
+    }
+
+    public function testAVersionsTableOfAnotherShapeIsNoVersion(): void
+    {
+        $fixture = $this->fixture(2020120301, false);
+        $this->dropTable('versions');
+        $fixture->connection->executeStatement('create table versions (id int, name varchar(10))');
+
+        self::assertNull($this->copier()->legacySchemaVersion());
+    }
+
+    /**
+     * After completion, 1.x tables recreated under their own names are listed (read-only) and do not
+     * stop anything.
+     */
+    public function testReappearedTablesAreListedAfterCompletion(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+        self::assertSame([], $copier->reappearedTables());
+        $this->complete($copier);
+        self::assertSame([], $copier->reappearedTables());
+        foreach (['reader' => 'legacy_reader', 'versions' => 'legacy_versions'] as $table => $like) {
+            $fixture->connection->executeStatement('create table ' . $table . ' like ' . $like);
+        }
+
+        self::assertSame(['reader', 'versions'], $copier->reappearedTables());
+        $progress = $copier->step(microtime(true) + self::FAR);
+        self::assertTrue($progress->complete);
+        self::assertNull($progress->error);
+    }
+
+    /**
+     * In the verify phase EVERY legacy_ table is dropped by hand: the step stores a public-safe error
+     * that names what vanished, writes nothing else, and the upgrade is never complete.
+     */
+    public function testEveryRenamedTableDroppedInTheVerifyPassStopsTheUpgrade(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 30);
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+        for ($i = 0; $i < 10 && $copier->progress()->phase !== UpgradeProgress::VERIFYING; ++$i) {
+            $copier->step(microtime(true) - 1);
+        }
+        self::assertSame(UpgradeProgress::VERIFYING, $copier->progress()->phase);
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            $this->dropTable('legacy_' . $table);
+        }
+        $settings = $this->settingsRows();
+        $before = $this->rowCounts();
+
+        $progress = $copier->step(microtime(true) + self::FAR);
+
+        self::assertFalse($progress->complete);
+        self::assertNotNull($progress->error);
+        self::assertStringContainsString('no longer there', $progress->error);
+        foreach (['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search', 'legacy_config'] as $table) {
+            self::assertStringContainsString($table, $progress->error);
+        }
+        self::assertNull($progress->errorDetail, 'public-safe: no private detail');
+        $row = $this->progressRow('entities');
+        self::assertSame($progress->error, $row['error'], 'stored');
+        self::assertSame($settings, $this->settingsRows());
+        $after = $this->rowCounts();
+        unset($before['idno_upgrade_progress'], $after['idno_upgrade_progress']);
+        self::assertSame($before, $after, 'nothing else was written');
         self::assertSame([null, null, null, null], $fixture->connection->fetchFirstColumn('select completed_at from idno_upgrade_progress'));
     }
 
@@ -898,8 +1101,56 @@ final class LegacyDataCopierTest extends TestCase
         $row = $this->progressRow('entities');
         self::assertSame('0', (string) $row['copied']);
         self::assertNull($row['position']);
-        self::assertStringContainsString('does not match its source', (string) $row['error']);
+        // The detail (it names the record) is private: stored apart, logged; the public error is the
+        // generic sentence.
+        self::assertSame(\Idno\Upgrade\PublicMessage::stopped()->text, (string) $row['error']);
+        self::assertStringContainsString('does not match its source', (string) $row['error_detail']);
+        self::assertStringContainsString('https://legacy.example/view/', (string) $row['error_detail']);
         self::assertStringContainsString('does not match its source', implode("\n", $logger->messages));
+        $progress = $this->copier()->progress();
+        self::assertSame(\Idno\Upgrade\PublicMessage::stopped()->text, $progress->error);
+        self::assertStringContainsString('does not match its source', (string) $progress->errorDetail);
+    }
+
+    /**
+     * A driver error's message (SQL state, a value) is private detail too.
+     */
+    public function testADriverErrorIsPrivateDetail(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insert('entities', ['uuid' => 'https://legacy.example/view/secret-uuid', 'title' => 'One']);
+        $middleware = new FailingStatementMiddleware();
+        $middleware->failOn('/^insert into `idno_entities`/i');
+
+        try {
+            $this->copier($this->connect($middleware))->step(microtime(true) + self::FAR);
+            self::fail('A failing statement is thrown.');
+        } catch (\Throwable) {
+        }
+
+        $progress = $this->copier()->progress();
+        self::assertSame(\Idno\Upgrade\PublicMessage::stopped()->text, $progress->error);
+        self::assertNotNull($progress->errorDetail);
+        self::assertStringNotContainsString('secret-uuid', $progress->error);
+    }
+
+    /**
+     * An impossible state found before any progress row exists cannot be stored, but progress()
+     * reports it from the tables alone, and step() returns it: it is never dropped.
+     */
+    public function testAnImpossibleStateWithoutProgressRowsIsReported(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 10);
+        $fixture->connection->executeStatement('rename table ' . implode(', ', array_map(static fn (string $t): string => $t . ' to legacy_' . $t, LegacyDataCopier::LEGACY_TABLES)));
+        $copier = $this->copier();
+
+        foreach ([$copier->progress(), $copier->step(microtime(true) + self::FAR), $copier->progress()] as $progress) {
+            self::assertNotNull($progress->error);
+            self::assertStringContainsString('the copy had not finished', $progress->error);
+            self::assertFalse($progress->complete);
+        }
+        self::assertSame(0, (int) $fixture->connection->fetchOne('select count(*) from idno_upgrade_progress'));
     }
 
     // ------------------------------------------------------------------ created, config, packets

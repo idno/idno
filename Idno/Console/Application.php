@@ -8,8 +8,12 @@ use Idno\Common\ConsolePlugin;
 use Idno\Core\Idno;
 use Idno\Core\RemoteVersion;
 use Idno\Core\Version;
+use Idno\Upgrade\SchemaGate;
 use Symfony\Bundle\FrameworkBundle\Console\Application as FrameworkApplication;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\CommandNotFoundException;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\HttpKernel\KernelInterface;
 
@@ -21,13 +25,17 @@ require_once __DIR__ . '/functions.php';
  * It offers Symfony's own commands and the commands tagged "console.command" (classes with
  * #[AsCommand], autowired), plus the legacy commands: every Idno\Common\ConsolePlugin found
  * in ConsolePlugins/ and IdnoPlugins/, and the built-in "version" command. The legacy commands
- * are left out when the kernel does not boot the legacy application (idno:upgrade).
+ * are left out when the kernel has not booted the legacy application: while the schema gate is
+ * closed (the database needs creating or upgrading), when every command but idno:upgrade first
+ * prints SchemaGate::CLOSED_MESSAGE on stderr.
  *
  * This class takes the kernel, so it is not a container service (see config/services.php).
  */
 final class Application extends FrameworkApplication
 {
     private bool $legacyCommandsRegistered = false;
+
+    private bool $gateClosedSaid = false;
 
     public function __construct(KernelInterface $kernel)
     {
@@ -51,10 +59,10 @@ final class Application extends FrameworkApplication
 
         parent::registerCommands();
 
-        // A kernel booted without the legacy application (idno:upgrade, see bin/console) has no
+        // A kernel that has not booted the legacy application (the schema gate is closed) has no
         // legacy commands: they need it.
         $kernel = $this->getKernel();
-        if ($kernel instanceof \Idno\Kernel && !$kernel->bootsLegacy()) {
+        if ($kernel instanceof \Idno\Kernel && !$kernel->legacyBooted()) {
             return;
         }
 
@@ -64,6 +72,41 @@ final class Application extends FrameworkApplication
 
         $this->registerConsolePlugins();
         $this->registerVersionCommand();
+    }
+
+    /**
+     * While the schema gate is closed, says so on stderr before any command but idno:upgrade runs
+     * (that command is the way to open it), and before the error for a command that is not there
+     * (the legacy ones are not, while the gate is closed).
+     */
+    protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
+    {
+        if ($command->getName() !== 'idno:upgrade') {
+            $this->sayTheGateIsClosed($output);
+        }
+
+        return parent::doRunCommand($command, $input, $output);
+    }
+
+    public function doRun(InputInterface $input, OutputInterface $output): int
+    {
+        try {
+            return parent::doRun($input, $output);
+        } catch (CommandNotFoundException $e) {
+            $this->sayTheGateIsClosed($output);
+
+            throw $e;
+        }
+    }
+
+    private function sayTheGateIsClosed(OutputInterface $output): void
+    {
+        $kernel = $this->getKernel();
+        if ($this->gateClosedSaid || !$kernel instanceof \Idno\Kernel || !$kernel->bootsLegacy() || $kernel->legacyBooted()) {
+            return;
+        }
+        $this->gateClosedSaid = true;
+        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln(SchemaGate::CLOSED_MESSAGE, OutputInterface::OUTPUT_PLAIN);
     }
 
     /**

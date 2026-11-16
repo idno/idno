@@ -46,7 +46,9 @@ use Psr\Log\NullLogger;
  * A database in an impossible state (some 1.x tables renamed and some not; renamed while the copy
  * was not finished) stops the upgrade with a stored error that says what was found; nothing else is
  * written. Failures are logged on the logger (the Monolog channel `upgrade`), stored as the error,
- * and thrown. Nothing in the kernel calls this class yet.
+ * and thrown. UpgradeRunner calls it (the upgrade page's steps and `idno:upgrade`), after the schema
+ * migrations and the declared field indexes, and SchemaState asks it whether a 1.x database is too
+ * old (legacySchemaVersion()) or its upgrade complete (completion()).
  */
 final class LegacyDataCopier
 {
@@ -79,7 +81,18 @@ final class LegacyDataCopier
 
     private const DOCUMENT_COLLECTIONS = ['entities', 'reader', 'site'];
 
-    private const PROGRESS = 'idno_upgrade_progress';
+    /** The upgrade's progress table (one row per collection), in the new schema. */
+    public const PROGRESS_TABLE = 'idno_upgrade_progress';
+
+    private const PROGRESS = self::PROGRESS_TABLE;
+
+    /**
+     * The tables that, all three present, show a 1.x Idno database: the one rule for "this database
+     * holds a 1.x Idno" (isOneXDatabase()); renamed `legacy_<name>` (isRenamedOneXDatabase()) they
+     * show one the upgrade has renamed. Other 1.x table names (`config`, `session`, `versions`,
+     * `site`, ...) are common words another application may use: alone they show nothing.
+     */
+    public const EVIDENCE_TABLES = ['entities', 'entities_metadata', 'entities_search'];
 
     /** The tables the new schema must have before anything is copied. */
     private const REQUIRED_TABLES = ['idno_entities', 'idno_reader', 'idno_site', SettingsRecordStore::TABLE, self::PROGRESS, RowWriter::REJECTS];
@@ -111,8 +124,30 @@ final class LegacyDataCopier
     }
 
     /**
+     * Whether these tables (lower case) show a 1.x Idno database: EVIDENCE_TABLES all present.
+     *
+     * @param list<string> $tables
+     */
+    public static function isOneXDatabase(array $tables): bool
+    {
+        return array_diff(self::EVIDENCE_TABLES, $tables) === [];
+    }
+
+    /**
+     * Whether these tables show a 1.x Idno database the upgrade renamed: `legacy_` + each of
+     * EVIDENCE_TABLES present.
+     *
+     * @param list<string> $tables
+     */
+    public static function isRenamedOneXDatabase(array $tables): bool
+    {
+        return array_diff(array_map(static fn (string $table): string => 'legacy_' . $table, self::EVIDENCE_TABLES), $tables) === [];
+    }
+
+    /**
      * The 1.x schema version (`versions`, or `legacy_versions` once renamed; label `schema`), or null
-     * when there is no such table or row.
+     * when there is no such table or row, or when the table is not a 1.x `versions` table (another
+     * shape: the query fails, which is no version, never an exception).
      */
     public function legacySchemaVersion(): ?int
     {
@@ -121,9 +156,29 @@ final class LegacyDataCopier
         if ($table === null) {
             return null;
         }
-        $value = $this->connection->fetchOne('select ' . $this->q('value') . ' from ' . $this->q($table) . ' where ' . $this->q('label') . ' = ?', ['schema']);
+        try {
+            $value = $this->connection->fetchOne('select ' . $this->q('value') . ' from ' . $this->q($table) . ' where ' . $this->q('label') . ' = ?', ['schema']);
+        } catch (\Doctrine\DBAL\Exception) {
+            return null;
+        }
 
         return is_scalar($value) && ctype_digit((string) $value) ? (int) $value : null;
+    }
+
+    /**
+     * The tables of LEGACY_TABLES that exist under their 1.x names after the upgrade completed (an
+     * old process recreated them; nothing reads them): [] before completion. Read-only, for the
+     * admin.
+     *
+     * @return list<string>
+     */
+    public function reappearedTables(): array
+    {
+        if (!in_array(self::PROGRESS, $this->tables(), true) || $this->completion() !== true) {
+            return [];
+        }
+
+        return array_values(array_intersect(self::LEGACY_TABLES, $this->tables()));
     }
 
     /**
@@ -167,13 +222,19 @@ final class LegacyDataCopier
         $tables = $this->tables();
         $rows = in_array(self::PROGRESS, $tables, true) ? $this->progressRows() : [];
         $collections = [];
+        $cursors = [];
         $error = null;
+        $detail = null;
         foreach (self::COLLECTIONS as $collection) {
             $row = $rows[$collection] ?? null;
             if ($row === null) {
                 $collections[$collection] = ['source' => 0, 'copied' => 0, 'rejected' => 0, 'done' => false];
                 continue;
             }
+            $cursors[$collection] = [
+                'position' => $row['position'] === null ? null : (string) $row['position'],
+                'verify_cursor' => $row['verify_cursor'] === null ? null : (string) $row['verify_cursor'],
+            ];
             $source = (int) $row['source_rows'];
             $copied = (int) $row['copied'];
             $rejected = (int) $row['rejected'];
@@ -183,10 +244,24 @@ final class LegacyDataCopier
                 'rejected' => $rejected,
                 'done' => $row['completed_at'] !== null || ($copied + $rejected >= $source && ($collection !== 'config' || $row['position'] !== null)),
             ];
-            $error ??= $row['error'] === null ? null : (string) $row['error'];
+            if (!array_key_exists('error_detail', $row)) {
+                throw new \LogicException('The table ' . self::PROGRESS . ' has no error_detail column: it was made by an earlier development version of the baseline migration. Recreate the database (or add the column: error_detail TEXT NULL).');
+            }
+            if ($error === null && $row['error'] !== null) {
+                $error = (string) $row['error'];
+                $detail = $row['error_detail'] === null ? null : (string) $row['error_detail'];
+            }
         }
         $complete = self::completed($rows);
         $noLegacyDatabase = $rows === [] && !self::hasLegacyTables($tables);
+        if ($error === null && !$complete && !$noLegacyDatabase) {
+            // An impossible state the tables alone show is reported even when no step could store it
+            // (no progress row yet).
+            $state = $this->phase($tables, $rows);
+            if ($state instanceof PublicMessage) {
+                $error = $state->text;
+            }
+        }
         $phase = match (true) {
             $complete => UpgradeProgress::COMPLETE,
             $rows === [] => UpgradeProgress::NOT_STARTED,
@@ -194,7 +269,28 @@ final class LegacyDataCopier
             default => UpgradeProgress::COPYING,
         };
 
-        return new UpgradeProgress($collections, $complete, $error, $phase, $noLegacyDatabase);
+        return new UpgradeProgress($collections, $complete, $error, $phase, $noLegacyDatabase, $detail, $cursors);
+    }
+
+    /**
+     * Whether the upgrade is complete: null when none has begun (no progress row), false while it
+     * runs, true once `completed_at` is set for every collection. ONE statement, on
+     * `idno_upgrade_progress`, which must exist (the schema gate asks only when the catalog lists
+     * it); it reads no 1.x table.
+     */
+    public function completion(): ?bool
+    {
+        $done = $this->connection->fetchAllKeyValue('select ' . $this->q('collection') . ', ' . $this->q('completed_at') . ' from ' . $this->q(self::PROGRESS));
+        if ($done === []) {
+            return null;
+        }
+        foreach (self::COLLECTIONS as $collection) {
+            if (($done[$collection] ?? null) === null) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -227,19 +323,15 @@ final class LegacyDataCopier
             // No 1.x database here and no upgrade begun: nothing is written at all.
             return $this->progress();
         }
-        $phase = $this->phase($source, $rows);
-        if (!in_array($phase, ['copy', 'rename', 'verify'], true)) {
+        $phase = $this->phase($source->tables(), $rows);
+        if ($phase instanceof PublicMessage) {
             // An impossible state: say what was found, touch nothing else.
-            $this->logger->error('The upgrade of the 1.x database stopped: ' . $phase);
-            $this->storeError($phase);
-            $progress = $this->progress();
-
-            return new UpgradeProgress($progress->collections, $progress->complete, $progress->error ?? $phase, $progress->phase, $progress->noLegacyDatabase);
+            return $this->stopped($phase);
         }
         if ($phase === 'copy') {
             $this->initialise($source, $rows);
         }
-        $this->connection->executeStatement('update ' . $this->q(self::PROGRESS) . ' set ' . $this->q('error') . ' = null where ' . $this->q('error') . ' is not null');
+        $this->connection->executeStatement('update ' . $this->q(self::PROGRESS) . ' set ' . $this->q('error') . ' = null, ' . $this->q('error_detail') . ' = null where ' . $this->q('error') . ' is not null or ' . $this->q('error_detail') . ' is not null');
         $this->writer->startStep();
 
         $worked = false;
@@ -294,6 +386,10 @@ final class LegacyDataCopier
             $source->rename($names);
             $worked = true;
             $source = LegacySource::read($this->connection, $this->dialect);
+            $appeared = $this->appeared($source->tables(), $this->progressRows());
+            if ($appeared !== null) {
+                return $this->stopped($appeared);
+            }
         }
 
         foreach (self::DOCUMENT_COLLECTIONS as $collection) {
@@ -329,54 +425,88 @@ final class LegacyDataCopier
     }
 
     /**
-     * What the tables and progress rows say: 'copy' (phase 1), 'rename' (ready, the 1.x tables still
-     * under their names), 'verify' (renamed, or no 1.x table at all), or, for an impossible state,
-     * the error that describes it.
+     * An impossible state: says what was found (logged, stored as the error), touches nothing else.
+     */
+    private function stopped(PublicMessage $error): UpgradeProgress
+    {
+        $this->logger->error('The upgrade of the 1.x database stopped: ' . $error->text);
+        $this->storeError($error);
+        $progress = $this->progress();
+
+        return new UpgradeProgress($progress->collections, $progress->complete, $progress->error ?? $error->text, $progress->phase, $progress->noLegacyDatabase, $progress->errorDetail, $progress->cursors);
+    }
+
+    /**
+     * What the tables (lower case) and progress rows say: 'copy' (phase 1), 'rename' (ready, the 1.x
+     * tables still under their names), 'verify' (renamed, or no 1.x table at all), or, for an
+     * impossible state, the PublicMessage that describes it (its parameters are table names of
+     * LEGACY_TABLES only).
      *
+     * @param list<string>                        $tables
      * @param array<string, array<string, mixed>> $rows
      */
-    private function phase(LegacySource $source, array $rows): string
+    private function phase(array $tables, array $rows): string|PublicMessage
     {
-        $old = array_values(array_filter(self::LEGACY_TABLES, $source->has(...)));
-        $renamed = array_values(array_filter(self::LEGACY_TABLES, static fn (string $table): bool => $source->has('legacy_' . $table)));
+        $has = static fn (string $table): bool => in_array($table, $tables, true);
+        $old = array_values(array_filter(self::LEGACY_TABLES, $has));
+        $renamed = array_values(array_filter(self::LEGACY_TABLES, static fn (string $table): bool => $has('legacy_' . $table)));
         $marked = count(array_filter($rows, static fn (array $row): bool => $row['verify_cursor'] !== null));
         if ($marked > 0 && !self::ready($rows)) {
-            return 'The upgrade\'s progress rows are inconsistent: some collections are marked ready for the rename and some are not. Nothing was changed.';
+            return PublicMessage::inconsistentProgress();
         }
         $partly = array_values(array_diff($renamed, $old));
         if ($old !== [] && $partly !== []) {
-            return sprintf(
-                'Some 1.x tables are renamed (%s) and some are not (%s): the upgrade renames all of them at once, so this database was changed by something else. Nothing was changed.',
-                implode(', ', array_map(static fn (string $table): string => 'legacy_' . $table, $partly)),
-                implode(', ', $old),
-            );
+            return PublicMessage::partlyRenamed(array_map(static fn (string $table): string => 'legacy_' . $table, $partly), $old);
         }
         if ($old === [] && $renamed !== [] && !self::ready($rows)) {
-            return sprintf(
-                'The 1.x tables are renamed (%s) but the copy had not finished: they were renamed by something else. Nothing was changed.',
-                implode(', ', array_map(static fn (string $table): string => 'legacy_' . $table, $renamed)),
-            );
+            return PublicMessage::renamedBeforeTheCopy(array_map(static fn (string $table): string => 'legacy_' . $table, $renamed));
         }
         $phase = !self::ready($rows) ? 'copy' : ($old === [] ? 'verify' : 'rename');
         // A collection whose table existed when its progress row was made (`source_existed`) must
-        // still have it, under the name this phase reads; one that never existed is no source.
+        // still have it, under the name this phase reads, and for a document collection its
+        // `_metadata` and `_search` tables too (the rename moves the three together, the copy reads
+        // two of them); one that never existed is no source.
         $missing = [];
         foreach ($rows as $collection => $row) {
             if ((int) $row['source_existed'] === 1) {
                 $table = $phase === 'verify' ? 'legacy_' . $collection : (string) $collection;
-                if (!$source->has($table)) {
-                    $missing[] = $table;
+                $needed = in_array($collection, self::DOCUMENT_COLLECTIONS, true) ? [$table, $table . '_metadata', $table . '_search'] : [$table];
+                foreach ($needed as $name) {
+                    if (!$has($name)) {
+                        $missing[] = $name;
+                    }
                 }
             }
         }
         if ($missing !== []) {
-            return sprintf(
-                'The upgrade began with 1.x tables that are no longer there: %s. They must be restored before the upgrade can go on. Nothing was changed.',
-                implode(', ', $missing),
-            );
+            return PublicMessage::vanished($missing);
+        }
+        if ($phase === 'verify') {
+            return $this->appeared($tables, $rows) ?? $phase;
         }
 
         return $phase;
+    }
+
+    /**
+     * In the verify pass: the error for a collection whose 1.x table did not exist when the upgrade
+     * began (`source_existed` 0) and whose `legacy_<c>` exists now. It appeared during the upgrade (a
+     * process of the old version recreated it) and was renamed with the others, but the verify pass
+     * never reads it, so its rows would be neither copied nor rejected. Null when there is none.
+     *
+     * @param list<string>                        $tables
+     * @param array<string, array<string, mixed>> $rows
+     */
+    private function appeared(array $tables, array $rows): ?PublicMessage
+    {
+        $appeared = [];
+        foreach ($rows as $collection => $row) {
+            if ((int) $row['source_existed'] !== 1 && in_array('legacy_' . $collection, $tables, true)) {
+                $appeared[] = 'legacy_' . $collection;
+            }
+        }
+
+        return $appeared === [] ? null : PublicMessage::appeared($appeared);
     }
 
     /**
@@ -458,19 +588,13 @@ final class LegacyDataCopier
         $blocking = [];
         foreach (self::LEGACY_TABLES as $table) {
             if ($source->has($table) && $source->has('legacy_' . $table)) {
-                $blocking[] = $table . ' and legacy_' . $table;
+                $blocking[] = $table;
             }
         }
         if ($blocking === []) {
             return true;
         }
-        $this->storeError(sprintf(
-            'The 1.x tables cannot be renamed: %s both exist. Nothing was changed. Someone who knows what the legacy_ %s must check %s and move or remove %s; the upgrade then goes on.',
-            implode(', ', $blocking),
-            count($blocking) === 1 ? 'table holds' : 'tables hold',
-            count($blocking) === 1 ? 'it' : 'them',
-            count($blocking) === 1 ? 'it' : 'them',
-        ));
+        $this->storeError(PublicMessage::renameBlocked($blocking));
 
         return false;
     }
@@ -799,19 +923,14 @@ final class LegacyDataCopier
     }
 
     /**
-     * Whether any table of a 1.x database is there, under its own name or renamed `legacy_<name>`.
+     * Whether a 1.x database is there, under its own names or renamed (the one evidence rule:
+     * isOneXDatabase() or isRenamedOneXDatabase()); other tables with 1.x names are not one.
      *
      * @param list<string> $tables
      */
     private static function hasLegacyTables(array $tables): bool
     {
-        foreach (self::LEGACY_TABLES as $table) {
-            if (in_array($table, $tables, true) || in_array('legacy_' . $table, $tables, true)) {
-                return true;
-            }
-        }
-
-        return false;
+        return self::isOneXDatabase($tables) || self::isRenamedOneXDatabase($tables);
     }
 
     /**
@@ -830,17 +949,29 @@ final class LegacyDataCopier
         return true;
     }
 
+    /**
+     * A failure: its detail (the exception's class and message, which may name a record or carry a
+     * driver message) is private: logged and stored as `error_detail`; the public error is
+     * PublicMessage::stopped().
+     */
     private function fail(\Throwable $exception): void
     {
-        $message = self::clean($exception->getMessage());
-        $this->logger->error('The upgrade of the 1.x database stopped: ' . $exception::class . ': ' . $message);
-        $this->storeError($message);
+        $detail = self::clean($exception::class . ': ' . $exception->getMessage());
+        $this->logger->error('The upgrade of the 1.x database stopped: ' . $detail);
+        $this->storeError(PublicMessage::stopped(), $detail);
     }
 
-    private function storeError(string $message): void
+    /**
+     * Stores the error on every progress row (nothing when there is none: progress() then finds an
+     * impossible state from the tables itself).
+     */
+    private function storeError(PublicMessage $error, ?string $detail = null): void
     {
         try {
-            $this->connection->executeStatement('update ' . $this->q(self::PROGRESS) . ' set ' . $this->q('error') . ' = ?', [self::clean($message)]);
+            $this->connection->executeStatement(
+                'update ' . $this->q(self::PROGRESS) . ' set ' . $this->q('error') . ' = ?, ' . $this->q('error_detail') . ' = ?',
+                [$error->text, $detail === null ? null : self::clean($detail)],
+            );
         } catch (\Throwable $e) {
             $this->logger->error('The upgrade could not store its error: ' . self::clean($e->getMessage()));
         }

@@ -8,6 +8,7 @@ use Doctrine\Bundle\DoctrineBundle\ConnectionFactory;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Idno\Config\BootConfig;
+use Idno\Storage\Platform\ConnectFailureIsFinal;
 use Idno\Storage\Platform\SqliteConnectionSetup;
 
 /**
@@ -20,7 +21,9 @@ use Idno\Storage\Platform\SqliteConnectionSetup;
  *
  * For an SQLite site it also adds SqliteConnectionSetup to the connection's middlewares (on a
  * copy of the Configuration), so that every physical connection is set up for SqliteDialect when
- * it connects. A MySQL connection is built exactly as before.
+ * it connects. On every site it adds Platform\ConnectFailureIsFinal last (on that copy): when the
+ * connection's first attempt to connect fails, no later attempt is made, so the database the
+ * schema gate saw as unreachable stays so for the request.
  *
  * This class is wired by hand in config/services.php, not by the directory scan.
  */
@@ -50,10 +53,15 @@ final class BootConfigConnectionFactory
             unset($params[$key]);
         }
 
+        $config = clone ($config ?? new Configuration());
+        $middlewares = $config->getMiddlewares();
         if ($legacy['driver'] === 'pdo_sqlite') {
-            $config = clone ($config ?? new Configuration());
-            $config->setMiddlewares([...$config->getMiddlewares(), new SqliteConnectionSetup()]);
+            $middlewares[] = new SqliteConnectionSetup();
         }
+        // Last, so that it sees every failure: a first connect that fails is final (the schema gate
+        // has seen the database unreachable; nothing may boot on a second attempt that succeeds).
+        $middlewares[] = new ConnectFailureIsFinal();
+        $config->setMiddlewares($middlewares);
 
         return $this->inner->createConnection($legacy + $params, $config, $mappingTypes);
     }

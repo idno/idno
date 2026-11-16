@@ -56,7 +56,7 @@ final class SqliteConnectionSetupTest extends TestCase
 
         $connection->close();
         $this->assertFalse($connection->isConnected());
-        $this->assertSame(1, (int) $connection->fetchOne('select count(*) from idno_migrations'), 'the next query opens a new connection');
+        $this->assertSame(2, (int) $connection->fetchOne('select count(*) from idno_migrations'), 'the next query opens a new connection');
 
         $this->assertNotSame($first, $connection->getNativeConnection(), 'a new physical connection');
         $this->assertSame($expected, self::settings($connection));

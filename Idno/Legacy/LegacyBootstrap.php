@@ -37,11 +37,9 @@ final class LegacyBootstrap
             return;
         }
 
-        if ($this->container->get(BootConfig::class)->isDefault()) {
-            throw new NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
-        }
+        $this->ensureInstalled();
 
-        if (\Idno\Core\Idno::site() !== null) {
+        if ($this->bootedInThisProcess()) {
             $this->booted = true;
 
             return;
@@ -79,6 +77,28 @@ final class LegacyBootstrap
         }
 
         $this->booted = true;
+    }
+
+    /**
+     * The check that comes before everything else at boot, the schema gate included: a site with no
+     * configuration yet has nothing to connect to.
+     *
+     * @throws NotInstalledException when there is no configuration yet
+     */
+    public function ensureInstalled(): void
+    {
+        if ($this->container->get(BootConfig::class)->isDefault()) {
+            throw new NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
+        }
+    }
+
+    /**
+     * Whether a kernel has booted the legacy application in this process already (it is a
+     * process-wide singleton): then the schema gate was open, and is not asked again.
+     */
+    public function bootedInThisProcess(): bool
+    {
+        return \Idno\Core\Idno::site() !== null;
     }
 
     /**

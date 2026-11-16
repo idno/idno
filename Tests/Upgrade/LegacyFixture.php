@@ -190,6 +190,69 @@ final class LegacyFixture
     }
 
     /**
+     * Writes what a 1.x site needs for the legacy application to boot on it and serve pages once it
+     * is upgraded, at the site URL $url (`http://host:port/`): the site's configuration (its title,
+     * URL and plugins), its `site` record (the host as `domain`), an admin user (`handle`) and one
+     * public status update by that user whose body is `body`, each with `created` and `updated` as a
+     * 1.x save wrote them. Its records' uuids are under $url.
+     *
+     * @return array{user: string, handle: string, post: string, body: string} the user's and the
+     *                                                                         post's _id, the
+     *                                                                         handle, the body
+     */
+    public function insertSite(string $url, string $handle = 'upgradeduser', array $plugins = ['Status', 'Text']): array
+    {
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        $created = 1_700_000_000;
+        $this->insert('config', [
+            'title' => 'A site from Idno 1.x',
+            'url' => $url,
+            'description' => 'Upgraded in place',
+            'plugins' => $plugins,
+            'open_registration' => false,
+            'created' => $created,
+        ]);
+        $this->insert('site', [
+            'entity_subtype' => 'Idno\\Core\\Site',
+            'domain' => $host,
+            'access' => 'PUBLIC',
+            'created' => $created,
+            'updated' => $created,
+        ]);
+        $userId = 'u' . bin2hex(random_bytes(8));
+        $this->insert('entities', [
+            '_id' => $userId,
+            'uuid' => $url . 'view/' . $userId,
+            'entity_subtype' => 'Idno\\Entities\\User',
+            'handle' => $handle,
+            'email' => $handle . '@example.com',
+            'password' => password_hash(bin2hex(random_bytes(12)), PASSWORD_DEFAULT),
+            'title' => 'Upgraded User',
+            'admin' => true,
+            'access' => 'PUBLIC',
+            'publish_status' => 'published',
+            'created' => $created + 1,
+            'updated' => $created + 1,
+        ]);
+        $postId = 'p' . bin2hex(random_bytes(8));
+        $body = 'A status update written on Idno 1.x, still here after the upgrade.';
+        $this->insert('entities', [
+            '_id' => $postId,
+            'uuid' => $url . 'view/' . $postId,
+            'entity_subtype' => 'IdnoPlugins\\Status\\Status',
+            'owner' => $url . 'view/' . $userId,
+            'body' => $body,
+            'access' => 'PUBLIC',
+            'publish_status' => 'published',
+            'slug' => 'a-status-update-from-1x',
+            'created' => $created + 2,
+            'updated' => $created + 2,
+        ]);
+
+        return ['user' => $userId, 'handle' => $handle, 'post' => $postId, 'body' => $body];
+    }
+
+    /**
      * Writes $count small records quickly (multi-row inserts of the main and search rows, no
      * metadata, which the copy never reads): record $i (from 1) has _id `many<i, five digits>`,
      * uuid manyUuid($i), and a title.

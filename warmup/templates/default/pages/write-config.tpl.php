@@ -20,8 +20,9 @@
         </li>
     </ul>
     <p>
-        Once you've saved your <code>config.ini</code> file, create the database tables: from the root of
-        your Idno installation, run <code>php bin/console idno:upgrade</code>. Then just reload this page to continue.
+        Once you've saved your <code>config.ini</code> file, just reload this page to continue. The database
+        is set up when the site is first loaded in a browser, or by running <code>php bin/console idno:upgrade</code>
+        from the root of your Idno installation.
     </p>
 
     <textarea class="installation"><?php echo htmlspecialchars($vars['ini_file']); ?></textarea>

@@ -15,8 +15,9 @@ User name: known (or whatever you set in .env)
 Password: whatever you set in .env
 Server: db
 
-The installer does not create the database tables: once it has written the configuration, run
-`php bin/console idno:upgrade` in the idno container, from the Idno directory.
+The installer does not create the database tables: the first page load after it has written the
+configuration sets them up (or run `php bin/console idno:upgrade` in the idno container, from the
+Idno directory).
 
 The 'configuration', 'Uploads' and 'var' directories are wide open so the webserver
 can write to them because Docker user/permission management is a headache.

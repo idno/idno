@@ -56,8 +56,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySqlMaintenance.
         // The upgrade's progress is a value object; the copier's helpers (the 1.x source, the writer
-        // of the new tables, the config copy, the document checks) are built by LegacyDataCopier.
-        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'RowWriter.php', 'UpgradeProgress.php'],
+        // of the new tables, the config copy, the document checks) are built by LegacyDataCopier;
+        // SchemaStatus is an enum, ServerVersion and UpgradePage static helpers.
+        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -202,13 +203,43 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The copy of a 1.x database into the new schema. It runs while the legacy application is NOT
     // booted, so it cannot have the site's logger (Psr\Log\LoggerInterface is the legacy
     // Idno\Core\Logging): it logs its failures on the Monolog channel `upgrade`, injected here by
-    // name, the one exception to the rule against injecting monolog.logger.* services. Its Dialect
-    // and connection are built when it is first fetched, without connecting; nothing fetches it while
-    // the kernel boots (nothing fetches it at all yet). Public, for the upgrade page and command.
+    // name, the one exception to the rule against injecting monolog.logger.* services (the runner and
+    // the step endpoint below are wired the same way). Its Dialect and connection are built when it is
+    // first fetched, without connecting; the schema gate fetches it at boot only on a MySQL or MariaDB
+    // database that has 1.x or legacy_ tables.
     $services->set(\Idno\Upgrade\UpgradeLock::class);
     $services->set(\Idno\Upgrade\LegacyDataCopier::class)
         ->arg('$logger', service('monolog.logger.upgrade'))
         ->public();
+
+    // The schema gate: Idno\Kernel asks it when it boots, before the legacy application (so it is
+    // public, and built without fetching anything). SchemaState fetches the connection, the catalog
+    // (the shared instance the record store reuses), the migrator and the copier only when it needs
+    // them, and nothing at all on a site whose database is not SQL.
+    $services->set(\Idno\Storage\SchemaMigrator::class);
+    $services->set(\Idno\Upgrade\SchemaState::class)
+        ->args([
+            service(BootConfig::class),
+            service_closure('database_connection'),
+            service_closure(\Idno\Storage\SchemaCatalog::class),
+            service_closure(\Idno\Storage\SchemaMigrator::class),
+            service_closure(\Idno\Upgrade\LegacyDataCopier::class),
+        ]);
+    $services->set(\Idno\Upgrade\SchemaGate::class)->public();
+    // The upgrade itself (the step endpoint, idno:upgrade). It logs its failures on the `upgrade`
+    // channel, as the copier does. Built when first fetched; it needs an SQL site.
+    // Which plugins are enabled, read without the legacy application (the runner's idno:upgrade
+    // reconciles their declared indexes). Set explicitly, like the services above.
+    $services->set(\Idno\Upgrade\EnabledPlugins::class);
+    $services->set(\Idno\Upgrade\UpgradeRunner::class)
+        ->arg('$logger', service('monolog.logger.upgrade'))
+        ->arg('$projectDir', '%kernel.project_dir%')
+        ->public();
+    // The step endpoint (POST /_upgrade/step) logs on the same channel. The listener that answers
+    // every other request while the gate is closed takes no logger; both are found by the scan.
+    $services->set(\Idno\Upgrade\UpgradeController::class)
+        ->arg('$logger', service('monolog.logger.upgrade'))
+        ->arg('$stepSeconds', \Idno\Upgrade\UpgradeRunner::STEP_SECONDS);
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

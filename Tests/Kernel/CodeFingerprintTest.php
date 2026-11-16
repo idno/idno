@@ -255,7 +255,7 @@ final class CodeFingerprintTest extends TestCase
     public function testRouteImportDirectoriesAreAllFingerprinted(): void
     {
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/config/routes.php');
-        $this->assertSame(1, preg_match_all("#/Idno/(\\w+)'#", $source, $matches), 'routes.php no longer names an Idno/ directory in the expected form');
+        $this->assertGreaterThanOrEqual(2, (int) preg_match_all("#/Idno/(\\w+)'#", $source, $matches), 'routes.php no longer names its Idno/ directories (Upgrade, Legacy) in the expected form');
 
         foreach ($matches[1] as $name) {
             $this->assertContains($name, CodeFingerprint::SERVICE_DIRECTORIES);

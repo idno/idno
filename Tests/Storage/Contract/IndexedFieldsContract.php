@@ -441,6 +441,27 @@ abstract class IndexedFieldsContract extends TestCase
         self::assertSame([], $this->indexes->reconcileDirectory(self::fixtures()));
     }
 
+    /**
+     * reconcileDirectoryUntil(): bounded by a deadline checked after each index it creates. With a
+     * deadline already past it creates exactly one index and says it is not complete; repeated, it
+     * creates the rest one at a time, and reports complete once nothing is left to create. Without a
+     * deadline it is reconcileDirectory().
+     */
+    public function testReconcilingCanBeBoundedByADeadline(): void
+    {
+        $all = ['entities.actor_id', 'reader.parent_field', 'reader.child_field', 'entities.f', 'entities.code'];
+        $created = [];
+        for ($i = 0; $i < count($all); ++$i) {
+            $result = $this->indexes->reconcileDirectoryUntil(microtime(true) - 1, self::fixtures());
+            self::assertCount(1, $result['created'], 'pass ' . $i);
+            $created[] = $result['created'][0];
+            self::assertSame($i === count($all) - 1, $result['complete'], 'pass ' . $i);
+        }
+        self::assertSame($all, $created);
+        self::assertSame(['created' => [], 'complete' => true], $this->indexes->reconcileDirectoryUntil(microtime(true) - 1, self::fixtures()));
+        self::assertSame(['created' => [], 'complete' => true], $this->indexes->reconcileDirectoryUntil(null, self::fixtures()));
+    }
+
     public function testAQueryOnAnIndexedFieldIsAComparisonWithTheIndexedValue(): void
     {
         $this->indexes->reconcile(FieldRecord::class);

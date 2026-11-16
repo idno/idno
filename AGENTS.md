@@ -37,7 +37,7 @@ php -l path/to/File.php
 
 # The command line (Symfony's commands and the legacy console plugins), against the test rig
 composer console -- list
-composer console -- idno:upgrade   # create or upgrade the database schema (the rig runs it on test:up)
+composer console -- idno:upgrade   # create or upgrade the database (the rig runs it on test:up)
 ```
 
 - `composer test` is `IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit`:
@@ -117,8 +117,11 @@ composer console -- idno:upgrade   # create or upgrade the database schema (the 
   - In both modes, once the database is up and before the web server starts, `up.sh` creates the
     schema with `bin/console idno:upgrade` (the tables and the field indexes; see "Console
     commands"), in the rig's environment (`APP_ENV=test`, `APP_DEBUG=1`, deprecations excluded, as
-    `composer console` runs it); on a database that has the schema it does nothing. No SQL file is
-    loaded.
+    `composer console` runs it); on a database that has the schema it re-checks the core declared
+    indexed fields and, last, those of the enabled plugins (creating any that are missing) and otherwise
+    says there is nothing to do (the command then runs with the legacy application booted, as any command does
+    with the schema gate open).
+    No SQL file is loaded; `up.sh` has no special case for the gate.
   - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
     database). `composer test:down` stops whichever is running (it is safe when nothing is), deletes
     the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
@@ -139,7 +142,8 @@ composer console -- idno:upgrade   # create or upgrade the database schema (the 
   - On SQLite, these skip, each with its reason: the tests on private MySQL databases
     (`JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`,
     `SchemaMigratorMySqlTest`, `InstallerSchemaTest`; their contracts run on SQLite in the unit
-    tier; and `Tests/Upgrade/LegacyDataCopierTest`: no 1.x site runs on SQLite), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
+    tier; and `Tests/Upgrade/LegacyDataCopierTest` and every case of `Tests/Upgrade/UpgradeEndToEndTest`
+    but the empty database's: no 1.x site runs on SQLite), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
     it compiled into the container, lazy, the old backend's session, failures), and the `RepositoryDataConciergeTest` cases that need MySQL (`requireMysql()`: the old
     backend's MySQL connection, full-text settings, a lost MySQL connection, `database` names that
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
@@ -214,10 +218,16 @@ Idno/
                                `config` (the site's configuration, ONE document) from the key/value table
                                `idno_settings` and every other collection from the store it decorates
                                (the container's RecordStore is one, over a JsonRecordStore)
-  Upgrade/                     The copy of a 1.x database into the new schema (modern style; runs while the
-                               legacy application is NOT booted): LegacyDataCopier (the phases), its helpers
-                               LegacySource, RowWriter, ConfigCopier and DocumentCheck, UpgradeLock (one
-                               process at a time) and UpgradeProgress (a value object). See "Copying a 1.x database"
+  Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
+                               application is NOT booted): SchemaState (what the database is: a
+                               SchemaStatus), SchemaGate (whether the legacy application may boot),
+                               ServerVersion (the MySQL/MariaDB floors), UpgradeRunner (one bounded step, or
+                               a whole run), UpgradeGateListener (answers every request while the gate is
+                               closed), UpgradeController (`POST /_upgrade/step`) and UpgradePage (the page);
+                               the copy of a 1.x database into the new schema: LegacyDataCopier (the
+                               phases), its helpers LegacySource, RowWriter, ConfigCopier and DocumentCheck,
+                               UpgradeLock (one process at a time) and UpgradeProgress (a value object). See
+                               "The schema gate and the upgrade" and "Copying a 1.x database"
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -251,20 +261,22 @@ anything else, or unset, is false), both read from `$_SERVER`.
 - **`Idno/start.php`** (boot only): boots the kernel and so the legacy application, and
   returns. Used by `Tests/_bootstrap.php` and by third-party scripts that need
   `Idno::site()`. It does not handle a request. On a site with no configuration it sends
-  the same redirect to `./warmup/` as `index.php` and exits.
+  the same redirect to `./warmup/` as `index.php` and exits. While the schema gate is closed
+  (see "The schema gate and the upgrade") it prints one line on stderr (`Idno's database needs
+  an upgrade: load the site in a browser or run php bin/console idno:upgrade`,
+  `SchemaGate::CLOSED_MESSAGE`), sets status 503 and exits 1 (pinned by
+  `Tests/Kernel/SchemaGateBootTest`, through `Tests/Kernel/boot_schema_gate.php`).
 - **`bin/console`** (CLI): first refuses to run under any SAPI but `cli` or `phpdbg` (a web
   server that executes it gets a 404 with an empty body). It then defines `IDNO_CONSOLE` (before the kernel boots, because it makes
-  `LegacyBootstrap` skip the web-only boot steps), boots the kernel, and runs
-  `Idno\Console\Application`, a subclass of FrameworkBundle's console application. When the
-  command is `idno:upgrade` (the first argument that is not an option, as `ArgvInput::getFirstArgument()`
-  reads it), the kernel is built WITHOUT booting the legacy application
-  (`Kernel::fromGlobals(bootLegacy: false)`): the command creates the schema, so it must run on a
-  database the legacy application cannot boot on (an empty one); the legacy console plugins and
-  the `version` command are then not registered, and `bin/console` itself refuses a site with no
-  configuration (`BootConfig::isDefault()`, which the legacy boot checks otherwise) with the same
-  line and exit code as below, before anything connects (pinned by
-  `Tests/Kernel/UpgradeCommandNotInstalledTest`). Every other command boots as described here. On a
-  site with no configuration it prints one line to stderr and exits 1; on any other
+  `LegacyBootstrap` skip the web-only boot steps), boots the kernel (as every entry point
+  does, whatever the command), and runs `Idno\Console\Application`, a subclass of
+  FrameworkBundle's console application. While the schema gate is closed the kernel does not
+  boot the legacy application: the legacy console plugins and the `version` command are not
+  registered, and every command but `idno:upgrade` first prints `SchemaGate::CLOSED_MESSAGE` on
+  stderr (also before the "not defined" error for a legacy command); Symfony's own commands
+  and `idno:upgrade` run (pinned by `Tests/Kernel/SchemaGateBootTest`). On a
+  site with no configuration it prints one line to stderr and exits 1, before anything connects
+  (pinned by `Tests/Kernel/UpgradeCommandNotInstalledTest`); on any other
   exception while booting it prints `Idno could not start: <exception class>: <message>`
   to stderr and exits 1 (it does not carry on). `idno.php` and
   `known.php` are aliases that repeat the SAPI check and require `bin/console`; use either.
@@ -287,11 +299,24 @@ services, `Idno::site()` or `Idno::container()`:
 2. `FrontController::requestFromGlobals()` builds the Symfony `Request` (it never parses
    the body, so `php://input` stays readable for legacy code), and
    `FrontController::handle()` calls `Kernel::handle()`.
-3. The kernel boots: the container is built (or loaded from cache) and the legacy
-   application is booted by `Idno\Legacy\LegacyBootstrap` (configuration, `Idno::site()`,
-   plugins, the legacy session — `session_start()` happens here, before routing). A site
-   with no configuration throws `NotInstalledException`, which `FrontController` turns
-   into the redirect to `./warmup/`.
+3. The kernel boots: the container is built (or loaded from cache); a site with no
+   configuration throws `NotInstalledException` (before anything connects), which
+   `FrontController` turns into the redirect to `./warmup/`; the schema gate is asked
+   (`Idno\Upgrade\SchemaGate`, see "The schema gate and the upgrade"); and, when it is open, the
+   legacy application is booted by `Idno\Legacy\LegacyBootstrap` (configuration, `Idno::site()`,
+   plugins, the legacy session — `session_start()` happens here, before routing). When the gate
+   is closed the legacy application is NOT booted (no `Idno::site()`, no session, no legacy
+   error handler) and `Idno\Upgrade\UpgradeGateListener` (a `kernel.request` listener at priority
+   300, before the router) answers every request with the upgrade page or a plain 503, except one
+   the router will match to the step route (`UpgradePage::isStepRequest()`: POST as sent and as
+   Symfony reads it, despite any `X-HTTP-Method-Override`, to exactly `/_upgrade/step`), which
+   reaches `UpgradeController`; so no request reaches the router's legacy catch-all, and steps 4 to
+   6 below do not happen for them (`Kernel::terminate()` still runs; no Idno listener is on it).
+   While the database is unreachable the legacy application boots as before (its database error
+   page), except for an upgrade step, which answers 503 itself (see "The schema gate and the
+   upgrade").
+   `LegacyFallbackListener` leaves a request to Symfony while the legacy application is not
+   booted.
 4. Symfony's router matches the request. Attribute-routed controllers under `Idno\`
    (and, in the `test` environment only, `Tests\Fixtures\`) are tried first. Anything
    they do not match goes to the lowest-priority catch-all route `idno_legacy`
@@ -336,9 +361,22 @@ MUST remain a legacy `Idno\Common\Page`. New-style controllers are only for publ
 read-only endpoints, or endpoints that authenticate each request themselves (e.g. a signed
 request or a bearer token).
 
+The one exception is `POST /_upgrade/step` (`Idno\Upgrade\UpgradeController`): it changes
+state without authentication or CSRF protection, because while the schema gate is closed nobody
+can log in (the legacy application does not boot) and whoever loads the site must be able to
+finish its upgrade. It is safe by construction, and must stay so: it takes no input that selects
+what it does (only the presentation flag `?html=1`); with the gate open it only reports `current`
+(no migration, no index, no copy, no lock, the runner not even built); every call does bounded
+work (a deadline five seconds ahead) and concurrent calls are serialised by `UpgradeLock` (the one
+that does not get it reports `working` and does nothing); every response carries `Cache-Control:
+no-store`; the `303` of `?html=1` goes to the request's own base path plus `/`, never to a URL
+from the request; nothing from the database reaches the response but JSON-encoded counts, phase and
+the copier's stored error (the page HTML-escapes them). Pinned by `Tests/Unit/Upgrade/UpgradeControllerTest`
+and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
+
 - Put a controller class with a `#[Symfony\Component\Routing\Attribute\Route]`
   attribute in a directory that `config/routes.php` imports attribute routes from
-  (today only `Idno/Legacy/`; add a new directory, e.g. `Idno/Http/Controller/`, to
+  (today `Idno/Upgrade/` and `Idno/Legacy/`; add a new directory, e.g. `Idno/Http/Controller/`, to
   `config/routes.php` AND to `CodeFingerprint::SERVICE_DIRECTORIES` so the container
   and route cache are rebuilt when it changes).
 - It always wins over the legacy catch-all, whatever the path: that route has priority
@@ -390,26 +428,43 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   constructor and put the work in `__invoke()` (or `execute()`). It must return an int.
   `Tests/Fixtures/ProbeCommand` (`idno:test:probe`, registered in `config/services_test.php`)
   is the test-environment-only example, pinned by `Tests/Kernel/ConsoleTest`; it is absent
-  in `prod`. Console code may take a `Psr\Log\LoggerInterface`: the console boots the legacy
-  application for every command but `idno:upgrade`.
-- **`idno:upgrade`** (`Idno\Console\UpgradeCommand`): creates or upgrades the database schema of an
-  SQL site (MySQL, MariaDB or SQLite). It runs the pending schema migrations (`SchemaMigrator`),
-  then creates the indexes the entity classes declare (`IndexedFields::reconcileDirectory()` for
-  `Idno/` and each directory under `IdnoPlugins/`, enabled or not), calling `SchemaCatalog::forget()`
-  after each, and prints each migration it ran (`Ran the migration <version>.`), each index it
+  in `prod`. Console code may take a `Psr\Log\LoggerInterface` only when it never runs while
+  the schema gate is closed: then the legacy application (which backs that logger) is not
+  booted. Commands that must run then (`idno:upgrade`) take no logger and nothing of the legacy
+  application.
+- **`idno:upgrade`** (`Idno\Console\UpgradeCommand`): creates or upgrades the database of an
+  SQL site (MySQL, MariaDB or SQLite) in one run, `UpgradeRunner::run()` (see "The schema gate and
+  the upgrade"): the pending schema migrations, the indexes the core entity classes (`Idno/`)
+  declare (re-checked on a current database too, so a newly declared field gets its index), the
+  copy of a 1.x database if there is one, and LAST, once the schema is current, the declared indexes
+  of each ENABLED plugin (`Idno\Upgrade\EnabledPlugins`). A plugin whose
+  indexes cannot be created (an invalid declaration, a unique index over duplicate values, any DDL
+  error) is skipped with one `Warning:` line and one log line on `upgrade`; the run goes on and exits
+  0 if nothing else failed; so does a run that cannot get the lock for that last part within the wait
+  (one `Warning:` line, one log line: run it again). A plugin directory that is there but not enabled is never read. It prints each migration it ran (`Ran the migration <version>.`), each index it
   created (`Created the index <collection>.<field>.`), each declaration that differs from its
-  existing index, or `Nothing to do: the schema is up to date.`; it exits 0. `--status` only lists
-  the pending migrations (`Pending migration: <version>`, or `No migration is pending.`) and changes
-  nothing. Today it runs without the legacy application (see `bin/console` under "Entry points"),
-  so it works on an empty database; it takes no logger. It reports the migrations THIS run executed
-  (`SchemaMigrator::migrate()` returns them), never one another process ran meanwhile. On a site
-  with no configuration it prints the one "not installed" line and exits 1 before anything
-  connects. On a site whose database is not SQL it
-  fails (fetching the connection throws) and exits 1. A new installation has no tables until it is
-  run (the installers only check that they can connect, and say to run it); the rig and CI run it
-  before the first request (when it fails, `up.sh` says so on stderr and exits non-zero without
-  starting the web server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private
-  empty database).
+  existing index, during a copy one line per collection whose count moved after each step
+  (`entities: 1500 of 12000 copied`) and `The 1.x data is copied.`, or `Nothing to do: the schema is
+  up to date.`; it exits 0 once the schema is current, and 1 with the public message on stderr (and
+  the private detail on a `Detail:` line, the one place it is shown) for a 1.x database too old to
+  copy, an unsupported database server, a lock held for over 60 seconds by another process, steps
+  that change nothing, or an error. An unreachable database opens the gate, so the console boots the
+  legacy application, whose database adapter prints its database error page on stdout and exits 0,
+  as before: the command (and `--status`) never runs then. `--status`
+  prints `Schema status: <status>` (the `SchemaStatus` value), the pending migrations (`Pending
+  migration: <version>`, or `No migration is pending.`) and, for a 1.x database, the copy's phase,
+  counts, stored error and its detail, and changes nothing. It exits 1, with the public message on stderr, for an unsupported database server, a
+  1.x database too old to upgrade, and renamed 1.x tables with no upgrade on record (exit 0 for every
+  other status). It runs whether or not the legacy application booted
+  (with the gate closed it does not), so it takes no logger and nothing from the legacy application.
+  It reports the migrations THIS run executed (`SchemaMigrator::migrate()` returns them), never one
+  another process ran meanwhile; while another process holds the `UpgradeLock` it says so once and
+  waits half a second between attempts, for at most 60 seconds. On a site with no configuration it prints the one "not installed" line
+  and exits 1 before anything connects. On a site whose database is not SQL it fails (building the
+  runner fetches the connection, which throws) and exits 1. The rig and CI run it before the first
+  request (when it fails, `up.sh` says so on stderr and exits non-zero without starting the web
+  server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private empty database)
+  and `Tests/Upgrade/UpgradeEndToEndTest` (a 1.x database).
 - **Legacy console plugins still work**: `Idno\Common\ConsolePlugin` subclasses
   (`getCommand()`, `getDescription()`, `getParameters()`, `execute()`) are found by
   `Idno\Console\Application` once the kernel (and so the legacy application) has booted,
@@ -456,8 +511,13 @@ other new code may.
   and DoctrineBundle (DBAL only, no ORM); `packages/framework.php`: Symfony's session and error
   handling are disabled, the legacy application owns both; `packages/doctrine.php`: the DBAL
   connection, see below; `services.php`; `routes.php`).
-  `Kernel::boot()` boots the legacy application through `Idno\Legacy\LegacyBootstrap`
-  (pass `bootLegacy: false` to the constructor to boot the kernel alone, as some tests do).
+  `Kernel::boot()` refuses a site with no configuration (`LegacyBootstrap::ensureInstalled()`),
+  asks the schema gate (`Idno\Upgrade\SchemaGate`, a public service, unless a kernel has already
+  booted the legacy application in this process: `LegacyBootstrap::bootedInThisProcess()`), and
+  boots the legacy application through `Idno\Legacy\LegacyBootstrap` only when the gate is open;
+  `Kernel::legacyBooted()` says whether it did. Pass `bootLegacy: false` to the constructor to boot
+  the kernel alone, as some tests do: such a kernel never asks the gate, and the gate's listener
+  does nothing in it.
 - The legacy application is a process-wide singleton (`Idno::site()`, `Idno::container()`,
   constants, shutdown functions). `LegacyBootstrap::boot()` is idempotent per process: once
   any kernel has booted it, booting another kernel leaves the first one's container and
@@ -477,7 +537,8 @@ other new code may.
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
-  builds; in `Idno/Upgrade/`, `UpgradeProgress.php` and the copier's helpers `ConfigCopier.php`,
+  builds; in `Idno/Upgrade/`, `UpgradeProgress.php`, the enum `SchemaStatus.php`, the static
+  helpers `ServerVersion.php` and `UpgradePage.php`, and the copier's helpers `ConfigCopier.php`,
   `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`,
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
@@ -493,8 +554,10 @@ other new code may.
   exactly: DSN charset `utf8mb4` (the schema's tables are utf8mb4), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
   `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. On a site whose
   `database` is `sqlite` (`dbname` is the database file's path, or `:memory:`), the factory also
-  adds `Idno\Storage\Platform\SqliteConnectionSetup` to the connection's middlewares; a MySQL
-  connection is built exactly as before. The service is
+  adds `Idno\Storage\Platform\SqliteConnectionSetup` to the connection's middlewares; on every
+  site it adds `Idno\Storage\Platform\ConnectFailureIsFinal` last (a first connect that fails is
+  never retried on that connection: see "The schema gate and the upgrade"); the MySQL connection's
+  parameters and options are as before. The service is
   lazy: fetching it does not connect (the first query does; on an SQL site the `db()` service
   fetches it and connects it during `Idno::init()`, see the `db()` bullet below). What the
   `database` setting means is decided by `ConnectionParameters::driverFamily()`, which the
@@ -512,9 +575,10 @@ other new code may.
   `beanstalk-mysql`, whose `RDS_*` mapping `ConnectionParameters::fromLegacyConfig()` repeats for the
   connection). Keep them in step if you change either. On a MongoDB or
   `other` site the container compiles and the kernel boots as before, but fetching the
-  service throws a `\LogicException`: nothing may fetch the connection while the kernel boots (no
-  `kernel.request` listener, no service built at boot), and code that uses it must only run on an
-  SQL site. Query logging and profiling are off (`config/packages/doctrine.php`). DoctrineBundle
+  service throws a `\LogicException`: nothing but the schema gate may fetch the connection while
+  the kernel boots (no `kernel.request` listener, no service built at boot; the gate's
+  `SchemaState` checks `driverFamily()` first and fetches nothing on a site that is not SQL), and
+  code that uses it must only run on an SQL site. Query logging and profiling are off (`config/packages/doctrine.php`). DoctrineBundle
   brings only the connection: `Idno\Kernel\DoctrineTrimPass` (a compiler pass added in
   `Kernel::build()`) removes every console command the bundle registers (no `doctrine:*` or
   `dbal:*` command exists; `dbal:run-sql` and `doctrine:database:drop` would act on the site's
@@ -602,7 +666,7 @@ other new code may.
   which nothing outside that backend called) from the
   storage layer: records through the `RecordStore` service, `getObjects()`/`countObjects()`/`getObject()`
   through the `EntityRepository` service; `rowToEntity()`, `saveObject()` and `getAnyObject()` are
-  `DataConcierge`'s. It holds no SQL and never creates or changes the schema (`idno:upgrade` does):
+  `DataConcierge`'s. It holds no SQL and never creates or changes the schema (the upgrade does):
   `getVersions()` is one object, label `schema`, whose value is `SchemaMigrator::latest()` (the
   newest schema migration executed, `'0'` when none; false, written to PHP's error log, when it
   cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (`optimize table` on
@@ -750,9 +814,19 @@ other new code may.
     false) and is logged as ONE warning naming the method and the query's shape: keys and operator
     names only, never values, control characters replaced, at most 200 bytes
     (`RepositoryDataConcierge::shape()`).
-  - The record store reads the schema catalog with ONE statement per request, at its first query of
-    a collection (`information_schema.columns` of the current database; `sqlite_master`), on the same
-    connection; the old backend's `select * from versions` on every connection is gone.
+  - The schema catalog is read with ONE statement per request (`information_schema.columns` of the
+    current database; `sqlite_master`), on the same connection: the schema gate reads it first, at
+    boot, and the record store reuses it (the container's one `SchemaCatalog`); the old backend's
+    `select * from versions` on every connection is gone. The gate adds ONE statement to every
+    request on a migrated SQL site, whatever other tables it has (`legacy_` ones included):
+    `SchemaMigrator::probe()`, `select version from idno_migrations union all select case when
+    completed_at is null then '#incomplete' else '#complete' end from idno_upgrade_progress` (the
+    second part only when the progress table exists). Only a database with the three 1.x `entities`
+    tables and no complete upgrade on record costs more (the 1.x version is read). Pinned by
+    `UpgradeEndToEndTest::testTheHomepageStatementsArePinned` (the DBAL statements of a homepage
+    request: the catalog, the probe, then the legacy application's, 13 on the fixture site, the same
+    after a completed upgrade, with its `legacy_` tables deleted, with 1.x tables recreated, with
+    another application's `legacy_config`).
   New code never calls `db()`: inject `EntityRepository` (entities) or `RecordStore` (records).
 - Querying entities in new code: inject `Idno\Storage\EntityRepository` and query with an
   `EntityQuery` (class names, a `Criteria`, limit, offset, collection, read groups); never call
@@ -844,7 +918,9 @@ other new code may.
   `Psr\Log\LoggerInterface` to that service for application code. `symfony` writes every
   other channel (`request`, `console`, `php`, ...: Symfony's own services, which keep the
   `logger` / `monolog.logger.*` services they name) at `warning` and above, in Monolog's
-  standard line format with channel and level. An ordinary legacy request logs nothing
+  standard line format with channel and level; that includes the channel `upgrade`, on which
+  `Idno\Upgrade\` code (the copier, the runner, the step endpoint) logs its failures, because it
+  runs while the legacy logger does not exist. An ordinary legacy request logs nothing
   through it; an exception Symfony handles (before routing, or from a new-style controller)
   is one `request.CRITICAL` line (`request.ERROR` for an HTTP exception below 500), and a
   console command that fails is one `console.CRITICAL` line (on stderr when PHP's
@@ -885,25 +961,31 @@ other new code may.
   path) gives `db()` the same adapter. For tests and development in this release (the default test
   rig runs on it; the installers do not create SQLite sites); it is to become a supported production
   database in a later release. See the SQLite bullet under "Kernel and services".
-- The schema is created by `php bin/console idno:upgrade` (see "Console commands"): a new
-  installation has no tables until it is run. The 1.x tables (`entities`, `entities_metadata`,
-  `entities_search`, `config`, `session`, `versions`, ...) are no longer read or written by the
-  site. `Idno\Upgrade\LegacyDataCopier` copies them into the new tables (see "Copying a 1.x
-  database" below), but nothing calls it yet: a 1.x site's data cannot be used yet.
+- The schema is created by the upgrade (see "The schema gate and the upgrade" below): the first
+  page load of a new installation, or of a site whose files were replaced, shows the upgrade page,
+  whose steps create the tables (and copy a 1.x database); `php bin/console idno:upgrade` does the
+  same in one run. The 1.x tables (`entities`, `entities_metadata`, `entities_search`, `config`,
+  `session`, `versions`, ...) are no longer read or written by the site: `Idno\Upgrade\LegacyDataCopier`
+  copies them into the new tables (see "Copying a 1.x database" below) and renames them
+  `legacy_<name>`.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 #### The schema (migrations)
 
-The site's tables are created by schema migrations, which `idno:upgrade` runs (the rig and CI run
-it before the first request).
+The site's tables are created by schema migrations, which the upgrade runs (the upgrade page's
+steps or `idno:upgrade`; the rig and CI run the command before the first request).
 
 - `doctrine/migrations` is used as a library only (no bundle, no console command, no configuration
   file): `Idno\Storage\SchemaMigrator` (a container service; it takes only the DBAL `Connection` and
-  queries nothing when constructed; nothing fetches it while the kernel boots) builds a
+  queries nothing when constructed; the schema gate fetches it at boot on an SQL site, for
+  `hasPending()`) builds a
   `DependencyFactory` on that connection with the migrations namespace `Idno\Storage\Migrations`,
   the directory `Idno/Storage/Migrations/` and the metadata table `idno_migrations` (created by
   `migrate()`). `pending()` lists the versions not yet executed (`'20261115000000'`, the numeric
-  part of the class name; asking creates nothing), `migrate()` executes them and returns the versions it executed (a no-op, `[]`, when none is
+  part of the class name; asking creates nothing), `hasPending()` is `pending() !== []` with ONE
+  statement (`select version from idno_migrations`, compared with the `Version*.php` files of
+  `Idno/Storage/Migrations/`; the table must exist: the schema gate asks only when the catalog lists
+  it), `migrate()` executes them and returns the versions it executed (a no-op, `[]`, when none is
   pending), `latest()` is the newest executed version, `'0'` when none. It writes no output.
 - Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
   (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
@@ -922,14 +1004,18 @@ it before the first request).
   `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping: see "Copying a 1.x
   database"; the rejects are indexed on `(collection, legacy_uuid)`). On MySQL/MariaDB
   every table is InnoDB, `utf8mb4`, and every text column names its collation:
-  `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`) except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
+  `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`) except the `utf8mb4_bin` ones above.
+  The second migration, `Version20261115000001`, has no SQL: it is the indexed-fields marker (see
+  "The schema gate and the upgrade"); `SchemaMigrator::migrate(exceptLast: true)` leaves the newest
+  pending migration for the upgrade to record once the declared indexes exist. The one exception is `idno_migrations`,
   which doctrine/migrations creates itself with the database's default charset and collation; it
   holds only migration class names and timings. On SQLite the same tables, with
   `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
   index names prefixed with the table's (`idno_entities_type_created`), no full-text index, and no
   custom collation or function, so the file opens with standard SQLite tools.
 - `Idno\Storage\SchemaCatalog` (a container service on the `Connection`; queries nothing when
-  constructed): `tables()` (lower case, sorted; SQLite's internal tables left out), `hasTable()`
+  constructed; the schema gate reads it at boot on an SQL site, and the record store reuses what it
+  read): `tables()` (lower case, sorted; SQLite's internal tables left out), `hasTable()`
   (ignores case), `indexedFields($collection)` (the fields with an index on `idno_<collection>`:
   on MySQL/MariaDB a generated column `ix_<field>`, on SQLite an index `idno_<collection>_ix_<field>`;
   field names `[a-z0-9_]{1,48}`, returned without the prefix). It reads everything with ONE
@@ -950,15 +1036,203 @@ it before the first request).
   to the rig site's tables directly. `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
 
+#### The schema gate and the upgrade
+
+The legacy application must never boot on a database whose schema is not current (an empty one, a
+pending migration, a 1.x database, a copy not complete). `Idno\Kernel::boot()` asks
+`Idno\Upgrade\SchemaGate` first (after the "not installed" check), in a kernel that would boot the
+legacy application; the gate keeps the status it computed for the life of its container (one per
+request or console run). Everything in `Idno\Upgrade\` runs while the legacy application is not
+booted: no `Idno::site()`, no `Idno\Legacy\`, no `Psr\Log\LoggerInterface` by its plain name (the
+runner, the copier and the step endpoint log failures on the Monolog channel `upgrade`, wired by
+name in `config/services.php`).
+
+- `SchemaState::status()` (computed afresh at each call; the closures it is built with fetch the
+  connection, the `SchemaCatalog`, the `SchemaMigrator` and the `LegacyDataCopier` only when needed),
+  a `SchemaStatus`, in this order: `NotApplicable` when `ConnectionParameters::driverFamily()` is
+  neither `mysql` nor `sqlite` (MongoDB, a backend class: nothing is fetched, nothing connects);
+  `Unreachable` when CONNECTING fails (`Connection::getServerVersion()`, which connects and reads
+  the version the driver reports, without a statement, throws while the connection is not
+  connected; a failure after connecting is thrown, never `Unreachable`); `UnsupportedServer` on MySQL below 8.0 or
+  MariaDB below 10.6 (`ServerVersion::refusal()`, which reads both `10.6.28-MariaDB-…` and the
+  `5.5.5-` prefixed form; a version it cannot read is not refused; SQLite's floor is the connection
+  setup's); then the catalog's tables (its one statement, which the record store reuses); on a
+  migrated database the probe (`SchemaMigrator::probe()`, the gate's one added statement: pending
+  migrations, and whether an upgrade is on record, complete or not); on MySQL/MariaDB only, the 1.x
+  part (below); then `Empty` without `idno_migrations`, `PendingMigrations` when the probe says so,
+  else `Current`. An SQLite site never asks
+  about 1.x tables. A failure after connecting (the catalog cannot be read) is thrown: the gate never
+  opens on a database it could not check.
+- The 1.x rule, in one place (`SchemaState::status()`, with `LegacyDataCopier::EVIDENCE_TABLES`,
+  `isOneXDatabase()`): an upgrade on record and not complete (the probe found an incomplete progress
+  row) → `Legacy`, always, whatever the tables look like: a 1.x table dropped by hand in the copy
+  phase, one or every `legacy_` table dropped in the verify phase, all keep the gate closed, and the
+  copier's impossible-state message names what is missing (for a document collection it requires
+  `<c>`, `<c>_metadata` and `<c>_search` under the name the phase reads). Otherwise a database holds
+  a 1.x Idno only when `entities`, `entities_metadata` AND `entities_search` all exist and no complete
+  upgrade is on record: `Legacy`, or `LegacyTooOld` when `legacySchemaVersion()` is below 2020120301
+  (Idno 1.6.4) or cannot be read (a `versions` table of another shape is "no version", never an
+  exception). Everything else is not a 1.x database and asks nothing: a complete upgrade's `legacy_`
+  tables, the same tables deleted by the admin, 1.x tables recreated after completion (an old worker
+  re-running its 1.x schema upgrader; nothing reads them; `LegacyDataCopier::reappearedTables()`
+  lists them, read-only, for the admin), another application's `entities`, `versions`, `config`,
+  `session`, `site`, `reader`, `legacy_config`, .... One more case is closed: the three renamed tables
+  `legacy_entities`, `legacy_entities_metadata` and `legacy_entities_search` with NO progress row at
+  all (an operator dropped the new tables to start again without renaming the 1.x ones back; also on
+  an empty database) → `RenamedWithoutRecord`: no step migrates, reconciles or copies anything (not
+  even the baseline), the page and `idno:upgrade` (exit 1) say `PublicMessage::renamedWithoutRecord()`
+  (rename them back to upgrade that site, or remove them to set up a new one), so an empty site is
+  never set up beside the content. The information is free: the catalog and the probe. Pinned in
+  `SchemaStateTest` (`testAnUpgradeOnRecordAndNotCompleteIsAlwaysClosed`,
+  `testACompleteUpgradeIsOpenWhateverItsLegacyTables`, `testForeignTablesNeverCloseTheGate`) and
+  `UpgradeEndToEndTest`. The copier's own idea of "there is a 1.x database here"
+  (`UpgradeProgress::$noLegacyDatabase`) uses the same evidence.
+- Closed for `Empty`, `PendingMigrations`, `Legacy`, `LegacyTooOld`, `RenamedWithoutRecord` and
+  `UnsupportedServer`; open
+  for `Current`, `Unreachable` and `NotApplicable`.
+- `Unreachable` is final for the request (and the process): `Idno\Storage\Platform\ConnectFailureIsFinal`,
+  a DBAL middleware `BootConfigConnectionFactory` adds last to the site's connection, makes every
+  later connect attempt of a connection whose FIRST attempt failed fail with that same failure,
+  without a second attempt. So the legacy application, which boots on an unreachable database to
+  show its own database error page (or redirect to `forward_on_empty`, or print it on the console)
+  exactly as before, can never boot on a database the gate did not check because a second attempt
+  succeeded ("Too many connections" during an upgrade), and a host that times out is waited for
+  once. A connection that has once succeeded reconnects as before (a lost connection). For an upgrade
+  step (`UpgradePage::isStepRequest()`, noted by `Kernel::handle()` before it boots) the kernel does
+  not boot the legacy application while the database is unreachable, and the step answers `503`,
+  JSON status `working`, `PublicMessage::unreachable()`, `Retry-After: 30`: never `current`. Pinned by
+  `Tests/Unit/Storage/ConnectFailureIsFinalTest` and, over HTTP, by
+  `UpgradeEndToEndTest::testAConnectionRefusedOnceNeverBootsTheSiteOnADatabaseThatIsNotCurrent` (empty,
+  1.x and mid-copy databases; nothing written) and `testADownDatabaseIsConnectedToOncePerRequest`
+  (exactly one attempt).
+- With the gate closed: web requests get `UpgradeGateListener`'s answer (a `GET`/`HEAD` whose
+  `Accept` includes `text/html`: the upgrade page, status 503, a `Content-Security-Policy` with a
+  per-response nonce that allows only the page's own inline script and style, its requests to its
+  own origin and its form's post; everything else: 503 `text/plain`, `Idno is upgrading its
+  database.`, or for `LegacyTooOld`/`UnsupportedServer` `Idno cannot start: <why>`; both with
+  `Retry-After: 30` and `Cache-Control: no-store`; a `HEAD` gets the headers only), except a request
+  the router will match to the step route: `UpgradePage::isStepRequest()`, a POST both as sent
+  (`getRealMethod()`) and as Symfony reads it (`getMethod()`, which honours `X-HTTP-Method-Override`),
+  to exactly `/_upgrade/step` (an override Symfony refuses, a trailing slash, any other method: the
+  503). So no request reaches the router's legacy catch-all while the legacy application is not
+  booted. `Idno/start.php` exits 1 with its line; the console runs without the legacy commands (see
+  "Entry points"). The listener takes no logger (it is built for the first request event) and acts
+  only when the gate was asked, so it does nothing in a `bootLegacy: false` kernel. The step URL
+  comes from the request's base path (`UpgradePage::basePath()`: a site in a subdirectory posts
+  `/blog/_upgrade/step`; a base path that starts with `//` or holds a backslash or a control character
+  is replaced by the root), never from stored configuration.
+- Errors shown to anyone are `Idno\Upgrade\PublicMessage`s only: the page and the step's JSON are
+  served to anonymous visitors. A PublicMessage can only be made by its named constructors (fixed
+  templates whose parameters are table names of `LEGACY_TABLES`, plain or `legacy_`, counts and
+  version numbers). A failure that carries anything else (a record's uuid, document data, a driver or
+  exception message, a file path, a connection detail) is shown as `PublicMessage::stopped()` ("The
+  upgrade stopped. The details are in the server's error log, and php bin/console idno:upgrade
+  --status shows them."); its detail is logged on the `upgrade` channel, stored apart (the copier's
+  `idno_upgrade_progress.error_detail`, `UpgradeProgress::$errorDetail`, the runner's result
+  `detail`) and shown by `idno:upgrade` only (a `Detail:` line). Pinned by
+  `UpgradeEndToEndTest::testAFailuresDetailIsNeverPublic` (a verification mismatch, a driver error).
+- `UpgradePage` (a static helper): one self-contained document (inline style and script with the
+  nonce, no external request of any kind, no legacy template): one `h1`, a `role="status"`
+  `aria-live` region, light and dark colours (`prefers-color-scheme`), fits 320 px; what is
+  happening, that the page can be closed and opened again, that old Idno processes (a queue or cron
+  service started before the files were replaced) must be stopped first because what they write is
+  not carried over, that the old tables are kept (renamed `legacy_<name>`) and nothing in them is
+  changed, and where to look if it stops (the stored public error is shown). Its script POSTs the step
+  URL until `current` and reloads; on `error`, `too_old` or `unsupported` it stops and shows the
+  message; on a network failure or an answer that is not JSON it retries after 2 s, doubling to 60 s;
+  never more than one request a second. A `<noscript>` form posts `?html=1`. `LegacyTooOld` and
+  `UnsupportedServer` have no script and no form. Everything from the database or the request is
+  escaped (HTML in the markup, JSON with HTML characters escaped in the script, `textContent` only).
+  The 1.6.4 sentence is `PublicMessage::tooOld()` everywhere; the progress wording is
+  `UpgradeProgress::countText()`/`line()` (`entities: 1500 of 12000 copied, 3 not carried over`) in the
+  page, the runner and the command (the page's script repeats it).
+- The indexed-fields marker. The newest pending migration is recorded only once the declared indexed
+  fields exist: on a new or 1.x database that is `Version20261115000001`, a migration with no SQL that
+  stands for "the declared indexed fields have been reconciled". The runner, whenever migrations are
+  pending, runs every pending migration but the newest (`SchemaMigrator::migrate(exceptLast: true)`),
+  reconciles the indexed fields (`IndexedFields::reconcileDirectoryUntil()`), and runs the newest only
+  when a reconcile pass finds nothing left to create. A step killed anywhere before that (a
+  `max_execution_time` kill in the middle of building indexes) leaves a migration pending, so the gate
+  stays closed and the next step carries on. The marker concerns the CORE declarations (classes under
+  `Idno/`) only: only a core reconcile failure holds it and keeps the gate closed, and a new CORE
+  declaration ships with a new, empty migration (its own version): that is what makes existing sites
+  reconcile it. Plugin declarations (bundled plugins included) never hold the marker and never close
+  the site: web steps never read `IdnoPlugins/` (on a current site a web step never reconciles at
+  all); `idno:upgrade` reconciles core first (a failure stops it), then the copy, and LAST of all,
+  once the schema is current and any copy is complete, each enabled plugin on its own (a failure is a
+  warning, the plugin is skipped). Last, so that the settings hold the site's plugin list (copied from
+  1.x) and a plugin's unique index can never turn a copied 1.x row into a reject.
+  `Idno\Upgrade\EnabledPlugins` decides which plugins are enabled without the legacy application, by
+  `Idno\Core\Config`/`Plugins`' rule exactly: the boot configuration merged over the stored settings
+  with `array_replace_recursive()` (a boot `plugins` list replaces the stored one index by index; an
+  empty boot list leaves the stored one; the same for `prerequisiteplugins`; `alwaysplugins` and
+  `antiplugins` from the boot configuration only), prerequisites first, then plugins plus
+  `alwaysplugins`, less `antiplugins`. The stored lists are rows of `idno_settings`, none when the table
+  or row is not there; any other database error is a warning line for the plugin phase (no plugin
+  indexes), never silently "no plugins".
+- `UpgradeRunner::step($deadline)` (a public service, built when first fetched; the web step): the
+  status (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`, `Unreachable` stop at once:
+  `unsupported`, `too_old`, `error`, `error`; `Current` and `NotApplicable` are `current`, nothing done, no lock); the `UpgradeLock`
+  without waiting (not got: `working` with `locked`, nothing done; the copy's progress when it can be
+  read, else none, never an error), held around everything that follows so that two processes never
+  migrate or create indexes at once (`LegacyDataCopier::step()` works under a lock its caller holds
+  and leaves it held); the pending migrations and the indexes as above, bounded: the deadline is
+  checked after each index created (one index, its one or two DDL statements, is the unit: with a
+  deadline already past a step creates exactly one index and reports `working`); for a 1.x database,
+  once nothing is pending and the deadline has not passed (or the step did nothing else), one copier
+  step until the deadline; then the status again: `current`, `working`, or `error`. An error the
+  copier returns is never dropped, and `LegacyDataCopier::progress()` itself reports an impossible
+  state the tables alone show (one no step could store: no progress row yet). It never throws: an
+  exception is logged on `upgrade` (the copier logs its own) and reported as `error` with
+  `PublicMessage::stopped()` and the private `detail`. The result is `array{status, progress:
+  ?UpgradeProgress, message: ?string (public), detail: ?string (private), locked: bool}`.
+- `UpgradeRunner::run()` (`idno:upgrade`; not bounded): steps until the status is not `working`; it
+  re-checks the core declared indexes in its first step that gets the lock (a current database too),
+  and, once the schema is current and any copy complete, reconciles the enabled plugins as its last
+  part, under the lock (a plugin phase that cannot get the lock within the wait leaves the result
+  `current`, with a warning). While another
+  process holds the lock before that it prints `Waiting: another process is upgrading the database (…)` once and
+  tries again every half second, and gives up after 60 seconds (`PublicMessage::lockHeld()`, exit 1).
+  It also gives up after `STALLED_STEPS` (5) steps in a row that changed nothing (no count, cursor or
+  phase moved, no line reported: no migration or index), whatever the status says
+  (`PublicMessage::noProgress()`, exit 1).
+- `UpgradeController` (`POST /_upgrade/step`): see "Adding a route" for its safety conditions. Its
+  JSON: `status` (`current`, `working`, `too_old`, `unsupported`, `error`), `message`, `phase`,
+  `collections` (an object, `{}` when empty; per collection `source`, `copied`, `rejected`, `done`)
+  and `error` (the copier's public error); HTTP 500 for `error`, 503 for an unreachable database,
+  200 otherwise; never a document, a rejected row or private detail. Its time budget is
+  `UpgradeRunner::STEP_SECONDS` (5); in the test environment only, `config/services_test.php` lets
+  `IDNO_TEST_UPGRADE_STEP_SECONDS` shorten it (no request can).
+- After a web install the browser is sent to `begin/register`: that request gets the upgrade page
+  (`Empty`), the steps set the database up, and the reload continues to registration.
+- Test hooks of the test environment (`config/services_test.php`, inert unless their environment
+  variable is set): `IDNO_TEST_UPGRADE_STEP_SECONDS` (above) and `Tests\Fixtures\FailFirstConnection`
+  (a `doctrine.middleware`: with `IDNO_TEST_FAIL_FIRST_CONNECTION=1` the first connection attempt
+  fails, as a server refusing one connection would).
+- Tests: `Tests/Unit/Upgrade/` (`SchemaStateTest` with the evidence rule, the version rule and the
+  MongoDB case, `UpgradeRunnerTest` on SQLite files, `UpgradeGateListenerTest`, `UpgradeControllerTest`,
+  `UpgradePageTest`), `Tests/Unit/Storage/ConnectFailureIsFinalTest`, `Tests/Kernel/SchemaGateBootTest`
+  (`Idno/start.php` and the console, closed and open, in subprocesses) and
+  `Tests/Upgrade/UpgradeEndToEndTest`: `php -S` on a free port (never 8089) in a subprocess with
+  `PHP_CLI_SERVER_WORKERS=2`, through a router of the test's own that passes `IDNO_DBNAME`, `IDNO_URL`,
+  `IDNO_PROXY_STRING`, `IDNO_DATABASE`, `IDNO_DBHOST` and `IDNO_DBPORT` into `$_SERVER` and runs
+  `Tests/rig/router.php`, with the rig server's credentials against a private database only, on a
+  `LegacyFixture` database (`insertSite()` writes a configuration, a `site` record, a user and a post)
+  or an empty one; it stops the server (a bounded wait, then SIGKILL) and drops the database in
+  `tearDown()`. Serialisation is proven by a step made while the test holds the lock (it copies
+  nothing); two steps sent together are checked only for copying every row once. Run it on MySQL and
+  MariaDB after changing the gate, the runner or the copier.
+
 #### Copying a 1.x database
 
 A 1.x site's data is in its 1.x tables (per collection `entities`, `reader`, `site`, `config`: the
 tables `<c>`, `<c>_metadata`, `<c>_search`; and `versions`, `session`).
 `Idno\Upgrade\LegacyDataCopier` (MySQL and MariaDB only: no 1.x site runs on SQLite) copies them
 into the new schema's tables, which must exist first (the schema migrations and the indexes the
-classes under `Idno/` declare: it creates no table). Nothing in the kernel, `idno:upgrade` or any
-page calls it yet. It is a public container service (its `Dialect` and connection built when it is
-fetched, without connecting; nothing fetches it while the kernel boots). Its helpers, built with
+classes under `Idno/` declare: it creates no table). `UpgradeRunner` calls it, after the migrations
+and the field indexes (see "The schema gate and the upgrade"). It is a public container service
+(its `Dialect` and connection built when it is fetched, without connecting; the schema gate fetches
+it at boot only on a MySQL or MariaDB database that has 1.x or `legacy_` tables). Its helpers, built with
 new: `LegacySource` (every statement that reads a 1.x table), `RowWriter` (writes `idno_<c>` and the
 rejects, verifies), `ConfigCopier` (the settings) and `DocumentCheck` (what a row's contents allow).
 
@@ -968,7 +1242,8 @@ table before the first step with every `legacy_` table after completion.
 
 The phases (each resumable at any point; the state is in `idno_upgrade_progress`, one row per
 collection: `source_rows`, `source_existed`, `copied`, `rejected`, `position` (the copy cursor),
-`verify_cursor`, `error`, `completed_at`):
+`verify_cursor`, `error` (a `PublicMessage`'s text), `error_detail` (the private detail of a
+failure: an exception's class and message; null for an impossible state), `completed_at`):
 
 1. **Copy**: per collection, a keyset pass by `uuid` over `<c>`, in batches; then the config.
 2. **Rename**: when every keyset pass has reached its end, the progress rows are marked ready
@@ -998,7 +1273,8 @@ What it guarantees:
   `noLegacyDatabase`: no table of `LEGACY_TABLES` under either name and no upgrade begun, in which case
   `step()` writes nothing at all (not even a progress row; `idno_settings` untouched).
   `legacySchemaVersion()` is the `schema` row of `versions`, or of `legacy_versions` after the rename,
-  or null. `step()` leaves the lock as it found it: when its caller already holds the lock, it works
+  or null. `completion()` is null when no upgrade has begun (no progress row), false while one runs,
+  true once complete: ONE statement on `idno_upgrade_progress` (which must exist), for the schema gate. `step()` leaves the lock as it found it: when its caller already holds the lock, it works
   under it and does not release it.
 - Bounded: no statement in a step reads a whole 1.x table, except one `COUNT(*)` per collection when
   its progress row is made (`source_rows`, display only). Every other read of a 1.x table is a LIMIT on
@@ -1026,8 +1302,9 @@ What it guarantees:
   instant (read without decoding the whole document); `data` = `contents` byte for byte; `search` the
   `_search` row's text, or ''.
 - Verification: each inserted row's columns and the SHA-256 of its `data` and `search`, read back from
-  the database, must equal the source's; any difference rolls the batch back, is stored as the error,
-  logged and thrown (`\UnexpectedValueException`).
+  the database, must equal the source's; any difference rolls the batch back, is stored (public error
+  `PublicMessage::stopped()`, the message naming the record as `error_detail`), logged and thrown
+  (`\UnexpectedValueException`). Every exception a step throws is stored the same way.
 - Rejects (`idno_upgrade_rejects`, indexed on `(collection, legacy_uuid)`, with the row's exact
   `contents` bytes and a reason of at most 255 characters): contents not valid UTF-8, not JSON,
   nested deeper than PHP's 512 levels, not an object or array, or a row the database refuses
@@ -1055,8 +1332,14 @@ What it guarantees:
   `legacy_<c>` while verifying, `config`/`legacy_config` included). A collection's progress row records
   whether its 1.x table existed when the row was made (`source_existed`): a collection this site never
   had (no `reader` tables, say) is copied as empty and needs no table later; one whose table existed
-  and then vanished is the impossible state. `ConfigCopier` never deletes the settings unless it has a
-  readable config table and has read it (it throws without one).
+  and then vanished is the impossible state, and so is one whose table did NOT exist and whose
+  `legacy_<c>` exists in the verify pass (it appeared during the upgrade, created by an old-version
+  process, and was renamed with the others, but the verify pass never reads it: its rows would be
+  lost); that is checked when a step starts in the verify phase and right after the rename. The
+  error is a `PublicMessage` naming only tables of `LEGACY_TABLES`. When there is no progress row to
+  store it in (the tables were renamed before any step), `progress()` finds it from the tables alone
+  and reports it, and `step()` returns it: an impossible state is never silent. `ConfigCopier` never
+  deletes the settings unless it has a readable config table and has read it (it throws without one).
 - Not detected: a 1.x row CHANGED after it was copied (its uuid is accounted for). Whoever runs the
   upgrade must stop every process of the old version first.
 - `UpgradeLock`: on MySQL and MariaDB the named lock `idno_upgrade_` + the first 16 hex digits of the
@@ -1247,18 +1530,32 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   from the path (PSR-4 under the project, or under the nearest `Idno`/`IdnoPlugins` directory outside
   it), loaded through the autoloader (never `require`), confirmed by reflection; a file that fails to
   load is skipped.
-- When it runs: `Idno\Pages\Admin\Plugins` reconciles a plugin's directory when the plugin is enabled
-  (skipped on a non-SQL site; a failure is logged and shown as an error message, and the plugin is
-  enabled anyway); `idno:upgrade` reconciles `Idno/` and every directory under `IdnoPlugins/`. On a
+- When it runs. CORE declarations (classes under `Idno/`): created by the upgrade (the upgrade page's
+  steps and `idno:upgrade`) before any copy, on the still empty tables, held by the marker migration
+  (a failure keeps the site closed); a new core declaration ships with a new, empty migration.
+  PLUGIN declarations, bundled plugins included: created when the plugin is enabled in the admin panel
+  (`Idno\Pages\Admin\Plugins`; skipped on a non-SQL site; a failure is logged and shown as an error
+  message, and the plugin is enabled anyway), and by `php bin/console idno:upgrade` for every enabled
+  plugin, after the schema is current and any copy has finished (a failure is a warning: the plugin is
+  skipped). The upgrade page never creates them: a site upgraded only through the browser has no
+  plugin indexes until one of those happens (slower plugin queries, never wrong results). A plugin's
+  failure never closes the site; a plugin that is there but not enabled is never reconciled by the
+  upgrade. On a
   database without the tables (a 1.x site not yet upgraded) enabling a plugin creates nothing (pinned
   by `Tests/Kernel/PluginIndexedFieldsTest`, on private databases).
 - Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`): `Idno\Common\Entity`: `access`,
   `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email`, `admin`; `Site`: `domain`;
   `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`;
-  `Reader\Feed`, `Reader\Subscription`, `Reader\FeedItem`: `feed_url`; `StaticPage`: `category`;
-  `ActivityPubFollower`: `actor_uri`, `user_uuid`. None is unique (nothing enforces uniqueness today;
-  a unique index would make saves fail on existing sites). A new declaration on an existing
-  first-party class ships with an empty migration, so that sites reconcile on upgrade.
+  `Reader\Feed`, `Reader\Subscription`, `Reader\FeedItem`: `feed_url`. A new declaration on a core
+  class ships with a new, empty migration, so that sites reconcile it on upgrade.
+- Bundled plugin declarations (plugin declarations, created as above, not by the upgrade page):
+  `StaticPages\StaticPage`: `category`; `ActivityPub\Entities\ActivityPubFollower`: `actor_uri`,
+  `user_uuid`. None of the core or bundled declarations is unique (nothing enforces uniqueness today;
+  a unique index would make saves fail on existing sites).
+- A warning for anyone declaring a field: a declaration applies to the whole collection table, not
+  to one class's entities. A field with a declared index matches scalar values only, so declaring a
+  field that other code stores lists or objects in changes what queries on that field match, for
+  everyone.
 - Plugin authors: `docs/developers/plugins/indexed-fields.md`.
 
 ## Content Plugins
@@ -1487,7 +1784,10 @@ the CLI installer no longer writes one.
   NOT apply this rule: drafts the user cannot see are counted.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs to legacy pages (inbox endpoints bypass via `post()` override).
-  New-style controllers have no authentication or CSRF protection yet (see "Adding a route")
+  New-style controllers have no authentication or CSRF protection yet (see "Adding a route");
+  the upgrade step `POST /_upgrade/step` changes state without either, under the conditions
+  stated there (no input selects what it does, nothing while the schema gate is open, bounded and
+  serialised work, `no-store`, a same-origin path redirect, encoded output)
 - Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - HTML sanitization via HTMLPurifier
@@ -1502,7 +1802,8 @@ the CLI installer no longer writes one.
   must implement `updateMetadata()` for this to apply.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
-- Content Security Policy headers via template system
+- Content Security Policy headers via template system (and, on the upgrade page, a strict
+  per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions

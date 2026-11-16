@@ -54,6 +54,21 @@ final class IndexedFields
      */
     public function reconcile(string ...$classes): array
     {
+        return $this->reconcileUntil(null, ...$classes)['created'];
+    }
+
+    /**
+     * reconcile(), bounded: the deadline (microtime(true); null for none) is checked after each
+     * index this call creates (an index, its one or two DDL statements, is the unit of work): once it
+     * has passed, nothing more is created, so with a deadline already past exactly one index is. The
+     * result says whether nothing is left to create (`complete`).
+     *
+     * @return array{created: list<string>, complete: bool}
+     *
+     * @throws \InvalidArgumentException when a class declares an invalid indexed field
+     */
+    public function reconcileUntil(?float $deadline, string ...$classes): array
+    {
         $this->conflicts = [];
         $declarations = [];
         foreach ($classes as $class) {
@@ -71,12 +86,15 @@ final class IndexedFields
                 $this->compare($collection, $field, $existing);
                 continue;
             }
+            if ($created !== [] && $deadline !== null && microtime(true) >= $deadline) {
+                return ['created' => $created, 'complete' => false];
+            }
             if ($this->create($table, $field)) {
                 $created[] = $collection . '.' . $field->name;
             }
         }
 
-        return $created;
+        return ['created' => $created, 'complete' => true];
     }
 
     /**
@@ -87,6 +105,16 @@ final class IndexedFields
     public function reconcileDirectory(string $directory): array
     {
         return $this->reconcile(...EntityClassFinder::in($directory));
+    }
+
+    /**
+     * reconcileUntil() for the classes EntityClassFinder finds in the directory.
+     *
+     * @return array{created: list<string>, complete: bool}
+     */
+    public function reconcileDirectoryUntil(?float $deadline, string $directory): array
+    {
+        return $this->reconcileUntil($deadline, ...EntityClassFinder::in($directory));
     }
 
     /**

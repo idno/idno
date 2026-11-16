@@ -852,7 +852,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         /** @var Connection $connection */
         $connection = Idno::container()->get('database_connection');
         $latest = (new SchemaMigrator($connection))->latest();
-        $this->assertSame('20261115000000', $latest, 'the rig\'s database has the baseline');
+        $this->assertSame('20261115000001', $latest, 'the rig\'s database has every migration (the newest is the indexed-fields marker)');
         $this->assertEquals([(object) ['label' => 'schema', 'value' => $latest]], Idno::site()->db()->getVersions());
 
         $empty = PrivateDatabase::sqliteMemory(migrate: false);
@@ -1244,7 +1244,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertInstanceOf(\PDO::class, $adapter->getClient());
         $this->assertSame($connection->getNativeConnection(), $adapter->getClient());
         $this->assertSame($path, $adapter->getDatabase());
-        $this->assertEquals([(object) ['label' => 'schema', 'value' => '20261115000000']], $adapter->getVersions());
+        $this->assertEquals([(object) ['label' => 'schema', 'value' => '20261115000001']], $adapter->getVersions());
 
         // Records
         $id = $adapter->saveRecord('entities', ['title' => 'A walrus', 'slug' => 'walrus', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);

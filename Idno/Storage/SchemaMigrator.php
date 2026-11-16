@@ -30,6 +30,11 @@ final class SchemaMigrator
 
     public const NAMESPACE = 'Idno\\Storage\\Migrations';
 
+    /** probe()'s markers: no migration version can look like them. */
+    private const INCOMPLETE = '#incomplete';
+
+    private const COMPLETE = '#complete';
+
     public function __construct(private readonly Connection $connection)
     {
     }
@@ -50,18 +55,65 @@ final class SchemaMigrator
     }
 
     /**
-     * Executes every pending migration, oldest first. Nothing happens when none is pending.
+     * Whether a migration on disk has not been executed: pending() !== [], answered with ONE
+     * statement (the executed versions, from `idno_migrations`, which must exist: the schema gate
+     * asks this only when the catalog lists it) compared with the migration classes in
+     * Idno/Storage/Migrations/, without doctrine/migrations' machinery. It is asked on every
+     * request.
+     */
+    public function hasPending(): bool
+    {
+        return $this->probe()['pending'];
+    }
+
+    /**
+     * hasPending() and, in the same ONE statement, whether rows of $progressTable (the upgrade's
+     * progress table, `idno_upgrade_progress`; it must exist when given) are incomplete (`completed_at`
+     * null) or complete: the executed versions UNION ALL one marker per progress row. It is what the
+     * schema gate sends on every request to a migrated database. Same SQL on MySQL, MariaDB and SQLite.
+     *
+     * @return array{pending: bool, incomplete: bool, complete: bool}
+     */
+    public function probe(?string $progressTable = null): array
+    {
+        $sql = 'select version from ' . self::METADATA_TABLE;
+        if ($progressTable !== null) {
+            if (preg_match('/^[a-z0-9_]{1,64}$/', $progressTable) !== 1) {
+                throw new \InvalidArgumentException('Not a table name: ' . $progressTable);
+            }
+            $sql .= " union all select case when completed_at is null then '" . self::INCOMPLETE . "' else '" . self::COMPLETE . "' end from " . $progressTable;
+        }
+        $rows = array_map('strval', $this->connection->fetchFirstColumn($sql));
+        $executed = array_flip($rows);
+        $pending = false;
+        foreach (glob(__DIR__ . '/Migrations/Version*.php') ?: [] as $file) {
+            if (!isset($executed[self::NAMESPACE . '\\' . basename($file, '.php')])) {
+                $pending = true;
+                break;
+            }
+        }
+
+        return ['pending' => $pending, 'incomplete' => isset($executed[self::INCOMPLETE]), 'complete' => isset($executed[self::COMPLETE])];
+    }
+
+    /**
+     * Executes every pending migration, oldest first. Nothing happens when none is pending. With
+     * $exceptLast the newest pending migration is left pending: the upgrade records it only once the
+     * declared indexed fields exist (see UpgradeRunner).
      *
      * @return list<string> the versions this call executed, oldest first (none when another
      *                      process executed them first)
      */
-    public function migrate(): array
+    public function migrate(bool $exceptLast = false): array
     {
         $dependencies = $this->dependencies();
         $dependencies->getMetadataStorage()->ensureInitialized();
         $versions = [];
         foreach ($dependencies->getMigrationStatusCalculator()->getNewMigrations()->getItems() as $migration) {
             $versions[] = $migration->getVersion();
+        }
+        if ($exceptLast) {
+            array_pop($versions);
         }
         if ($versions === []) {
             return [];

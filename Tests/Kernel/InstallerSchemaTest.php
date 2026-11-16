@@ -15,8 +15,8 @@ use Tests\Storage\PrivateDatabase;
 
 /**
  * The installers' Installer::installSchema() only checks that it can connect to the database: it
- * creates no table (the schema is made by `bin/console idno:upgrade`). On an empty private database
- * on the rig's MySQL or MariaDB server; skipped on any other site's database.
+ * creates no table (the schema is made by the first page load or `bin/console idno:upgrade`). On an
+ * empty private database on the rig's MySQL or MariaDB server; skipped on any other site's database.
  */
 final class InstallerSchemaTest extends TestCase
 {

@@ -79,17 +79,17 @@ final class KernelFromGlobalsTest extends TestCase
     }
 
     /**
-     * The legacy application is booted unless the caller says not (bin/console, for idno:upgrade);
-     * the environment and debug flag are read the same way either way.
+     * The entry points' kernel boots the legacy application, subject to the schema gate (which
+     * boot() asks: SchemaGateBootTest); before boot() it has not booted it.
      */
-    public function testTheLegacyApplicationIsBootedUnlessTheCallerSaysNot(): void
+    public function testTheEntryPointsKernelBootsTheLegacyApplication(): void
     {
         $_SERVER['APP_ENV'] = 'test';
         $_SERVER['APP_DEBUG'] = '1';
 
-        $this->assertTrue(Kernel::fromGlobals()->bootsLegacy());
-        $kernel = Kernel::fromGlobals(bootLegacy: false);
-        $this->assertFalse($kernel->bootsLegacy());
+        $kernel = Kernel::fromGlobals();
+        $this->assertTrue($kernel->bootsLegacy());
+        $this->assertFalse($kernel->legacyBooted());
         $this->assertSame(['test', true], [$kernel->getEnvironment(), $kernel->isDebug()]);
     }
 }

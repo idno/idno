@@ -25,6 +25,31 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->defaults()->autowire()->autoconfigure()
         ->set(ProbeCommand::class);
 
+    // A DBAL middleware that makes the first connection attempt fail when the environment variable
+    // IDNO_TEST_FAIL_FIRST_CONNECTION is 1 (for the schema gate's tests: a database that refuses one
+    // connection and would accept the next); inert otherwise.
+    $container->services()
+        ->set(\Tests\Fixtures\FailFirstConnection::class)
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->tag('doctrine.middleware');
+
+    // A DBAL middleware that appends every statement to the file IDNO_TEST_STATEMENT_LOG names (for
+    // the tests that pin the statements a request sends); inert otherwise.
+    $container->services()
+        ->set(\Tests\Fixtures\StatementLog::class)
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->tag('doctrine.middleware');
+
+    // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
+    // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
+    // test environment; no request can set it.
+    $container->parameters()->set('env(IDNO_TEST_UPGRADE_STEP_SECONDS)', (string) \Idno\Upgrade\UpgradeRunner::STEP_SECONDS);
+    $container->services()
+        ->get(\Idno\Upgrade\UpgradeController::class)
+        ->arg('$stepSeconds', '%env(float:IDNO_TEST_UPGRADE_STEP_SECONDS)%');
+
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();
     $container->services()->alias('idno.test.monolog_logger', 'monolog.logger')->public();

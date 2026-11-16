@@ -8,8 +8,14 @@ use Idno\Kernel\CacheDirResolver;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Kernel\DoctrineTrimPass;
 use Idno\Legacy\LegacyBootstrap;
+use Idno\Upgrade\SchemaGate;
+use Idno\Upgrade\SchemaStatus;
+use Idno\Upgrade\UpgradePage;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 
 class Kernel extends BaseKernel
@@ -18,6 +24,8 @@ class Kernel extends BaseKernel
 
     private ?string $baseDir = null;
     private ?string $cacheDir = null;
+    private bool $legacyBooted = false;
+    private bool $stepRequest = false;
 
     public function __construct(string $environment, bool $debug, private readonly bool $bootLegacy = true)
     {
@@ -27,27 +35,35 @@ class Kernel extends BaseKernel
     /**
      * The kernel the entry points (index.php, Idno/start.php, bin/console) run: environment
      * from APP_ENV (default "prod"), debug from APP_DEBUG ("1", "true", "on", "yes" are
-     * true; anything else, or unset, is false). Both are read from $_SERVER. With $bootLegacy
-     * false the kernel boots without the legacy application (bin/console, for idno:upgrade).
+     * true; anything else, or unset, is false). Both are read from $_SERVER.
      */
-    public static function fromGlobals(bool $bootLegacy = true): self
+    public static function fromGlobals(): self
     {
         $environment = $_SERVER['APP_ENV'] ?? '';
         $debug = $_SERVER['APP_DEBUG'] ?? false;
 
         return new self(
             is_string($environment) && $environment !== '' ? $environment : 'prod',
-            filter_var($debug, FILTER_VALIDATE_BOOLEAN),
-            $bootLegacy
+            filter_var($debug, FILTER_VALIDATE_BOOLEAN)
         );
     }
 
     /**
-     * Whether boot() boots the legacy application too.
+     * Whether boot() would boot the legacy application (false for a kernel built with
+     * bootLegacy: false, which never asks the schema gate either).
      */
     public function bootsLegacy(): bool
     {
         return $this->bootLegacy;
+    }
+
+    /**
+     * Whether boot() has booted the legacy application: false before boot(), in a kernel built
+     * with bootLegacy: false, and while the schema gate is closed.
+     */
+    public function legacyBooted(): bool
+    {
+        return $this->legacyBooted;
     }
 
     public function getProjectDir(): string
@@ -64,13 +80,58 @@ class Kernel extends BaseKernel
         $container->addCompilerPass(new DoctrineTrimPass());
     }
 
+    /**
+     * Boots the container, then, in a kernel that boots the legacy application: refuses a site with
+     * no configuration (NotInstalledException, before anything connects), asks the schema gate, and
+     * boots the legacy application only when the gate is open. With the gate closed (the database
+     * needs creating or upgrading) the legacy application is NOT booted: no Idno::site(), no
+     * session; web requests get the upgrade page from Idno\Upgrade\UpgradeGateListener, and the
+     * console runs without the legacy commands. Once a kernel has booted the legacy application in
+     * this process, the gate is not asked again.
+     */
     public function boot(): void
     {
         parent::boot();
 
-        if ($this->bootLegacy) {
-            $this->getContainer()->get(LegacyBootstrap::class)->boot();
+        if (!$this->bootLegacy) {
+            return;
         }
+        $container = $this->getContainer();
+        $bootstrap = $container->get(LegacyBootstrap::class);
+        $bootstrap->ensureInstalled();
+        if (!$bootstrap->bootedInThisProcess()) {
+            $gate = $container->get(SchemaGate::class);
+            // Closed: the legacy application must not boot. Unreachable: it boots to show its
+            // database error page, except for an upgrade step, which answers for itself (the
+            // connection failure is final, see ConnectFailureIsFinal).
+            if ($gate->closed() || ($this->stepRequest && $gate->status() === SchemaStatus::Unreachable)) {
+                $this->legacyBooted = false;
+
+                return;
+            }
+        }
+        $bootstrap->boot();
+        $this->legacyBooted = true;
+    }
+
+    /**
+     * Notes whether the main request is an upgrade step (UpgradePage::isStepRequest()) before the
+     * kernel boots: boot() does not boot the legacy application for it while the database is
+     * unreachable, so the step can answer 503 itself.
+     */
+    public function handle(Request $request, int $type = HttpKernelInterface::MAIN_REQUEST, bool $catch = true): Response
+    {
+        if ($type === HttpKernelInterface::MAIN_REQUEST) {
+            $this->stepRequest = UpgradePage::isStepRequest($request);
+        }
+
+        return parent::handle($request, $type, $catch);
+    }
+
+    public function shutdown(): void
+    {
+        parent::shutdown();
+        $this->legacyBooted = false;
     }
 
     /**

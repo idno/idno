@@ -17,15 +17,19 @@ use PHPUnit\Framework\TestCase;
 use Tests\Storage\PrivateDatabase;
 
 /**
- * `idno:upgrade` creates the schema on an EMPTY database, where the legacy application cannot
- * boot: bin/console builds the kernel without booting it for that command. Each case runs the real
- * console in a subprocess, on a private database chosen with IDNO_DBNAME (on MySQL or MariaDB the
- * empty database `<dbname>_upgrade_command` on the rig's server, on SQLite an empty file in a
- * temporary directory of the test's own), never the rig site's database. Skipped on a MongoDB site.
+ * `idno:upgrade` creates the schema on an EMPTY database, where the schema gate is closed and the
+ * legacy application does not boot; once the schema is current the gate is open and the command
+ * runs with the legacy application booted, as every command does. Each case runs the real console
+ * in a subprocess, on a private database chosen with IDNO_DBNAME (on MySQL or MariaDB the empty
+ * database `<dbname>_upgrade_command` on the rig's server, on SQLite an empty file in a temporary
+ * directory of the test's own), never the rig site's database. Skipped on a MongoDB site.
  */
 final class UpgradeCommandTest extends TestCase
 {
     private const BASELINE = '20261115000000';
+
+    /** The marker migration, recorded once the declared indexes exist. */
+    private const MARKER = '20261115000001';
 
     private const TABLES = [
         'idno_entities',
@@ -103,8 +107,10 @@ final class UpgradeCommandTest extends TestCase
         foreach (self::TABLES as $table) {
             $this->assertTrue($catalog->hasTable($table), $table);
         }
-        $this->assertSame(self::BASELINE, (new SchemaMigrator($this->connection()))->latest());
+        $this->assertSame(self::MARKER, (new SchemaMigrator($this->connection()))->latest());
         $this->assertStringContainsString('Ran the migration ' . self::BASELINE . '.', $stdout);
+        // The marker is recorded after the indexes, never before.
+        $this->assertGreaterThan(strpos($stdout, 'Created the index '), strpos($stdout, 'Ran the migration ' . self::MARKER . '.'));
         foreach (self::CORE_INDEXES as $collection => $fields) {
             $this->assertSame([], array_values(array_diff($fields, $catalog->indexedFields($collection))), $collection . ': every core index exists');
             foreach ($fields as $field) {
@@ -122,9 +128,11 @@ final class UpgradeCommandTest extends TestCase
 
         [$exit, $stdout, $stderr] = $this->console('idno:upgrade');
 
+        // The gate is open now: the legacy application booted (and logs what it logs at boot).
         $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
         $this->assertSame("Nothing to do: the schema is up to date.\n", $stdout);
-        $this->assertSame('', $stderr);
+        $this->assertStringNotContainsString(\Idno\Upgrade\SchemaGate::CLOSED_MESSAGE, $stderr);
+        $this->assertStringNotContainsString('error', strtolower($stderr));
         $catalog = $this->catalog();
         $this->assertSame($indexes, array_map(static fn (string $collection): array => $catalog->indexedFields($collection), ['entities', 'reader', 'site']));
     }
@@ -134,26 +142,35 @@ final class UpgradeCommandTest extends TestCase
         [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--status');
 
         $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
-        $this->assertSame('Pending migration: ' . self::BASELINE . "\n", $stdout);
+        $this->assertSame("Schema status: empty\nPending migration: " . self::BASELINE . "\nPending migration: " . self::MARKER . "\n", $stdout);
+        $this->assertSame('', $stderr);
         $this->assertSame([], $this->catalog()->tables(), '--status creates nothing');
 
         $this->assertSame(0, $this->console('idno:upgrade')[0]);
         [$exit, $stdout] = $this->console('idno:upgrade', '--status');
 
         $this->assertSame(0, $exit);
-        $this->assertSame("No migration is pending.\n", $stdout);
+        $this->assertSame("Schema status: current\nNo migration is pending.\n", $stdout);
     }
 
     /**
-     * Every other command boots the legacy application, which cannot boot on an empty database:
-     * the control that shows idno:upgrade is the one that does not need it.
+     * While the gate is closed the commands that need the legacy application (its console plugins,
+     * `version`) are not there, and the console says why; idno:upgrade opens the gate.
      */
-    public function testOtherCommandsStillBootTheLegacyApplication(): void
+    public function testOtherCommandsWaitForTheUpgrade(): void
     {
         [$exit, , $stderr] = $this->console('version');
 
         $this->assertNotSame(0, $exit);
-        $this->assertStringContainsString('Idno could not start', $stderr);
+        $this->assertStringContainsString(\Idno\Upgrade\SchemaGate::CLOSED_MESSAGE, $stderr);
+        $this->assertStringContainsString('Command "version" is not defined', $stderr);
+        $this->assertSame([], $this->catalog()->tables(), 'nothing was created');
+
+        $this->assertSame(0, $this->console('idno:upgrade')[0]);
+        [$exit, $stdout, $stderr] = $this->console('version');
+
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringNotContainsString(\Idno\Upgrade\SchemaGate::CLOSED_MESSAGE, $stderr);
     }
 
     private function connection(): Connection

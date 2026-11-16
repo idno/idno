@@ -22,6 +22,9 @@ final class SchemaMigratorTest extends TestCase
 {
     private const BASELINE = '20261115000000';
 
+    /** The marker migration: the declared indexed fields have been reconciled. */
+    private const MARKER = '20261115000001';
+
     private const TABLES = [
         'idno_entities',
         'idno_migrations',
@@ -63,7 +66,7 @@ final class SchemaMigratorTest extends TestCase
             $this->assertTrue($catalog->hasTable($table), $table);
         }
         $this->assertSame([], (new SchemaMigrator($connection))->pending());
-        $this->assertSame(self::BASELINE, (new SchemaMigrator($connection))->latest());
+        $this->assertSame(self::MARKER, (new SchemaMigrator($connection))->latest());
     }
 
     /**
@@ -74,7 +77,7 @@ final class SchemaMigratorTest extends TestCase
     {
         $connection = PrivateDatabase::sqliteMemory(migrate: false);
 
-        $this->assertSame([self::BASELINE], (new SchemaMigrator($connection))->migrate());
+        $this->assertSame([self::BASELINE, self::MARKER], (new SchemaMigrator($connection))->migrate());
         $this->assertSame([], (new SchemaMigrator($connection))->migrate());
         $connection->close();
     }
@@ -90,7 +93,7 @@ final class SchemaMigratorTest extends TestCase
 
         $this->assertSame($before, $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name'));
         $this->assertSame('"yes"', $connection->fetchOne('select value from idno_settings where name = ?', ['kept']));
-        $this->assertSame(1, (int) $connection->fetchOne('select count(*) from idno_migrations'));
+        $this->assertSame(2, (int) $connection->fetchOne('select count(*) from idno_migrations'));
         $this->assertSame([], (new SchemaMigrator($connection))->pending());
     }
 
@@ -104,7 +107,7 @@ final class SchemaMigratorTest extends TestCase
         $connection->executeStatement('drop table idno_reader');
         $connection->executeStatement('delete from idno_migrations');
         $migrator = new SchemaMigrator($connection);
-        $this->assertSame([self::BASELINE], $migrator->pending());
+        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending());
 
         $migrator->migrate();
 
@@ -121,9 +124,52 @@ final class SchemaMigratorTest extends TestCase
         $connection = self::emptyDatabase();
         $migrator = new SchemaMigrator($connection);
 
-        $this->assertSame([self::BASELINE], $migrator->pending());
+        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending());
         $this->assertSame('0', $migrator->latest());
         $this->assertSame([], (new SchemaCatalog($connection))->tables(), 'asking creates nothing');
+    }
+
+    /**
+     * hasPending() is what the schema gate asks on every request: ONE statement (the executed
+     * versions), compared with the migration classes on disk, never doctrine/migrations' machinery.
+     */
+    public function testHasPendingAsksOneQuestion(): void
+    {
+        $recorder = new \Tests\Storage\StatementRecorder();
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], (new Configuration())->setMiddlewares([new SqliteConnectionSetup(), $recorder]));
+        $migrator = new SchemaMigrator($connection);
+        $migrator->migrate();
+        $recorder->statements = [];
+
+        $this->assertFalse($migrator->hasPending());
+        $this->assertSame([['sql' => 'select version from idno_migrations', 'params' => []]], $recorder->statements);
+
+        $connection->executeStatement('delete from idno_migrations');
+        $this->assertTrue($migrator->hasPending());
+        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending(), 'the same answer as pending()');
+
+        $connection->executeStatement("insert into idno_migrations (version) values ('Idno\\Storage\\Migrations\\Version19990101000000')");
+        $this->assertTrue($migrator->hasPending(), 'an executed version that is not on disk does not count');
+    }
+
+    /**
+     * migrate(exceptLast: true) leaves the newest pending migration (the upgrade records it only once
+     * the declared indexes exist); the marker migration has no SQL of its own.
+     */
+    public function testMigrateCanLeaveTheLastPendingMigration(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory(migrate: false);
+        $migrator = new SchemaMigrator($connection);
+
+        $this->assertSame([self::BASELINE], $migrator->migrate(exceptLast: true));
+        $this->assertSame([self::MARKER], $migrator->pending());
+        $this->assertTrue($migrator->hasPending());
+        $this->assertSame([], $migrator->migrate(exceptLast: true), 'the last one is left again');
+        $before = $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name');
+        $this->assertSame([self::MARKER], $migrator->migrate());
+        $this->assertSame($before, $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name'), 'the marker changes no table');
+        $this->assertFalse($migrator->hasPending());
+        $this->assertSame(self::MARKER, $migrator->latest());
     }
 
     public function testConstructingQueriesNothing(): void
@@ -177,7 +223,7 @@ final class SchemaMigratorTest extends TestCase
         $columns = array_column($connection->fetchAllAssociative('PRAGMA table_info(idno_settings)'), 'name');
         $this->assertSame(['name', 'value', 'position'], $columns);
         $this->assertSame(
-            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'completed_at'],
+            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'error_detail', 'completed_at'],
             array_column($connection->fetchAllAssociative('PRAGMA table_info(idno_upgrade_progress)'), 'name'),
         );
         $this->assertSame(['collection', 'legacy_uuid'], array_column($connection->fetchAllAssociative('PRAGMA index_info(idno_upgrade_rejects_collection_uuid)'), 'name'));

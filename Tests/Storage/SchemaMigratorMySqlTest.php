@@ -83,7 +83,7 @@ final class SchemaMigratorMySqlTest extends TestCase
         }
         $migrator = new SchemaMigrator($this->connection());
         $this->assertSame([], $migrator->pending());
-        $this->assertSame('20261115000000', $migrator->latest());
+        $this->assertSame('20261115000001', $migrator->latest());
     }
 
     public function testMigrateTwiceIsANoOp(): void
@@ -97,7 +97,7 @@ final class SchemaMigratorMySqlTest extends TestCase
 
         $this->assertSame($before, $tables($this->connection()));
         $this->assertSame('"yes"', $this->connection()->fetchOne('select value from idno_settings where name = ?', ['kept']));
-        $this->assertSame(1, (int) $this->connection()->fetchOne('select count(*) from idno_migrations'));
+        $this->assertSame(2, (int) $this->connection()->fetchOne('select count(*) from idno_migrations'));
     }
 
     /**
@@ -109,7 +109,7 @@ final class SchemaMigratorMySqlTest extends TestCase
         $this->connection()->executeStatement('drop table idno_settings');
         $this->connection()->executeStatement('drop table idno_migrations');
         $migrator = new SchemaMigrator($this->connection());
-        $this->assertSame(['20261115000000'], $migrator->pending());
+        $this->assertSame(['20261115000000', '20261115000001'], $migrator->pending());
 
         $migrator->migrate();
 
@@ -118,7 +118,7 @@ final class SchemaMigratorMySqlTest extends TestCase
             $this->assertTrue($catalog->hasTable($table), $table);
         }
         $this->assertSame([], $migrator->pending());
-        $this->assertSame('20261115000000', $migrator->latest());
+        $this->assertSame('20261115000001', $migrator->latest());
     }
 
     public function testColumnsAndCollations(): void
@@ -153,7 +153,7 @@ final class SchemaMigratorMySqlTest extends TestCase
         }
         $this->assertSame('longblob', $this->columns('idno_upgrade_rejects')['contents']['type']);
         $this->assertSame(
-            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'completed_at'],
+            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'error_detail', 'completed_at'],
             array_keys($this->columns('idno_upgrade_progress')),
         );
         $this->assertSame('varchar', $this->columns('idno_upgrade_progress')['verify_cursor']['type']);
