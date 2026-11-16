@@ -9,6 +9,7 @@
 
 namespace Idno\Entities {
 
+    #[\Idno\Storage\Attribute\AsEntity('remote_user')]
     class RemoteUser extends \Idno\Entities\User implements Mutable
     {
 

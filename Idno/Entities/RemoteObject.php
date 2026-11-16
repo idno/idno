@@ -9,6 +9,7 @@
 
 namespace Idno\Entities {
 
+    #[\Idno\Storage\Attribute\AsEntity('remote_object')]
     class RemoteObject extends \Idno\Entities\BaseObject implements \JsonSerializable
     {
 

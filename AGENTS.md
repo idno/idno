@@ -201,8 +201,9 @@ Idno/
                                for tests); SchemaMigrator (runs the schema migrations in Migrations/)
                                and SchemaCatalog (the tables and indexed fields that exist);
                                JsonRecordStore, the RecordStore on the tables the migrations create (not
-                               used by the site yet), with TypeMap (a class's value in the `type` column)
-                               and IdentityTypeMap (no aliases); RecordIndex::queryValues() is what a
+                               used by the site yet), with TypeMap (a class's value in the `type` column),
+                               AttributeTypeMap (the aliases the entity classes declare with
+                               Attribute/AsEntity) and IdentityTypeMap (no aliases); RecordIndex::queryValues() is what a
                                query on a document field compares with, in that store and in memory
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
@@ -434,14 +435,13 @@ other new code may.
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityQuery.php`,
-  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
+  `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
   `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`,
   `JsonRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
-  the storage services below). The `TypeMap` interface has no container implementation yet, so
-  nothing may autowire it. `BootConfigConnectionFactory.php` is
+  the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
   `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
@@ -862,6 +862,24 @@ test made them.
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
 
 #### The JSON record store (not used by the site yet)
+
+Entity type aliases. A record's `type` column holds a short, stable alias (`status`, `article`,
+`user`), not the entity's PHP class name, so stored data does not depend on class names; the
+document itself keeps the class name in `entity_subtype`, and hydration reads that. Every
+concrete entity class under `Idno/` and `IdnoPlugins/` declares its alias with one attribute line
+directly above the class: `#[\Idno\Storage\Attribute\AsEntity('status')]`, with
+`collection: 'reader'` or `collection: 'site'` where its static `$retrieve_collection` is not
+`entities` (`Tests/Kernel/EntityAliasesTest` fails for a concrete entity class with no alias, a
+duplicate alias or a collection that differs from the static). `Idno\Common\Entity` itself, abstract,
+is `entity` (the default subtype); no other abstract class has one. To give a new entity class an
+alias: add the attribute, choosing the snake-case form of the class name for a core class
+(`notification`) or `<plugin>_<class>` for a plugin's. Aliases are stored permanently: never
+change one. When a class is renamed or moved, keep its alias and list its former class names in
+`legacy: [...]`, so a query by class still finds rows stored under them (`TypeMap::typesFor()` is the
+alias, the class name and those names). The attribute is NOT inherited: a subclass is stored under
+its own alias or, with none, under its class name. `AttributeTypeMap` loads each class once per
+instance and never throws: a string that is no class, a class that cannot be loaded or one with no
+attribute keeps its name.
 
 `Idno\Storage\JsonRecordStore` (built with new: the connection, a `Dialect`, `RecordDefaults`, a
 `TypeMap`, the `SchemaCatalog` of the same connection, the quote normaliser and the two search

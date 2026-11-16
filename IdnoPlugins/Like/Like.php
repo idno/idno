@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Like {
 
+    #[\Idno\Storage\Attribute\AsEntity('like')]
     class Like extends \Idno\Common\Entity
     {
 

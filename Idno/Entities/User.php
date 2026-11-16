@@ -12,6 +12,7 @@ namespace Idno\Entities {
     use Idno\Common\Entity;
     use Idno\Core\Email;
 
+    #[\Idno\Storage\Attribute\AsEntity('user')]
     class User extends \Idno\Common\Entity
         implements \Idno\Common\JSONLDSerialisable
     {

@@ -4,6 +4,7 @@ namespace Idno\Entities\Reader {
 
     use Idno\Common\Entity;
 
+    #[\Idno\Storage\Attribute\AsEntity('feed_subscription', collection: 'reader')]
     class Subscription extends Entity
     {
 

@@ -4,6 +4,7 @@ namespace Idno\Entities {
 
     use Idno\Common\Component;
 
+    #[\Idno\Storage\Attribute\AsEntity('unfurled_url')]
     class UnfurledUrl extends BaseObject
     {
 

@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Event {
 
+    #[\Idno\Storage\Attribute\AsEntity('rsvp')]
     class RSVP extends \Idno\Common\Entity
     {
 

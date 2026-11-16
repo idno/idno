@@ -11,6 +11,7 @@ namespace Idno\Entities {
 
     use Idno\Core\Email;
 
+    #[\Idno\Storage\Attribute\AsEntity('invitation')]
     class Invitation extends \Idno\Common\Entity
     {
 

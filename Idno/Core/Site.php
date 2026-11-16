@@ -5,6 +5,7 @@ namespace Idno\Core;
 use Idno\Common\Entity;
 use Idno\Core\Idno;
 
+#[\Idno\Storage\Attribute\AsEntity('site', collection: 'site')]
 class Site extends Entity
 {
 

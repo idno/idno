@@ -5,6 +5,7 @@ namespace Idno\Entities {
     /**
      * Represents a queued event stored in the AsynchronousQueue.
      */
+    #[\Idno\Storage\Attribute\AsEntity('queued_event')]
     class AsynchronousQueuedEvent extends \Idno\Entities\BaseObject
     {
 

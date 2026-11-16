@@ -4,6 +4,7 @@ namespace IdnoPlugins\Text {
 
     use Idno\Core\Autosave;
 
+    #[\Idno\Storage\Attribute\AsEntity('article')]
     class Entry extends \Idno\Common\Entity implements \Idno\Common\JSONLDSerialisable
     {
 

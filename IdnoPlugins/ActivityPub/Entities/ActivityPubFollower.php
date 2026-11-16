@@ -6,6 +6,7 @@ namespace IdnoPlugins\ActivityPub\Entities;
  * Represents an ActivityPub follower relationship.
  * Stored as a standard Idno entity, discriminated by entity_subtype.
  */
+#[\Idno\Storage\Attribute\AsEntity('activitypub_follower')]
 class ActivityPubFollower extends \Idno\Common\Entity
 {
 

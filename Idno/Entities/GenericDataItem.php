@@ -10,6 +10,7 @@
 
 namespace Idno\Entities {
 
+    #[\Idno\Storage\Attribute\AsEntity('generic_data_item')]
     class GenericDataItem extends \Idno\Entities\BaseObject
     {
         /**

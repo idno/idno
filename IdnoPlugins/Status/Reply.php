@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Status {
 
+    #[\Idno\Storage\Attribute\AsEntity('status_reply')]
     class Reply extends \IdnoPlugins\Status\Status
     {
 

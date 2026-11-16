@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Event {
 
+    #[\Idno\Storage\Attribute\AsEntity('event')]
     class Event extends \Idno\Common\Entity
     {
 

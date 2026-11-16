@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Status {
 
+    #[\Idno\Storage\Attribute\AsEntity('status')]
     class Status extends \Idno\Common\Entity
     {
 

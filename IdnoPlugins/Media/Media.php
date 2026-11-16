@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Media {
 
+    #[\Idno\Storage\Attribute\AsEntity('media')]
     class Media extends \Idno\Common\Entity implements \Idno\Common\JSONLDSerialisable
     {
 

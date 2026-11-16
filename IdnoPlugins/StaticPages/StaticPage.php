@@ -5,6 +5,7 @@ namespace IdnoPlugins\StaticPages {
     use Idno\Common\Entity;
     use Idno\Entities\User;
 
+    #[\Idno\Storage\Attribute\AsEntity('static_page')]
     class StaticPage extends Entity
     {
 

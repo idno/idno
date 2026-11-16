@@ -4,6 +4,7 @@ namespace IdnoPlugins\Photo {
 
     use Idno\Entities\File;
 
+    #[\Idno\Storage\Attribute\AsEntity('photo')]
     class Photo extends \Idno\Common\Entity
         implements \Idno\Common\JSONLDSerialisable
     {

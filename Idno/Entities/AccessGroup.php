@@ -9,6 +9,7 @@
 
 namespace Idno\Entities {
 
+    #[\Idno\Storage\Attribute\AsEntity('access_group')]
     class AccessGroup extends \Idno\Common\Entity
     {
 

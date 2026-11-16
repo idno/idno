@@ -47,12 +47,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // derivation, the defaults a store fills in, the connection parameters, the rules MySQL
         // applies that the other stores reproduce, the SQL dialects and the SQLite connection setup
         // middleware), the test doubles (FixedRecordDefaults, FixedAccessContext), the TypeMap
-        // without aliases (IdentityTypeMap; the TypeMap interface has no container implementation
-        // yet) and the RecordStore implementations, built with new, not services: the container's RecordStore is
+        // without aliases (IdentityTypeMap; the container's TypeMap is AttributeTypeMap, aliased
+        // below), Attribute/ (attribute classes) and the RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
         // builds them); they are not services.
-        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySchemaUpgrader and LegacySqlMaintenance.
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
@@ -173,6 +173,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->factory([service(LegacyRecordStoreFactory::class), 'create'])
         ->public();
     $services->alias(AccessContext::class, LegacyAccessContext::class)->public();
+    // The type each record's `type` column holds for its class: the entity's alias.
+    $services->set(\Idno\Storage\AttributeTypeMap::class);
+    $services->alias(\Idno\Storage\TypeMap::class, \Idno\Storage\AttributeTypeMap::class)->public();
     $services->set(EntityRepository::class)->public();
 
     $services->set(LegacySiteSettings::class)

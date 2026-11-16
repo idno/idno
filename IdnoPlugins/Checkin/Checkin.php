@@ -2,6 +2,7 @@
 
 namespace IdnoPlugins\Checkin {
 
+    #[\Idno\Storage\Attribute\AsEntity('checkin')]
     class Checkin extends \Idno\Common\Entity
         implements \Idno\Common\JSONLDSerialisable
     {
