@@ -70,8 +70,8 @@ composer console -- list
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
   `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against
   `EntityRepository` in `EntityRepositoryTest` (MySQL and SQLite; both contracts were first proven
-  against the old SQL backend, `Idno\Data\MySQL`, removed in phase 2a, and pin its behaviour as
-  literals, with the deliberate differences of the rulings); the storage services are tested in
+  against the old SQL backend, `Idno\Data\MySQL`, since removed, and pin its behaviour as
+  literals, with the deliberate differences listed under the `db()` bullet); the storage services are tested in
   `StorageServicesTest`, and `EntityRepository::count()`'s criteria in the unit tier,
   `Tests/Unit/Storage/EntityRepositoryCriteriaTest`; the `db()` adapter in
   `Tests/Kernel/RepositoryDataConciergeTest`), the black-box characterisation suite
@@ -158,7 +158,7 @@ Idno/
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
   Data/                        The legacy MongoDB backend, Mongo.php (a MongoDB site's db()); on an SQL site
                                db() is Idno\Legacy\RepositoryDataConcierge (the old SQL backend that was here
-                               was removed in phase 2a, see the db() bullet)
+                               has been removed, see the db() bullet)
   Storage/                     The storage interface (modern style): the RecordStore interface; the query
                                model (Criteria and Criterion/*, value objects parsed from the legacy search
                                arrays); RecordIndex (the metadata rows, search text and columns an SQL store
@@ -429,13 +429,20 @@ other new code may.
   connection is built exactly as before. The service is
   lazy: fetching it does not connect (the first query does; on an SQL site the `db()` service
   fetches it and connects it during `Idno::init()`, see the `db()` bullet below). What the
-  `database` setting means is decided in ONE place, `ConnectionParameters::driverFamily()`, which
-  `LegacyServiceFactory::db()`, the connection factory and `LegacyRecordStoreFactory` all use:
+  `database` setting means is decided by `ConnectionParameters::driverFamily()`, which the
+  connection factory and `LegacyRecordStoreFactory` use for every value:
   `mysql`/`beanstalk-mysql` → `mysql`, `sqlite` → `sqlite`, `mongo`/`mongodb` → `mongo`; any other
   value is `other` when it names a loadable backend class the way the legacy
   `Idno::componentFactory()` reads it (a full class name, or a class in `Idno\Data\`, extending
   `Idno\Core\DataConcierge`; `ConnectionParameters::backendClass()`), and otherwise `mysql`, because
-  `componentFactory()` falls back to the MySQL backend for such a name (ruling P16). On a MongoDB or
+  `componentFactory()` fell back to the old MySQL backend for a name it could not load.
+  `LegacyServiceFactory::db()` decides three names itself, in its own `switch`, before it asks
+  `driverFamily()`: `mongo`/`mongodb` (case-insensitive, trimmed) build `Idno\Data\Mongo`, and
+  `beanstalk-mysql` copies the `RDS_*` server variables into the legacy config and builds the adapter
+  on MySQL; every other value goes to `driverFamily()` (`mysql`/`sqlite`: the adapter; `other`: the
+  class, through `componentFactory()`). Both agree on those three names (`mongo`, and `mysql` for
+  `beanstalk-mysql`, whose `RDS_*` mapping `ConnectionParameters::fromLegacyConfig()` repeats for the
+  connection). Keep them in step if you change either. On a MongoDB or
   `other` site the container compiles and the kernel boots as before, but fetching the
   service throws a `\LogicException`: nothing may fetch the connection while the kernel boots (no
   `kernel.request` listener, no service built at boot), and code that uses it must only run on an
@@ -460,11 +467,15 @@ other new code may.
   the database refuses the record's data (`Dialect::isRefusedData()`, an allowlist: constraint
   violations, deadlock and lock-wait, and on MySQL 1292, 1366, 1406), after `save()` has rolled
   its transaction back; every other error propagates. So `save()` returns the id only when its
-  transaction committed, false when the data was refused, and throws otherwise.
+  transaction committed, false when the data was refused, and throws otherwise. The `RecordStore`
+  interface states this error contract for every implementation (what returns false, `[]`, 0 or
+  null; everything else is thrown, from every method); `Tests/Unit/Storage/DbalRecordStoreFailureTest`
+  pins the throwing side (a failure on any statement of `save()` is thrown, rolled back, stores
+  nothing and leaves the connection usable).
 - SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
   3.24 or later through `pdo_sqlite`; the connection setup refuses an older library): the same
-  store, held to the same contract with the in-memory store's hook values. **In this phase SQLite
-  is for tests and development only** (it becomes a supported production database in phase 2b): no
+  store, held to the same contract with the in-memory store's hook values. **In this release SQLite
+  is for tests and development only** (it is to become a supported production database in a later release): no
   site is installed on it (the installer does not create SQLite sites; the test rig's SQLite mode is
   the one SQLite site, see "Build & Test"), and an SQLite site's PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the store uses MUST have `SqliteConnectionSetup` among its
   DBAL middlewares (the `database_connection` service of an SQLite site has it; a connection you
@@ -487,7 +498,7 @@ other new code may.
     `REINDEX idno_ci` through a set-up connection.
   - WAL needs shared memory between the processes using the file: never put the database on a
     network filesystem (NFS, SMB).
-  - Differences from MySQL: search never uses a full-text index (ruling P8: a term over 5 bytes
+  - Differences from MySQL: search never uses a full-text index (a term over 5 bytes
     matches any of its words as a case-insensitive substring, whatever `boolean_search` and
     `bypass_fulltext_search` say; no boolean operators, no parse errors); four-byte characters are
     stored; a `created` operand MySQL would reject is caught by `Dialect::columnValue()` before the
@@ -530,7 +541,7 @@ other new code may.
   `database` names a loadable backend class, that class (`componentFactory()`, as before); on a MySQL
   (`mysql`, `beanstalk-mysql`, or a name that is no loadable class) or SQLite site
   `Idno\Legacy\RepositoryDataConcierge`, the adapter that serves the public API of the old SQL backend
-  (removed in phase 2a: same method names, parameters, defaults, return and failure values, as
+  (since removed: same method names, parameters, defaults, return and failure values, as
   listed in `RepositoryDataConciergeTest::OLD_BACKEND_METHODS`, except `build_where_from_array()`,
   which nothing outside that backend called) from the
   storage layer: records through the `RecordStore` service, `getObjects()`/`countObjects()`/`getObject()`
@@ -539,21 +550,25 @@ other new code may.
   `Idno\Legacy\LegacySchemaUpgrader` (the old backend's `checkAndUpgradeSchema()` moved unchanged; a
   no-op on SQLite), `optimize()`, `exportRecords()` and the connection check of `reconnectIfNeeded()` in
   `Idno\Legacy\LegacySqlMaintenance`, all on the shared connection. `getClient()` is the native PDO
-  of the `database_connection` service, and `handleSession()` installs the same
+  of the `database_connection` service (asked of the connection on each call, never a kept copy: a
+  `Pdo\Mysql` on MySQL, a `Pdo\Sqlite` on SQLite), and `handleSession()` installs the same
   `PdoSessionHandler` with the same options on that PDO (advisory locks on MySQL; NONE on SQLite,
   which PdoSessionHandler refuses advisory locks on: parallel requests of one session race, so SQLite
-  sessions are unsafe beyond tests and development, like SQLite itself in this phase), so a request
+  sessions are unsafe beyond tests and development, like SQLite itself in this release), so a request
   opens ONE database connection and session rows written before the switch are read as before.
   `handleSession()` returns null, as the old backend's did, so `Idno\Core\Session` goes on to its
   `sessions_storage` step even when `sessions_database` (on by default) installed the handler.
-  The old SQL backend classes (`Idno\Data\MySQL`, `Idno\Data\AbstractSQL`) were removed in phase 2a.
-  A site whose `sessions_storage` setting names `Idno\Data\MySQL` (with or without a leading
-  backslash; it used to build a second connection whose handler replaced the adapter's) keeps its
-  database sessions: `Idno\Core\Session` calls the adapter's `handleSession()` instead, so the same
-  `session` table and handler are used on the shared connection, with `sessions_database` on or off
-  (ruling P17, pinned in
-  `RepositoryDataConciergeTest::testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions`;
-  on a MongoDB site the setting does nothing). Any other `sessions_storage` value behaves as before.
+  The old SQL backend classes (`Idno\Data\MySQL`, `Idno\Data\AbstractSQL`) have been removed.
+  A site whose `sessions_storage` setting names `Idno\Data\MySQL` (in any case, with or without a
+  leading backslash, as PHP matched the class name; it used to build a second connection whose
+  handler replaced the adapter's) keeps its database sessions: `Idno\Core\Session` calls the
+  adapter's `handleSession()` instead, so the same `session` table and handler are used on the
+  shared connection, with `sessions_database` on or off (so that users stay logged in across the
+  upgrade; pinned in
+  `RepositoryDataConciergeTest::testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions`).
+  On a MongoDB site that setting now does nothing: such a site (sessions in a MySQL database next
+  to MongoDB) falls back to file sessions, so its users are logged out once at the upgrade
+  (`docs/install/upgrade.md` says so). Any other `sessions_storage` value behaves as before.
   `database` values naming the old class (`Idno\Data\MySQL`) or any other name that is no class
   mean MySQL, as they always did. The facts to keep:
   - Construction order: `Idno::init()` fetches `db()` early, before the logger, the session and the
@@ -567,32 +582,58 @@ other new code may.
     to PHP's error log, then a redirect to `forward_on_empty` when it is set, otherwise status 500
     and `statics/db.php` (with the message and the connection string in debug mode); on the console
     the same page on stdout, exit 0 (pinned in `RepositoryDataConciergeTest`).
-  - Errors the database raises are logged as before (the driver's PDOException message, through the
-    site's logger) and return the legacy failure value (`false`, `[]`). Otherwise return values are the
-    old backend's, with these deliberate differences, ALL of them (pinned in
-    `RepositoryDataConciergeTest`, P14 and the publish-status one in `EntityQueryContract`):
-    - DIFFERENCE (P6): a query the old backend sent to MySQL as invalid SQL, or that MySQL rejected for
+  - Which failures become a failure value: each method turns into its legacy failure value
+    (`false`, `[]`) exactly the failures the old backend's own `try` covered: a failure of the
+    database statement (a `Doctrine\DBAL\Exception` or a `\PDOException`, logged as before: the
+    driver's PDOException message, as an error, through the site's logger), a search array
+    `Criteria::fromLegacyArray()` cannot read (below), and a record `RecordIndex` cannot index
+    (`saveRecord()`, below). Everything else PROPAGATES, as it did from the old backend, whose `try`
+    held only its statements: an exception from the read-group lookup (the session and its
+    `permission:read:ids` event), from hydration (`loadFromArray()`; an `\Error` while constructing or
+    loading an entity is still logged and the record skipped, as `rowToEntity()` did), from
+    `canRead()`, from an event listener or `RecordDefaults`, a `\LogicException`, a `\TypeError`. Never
+    widen a `catch` in the adapter: an "empty" result from a broken listener makes callers act on
+    nothing found (`Idno::site_details()` creates a new Site when its lookup is empty). Pinned in
+    `RepositoryDataConciergeTest` (`testAFailureThatIsNotTheDatabasesPropagates` and the tests after it).
+  - After a lost connection (a worker that outlives `wait_timeout`, a server restart), the next
+    query fails (logged, the failure value) and DBAL closes the connection; the query after that runs
+    on a new connection, and `getClient()` returns its PDO (pinned on MySQL in
+    `testGetClientFollowsTheConnectionAfterItIsLost`). NOT recovered: a PDO a caller kept from an
+    earlier `getClient()`, and the session handler, which `handleSession()` built on the PDO of that
+    moment (it is not rebuilt). `reconnectIfNeeded()` checks the connection and replaces it at once.
+  - Otherwise return values are the old backend's, with these deliberate differences, ALL of them
+    (pinned in `RepositoryDataConciergeTest` and `EntityQueryContract`):
+    - DIFFERENCE (unanswerable queries): a query the old backend sent to MySQL as invalid SQL, or that MySQL rejected for
       its operand, matches nothing, so `countRecords()`/`countObjects()` give 0 where they gave false
       (no caller can tell: `Entity::count()`/`countFromX()` are declared `int`);
-    - DIFFERENCE (not logged): queries the store recognises as unanswerable (P6's rejected queries, and
+    - DIFFERENCE (not logged): queries the store recognises as unanswerable (the rejected queries above, and
       any query or write on a collection that does not exist) are not logged; the old backend logged
       MySQL's error for each. `RecordStore` does not tell the adapter why it found nothing, and its
       interface stays free of logging policy;
-    - DIFFERENCE (P7): `saveRecord()`/`saveObject()` return the id only when the record was stored. A
+    - DIFFERENCE (refused saves): `saveRecord()`/`saveObject()` return the id only when the record was stored. A
       save the database refuses (a 4-byte character in a field on the utf8mb3 metadata table, a field
       name over 64 characters, ...) returns false and stores nothing (an update leaves the previous
       version). The old backend returned the id of a save it had rolled back when a metadata row
       failed, so `Entity::save()` reported success and fired `saved`/`updated` (and federation) for a
       record that was not stored; now it returns false and fires neither;
-    - DIFFERENCE (P14): see the `Criteria` merge below;
-    - DIFFERENCE (P15): `getObjects()` leaves out a record whose class cannot be loaded instead of
+    - DIFFERENCE (empty `access`/`entity_subtype` conditions): see the `Criteria` merge below;
+    - DIFFERENCE (unloadable classes): `getObjects()` leaves out a record whose class cannot be loaded instead of
       returning `false` in its place (`getFromX()` already filtered those out; counts still include it);
     - DIFFERENCE (publish-status override): `getObjects()` hides unpublished entities by
       `EntityRepository`'s rule computed from the AccessContext; an entity class overriding
       `isHiddenByPublishStatus()` is no longer consulted (no core or bundled plugin class overrides it);
     - DIFFERENCE (string read group): a string `$readGroups` given to `getObjects()` is one read group;
-      the old backend ran it into `foreach` and failed (found nothing).
-  - (P9) A search array `Criteria::fromLegacyArray()` rejects (an array operand, `'$not' => ['$in' =>
+      the old backend ran it into `foreach` and failed (found nothing);
+    - DIFFERENCE (`created`): a record whose `created` is not a timestamp makes `saveRecord()` return
+      false and log why (`RecordIndex` cannot index it); the old backend raised a `TypeError`;
+    - DIFFERENCE (`getClient()`): it returns a `Pdo\Mysql` on MySQL and a `Pdo\Sqlite` on SQLite
+      (subclasses of `PDO`), not a plain `PDO`; and after a lost connection it is the new connection's
+      PDO (above), where the old backend's stayed dead until `reconnectIfNeeded()`;
+    - DIFFERENCE (lost connection): record queries reconnect by themselves after the one that found
+      the connection lost (above); the session handler does not;
+    - DIFFERENCE (ignore-access): `getObjects()` reads the ignore-access flag once per call, when it
+      builds the query; the old backend read it again for each row (the publish-status check).
+  - A search array `Criteria::fromLegacyArray()` rejects (an array operand, `'$not' => ['$in' =>
     []]`, a non-array `$in`, ...) matches nothing (`getRecords()` false, `getObjects()` `[]`, the counts
     false) and is logged as ONE warning naming the method and the query's shape: keys and operator
     names only, never values, control characters replaced, at most 200 bytes
@@ -619,14 +660,14 @@ other new code may.
     a member of;
   - the `Criteria` is merged OVER those conditions: a top-level condition on `access` or
     `entity_subtype` REPLACES the repository's, so it can widen what a user reads. Pass one only
-    when your code has already decided what the user may see. DIFFERENCE (ruling P14): a value that
+    when your code has already decided what the user may see. DIFFERENCE (empty conditions): a value that
     parses to no condition (`[]`, `['$in' => []]`, an operator with an empty operand) is no
     condition, so the viewer's read groups (or the types) stay; legacy drops the filter entirely;
   - `find()`: with ignore-access on there is no access condition; the page is cut in the database,
     then records whose class does not exist and unpublished entities the user may not see (only owner
     and admins see them) are dropped, so a page can come back short. The publish-status rule is
     computed from the AccessContext. DIFFERENCE (publish-status override): an entity class overriding
-    `isHiddenByPublishStatus()` is not consulted, where legacy `getObjects()` consulted it. DIFFERENCE (P15): legacy `getObjects()` returns `false` in place of a record whose class does
+    `isHiddenByPublishStatus()` is not consulted, where legacy `getObjects()` consulted it. DIFFERENCE (unloadable classes): legacy `getObjects()` returns `false` in place of a record whose class does
     not exist; `find()` returns entities only;
   - `count()` applies the access condition but NOT the publish-status rule (drafts are counted), does
     NOT honour ignore-access, and counts records whose class does not exist (as `countObjects()`); it
@@ -723,12 +764,12 @@ other new code may.
 - **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
 - **MySQL** — stores entities as JSON blobs, through `Idno\Storage\DbalRecordStore` on the DBAL
   connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over it (see the `db()` bullet under
-  "Kernel and services"). The hand-written SQL backend that preceded it was removed in phase 2a;
+  "Kernel and services"). The hand-written SQL backend that preceded it has been removed;
   `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
 - **SQLite** — the same store with `SqliteDialect` (schema: `warmup/schemas/sqlite/sqlite.sql`);
   `database = sqlite` (with `dbname` the file's path) gives `db()` the same adapter. For tests and
-  development in this phase (the default test rig runs on it; the installer does not create the
-  schema for a site); a supported production database from phase 2b. See the SQLite
+  development in this release (the default test rig runs on it; the installer does not create the
+  schema for a site); it is to become a supported production database in a later release. See the SQLite
   bullet under "Kernel and services" for the limits of the database file.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 

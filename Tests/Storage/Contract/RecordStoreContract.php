@@ -13,8 +13,10 @@ use PHPUnit\Framework\TestCase;
  *
  * Every expectation here describes what the MySQL store (DbalRecordStore with MySqlDialect)
  * does, odd corners included: the behaviour of the legacy MySQL backend this contract was first
- * proven against (removed in phase 2a), except where a ruling changed it (P5, P6, P7: the new
- * behaviour is pinned here). Other bindings must reproduce it. Where a backend may legitimately
+ * proven against (since removed), except for its deliberate differences, whose new behaviour is
+ * pinned here: an array in a search text field is stored (`Array` is searchable) rather than
+ * raising, a query MySQL cannot run counts 0, a save the database refuses returns false and stores
+ * nothing, and indexed values are cut on a character boundary. Other bindings must reproduce it. Where a backend may legitimately
  * differ, the expectation is routed through a protected method whose default is the MySQL
  * store's value, so a binding overrides the expectation rather than weakening the test.
  *
@@ -97,8 +99,8 @@ abstract class RecordStoreContract extends TestCase
      * Whether a search term of more than 5 bytes is a MySQL boolean-mode full-text query: its
      * operators apply (`+hello -world` excludes records with "world"), and a term the boolean
      * parser cannot parse (`abc@def.com`, `hello-`, ...) fails the query (error 1064), which the
-     * store reports as no records (count 0, ruling P6). Backends
-     * without full-text search (in memory, SQLite) match the words as substrings (ruling P8),
+     * store reports as no records (count 0). Backends
+     * without full-text search (in memory, SQLite) match the words as substrings,
      * where operators are plain characters and every term can run: they override this to false.
      */
     protected function expectBooleanModeSearch(): bool
@@ -548,8 +550,8 @@ abstract class RecordStoreContract extends TestCase
 
         // The MongoDB list-of-conditions form is not understood: it compiles to
         // invalid SQL, the error is logged, and find() answers with an empty list
-        // (not a match-everything). count() fails; by ruling the new implementations
-        // match nothing and count 0 (ruling P6).
+        // (not a match-everything). count() fails; the new implementations deliberately
+        // match nothing and count 0.
         $this->assertSame([], $this->ids(['$or' => [['slug' => 'a'], ['slug' => 'b']]]));
         $this->assertNotEmpty($this->ids([]), 'the records exist; only the malformed $or query fails');
         $malformed = ['$or' => [['slug' => 'a'], ['slug' => 'b']], self::MARKER_FIELD => $this->marker];
@@ -754,7 +756,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']));
     }
 
-    // ======================================================= fix round 1 additions
+    // ======================================================= further cases
 
     // ------------------------------------------------------- update and insert
 
@@ -900,7 +902,7 @@ abstract class RecordStoreContract extends TestCase
     public function testAValueCutInTheMiddleOfAMultibyteCharacterIsStoredAndIndexedUpToTheCharacterBefore(): void
     {
         // 200 times 'é' is 400 bytes; the cut at byte 255 lands inside the 128th character.
-        // Ruling P7: the index is cut on a character boundary and the record is stored (the
+        // A deliberate difference: the index is cut on a character boundary and the record is stored (the
         // legacy backend cut the character in half, MySQL rejected it, and the record was lost).
         $value = str_repeat('é', 200);
         $record = $this->put($this->r(['note' => $value]));
@@ -1129,7 +1131,7 @@ abstract class RecordStoreContract extends TestCase
         // MySQL rejects a bare integer as a TIMESTAMP ("Incorrect TIMESTAMP value");
         // the error is logged and find() answers with an empty list, not with the
         // records that a numeric comparison would find. (count() is not asserted here; it is 0,
-        // ruling P6, as testCreatedRejectsTheLiteralsMysqlRejects pins.)
+        // as testCreatedRejectsTheLiteralsMysqlRejects pins.)
         $this->assertSame([], $this->ids(['created' => ['$lt' => self::BASE_TIME + 1000]]));
         $this->assertSame([], $this->ids(['created' => ['$gt' => self::BASE_TIME]]));
         // Positive control: the datetime string form finds the record.
@@ -1251,7 +1253,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['ts' => 1000], [$big]);
     }
 
-    // ------------------------------------------- datetime literals (fix round 1)
+    // ------------------------------------------- datetime literals
 
     /**
      * Three records at 2023-06-14 00:00:00, 00:00:01 and 12:30:45 (PHP default timezone, the
@@ -1309,7 +1311,7 @@ abstract class RecordStoreContract extends TestCase
 
     /**
      * Literals MySQL rejects ("Incorrect TIMESTAMP value", error 1525) for a `created` operand:
-     * the query fails, which the store reports as no records (count 0, ruling P6).
+     * the query fails, which the store reports as no records (count 0).
      *
      * @return array<string, array{string|int|float|bool}>
      */
@@ -1376,7 +1378,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSame(0, $this->store()->count('entities', $this->criteria($query + [self::MARKER_FIELD => $this->marker])));
     }
 
-    // ------------------------------------------------ four-byte characters (Task 4)
+    // ------------------------------------------------ four-byte characters
 
     public function testAFourByteCharacterInTheBodyIsRejectedOrStored(): void
     {
@@ -1429,7 +1431,7 @@ abstract class RecordStoreContract extends TestCase
         }
     }
 
-    // ------------------------------------------------ boolean-mode search terms (Task 4 fix round 1)
+    // ------------------------------------------------ boolean-mode search terms
 
     /**
      * Terms longer than 5 bytes that MySQL's boolean-mode full-text parser rejects (error 1064).

@@ -7,10 +7,12 @@
 namespace Idno\Legacy;
 
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception as DbalException;
 use Idno\Core\Idno;
 use Idno\Storage\Criteria;
 use Idno\Storage\EntityQuery;
 use Idno\Storage\EntityRepository;
+use Idno\Storage\RecordIndex;
 use Idno\Storage\RecordStore;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
@@ -35,35 +37,46 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
  *
  * Return values and failure values are the legacy backend's, with these deliberate differences
  * (all of them; AGENTS.md lists them too):
- *  - (P6) a query the legacy backend sent to MySQL as invalid SQL (or that MySQL rejected) matches
- *    nothing: getRecords()/getObjects() give no results as before, countRecords()/countObjects()
- *    give 0 where the legacy backend gave false;
- *  - (not logged) queries the store recognises as unanswerable (those of P6, and any query or write
+ *  - a query the legacy backend sent to MySQL as invalid SQL (or that MySQL rejected for its
+ *    operand) matches nothing: getRecords()/getObjects() give no results as before,
+ *    countRecords()/countObjects() give 0 where the legacy backend gave false;
+ *  - (not logged) queries the store recognises as unanswerable (those above, and any query or write
  *    on a collection that does not exist) are not logged: RecordStore does not say why it found
  *    nothing, and stays free of logging policy; the legacy backend logged MySQL's error;
- *  - (P7) saveRecord()/saveObject() return the id only when the record was stored: a save the
- *    database refuses returns false (the legacy backend returned the id of a save it had rolled back
- *    when a metadata row failed, so Entity::save() fired saved/updated for a record not stored);
- *  - (P14) a caller's `access` or `entity_subtype` condition that parses to no condition does not
- *    remove the viewer's access filter (or the requested types), see EntityRepository;
- *  - (P15) getObjects() leaves out a record whose class cannot be loaded, where the legacy backend
+ *  - saveRecord()/saveObject() return the id only when the record was stored: a save the database
+ *    refuses returns false (the legacy backend returned the id of a save it had rolled back when a
+ *    metadata row failed, so Entity::save() fired saved/updated for a record not stored);
+ *  - a record whose `created` is not a timestamp is refused (false, logged); the legacy backend
+ *    raised a TypeError;
+ *  - a caller's `access` or `entity_subtype` condition that parses to no condition does not remove
+ *    the viewer's access filter (or the requested types), see EntityRepository;
+ *  - getObjects() leaves out a record whose class cannot be loaded, where the legacy backend
  *    returned false in its place;
  *  - (publish-status override) getObjects() hides unpublished entities by EntityRepository's rule; an
  *    entity class's override of isHiddenByPublishStatus() is not consulted;
- *  - (string read group) a string $readGroups is one read group; the legacy backend failed on it.
- * A search array that Criteria::fromLegacyArray() cannot read (P9) is logged as one warning, naming
- * the method and the query's shape (keys and operator names, never values), and the method returns
- * what the legacy backend returned for a failed query. Any other error of the database is logged as
- * an error, with the message of the driver's PDOException where there is one (as the legacy backend
- * logged it), and the method returns its legacy failure value.
+ *  - getObjects() reads the ignore-access flag once per call, not once per row;
+ *  - (string read group) a string $readGroups is one read group; the legacy backend failed on it;
+ *  - getClient() is the connection's current PDO (a Pdo\Mysql or Pdo\Sqlite), see getClient().
+ *
+ * Failures. Each method converts into its legacy failure value exactly the failures the legacy
+ * backend's own `try` covered:
+ *  - a failure of the database statement (Doctrine\DBAL\Exception, \PDOException), logged as an
+ *    error with the message of the driver's PDOException where there is one (as the legacy backend
+ *    logged it);
+ *  - a search array that Criteria::fromLegacyArray() cannot read, logged as one warning naming the
+ *    method and the query's shape (keys and operator names, never values);
+ *  - a record RecordIndex cannot index (saveRecord()), logged as an error.
+ * Everything else propagates, as it did from the legacy backend: an exception from the read-group
+ * lookup (the session and its event), from hydration (an \Error while constructing or loading an
+ * entity is logged and the record skipped, as DataConcierge::rowToEntity() did), from canRead(),
+ * from an event listener, a \LogicException, a \TypeError. A wider catch would turn a broken plugin
+ * into "nothing found", which callers act on (Idno::site_details() creates a Site when its lookup is
+ * empty).
  *
  * Not a container service: Idno\Legacy\LegacyServiceFactory::db() builds it.
  */
 final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements \Idno\Common\SessionStorageInterface
 {
-    /** The fields the legacy backend queried on the main table's columns (AbstractSQL::getSchemaFields()). */
-    private const SCHEMA_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
-
     /** The longest query shape written to the log (bytes). */
     private const MAX_SHAPE_LENGTH = 200;
 
@@ -105,7 +118,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     function init()
     {
         try {
-            $this->client = $this->connection->getNativeConnection();
+            $this->connection->getNativeConnection();
         } catch (\Exception $e) {
             $e = self::driverException($e);
             $config = Idno::site()->config();
@@ -136,7 +149,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function checkAndUpgradeSchema()
     {
-        $this->schema->upgrade($this->client, $this->family);
+        $this->schema->upgrade($this->getClient(), $this->family);
     }
 
     /**
@@ -146,7 +159,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function getSchemaFields()
     {
-        return self::SCHEMA_FIELDS;
+        return RecordIndex::COLUMN_FIELDS;
     }
 
     /**
@@ -156,7 +169,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function getVersions()
     {
-        return $this->schema->versions($this->client);
+        return $this->schema->versions($this->getClient());
     }
 
     /**
@@ -176,7 +189,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     public function sessionHandler(): PdoSessionHandler
     {
         return new PdoSessionHandler(
-            $this->client,
+            $this->getClient(),
             [
                 'db_table'    => 'session',
                 'db_id_col'   => 'session_id',
@@ -195,7 +208,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function optimize()
     {
-        return $this->maintenance->optimize($this->client);
+        return $this->maintenance->optimize($this->getClient());
     }
 
     /**
@@ -209,22 +222,31 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Returns the native PDO of the shared DBAL connection
+     * Returns the native PDO of the shared DBAL connection: the connection's current one, asked for
+     * on each call (never a copy kept from an earlier call), so after a lost connection has been
+     * replaced (by reconnectIfNeeded(), or by DBAL, which closes a connection it finds lost and opens
+     * a new one for the next query) it is the new connection's PDO. A `Pdo\Mysql` on MySQL and a
+     * `Pdo\Sqlite` on SQLite (both subclasses of PDO). It connects when the connection is closed.
+     *
+     * What is NOT recovered after a lost connection: a PDO a caller kept from an earlier call, and
+     * the session handler (handleSession() builds it once, on the PDO of that moment; it is not
+     * rebuilt).
      *
      * @return \PDO
      */
     function getClient()
     {
-        return $this->client;
+        return $this->connection->getNativeConnection();
     }
 
     /**
      * Check if the connection is still alive and reconnect if it has timed out, as the legacy
-     * backend did for long-running processes like the async event queue worker.
+     * backend did for long-running processes like the async event queue worker: on a failed check
+     * the connection is closed and a new one opened (a failure to open it propagates).
      */
     function reconnectIfNeeded()
     {
-        $this->client = $this->maintenance->reconnectIfNeeded($this->connection);
+        $this->maintenance->reconnectIfNeeded($this->connection);
     }
 
     /**
@@ -255,9 +277,19 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
             return false;
         }
 
+        // A record RecordIndex cannot index (its `created` is not a timestamp) is refused here, so
+        // that the store call below is the only thing whose failure is caught.
+        try {
+            RecordIndex::columns($array);
+        } catch (\InvalidArgumentException $e) {
+            $this->logger()->error($e->getMessage());
+
+            return false;
+        }
+
         try {
             return $this->store()->save((string)$collection, $array);
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -278,7 +310,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->findByUuid((string)$collection, (string)$uuid) ?? false;
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -299,7 +331,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->findById((string)$collection, (string)$id) ?? false;
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -316,7 +348,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     {
         try {
             return $this->store()->findLatest((string)$collection) ?? false;
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             if (\Idno\Core\Idno::site()->session() == null) {
                 throw self::driverException($e); // Throw exception up if the session isn't set
             }
@@ -344,7 +376,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             $records = $this->store()->find((string)$collection, $criteria, (int)$limit, (int)$offset);
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
 
             return false;
@@ -368,7 +400,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->count((string)$collection, $criteria);
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -397,7 +429,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->repository()->find(new EntityQuery(self::types($subtypes), $criteria, (int)$limit, (int)$offset, (string)$collection, self::readGroups($readGroups)));
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -420,7 +452,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->repository()->count(new EntityQuery(self::types($subtypes), $criteria, collection: (string)$collection));
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -441,7 +473,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->repository()->findOneByUuid((string)$uuid) ?? false;
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -456,7 +488,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function exportRecords($collection = 'entities', $limit = 10, $offset = 0)
     {
-        return $this->maintenance->export($this->client, $this->sanitiseCollection($collection), $limit, $offset, $this->logger());
+        return $this->maintenance->export($this->getClient(), $this->sanitiseCollection($collection), $limit, $offset, $this->logger());
     }
 
     /**
@@ -472,7 +504,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->delete((string)$collection, (string)$id);
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -492,7 +524,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->deleteAll((string)$collection);
-        } catch (\Exception $e) {
+        } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
@@ -506,8 +538,9 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      */
     function getErrors()
     {
-        if (!empty($this->client)) {
-            return $this->client->errorInfo();
+        $client = $this->getClient();
+        if (!empty($client)) {
+            return $client->errorInfo();
         }
 
         return false;
@@ -563,7 +596,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * The search array as Criteria, or null when it cannot be read (ruling P9): logged as one warning
+     * The search array as Criteria, or null when it cannot be read: logged as one warning
      * naming the method and the query's shape.
      *
      * @param array<int|string, mixed> $search
@@ -613,7 +646,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      * Logs a database error as the legacy backend did: its message (the PDOException's, where the
      * driver raised one).
      */
-    private function logError(\Exception $e): void
+    private function logError(DbalException|\PDOException $e): void
     {
         $this->logger()->error(self::driverException($e)->getMessage());
     }
@@ -622,7 +655,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      * The PDOException the driver raised, which is what the legacy backend saw (and logged), or the
      * exception itself when there is none: DBAL wraps the driver's exception in its own.
      */
-    private static function driverException(\Exception $e): \Exception
+    private static function driverException(\Throwable $e): \Throwable
     {
         for ($previous = $e; $previous !== null; $previous = $previous->getPrevious()) {
             if ($previous instanceof \PDOException) {

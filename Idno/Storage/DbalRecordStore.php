@@ -24,14 +24,14 @@ use Idno\Storage\Platform\Dialect;
  * the JSON document in `contents`), `<collection>_metadata` (one name/value row per indexed
  * value) and `<collection>_search` (the search text).
  *
- * It runs the statements the old backend, Idno\Data\MySQL (removed in phase 2a), ran, with what is engine-specific in the Dialect
+ * It runs the statements the old backend, Idno\Data\MySQL (since removed), ran, with what is engine-specific in the Dialect
  * (MySqlDialect, SqliteDialect):
  *
  *  - save(): in one transaction, an upsert of the main row, an upsert of the search row, the
  *    deletion of the metadata rows and the insertion of the new ones. What is written is derived
- *    by RecordIndex. It returns false whenever the transaction did not commit (ruling P7: today's
- *    backend returns the id when a metadata row is rejected; values are cut at 255 bytes on a
- *    character boundary). A record that cannot be encoded as JSON is not saved (false).
+ *    by RecordIndex. It returns the id only when the transaction committed (a deliberate difference:
+ *    the old backend returned the id when a metadata row was rejected; values are cut at 255 bytes
+ *    on a character boundary). A record that cannot be encoded as JSON is not saved (false).
  *  - find()/count(): `select distinct <table>.*` (`count(distinct <table>.uuid)`), one
  *    `left join <table>_metadata md<n>` per condition on a document field, a `left join
  *    <table>_search srch` for a top-level search, newest `created` first.
@@ -41,7 +41,7 @@ use Idno\Storage\Platform\Dialect;
  * operand matches the stored '1', and an operand on `created` that is not a datetime literal
  * makes MySQL reject the query.
  *
- * Queries that cannot run match nothing (find() gives [], count() 0; ruling P6):
+ * Queries that cannot run match nothing (find() gives [], count() 0, where the old backend's count failed):
  *  - an AnyOf with no children (the MongoDB list form of `$or`, which legacy compiles to invalid
  *    SQL) is compiled to a false condition, never sent as invalid SQL (an AllOf with none is true;
  *    an In with no values is false, a NotIn with none requires only that the field exists);
@@ -62,13 +62,11 @@ use Idno\Storage\Platform\Dialect;
  * found; matched without regard to case when the server resolves table names that way); any
  * other name makes writes fail (false) and reads find nothing, without a query on it.
  *
- * This class is not a container service yet (see config/services.php).
+ * Not registered by the container's directory scan: the container's RecordStore service is a
+ * DbalRecordStore built by Idno\Legacy\LegacyRecordStoreFactory (see config/services.php).
  */
 final class DbalRecordStore implements RecordStore
 {
-    /** The fields queried on the columns of the main table, not on the metadata rows (exact names). */
-    private const COLUMN_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
-
     /** The main table's columns, in the order the legacy upsert writes them. */
     private const INSERT_COLUMNS = ['uuid', '_id', 'siteid', 'entity_subtype', 'owner', 'contents', 'publish_status', 'created'];
 
@@ -464,7 +462,7 @@ final class DbalRecordStore implements RecordStore
         $field = $criterion->field;
         $isList = $criterion instanceof In || $criterion instanceof NotIn;
 
-        if (in_array($field, self::COLUMN_FIELDS, true)) {
+        if (in_array($field, RecordIndex::COLUMN_FIELDS, true)) {
             if ($isList && $operands === []) {
                 // In nothing is false; not in nothing is true for the one value a column always has.
                 return $criterion instanceof In ? '(1 = 0)' : '(1 = 1)';

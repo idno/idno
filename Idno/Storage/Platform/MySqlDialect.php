@@ -9,7 +9,7 @@ use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\RetryableException;
 
 /**
- * MySQL, as the old backend, Idno\Data\MySQL (removed in phase 2a), used it: `insert ... on duplicate key update`, full-text
+ * MySQL, as the old backend, Idno\Data\MySQL (since removed), used it: `insert ... on duplicate key update`, full-text
  * `match ... against` for search terms of more than five bytes (in boolean mode when the site's
  * `boolean_search` is on, `like` instead when `bypass_fulltext_search` is), `like '%term%'` for
  * shorter ones, and backquoted identifiers.

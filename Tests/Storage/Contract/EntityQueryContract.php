@@ -15,8 +15,9 @@ use IdnoPlugins\Text\Entry;
 /**
  * What entity lookups return, and to whom: the behaviour of the legacy getObjects(), countObjects() and
  * getObject() of the old MySQL backend (Idno\Data\AbstractSQL and Idno\Core\DataConcierge on MySQL;
- * this contract was first proven against it, and the backend was removed in phase 2a), which
- * EntityRepository reproduces, with the deliberate differences pinned here (P14, P15, publish status).
+ * this contract was first proven against it, and the backend has since been removed), which
+ * EntityRepository reproduces, with the deliberate differences pinned here (an empty `access` or
+ * `entity_subtype` condition keeps the filter, find() returns entities only, publish status).
  *
  * A binding supplies find(), count() and findOneByUuid(). The access context is always the legacy
  * session (the user logged on, the db() service's ignore-access flag), which the repository binding
@@ -490,7 +491,7 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     }
 
     /**
-     * Ruling P14: a caller's `access` that parses to no condition is no condition, so the read groups
+     * A deliberate difference: a caller's `access` that parses to no condition is no condition, so the read groups
      * stay in force. (Legacy replaced the read groups with nothing, so an anonymous visitor found
      * every access level, drafts still hidden.)
      *
@@ -508,7 +509,7 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     }
 
     /**
-     * Ruling P14, the same for `entity_subtype`: the requested types stay in force. (Legacy replaced
+     * The same for `entity_subtype`: the requested types stay in force. (Legacy replaced
      * them by nothing.)
      *
      * @dataProvider emptyConditions
@@ -624,7 +625,7 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
         try {
             $this->asAnonymous();
             $found = $this->findEntities([], [self::MARKER => $marker]);
-            // Ruling P15: find() returns entities only (legacy getObjects() gave `false` in its place).
+            // A deliberate difference: find() returns entities only (legacy getObjects() gave `false` in its place).
             $this->assertSame([], $found);
             $this->assertSame(1, $this->countEntities([], [self::MARKER => $marker]));
             $this->assertNull($this->findOneByUuid((string) $stored['uuid']));

@@ -18,8 +18,8 @@ use Tests\Storage\Contract\EntityQueryContract;
  * The entity query contract against EntityRepository over the container's RecordStore (a
  * DbalRecordStore on the rig's database, MySQL or SQLite) with LegacyAccessContext: the legacy
  * getObjects()/countObjects()/getObject() expectations, with the deliberate differences the contract
- * pins (find() returns entities only, ruling P15; a caller condition on `access` or `entity_subtype`
- * that parses to nothing leaves the viewer's read groups or the types in force, ruling P14).
+ * pins (find() returns entities only; a caller condition on `access` or `entity_subtype` that
+ * parses to nothing leaves the viewer's read groups or the types in force).
  *
  * Plus what only the repository has: save(), delete() and hydrate().
  */

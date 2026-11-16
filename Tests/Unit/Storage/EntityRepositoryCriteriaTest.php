@@ -213,8 +213,9 @@ final class EntityRepositoryCriteriaTest extends TestCase
     }
 
     /**
-     * Ruling P14: a caller condition on `access` that parses to nothing does not remove the read
-     * groups (legacy array_merge() would leave no access condition at all, and count 7 here).
+     * A caller condition on `access` that parses to nothing does not remove the read groups, a
+     * deliberate difference from legacy (array_merge() would leave no access condition at all, and
+     * count 7 here).
      *
      * @dataProvider emptyConditions
      *
@@ -227,7 +228,7 @@ final class EntityRepositoryCriteriaTest extends TestCase
     }
 
     /**
-     * Ruling P14, for the types (legacy would count all 7).
+     * The same for the types: they stay in force (legacy would count all 7).
      *
      * @dataProvider emptyConditions
      *

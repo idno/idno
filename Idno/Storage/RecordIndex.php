@@ -6,13 +6,12 @@ namespace Idno\Storage;
 
 /**
  * What a SQL store derives from a record to make it queryable: the same three things the old
- * backend's Idno\Data\MySQL::saveRecord() (removed in phase 2a) wrote next to the document, reproduced exactly.
+ * backend's Idno\Data\MySQL::saveRecord() (since removed) wrote next to the document, reproduced exactly.
  *
  *  - metadataRows(): the rows of `<collection>_metadata`, which equality, $in, $not, $lt and $gt
  *    on document fields run against;
  *  - searchText(): the text of `<collection>_search`, which $search runs against;
- *  - columns(): the columns of the main table, which the fields uuid, _id, entity_subtype,
- *    owner, publish_status and created are queried on.
+ *  - columns(): the columns of the main table, which the fields of COLUMN_FIELDS are queried on.
  *
  * All three take the record AS IT IS ENCODED INTO THE DOCUMENT: that is, after the store has
  * filled in a missing _id, siteid, uuid and owner, but before the defaults for entity_subtype,
@@ -27,6 +26,13 @@ namespace Idno\Storage;
  */
 final class RecordIndex
 {
+    /**
+     * The fields that are queried on the columns of the main table, not on the metadata rows (exact
+     * names), in the order the old backend listed them (its getSchemaFields()). Every other field of
+     * a query is looked up in `<collection>_metadata`.
+     */
+    public const COLUMN_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
+
     /** The longest indexed value, in bytes. */
     private const MAX_VALUE_BYTES = 255;
 
@@ -120,11 +126,12 @@ final class RecordIndex
     }
 
     /**
-     * The column values saveRecord() writes to the main table. entity_subtype defaults to
+     * The column values saveRecord() writes to the main table: one per field of COLUMN_FIELDS, plus
+     * siteid (which is not a queryable column). entity_subtype defaults to
      * 'Idno\Common\Entity', publish_status to 'published', created to the time $now; a given
      * `created` (an integer, a float or numeric string that fits an integer) is formatted as
      * 'Y-m-d H:i:s' in the PHP default timezone at this moment. siteid is null when the record
-     * has none (it is not a queryable column).
+     * has none.
      *
      * @param array<int|string, mixed> $record
      * @param int|null                 $now    the time used when the record has no `created` (default: now)

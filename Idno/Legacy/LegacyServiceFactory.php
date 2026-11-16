@@ -80,7 +80,7 @@ final class LegacyServiceFactory
         // What any other value means is decided in one place (ConnectionParameters::driverFamily(),
         // which the DBAL connection and the record store use too): 'mysql' and 'sqlite' are served
         // by the storage layer, and so is a name that is no loadable backend class (componentFactory()
-        // fell back to the old MySQL backend for it, ruling P16); a loadable backend class (driverFamily()
+        // fell back to the old MySQL backend for it, so such a site has always run on MySQL); a loadable backend class (driverFamily()
         // 'other') is built by componentFactory() as before, so it needs no fallback class.
         $family = \Idno\Storage\ConnectionParameters::driverFamily(['database' => $config->database]);
         if ($family === 'mysql' || $family === 'sqlite') {

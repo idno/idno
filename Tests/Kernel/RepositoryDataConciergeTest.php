@@ -11,11 +11,14 @@ use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyRecordDefaults;
 use Idno\Legacy\LegacySchemaUpgrader;
 use Idno\Legacy\RepositoryDataConcierge;
+use Idno\Storage\AccessContext;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Criteria;
 use Idno\Storage\DbalRecordStore;
 use Idno\Storage\EntityQuery;
 use Idno\Storage\EntityRepository;
+use Idno\Storage\FixedAccessContext;
+use Idno\Storage\FixedRecordDefaults;
 use Idno\Storage\Platform\SqliteDialect;
 use Idno\Storage\RecordStore;
 use IdnoPlugins\Status\Status;
@@ -34,9 +37,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 {
     /**
      * Every public method of the old SQL backend, Idno\Data\MySQL (with those it inherits from
-     * AbstractSQL, DataConcierge and Component), captured from the class on the commit before Task 7,
+     * AbstractSQL, DataConcierge and Component), captured from the class before it was replaced,
      * with its parameters (name => default, or no default when required) and whether it is static.
-     * The class was removed in Task 9; this list is what it had (checked against it until then).
+     * The class has since been removed; this list is what it had (checked against it until then).
      */
     private const OLD_BACKEND_METHODS = [
         'build_where_from_array' => [['params', 'variables', 'metadata_joins', 'non_md_variables', 'clause' => 'and', 'collection' => 'entities'], false],
@@ -210,7 +213,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * The shared connection has the session and the PDO attributes the legacy backend's own
-     * connection had: what a connection of Idno\Data\MySQL (removed in Task 9) answered on the rig's
+     * connection had: what a connection of Idno\Data\MySQL (since removed) answered on the rig's
      * MySQL 8, observed on the commit before its removal.
      */
     public function testTheConnectionMatchesTheLegacyBackendsConnection(): void
@@ -250,7 +253,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * The order in which Idno::init() built the legacy services is unchanged: captured on the commit
-     * before Task 7 (reflection on the container's services, in the order they were instantiated).
+     * before the adapter replaced the old backend (reflection on the container's services, in the order they were instantiated).
      * The DBAL connection is now built inside db() (it does not connect by itself), and the record
      * store and the repository only after the logger, when first used.
      */
@@ -288,56 +291,56 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
     }
 
-    // ------------------------------------------------ fix round 1
+    // ------------------------------------------------ refused saves, read groups, search settings, backend names
 
     /**
-     * Ruling P7 (I1a): a save the database refuses returns false and stores nothing. The value is a
+     * A deliberate difference: a save the database refuses returns false and stores nothing. The value is a
      * 4-byte character in a document field: the JSON document escapes it, so the main row and the
      * search row are written, and the rig's utf8mb3 metadata table refuses it.
      * (The old backend returned the id, set before the metadata inserts, although it rolled the
-     * save back and stored nothing; observed before Task 7, no longer testable since Task 9.)
+     * save back and stored nothing; observed before the adapter replaced it, no longer testable now it is gone.)
      */
     public function testARefusedSaveReturnsFalseAndStoresNothing(): void
     {
         $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores.');
         $db = Idno::site()->db();
-        $marker = 't7-' . bin2hex(random_bytes(6));
-        $refused = ['t7marker' => $marker, 't7note' => "a seal \u{1F9AD}", 'access' => 'PUBLIC', 'created' => 1_700_000_000];
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
+        $refused = ['testmarker' => $marker, 'testnote' => "a seal \u{1F9AD}", 'access' => 'PUBLIC', 'created' => 1_700_000_000];
 
         $this->captureLog();
         $this->assertFalse($db->saveRecord('entities', $refused));
-        $this->assertSame(0, $db->countRecords(['t7marker' => $marker]));
+        $this->assertSame(0, $db->countRecords(['testmarker' => $marker]));
 
         // An update the database refuses leaves the previous version intact.
-        $id = $db->saveRecord('entities', ['t7marker' => $marker, 't7note' => 'first version', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
+        $id = $db->saveRecord('entities', ['testmarker' => $marker, 'testnote' => 'first version', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
         $this->assertIsString($id);
         $this->created[] = $db->getRecord($id)['uuid'];
         $this->assertFalse($db->saveRecord('entities', ['_id' => $id] + $refused));
-        $this->assertSame('first version', $db->getRecord($id)['t7note']);
-        $this->assertSame(1, $db->countRecords(['t7marker' => $marker]));
+        $this->assertSame('first version', $db->getRecord($id)['testnote']);
+        $this->assertSame(1, $db->countRecords(['testmarker' => $marker]));
 
         $status = new Status();
         $status->setOwner($this->user());
         $status->body = 'Refused ' . $marker;
-        $status->t7note = "a seal \u{1F9AD}";
+        $status->testnote = "a seal \u{1F9AD}";
         $status->setAccess('PUBLIC');
         $this->assertFalse($db->saveObject($status));
     }
 
     /**
-     * Ruling P7 (I1a), through Entity::save(): a refused save returns false and fires neither
+     * The same, through Entity::save(): a refused save returns false and fires neither
      * `saved` (a new entity) nor `updated` (an existing one); the old backend reported success and
      * fired them for a record it had not stored.
      */
     public function testEntitySaveOfARefusedRecordReturnsFalseAndFiresNoEvent(): void
     {
         $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores.');
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $fired = [];
         $listener = static function (\Idno\Core\Event $event) use (&$fired, $marker): void {
             $object = $event->data()['object'] ?? null;
-            if ($object instanceof Entity && $object->t7marker === $marker) {
-                $fired[] = $object->t7note;
+            if ($object instanceof Entity && $object->testmarker === $marker) {
+                $fired[] = $object->testnote;
             }
         };
         $dispatcher = (new \ReflectionProperty(\Idno\Core\EventDispatcher::class, 'dispatcher'))->getValue(Idno::site()->events());
@@ -347,19 +350,19 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $new = new Status();
             $new->setOwner($this->user());
             $new->body = 'New refused ' . $marker;
-            $new->t7marker = $marker;
-            $new->t7note = "new \u{1F9AD}";
+            $new->testmarker = $marker;
+            $new->testnote = "new \u{1F9AD}";
             $new->setAccess('PUBLIC');
             $this->assertFalse($new->save(true));
 
             $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_000);
             $this->assertSame([null], $fired, 'the control: saving a storable entity fires saved');
             $fired = [];
-            $existing->t7note = "updated \u{1F9AD}";
+            $existing->testnote = "updated \u{1F9AD}";
             $this->assertFalse($existing->save(true));
             $this->assertSame([], $fired, 'no saved or updated event for a refused save');
-            $this->assertSame(1, Idno::site()->db()->countRecords(['t7marker' => $marker]));
-            $this->assertArrayNotHasKey('t7note', Idno::site()->db()->getRecordByUUID($existing->getUUID()));
+            $this->assertSame(1, Idno::site()->db()->countRecords(['testmarker' => $marker]));
+            $this->assertArrayNotHasKey('testnote', Idno::site()->db()->getRecordByUUID($existing->getUUID()));
         } finally {
             $dispatcher->removeListener('saved', $listener);
             $dispatcher->removeListener('updated', $listener);
@@ -367,17 +370,17 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Ruling P7 (I1a), through Entity::save(), with a refusal both databases make: a NEW entity whose
+     * The same, through Entity::save(), with a refusal both databases make: a NEW entity whose
      * uuid is another record's (the uuid is unique) returns false and fires no `saved` event, and the
      * other record is left as it was. (The 4-byte case above needs MySQL.)
      */
     public function testEntitySaveOfANewRecordWithAnExistingUuidReturnsFalseAndFiresNoEvent(): void
     {
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $fired = [];
         $listener = static function (\Idno\Core\Event $event, string $name) use (&$fired, $marker): void {
             $object = $event->data()['object'] ?? null;
-            if ($object instanceof Entity && $object->t7marker === $marker) {
+            if ($object instanceof Entity && $object->testmarker === $marker) {
                 $fired[] = $name;
             }
         };
@@ -392,13 +395,13 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $clash = new Status();
             $clash->setOwner($this->user());
             $clash->body = 'Clashing ' . $marker;
-            $clash->t7marker = $marker;
+            $clash->testmarker = $marker;
             $clash->uuid = $existing->getUUID();
             $clash->setAccess('PUBLIC');
 
             $this->assertFalse($clash->save(true));
             $this->assertSame([], $fired, 'no saved or updated event for a refused save');
-            $this->assertSame(1, Idno::site()->db()->countRecords(['t7marker' => $marker]));
+            $this->assertSame(1, Idno::site()->db()->countRecords(['testmarker' => $marker]));
             $this->assertSame('Existing ' . $marker, Idno::site()->db()->getRecordByUUID($existing->getUUID())['body']);
         } finally {
             $dispatcher->removeListener('saved', $listener);
@@ -407,27 +410,27 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * I1c: a string $readGroups is one read group. OBSERVED reasoning, not runnable on the rig: the old
+     * A string $readGroups is one read group. OBSERVED reasoning, not runnable on the rig: the old
      * backend ran `'$in' => 'PUBLIC'` into foreach (a warning, an exception here) and found nothing.
      */
     public function testAStringReadGroupIsHonoured(): void
     {
         $db = Idno::site()->db();
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $status = $this->status('Read group ' . $marker, $marker, 1_700_000_000);
 
-        $this->assertSame([$status->getUUID()], $this->uuids($db->getObjects('', ['t7marker' => $marker], [], 10, 0, 'entities', 'PUBLIC')));
-        $this->assertSame([], $db->getObjects('', ['t7marker' => $marker], [], 10, 0, 'entities', 'SITE'));
+        $this->assertSame([$status->getUUID()], $this->uuids($db->getObjects('', ['testmarker' => $marker], [], 10, 0, 'entities', 'PUBLIC')));
+        $this->assertSame([], $db->getObjects('', ['testmarker' => $marker], [], 10, 0, 'entities', 'SITE'));
     }
 
     /**
-     * M1: the record store reads `bypass_fulltext_search` and `boolean_search` from the legacy config
+     * The record store reads `bypass_fulltext_search` and `boolean_search` from the legacy config
      * each time a search runs, as the old backend did. A term of more than 5 bytes uses the full-text
      * index (whole words) unless bypassed, when it is a substring match.
      */
     public function testSearchSettingsAreReadAtQueryTime(): void
     {
-        $this->requireMysql('bypass_fulltext_search changes MySQL\'s full-text search only; SQLite always matches substrings (ruling P8).');
+        $this->requireMysql('bypass_fulltext_search changes MySQL\'s full-text search only; SQLite always matches substrings.');
         $config = Idno::site()->config();
         $previous = [$config->bypass_fulltext_search, $config->boolean_search];
         $store = (new \Idno\Legacy\LegacyRecordStoreFactory(
@@ -435,11 +438,11 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             Idno::container()->get(\Idno\Config\BootConfig::class),
             new LegacyRecordDefaults(),
         ))->create();
-        $marker = 't7-' . bin2hex(random_bytes(6));
-        $id = Idno::site()->db()->saveRecord('entities', ['title' => 'Seawalruses ahoy', 't7marker' => $marker, 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
+        $id = Idno::site()->db()->saveRecord('entities', ['title' => 'Seawalruses ahoy', 'testmarker' => $marker, 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
         $this->assertIsString($id);
         $this->created[] = Idno::site()->db()->getRecord($id)['uuid'];
-        $search = Criteria::fromLegacyArray(['$search' => ['walruses'], 't7marker' => $marker]);
+        $search = Criteria::fromLegacyArray(['$search' => ['walruses'], 'testmarker' => $marker]);
         try {
             $config->bypass_fulltext_search = false;
             $this->assertSame(0, $store->count('entities', $search), 'full text: no whole word "walruses"');
@@ -456,7 +459,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * M6: what db() builds for a `database` value that is not a known name, in a fresh process: a
+     * What db() builds for a `database` value that is not a known name, in a fresh process: a
      * loadable backend class is built by componentFactory() as before.
      */
     public function testDbBuildsALoadableBackendClass(): void
@@ -465,8 +468,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * M6: a `database` name that is no class gets the adapter on MySQL (componentFactory() fell back
-     * to the old MySQL backend, removed in Task 9).
+     * A `database` name that is no class gets the adapter on MySQL (componentFactory() fell back
+     * to the old MySQL backend, since removed).
      */
     public function testDbFallsBackToTheAdapterOnMysqlForANameThatIsNoClass(): void
     {
@@ -502,9 +505,27 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * A site configured with the old SQL backend's class name is on MySQL, served by the adapter,
+     * even where a class of that name still exists (an upgrade that overwrote files and left the old
+     * class file behind): ConnectionParameters counts that name as no class, so componentFactory()
+     * never builds it. In a fresh process with a stand-in class Idno\Data\MySQL defined before boot.
+     */
+    public function testALeftBehindOldBackendClassIsNeverBuilt(): void
+    {
+        $this->requireMysql('the old backend\'s name means MySQL, so the subprocess connects to the rig\'s MySQL server.');
+        foreach (['Idno\\Data\\MySQL', '\\Idno\\Data\\MySQL', 'idno\\data\\mysql'] as $database) {
+            $this->assertSame(
+                ['class' => RepositoryDataConcierge::class, 'family' => 'mysql', 'standInConstructed' => false],
+                $this->bootWithDatabase($database, ['IDNO_TEST_OLD_BACKEND_STAND_IN' => '1']),
+                $database,
+            );
+        }
+    }
+
+    /**
      * @param array<string, string> $env more environment variables for the subprocess
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     private function bootWithDatabase(string $database, array $env = []): array
     {
@@ -522,7 +543,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     public function testStaticFindersGoThroughTheRepository(): void
     {
         $repository = Idno::container()->get(EntityRepository::class);
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $first = $this->status('First ' . $marker, $marker, 1_700_000_000);
         $second = $this->status('Second ' . $marker, $marker, 1_700_000_060);
 
@@ -533,10 +554,10 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertSame($found[0]->getUUID(), $byUuid->getUUID());
 
         $this->assertSame(
-            $this->uuids($repository->find(new EntityQuery([Status::class], Criteria::fromLegacyArray(['t7marker' => $marker])))),
-            $this->uuids(Status::get(['t7marker' => $marker])),
+            $this->uuids($repository->find(new EntityQuery([Status::class], Criteria::fromLegacyArray(['testmarker' => $marker])))),
+            $this->uuids(Status::get(['testmarker' => $marker])),
         );
-        $this->assertSame([$second->getUUID(), $first->getUUID()], $this->uuids(Status::get(['t7marker' => $marker])));
+        $this->assertSame([$second->getUUID(), $first->getUUID()], $this->uuids(Status::get(['testmarker' => $marker])));
 
         $slug = $first->getSlug();
         $this->assertNotEmpty($slug);
@@ -545,35 +566,35 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             [Entity::getBySlug($slug)->getUUID()],
         );
 
-        $this->assertSame(2, Entity::countFromX(Status::class, ['t7marker' => $marker]));
-        $this->assertSame($repository->count(new EntityQuery([Status::class], Criteria::fromLegacyArray(['t7marker' => $marker]))), Entity::countFromX(Status::class, ['t7marker' => $marker]));
+        $this->assertSame(2, Entity::countFromX(Status::class, ['testmarker' => $marker]));
+        $this->assertSame($repository->count(new EntityQuery([Status::class], Criteria::fromLegacyArray(['testmarker' => $marker]))), Entity::countFromX(Status::class, ['testmarker' => $marker]));
         $this->assertSame($repository->findOneByUuid($second->getUUID())?->getUUID(), Idno::site()->db()->getObject($second->getUUID())->getUUID());
     }
 
     /**
-     * Ruling P15: a record whose class cannot be loaded is left out of getObjects(), where the old
+     * A deliberate difference: a record whose class cannot be loaded is left out of getObjects(), where the old
      * backend returned false in its place; counts still include it, as before.
      */
     public function testGetObjectsLeavesOutARecordWhoseClassCannotBeLoaded(): void
     {
         $db = Idno::site()->db();
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $this->status('Loadable ' . $marker, $marker, 1_700_000_000);
-        $id = $db->saveRecord('entities', ['entity_subtype' => 'Tests\\Kernel\\NoSuchEntityClass', 'access' => 'PUBLIC', 't7marker' => $marker, 'created' => 1_700_000_100]);
+        $id = $db->saveRecord('entities', ['entity_subtype' => 'Tests\\Kernel\\NoSuchEntityClass', 'access' => 'PUBLIC', 'testmarker' => $marker, 'created' => 1_700_000_100]);
         $this->assertIsString($id);
         $this->created[] = $db->getRecord($id)['uuid'];
 
-        $objects = $db->getObjects('', ['t7marker' => $marker]);
+        $objects = $db->getObjects('', ['testmarker' => $marker]);
         $this->assertCount(1, $objects);
         $this->assertNotContains(false, $objects, 'no false entries');
-        $this->assertSame(2, $db->countObjects('', ['t7marker' => $marker]));
-        $this->assertSame([], array_values(array_filter(Entity::getFromX('', ['t7marker' => $marker]), static fn ($e): bool => !$e instanceof Status)));
+        $this->assertSame(2, $db->countObjects('', ['testmarker' => $marker]));
+        $this->assertSame([], array_values(array_filter(Entity::getFromX('', ['testmarker' => $marker]), static fn ($e): bool => !$e instanceof Status)));
     }
 
     // ------------------------------------------------ queries the old backend could not run
 
     /**
-     * Ruling P9: a search array the parser rejects matches nothing and is logged once as a warning
+     * A search array the parser rejects matches nothing and is logged once as a warning
      * that names the method and the query's shape, never its values. The one rejected shape with a
      * plausible dynamic source: `$not => [$in => []]`, which the old backend ran as `!= 'Array'`
      * (in production: the records that have the field).
@@ -581,9 +602,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     public function testAnUnreadableSearchMatchesNothingAndIsLogged(): void
     {
         $db = Idno::site()->db();
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
-        $search = ['t7marker' => ['$not' => ['$in' => []]], 'secret-value-key' => 'do-not-log-me'];
+        $search = ['testmarker' => ['$not' => ['$in' => []]], 'secret-value-key' => 'do-not-log-me'];
 
         $this->captureLog();
         $this->assertSame([], $db->getObjects('', $search));
@@ -594,7 +615,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
         $this->assertCount(4, $log, implode("\n", $log));
         foreach (['getObjects', 'countObjects', 'getRecords', 'countRecords'] as $i => $method) {
-            $this->assertStringContainsString('warning - ' . $method . '(): the search could not be read, so nothing matches it: {t7marker: {$not: {$in: []}}, secret-value-key: _}', $log[$i]);
+            $this->assertStringContainsString('warning - ' . $method . '(): the search could not be read, so nothing matches it: {testmarker: {$not: {$in: []}}, secret-value-key: _}', $log[$i]);
             $this->assertStringNotContainsString('do-not-log-me', $log[$i]);
         }
     }
@@ -605,7 +626,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertSame('{a?b: _}', RepositoryDataConcierge::shape(["a\nb" => 1]));
         $long = RepositoryDataConcierge::shape(array_fill_keys(array_map(static fn (int $i): string => 'field' . $i, range(1, 100)), 'v'));
         $this->assertSame(200, strlen($long));
-        // M4: a multi-byte key across the limit is not cut in half.
+        // A multi-byte key across the limit is not cut in half.
         $this->assertSame('{' . str_repeat('a', 197) . 'é', RepositoryDataConcierge::shape([str_repeat('a', 197) . 'éé' => 1]));
         $cut = RepositoryDataConcierge::shape([str_repeat('a', 198) . 'éé' => 1]);
         $this->assertSame('{' . str_repeat('a', 198), $cut, 'a character that does not fit whole is left out');
@@ -613,7 +634,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Ruling P6: a query the old backend sent to MySQL as invalid SQL (here the MongoDB list form of
+     * A deliberate difference: a query the old backend sent to MySQL as invalid SQL (here the MongoDB list form of
      * $or) matches nothing; countRecords() gives 0 where the old backend gave false.
      */
     public function testAQueryTheOldBackendFailedCountsZero(): void
@@ -690,14 +711,14 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
         }
         // LegacyServiceFactory::db() returns `new \Idno\Data\Mongo()` for these names before anything
-        // else (the case is unchanged from before Task 7).
+        // else (the case is unchanged from before the adapter replaced the old backend).
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/Idno/Legacy/LegacyServiceFactory.php');
         $this->assertMatchesRegularExpression("/switch \\(trim\\(strtolower\\(\\\$config->database\\)\\)\\) \\{\\s*case 'mongo':\\s*case 'mongodb':\\s*return new \\\\Idno\\\\Data\\\\Mongo\\(\\);/", $source);
     }
 
     public function testAnUnknownBackendNameIsMysqlAndALoadableClassIsBuiltAsBefore(): void
     {
-        // Ruling P16: the record store and the connection agree with db().
+        // The record store and the connection agree with db().
         $this->assertSame('mysql', ConnectionParameters::driverFamily(['database' => 'NoSuchBackend']));
         $factory = new \Idno\Legacy\LegacyRecordStoreFactory(
             static fn (): Connection => Idno::container()->get('database_connection'),
@@ -714,7 +735,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->trackExportTempFiles();
         $this->captureLog();
         $this->assertFalse($db->optimize(), 'optimize() returns false, as before');
-        $marker = 't7-' . bin2hex(random_bytes(6));
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $status = $this->status('Export ' . $marker, $marker, 1_700_000_000);
         $total = $db->countRecords([]);
 
@@ -739,6 +760,41 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * After the connection is lost, the record store's next query fails (a database error: logged,
+     * the legacy failure value) and DBAL closes the connection; the query after that runs on a new
+     * connection, and getClient() is that connection's PDO, not the dead one. The session handler,
+     * built on the PDO it was given, is not recovered. On a connection of the test's own (killed
+     * with KILL CONNECTION_ID(), which ends only that connection), never the site's.
+     */
+    public function testGetClientFollowsTheConnectionAfterItIsLost(): void
+    {
+        $this->requireMysql('it ends a MySQL connection with KILL CONNECTION_ID().');
+        /** @var Connection $shared */
+        $shared = Idno::container()->get('database_connection');
+        $connection = new Connection($shared->getParams(), $shared->getDriver(), $shared->getConfiguration());
+        $store = new DbalRecordStore($connection, new \Idno\Storage\Platform\MySqlDialect(), new LegacyRecordDefaults(), static fn (string $text): string => $text, false, false);
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn($store, new FixedAccessContext(), $logger, 'mysql', $connection);
+
+        $dead = $db->getClient();
+        $this->assertNotSame($shared->getNativeConnection(), $dead, 'a connection of the test\'s own');
+        $this->assertIsInt($db->countRecords([]));
+        try {
+            $dead->query('KILL CONNECTION_ID()');
+        } catch (\PDOException) {
+            // MySQL interrupts the statement that ends its own connection.
+        }
+
+        $this->assertFalse($db->countRecords([]), 'the first query on the lost connection fails');
+        $this->assertCount(1, $logger->records);
+        $this->assertIsInt($db->countRecords([]), 'the next one runs on a new connection');
+        $client = $db->getClient();
+        $this->assertNotSame($dead, $client, 'getClient() is not the dead PDO');
+        $this->assertSame([1], $client->query('SELECT 1')->fetch(\PDO::FETCH_NUM));
+        $connection->close();
+    }
+
+    /**
      * The async queue's query shapes through the adapter: enqueue (save), the pending lookup
      * (`complete $not $in [true]`), dispatch (marks complete and saves), the garbage collector
      * (`completedTs $lt`, `complete` true).
@@ -746,8 +802,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     public function testTheAsynchronousQueueRunsThroughTheAdapter(): void
     {
         $queue = new \Idno\Core\AsynchronousQueue();
-        $name = 't7queue' . bin2hex(random_bytes(4));
-        $event = 't7/event/' . bin2hex(random_bytes(4));
+        $name = 'adapterqueue' . bin2hex(random_bytes(4));
+        $event = 'adapter/event/' . bin2hex(random_bytes(4));
         $received = [];
         Idno::site()->events()->addListener($event, static function (\Idno\Core\Event $e) use (&$received): void {
             $received[] = $e->data();
@@ -791,7 +847,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * A user logged in before the deploy stays logged in: a session row as the old backend wrote it
-     * (Idno\Data\MySQL::handleSession(), removed in Task 9) is read by the adapter's handler when the
+     * (Idno\Data\MySQL::handleSession(), since removed) is read by the adapter's handler when the
      * site serves the next request with that cookie.
      */
     public function testASessionWrittenByTheOldBackendIsReadByTheAdapter(): void
@@ -816,11 +872,11 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Ruling P17: a site whose `sessions_storage` names the removed old backend (Idno\Data\MySQL, with
-     * or without a leading backslash) keeps its database sessions: the db() service's handler (the
+     * A site whose `sessions_storage` names the removed old backend (Idno\Data\MySQL, with
+     * in any case, with or without a leading backslash) keeps its database sessions: the db() service's handler (the
      * `session` table, the same handler and options) on the shared connection, even with
-     * `sessions_database` off, and a session row the old backend wrote is still read. Before Task 9 the
-     * setting built a second connection (Idno\Data\MySQL) whose handler replaced the adapter's; any
+     * `sessions_database` off, and a session row the old backend wrote is still read. Before the old backend
+     * was removed the setting built a second connection (Idno\Data\MySQL) whose handler replaced the adapter's; any
      * other `sessions_storage` value, and `sessions_database` alone, behave as before. Each case boots
      * in a fresh process.
      */
@@ -833,6 +889,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $cases = [
             'the old backend, sessions_database off' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'Idno\\Data\\MySQL'], $database],
             'the old backend with a leading backslash' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => '\\Idno\\Data\\MySQL'], $database],
+            // PHP's class names ignore case, so the old backend was built for these too.
+            'the old backend, mis-cased' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'idno\\data\\MYSQL'], $database],
+            'the old backend, mis-cased with a leading backslash' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => '\\IDNO\\Data\\mysql'], $database],
             'the old backend, sessions_database on' => [['IDNO_SESSIONS_STORAGE' => 'Idno\\Data\\MySQL'], $database],
             'sessions_database on, nothing else' => [[], $database],
             'sessions_database off, nothing else' => [['IDNO_SESSIONS_DATABASE' => '0'], $files],
@@ -935,12 +994,12 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * The site's search page finds a post by a word of its body: whole words through MySQL's full-text
-     * index, substrings on SQLite (ruling P8); a whole word is found on both.
+     * index, substrings on SQLite; a whole word is found on both.
      */
     public function testTheSearchPageFindsAPost(): void
     {
         $word = 'seawalrus' . bin2hex(random_bytes(5));
-        $status = $this->status('Looking for the ' . $word . ' today', 't7-' . bin2hex(random_bytes(6)), time());
+        $status = $this->status('Looking for the ' . $word . ' today', 'adapter-test-' . bin2hex(random_bytes(6)), time());
 
         $found = $this->get('content/all/?q=' . $word);
         $this->assertSame(200, $found['status']);
@@ -978,7 +1037,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * OBSERVED on the commit before Task 7 (MySQL): the console prints the error page on stdout, writes
+     * OBSERVED on the commit before the adapter replaced the old backend (MySQL): the console prints the error page on stdout, writes
      * the driver's message twice to the error log (stderr) and exits 0; with forward_on_empty set, it
      * prints nothing, writes the message once and exits 0. SQLite: the same, with its driver's message.
      */
@@ -1006,7 +1065,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testTheAdapterWorksOnSqlite(): void
     {
-        $path = sys_get_temp_dir() . '/idno-t7-' . bin2hex(random_bytes(6)) . '.db';
+        $path = sys_get_temp_dir() . '/idno-adapter-test-' . bin2hex(random_bytes(6)) . '.db';
         array_push($this->files, $path, $path . '-wal', $path . '-shm');
         $this->trackExportTempFiles();
         $connection = SqliteTestDatabase::withSchema($path);
@@ -1073,14 +1132,244 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $connection->close();
     }
 
+    // ------------------------------------------------ which failures become a failure value
+
+    /**
+     * Each method's call on a store that fails, and what the old backend returned when its
+     * database statement failed.
+     *
+     * @return array<string, array{\Closure(RepositoryDataConcierge): mixed, mixed}>
+     */
+    public static function failingCalls(): array
+    {
+        return [
+            'saveRecord' => [static fn (RepositoryDataConcierge $db): mixed => $db->saveRecord('entities', ['title' => 'x', 'created' => 1_700_000_000]), false],
+            'saveObject' => [static function (RepositoryDataConcierge $db): mixed {
+                $status = new Status();
+                $status->body = 'x';
+                $status->created = 1_700_000_000;
+
+                return $db->saveObject($status);
+            }, false],
+            'getRecords' => [static fn (RepositoryDataConcierge $db): mixed => $db->getRecords([], ['slug' => 'x'], 10, 0), false],
+            'countRecords' => [static fn (RepositoryDataConcierge $db): mixed => $db->countRecords(['slug' => 'x']), false],
+            'getRecord' => [static fn (RepositoryDataConcierge $db): mixed => $db->getRecord('an-id'), false],
+            'getRecordByUUID' => [static fn (RepositoryDataConcierge $db): mixed => $db->getRecordByUUID('http://example.test/view/an-id'), false],
+            'deleteRecord' => [static fn (RepositoryDataConcierge $db): mixed => $db->deleteRecord('an-id'), false],
+            'deleteAllRecords' => [static fn (RepositoryDataConcierge $db): mixed => $db->deleteAllRecords('entities'), false],
+            'getObjects' => [static fn (RepositoryDataConcierge $db): mixed => $db->getObjects('', ['slug' => 'x']), []],
+            'countObjects' => [static fn (RepositoryDataConcierge $db): mixed => $db->countObjects('', ['slug' => 'x']), false],
+            'getObject' => [static fn (RepositoryDataConcierge $db): mixed => $db->getObject('http://example.test/view/an-id'), false],
+        ];
+    }
+
+    /**
+     * A failure that is not the database's (here a \LogicException from the store) propagates out
+     * of every method, as it did out of the old backend, whose `try` held only its statements; it
+     * is not logged.
+     *
+     * @dataProvider failingCalls
+     */
+    public function testAFailureThatIsNotTheDatabasesPropagates(\Closure $call): void
+    {
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn(new FailingStore(new \LogicException('not the database')), new FixedAccessContext(), $logger);
+
+        $thrown = self::thrown(static fn () => $call($db));
+        $this->assertInstanceOf(\LogicException::class, $thrown, 'the \LogicException propagates');
+        $this->assertSame('not the database', $thrown->getMessage());
+        $this->assertSame([], $logger->records);
+    }
+
+    /**
+     * getAnyRecord() too: only a database failure is turned into false (and thrown when there is no
+     * session, as before).
+     */
+    public function testAFailureThatIsNotTheDatabasesPropagatesFromGetAnyRecord(): void
+    {
+        $db = $this->adapterOn(new FailingStore(new \LogicException('not the database')), new FixedAccessContext(), new RecordingLogger());
+
+        $this->expectException(\LogicException::class);
+        $db->getAnyRecord();
+    }
+
+    /**
+     * A failure of the database statement (a DBAL exception, here wrapping the driver's
+     * PDOException) gives the old backend's failure value and one error line: the PDOException's
+     * message, as the old backend logged it.
+     *
+     * @dataProvider failingCalls
+     */
+    public function testADatabaseFailureGivesTheOldFailureValueAndOneLogLine(\Closure $call, mixed $failureValue): void
+    {
+        $dbalException = self::databaseException();
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn(new FailingStore($dbalException), new FixedAccessContext(), $logger);
+
+        $this->assertSame($failureValue, $call($db));
+        $this->assertCount(1, $logger->records);
+        $this->assertSame(['error', self::pdoException($dbalException)->getMessage()], $logger->records[0]);
+    }
+
+    /**
+     * The same for a bare \PDOException.
+     *
+     * @dataProvider failingCalls
+     */
+    public function testABarePdoExceptionGivesTheOldFailureValueAndOneLogLine(\Closure $call, mixed $failureValue): void
+    {
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn(new FailingStore(new \PDOException('SQLSTATE[HY000]: General error: a test failure')), new FixedAccessContext(), $logger);
+
+        $this->assertSame($failureValue, $call($db));
+        $this->assertSame([['error', 'SQLSTATE[HY000]: General error: a test failure']], $logger->records);
+    }
+
+    /**
+     * The read-group lookup (the session and its `permission:read:ids` event) sat outside the old
+     * backend's `try`: its failure propagates from getObjects() and countObjects(), it is not
+     * "nothing found".
+     */
+    public function testAFailingReadGroupLookupPropagates(): void
+    {
+        $access = new class () implements AccessContext {
+            public function currentUserUuid(): ?string
+            {
+                return null;
+            }
+
+            public function isAdmin(): bool
+            {
+                return false;
+            }
+
+            public function readAccessGroupIds(): array
+            {
+                throw new \RuntimeException('the read groups could not be found');
+            }
+
+            public function ignoreAccess(): bool
+            {
+                return false;
+            }
+        };
+        $connection = SqliteTestDatabase::withSchema();
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn(self::sqliteStore($connection), $access, $logger);
+
+        foreach (['getObjects' => static fn () => $db->getObjects(), 'countObjects' => static fn () => $db->countObjects()] as $method => $call) {
+            $thrown = self::thrown($call);
+            $this->assertInstanceOf(\RuntimeException::class, $thrown, $method . '(): the \RuntimeException propagates');
+            $this->assertSame('the read groups could not be found', $thrown->getMessage(), $method);
+        }
+        $this->assertSame([], $logger->records);
+        $connection->close();
+    }
+
+    /**
+     * Hydration (DataConcierge::rowToEntity()) sat outside the old backend's `try`, and caught only
+     * an \Error: an \Exception from an entity's loadFromArray() propagates from getObject() and
+     * getObjects().
+     */
+    public function testAnEntityThatFailsToLoadPropagates(): void
+    {
+        $connection = SqliteTestDatabase::withSchema();
+        $store = self::sqliteStore($connection);
+        $id = $store->save('entities', ['entity_subtype' => FailingToLoadEntity::class, 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
+        $this->assertIsString($id);
+        $uuid = $store->findById('entities', $id)['uuid'];
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn($store, new FixedAccessContext(), $logger);
+
+        foreach (['getObject' => static fn () => $db->getObject($uuid), 'getObjects' => static fn () => $db->getObjects()] as $method => $call) {
+            $thrown = self::thrown($call);
+            $this->assertInstanceOf(\RuntimeException::class, $thrown, $method . '(): the \RuntimeException propagates');
+            $this->assertSame('this entity cannot be loaded', $thrown->getMessage(), $method);
+        }
+        $this->assertSame([], $logger->records);
+        $connection->close();
+    }
+
+    /**
+     * A record RecordIndex cannot index (`created` that is not a timestamp) is refused: false, and
+     * the reason logged as an error.
+     */
+    public function testARecordThatCannotBeIndexedIsRefusedAndLogged(): void
+    {
+        $connection = SqliteTestDatabase::withSchema();
+        $logger = new RecordingLogger();
+        $db = $this->adapterOn(self::sqliteStore($connection), new FixedAccessContext(), $logger);
+
+        $this->assertFalse($db->saveRecord('entities', ['title' => 'x', 'created' => 'yesterday']));
+        $this->assertSame([['error', '`created` must be a timestamp, string given.']], $logger->records);
+        $this->assertSame(0, (int) $connection->fetchOne('select count(*) from entities'));
+        $connection->close();
+    }
+
     // ------------------------------------------------ helpers
+
+    private function adapterOn(RecordStore $store, AccessContext $access, RecordingLogger $logger, string $family = 'sqlite', ?Connection $connection = null): RepositoryDataConcierge
+    {
+        $repository = new EntityRepository($store, $access, new NullLogger());
+
+        return new RepositoryDataConcierge($family, $connection ?? SqliteTestDatabase::connection(), static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, null);
+    }
+
+    private static function sqliteStore(Connection $connection): DbalRecordStore
+    {
+        return new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $text): string => $text, true, false);
+    }
+
+    /**
+     * A real DBAL exception from a failing statement, wrapping the driver's PDOException.
+     */
+    private static function databaseException(): \Doctrine\DBAL\Exception\DriverException
+    {
+        $connection = SqliteTestDatabase::connection();
+        try {
+            $connection->executeQuery('select * from no_such_table');
+        } catch (\Doctrine\DBAL\Exception\DriverException $e) {
+            $connection->close();
+            self::pdoException($e);
+
+            return $e;
+        }
+        self::fail('the statement fails');
+    }
+
+    /**
+     * What the call throws, or null.
+     */
+    private static function thrown(\Closure $call): ?\Throwable
+    {
+        try {
+            $call();
+        } catch (\Throwable $e) {
+            return $e;
+        }
+
+        return null;
+    }
+
+    /**
+     * The driver's PDOException that the DBAL exception wraps (somewhere in its chain).
+     */
+    private static function pdoException(\Throwable $e): \PDOException
+    {
+        for ($previous = $e; $previous !== null; $previous = $previous->getPrevious()) {
+            if ($previous instanceof \PDOException) {
+                return $previous;
+            }
+        }
+        self::fail('a PDOException in the chain of ' . get_class($e));
+    }
 
     private function status(string $body, string $marker, int $created): Status
     {
         $status = new Status();
         $status->setOwner($this->user());
         $status->body = $body;
-        $status->t7marker = $marker;
+        $status->testmarker = $marker;
         $status->setAccess('PUBLIC');
         $status->created = $created;
         $this->assertNotFalse($status->save(true));
@@ -1112,7 +1401,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     private function captureLog(): void
     {
-        $this->logFile = (string) tempnam(sys_get_temp_dir(), 'idno-t7-log');
+        $this->logFile = (string) tempnam(sys_get_temp_dir(), 'idno-adapter-test-log');
         $this->previousErrorLog = ini_set('error_log', $this->logFile);
     }
 
@@ -1189,7 +1478,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     /**
      * Writes a session for the user as the old backend's handler did, and returns its id. The row is
      * the one Idno\Data\MySQL::handleSession() (a PdoSessionHandler with advisory locks) wrote for a
-     * session holding only `user_uuid`, observed on the commit before Task 9: a 32-character
+     * session holding only `user_uuid`, observed on the commit before its removal: a 32-character
      * hexadecimal id, the PHP-serialised session (`user_uuid|s:<length>:"<uuid>";`), the time of the
      * write in `session_time` and that time plus the session lifetime (604800 seconds on the rig) in
      * `session_lifetime`.
@@ -1377,5 +1666,66 @@ final class RecordingLogger extends AbstractLogger
     public function log($level, \Stringable|string $message, array $context = []): void
     {
         $this->records[] = [$level, (string) $message];
+    }
+}
+
+/**
+ * A RecordStore every method of which throws the given exception.
+ */
+final class FailingStore implements RecordStore
+{
+    public function __construct(private readonly \Throwable $failure)
+    {
+    }
+
+    public function save(string $collection, array $record): string|false
+    {
+        throw $this->failure;
+    }
+
+    public function findById(string $collection, string $id): ?array
+    {
+        throw $this->failure;
+    }
+
+    public function findByUuid(string $collection, string $uuid): ?array
+    {
+        throw $this->failure;
+    }
+
+    public function findLatest(string $collection): ?array
+    {
+        throw $this->failure;
+    }
+
+    public function find(string $collection, Criteria $criteria, int $limit, int $offset): array
+    {
+        throw $this->failure;
+    }
+
+    public function count(string $collection, Criteria $criteria): int
+    {
+        throw $this->failure;
+    }
+
+    public function delete(string $collection, string $id): bool
+    {
+        throw $this->failure;
+    }
+
+    public function deleteAll(string $collection): bool
+    {
+        throw $this->failure;
+    }
+}
+
+/**
+ * An entity whose loadFromArray() throws an \Exception (not an \Error).
+ */
+final class FailingToLoadEntity extends Entity
+{
+    function loadFromArray($array)
+    {
+        throw new \RuntimeException('this entity cannot be loaded');
     }
 }

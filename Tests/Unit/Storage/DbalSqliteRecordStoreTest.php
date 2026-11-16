@@ -29,7 +29,7 @@ use Tests\Storage\Contract\RecordStoreContract;
  * It overrides exactly the hooks the in-memory binding overrides (InMemoryRecordStoreTest), with
  * the same values:
  *  - ownsPrivateDatabase (true);
- *  - expectLongSearchTermToMatchSubstring (true), expectBooleanModeSearch (false): ruling P8, no
+ *  - expectLongSearchTermToMatchSubstring (true), expectBooleanModeSearch (false): no
  *    full-text index; a long term's words are matched as substrings;
  *  - expectFourByteCharactersToBeRejected (false): SQLite stores any UTF-8.
  */

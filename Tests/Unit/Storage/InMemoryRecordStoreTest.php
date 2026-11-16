@@ -28,7 +28,7 @@ use Tests\Storage\Contract\RecordStoreContract;
  *    a substring match on each of its words;
  *  - ownsPrivateDatabase (true): the store is private to the test;
  *  - expectFourByteCharactersToBeRejected (false): no utf8mb3 limit, an emoji is stored and indexed;
- *  - expectBooleanModeSearch (false): ruling P8, long terms are words matched as substrings.
+ *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
 {

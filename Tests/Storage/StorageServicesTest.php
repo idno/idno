@@ -114,7 +114,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->assertInstanceOf($dialects[$family], self::property($store, 'dialect'));
         $this->assertSame($container->get('database_connection'), self::property($store, 'connection'));
         $this->assertInstanceOf(LegacyRecordDefaults::class, self::property($store, 'defaults'));
-        // Read from the legacy config each time a search is built (Task 7 fix M1; was: read once).
+        // Read from the legacy config each time a search is built, as the old backend read it (not once).
         $this->assertSame((bool) Idno::site()->config()->boolean_search, self::property($store, 'booleanSearch')());
         $this->assertSame((bool) Idno::site()->config()->bypass_fulltext_search, self::property($store, 'bypassFulltext')());
         $uncurl = self::property($store, 'uncurlQuotes');

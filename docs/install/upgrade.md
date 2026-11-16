@@ -56,13 +56,13 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 Idno 2.0 reads and writes MySQL through a new storage layer (`Idno\Storage\`, built on Doctrine DBAL) instead of its old hand-written SQL code. The tables and their contents are unchanged.
 
 * **MySQL sites: no action is needed.** Every `database` setting that worked before still works (`MySQL`, `mysql`, `beanstalk-mysql`, and any other value that is not a database class, which has always meant MySQL), and a `sessions_storage = Idno\Data\MySQL` setting keeps your sessions in the database's `session` table, as before: users stay logged in across the upgrade.
-* **MongoDB sites are not affected** by this change; they move to the new storage layer in a later release.
+* **MongoDB sites are not affected** by this change (they move to the new storage layer in a later release), with one exception: a MongoDB site whose `sessions_storage` setting is `Idno\Data\MySQL` (sessions kept in a MySQL database next to MongoDB) now keeps its sessions in files, because that class no longer exists. Every user is logged out once at the upgrade and must log in again; remove the setting.
 
 ### For plugin and theme developers
 
 The classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` have been removed. Code that extended them, created them (`new \Idno\Data\MySQL()`), or checked for them (`instanceof \Idno\Data\MySQL` or `AbstractSQL`, `class_exists()`) must change:
 
-* Legacy plugin code keeps using `Idno::site()->db()`, which on a MySQL site serves the same public methods with the same parameters and defaults (except `build_where_from_array()`, which is gone). `getClient()` still returns a `PDO` on the site's one database connection.
+* Legacy plugin code keeps using `Idno::site()->db()`, which on a MySQL site serves the same public methods with the same parameters and defaults (except `build_where_from_array()`, which is gone). `getClient()` still returns a `PDO` on the site's one database connection: a `Pdo\Mysql` (PHP's MySQL subclass of `PDO`), not a plain `PDO`.
 * New code takes `Idno\Storage\EntityRepository` (entities) or `Idno\Storage\RecordStore` (raw records) as a constructor argument and never calls `db()` or writes SQL against Idno's tables. See `AGENTS.md`.
 * To tell whether a site is on SQL, do not check the class of `db()`: use `Idno\Storage\ConnectionParameters::driverFamily(['database' => Idno::site()->config()->database])`, which returns `mysql`, `sqlite`, `mongo` or `other`.
 
@@ -75,6 +75,10 @@ On a MySQL site `db()` now behaves differently from the old classes in these way
 * **Records whose class no longer exists are left out.** `getObjects()` no longer returns `false` in their place (`getFromX()` already left them out). Counts still include them.
 * **`isHiddenByPublishStatus()` overrides are not consulted by `getObjects()`.** Drafts and other unpublished entities are hidden by the standard rule (visible to their owner and to admins only); an entity class that overrides `isHiddenByPublishStatus()` still has its override applied by `canRead()`, but not when entities are looked up.
 * **A string `$readGroups` works.** Passing one access group as a string to `getObjects()` now means that group; the old code failed and found nothing.
+* **A record whose `created` is not a timestamp is refused.** `saveRecord()` returns `false` (and logs why) for a record whose `created` is not a number of seconds; the old code failed with a PHP `TypeError`.
+* **A lost database connection is replaced.** After the connection to MySQL is lost (a long-running process that outlives the server's `wait_timeout`, a server restart), the first query fails as before (logged, the usual failure value), and the next one runs on a new connection by itself; `getClient()` then returns the new connection's `PDO`, so do not keep the `PDO` it returned earlier. The PHP session handler stays on the connection it was given when the request started and is not reconnected.
+* **`getObjects()` reads the ignore-access flag once per call**, when it builds the query, where the old code read it again for each entity it returned. Changing it with `setIgnoreAccess()` from code that runs while the results are being built (an entity's `loadFromArray()`, for example) no longer affects the rest of that call.
+* **Only database failures become a failure value.** As before, each method turns a failure of its database statement into its old failure value (`false`, an empty array) and logs the driver's message. Any other exception raised inside it propagates as it did with the old code: one from the session's access-group lookup or its `permission:read:ids` event, from loading an entity (`loadFromArray()`), from `canRead()`, from an event listener, or a programming error. (An `\Error` thrown while an entity is constructed or loaded is still logged and the record skipped, as before.)
 * **Search arrays that cannot be understood find nothing.** A search array with an operator applied to something it cannot use (an array where a value is expected, `'$not' => ['$in' => []]`, a non-array `$in`, ...) finds nothing (`getRecords()` returns `false`, `getObjects()` an empty array, the counts `false`) and logs one warning naming the method and the query's shape (never its values).
 
 ## Removed in 2.0

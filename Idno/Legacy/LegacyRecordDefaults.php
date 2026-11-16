@@ -10,7 +10,7 @@ use Ramsey\Uuid\Uuid;
 
 /**
  * The RecordDefaults of the legacy application, read at call time, as the old backend's
- * Idno\Data\MySQL::saveRecord() (removed in phase 2a) filled in a record:
+ * Idno\Data\MySQL::saveRecord() (since removed) filled in a record:
  *  - _id: a random UUID (DataConcierge::generateID());
  *  - uuid: Config::getURL() (the site URL with its trailing slash, '/' when it has none) . 'view/' . _id;
  *  - siteid: the Site entity's uuid (Idno::site()->site_details()), or null when there is none.

@@ -216,7 +216,7 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
     public function testTheSessionMatchesTheLegacyConnection(): void
     {
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results';
-        // What a connection of the legacy backend (Idno\Data\MySQL, removed in Task 9) answered on
+        // What a connection of the legacy backend (Idno\Data\MySQL, since removed) answered on
         // the rig's MySQL 8, observed on the commit before its removal.
         $legacy = [
             'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION',
@@ -268,7 +268,7 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
 
     public function testAFieldNameLongerThanTheColumnIsNotStored(): void
     {
-        // `name` is varchar(64): MySQL rejects the row and the save is rolled back (P7: false).
+        // `name` is varchar(64): MySQL rejects the row and the save is rolled back (false).
         $record = $this->r([str_repeat('n', 65) => 'v']);
         $this->track($record['_id']);
 
@@ -364,7 +364,7 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
 
     /**
      * The rows the store writes for a record are, but for the ids, the rows the legacy backend
-     * (Idno\Data\MySQL::saveRecord(), removed in Task 9) wrote for the same record: observed on the
+     * (Idno\Data\MySQL::saveRecord(), since removed) wrote for the same record: observed on the
      * commit before its removal by saving this record with both and reading the rows back (ids and
      * the test's marker replaced). The note is 120 characters (240 bytes): the legacy backend lost a
      * record whose indexed value was cut in the middle of a character, so the observed record has

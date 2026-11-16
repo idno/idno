@@ -32,7 +32,7 @@ use Idno\Storage\MySqlSemantics;
  *  - `created` holds 'Y-m-d H:i:s' text. A `created` operand is checked and normalised here
  *    (columnValue(), MySqlSemantics::datetime()): one MySQL would reject makes the query match
  *    nothing, an accepted one ('2023-6-14', '...T...', a fraction) compares as the datetime it is;
- *  - search never uses a full-text index (ruling P8): every term goes to the `idno_search`
+ *  - search never uses a full-text index: every term goes to the `idno_search`
  *    function (MySqlSemantics::searchMatches()), whatever the site's `boolean_search` and
  *    `bypass_fulltext_search` settings: a term of more than 5 bytes matches a record holding any
  *    of its words as a case-insensitive substring, a shorter one is a `LIKE '%term%'` phrase;

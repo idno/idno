@@ -18,7 +18,7 @@ use Idno\Storage\Criterion\Search;
 /**
  * A storage query: a tree of Criterion nodes under an AllOf root.
  *
- * fromLegacyArray() mirrors Idno\Data\MySQL::build_where_from_array() (removed in phase 2a), the interpreter of
+ * fromLegacyArray() mirrors Idno\Data\MySQL::build_where_from_array() (since removed), the interpreter of
  * the search arrays legacy code passes to getObjects() and getRecords(), including its
  * oddities (listed on the method). Value objects here are deliberately not coerced: later
  * code reproduces the legacy "everything is bound as a string" behaviour at evaluation time.
@@ -78,8 +78,11 @@ final class Criteria
     }
 
     /**
-     * The inverse of fromLegacyArray(), for the MongoDB backend and the legacy test binding:
-     * fromLegacyArray($c->toLegacyArray()) equals $c for every tree fromLegacyArray() produces.
+     * The inverse of fromLegacyArray(): fromLegacyArray($c->toLegacyArray()) equals $c for every tree
+     * fromLegacyArray() produces. Today only tests use it (CriteriaTest's round trip, and
+     * EntityRepositoryCriteriaTest, which reads the criteria the repository built as a legacy array);
+     * it is kept for code that must hand criteria to a backend that takes legacy search arrays (the
+     * MongoDB backend, when it moves to the storage layer).
      * An AnyOf without children is written as the list form, '$or' => [].
      *
      * @return array<int|string, mixed>

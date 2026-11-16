@@ -11,16 +11,27 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 /**
  * Subprocess helper for RepositoryDataConciergeTest: boots the application with the `database`
  * setting of the environment (IDNO_DATABASE) and prints the class of Idno::site()->db() and what
- * ConnectionParameters::driverFamily() says the setting means.
+ * ConnectionParameters::driverFamily() says the setting means. With
+ * IDNO_TEST_OLD_BACKEND_STAND_IN=1 it first defines a stand-in class under the old SQL backend's
+ * name (OldSqlBackendStandIn.php, Idno\Data\MySQL) and also prints whether it was constructed.
  *
- * Usage: IDNO_DATABASE=<value> php boot_db_backend.php
+ * Usage: IDNO_DATABASE=<value> [IDNO_TEST_OLD_BACKEND_STAND_IN=1] php boot_db_backend.php
  */
 
 $root = dirname(__DIR__, 2);
+$standIn = getenv('IDNO_TEST_OLD_BACKEND_STAND_IN') === '1';
+if ($standIn) {
+    require $root . '/vendor/autoload.php';
+    require __DIR__ . '/OldSqlBackendStandIn.php';
+}
 require $root . '/Idno/start.php';
 
 $site = \Idno\Core\Idno::site();
-echo json_encode([
+$result = [
     'class' => get_class($site->db()),
     'family' => \Idno\Storage\ConnectionParameters::driverFamily(['database' => $site->config()->database]),
-]), "\n";
+];
+if ($standIn) {
+    $result['standInConstructed'] = \Idno\Data\MySQL::$constructed;
+}
+echo json_encode($result), "\n";

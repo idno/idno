@@ -278,7 +278,7 @@ final class RecordIndexTest extends TestCase
         $this->assertSame(str_repeat('a', 255), $at(str_repeat('a', 255)));
         // 127 two-byte characters and one byte are exactly 255 bytes.
         $this->assertSame(str_repeat('é', 127) . 'a', $at(str_repeat('é', 127) . 'abcd'));
-        // A cut that would fall inside the 128th character stops before it: 254 bytes (P7).
+        // A cut that would fall inside the 128th character stops before it: 254 bytes (never half a character).
         $this->assertSame(str_repeat('é', 127), $at(str_repeat('é', 200)));
         $this->assertSame(254, strlen($at(str_repeat('é', 200))));
         // Four-byte characters: 63 of them are 252 bytes, the 64th would end at 256.
@@ -356,5 +356,15 @@ final class RecordIndexTest extends TestCase
         $this->assertSame(['uuid' => 'u', '_id' => '12', 'siteid' => '7', 'entity_subtype' => 'S', 'owner' => '1', 'publish_status' => 'draft', 'created' => '1970-01-01 00:00:05'], $columns);
         $this->assertSame('', RecordIndex::columns([], 5)['owner']);
         $this->assertSame('', RecordIndex::columns([], 5)['uuid']);
+    }
+
+    /**
+     * The queryable column fields are the old backend's getSchemaFields(), in its order, and
+     * columns() gives a value for each of them (and for siteid, which is not queryable).
+     */
+    public function testTheColumnFieldsAreTheOldSchemaFieldsAndColumnsCoversThem(): void
+    {
+        $this->assertSame(['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'], RecordIndex::COLUMN_FIELDS);
+        $this->assertSame(RecordIndex::COLUMN_FIELDS, array_values(array_diff(array_keys(RecordIndex::columns([], 5)), ['siteid'])));
     }
 }

@@ -12,7 +12,7 @@ use Psr\Log\NullLogger;
 
 /**
  * Entities (legacy Idno\Common\Entity objects) on a RecordStore, with the legacy access rules: what
- * the old backend's Idno\Data\AbstractSQL::getObjects() / countObjects() (removed in phase 2a) and
+ * the old backend's Idno\Data\AbstractSQL::getObjects() / countObjects() (since removed) and
  * Idno\Core\DataConcierge::getObject(), rowToEntity() and saveObject() did on MySQL, as pinned by Tests/Storage/Contract/EntityQueryContract.
  *
  * find() and count():
@@ -24,7 +24,7 @@ use Psr\Log\NullLogger;
  *  - the caller's criteria are merged over those: a top-level condition on `entity_subtype` or
  *    `access` REPLACES the repository's (as legacy array_merge() does), so a caller can widen access.
  *    Only code that has already decided what the user may read may pass an `access` condition.
- *    DELIBERATE DIFFERENCE from legacy (ruling P14): a caller's `access` or `entity_subtype` value
+ *    DELIBERATE DIFFERENCE from legacy: a caller's `access` or `entity_subtype` value
  *    that parses to no condition (`[]`, `['$in' => []]`, an operator with an empty operand such as
  *    `['$lt' => 0]`) is no condition, so the viewer's read groups (or the requested types) stay in
  *    force. Legacy array_merge() replaces them with nothing, so getObjects()/countObjects() then do

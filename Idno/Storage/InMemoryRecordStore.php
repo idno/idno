@@ -83,9 +83,6 @@ final class InMemoryRecordStore implements RecordStore
     /** The collections of the legacy schema, which exist from the start. */
     public const DEFAULT_COLLECTIONS = ['entities', 'reader', 'config', 'session', 'site'];
 
-    /** The fields queried on the columns of the main table, not on the metadata rows. */
-    private const COLUMN_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
-
     /**
      * @var array<string, array<string, array{record: array<int|string, mixed>, columns: array<string, string|null>, rows: list<array{name: string, value: string}>, search: string}>>
      */
@@ -350,7 +347,7 @@ final class InMemoryRecordStore implements RecordStore
      */
     private static function valuesOf(array $entry, string $field): array
     {
-        if (in_array($field, self::COLUMN_FIELDS, true)) {
+        if (in_array($field, RecordIndex::COLUMN_FIELDS, true)) {
             return [(string) $entry['columns'][$field]];
         }
         $values = [];

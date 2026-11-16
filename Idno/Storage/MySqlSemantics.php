@@ -15,7 +15,7 @@ namespace Idno\Storage;
  *    string comparison orders them correctly against the stored values;
  *  - fold() and compare(): text comparison as `utf8mb3_general_ci` does it for ASCII (folded to
  *    UPPER case, so `[ \ ] ^ _` and the backtick sort after the letters: 'a_' > 'aZ');
- *  - searchMatches(): the search rule of the stores without a full-text index (ruling P8).
+ *  - searchMatches(): the search rule of the stores without a full-text index (in memory, SQLite).
  *
  * The known differences from MySQL are listed on InMemoryRecordStore.
  *

@@ -53,9 +53,10 @@ namespace Idno\Core {
             // Try a pluggable session storage handler
             if ((!$sessions_handled) && (Idno::site()->config()->sessions_storage)) {
                 $storage_class = Idno::site()->config()->sessions_storage;
-                if (in_array($storage_class, ['Idno\\Data\\MySQL', '\\Idno\\Data\\MySQL'], true)) {
+                if (is_scalar($storage_class) && strcasecmp(ltrim((string) $storage_class, '\\'), 'Idno\\Data\\MySQL') === 0) {
                     // The old SQL backend has been removed: its session handler (the `session` table,
-                    // same handler and options) is the db() service's, on the shared connection.
+                    // same handler and options) is the db() service's, on the shared connection. The
+                    // name is matched as PHP matched the class: in any case, leading backslash optional.
                     $db = Idno::site()->db();
                     if ($db instanceof \Idno\Legacy\RepositoryDataConcierge) {
                         $db->handleSession();

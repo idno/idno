@@ -10,7 +10,7 @@
 -- statement ends with a semicolon at the end of a line and no statement has one inside a line
 -- break, so it can be split on ";\n" as the legacy installer splits the MySQL schema.
 --
--- SQLite support is, in this phase, for tests and development: no site is installed on it.
+-- SQLite support is, in this release, for tests and development: no site is installed on it.
 --
 -- LIMITS OF A DATABASE BUILT FROM THIS SCHEMA (because of the `idno_ci` collation):
 --  - Outside a connection set up by SqliteConnectionSetup (for example the `sqlite3` command
@@ -32,7 +32,7 @@
 --    unique keys can clash on SQLite where they do not on MySQL.
 --
 -- Differences from MySQL, all deliberate:
---  - no full-text index: search terms are matched by the `idno_search` function (ruling P8).
+--  - no full-text index: search terms are matched by the `idno_search` function.
 --  - `created` is text ('Y-m-d H:i:s', compared byte by byte), not a timestamp: the dialect
 --    checks and normalises a `created` operand before it reaches SQLite.
 --  - index names are global in SQLite, so each is prefixed with its table's name.

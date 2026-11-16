@@ -58,6 +58,8 @@ Additionally, you will need to create the database referred to in this configura
 
 ### If you're using SQLite
 
+> **Warning: SQLite sites cannot be installed in this release.** The instructions below are out of date: with `database = "Sqlite3"` Idno connects to MySQL instead, using the file path as the database name, and it does not create an SQLite database. Use MySQL (or MongoDB).
+
 As with MySQL, currently SQLite users need to create a ```config.ini``` in the root of their installation. This should contain the following information:
 
     database = "Sqlite3"

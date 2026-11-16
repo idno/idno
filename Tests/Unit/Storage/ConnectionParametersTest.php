@@ -88,8 +88,9 @@ final class ConnectionParametersTest extends TestCase
     }
 
     /**
-     * Ruling P16: a name that is no loadable backend class is what the legacy componentFactory()
-     * falls back to MySQL for, so it is MySQL (this test pinned a \LogicException before Task 7).
+     * A name that is no loadable backend class is what the legacy componentFactory() fell back to
+     * the old MySQL backend for, so such a site has always run on MySQL: it is MySQL (it used to be a
+     * \LogicException here, before the old backend was replaced).
      */
     public function testUnknownDriverName(): void
     {
