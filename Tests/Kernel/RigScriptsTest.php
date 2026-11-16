@@ -26,6 +26,9 @@ final class RigScriptsTest extends TestCase
     /** The web server port of this test's scripts (IDNO_RIG_PORT), picked once per test. */
     private int $port = 0;
 
+    /** IDNO_RIG_MYSQL_IMAGE for the scripts this test runs ('' : unset, the default image). */
+    private string $mysqlImage = '';
+
     protected function setUp(): void
     {
         $this->port = self::freePort();
@@ -83,6 +86,7 @@ final class RigScriptsTest extends TestCase
     {
         $command = 'PATH=' . escapeshellarg($this->root . '/bin:' . (string) getenv('PATH')) . ' '
             . 'IDNO_RIG_PORT=' . $this->port . ' '
+            . 'IDNO_RIG_MYSQL_IMAGE=' . escapeshellarg($this->mysqlImage) . ' '
             . escapeshellarg($this->root . '/Tests/rig/' . $script);
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);
@@ -108,13 +112,14 @@ final class RigScriptsTest extends TestCase
     }
 
     /**
-     * A `docker` first on the PATH that logs its arguments; it fails (exit 1, as with Docker not
-     * running) or succeeds (and then answers the schema check as if the database had tables).
+     * A `docker` first on the PATH that logs its arguments, after the image docker compose would
+     * interpolate (`[<IDNO_RIG_MYSQL_IMAGE>] `); it fails (exit 1, as with Docker not running) or
+     * succeeds (and then answers the schema check as if the database had tables).
      */
     private function dockerShim(bool $succeeds): void
     {
         $log = escapeshellarg($this->root . '/docker.log');
-        $script = "#!/bin/sh\necho \"\$*\" >> $log\n" . ($succeeds
+        $script = "#!/bin/sh\necho \"[\$IDNO_RIG_MYSQL_IMAGE] \$*\" >> $log\n" . ($succeeds
             ? "case \"\$*\" in *'SHOW TABLES'*) echo versions ;; esac\nexit 0\n"
             : "echo 'Cannot connect to the Docker daemon' >&2\nexit 1\n");
         file_put_contents($this->root . '/bin/docker', $script);
@@ -277,7 +282,7 @@ final class RigScriptsTest extends TestCase
 
         $this->assertSame(0, $code, $output);
         $this->assertStringContainsString('warning: could not stop the test rig\'s MySQL container', $output);
-        $this->assertStringContainsString('compose -f ' . $this->root . '/Tests/rig/docker-compose.yml down', $this->dockerLog());
+        $this->assertStringContainsString('compose -f ' . $this->root . '/Tests/rig/docker-compose.yml down -v', $this->dockerLog());
         $this->assertDirectoryDoesNotExist($this->stateDir());
         $this->assertNull($this->mode());
     }
@@ -395,7 +400,46 @@ final class RigScriptsTest extends TestCase
         [$code, $output] = $this->runScript('down.sh');
 
         $this->assertSame(0, $code, $output);
-        $this->assertStringContainsString('compose -f ' . $this->root . '/Tests/rig/docker-compose.yml down', (string) file_get_contents($this->root . '/docker-was-run'));
+        $this->assertStringContainsString('compose -f ' . $this->root . '/Tests/rig/docker-compose.yml down -v', (string) file_get_contents($this->root . '/docker-was-run'), 'the data volume goes too');
+    }
+
+    public function testTheMysqlModeRunsMysql8UnlessAnImageIsChosen(): void
+    {
+        $compose = (string) file_get_contents(self::rigDir() . '/docker-compose.yml');
+        $this->assertStringContainsString('image: ${IDNO_RIG_MYSQL_IMAGE:-mysql:8.0}', $compose);
+
+        $this->dockerShim(true);
+        [$code, $output] = $this->runScript('up.sh', 'mysql');
+
+        $this->assertSame(0, $code, $output);
+        $this->assertStringContainsString('[mysql:8.0] compose -f ' . $this->root . '/Tests/rig/docker-compose.yml up -d --wait --renew-anon-volumes', $this->dockerLog());
+        $this->assertStringContainsString('mysql:8.0 on 127.0.0.1:33306', $output);
+    }
+
+    public function testStartingAnotherImageStopsTheRunningDatabaseFirst(): void
+    {
+        $this->dockerShim(true);
+        [$code, $output] = $this->runScript('up.sh', 'mysql');
+        $this->assertSame(0, $code, $output);
+
+        $this->mysqlImage = 'mariadb:10.6';
+        [$code, $output] = $this->runScript('up.sh', 'mysql');
+
+        $this->assertSame(0, $code, $output);
+        $this->assertStringContainsString('The test rig\'s database runs mysql:8.0, not mariadb:10.6: stopping it first.', $output);
+        $log = $this->dockerLog();
+        $down = strpos($log, 'docker-compose.yml down -v');
+        $this->assertNotFalse($down, $log);
+        $this->assertGreaterThan($down, strpos($log, '[mariadb:10.6] compose -f ' . $this->root . '/Tests/rig/docker-compose.yml up -d --wait'), 'MariaDB starts after MySQL and its data are gone');
+        $this->assertStringContainsString('[mariadb:10.6] compose -f ' . $this->root . '/Tests/rig/docker-compose.yml exec -T db', $log, 'the schema check runs on the new image');
+        $this->assertSame('mysql', $this->mode());
+
+        // The same image again: nothing is stopped.
+        file_put_contents($this->root . '/docker.log', '');
+        [$code, $output] = $this->runScript('up.sh', 'mysql');
+        $this->assertSame(0, $code, $output);
+        $this->assertStringNotContainsString('stopping it first', $output);
+        $this->assertStringNotContainsString('down', $this->dockerLog());
     }
 
     public function testTheTwoTemplatesDifferOnlyInTheirDatabaseSettings(): void

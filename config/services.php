@@ -49,7 +49,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // middleware), the test doubles (FixedRecordDefaults, FixedAccessContext) and the
         // RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
-        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
+        // builds them); they are not services.
+        'Storage' => ['BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'InMemoryRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySchemaUpgrader and LegacySqlMaintenance.
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],

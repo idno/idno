@@ -17,6 +17,22 @@ RIG_LEGACY_MARKER='; Idno configuration for the local test rig (see Tests/rig/up
 # two checkouts (git worktrees) of the repository never share a database or uploads.
 STATE_DIR="$(php -r 'echo rtrim(sys_get_temp_dir(), "/"), "/idno-test-rig-", substr(hash("sha256", $argv[1]), 0, 12);' "$ROOT")"
 
+# The Docker image of the MySQL mode's database: IDNO_RIG_MYSQL_IMAGE (any image of MySQL or
+# MariaDB), by default MySQL 8. The image the running database was started from is recorded in
+# MYSQL_IMAGE_FILE (deleted with the rest of STATE_DIR by down.sh).
+MYSQL_IMAGE="${IDNO_RIG_MYSQL_IMAGE:-mysql:8.0}"
+MYSQL_IMAGE_FILE="$STATE_DIR/mysql-image"
+
+# The image the MySQL mode's database was started from (the default when none was recorded: a
+# database started before the image could be chosen).
+rig_mysql_image() {
+    if [ -f "$MYSQL_IMAGE_FILE" ]; then
+        cat "$MYSQL_IMAGE_FILE"
+    else
+        echo mysql:8.0
+    fi
+}
+
 # True when configuration/config.ini was written by the rig: a regular file (never a symlink) whose
 # first line is the marker, exactly.
 rig_config_is_ours() {

@@ -5,6 +5,10 @@
 #                    upload directory are in a directory under the system temp directory that is
 #                    specific to this checkout (see lib.sh).
 #   up.sh mysql      MySQL 8 in Docker on 127.0.0.1:33306 (composer test:up:mysql).
+#                    IDNO_RIG_MYSQL_IMAGE selects another image of MySQL or MariaDB (default
+#                    mysql:8.0), e.g. IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql.
+#                    Starting it on another image than the running one stops the running one
+#                    first (down.sh, which deletes its data), so each image starts empty.
 #
 # Starting one mode while the other is running stops the other first (down.sh, which wipes its
 # database). A configuration/config.ini the rig did not write is never replaced.
@@ -35,6 +39,9 @@ fi
 if [ -n "$RUNNING" ] && [ "$RUNNING" != "$MODE" ]; then
     echo "The test rig was last started in $RUNNING mode: stopping it first."
     "$RIG_DIR/down.sh"
+elif [ "$RUNNING" = mysql ] && [ "$MODE" = mysql ] && [ "$(rig_mysql_image)" != "$MYSQL_IMAGE" ]; then
+    echo "The test rig's database runs $(rig_mysql_image), not $MYSQL_IMAGE: stopping it first."
+    "$RIG_DIR/down.sh"
 fi
 
 mkdir -p "$STATE_DIR/uploads"
@@ -43,16 +50,24 @@ mkdir -p "$STATE_DIR/uploads"
 # The mode file is written only once the database is up, so a start that fails (Docker not running)
 # leaves nothing that a later start of the other mode would have to stop.
 if [ "$MODE" = mysql ]; then
-    docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait
+    # --renew-anon-volumes: a container that must be recreated (another image) gets an empty data
+    # directory, never the previous image's.
+    IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait --renew-anon-volumes
+    echo "$MYSQL_IMAGE" > "$MYSQL_IMAGE_FILE"
     echo "$MODE" > "$MODE_FILE"
 
+    # The image's command-line client: mariadb in MariaDB's images (which drop the mysql name in
+    # 11), mysql in MySQL's.
+    db_client() {
+        IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" exec -T db \
+            sh -c 'exec "$(command -v mariadb || command -v mysql)" -uroot "$@"' db-client "$@"
+    }
     # Load the schema only into an empty database, so re-running does not wipe test data.
-    DB="docker compose -f $RIG_DIR/docker-compose.yml exec -T db mysql -uroot"
-    if [ -z "$($DB -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
-        $DB known_unittest < warmup/schemas/mysql/mysql.sql
+    if [ -z "$(db_client -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
+        db_client known_unittest < warmup/schemas/mysql/mysql.sql
         echo "Loaded MySQL schema."
     fi
-    DATABASE="MySQL on 127.0.0.1:33306, database known_unittest"
+    DATABASE="$MYSQL_IMAGE on 127.0.0.1:33306, database known_unittest"
 else
     # Loads the schema only into a database without tables, so re-running does not wipe test data.
     php -d error_reporting=22527 "$RIG_DIR/sqlite_schema.php" "$STATE_DIR/site.sqlite"

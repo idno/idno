@@ -1,15 +1,20 @@
-# MySQL for the local test rig. Started by `composer test:up`.
+# MySQL (or MariaDB) for the local test rig. Started by `composer test:up:mysql`.
+# IDNO_RIG_MYSQL_IMAGE selects the image (default mysql:8.0), e.g. mariadb:10.6; up.sh passes it.
+# The data directory is the image's anonymous volume: down.sh removes it (`down -v`), and up.sh
+# starts a container of another image on a new, empty one.
 name: idno-test-rig
 services:
   db:
-    image: mysql:8.0
+    image: ${IDNO_RIG_MYSQL_IMAGE:-mysql:8.0}
     environment:
+      # MariaDB's image honours the MYSQL_* variables too.
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
       MYSQL_DATABASE: known_unittest
     ports:
       - "33306:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      # mysqladmin in MySQL's image, mariadb-admin in MariaDB's (which drops the mysql* names in 11).
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent 2>/dev/null || mariadb-admin ping -h 127.0.0.1 --silent"]
       interval: 5s
       timeout: 5s
       retries: 20

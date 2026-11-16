@@ -20,6 +20,7 @@ composer install
 # Local test rig: a database + php -S web server (http://127.0.0.1:8089/)
 composer test:up        # start the rig on SQLite: needs nothing but PHP (the default)
 composer test:up:mysql  # start the rig on MySQL 8 in Docker (127.0.0.1:33306)
+IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql  # the same, on MariaDB 10.6 (any MySQL or MariaDB image)
 composer test           # run the full suite (core + plugins + unit tier); needs the rig, either mode
 composer test:down      # stop the rig, whichever mode, and delete its database
 
@@ -97,6 +98,18 @@ composer console -- list
     error codes): the tests bound to those skip on SQLite
     and say why. Run the whole suite on MySQL before merging such a change (CI runs SQLite, MySQL
     and MongoDB).
+    `IDNO_RIG_MYSQL_IMAGE` selects the Docker image (default `mysql:8.0`; e.g. `mariadb:10.6`, whose
+    image honours the `MYSQL_*` variables; the healthcheck and the schema load use `mysqladmin`/`mysql`
+    or `mariadb-admin`/`mariadb`, whichever the image has). The image the database was started from
+    is recorded in the per-checkout temporary directory (`mysql-image`; none recorded means
+    `mysql:8.0`): `test:up:mysql` with another image stops the running database first (`down.sh`),
+    and the container is started with `--renew-anon-volumes`, so a new image always starts on an
+    empty data directory with today's schema loaded. `down.sh` removes the container's data volume
+    (`docker compose down -v`). On MariaDB 10.6 the existing suite fails where it pins MySQL 8's
+    behaviour: the session `sql_mode` (`testTheConnectionMatchesTheLegacyBackendsConnection`,
+    `testTheSessionMatchesTheLegacyConnection`) and the `created` operands MySQL rejects, which
+    MariaDB accepts (`testCreatedQueriedWithAnIntegerTimestampFails`,
+    `testCreatedRejectsTheLiteralsMysqlRejects`).
   - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
     database). `composer test:down` stops whichever is running (it is safe when nothing is), deletes
     the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
@@ -178,7 +191,8 @@ Idno/
                                BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime);
                                EntityRepository (entities on a RecordStore, with the legacy access rules),
                                EntityQuery (its query) and AccessContext (who is asking; FixedAccessContext
-                               for tests)
+                               for tests); SchemaMigrator (runs the schema migrations in Migrations/)
+                               and SchemaCatalog (the tables and indexed fields that exist)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -409,8 +423,8 @@ other new code may.
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityQuery.php`,
-  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `MySqlSemantics.php`, `Platform/`,
-  `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
+  `FixedAccessContext.php`, `FixedRecordDefaults.php`, `Migrations/` (the schema migrations),
+  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
   `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`) are
@@ -778,6 +792,51 @@ other new code may.
   schema for a site); it is to become a supported production database in a later release. See the SQLite
   bullet under "Kernel and services" for the limits of the database file.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
+
+#### The new schema (migrations; not used by the site yet)
+
+The site still runs on the schema below (`warmup/schemas/`). Its successor is created by schema
+migrations, and nothing reads or writes it yet: no site or rig database has its tables unless a
+test made them.
+
+- `doctrine/migrations` is used as a library only (no bundle, no console command, no configuration
+  file): `Idno\Storage\SchemaMigrator` (a container service; it takes only the DBAL `Connection` and
+  queries nothing when constructed; nothing fetches it while the kernel boots) builds a
+  `DependencyFactory` on that connection with the migrations namespace `Idno\Storage\Migrations`,
+  the directory `Idno/Storage/Migrations/` and the metadata table `idno_migrations` (created by
+  `migrate()`). `pending()` lists the versions not yet executed (`'20261115000000'`, the numeric
+  part of the class name; asking creates nothing), `migrate()` executes them (a no-op when none is
+  pending), `latest()` is the newest executed version, `'0'` when none. It writes no output.
+- Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
+  (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
+  SQLite; any other platform aborts) and never changes once committed: a schema change is a new
+  migration. On MySQL and MariaDB a migration is not transactional (DDL commits implicitly).
+- The baseline, `Version20261115000000` (irreversible), creates: `idno_entities`, `idno_reader`,
+  `idno_site` (one row per document: `id`, `uuid` (unique), `type`, `owner`, `created` (epoch
+  seconds, `BIGINT`), `publish_status`, `data` (the document's JSON text, `LONGTEXT` `utf8mb4_bin`),
+  `search` (full-text indexed on MySQL/MariaDB); keys `type_created`, `owner_created`, `created`);
+  `idno_settings` (`name` and `value` `utf8mb4_bin`, `position` INT: one row per settings key, in
+  order); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
+  `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping). On MySQL/MariaDB
+  every table is InnoDB, `utf8mb4`, and every text column names its collation:
+  `utf8mb4_general_ci` except the `utf8mb4_bin` ones above. On SQLite the same tables, with
+  `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
+  index names prefixed with the table's (`idno_entities_type_created`), no full-text index, and no
+  custom collation or function, so the file opens with standard SQLite tools.
+- `Idno\Storage\SchemaCatalog` (a container service on the `Connection`; queries nothing when
+  constructed): `tables()` (lower case, sorted; SQLite's internal tables left out), `hasTable()`
+  (ignores case), `indexedFields($collection)` (the fields with an index on `idno_<collection>`:
+  on MySQL/MariaDB a generated column `ix_<field>`, on SQLite an index `idno_<collection>_ix_<field>`;
+  field names `[a-z0-9_]{1,48}`, returned without the prefix). It reads everything with ONE
+  statement at the first question (`information_schema.columns` of the current database;
+  `sqlite_master`) and keeps it until `forget()`: call that after DDL.
+- Tests: `Tests\Storage\PrivateDatabase` makes migrated databases of a test's own.
+  `sqliteMemory()` (an in-memory database with `SqliteConnectionSetup`) needs nothing but PHP and
+  works in the unit tier; `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
+  MariaDB server (dropping a leftover first) and returns a new connection to it (never the site's),
+  skipping the test on an SQLite or MongoDB site; `drop()` removes either (call it in `tearDown()`;
+  it refuses to drop the site's own database). `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
+  `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
 
 #### MySQL schema
 
