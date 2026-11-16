@@ -20,7 +20,8 @@ require_once __DIR__ . '/functions.php';
  *
  * It offers Symfony's own commands and the commands tagged "console.command" (classes with
  * #[AsCommand], autowired), plus the legacy commands: every Idno\Common\ConsolePlugin found
- * in ConsolePlugins/ and IdnoPlugins/, and the built-in "version" command.
+ * in ConsolePlugins/ and IdnoPlugins/, and the built-in "version" command. The legacy commands
+ * are left out when the kernel does not boot the legacy application (idno:upgrade).
  *
  * This class takes the kernel, so it is not a container service (see config/services.php).
  */
@@ -49,6 +50,13 @@ final class Application extends FrameworkApplication
         $this->legacyCommandsRegistered = true;
 
         parent::registerCommands();
+
+        // A kernel booted without the legacy application (idno:upgrade, see bin/console) has no
+        // legacy commands: they need it.
+        $kernel = $this->getKernel();
+        if ($kernel instanceof \Idno\Kernel && !$kernel->bootsLegacy()) {
+            return;
+        }
 
         // Legacy console plugins fetch the application with application().
         global $console;

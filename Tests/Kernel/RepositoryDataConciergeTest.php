@@ -5,56 +5,38 @@ declare(strict_types=1);
 namespace Tests\Kernel;
 
 use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\DriverManager;
 use Idno\Common\Entity;
 use Idno\Core\Idno;
 use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyRecordDefaults;
-use Idno\Legacy\LegacySchemaUpgrader;
 use Idno\Legacy\RepositoryDataConcierge;
 use Idno\Storage\AccessContext;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Criteria;
-use Idno\Storage\DbalRecordStore;
 use Idno\Storage\EntityQuery;
 use Idno\Storage\EntityRepository;
 use Idno\Storage\FixedAccessContext;
-use Idno\Storage\FixedRecordDefaults;
-use Idno\Storage\Platform\MySqlDialect;
-use Idno\Storage\Platform\SqliteDialect;
+use Idno\Storage\IdentityTypeMap;
+use Idno\Storage\JsonRecordStore;
 use Idno\Storage\RecordStore;
+use Idno\Storage\SchemaCatalog;
+use Idno\Storage\SchemaMigrator;
+use Idno\Storage\SettingsRecordStore;
 use IdnoPlugins\Status\Status;
 use Psr\Log\AbstractLogger;
 use Psr\Log\NullLogger;
 use Tests\IdnoTestCase;
-use Tests\Unit\Storage\SqliteTestDatabase;
+use Tests\Storage\PrivateDatabase;
 
 /**
  * The legacy db() service on an SQL site is Idno\Legacy\RepositoryDataConcierge: the old backend's
  * API (Idno\Data\MySQL / AbstractSQL) served by the storage layer, on the shared DBAL connection.
- * Rig tests on the rig's database (MySQL or SQLite; the tests that need MySQL skip on SQLite and
- * say why), plus the adapter built over an SQLite database of its own.
+ * Rig tests on the rig's database (MySQL, MariaDB or SQLite; the tests that need MySQL skip on SQLite
+ * and say why), plus the adapter built over an SQLite database of its own. The site's tables are
+ * those of the schema migrations (`idno_<collection>`, `idno_settings`, `idno_sessions`).
  */
 final class RepositoryDataConciergeTest extends IdnoTestCase
 {
-    /** The MySQL schema as it stood before its search text and indexed values became utf8mb4. */
-    private const PRE_UTF8MB4_SCHEMA = __DIR__ . '/../Upgrade/fixtures/mysql-schema-2020120301.sql';
-
-    /** That schema's version. */
-    private const PRE_UTF8MB4_VERSION = '2020120301';
-
-    /** The columns that hold text written by people, with the length of the index prefix on them (if any). */
-    private const TEXT_COLUMNS = [
-        'site_search.search' => null,
-        'config_search.search' => null,
-        'entities_search.search' => null,
-        'reader_search.search' => null,
-        'site_metadata.value' => 191,
-        'config_metadata.value' => 191,
-        'entities_metadata.value' => 191,
-        'reader_metadata.value' => 191,
-    ];
-
     /**
      * Every public method of the old SQL backend, Idno\Data\MySQL (with those it inherits from
      * AbstractSQL, DataConcierge and Component), captured from the class before it was replaced,
@@ -112,7 +94,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * Methods of the old backend the adapter does not have, and why. build_where_from_array() is the
-     * old backend's SQL compiler (Criteria::fromLegacyArray() and DbalRecordStore replace it); nothing
+     * old backend's SQL compiler (Criteria::fromLegacyArray() and the record store replace it); nothing
      * outside Idno\Data\ calls it. The constructor differs on purpose (the adapter is built by
      * LegacyServiceFactory::db()).
      */
@@ -127,12 +109,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /** @var list<string> files to remove */
     private array $files = [];
-
-    /** @var list<string> scratch databases to drop */
-    private array $scratchDatabases = [];
-
-    /** @var list<Connection> connections to scratch databases, closed before they are dropped */
-    private array $scratchConnections = [];
 
     /** @var (\Closure(): list<string>)|null the temporary files exportRecords() made during the test */
     private ?\Closure $exportTempFiles = null;
@@ -187,14 +163,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
         $this->files = [];
         $this->logFile = null;
-        foreach ($this->scratchConnections as $connection) {
-            $connection->close();
-        }
-        $this->scratchConnections = [];
-        foreach ($this->scratchDatabases as $name) {
-            Idno::site()->db()->getClient()->exec('drop database if exists `' . $name . '`');
-        }
-        $this->scratchDatabases = [];
         parent::tearDown();
     }
 
@@ -247,9 +215,11 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * The shared connection has the session and the PDO attributes the legacy backend's own
-     * connection had: what a connection of Idno\Data\MySQL (since removed) answered on the rig's
-     * MySQL 8, observed on the commit before its removal, with the character set its DSN asked for
-     * last, utf8mb4 (observed on the rig's MySQL 8).
+     * connection had. On every server it answers as a control connection to the same server opened
+     * the way Idno\Data\MySQL (since removed) opened its own (a PDO with the DSN charset utf8mb4 and
+     * ERRMODE_EXCEPTION, nothing else), so the server's own defaults (MariaDB's sql_mode differs from
+     * MySQL 8's) are what both have. On MySQL 8 it also answers exactly what a connection of the old
+     * backend answered on the rig's MySQL 8, observed on the commit before its removal.
      */
     public function testTheConnectionMatchesTheLegacyBackendsConnection(): void
     {
@@ -273,7 +243,15 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             \PDO::ATTR_STRINGIFY_FETCHES => false,
         ];
 
-        $this->assertSame($legacy, Idno::site()->db()->getClient()->query($query)->fetch(\PDO::FETCH_NUM));
+        $config = Idno::site()->config();
+        $dsn = 'mysql:host=' . $config->dbhost . ';dbname=' . $config->dbname . ';charset=utf8mb4' . (empty($config->dbport) ? '' : ';port=' . $config->dbport);
+        $control = new \PDO($dsn, $config->dbuser, $config->dbpass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+        $actual = Idno::site()->db()->getClient()->query($query)->fetch(\PDO::FETCH_NUM);
+
+        $this->assertSame($control->query($query)->fetch(\PDO::FETCH_NUM), $actual, 'the session of a connection the old backend opened on this server');
+        if (!str_contains((string) $control->query('select version()')->fetchColumn(), 'MariaDB')) {
+            $this->assertSame($legacy, $actual, 'what the old backend\'s connection answered on MySQL 8');
+        }
         foreach ($legacyAttributes as $attribute => $value) {
             $this->assertSame($value, Idno::site()->db()->getClient()->getAttribute($attribute), 'PDO attribute ' . $attribute);
         }
@@ -330,21 +308,23 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * A deliberate difference: a save the database refuses returns false and stores nothing. The refused
-     * value is a field name of 65 characters: the main row and the search row are written, and MySQL
-     * refuses the metadata row (its `name` column is varchar(64)).
-     * (The old backend returned the id, set before the metadata inserts, although it rolled the
-     * save back and stored nothing; observed before the adapter replaced it, no longer testable now it is gone.)
+     * value is another record's uuid (the uuid is unique), which every database refuses: a new record
+     * with it, and an existing record re-saved with it (which leaves the previous version, and the
+     * other record, intact). (The old backend returned the id of a save it had rolled back when a
+     * metadata row was refused; observed before the adapter replaced it, no longer testable now it is gone.)
      */
     public function testARefusedSaveReturnsFalseAndStoresNothing(): void
     {
-        $this->requireMysql('the refused value is a field name over 64 characters, which MySQL refuses and SQLite stores.');
         $db = Idno::site()->db();
         $marker = 'adapter-test-' . bin2hex(random_bytes(6));
-        $refused = ['testmarker' => $marker, 'testnote' => 'refused version', str_repeat('n', 65) => 'too long a name', 'access' => 'PUBLIC', 'created' => 1_700_000_000];
+        $other = $this->saveTestRecord(['testmarker' => $marker, 'testnote' => 'the other record']);
+        $otherUuid = $db->getRecord($other)['uuid'];
+        $refused = ['testmarker' => $marker, 'testnote' => 'refused version', 'uuid' => $otherUuid, 'access' => 'PUBLIC', 'created' => 1_700_000_000];
+        $owner = $this->user();
 
         $this->captureLog();
         $this->assertFalse($db->saveRecord('entities', $refused));
-        $this->assertSame(0, $db->countRecords(['testmarker' => $marker]));
+        $this->assertSame(1, $db->countRecords(['testmarker' => $marker]));
 
         // An update the database refuses leaves the previous version intact.
         $id = $db->saveRecord('entities', ['testmarker' => $marker, 'testnote' => 'first version', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
@@ -352,24 +332,25 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->created[] = $db->getRecord($id)['uuid'];
         $this->assertFalse($db->saveRecord('entities', ['_id' => $id] + $refused));
         $this->assertSame('first version', $db->getRecord($id)['testnote']);
-        $this->assertSame(1, $db->countRecords(['testmarker' => $marker]));
+        $this->assertSame('the other record', $db->getRecordByUUID($otherUuid)['testnote']);
+        $this->assertSame(2, $db->countRecords(['testmarker' => $marker]));
 
         $status = new Status();
-        $status->setOwner($this->user());
+        $status->setOwner($owner);
         $status->body = 'Refused ' . $marker;
-        $status->{str_repeat('n', 65)} = 'too long a name';
+        $status->uuid = $otherUuid;
         $status->setAccess('PUBLIC');
         $this->assertFalse($db->saveObject($status));
+        $this->assertSame([], $this->readLog(), 'a refusal is no error');
     }
 
     /**
-     * The same, through Entity::save(): a refused save returns false and fires neither
-     * `saved` (a new entity) nor `updated` (an existing one); the old backend reported success and
-     * fired them for a record it had not stored.
+     * The same, through Entity::save(): an existing entity re-saved with another record's uuid
+     * returns false and fires no `updated` (nor `saved`) event, and both records are left as they
+     * were; the old backend reported success and fired them for a record it had not stored.
      */
     public function testEntitySaveOfARefusedRecordReturnsFalseAndFiresNoEvent(): void
     {
-        $this->requireMysql('the refused value is a field name over 64 characters, which MySQL refuses and SQLite stores.');
         $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $fired = [];
         $listener = static function (\Idno\Core\Event $event) use (&$fired, $marker): void {
@@ -382,25 +363,18 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $dispatcher->addListener('saved', $listener);
         $dispatcher->addListener('updated', $listener);
         try {
-            $new = new Status();
-            $new->setOwner($this->user());
-            $new->body = 'New refused ' . $marker;
-            $new->testmarker = $marker;
-            $new->testnote = 'new';
-            $new->{str_repeat('n', 65)} = 'too long a name';
-            $new->setAccess('PUBLIC');
-            $this->assertFalse($new->save(true));
-            $this->assertEmpty($new->getID(), 'a refused new entity gets no id');
-
-            $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_000);
-            $this->assertSame([null], $fired, 'the control: saving a storable entity fires saved');
+            $other = $this->status('Other ' . $marker, $marker, 1_700_000_000);
+            $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_060);
+            $this->assertSame([null, null], $fired, 'the control: saving a storable entity fires saved');
             $fired = [];
+            $uuid = $existing->getUUID();
             $existing->testnote = 'updated';
-            $existing->{str_repeat('n', 65)} = 'too long a name';
+            $existing->uuid = $other->getUUID();
             $this->assertFalse($existing->save(true));
             $this->assertSame([], $fired, 'no saved or updated event for a refused save');
-            $this->assertSame(1, Idno::site()->db()->countRecords(['testmarker' => $marker]));
-            $this->assertArrayNotHasKey('testnote', Idno::site()->db()->getRecordByUUID($existing->getUUID()));
+            $this->assertSame(2, Idno::site()->db()->countRecords(['testmarker' => $marker]));
+            $this->assertArrayNotHasKey('testnote', Idno::site()->db()->getRecordByUUID($uuid));
+            $this->assertSame('Other ' . $marker, Idno::site()->db()->getRecordByUUID($other->getUUID())['body']);
         } finally {
             $dispatcher->removeListener('saved', $listener);
             $dispatcher->removeListener('updated', $listener);
@@ -450,8 +424,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     // ------------------------------------------------ multi-byte and four-byte characters
 
     /**
-     * Values whose 255th byte falls inside a multi-byte character, with the indexed copy expected:
-     * everything up to the last whole character that fits.
+     * Values whose 255th byte falls inside a multi-byte character, with what the old backend's
+     * indexed copy of them was: everything up to the last whole character that fits.
      *
      * @return array<string, array{string, string}>
      */
@@ -465,37 +439,32 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * A record with a multi-byte character across the 255-byte limit of an indexed value is stored
-     * byte for byte; its indexed copy is valid UTF-8, at most 255 bytes, cut after the last whole
-     * character, and a query for that copy finds the record.
+     * A record with a multi-byte character across the old 255-byte limit of an indexed value is
+     * stored byte for byte and found by its whole value; a query for the old backend's indexed copy
+     * (cut on a character boundary) no longer finds it: whole values are compared.
      *
      * @dataProvider straddlingValues
      */
-    public function testAMultiByteValueAcrossTheIndexLimitIsStoredWholeAndIndexedOnACharacterBoundary(string $value, string $expectedIndexed): void
+    public function testAMultiByteValueAcrossTheOldIndexLimitIsStoredWholeAndFoundWhole(string $value, string $oldIndexedCopy): void
     {
         $db = Idno::site()->db();
         $id = $this->saveTestRecord(['testnote' => $value]);
 
         $this->assertSame($value, $db->getRecord($id)['testnote']);
-        $indexed = $this->indexedValues($id, 'testnote');
-        $this->assertCount(1, $indexed);
-        $this->assertTrue(mb_check_encoding($indexed[0], 'UTF-8'));
-        $this->assertLessThanOrEqual(255, strlen($indexed[0]));
-        $this->assertSame($expectedIndexed, $indexed[0]);
-        $this->assertContains($id, array_column($db->getRecords([], ['testnote' => $expectedIndexed], 10, 0), '_id'));
+        $this->assertContains($id, array_column($db->getRecords([], ['testnote' => $value], 10, 0) ?: [], '_id'));
+        $this->assertNotContains($id, array_column($db->getRecords([], ['testnote' => $oldIndexedCopy], 10, 0) ?: [], '_id'));
     }
 
-    public function testMultiByteValuesInAListAreEachIndexedOnACharacterBoundary(): void
+    public function testMultiByteValuesInAListAreEachFoundWhole(): void
     {
         $values = [str_repeat('é', 200), 'short', 'a' . str_repeat('日', 100)];
         $id = $this->saveTestRecord(['testnotes' => $values]);
 
         $this->assertSame($values, Idno::site()->db()->getRecord($id)['testnotes']);
-        $indexed = $this->indexedValues($id, 'testnotes');
-        $expected = [str_repeat('é', 127), 'short', 'a' . str_repeat('日', 84)];
-        sort($indexed);
-        sort($expected);
-        $this->assertSame($expected, $indexed);
+        foreach ($values as $value) {
+            $this->assertContains($id, array_column(Idno::site()->db()->getRecords([], ['testnotes' => $value], 10, 0) ?: [], '_id'), $value);
+        }
+        $this->assertFalse(Idno::site()->db()->getRecords([], ['testnotes' => str_repeat('é', 127), 'uuid' => Idno::site()->db()->getRecord($id)['uuid']], 10, 0), 'the old indexed copy is no value');
     }
 
     /**
@@ -514,8 +483,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * An entity with an emoji in its title, body and tags is saved and read back unchanged; its
-     * search text and indexed values hold the whole text, a query for the tag finds it, and so does
-     * a full-text search for a word after the emoji.
+     * search text holds the whole text, a query for each of its fields finds it, and so does a
+     * full-text search for a word after the emoji.
      *
      * @dataProvider sqlModes
      */
@@ -531,15 +500,15 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertInstanceOf(\IdnoPlugins\Text\Entry::class, $loaded);
         $this->assertSame([$title, $body, $tags], [$loaded->title, $loaded->body, $loaded->tags]);
 
-        $statement = Idno::site()->db()->getClient()->prepare('select search from entities_search where _id = ?');
+        $statement = Idno::site()->db()->getClient()->prepare('select search from idno_entities where id = ?');
         $statement->execute([$id]);
         $search = (string) $statement->fetchColumn();
         foreach ([$title, $tags, $body] as $text) {
             $this->assertStringContainsString(strtolower($text), $search);
         }
-        $this->assertSame([$title], $this->indexedValues($id, 'title'));
-        $this->assertSame([$body], $this->indexedValues($id, 'body'));
-        $this->assertSame([$tags], $this->indexedValues($id, 'tags'));
+        foreach (['title' => $title, 'body' => $body] as $field => $value) {
+            $this->assertContains($id, array_column(Idno::site()->db()->getRecords([], [$field => $value], 10, 0) ?: [], '_id'), $field);
+        }
 
         $this->assertContains($id, array_column(Idno::site()->db()->getRecords([], ['tags' => $tags], 10, 0), '_id'));
         $found = \IdnoPlugins\Text\Entry::getOne(['tags' => $tags]);
@@ -578,110 +547,19 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * On MySQL, a four-byte character compared with a column that stays utf8mb3 (uuid, _id, owner,
-     * entity_subtype, a field name) is an SQL error (1267, an illegal mix of collations): the adapter
-     * logs it and reports nothing found, as the old backend did. Nothing could match such a value.
+     * A four-byte character compared with an identifier column (uuid, owner) finds nothing and is
+     * no error, on every database. (On MySQL the old backend's identifier columns were utf8mb3: such
+     * a comparison was an SQL error, 1267, an illegal mix of collations, which it logged.)
      */
-    public function testAFourByteCharacterComparedWithAnIdentifierColumnIsLoggedAndFindsNothing(): void
+    public function testAFourByteCharacterComparedWithAnIdentifierColumnFindsNothing(): void
     {
-        $this->requireMysql('only MySQL\'s utf8mb3 identifier columns refuse to compare with a four-byte character.');
         $db = Idno::site()->db();
         $this->captureLog();
 
         $this->assertFalse($db->getRecordByUUID("x\u{1F600}"));
         $this->assertFalse($db->getRecords([], ['owner' => "x\u{1F600}"], 10, 0));
         $this->assertSame([], $db->getObjects('', ['owner' => "x\u{1F600}"], [], 10, 0));
-
-        $log = $this->readLog();
-        $this->assertCount(3, $log);
-        foreach ($log as $line) {
-            $this->assertStringContainsString('error - SQLSTATE[HY000]: General error: 1267 Illegal mix of collations', $line);
-        }
-    }
-
-    /**
-     * The search text and the indexed values of the rig's database are utf8mb4, with a collation
-     * that tells four-byte characters apart, and the index on the indexed values fits every InnoDB
-     * row format (191 characters of utf8mb4 are 764 bytes; the older formats' limit is 767).
-     */
-    public function testTheTextColumnsAreUtf8mb4(): void
-    {
-        $this->requireMysql('it reads MySQL\'s information_schema.');
-        $this->assertTextColumnsAreUtf8mb4(Idno::site()->db()->getClient(), (string) Idno::site()->db()->getDatabase());
-    }
-
-    /**
-     * A database at the schema version before utf8mb4 is converted when the adapter connects to it,
-     * and keeps its rows; it then stores and finds a record with an emoji, and still finds the
-     * records written before the upgrade.
-     */
-    public function testTheSchemaUpgradeConvertsAnExistingDatabaseAndKeepsItsRows(): void
-    {
-        $this->requireMysql('it upgrades a MySQL database.');
-        $this->captureLog();
-        $name = $this->createScratchDatabase(self::PRE_UTF8MB4_SCHEMA, 'upgrade');
-        $scratch = $this->connectTo($name);
-        $rows = $this->insertRowsWrittenBeforeTheUpgrade($scratch);
-
-        $this->assertSame(self::PRE_UTF8MB4_VERSION, $this->schemaVersion($scratch));
-        $this->assertNotSame('utf8mb4', $this->textColumns($scratch, $name)['entities_metadata.value']['charset']);
-
-        $db = $this->adapterFor($name);
-
-        $this->assertGreaterThan((int) self::PRE_UTF8MB4_VERSION, (int) $this->schemaVersion($scratch));
-        $this->assertTextColumnsAreUtf8mb4($scratch, $name);
-        $this->assertSame($rows, $this->scratchRows($scratch));
-
-        $id = $db->saveRecord('entities', ['entity_subtype' => 'Idno\Entities\GenericDataItem', 'siteid' => 'site-1', 'title' => "Launch day \u{1F680}", 'tags' => "#party\u{1F389}"]);
-        $this->assertIsString($id);
-        $this->assertSame([$id], array_column($db->getRecords([], ['tags' => "#party\u{1F389}"], 10, 0), '_id'));
-
-        $this->assertSame(['old-1'], array_column($db->getRecords([], ['title' => 'Crème brûlée 日本語'], 10, 0), '_id'));
-        $this->assertSame(['old-1'], array_column($db->getRecords([], ['$search' => ['brûlée']], 10, 0), '_id'));
-    }
-
-    /**
-     * The upgrade can be applied again to a database it has already converted: one that was
-     * interrupted starts again from the top on the next request.
-     */
-    public function testTheSchemaUpgradeCanBeAppliedAgain(): void
-    {
-        $this->requireMysql('it upgrades a MySQL database.');
-        $this->captureLog();
-        $name = $this->createScratchDatabase(self::PRE_UTF8MB4_SCHEMA, 'upgrade');
-        $scratch = $this->connectTo($name);
-        $rows = $this->insertRowsWrittenBeforeTheUpgrade($scratch);
-
-        $db = $this->adapterFor($name);
-        $upgraded = $this->schemaVersion($scratch);
-        $this->assertGreaterThan((int) self::PRE_UTF8MB4_VERSION, (int) $upgraded);
-
-        // As if the upgrade had stopped before it recorded the new version.
-        $scratch->exec("update versions set value = '" . self::PRE_UTF8MB4_VERSION . "' where label = 'schema'");
-        $db->checkAndUpgradeSchema();
-
-        $this->assertSame($upgraded, $this->schemaVersion($scratch));
-        $this->assertTextColumnsAreUtf8mb4($scratch, $name);
-        $this->assertSame($rows, $this->scratchRows($scratch));
-    }
-
-    /**
-     * A new installation (mysql.sql) has the same text columns and the same schema version as an
-     * upgraded database.
-     */
-    public function testANewInstallationMatchesAnUpgradedDatabase(): void
-    {
-        $this->requireMysql('it compares MySQL schemas.');
-        $this->captureLog();
-        $new = $this->createScratchDatabase(dirname(__DIR__, 2) . '/warmup/schemas/mysql/mysql.sql', 'new');
-        $newClient = $this->connectTo($new);
-        $old = $this->createScratchDatabase(self::PRE_UTF8MB4_SCHEMA, 'old');
-        $oldClient = $this->connectTo($old);
-        $this->adapterFor($old);
-
-        $this->assertTextColumnsAreUtf8mb4($newClient, $new);
-        $this->assertSame($this->textColumns($oldClient, $old), $this->textColumns($newClient, $new));
-        $this->assertSame($this->schemaVersion($oldClient), $this->schemaVersion($newClient), 'mysql.sql records the version of the latest upgrade');
+        $this->assertSame([], $this->readLog());
     }
 
     /**
@@ -710,9 +588,12 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $previous = [$config->bypass_fulltext_search, $config->boolean_search];
         $store = (new \Idno\Legacy\LegacyRecordStoreFactory(
             static fn (): Connection => Idno::container()->get('database_connection'),
+            static fn (): SchemaCatalog => Idno::container()->get(SchemaCatalog::class),
             Idno::container()->get(\Idno\Config\BootConfig::class),
             new LegacyRecordDefaults(),
+            new IdentityTypeMap(),
         ))->create();
+        $documents = (new \ReflectionProperty(SettingsRecordStore::class, 'inner'))->getValue($store);
         $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $id = Idno::site()->db()->saveRecord('entities', ['title' => 'Seawalruses ahoy', 'testmarker' => $marker, 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
         $this->assertIsString($id);
@@ -725,9 +606,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertSame(1, $store->count('entities', $search), 'bypassed: substring match, same store object');
 
             $config->boolean_search = false;
-            $this->assertFalse((new \ReflectionProperty(DbalRecordStore::class, 'booleanSearch'))->getValue($store)());
+            $this->assertFalse((new \ReflectionProperty(JsonRecordStore::class, 'booleanSearch'))->getValue($documents)());
             $config->boolean_search = true;
-            $this->assertTrue((new \ReflectionProperty(DbalRecordStore::class, 'booleanSearch'))->getValue($store)());
+            $this->assertTrue((new \ReflectionProperty(JsonRecordStore::class, 'booleanSearch'))->getValue($documents)());
         } finally {
             [$config->bypass_fulltext_search, $config->boolean_search] = $previous;
         }
@@ -960,25 +841,27 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     // ------------------------------------------------ connection, schema and maintenance
 
-    public function testSchemaUpgraderRunsForMysqlOnly(): void
+    /**
+     * The schema is the schema migrations', created by the `idno:upgrade` command: getVersions() is
+     * one object, label `schema`, whose value is the newest migration executed (the old backend's
+     * `versions` row held the date of its last upgrade file), and connecting (init(),
+     * checkAndUpgradeSchema()) creates or changes nothing.
+     */
+    public function testTheVersionIsTheNewestSchemaMigrationAndNothingIsUpgradedOnConnect(): void
     {
-        $pdo = new RecordingPdo('sqlite::memory:');
-        $pdo->exec("create table versions (label varchar(32) primary key, value varchar(10))");
-        $pdo->exec("insert into versions values ('schema', '2020120201')");
-        $this->captureLog();
+        /** @var Connection $connection */
+        $connection = Idno::container()->get('database_connection');
+        $latest = (new SchemaMigrator($connection))->latest();
+        $this->assertSame('20261115000000', $latest, 'the rig\'s database has the baseline');
+        $this->assertEquals([(object) ['label' => 'schema', 'value' => $latest]], Idno::site()->db()->getVersions());
 
-        (new LegacySchemaUpgrader())->upgrade($pdo, 'sqlite');
-        $this->assertSame([], $pdo->prepared, 'nothing runs on SQLite');
-
-        (new LegacySchemaUpgrader())->upgrade($pdo, 'mysql');
-        $this->assertSame('select * from versions', $pdo->prepared[0]);
-        $this->assertGreaterThan(1, count($pdo->prepared), 'the upgrade newer than the schema version was attempted');
-        $this->assertStringContainsString('Applying schema updates from', implode("\n", $this->readLog()));
-
-        // On the rig the schema is current: the versions are what MySQL::getVersions() returns.
-        $versions = Idno::site()->db()->getVersions();
-        $this->assertIsArray($versions);
-        $this->assertEquals((object) ['label' => 'schema', 'value' => (string) LegacySchemaUpgrader::UPGRADES[array_key_last(LegacySchemaUpgrader::UPGRADES)]], $versions[0]);
+        $empty = PrivateDatabase::sqliteMemory(migrate: false);
+        $adapter = $this->adapterOn(PrivateDatabase::recordStore($empty), new FixedAccessContext(), new RecordingLogger(), 'sqlite', $empty);
+        $adapter->init();
+        $adapter->checkAndUpgradeSchema();
+        $this->assertSame([], (new SchemaCatalog($empty))->tables(), 'the adapter creates no table');
+        $this->assertEquals([(object) ['label' => 'schema', 'value' => '0']], $adapter->getVersions());
+        $empty->close();
     }
 
     public function testMongoConfigStillSelectsTheMongoBackend(): void
@@ -999,33 +882,40 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertSame('mysql', ConnectionParameters::driverFamily(['database' => 'NoSuchBackend']));
         $factory = new \Idno\Legacy\LegacyRecordStoreFactory(
             static fn (): Connection => Idno::container()->get('database_connection'),
+            static fn (): SchemaCatalog => Idno::container()->get(SchemaCatalog::class),
             new \Idno\Config\BootConfig(['database' => 'NoSuchBackend'], false),
             new LegacyRecordDefaults(),
+            new IdentityTypeMap(),
         );
-        $this->assertInstanceOf(DbalRecordStore::class, $factory->create());
+        $this->assertInstanceOf(SettingsRecordStore::class, $factory->create());
         $this->assertSame('other', ConnectionParameters::driverFamily(['database' => \Tests\Unit\Storage\PluginBackendFixture::class]));
     }
 
+    /**
+     * optimize() optimizes the tables of the schema migrations (MySQL's `optimize table`, SQLite's
+     * `pragma optimize`) and returns false, as before; exportRecords() exports a page of a
+     * collection's table as `insert` statements.
+     */
     public function testOptimizeAndExportRunOnTheSharedConnection(): void
     {
         $db = Idno::site()->db();
         $this->trackExportTempFiles();
-        $this->captureLog();
-        $this->assertFalse($db->optimize(), 'optimize() returns false, as before');
         $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $status = $this->status('Export ' . $marker, $marker, 1_700_000_000);
+        $this->captureLog();
+        $this->assertFalse($db->optimize(), 'optimize() returns false, as before');
         $total = $db->countRecords([]);
 
         $all = '';
         for ($offset = 0; $offset < $total + 10 && ($page = $db->exportRecords('entities', 10, $offset)); $offset += 10) {
             $all .= $page;
         }
-        $this->assertStringContainsString("insert into entities (`uuid`,`_id`,", $all);
+        $this->assertStringContainsString('insert into idno_entities (`id`,`uuid`,`type`,`owner`,`created`,`publish_status`,`data`,`search`) values (', $all);
         $this->assertStringContainsString($db->getClient()->quote($status->getUUID()), $all);
-        // OBSERVED: the metadata lookup binds the record's uuid as its _id, so it never matches and
-        // no metadata row is ever exported (a legacy bug, moved unchanged).
-        $this->assertStringNotContainsString('insert into entities_metadata', $all);
         $this->assertSame('', $db->exportRecords('entities', 10, $total + 10), 'an empty page is an empty string');
+        $this->assertStringStartsWith('insert into idno_settings (`name`,`value`,`position`) values (', (string) $db->exportRecords('config', 10, 0));
+        $this->assertSame([], $this->readLog(), 'nothing failed');
+        $this->assertFalse($db->exportRecords('sessions'), 'not a collection');
     }
 
     public function testReconnectIfNeededKeepsALiveConnection(): void
@@ -1049,7 +939,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         /** @var Connection $shared */
         $shared = Idno::container()->get('database_connection');
         $connection = new Connection($shared->getParams(), $shared->getDriver(), $shared->getConfiguration());
-        $store = new DbalRecordStore($connection, new \Idno\Storage\Platform\MySqlDialect(), new LegacyRecordDefaults(), static fn (string $text): string => $text, false, false);
+        $store = PrivateDatabase::recordStore($connection, new LegacyRecordDefaults());
         $logger = new RecordingLogger();
         $db = $this->adapterOn($store, new FixedAccessContext(), $logger, 'mysql', $connection);
 
@@ -1112,7 +1002,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $sessionId = $response['cookies'][Idno::site()->config()->sessionname] ?? null;
         $this->assertNotEmpty($sessionId, 'the page sets a session cookie');
 
-        $statement = Idno::site()->db()->getClient()->prepare('select session_value, session_lifetime, session_time from session where session_id = ?');
+        $statement = Idno::site()->db()->getClient()->prepare('select session_value, session_lifetime, session_time from idno_sessions where session_id = ?');
         $statement->execute([$sessionId]);
         $row = $statement->fetch(\PDO::FETCH_ASSOC);
         $this->deleteSession($sessionId);
@@ -1123,13 +1013,14 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * A user logged in before the deploy stays logged in: a session row as the old backend wrote it
-     * (Idno\Data\MySQL::handleSession(), since removed) is read by the adapter's handler when the
-     * site serves the next request with that cookie.
+     * A session row in `idno_sessions`, in the format the old backend's handler wrote to its
+     * `session` table (Idno\Data\MySQL::handleSession(), since removed: the same handler and options),
+     * is read by the adapter's handler when the site serves the next request with that cookie, and
+     * written back in the same format. (Rows of the old `session` table are not read: users log in
+     * again after the upgrade.)
      */
-    public function testASessionWrittenByTheOldBackendIsReadByTheAdapter(): void
+    public function testASessionRowInTheOldBackendsFormatIsReadByTheAdapter(): void
     {
-        $this->requireMysql('the session row is in the format the old MySQL backend wrote on MySQL.');
         $user = $this->user();
         $this->assertSame(403, $this->get('account/settings/')['status'], 'anonymous visitors have no account settings');
 
@@ -1140,7 +1031,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertStringContainsString($user->getHandle(), $response['body']);
 
             // The adapter's handler read the row and wrote it back, in the same format.
-            $statement = Idno::site()->db()->getClient()->prepare('select session_value from session where session_id = ?');
+            $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
             $statement->execute([$sessionId]);
             $this->assertStringStartsWith('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '";secure|b:0;', (string) $statement->fetchColumn());
         } finally {
@@ -1151,8 +1042,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     /**
      * A site whose `sessions_storage` names the removed old backend (Idno\Data\MySQL, with
      * in any case, with or without a leading backslash) keeps its database sessions: the db() service's handler (the
-     * `session` table, the same handler and options) on the shared connection, even with
-     * `sessions_database` off, and a session row the old backend wrote is still read. Before the old backend
+     * `idno_sessions` table, the same handler and options) on the shared connection, even with
+     * `sessions_database` off, and a session row in the old backend's format is read. Before the old backend
      * was removed the setting built a second connection (Idno\Data\MySQL) whose handler replaced the adapter's; any
      * other `sessions_storage` value, and `sessions_database` alone, behave as before. Each case boots
      * in a fresh process.
@@ -1185,11 +1076,11 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
                 $this->assertSame($expected['shared_lock'], $result['shared_lock'], $case . ': the advisory lock is the shared connection\'s');
                 if ($expected['save_handler'] === 'user') {
                     $this->assertSame($sessionId, $result['session_id'], $case);
-                    $this->assertSame($uuid, $result['read'], $case . ': the row the old backend wrote is read');
-                    $this->assertTrue($result['row'], $case . ': the session is written to the `session` table');
+                    $this->assertSame($uuid, $result['read'], $case . ': the row in the old backend\'s format is read');
+                    $this->assertTrue($result['row'], $case . ': the session is written to the `idno_sessions` table');
                 } else {
                     $this->assertNull($result['read'], $case);
-                    $this->assertFalse($result['row'], $case . ': nothing is written to the `session` table');
+                    $this->assertFalse($result['row'], $case . ': nothing is written to the `idno_sessions` table');
                 }
             } finally {
                 foreach (array_unique($sessions) as $id) {
@@ -1255,7 +1146,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
                 $this->assertSame(200, $page['status'], 'request ' . $request . ' after logging in is logged in');
                 $this->assertStringContainsString($user->getHandle(), $page['body']);
             }
-            $statement = Idno::site()->db()->getClient()->prepare('select session_value from session where session_id = ?');
+            $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
             $statement->execute([$cookies[$name]]);
             $this->assertStringContainsString('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '"', (string) $statement->fetchColumn());
         } finally {
@@ -1336,17 +1227,16 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     // ------------------------------------------------ SQLite
 
     /**
-     * The adapter over an SQLite database loaded with warmup/schemas/sqlite/sqlite.sql: records,
-     * entities, counts, deletion, the session handler and the versions. The schema upgrade does
-     * nothing there.
+     * The adapter over an SQLite database file of its own with the schema migrations run: records,
+     * entities, counts, deletion, the session handler, the versions and maintenance.
      */
     public function testTheAdapterWorksOnSqlite(): void
     {
         $path = sys_get_temp_dir() . '/idno-adapter-test-' . bin2hex(random_bytes(6)) . '.db';
         array_push($this->files, $path, $path . '-wal', $path . '-shm');
         $this->trackExportTempFiles();
-        $connection = SqliteTestDatabase::withSchema($path);
-        $store = new DbalRecordStore($connection, new SqliteDialect($connection), new LegacyRecordDefaults(), static fn (string $text): string => (string) Idno::site()->language()->uncurlQuotes($text), true, false);
+        $connection = PrivateDatabase::sqliteFile($path);
+        $store = PrivateDatabase::recordStore($connection, new LegacyRecordDefaults(), Idno::container()->get(\Idno\Storage\TypeMap::class), static fn (string $text): string => (string) Idno::site()->language()->uncurlQuotes($text));
         $repository = new EntityRepository($store, new LegacyAccessContext(), new NullLogger());
         $logger = new RecordingLogger();
         $adapter = new RepositoryDataConcierge('sqlite', $connection, static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, $path);
@@ -1354,7 +1244,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertInstanceOf(\PDO::class, $adapter->getClient());
         $this->assertSame($connection->getNativeConnection(), $adapter->getClient());
         $this->assertSame($path, $adapter->getDatabase());
-        $this->assertEquals([(object) ['label' => 'schema', 'value' => '2026111401']], $adapter->getVersions());
+        $this->assertEquals([(object) ['label' => 'schema', 'value' => '20261115000000']], $adapter->getVersions());
 
         // Records
         $id = $adapter->saveRecord('entities', ['title' => 'A walrus', 'slug' => 'walrus', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
@@ -1397,13 +1287,13 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertTrue($handler->open('', 'idno'));
         $this->assertSame('user_uuid|s:4:"abcd";', $handler->read($sessionId));
         $this->assertTrue($handler->close());
-        $this->assertSame(1, (int) $connection->fetchOne('select count(*) from session where session_id = ?', [$sessionId]));
+        $this->assertSame(1, (int) $connection->fetchOne('select count(*) from idno_sessions where session_id = ?', [$sessionId]));
 
-        // Maintenance: optimize() is MySQL's and fails (written to the error log, as on MySQL), export works.
+        // Maintenance: optimize() runs SQLite's `pragma optimize` and returns false, as before; export works.
         $this->captureLog();
         $this->assertFalse($adapter->optimize());
-        $this->assertStringContainsString('near "optimize": syntax error', implode("\n", $this->readLog()));
-        $this->assertStringContainsString('insert into entities (`uuid`,`_id`,', (string) $adapter->exportRecords('entities', 10, 0));
+        $this->assertSame([], $this->readLog());
+        $this->assertStringContainsString('insert into idno_entities (`id`,`uuid`,', (string) $adapter->exportRecords('entities', 10, 0));
         $this->assertSame([], $logger->records, 'nothing was logged through the site logger');
 
         $connection->close();
@@ -1530,7 +1420,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
                 return false;
             }
         };
-        $connection = SqliteTestDatabase::withSchema();
+        $connection = PrivateDatabase::sqliteMemory();
         $logger = new RecordingLogger();
         $db = $this->adapterOn(self::sqliteStore($connection), $access, $logger);
 
@@ -1550,7 +1440,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testAnEntityThatFailsToLoadPropagates(): void
     {
-        $connection = SqliteTestDatabase::withSchema();
+        $connection = PrivateDatabase::sqliteMemory();
         $store = self::sqliteStore($connection);
         $id = $store->save('entities', ['entity_subtype' => FailingToLoadEntity::class, 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
         $this->assertIsString($id);
@@ -1573,13 +1463,13 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testARecordThatCannotBeIndexedIsRefusedAndLogged(): void
     {
-        $connection = SqliteTestDatabase::withSchema();
+        $connection = PrivateDatabase::sqliteMemory();
         $logger = new RecordingLogger();
         $db = $this->adapterOn(self::sqliteStore($connection), new FixedAccessContext(), $logger);
 
         $this->assertFalse($db->saveRecord('entities', ['title' => 'x', 'created' => 'yesterday']));
         $this->assertSame([['error', '`created` must be a timestamp, string given.']], $logger->records);
-        $this->assertSame(0, (int) $connection->fetchOne('select count(*) from entities'));
+        $this->assertSame(0, (int) $connection->fetchOne('select count(*) from idno_entities'));
         $connection->close();
     }
 
@@ -1589,12 +1479,12 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     {
         $repository = new EntityRepository($store, $access, new NullLogger());
 
-        return new RepositoryDataConcierge($family, $connection ?? SqliteTestDatabase::connection(), static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, null);
+        return new RepositoryDataConcierge($family, $connection ?? PrivateDatabase::sqliteMemory(migrate: false), static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, null);
     }
 
-    private static function sqliteStore(Connection $connection): DbalRecordStore
+    private static function sqliteStore(Connection $connection): RecordStore
     {
-        return new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $text): string => $text, true, false);
+        return PrivateDatabase::recordStore($connection);
     }
 
     /**
@@ -1602,7 +1492,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     private static function databaseException(): \Doctrine\DBAL\Exception\DriverException
     {
-        $connection = SqliteTestDatabase::connection();
+        $connection = PrivateDatabase::sqliteMemory(migrate: false);
         try {
             $connection->executeQuery('select * from no_such_table');
         } catch (\Doctrine\DBAL\Exception\DriverException $e) {
@@ -1687,145 +1577,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         return $entry;
     }
 
-    /**
-     * The indexed copies of a field of a record, read from the metadata table.
-     *
-     * @return list<string>
-     */
-    private function indexedValues(string $id, string $name): array
-    {
-        $statement = Idno::site()->db()->getClient()->prepare('select value from entities_metadata where _id = ? and name = ?');
-        $statement->execute([$id, $name]);
-
-        return array_map('strval', $statement->fetchAll(\PDO::FETCH_COLUMN));
-    }
-
-    /**
-     * Create an empty database beside the rig's (`<dbname>_utf8mb4test_<suffix>`), load a schema file
-     * into it, and drop it after the test. Skips the test when the user may not create databases.
-     */
-    private function createScratchDatabase(string $schemaFile, string $suffix): string
-    {
-        $client = Idno::site()->db()->getClient();
-        $name = Idno::site()->db()->getDatabase() . '_utf8mb4test_' . $suffix;
-        try {
-            $client->exec('drop database if exists `' . $name . '`');
-            $client->exec('create database `' . $name . '`');
-        } catch (\PDOException $e) {
-            $this->markTestSkipped('The database user cannot create a scratch database: ' . $e->getMessage());
-        }
-        $this->scratchDatabases[] = $name;
-
-        $scratch = $this->connectTo($name);
-        foreach (explode(";\n", (string) file_get_contents($schemaFile)) as $statement) {
-            if (trim($statement) !== '') {
-                $scratch->exec($statement);
-            }
-        }
-
-        return $name;
-    }
-
-    /**
-     * A connection of the test's own to a scratch database.
-     */
-    private function connectTo(string $name): \PDO
-    {
-        $config = Idno::site()->config();
-        $dsn = 'mysql:host=' . $config->dbhost . ';dbname=' . $name . ';charset=utf8mb4';
-        if (!empty($config->dbport)) {
-            $dsn .= ';port=' . $config->dbport;
-        }
-
-        return new \PDO($dsn, $config->dbuser, $config->dbpass, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
-    }
-
-    /**
-     * The adapter on a connection to a scratch database, built as the site's is: connecting runs the
-     * schema upgrade.
-     */
-    private function adapterFor(string $name): RepositoryDataConcierge
-    {
-        $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
-        $connection = DriverManager::getConnection(['dbname' => $name] + ConnectionParameters::fromLegacyConfig($config, []));
-        $this->scratchConnections[] = $connection;
-        $store = new DbalRecordStore($connection, new MySqlDialect(), new LegacyRecordDefaults(), static fn (string $text): string => $text, true, false);
-        $repository = new EntityRepository($store, new LegacyAccessContext(), new NullLogger());
-
-        return new RepositoryDataConcierge('mysql', $connection, static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => new NullLogger(), $name);
-    }
-
-    /**
-     * Write a record to a database at the schema version before utf8mb4 as the old backend did: a
-     * document, its search text and its indexed values, with accented and CJK characters (which
-     * utf8mb3 could always store).
-     *
-     * @return array<string, list<array<string, mixed>>> the rows, as scratchRows() returns them
-     */
-    private function insertRowsWrittenBeforeTheUpgrade(\PDO $client): array
-    {
-        $title = 'Crème brûlée 日本語';
-        $contents = json_encode(['_id' => 'old-1', 'uuid' => 'http://example.com/view/old-1', 'title' => $title, 'entity_subtype' => 'Idno\Entities\GenericDataItem']);
-
-        $client->prepare("insert into entities (uuid, _id, siteid, owner, entity_subtype, contents) values ('http://example.com/view/old-1', 'old-1', 'site-1', '', 'Idno\\\\Entities\\\\GenericDataItem', ?)")->execute([$contents]);
-        $client->prepare("insert into entities_search (_id, search) values ('old-1', ?)")->execute(['crème brûlée 日本語 ']);
-        $insert = $client->prepare("insert into entities_metadata (_id, name, value) values ('old-1', ?, ?)");
-        $insert->execute(['title', $title]);
-        $insert->execute(['long', str_repeat('é', 127) . 'a']); // 255 bytes: the most that is indexed
-
-        return $this->scratchRows($client);
-    }
-
-    /**
-     * Everything in the entities tables of a scratch database.
-     *
-     * @return array<string, list<array<string, mixed>>>
-     */
-    private function scratchRows(\PDO $client): array
-    {
-        return [
-            'entities' => $client->query('select uuid, _id, siteid, owner, entity_subtype, contents, publish_status from entities order by _id')->fetchAll(\PDO::FETCH_ASSOC),
-            'entities_search' => $client->query('select * from entities_search order by _id')->fetchAll(\PDO::FETCH_ASSOC),
-            'entities_metadata' => $client->query('select * from entities_metadata order by _id, name')->fetchAll(\PDO::FETCH_ASSOC),
-        ];
-    }
-
-    private function schemaVersion(\PDO $client): string
-    {
-        return (string) $client->query("select value from versions where label = 'schema'")->fetchColumn();
-    }
-
-    /**
-     * The character set, collation and index prefix length of the text columns of a database.
-     *
-     * @return array<string, array{charset: string, collation: string, 'index prefix': int|null}>
-     */
-    private function textColumns(\PDO $client, string $database): array
-    {
-        $columns = [];
-        foreach (array_keys(self::TEXT_COLUMNS) as $column) {
-            [$table, $name] = explode('.', $column);
-            $statement = $client->prepare('select character_set_name, collation_name from information_schema.columns where table_schema = ? and table_name = ? and column_name = ?');
-            $statement->execute([$database, $table, $name]);
-            $row = $statement->fetch(\PDO::FETCH_NUM);
-            $statement = $client->prepare("select sub_part from information_schema.statistics where table_schema = ? and table_name = ? and column_name = ? and index_type = 'BTREE'");
-            $statement->execute([$database, $table, $name]);
-            $prefix = $statement->fetchColumn();
-            $columns[$column] = ['charset' => (string) $row[0], 'collation' => (string) $row[1], 'index prefix' => $prefix === false || $prefix === null ? null : (int) $prefix];
-        }
-
-        return $columns;
-    }
-
-    private function assertTextColumnsAreUtf8mb4(\PDO $client, string $database): void
-    {
-        $expected = [];
-        foreach (self::TEXT_COLUMNS as $column => $prefix) {
-            $expected[$column] = ['charset' => 'utf8mb4', 'collation' => 'utf8mb4_unicode_520_ci', 'index prefix' => $prefix];
-        }
-        $this->assertSame($expected, $this->textColumns($client, $database));
-    }
-
     private function status(string $body, string $marker, int $created): Status
     {
         $status = new Status();
@@ -1885,7 +1636,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     private function deleteSession(string $sessionId): void
     {
-        Idno::site()->db()->getClient()->prepare('delete from session where session_id = ?')->execute([$sessionId]);
+        Idno::site()->db()->getClient()->prepare('delete from idno_sessions where session_id = ?')->execute([$sessionId]);
     }
 
     /**
@@ -1938,8 +1689,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Writes a session for the user as the old backend's handler did, and returns its id. The row is
-     * the one Idno\Data\MySQL::handleSession() (a PdoSessionHandler with advisory locks) wrote for a
+     * Writes a session for the user to `idno_sessions` as the old backend's handler wrote it to its
+     * `session` table, and returns its id. The row is the one Idno\Data\MySQL::handleSession() (a
+     * PdoSessionHandler with advisory locks, the handler the adapter installs) wrote for a
      * session holding only `user_uuid`, observed on the commit before its removal: a 32-character
      * hexadecimal id, the PHP-serialised session (`user_uuid|s:<length>:"<uuid>";`), the time of the
      * write in `session_time` and that time plus the session lifetime (604800 seconds on the rig) in
@@ -1949,7 +1701,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     {
         $sessionId = bin2hex(random_bytes(16));
         $time = time();
-        $statement = Idno::site()->db()->getClient()->prepare('insert into session (session_id, session_value, session_lifetime, session_time) values (?, ?, ?, ?)');
+        $statement = Idno::site()->db()->getClient()->prepare('insert into idno_sessions (session_id, session_value, session_lifetime, session_time) values (?, ?, ?, ?)');
         $statement->execute([$sessionId, 'user_uuid|s:' . strlen($userUuid) . ':"' . $userUuid . '";', $time + 604800, $time]);
 
         return $sessionId;
@@ -2098,22 +1850,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         fclose($pipes[2]);
 
         return [proc_close($process), $stdout, $stderr];
-    }
-}
-
-/**
- * A PDO that records the statements it prepares (for the schema upgrader).
- */
-final class RecordingPdo extends \PDO
-{
-    /** @var list<string> */
-    public array $prepared = [];
-
-    public function prepare(string $query, array $options = []): \PDOStatement|false
-    {
-        $this->prepared[] = $query;
-
-        return parent::prepare($query, $options);
     }
 }
 

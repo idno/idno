@@ -52,10 +52,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
         // builds them); they are not services. EntityClassFinder is a static helper. SettingsRecordStore (a RecordStore decorator that serves `config` from the settings table) is built with new, like the other RecordStore implementations.
-        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
-        // LegacySchemaUpgrader and LegacySqlMaintenance.
-        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        // LegacySqlMaintenance.
+        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -160,15 +160,22 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // the logger, they must not be fetched before it has booted, nor in a kernel built with
     // bootLegacy: false; nothing fetches them while the kernel boots. They are public because
     // legacy code will fetch them with Idno::container()->get(). Nothing from the configuration is
-    // compiled in: the store is built by LegacyRecordStoreFactory when first fetched, and throws a
-    // \LogicException on a site whose database is neither MySQL nor SQLite (the connection is
-    // fetched only after that check).
+    // compiled in: the store (a SettingsRecordStore over a JsonRecordStore) is built by
+    // LegacyRecordStoreFactory when first fetched, and throws a \LogicException on a site whose
+    // database is neither MySQL, MariaDB nor SQLite (the connection and the catalog are fetched
+    // only after that check).
     // Set explicitly (not only found by the scan), like LegacySiteSettings below, so the
     // definitions exist whatever the scan finds.
     $services->set(LegacyRecordDefaults::class);
     $services->set(LegacyAccessContext::class);
     $services->set(LegacyRecordStoreFactory::class)
-        ->args([service_closure('database_connection'), service(BootConfig::class), service(LegacyRecordDefaults::class)]);
+        ->args([
+            service_closure('database_connection'),
+            service_closure(\Idno\Storage\SchemaCatalog::class),
+            service(BootConfig::class),
+            service(LegacyRecordDefaults::class),
+            service(\Idno\Storage\TypeMap::class),
+        ]);
     $services->set(RecordStore::class)
         ->factory([service(LegacyRecordStoreFactory::class), 'create'])
         ->public();
@@ -183,7 +190,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // plugin fetches IndexedFields with Idno::container()->get(). Nothing fetches either while the
     // kernel boots; building them does not connect.
     // Set explicitly (not only found by the scan), like the services above.
-    $services->set(\Idno\Storage\SchemaCatalog::class);
+    $services->set(\Idno\Storage\SchemaCatalog::class)->public();
     $services->set(\Idno\Storage\DialectFactory::class);
     $services->set(\Idno\Storage\Platform\Dialect::class)
         ->factory([service(\Idno\Storage\DialectFactory::class), 'create']);

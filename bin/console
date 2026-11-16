@@ -24,10 +24,19 @@ if (file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
     die('Could not find autoload.php, did you run "composer install" ..?');
 }
 
-// Boot Idno: the Symfony kernel boots the legacy application (see \Idno\Legacy\LegacyBootstrap)
-$kernel = \Idno\Kernel::fromGlobals();
+// Boot Idno: the Symfony kernel boots the legacy application (see \Idno\Legacy\LegacyBootstrap),
+// except for idno:upgrade, which creates the schema and so must run on a database the legacy
+// application cannot boot on (an empty one). The command is the first argument that is not an
+// option; for it the legacy console plugins are not loaded.
+$bootLegacy = (new \Symfony\Component\Console\Input\ArgvInput())->getFirstArgument() !== 'idno:upgrade';
+$kernel = \Idno\Kernel::fromGlobals($bootLegacy);
 try {
     $kernel->boot();
+    // Without the legacy application nothing has refused a site with no configuration yet (the
+    // legacy boot does that): refuse it here, as every other command does, before anything connects.
+    if (!$bootLegacy && $kernel->getContainer()->get(\Idno\Config\BootConfig::class)->isDefault()) {
+        throw new \Idno\Legacy\NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
+    }
 } catch (\Idno\Legacy\NotInstalledException $e) {
     fwrite(STDERR, "Idno is not installed yet: run the installer (warmup/ in a browser, or warmup/CLI/CLIInstaller.php) first.\n");
     exit(1);

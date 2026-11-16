@@ -46,8 +46,8 @@ final class MySqlDialectTest extends TestCase
             'duplicate uuid' => self::error(1062, UniqueConstraintViolationException::class),
             'foreign key' => self::error(1452, ForeignKeyConstraintViolationException::class),
             'not null' => self::error(1048, NotNullConstraintViolationException::class),
-            'incorrect string value (four-byte character)' => self::error(1366),
-            'data too long (field name over 64 characters)' => self::error(1406),
+            'incorrect string value' => self::error(1366),
+            'data too long (an _id over 36 characters)' => self::error(1406),
             'incorrect datetime value' => self::error(1292),
             'deadlock' => self::error(1213, DeadlockException::class),
             'lock wait timeout' => self::error(1205, LockWaitTimeoutException::class),
@@ -72,13 +72,12 @@ final class MySqlDialectTest extends TestCase
     {
         $dialect = new MySqlDialect();
 
-        // "Incorrect TIMESTAMP value": a `created` operand that is not a datetime.
-        $this->assertTrue($dialect->isRejectedOperand(self::error(1525), false));
-        $this->assertTrue($dialect->isRejectedOperand(self::error(1525), true));
         // A parse error is the search term's only when the query holds a boolean-mode full-text predicate.
         $this->assertTrue($dialect->isRejectedOperand(self::error(1064, SyntaxErrorException::class), true));
         $this->assertFalse($dialect->isRejectedOperand(self::error(1064, SyntaxErrorException::class), false));
-        foreach ([2013, 2006, 1146, 1054, 1366] as $code) {
+        // The store never sends a `created` operand that is not a timestamp, so MySQL's "Incorrect
+        // TIMESTAMP value" (1525) is a broken query like any other.
+        foreach ([2013, 2006, 1146, 1054, 1366, 1525] as $code) {
             $this->assertFalse($dialect->isRejectedOperand(self::error($code), true), (string) $code);
         }
     }
@@ -87,9 +86,9 @@ final class MySqlDialectTest extends TestCase
     {
         $dialect = new MySqlDialect();
 
-        $this->assertSame(['match (s) against (? in boolean mode)', ['abc@def.com'], true], $dialect->searchCondition('s', 'abc@def.com', true, false));
-        $this->assertSame(['match (s) against (?)', ['abc@def.com'], false], $dialect->searchCondition('s', 'abc@def.com', false, false));
-        $this->assertSame(['s like ?', ['%abc@def.com%'], false], $dialect->searchCondition('s', 'abc@def.com', true, true));
-        $this->assertSame(['s like ?', ['%hello%'], false], $dialect->searchCondition('s', 'hello', true, false));
+        $this->assertSame(['match (s) against (? in boolean mode)', ['abc@def.com'], true], $dialect->searchTextCondition('s', 'abc@def.com', true, false));
+        $this->assertSame(['match (s) against (?)', ['abc@def.com'], false], $dialect->searchTextCondition('s', 'abc@def.com', false, false));
+        $this->assertSame(['s like ?', ['%abc@def.com%'], false], $dialect->searchTextCondition('s', 'abc@def.com', true, true));
+        $this->assertSame(['s like ?', ['%hello%'], false], $dialect->searchTextCondition('s', 'hello', true, false));
     }
 }

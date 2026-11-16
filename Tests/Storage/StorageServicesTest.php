@@ -12,17 +12,22 @@ use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyRecordDefaults;
 use Idno\Legacy\LegacyRecordStoreFactory;
 use Idno\Storage\AccessContext;
-use Idno\Storage\DbalRecordStore;
+use Idno\Storage\AttributeTypeMap;
 use Idno\Storage\DialectFactory;
 use Idno\Storage\EntityRepository;
+use Idno\Storage\IdentityTypeMap;
 use Idno\Storage\IndexedFields;
+use Idno\Storage\JsonRecordStore;
 use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\Platform\SqliteDialect;
 use Idno\Storage\RecordStore;
-use Tests\Unit\Storage\SqliteTestDatabase;
+use Idno\Storage\SchemaCatalog;
+use Idno\Storage\SettingsRecordStore;
+use Idno\Storage\TypeMap;
 
 /**
- * The storage services: RecordStore (built by LegacyRecordStoreFactory), AccessContext
+ * The storage services: RecordStore (a SettingsRecordStore over a JsonRecordStore, built by
+ * LegacyRecordStoreFactory), AccessContext
  * (LegacyAccessContext) and EntityRepository. They resolve on the rig; the container compiles and
  * the kernel boots on any site's database without building them; LegacyAccessContext reads the
  * legacy session and ignore-access flag at call time.
@@ -112,14 +117,22 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $container = Idno::container();
 
         $store = $container->get(RecordStore::class);
-        $this->assertInstanceOf(DbalRecordStore::class, $store);
-        $this->assertInstanceOf($dialects[$family], self::property($store, 'dialect'));
-        $this->assertSame($container->get('database_connection'), self::property($store, 'connection'));
-        $this->assertInstanceOf(LegacyRecordDefaults::class, self::property($store, 'defaults'));
+        $this->assertInstanceOf(SettingsRecordStore::class, $store);
+        $documents = self::property($store, 'inner');
+        $this->assertInstanceOf(JsonRecordStore::class, $documents);
+        foreach ([$store, $documents] as $layer) {
+            $this->assertInstanceOf($dialects[$family], self::property($layer, 'dialect'));
+            $this->assertSame($container->get('database_connection'), self::property($layer, 'connection'));
+            $this->assertInstanceOf(LegacyRecordDefaults::class, self::property($layer, 'defaults'));
+        }
+        $this->assertSame($container->get(TypeMap::class), self::property($documents, 'types'));
+        $this->assertInstanceOf(AttributeTypeMap::class, self::property($documents, 'types'));
+        $this->assertSame($container->get(SchemaCatalog::class), self::property($documents, 'catalog'), 'the catalog IndexedFields refreshes');
+        $this->assertSame($container->get(SchemaCatalog::class), self::property($container->get(IndexedFields::class), 'catalog'));
         // Read from the legacy config each time a search is built, as the old backend read it (not once).
-        $this->assertSame((bool) Idno::site()->config()->boolean_search, self::property($store, 'booleanSearch')());
-        $this->assertSame((bool) Idno::site()->config()->bypass_fulltext_search, self::property($store, 'bypassFulltext')());
-        $uncurl = self::property($store, 'uncurlQuotes');
+        $this->assertSame((bool) Idno::site()->config()->boolean_search, self::property($documents, 'booleanSearch')());
+        $this->assertSame((bool) Idno::site()->config()->bypass_fulltext_search, self::property($documents, 'bypassFulltext')());
+        $uncurl = self::property($documents, 'uncurlQuotes');
         $this->assertSame(Idno::site()->language()->uncurlQuotes("\u{201C}a\u{2019}"), $uncurl("\u{201C}a\u{2019}"));
 
         $this->assertInstanceOf(LegacyAccessContext::class, $container->get(AccessContext::class));
@@ -187,15 +200,22 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
 
     public function testTheFactoryGivesAnSqliteSiteTheSqliteDialectOnTheStoreConnection(): void
     {
-        $connection = SqliteTestDatabase::withSchema();
-        $factory = new LegacyRecordStoreFactory(static fn (): Connection => $connection, new BootConfig(['database' => 'SQLite', 'dbname' => ':memory:'], false), new LegacyRecordDefaults());
+        $connection = PrivateDatabase::sqliteMemory();
+        $catalog = new SchemaCatalog($connection);
+        $types = new IdentityTypeMap();
+        $factory = new LegacyRecordStoreFactory(static fn (): Connection => $connection, static fn (): SchemaCatalog => $catalog, new BootConfig(['database' => 'SQLite', 'dbname' => ':memory:'], false), new LegacyRecordDefaults(), $types);
 
         $store = $factory->create();
-        $this->assertInstanceOf(DbalRecordStore::class, $store);
-        $dialect = self::property($store, 'dialect');
-        $this->assertInstanceOf(SqliteDialect::class, $dialect);
+        $this->assertInstanceOf(SettingsRecordStore::class, $store);
+        $documents = self::property($store, 'inner');
+        $this->assertInstanceOf(JsonRecordStore::class, $documents);
+        $this->assertInstanceOf(SqliteDialect::class, self::property($documents, 'dialect'));
+        $this->assertSame(self::property($documents, 'dialect'), self::property($store, 'dialect'));
         $this->assertSame($connection, self::property($store, 'connection'));
-        $this->assertSame($connection, self::property($dialect, 'connection'));
+        $this->assertSame($connection, self::property($documents, 'connection'));
+        $this->assertSame($catalog, self::property($documents, 'catalog'));
+        $this->assertSame($types, self::property($documents, 'types'));
+        $connection->close();
     }
 
     public function testTheFactoryGivesAMysqlSiteTheMysqlDialect(): void
@@ -203,10 +223,11 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         // A MySQL connection of its own that is never opened (DBAL connects at the first query), so
         // the test runs on any site's database, MongoDB included (whose container has no connection).
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql', 'host' => '127.0.0.1', 'dbname' => 'never_connected']);
-        $factory = new LegacyRecordStoreFactory(static fn (): Connection => $connection, new BootConfig(['database' => 'beanstalk-mysql'], false), new LegacyRecordDefaults());
+        $factory = new LegacyRecordStoreFactory(static fn (): Connection => $connection, static fn (): SchemaCatalog => new SchemaCatalog($connection), new BootConfig(['database' => 'beanstalk-mysql'], false), new LegacyRecordDefaults(), new IdentityTypeMap());
 
         $store = $factory->create();
         $this->assertInstanceOf(MySqlDialect::class, self::property($store, 'dialect'));
+        $this->assertInstanceOf(MySqlDialect::class, self::property(self::property($store, 'inner'), 'dialect'));
         $this->assertSame($connection, self::property($store, 'connection'));
         $this->assertFalse($connection->isConnected(), 'building the store does not connect');
     }
@@ -226,8 +247,10 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
     {
         $factory = new LegacyRecordStoreFactory(
             static fn (): Connection => throw new \RuntimeException('the connection was fetched'),
+            static fn (): SchemaCatalog => throw new \RuntimeException('the catalog was fetched'),
             new BootConfig(['database' => $database], false),
             new LegacyRecordDefaults(),
+            new IdentityTypeMap(),
         );
 
         $this->expectException(\LogicException::class);
@@ -298,19 +321,16 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->assertInstanceOf(IndexedFields::class, $indexes);
         $this->assertInstanceOf($dialects[$database], self::property($indexes, 'dialect'));
         $this->assertSame($container->get('database_connection'), self::property($indexes, 'connection'));
-        if ($database === 'sqlite') {
-            $this->assertSame($container->get('database_connection'), self::property(self::property($indexes, 'dialect'), 'connection'));
-        }
         $this->assertFalse($container->get('database_connection')->isConnected(), 'building it does not connect');
         $this->assertFileDoesNotExist($this->cacheDir . '/site.db');
     }
 
     public function testTheDialectFactoryRefusesADatabaseThatIsNotSql(): void
     {
-        $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql', 'host' => '127.0.0.1', 'dbname' => 'never_connected']);
-        $this->assertInstanceOf(MySqlDialect::class, (new DialectFactory(new BootConfig(['database' => 'beanstalk-mysql'], false), $connection))->create());
+        $this->assertInstanceOf(MySqlDialect::class, (new DialectFactory(new BootConfig(['database' => 'beanstalk-mysql'], false)))->create());
+        $this->assertInstanceOf(SqliteDialect::class, (new DialectFactory(new BootConfig(['database' => 'sqlite'], false)))->create());
 
         $this->expectException(\LogicException::class);
-        (new DialectFactory(new BootConfig(['database' => 'mongodb'], false), $connection))->create();
+        (new DialectFactory(new BootConfig(['database' => 'mongodb'], false)))->create();
     }
 }

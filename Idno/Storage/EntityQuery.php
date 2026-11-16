@@ -19,7 +19,7 @@ namespace Idno\Storage;
 final class EntityQuery
 {
     /**
-     * @param list<string> $types      class names; a leading '!' excludes, as today
+     * @param list<string> $types      class names; a leading '!' excludes, as in legacy getObjects()
      * @param list<string> $readGroups
      */
     public function __construct(

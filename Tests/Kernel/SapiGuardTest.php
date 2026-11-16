@@ -104,7 +104,7 @@ final class SapiGuardTest extends TestCase
     public function testTheScriptListsAreDerivedFromTheFilesystem(): void
     {
         $scripts = self::scripts();
-        foreach (['Tests/Kernel/boot_routes.php', 'Tests/Kernel/boot_cache_dir.php', 'Tests/Kernel/boot_db_backend.php', 'Tests/rig/sqlite_schema.php', 'Tests/Storage/sqlite_writer.php'] as $script) {
+        foreach (['Tests/Kernel/boot_routes.php', 'Tests/Kernel/boot_cache_dir.php', 'Tests/Kernel/boot_db_backend.php', 'Tests/Storage/sqlite_writer.php'] as $script) {
             $this->assertContains($script, $scripts['cli']);
         }
         foreach (['Tests/rig/router.php', 'Tests/Kernel/legacy_response_server.php', 'Tests/Kernel/boot_db_unreachable.php'] as $script) {

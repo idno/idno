@@ -12,26 +12,31 @@ use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Idno\Storage\Attribute\IndexedField;
 
 /**
- * MySQL, as the old backend, Idno\Data\MySQL (since removed), used it: `insert ... on duplicate key update`, full-text
- * `match ... against` for search terms of more than five bytes (in boolean mode when the site's
- * `boolean_search` is on, `like` instead when `bypass_fulltext_search` is), `like '%term%'` for
- * shorter ones, and backquoted identifiers.
+ * MySQL 8.0 and MariaDB 10.6, over the tables of the schema migrations: `insert ... on duplicate
+ * key update`, full-text `match ... against` for search terms of more than five bytes (in boolean
+ * mode when the site's `boolean_search` is on, `like` instead when `bypass_fulltext_search` is),
+ * `like '%term%'` for shorter ones, document fields read with JSON_TABLE, and backquoted identifiers.
  */
 final class MySqlDialect implements Dialect
 {
+    /**
+     * The collation of the text columns of the schema's tables (but `data` and the settings, which
+     * are binary), and of every comparison of a value read from `data`: the Unicode Collation
+     * Algorithm 5.2.0, ignoring case and accents, with a weight of its own for each four-byte
+     * character (emoji), as the 1.x schema's document values and search text had.
+     */
+    public const COLLATION = 'utf8mb4_unicode_520_ci';
+
     /** Search terms longer than this many bytes use the full-text index. */
     private const SHORT_SEARCH_BYTES = 5;
-
-    /** ER_WRONG_VALUE: "Incorrect TIMESTAMP value", a `created` operand that is not a datetime. */
-    private const ER_WRONG_VALUE = 1525;
 
     /** ER_PARSE_ERROR: also what the boolean-mode full-text parser raises for a term it cannot parse. */
     private const ER_PARSE_ERROR = 1064;
 
     /**
      * Data refusals that DBAL maps to the generic DriverException: ER_TRUNCATED_WRONG_VALUE (1292),
-     * ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366, e.g. a four-byte character in a utf8mb3 column),
-     * ER_DATA_TOO_LONG (1406, e.g. a field name longer than the 64 characters of `name`).
+     * ER_TRUNCATED_WRONG_VALUE_FOR_FIELD (1366, a value the column's character set cannot hold),
+     * ER_DATA_TOO_LONG (1406, e.g. an _id longer than the 36 characters of `id`).
      */
     private const REFUSED_DATA_CODES = [1292, 1366, 1406];
 
@@ -43,18 +48,7 @@ final class MySqlDialect implements Dialect
         return '`' . str_replace('`', '``', $name) . '`';
     }
 
-    public function upsert(string $table, array $insertColumns, array $updateColumns): array
-    {
-        $sql = 'insert into ' . $this->quoteIdentifier($table)
-            . ' (' . implode(', ', array_map($this->quoteIdentifier(...), $insertColumns)) . ')'
-            . ' values (' . implode(', ', array_fill(0, count($insertColumns), '?')) . ')'
-            . ' on duplicate key update '
-            . implode(', ', array_map(fn (string $column): string => $this->quoteIdentifier($column) . ' = ?', $updateColumns));
-
-        return [$sql, [...$insertColumns, ...$updateColumns]];
-    }
-
-    public function searchCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
+    public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
     {
         if (strlen($term) > self::SHORT_SEARCH_BYTES && !$bypassFulltext) {
             return ['match (' . $column . ') against (?' . ($booleanSearch ? ' in boolean mode' : '') . ')', [$term], $booleanSearch];
@@ -99,7 +93,7 @@ final class MySqlDialect implements Dialect
      * CHARACTER SET utf8mb4 gives a string unquoted in full UTF-8 on MySQL and MariaDB alike
      * (MariaDB's JSON_UNQUOTE() returns utf8mb3 and loses four-byte characters); the JSON column
      * gives the type (MySQL makes a JSON null an SQL NULL there, read as null). The value is
-     * compared as utf8mb4_general_ci, the collation of the table's text columns.
+     * compared as COLLATION, the collation of the table's text columns.
      *
      * A number is its text as the database prints it: MariaDB prints the document's own text,
      * MySQL parses the number and prints it its own way, which differs from PHP's for numbers in
@@ -116,7 +110,7 @@ final class MySqlDialect implements Dialect
             . 's longtext character set utf8mb4 path \'$\', j json path \'$\', '
             . 'nested path \'$[*]\' columns (n for ordinality, es longtext character set utf8mb4 path \'$\', ej json path \'$\'), '
             . 'nested path \'$.*\' columns (m for ordinality, os longtext character set utf8mb4 path \'$\', oj json path \'$\'))) as v'
-            . ' where (' . $value . ') collate utf8mb4_general_ci ' . $operator . ' ' . $operands . ')';
+            . ' where (' . $value . ') collate ' . self::COLLATION . ' ' . $operator . ' ' . $operands . ')';
 
         return [$sql, 1];
     }
@@ -146,7 +140,7 @@ final class MySqlDialect implements Dialect
     }
 
     /**
-     * A VIRTUAL generated column `ix_<field>` (LONGTEXT, utf8mb4_general_ci, the collation of the
+     * A VIRTUAL generated column `ix_<field>` (LONGTEXT, COLLATION, the collation of the
      * table's text columns) whose value is text() of the field's JSON value, NULL when the field is
      * absent, then an index `ix_<field>` on its first $length characters. The whole value is in the
      * column, so a comparison is on the whole value; a unique index is unique on the prefix.
@@ -173,7 +167,7 @@ final class MySqlDialect implements Dialect
         $quotedTable = $this->quoteIdentifier($table);
 
         return [
-            'alter table ' . $quotedTable . ' add column ' . $column . ' longtext character set utf8mb4 collate utf8mb4_general_ci generated always as (' . $value . ') virtual',
+            'alter table ' . $quotedTable . ' add column ' . $column . ' longtext character set utf8mb4 collate ' . self::COLLATION . ' generated always as (' . $value . ') virtual',
             'create ' . ($unique ? 'unique ' : '') . 'index ' . $column . ' on ' . $quotedTable . ' (' . $column . '(' . $length . '))',
         ];
     }
@@ -210,34 +204,11 @@ final class MySqlDialect implements Dialect
     }
 
     /**
-     * The column's own collation (utf8mb4_general_ci) orders text folded to upper case.
+     * The column's own collation (COLLATION) orders text: punctuation such as `_` before the letters.
      */
     public function textComparison(string $column, string $operator, string $operands): string
     {
         return $column . ' ' . $operator . ' ' . $operands;
-    }
-
-    public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array
-    {
-        return $this->searchCondition($column, $term, $booleanSearch, $bypassFulltext);
-    }
-
-    /**
-     * Unchanged: MySQL itself rejects a `created` operand that is not a datetime (error 1525).
-     */
-    public function columnValue(string $column, string $value): ?string
-    {
-        return $value;
-    }
-
-    public function tableNamesQuery(): string
-    {
-        return 'show tables';
-    }
-
-    public function tableNamesIgnoreCaseQuery(): string
-    {
-        return 'select @@lower_case_table_names <> 0';
     }
 
     public function limit(int $limit, int $offset): string
@@ -245,10 +216,13 @@ final class MySqlDialect implements Dialect
         return 'limit ' . $offset . ',' . $limit;
     }
 
+    /**
+     * A term the boolean-mode full-text parser cannot parse (error 1064 in a query that holds such
+     * a search). The store never sends a `created` operand that is not a timestamp.
+     */
     public function isRejectedOperand(DriverException $exception, bool $parsedSearchTerm): bool
     {
-        return $exception->getCode() === self::ER_WRONG_VALUE
-            || ($parsedSearchTerm && $exception->getCode() === self::ER_PARSE_ERROR);
+        return $parsedSearchTerm && $exception->getCode() === self::ER_PARSE_ERROR;
     }
 
     public function isRefusedData(DriverException $exception): bool

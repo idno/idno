@@ -31,17 +31,18 @@ use Idno\Storage\Platform\Dialect;
  *    no statement is sent for it. The catalog is read once; whoever creates a table later calls
  *    SchemaCatalog::forget().
  *  - save() is one upsert on `id` (Dialect::upsertById()): `data` is the record json_encode()d as
- *    today's store encodes it, `type` is TypeMap::typeFor() of its entity_subtype (default
+ *    the old store encoded it, `type` is TypeMap::typeFor() of its entity_subtype (default
  *    Idno\Common\Entity), `created` its timestamp (default now), `search` RecordIndex::searchText().
  *    A record read back is json_decode($data, true): the document as given, never rebuilt from the
  *    columns. Another record holding the uuid makes the save return false, and both records stay.
  *  - Queries: a field of RecordIndex::COLUMN_FIELDS is compared with its column (_id is `id`,
- *    entity_subtype is `type`, with each operand expanded through TypeMap::typesFor()), `created`
+ *    entity_subtype is `type`, with each operand expanded through TypeMap::typesFor(), except one
+ *    with a leading backslash, which is compared as it is and so matches nothing), `created`
  *    with operands read by MySqlSemantics::epoch() in the PHP default time zone of the query (an
  *    operand it rejects makes the query match nothing); any other field with its query values
  *    (RecordIndex::queryValues(): the scalar values of a list or object), computed from `data` by
  *    Dialect::fieldCondition(), the field named by its exact name. Values are bound as strings
- *    (true is '1', false ''), as today, except that a float operand of a document field is
+ *    (true is '1', false ''), as the old store bound them, except that a float operand of a document field is
  *    RecordIndex::floatText(), the text its query value has, so that a float finds itself.
  *    A field the SchemaCatalog lists as indexed for the collection (#[IndexedField], made by
  *    IndexedFields) is compared with its indexed value instead (Dialect::indexedFieldValue(), a
@@ -49,7 +50,7 @@ use Idno\Storage\Platform\Dialect;
  *    NULL otherwise: such a field matches scalar values only (a list or object in it is not
  *    found); for every other record the result is the same with or without the index.
  *    Results are ordered by `created`, newest first, then `id` descending.
- *  - Search: today's rules, against the `search` column (Dialect::searchTextCondition()); a search
+ *  - Search: the old store's rules, against the `search` column (Dialect::searchTextCondition()); a search
  *    anywhere but at the top level makes the query match nothing, as do an AnyOf with no children
  *    and an In with no values.
  *  - Errors: as the RecordStore interface states. A query the database rejects for its operand
@@ -65,8 +66,8 @@ final class JsonRecordStore implements RecordStore
 
     private const TABLE_PREFIX = 'idno_';
 
-    /** The columns of a collection table, in the order save() writes them. */
-    private const COLUMNS = ['id', 'uuid', 'type', 'owner', 'created', 'publish_status', 'data', 'search'];
+    /** The columns of a collection table, in the order save() writes them (an indexed field adds a generated column). */
+    public const COLUMNS = ['id', 'uuid', 'type', 'owner', 'created', 'publish_status', 'data', 'search'];
 
     /** The column each field of RecordIndex::COLUMN_FIELDS is queried on. */
     private const FIELD_COLUMNS = ['uuid' => 'uuid', '_id' => 'id', 'entity_subtype' => 'type', 'owner' => 'owner', 'publish_status' => 'publish_status', 'created' => 'created'];
@@ -487,6 +488,10 @@ final class JsonRecordStore implements RecordStore
             foreach ($values as $value) {
                 if ($value === null) {
                     $types[] = null;
+                } elseif (str_starts_with($value, '\\')) {
+                    // No class is stored under a name with a leading backslash: compared as it is
+                    // (it matches nothing), as the old store compared it, not resolved to its class.
+                    $types[] = $value;
                 } elseif ($isList) {
                     array_push($types, ...$this->types->typesFor($value));
                 } else {
@@ -575,7 +580,7 @@ final class JsonRecordStore implements RecordStore
     }
 
     /**
-     * The operand as today's store binds it: as a string (PDO's conversion), null as NULL.
+     * The operand as the old store bound it: as a string (PDO's conversion), null as NULL.
      */
     private static function bind(string|int|float|bool|null $operand): ?string
     {

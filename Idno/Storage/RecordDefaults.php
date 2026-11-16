@@ -25,7 +25,7 @@ interface RecordDefaults
     /**
      * The id of the current site. Null means the site has none ("no site"): a record saved without
      * a siteid then gets the key `siteid` with the value null, which is what the in-memory store
-     * does and what the legacy backend does today when the Site entity has no uuid (a store that
+     * does, what the old backend did, and what JsonRecordStore does when the Site entity has no uuid (a store that
      * cannot tell "no site" from "no uuid" has nothing else to do).
      */
     public function currentSiteId(): ?string;

@@ -6,11 +6,9 @@ namespace Tests\Storage;
 
 use Doctrine\DBAL\Connection;
 use Idno\Storage\Criteria;
-use Idno\Storage\DbalRecordStore;
-use Idno\Storage\FixedRecordDefaults;
 use Idno\Storage\Platform\SqliteDialect;
+use Idno\Storage\RecordStore;
 use PHPUnit\Framework\TestCase;
-use Tests\Unit\Storage\SqliteTestDatabase;
 
 /**
  * Two connections to one SQLite database file (in a temporary directory): with write-ahead
@@ -29,7 +27,7 @@ final class SqliteConcurrencyTest extends TestCase
         $this->dir = sys_get_temp_dir() . '/idno-sqlite-test-' . bin2hex(random_bytes(6));
         mkdir($this->dir);
         $this->file = $this->dir . '/site.sqlite';
-        SqliteTestDatabase::withSchema($this->file)->close();
+        PrivateDatabase::sqliteFile($this->file)->close();
     }
 
     protected function tearDown(): void
@@ -40,20 +38,25 @@ final class SqliteConcurrencyTest extends TestCase
         rmdir($this->dir);
     }
 
-    private static function store(Connection $connection): DbalRecordStore
+    private static function store(Connection $connection): RecordStore
     {
-        return new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
+        return PrivateDatabase::recordStore($connection);
+    }
+
+    private function connect(): Connection
+    {
+        return PrivateDatabase::sqliteFile($this->file, migrate: false);
     }
 
     public function testAReaderSeesTheLastCommitWhileAWriteIsInProgress(): void
     {
-        $writer = SqliteTestDatabase::connection($this->file);
-        $reader = SqliteTestDatabase::connection($this->file);
+        $writer = $this->connect();
+        $reader = $this->connect();
         $this->assertSame('wal', (string) $writer->fetchOne('pragma journal_mode'));
         $id = self::store($writer)->save('entities', ['_id' => 'a', 'title' => 'first']);
 
         $writer->beginTransaction();
-        $writer->executeStatement("update entities set contents = '{\"_id\":\"a\",\"title\":\"second\"}' where _id = 'a'");
+        $writer->executeStatement("update idno_entities set data = '{\"_id\":\"a\",\"title\":\"second\"}' where id = 'a'");
 
         $started = microtime(true);
         $this->assertSame('first', self::store($reader)->findById('entities', 'a')['title'] ?? null);
@@ -74,7 +77,7 @@ final class SqliteConcurrencyTest extends TestCase
         $this->assertSame("locked\n", fgets($pipes[1]));
 
         $started = microtime(true);
-        $id = self::store(SqliteTestDatabase::connection($this->file))->save('entities', ['_id' => 'b', 'title' => 'waited']);
+        $id = self::store($this->connect())->save('entities', ['_id' => 'b', 'title' => 'waited']);
         $waited = microtime(true) - $started;
 
         fclose($pipes[1]);
@@ -104,7 +107,7 @@ final class SqliteConcurrencyTest extends TestCase
             $this->assertSame(0, proc_close($process), 'writer ' . $prefix . ' failed: ' . $output);
         }
 
-        $store = self::store(SqliteTestDatabase::connection($this->file));
+        $store = self::store($this->connect());
         $this->assertSame(400, $store->count('entities', Criteria::all()));
         $this->assertSame('record 200', $store->findById('entities', 'first-200')['title'] ?? null);
         $this->assertSame('record 200', $store->findById('entities', 'second-200')['title'] ?? null);
@@ -112,9 +115,9 @@ final class SqliteConcurrencyTest extends TestCase
 
     public function testAWriteThatCannotGetTheLockWithinTheBusyTimeoutIsNotStored(): void
     {
-        $holder = SqliteTestDatabase::connection($this->file);
+        $holder = $this->connect();
         $holder->executeStatement('begin immediate');
-        $store = self::store(SqliteTestDatabase::connection($this->file));
+        $store = self::store($this->connect());
 
         $started = microtime(true);
         $result = $store->save('entities', ['_id' => 'c', 'title' => 'locked out']);

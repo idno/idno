@@ -18,7 +18,7 @@ system as Idno.
 composer install
 
 # Local test rig: a database + php -S web server (http://127.0.0.1:8089/)
-composer test:up        # start the rig on SQLite: needs nothing but PHP (the default)
+composer test:up        # start the rig on SQLite: needs nothing but PHP (the default); creates the schema
 composer test:up:mysql  # start the rig on MySQL 8 in Docker (127.0.0.1:33306)
 IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql  # the same, on MariaDB 10.6 (any MySQL or MariaDB image)
 composer test           # run the full suite (core + plugins + unit tier); needs the rig, either mode
@@ -37,6 +37,7 @@ php -l path/to/File.php
 
 # The command line (Symfony's commands and the legacy console plugins), against the test rig
 composer console -- list
+composer console -- idno:upgrade   # create or upgrade the database schema (the rig runs it on test:up)
 ```
 
 - `composer test` is `IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit`:
@@ -60,18 +61,19 @@ composer console -- list
   bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
   Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
   **Everything else** (`composer test`) needs the rig, in either mode (see below): kernel tests (`Tests/Kernel`),
-  the storage contract bound to the rig's MySQL (`Tests/Storage/DbalMySqlRecordStoreTest`: `DbalRecordStore`
-  with `MySqlDialect` on the `database_connection` service, which it also tests; the contract itself,
-  `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and also runs against the
-  in-memory store and against `DbalRecordStore` on in-memory SQLite in `Tests/Unit/Storage`; its
-  expectations are the MySQL store's, and the hooks a binding overrides are only where the
-  databases really differ: `expectLongSearchTermToMatchSubstring`, `expectBooleanModeSearch`,
-  `expectFourByteCharactersToBeRejected`, `expectTextComparisonToIgnoreCase`,
-  `expectTextToSortFoldedToUpperCase`, or where the JSON store differs from today's (see "The JSON
-  record store" under "Database"); the contract also runs against `JsonRecordStore` on in-memory
-  SQLite in the unit tier (`Tests/Unit/Storage/JsonSqliteRecordStoreTest`) and on a private MySQL or
-  MariaDB database of the rig's server (`Tests/Storage/JsonMySqlRecordStoreTest`, which skips on
-  SQLite); `SettingsRecordStore` has the same two bindings of one test case
+  the storage contract bound to a private MySQL or MariaDB database of the rig's server
+  (`Tests/Storage/JsonMySqlRecordStoreTest`: `JsonRecordStore` with `MySqlDialect`, which skips on
+  SQLite; the contract itself, `Tests/Storage/Contract/RecordStoreContract`, is dependency-free and
+  also runs against the in-memory store and against `JsonRecordStore` on in-memory SQLite in
+  `Tests/Unit/Storage` (`InMemoryRecordStoreTest`, `JsonSqliteRecordStoreTest`); its expectations
+  are the MySQL store's, and the hooks a binding overrides are only where the databases really
+  differ: `expectLongSearchTermToMatchSubstring`, `expectBooleanModeSearch` (no full-text index in
+  memory or on SQLite), `expectNonAsciiCaseToBeIgnored`, `expectAccentsToBeIgnored`,
+  `expectExpansionsToBeEqual`, `expectTrailingSpacesToBeIgnored` and
+  `expectTextToSortFoldedToUpperCase` (MySQL's `utf8mb4_unicode_520_ci` against the in-memory
+  store's upper-case folding and SQLite's NOCASE),
+  `expectCreatedToBeComparedInTheTimeZoneOfItsSave` (the in-memory store keeps `created` as text),
+  `expectFloatsInExponentFormToMatchTheirJsonText` (MySQL 8's JSON functions); `SettingsRecordStore` has the same two bindings of one test case
   (`Tests/Storage/Contract/SettingsRecordStoreContract`: `Tests/Unit/Storage/SettingsRecordStoreTest`
   on an SQLite file in a temporary directory and `Tests/Storage/SettingsRecordStoreMySqlTest` on a private MySQL or MariaDB
   database); the
@@ -94,31 +96,29 @@ composer console -- list
   - **SQLite** (`composer test:up`, the default): no Docker, nothing but PHP. The database file
     (`site.sqlite`, with its `-wal`/`-shm` files) and the upload directory (`uploads/`) are in
     `<sys_get_temp_dir()>/idno-test-rig-<first 12 hex digits of the SHA-256 of the checkout's real
-    path>/`, so two checkouts (git worktrees) never share a database or uploads. `up.sh` creates it and
-    loads `warmup/schemas/sqlite/sqlite.sql` through a set-up connection (`Tests/rig/sqlite_schema.php`;
-    a database that already has tables is left as it is). No step of this mode runs `docker`.
+    path>/`, so two checkouts (git worktrees) never share a database or uploads. `up.sh` creates it
+    as an empty file (a re-run keeps the file there and its data). No step of this mode runs `docker`.
   - **MySQL** (`composer test:up:mysql`): MySQL 8 in Docker on 127.0.0.1:33306, database
-    `known_unittest`, schema `warmup/schemas/mysql/mysql.sql` (as before); the upload directory is
-    in the same per-checkout temporary directory. Use it for anything that touches the SQL dialect,
-    search (MySQL's full-text index), the schema upgrader (`LegacySchemaUpgrader`) or MySQL's
-    refusals (field names over 64 characters, 4-byte characters compared with a `utf8mb3` column,
-    error codes): the tests bound to those skip on SQLite
-    and say why. Run the whole suite on MySQL before merging such a change (CI runs SQLite, MySQL
-    and MongoDB).
+    `known_unittest`, created empty by the image; the upload directory is in the same per-checkout
+    temporary directory. Use it for anything that touches the SQL dialect, search (MySQL's full-text
+    index), the schema migrations on MySQL or MySQL's refusals and error codes: the tests bound to
+    those skip on SQLite and say why. Run the whole suite on MySQL (and on MariaDB, below) before
+    merging such a change (CI runs SQLite, MySQL, MariaDB and MongoDB).
     `IDNO_RIG_MYSQL_IMAGE` selects the Docker image (default `mysql:8.0`; e.g. `mariadb:10.6`, whose
-    image honours the `MYSQL_*` variables; the healthcheck and the schema load use `mysqladmin`/`mysql`
-    or `mariadb-admin`/`mariadb`, whichever the image has). The image the database was started from
+    image honours the `MYSQL_*` variables; the healthcheck uses `mysqladmin` or `mariadb-admin`,
+    whichever the image has). The image the database was started from
     is recorded in the per-checkout temporary directory (`mysql-image`; none recorded means
     `mysql:8.0`): `test:up:mysql` with another image stops the running database first (`down.sh`),
     and the container is started with `--renew-anon-volumes`, so whenever compose recreates it (a new
     image, or any change to the service in `docker-compose.yml`) it starts on an empty data directory
-    with today's schema loaded, and the previous test data is gone; a re-run that needs no new
-    container keeps its data. `down.sh` removes the container's data volume
-    (`docker compose down -v`). On MariaDB 10.6 the existing suite fails where it pins MySQL 8's
-    behaviour: the session `sql_mode` (`testTheConnectionMatchesTheLegacyBackendsConnection`,
-    `testTheSessionMatchesTheLegacyConnection`) and the `created` operands MySQL rejects, which
-    MariaDB accepts (`testCreatedQueriedWithAnIntegerTimestampFails`,
-    `testCreatedRejectsTheLiteralsMysqlRejects`).
+    (the schema is created again, below), and the previous test data is gone; a re-run that needs no
+    new container keeps its data. `down.sh` removes the container's data volume
+    (`docker compose down -v`). The whole suite passes on MySQL 8.0 and MariaDB 10.6 alike.
+  - In both modes, once the database is up and before the web server starts, `up.sh` creates the
+    schema with `bin/console idno:upgrade` (the tables and the field indexes; see "Console
+    commands"), in the rig's environment (`APP_ENV=test`, `APP_DEBUG=1`, deprecations excluded, as
+    `composer console` runs it); on a database that has the schema it does nothing. No SQL file is
+    loaded.
   - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
     database). `composer test:down` stops whichever is running (it is safe when nothing is), deletes
     the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
@@ -136,28 +136,30 @@ composer console -- list
     rig writes the file when there is none and replaces one that carries the marker (that is how the
     mode switches); it never touches one without the marker (a developer's own): `up.sh` exits 1 and
     says so, before starting or stopping anything.
-  - On SQLite, these skip, each with its reason: the storage contract against `DbalRecordStore` on
-    the rig's MySQL (`DbalMySqlRecordStoreTest`; the contract runs on SQLite in the unit tier,
-    `DbalSqliteRecordStoreTest`), and the `RepositoryDataConciergeTest` cases that need MySQL
-    (`requireMysql()`: the old backend's MySQL connection and session-row formats, MySQL's refusals,
-    full-text settings, the character sets of the schema and its upgrade to utf8mb4, `database`
-    names that mean MySQL). `EntityRepositoryTest` runs on both. Nothing
-    else skips (the unreachable-database tests run on both: a closed port on MySQL, a database file
-    in a missing directory on SQLite); the characterisation suite runs in full on both.
+  - On SQLite, these skip, each with its reason: the tests on private MySQL databases
+    (`JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`,
+    `SchemaMigratorMySqlTest`, `InstallerSchemaTest`; their contracts run on SQLite in the unit
+    tier), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
+    it compiled into the container, lazy, the old backend's session, failures), and the `RepositoryDataConciergeTest` cases that need MySQL (`requireMysql()`: the old
+    backend's MySQL connection, full-text settings, a lost MySQL connection, `database` names that
+    mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
+    (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
+    missing directory on SQLite); the characterisation suite runs in full on both.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
-  (`composer test:up`, then `composer test`; no service containers, no Docker); and the MySQL and
-  MongoDB jobs, which do not use the rig: they copy `Tests/build/config_mysql.ini` (or
-  `config_default.ini` for MongoDB) to `configuration/config.ini` and serve the site at
-  `http://localhost/` with `php -S localhost:80` and `Tests/build/router.php`, on a fresh database,
-  and run bare `vendor/bin/phpunit`. Tests must not assume a
+  (`composer test:up`, then `composer test`; no service containers, no Docker); and the MySQL,
+  MariaDB 10.6 and MongoDB jobs, which do not use the rig: they copy `Tests/build/config_mysql.ini`
+  (or `config_default.ini` for MongoDB) to `configuration/config.ini`, on MySQL and MariaDB create
+  the schema with `php bin/console idno:upgrade` on the fresh, empty database, serve the site at
+  `http://localhost/` with `php -S localhost:80` and `Tests/build/router.php`, and run bare
+  `vendor/bin/phpunit`. Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
   from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
   `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_*.ini` in step
   (`Tests/Kernel/RigScriptsTest` checks the rig's two and the two CI copies, `config_mysql.ini` and
-  `config_default.ini`; `config_pgsql.ini` and `.travis.yml` are stale and unused). Every test that
+  `config_default.ini`). Every test that
   touches the database runs on MySQL and SQLite and either supports MongoDB or skips on it, saying
   why (the storage-bound classes key their skips on `ConnectionParameters::driverFamily()`).
 
@@ -186,16 +188,14 @@ Idno/
                                has been removed, see the db() bullet)
   Storage/                     The storage interface (modern style): the RecordStore interface; the query
                                model (Criteria and Criterion/*, value objects parsed from the legacy search
-                               arrays); RecordIndex (the metadata rows, search text and columns an SQL store
-                               derives from a record, exactly as the old backend's MySQL::saveRecord() did,
-                               and the query values of the JSON store); RecordDefaults
+                               arrays); RecordIndex (the query values, search text and columns a store
+                               derives from a record); RecordDefaults
                                (what a store fills in: _id, uuid, siteid); InMemoryRecordStore, the reference
                                implementation the storage contract also holds to MySQL's behaviour;
-                               MySqlSemantics (the rules MySQL applies by itself, in PHP, shared by the
-                               in-memory store and the SQLite dialect: `created` literals, upper-case text
-                               folding, search); DbalRecordStore, the RecordStore on a Doctrine DBAL connection
-                               over the legacy schema, with what is engine-specific in Platform/ (Dialect,
-                               MySqlDialect, SqliteDialect, and SqliteConnectionSetup, the DBAL middleware
+                               MySqlSemantics (the rules MySQL applies by itself, in PHP: `created`
+                               literals, upper-case text folding, the in-memory store's search);
+                               what is engine-specific in Platform/ (Dialect, MySqlDialect for MySQL and
+                               MariaDB, SqliteDialect, and SqliteConnectionSetup, the DBAL middleware
                                that sets up every SQLite connection);
                                ConnectionParameters (legacy database settings -> DBAL parameters) and
                                BootConfigConnectionFactory (gives the DBAL connection those parameters at runtime);
@@ -203,8 +203,7 @@ Idno/
                                EntityQuery (its query) and AccessContext (who is asking; FixedAccessContext
                                for tests); SchemaMigrator (runs the schema migrations in Migrations/)
                                and SchemaCatalog (the tables and indexed fields that exist);
-                               JsonRecordStore, the RecordStore on the tables the migrations create (not
-                               used by the site yet), with TypeMap (a class's value in the `type` column),
+                               JsonRecordStore, the RecordStore on the tables the migrations create, with TypeMap (a class's value in the `type` column),
                                AttributeTypeMap (the aliases the entity classes declare with
                                Attribute/AsEntity) and IdentityTypeMap (no aliases); RecordIndex::queryValues() is what a
                                query on a document field compares with, in that store and in memory;
@@ -213,8 +212,8 @@ Idno/
                                carry those attributes) and DialectFactory (the container's Dialect);
                                SettingsRecordStore, a RecordStore decorator that serves the collection
                                `config` (the site's configuration, ONE document) from the key/value table
-                               `idno_settings` and every other collection from the store it decorates (not
-                               used by the site yet)
+                               `idno_settings` and every other collection from the store it decorates
+                               (the container's RecordStore is one, over a JsonRecordStore)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -252,7 +251,15 @@ anything else, or unset, is false), both read from `$_SERVER`.
 - **`bin/console`** (CLI): first refuses to run under any SAPI but `cli` or `phpdbg` (a web
   server that executes it gets a 404 with an empty body). It then defines `IDNO_CONSOLE` (before the kernel boots, because it makes
   `LegacyBootstrap` skip the web-only boot steps), boots the kernel, and runs
-  `Idno\Console\Application`, a subclass of FrameworkBundle's console application. On a
+  `Idno\Console\Application`, a subclass of FrameworkBundle's console application. When the
+  command is `idno:upgrade` (the first argument that is not an option, as `ArgvInput::getFirstArgument()`
+  reads it), the kernel is built WITHOUT booting the legacy application
+  (`Kernel::fromGlobals(bootLegacy: false)`): the command creates the schema, so it must run on a
+  database the legacy application cannot boot on (an empty one); the legacy console plugins and
+  the `version` command are then not registered, and `bin/console` itself refuses a site with no
+  configuration (`BootConfig::isDefault()`, which the legacy boot checks otherwise) with the same
+  line and exit code as below, before anything connects (pinned by
+  `Tests/Kernel/UpgradeCommandNotInstalledTest`). Every other command boots as described here. On a
   site with no configuration it prints one line to stderr and exits 1; on any other
   exception while booting it prints `Idno could not start: <exception class>: <message>`
   to stderr and exits 1 (it does not carry on). `idno.php` and
@@ -379,8 +386,26 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   constructor and put the work in `__invoke()` (or `execute()`). It must return an int.
   `Tests/Fixtures/ProbeCommand` (`idno:test:probe`, registered in `config/services_test.php`)
   is the test-environment-only example, pinned by `Tests/Kernel/ConsoleTest`; it is absent
-  in `prod`. Console code may take a `Psr\Log\LoggerInterface`: the console always boots the
-  legacy application.
+  in `prod`. Console code may take a `Psr\Log\LoggerInterface`: the console boots the legacy
+  application for every command but `idno:upgrade`.
+- **`idno:upgrade`** (`Idno\Console\UpgradeCommand`): creates or upgrades the database schema of an
+  SQL site (MySQL, MariaDB or SQLite). It runs the pending schema migrations (`SchemaMigrator`),
+  then creates the indexes the entity classes declare (`IndexedFields::reconcileDirectory()` for
+  `Idno/` and each directory under `IdnoPlugins/`, enabled or not), calling `SchemaCatalog::forget()`
+  after each, and prints each migration it ran (`Ran the migration <version>.`), each index it
+  created (`Created the index <collection>.<field>.`), each declaration that differs from its
+  existing index, or `Nothing to do: the schema is up to date.`; it exits 0. `--status` only lists
+  the pending migrations (`Pending migration: <version>`, or `No migration is pending.`) and changes
+  nothing. Today it runs without the legacy application (see `bin/console` under "Entry points"),
+  so it works on an empty database; it takes no logger. It reports the migrations THIS run executed
+  (`SchemaMigrator::migrate()` returns them), never one another process ran meanwhile. On a site
+  with no configuration it prints the one "not installed" line and exits 1 before anything
+  connects. On a site whose database is not SQL it
+  fails (fetching the connection throws) and exits 1. A new installation has no tables until it is
+  run (the installers only check that they can connect, and say to run it); the rig and CI run it
+  before the first request (when it fails, `up.sh` says so on stderr and exits non-zero without
+  starting the web server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private
+  empty database).
 - **Legacy console plugins still work**: `Idno\Common\ConsolePlugin` subclasses
   (`getCommand()`, `getDescription()`, `getParameters()`, `execute()`) are found by
   `Idno\Console\Application` once the kernel (and so the legacy application) has booted,
@@ -412,7 +437,7 @@ catch-all described above. Do not add new ones; add a controller instead.
 `LegacyDispatcher`, `LegacyResponse`, `LegacyFallbackListener`, `FatalErrorPage`,
 `VerbatimLogFormatter`, `NotInstalledException`, and for storage `LegacyRecordStoreFactory`,
 `LegacyRecordDefaults`, `LegacyAccessContext`, and the `db()` service of SQL sites,
-`RepositoryDataConcierge`, with `LegacySchemaUpgrader` and `LegacySqlMaintenance`). They
+`RepositoryDataConcierge`, with `LegacySqlMaintenance`). They
 exist to be removed as the legacy code is replaced. New code must not depend on anything
 in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected services.
 The only classes outside `Idno\Legacy\` (and outside the legacy `Idno\Core`, `Idno\Common`,
@@ -446,10 +471,10 @@ other new code may.
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
-  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
-  `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
+  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
+  and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds), or the container will try to autowire
-  them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`,
+  them. `RecordStore` implementations (`InMemoryRecordStore.php`,
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
@@ -460,8 +485,7 @@ other new code may.
   the service is first fetched, replaces the parameters with `ConnectionParameters::fromLegacyConfig()`
   of the `BootConfig` (plus the `RDS_*` environment variables for `beanstalk-mysql`), so no
   configuration value is compiled into the container. It reproduces the legacy connection
-  exactly: DSN charset `utf8mb4` (the search text and indexed values are utf8mb4 since schema
-  2026111401; see "MySQL schema" under "Database"), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
+  exactly: DSN charset `utf8mb4` (the schema's tables are utf8mb4), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
   `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. On a site whose
   `database` is `sqlite` (`dbname` is the database file's path, or `:memory:`), the factory also
   adds `Idno\Storage\Platform\SqliteConnectionSetup` to the connection's middlewares; a MySQL
@@ -491,87 +515,68 @@ other new code may.
   `dbal:*` command exists; `dbal:run-sql` and `doctrine:database:drop` would act on the site's
   database) and its idle-connection `kernel.request` listener. `Tests/Kernel/DoctrineTrimTest`
   pins both in the test and prod containers. Do not add them back.
-- SQL against the legacy tables (`DbalRecordStore`): bind EVERY value as a string, as the legacy
-  backend does (true is '1', false '', numbers their text, null NULL); the contract pins behaviour
-  that depends on it (`$lt` on a document field compares text, `created` operands that are not
-  datetime literals make MySQL fail the query). Never interpolate a value; identifiers are
-  collection names reduced to `[a-zA-Z0-9_]` and quoted by the `Dialect`. A collection exists
-  when its three tables do (`<name>`, `<name>_metadata`, `<name>_search`, listed once and again
-  when a name is not found, without regard to case when the server's `lower_case_table_names`
-  is not 0); any other name gives false, null, `[]` or 0 without querying it. A SELECT the
-  database rejects for its operand matches nothing (`Dialect::isRejectedOperand()`; on MySQL,
-  error 1525 for a `created` operand that is not a datetime, and error 1064 only for a statement
-  holding a boolean-mode full-text search, whose parser rejects terms such as `abc@def.com`);
-  every other driver error (lost connection, broken SQL) propagates. A write returns false when
-  the database refuses the record's data (`Dialect::isRefusedData()`, an allowlist: constraint
-  violations, deadlock and lock-wait, and on MySQL 1292, 1366, 1406), after `save()` has rolled
-  its transaction back; every other error propagates. So `save()` returns the id only when its
-  transaction committed, false when the data was refused, and throws otherwise. The `RecordStore`
-  interface states this error contract for every implementation (what returns false, `[]`, 0 or
-  null; everything else is thrown, from every method); `Tests/Unit/Storage/DbalRecordStoreFailureTest`
-  pins the throwing side (a failure on any statement of `save()` is thrown, rolled back, stores
-  nothing and leaves the connection usable).
-- SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
-  3.38 or later with the JSON functions, through `pdo_sqlite`; the connection setup refuses an older
-  library, or one built without `json_valid()`, with a `\LogicException` naming the version
-  required and the one found): the same
-  store, held to the same contract with the in-memory store's hook values. **In this release SQLite
-  is for tests and development only** (it is to become a supported production database in a later release): no
-  site is installed on it (the installer does not create SQLite sites; the test rig's SQLite mode is
-  the one SQLite site, see "Build & Test"), and an SQLite site's PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the store uses MUST have `SqliteConnectionSetup` among its
-  DBAL middlewares (the `database_connection` service of an SQLite site has it; a connection you
-  build yourself needs `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
-  `Tests/Unit/Storage/SqliteTestDatabase` does; the middleware refuses any connection that is not
+- SQL against the site's tables (`JsonRecordStore`, `SettingsRecordStore`, see "Database"): bind
+  EVERY value as a string, as the old backend did (true is '1', false '', numbers their text, null
+  NULL), except a float operand of a document-field condition, which is its JSON text
+  (`RecordIndex::floatText()`); the contract pins behaviour that depends on it (`$lt` on a document
+  field compares text). Never interpolate a value; identifiers are collection names reduced to
+  `[a-zA-Z0-9_]` and indexed-field names `[a-z0-9_]{1,48}`, quoted by the `Dialect`, and the JSON path
+  of an ad-hoc field is a bound parameter. A collection `c` exists when its table `idno_<c>` does
+  (the `SchemaCatalog` says so); any other name gives false, null, `[]` or 0 without querying it. A
+  `created` operand is read in PHP (`MySqlSemantics::epoch()`): one that is not a datetime literal
+  makes the query match nothing on every engine, and is never sent. A SELECT the database rejects for
+  its operand matches nothing (`Dialect::isRejectedOperand()`: on MySQL and MariaDB, error 1064 only
+  for a statement holding a boolean-mode full-text search, whose parser rejects terms such as
+  `abc@def.com`); every other driver error (lost connection, broken SQL) propagates. A write returns
+  false when the database refuses the record's data (`Dialect::isRefusedData()`, an allowlist:
+  constraint violations, deadlock and lock-wait, and on MySQL and MariaDB 1292, 1366, 1406); every
+  other error propagates. `JsonRecordStore::save()` is ONE statement, so it returns the id only when
+  the row is stored, false when the data was refused, and throws otherwise; `SettingsRecordStore`
+  rolls its transaction back before it returns false or throws. The `RecordStore` interface states
+  this error contract for every implementation (what returns false, `[]`, 0 or null; everything else
+  is thrown, from every method); `Tests/Unit/Storage/JsonRecordStoreFailureTest` and
+  `SettingsRecordStoreContract` pin the throwing side.
+- SQLite (`Idno\Storage\Platform\SqliteDialect`, SQLite 3.38 or later with the JSON functions,
+  through `pdo_sqlite`; the connection setup refuses an older library, or one built without
+  `json_valid()`, with a `\LogicException` naming the version required and the one found): the same
+  stores, held to the same contracts with the hook values of `JsonSqliteRecordStoreTest`. **In this
+  release SQLite is for tests and development only** (it is to become a supported production
+  database in a later release): no site is installed on it (the installers do not create SQLite
+  sites; the test rig's SQLite mode is the one SQLite site, see "Build & Test"), and an SQLite site's
+  PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the storage uses MUST
+  have `SqliteConnectionSetup` among its DBAL middlewares (the `database_connection` service of an
+  SQLite site has it; a connection you build yourself needs
+  `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
+  `Tests\Storage\PrivateDatabase` does; the middleware refuses any connection that is not
   `Pdo\Sqlite`): on each new physical connection it sets `busy_timeout = 5000`,
-  `journal_mode = WAL` and `foreign_keys = ON` and registers the `idno_ci` collation (text folded
-  to upper case, `MySqlSemantics::compare()`) and the `idno_search()` function. The dialect is
-  built for the store's connection, `new SqliteDialect($connection)`: it reads each table's indexes
-  there once to name the upsert's conflict target. Do not repeat MySQL's rules in SQL or PHP:
-  `MySqlSemantics` is their one copy.
-  - Limits of the database file (the `idno_ci` collation; also in the schema's header): outside a
-    set-up connection (e.g. the `sqlite3` command line) every SELECT, INSERT, UPDATE or DELETE on
-    the collection tables and `versions`, `PRAGMA integrity_check`/`quick_check` and `VACUUM` fail
-    with "no such collation sequence: idno_ci" (only `session` is usable), and a `.dump` cannot be
-    loaded into a plain `sqlite3`. A backup that works: a copy of the file with its `-wal`/`-shm`
-    files while no writer is active, or `sqlite3`'s `.backup`. Checks, VACUUM, REINDEX and restores
-    only through a set-up connection. The collation's order comes from PHP's mbstring case tables,
-    which PHP releases change: after a PHP upgrade, run `PRAGMA integrity_check` and
-    `REINDEX idno_ci` through a set-up connection.
+  `journal_mode = WAL` and `foreign_keys = ON`. It registers nothing: the schema uses built-in
+  collations and functions only, so the database file opens, checks (`PRAGMA integrity_check`),
+  dumps and restores with the standard `sqlite3` tool. `new SqliteDialect()` takes nothing.
   - WAL needs shared memory between the processes using the file: never put the database on a
-    network filesystem (NFS, SMB).
-  - Differences from MySQL: search never uses a full-text index (a term over 5 bytes
-    matches any of its words as a case-insensitive substring, whatever `boolean_search` and
-    `bypass_fulltext_search` say; no boolean operators, no parse errors); four-byte characters are
-    stored; a `created` operand MySQL would reject is caught by `Dialect::columnValue()` before the
-    query is built (the query matches nothing, as on MySQL); lengths are not enforced (a field name
-    over 64 characters is stored, MySQL refuses it); table (collection) names ignore case; case
-    folding is full Unicode (`mb_strtoupper`), so it equates strings MySQL's `utf8mb3_general_ci`
-    (the identifier columns) keeps apart (`'ß'` = `'SS'`, `'ﬁ'` = `'FI'`, `'ǅ'` = `'Ǆ'`): uuids
-    `straße` and `STRASSE` clash on SQLite and not on MySQL; text is ordered folded to upper case,
-    where MySQL orders the indexed values by `utf8mb4_unicode_520_ci` (punctuation such as `_`
-    sorts before the letters on MySQL and after them on SQLite: the contract hook
-    `expectTextToSortFoldedToUpperCase`); in `site` and `config`, whose `_id` is not unique, the foreign keys
-    of `_search`/`_metadata` are triggers (SQLite cannot reference a non-unique column) that cascade
-    as InnoDB does. The upsert names its conflict target (`_id` where a unique index is on `_id`
-    alone: `entities`, `reader`, the `_search` tables; else the primary key, `uuid`: `site`,
-    `config`), where MySQL's `on duplicate key update` takes whichever key conflicts. The outcome
-    differs in one case: in `entities`/`reader`, an existing record re-saved with ANOTHER existing
-    record's uuid is refused on SQLite (false, both rows intact), while MySQL overwrites the other
-    record's row with this document and returns the id. Re-saves, a new record with an existing
-    uuid (false on both), an existing record with a new uuid, and every case in `site`/`config` are
-    the same on both (pinned in `DbalSqliteRecordStoreTest`).
+    network filesystem (NFS, SMB). A backup: a copy of the file with its `-wal`/`-shm` files while
+    no writer is active, or `sqlite3`'s `.backup`.
+  - Differences from MySQL: search never uses a full-text index (a term over 5 bytes matches any of
+    its words as a substring, whatever `boolean_search` and `bypass_fulltext_search` say; no boolean
+    operators, no parse errors); text compares with NOCASE, which ignores the case of ASCII letters
+    only (`ÉTÉ` is not `été`, `café` is not `cafe`, `straße` is not `strasse`, `word ` is not
+    `word`: MySQL and MariaDB equate each pair), and orders text folded to upper case (`_` after
+    the letters, where MySQL sorts it before them);
+    lengths are not enforced (an `_id` over the 36 characters of MySQL's `id` column is stored).
   - A write that cannot get the write lock within the busy timeout ("database is locked") is
     refused data: `save()` returns false (two processes writing at once both succeed: each waits for
-    the other's lock, `SqliteConcurrencyTest::testConcurrentWritersDoNotFail`). The installer does not
-    create the SQLite schema for a site; the test rig loads it (`Tests/rig/sqlite_schema.php`).
+    the other's lock, `SqliteConcurrencyTest::testConcurrentWritersDoNotFail`).
 - The storage services, public, all built at runtime when first fetched: `Idno\Storage\RecordStore`
-  (a `DbalRecordStore` built by `Idno\Legacy\LegacyRecordStoreFactory`: on the `database_connection`
-  service, `MySqlDialect` for a MySQL site and `SqliteDialect` on the same connection for an SQLite
-  site, `Idno\Legacy\LegacyRecordDefaults` (what the old backend's `saveRecord()` filled in), the legacy quote
+  (built by `Idno\Legacy\LegacyRecordStoreFactory`: a `SettingsRecordStore`, which serves the
+  collection `config` from `idno_settings`, over a `JsonRecordStore`, which serves every other
+  collection from its `idno_<collection>` table, both on the `database_connection` service with
+  `MySqlDialect` for a MySQL or MariaDB site and `SqliteDialect` for an SQLite site,
+  `Idno\Legacy\LegacyRecordDefaults` (what the old backend's `saveRecord()` filled in), the
+  container's `TypeMap` (`AttributeTypeMap`, the entities' aliases) and `SchemaCatalog` (public,
+  shared with `IndexedFields`, which forgets it when it creates an index), the legacy quote
   normaliser, and the site's `boolean_search` / `bypass_fulltext_search`, read from the legacy config
-  each time a search condition is built, as the legacy backend did (`DbalRecordStore` takes each as a
-  bool or a closure); on a MongoDB or `other` site it throws a `\LogicException` without touching the
-  connection),
+  each time a search condition is built, as the legacy backend did (`JsonRecordStore` takes each as
+  a bool or a closure); on a MongoDB or `other` site it throws a `\LogicException` without touching
+  the connection or the catalog),
   `Idno\Storage\AccessContext` (`Idno\Legacy\LegacyAccessContext`: the legacy session's user,
   admin status and read groups, and the `db()` service's ignore-access flag, read at each call;
   with no session object it is anonymous with read groups `['PUBLIC']`) and
@@ -590,25 +595,31 @@ other new code may.
   which nothing outside that backend called) from the
   storage layer: records through the `RecordStore` service, `getObjects()`/`countObjects()`/`getObject()`
   through the `EntityRepository` service; `rowToEntity()`, `saveObject()` and `getAnyObject()` are
-  `DataConcierge`'s. It holds no SQL: the schema upgrade and `getVersions()` are in
-  `Idno\Legacy\LegacySchemaUpgrader` (the old backend's `checkAndUpgradeSchema()` moved unchanged; a
-  no-op on SQLite), `optimize()`, `exportRecords()` and the connection check of `reconnectIfNeeded()` in
+  `DataConcierge`'s. It holds no SQL and never creates or changes the schema (`idno:upgrade` does):
+  `getVersions()` is one object, label `schema`, whose value is `SchemaMigrator::latest()` (the
+  newest schema migration executed, `'0'` when none; false, written to PHP's error log, when it
+  cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (`optimize table` on
+  `idno_entities`, `idno_reader`, `idno_site`, `idno_settings` and `idno_sessions` on MySQL and
+  MariaDB, `pragma optimize` on SQLite; false, as before), `exportRecords()` (a page of a
+  collection's table as `insert into idno_<collection> (...) values (...);` lines, `config` from
+  `idno_settings`, its own columns only, never a generated `ix_` column; '' past the end; false,
+  logged, for a name that is no collection) and the connection check of `reconnectIfNeeded()` are in
   `Idno\Legacy\LegacySqlMaintenance`, all on the shared connection. `getClient()` is the native PDO
   of the `database_connection` service (asked of the connection on each call, never a kept copy: a
   `Pdo\Mysql` on MySQL, a `Pdo\Sqlite` on SQLite), and `handleSession()` installs the same
-  `PdoSessionHandler` with the same options on that PDO (advisory locks on MySQL; NONE on SQLite,
-  which PdoSessionHandler refuses advisory locks on: parallel requests of one session race, so SQLite
-  sessions are unsafe beyond tests and development, like SQLite itself in this release), so a request
-  opens ONE database connection and session rows written before the switch are read as before.
+  `PdoSessionHandler` with the same options on that PDO, on the table `idno_sessions` (advisory locks
+  on MySQL; NONE on SQLite, which PdoSessionHandler refuses advisory locks on: parallel requests of
+  one session race, so SQLite sessions are unsafe beyond tests and development, like SQLite itself in
+  this release), so a request opens ONE database connection. The old backend's `session` table is
+  not read: users log in again after the upgrade.
   `handleSession()` returns null, as the old backend's did, so `Idno\Core\Session` goes on to its
   `sessions_storage` step even when `sessions_database` (on by default) installed the handler.
   The old SQL backend classes (`Idno\Data\MySQL`, `Idno\Data\AbstractSQL`) have been removed.
   A site whose `sessions_storage` setting names `Idno\Data\MySQL` (in any case, with or without a
   leading backslash, as PHP matched the class name; it used to build a second connection whose
   handler replaced the adapter's) keeps its database sessions: `Idno\Core\Session` calls the
-  adapter's `handleSession()` instead, so the same `session` table and handler are used on the
-  shared connection, with `sessions_database` on or off (so that users stay logged in across the
-  upgrade; pinned in
+  adapter's `handleSession()` instead, so the same `idno_sessions` table and handler are used on the
+  shared connection, with `sessions_database` on or off (pinned in
   `RepositoryDataConciergeTest::testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions`).
   On a MongoDB site that setting now does nothing: such a site (sessions in a MySQL database next
   to MongoDB) falls back to file sessions, so its users are logged out once at the upgrade
@@ -617,7 +628,7 @@ other new code may.
   mean MySQL, as they always did. The facts to keep:
   - Construction order: `Idno::init()` fetches `db()` early, before the logger, the session and the
     language exist. The adapter's constructor connects (as `MySQL::init()` did, at the same point
-    of boot) and runs the schema upgrade; the record store, the repository and the logger are
+    of boot; it creates and changes no table); the record store, the repository and the logger are
     service closures fetched at first use (the store when the config is loaded, the repository when
     the first entity query runs). The legacy services are built in the same order as before
     (pinned in `RepositoryDataConciergeTest::testLegacyServicesAreBuiltInTheSameOrder`); do not
@@ -655,11 +666,13 @@ other new code may.
       MySQL's error for each. `RecordStore` does not tell the adapter why it found nothing, and its
       interface stays free of logging policy;
     - DIFFERENCE (refused saves): `saveRecord()`/`saveObject()` return the id only when the record was stored. A
-      save the database refuses (a field name over 64 characters, a 4-byte character in a field on a
-      metadata table still in utf8mb3, ...) returns false and stores nothing (an update leaves the previous
-      version). The old backend returned the id of a save it had rolled back when a metadata row
-      failed, so `Entity::save()` reported success and fired `saved`/`updated` (and federation) for a
-      record that was not stored; now it returns false and fires neither;
+      save the database refuses (another record's uuid, on a new record or on a re-save; an `_id`
+      longer than the 36 characters of MySQL's `id` column, ...) returns false and stores nothing (an
+      update leaves the previous version, and the other record is intact). The old backend returned
+      the id of a save it had rolled back when a metadata row failed, so `Entity::save()` reported
+      success and fired `saved`/`updated` (and federation) for a record that was not stored; now it
+      returns false and fires neither. The old backend on MySQL also overwrote the OTHER record when
+      an existing record was re-saved with its uuid; that is refused now on every database;
     - DIFFERENCE (empty `access`/`entity_subtype` conditions): see the `Criteria` merge below;
     - DIFFERENCE (unloadable classes): `getObjects()` leaves out a record whose class cannot be loaded instead of
       returning `false` in its place (`getFromX()` already filtered those out; counts still include it);
@@ -677,14 +690,62 @@ other new code may.
       the connection lost (above); the session handler does not;
     - DIFFERENCE (ignore-access): `getObjects()` reads the ignore-access flag once per call, when it
       builds the query; the old backend read it again for each row (the publish-status check).
+    The tables of the schema migrations make these differences too, in what queries match (pinned by
+    `RecordStoreContract`, `IndexedFieldsContract`, `SettingsRecordStoreContract` and, through `db()`,
+    `RepositoryDataConciergeTest`):
+    - DIFFERENCE (order of equal `created`): records with an equal `created` come back newest id first
+      (`_id` descending), in pages too; the old backend left their order undefined;
+    - DIFFERENCE (whole values): a document field's value is compared whole; the old backend compared
+      only its first 255 bytes, so a longer value was found by its first 255 bytes and not by itself;
+    - DIFFERENCE (nested values): an element of a list or object that is itself a list or object is
+      not queryable; the old backend matched it against its JSON encoding. A field that holds a list
+      or an object is still queryable by its scalar values (never its keys), as before;
+    - DIFFERENCE (stored, not refused): four-byte characters (emoji) anywhere, and field names over
+      64 characters, are stored and queryable; the old backend on MySQL refused such a save;
+    - DIFFERENCE (identifier columns): on MySQL and MariaDB every text column of the schema compares
+      with `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`), the collation the 1.x schema
+      (2026111401) gave document values and the search text: it ignores case and accents, equates
+      `ß` with `ss`, ignores trailing spaces, sorts `_` before the letters and gives every emoji a
+      weight of its own (two values that differ in an emoji are different). What changed are the
+      identifier columns `uuid`, `owner`, `type`, `publish_status` and `id`, which were `utf8`
+      (utf8mb3) `general_ci` in 1.x: for example the uuids `…/straße` and `…/strasse` were two
+      different values in 1.x and are the same value now (observed on MySQL 8.0 and MariaDB 10.6), so
+      the second record is refused as a duplicate uuid. On SQLite text compares with NOCASE: ASCII
+      case only (`ÉTÉ` is not `été`, `straße` is not `strasse`, accents and trailing spaces count);
+    - DIFFERENCE (field names): a document field in a query is found by its exact name (`colour` does
+      not find `Colour`); the old backend matched field names without regard to case;
+    - DIFFERENCE (`site` rows): the `site` collection keeps exactly one row per record: `_id` is the
+      primary key of every collection's table now. In `site`, whose `_id` was
+      not unique in the old schema, a record re-saved with a new uuid keeps its one row (the old
+      backend added a second row with the same `_id`), and one re-saved with another record's uuid is
+      refused (the old backend overwrote that record's row);
+    - DIFFERENCE (collection names): collection names ignore case on every database: a name is
+      reduced to lower case, so `ENTITIES` is the collection `entities`; the old backend on MySQL
+      (whose table names are case-sensitive on Linux) found no such collection;
+    - (a rule of the store, as before) a type name with a leading backslash (`\IdnoPlugins\...`)
+      matches nothing: types are compared as stored, never resolved from such a name;
+    - DIFFERENCE (`created` literals): `created` is stored as a timestamp, and a datetime literal in
+      a query is read in PHP's default time zone at the time of the query; the old backend compared it
+      with the text formatted in the time zone of the save. A literal that is not a datetime makes the
+      query match nothing on every database (the old backend's MySQL failed the query, which also
+      matched nothing);
+    - DIFFERENCE (floats): a float is compared as its JSON text: a float still finds itself, but the
+      string `'0.3'` no longer finds `0.1 + 0.2` (stored as `0.30000000000000004`); on MySQL 8 (not
+      MariaDB) a float that JSON writes in exponent form (`1.0e+25`) is not found by the same float,
+      only by MySQL's own text of it (`9.999999999999999e24`);
+    - DIFFERENCE (declared indexed fields): a field with a declared index (`#[IndexedField]`) matches
+      scalar values only: a record whose field holds a list or an object is not found by a query on it;
+    - DIFFERENCE (settings): `config` holds one document (saving another `_id` replaces it), and a
+      settings key ending in a space is refused (false, the previous document intact);
+    - (unchanged, stated once) a whole float (`1.0`) reads back as the integer `1`, as before.
   - A search array `Criteria::fromLegacyArray()` rejects (an array operand, `'$not' => ['$in' =>
     []]`, a non-array `$in`, ...) matches nothing (`getRecords()` false, `getObjects()` `[]`, the counts
     false) and is logged as ONE warning naming the method and the query's shape: keys and operator
     names only, never values, control characters replaced, at most 200 bytes
     (`RepositoryDataConcierge::shape()`).
-  - The record store lists the database's tables once per process (`show tables` and
-    `select @@lower_case_table_names`): two statements per web request more than the old backend
-    sent, on the same connection.
+  - The record store reads the schema catalog with ONE statement per request, at its first query of
+    a collection (`information_schema.columns` of the current database; `sqlite_master`), on the same
+    connection; the old backend's `select * from versions` on every connection is gone.
   New code never calls `db()`: inject `EntityRepository` (entities) or `RecordStore` (records).
 - Querying entities in new code: inject `Idno\Storage\EntityRepository` and query with an
   `EntityQuery` (class names, a `Criteria`, limit, offset, collection, read groups); never call
@@ -693,11 +754,13 @@ other new code may.
   fails, is logged, and `find()` returns `[]`); only `count()` and the criteria it builds can be
   unit-tested without it, with `Idno\Storage\FixedAccessContext` (constructor-set user, admin flag,
   read groups, ignore-access; not a service) on an `InMemoryRecordStore`
-  (`Tests/Unit/Storage/EntityRepositoryCriteriaTest`). The rules it applies are today's
+  (`Tests/Unit/Storage/EntityRepositoryCriteriaTest`). The rules it applies are the old backend's
   `getObjects()` / `countObjects()` / `getObject()` (pinned by `EntityQueryContract` against both),
   with the two deliberate differences marked below:
-  - types match the stored class name exactly (no leading backslash, no subclasses); a leading `!`
-    excludes; with one inclusion, exclusions are dropped;
+  - types match the stored type exactly: a class matches the rows stored under its alias, its class
+    name and the names it had before (`TypeMap::typesFor()`); a name with a leading backslash matches
+    nothing, and a class never matches its subclasses; a leading `!` excludes; with one inclusion,
+    exclusions are dropped;
   - unless the user is an admin, `access` must be one of the query's `readGroups` or, when it gives
     none, the user's (`PUBLIC`, `SITE` when logged on, the user's uuid, their access groups). Access
     goes by the `access` value only: an owner does not find their own entity in a group they are not
@@ -806,22 +869,25 @@ other new code may.
 ### Database
 
 - **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
-- **MySQL** — stores entities as JSON blobs, through `Idno\Storage\DbalRecordStore` on the DBAL
-  connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over it (see the `db()` bullet under
-  "Kernel and services"). The hand-written SQL backend that preceded it has been removed;
+- **MySQL 8.0 and MariaDB 10.6** (or later) — store each document as JSON text in the tables of the
+  schema migrations (below), through `Idno\Storage\JsonRecordStore` and `SettingsRecordStore` on the
+  DBAL connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over them (see the `db()` bullet
+  under "Kernel and services"). The hand-written SQL backend that preceded it has been removed;
   `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
-- **SQLite** — the same store with `SqliteDialect` (schema: `warmup/schemas/sqlite/sqlite.sql`);
-  `database = sqlite` (with `dbname` the file's path) gives `db()` the same adapter. For tests and
-  development in this release (the default test rig runs on it; the installer does not create the
-  schema for a site); it is to become a supported production database in a later release. See the SQLite
-  bullet under "Kernel and services" for the limits of the database file.
+- **SQLite** — the same stores with `SqliteDialect`; `database = sqlite` (with `dbname` the file's
+  path) gives `db()` the same adapter. For tests and development in this release (the default test
+  rig runs on it; the installers do not create SQLite sites); it is to become a supported production
+  database in a later release. See the SQLite bullet under "Kernel and services".
+- The schema is created by `php bin/console idno:upgrade` (see "Console commands"): a new
+  installation has no tables until it is run. The 1.x tables (`entities`, `entities_metadata`,
+  `entities_search`, `config`, `session`, `versions`, ...) are no longer read or written: a 1.x
+  site's data cannot be used yet, because carrying it into the new tables is not built yet.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
-#### The new schema (migrations; not used by the site yet)
+#### The schema (migrations)
 
-The site still runs on the schema below (`warmup/schemas/`). Its successor is created by schema
-migrations, and nothing reads or writes it yet: no site or rig database has its tables unless a
-test made them.
+The site's tables are created by schema migrations, which `idno:upgrade` runs (the rig and CI run
+it before the first request).
 
 - `doctrine/migrations` is used as a library only (no bundle, no console command, no configuration
   file): `Idno\Storage\SchemaMigrator` (a container service; it takes only the DBAL `Connection` and
@@ -829,7 +895,7 @@ test made them.
   `DependencyFactory` on that connection with the migrations namespace `Idno\Storage\Migrations`,
   the directory `Idno/Storage/Migrations/` and the metadata table `idno_migrations` (created by
   `migrate()`). `pending()` lists the versions not yet executed (`'20261115000000'`, the numeric
-  part of the class name; asking creates nothing), `migrate()` executes them (a no-op when none is
+  part of the class name; asking creates nothing), `migrate()` executes them and returns the versions it executed (a no-op, `[]`, when none is
   pending), `latest()` is the newest executed version, `'0'` when none. It writes no output.
 - Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
   (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
@@ -847,7 +913,7 @@ test made them.
   order; served as the collection `config` by `SettingsRecordStore`, below); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
   `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping). On MySQL/MariaDB
   every table is InnoDB, `utf8mb4`, and every text column names its collation:
-  `utf8mb4_general_ci` except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
+  `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`) except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
   which doctrine/migrations creates itself with the database's default charset and collation; it
   holds only migration class names and timings. On SQLite the same tables, with
   `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
@@ -861,17 +927,21 @@ test made them.
   statement at the first question (`information_schema.columns` of the current database;
   `sqlite_master`) and keeps it until `forget()`: call that after DDL.
 - `Idno\Storage\JsonRecordStore` is the `RecordStore` on these tables (see "The JSON record store"
-  below). Nothing in the site builds it yet: the container's `RecordStore` is still `DbalRecordStore`.
-- Tests: `Tests\Storage\PrivateDatabase` makes migrated databases of a test's own.
-  `sqliteMemory()` (an in-memory database with `SqliteConnectionSetup`) needs nothing but PHP and
-  works in the unit tier; `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
+  below); the container's `RecordStore` is a `SettingsRecordStore` over one.
+- Tests: `Tests\Storage\PrivateDatabase` makes databases of a test's own, migrated unless
+  `migrate: false` (an empty database). `sqliteMemory()` (an in-memory database with
+  `SqliteConnectionSetup`) and `sqliteFile($path)` (a database file at a path in a temporary
+  directory the test makes and removes) need nothing but PHP and work in the unit tier;
+  `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
   MariaDB server (dropping a leftover first; the site's dbname must match `^[A-Za-z0-9_]+$`) and
   returns a new connection to it (never the site's), dropping it again if the migrations fail, and
   skipping the test on an SQLite or MongoDB site; `drop()` removes either (call it in `tearDown()`;
-  it refuses to drop the site's own database). `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
+  it refuses to drop the site's own database). `recordStore($connection)` builds the store the site
+  builds on such a database, `dialect($connection)` the dialect of its platform. A test never writes
+  to the rig site's tables directly. `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
 
-#### The JSON record store (not used by the site yet)
+#### The JSON record store
 
 Entity type aliases. A record's `type` column holds a short, stable alias (`status`, `article`,
 `user`), not the entity's PHP class name, so stored data does not depend on class names; the
@@ -900,7 +970,7 @@ collection, and no statement is sent for it. The catalog is read once: code that
 afterwards calls `SchemaCatalog::forget()`.
 
 - `save()` is ONE upsert on `id` (`Dialect::upsertById()`): `data` is `json_encode($record)` with
-  today's flags (none), so a document copied byte for byte from a 1.x `contents` reads the same;
+  the old store's flags (none), so a document copied byte for byte from a 1.x `contents` reads the same;
   `type` is `TypeMap::typeFor()` of `entity_subtype` (default `Idno\Common\Entity`), `created` the
   timestamp (`RecordIndex::created()`), `search` `RecordIndex::searchText()`. A record is read back
   as `json_decode($data, true)`, never rebuilt from the columns. On MySQL/MariaDB every update of
@@ -909,7 +979,8 @@ afterwards calls `SchemaCatalog::forget()`.
   that the record is there (an identical re-save) or returns false (another record's uuid). Do not
   give the connection `PDO::MYSQL_ATTR_FOUND_ROWS`: it changes what "no row" means.
 - Queries: `uuid`, `_id` (column `id`), `entity_subtype` (column `type`, each operand expanded
-  through `TypeMap::typesFor()`; `=` and `$not` become `in` and `not in`), `owner`,
+  through `TypeMap::typesFor()`, except a name with a leading backslash, compared as it is, which
+  matches nothing, as before; `=` and `$not` become `in` and `not in`), `owner`,
   `publish_status` and `created` are compared with their columns; a `created` operand is read by
   `MySqlSemantics::epoch()` in the PHP default time zone of the query, and one with a fraction is
   never sent (MySQL and MariaDB compare an integer column with a fractional operand inexactly): it
@@ -920,48 +991,35 @@ afterwards calls `SchemaCatalog::forget()`.
   MySQL/MariaDB: a semi-join of the table with `JSON_TABLE` (not `EXISTS`: MySQL 8.0 evaluates a
   `JSON_TABLE` in an `EXISTS` subquery without its outer row), text from `LONGTEXT CHARACTER SET
   utf8mb4` columns (MariaDB's `JSON_UNQUOTE()` returns utf8mb3), compared `collate
-  utf8mb4_general_ci`. SQLite: `json_each()` and `->` (built-ins only), `collate nocase`, and
+  utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`, the collation of the table's text columns). SQLite: `json_each()` and `->` (built-ins only), `collate nocase`, and
   `upper(...) collate binary` for `$lt`/`$gt`. Order: `created` desc, `id` desc.
-- Search: today's rules on the `search` column (MySQL/MariaDB: the full-text index with the site's
+- Search: the old store's rules on the `search` column (MySQL/MariaDB: the full-text index with the site's
   `boolean_search` and `bypass_fulltext_search`; SQLite: `like` for terms of up to 5 bytes, `instr()`
   for each word of a longer one, built-ins only, ASCII case only).
 - Errors: the `RecordStore` interface's contract (`Tests/Unit/Storage/JsonRecordStoreFailureTest`
   pins the throwing side, the schema catalog's read included).
-- Differences from today's store, each a contract hook (in `RecordStoreContract`; the in-memory
-  store has the JSON store's value of every one, as on MariaDB, except the `created` time zone: it
-  keeps `created` as the text formatted at save time):
-  records with an equal `created` are ordered by `id` descending (`expectEqualCreatedToBeOrderedById`);
-  values are compared whole, never cut at 255 bytes (`expectValuesToBeCutAt255Bytes`); an element of
-  a list or object that is itself an array or object is not queryable, where today it is queried as
-  its JSON encoding (`expectNestedArraysToMatchTheirJson`; a field holding a list or an object is
-  queryable by its scalar values, never its keys, on every store, as today);
-  four-byte characters and field names over 64 characters are stored (`expectFourByteCharactersToBeRejected`,
-  `expectLongFieldNamesToBeRefused`); re-saving a record with another record's uuid is refused, both
-  records intact (`expectUuidClashOnResaveToOverwrite`); on SQLite, text ignores ASCII case only
-  (`expectNonAsciiCaseToBeIgnored`); a field is found by its exact name (`expectFieldNamesToIgnoreCase`);
-  `created` is a timestamp, so a query's datetime literal is read in the time zone of the query, not
-  compared with the text formatted at save time (`expectCreatedToBeComparedInTheTimeZoneOfItsSave`);
-  a field with a declared index (#[IndexedField], below) matches scalar values only: a record whose
-  field holds a list or an object is not found by a query on it once the index exists (no hook:
-  pinned by `IndexedFieldsContract::testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed`);
-  a float is queried as the text `json_encode()` wrote (`0.30000000000000004`, not PHP's 14-digit
-  `0.3`; `expectFloatsToMatchTheirJsonText`), and a float OPERAND of a document-field condition is
-  converted the same way (`RecordIndex::floatText()`, shared by the stored values and the operands
-  in the JSON and in-memory stores), so a float always finds itself, as it does today; only a string
-  operand such as `'0.3'` tells the rules apart. The exception: MySQL (not MariaDB) prints a number
-  in exponent form its own way (`9.999999999999999e24` for `1.0e+25`, `0.00001` for `1.0e-5`), so
-  there such a float is found neither by its text nor by the same float, only by MySQL's text
-  (`expectFloatsInExponentFormToMatchTheirJsonText`, the one hook whose value differs between MySQL
-  and MariaDB).
+- Differences from the old store: listed for `db()` callers under the `db()` bullet ("The tables of
+  the schema migrations make these differences too"); the contract pins each as the one behaviour of
+  every binding, except where the bindings still differ, through a hook of `RecordStoreContract`:
+  `expectNonAsciiCaseToBeIgnored` (false on SQLite), `expectAccentsToBeIgnored` and
+  `expectTrailingSpacesToBeIgnored` (false in memory and on SQLite), `expectExpansionsToBeEqual`
+  (false on SQLite), `expectTextToSortFoldedToUpperCase` (true in memory and on SQLite),
+  `expectCreatedToBeComparedInTheTimeZoneOfItsSave`
+  (true in memory, which keeps `created` as the text formatted at save time; false for this store),
+  `expectFloatsInExponentFormToMatchTheirJsonText` (false on MySQL, true on MariaDB, SQLite and in
+  memory), `expectLongSearchTermToMatchSubstring` and `expectBooleanModeSearch` (no full-text index
+  in memory or on SQLite). A field with a declared index (#[IndexedField], below) matches scalar
+  values only (no hook: pinned by
+  `IndexedFieldsContract::testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed`).
 
-#### The settings store (not used by the site yet)
+#### The settings store
 
 The legacy application keeps the site's configuration as ONE document in the collection `config`
 (`Idno\Core\Config` reads "the latest record of `config`" and saves "this record to `config`").
 `Idno\Storage\SettingsRecordStore` (built with new: the store it decorates, the connection, a
 `Dialect` and `RecordDefaults`; `COLLECTION` is `config`) serves that collection from `idno_settings`
-and passes every other collection to the inner store unchanged. The container does not build it yet;
-the site still uses `DbalRecordStore` and its `config` table.
+and passes every other collection to the inner store unchanged. The container's `RecordStore` is one,
+over a `JsonRecordStore`.
 
 - Layout: one row per top-level key of the document. `name` is the key (case-sensitive, binary
   collation; at most 190 bytes), `value` the key's value as JSON text (`json_encode()` with no flags,
@@ -1019,7 +1077,7 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   DDL or SQL (the JSON path in DDL cannot be a bound parameter, so it is written only from the
   validated name).
 - What exists: on MySQL/MariaDB a `VIRTUAL` generated column `ix_<field>` of `idno_<collection>`
-  (`LONGTEXT`, `utf8mb4_general_ci`) and an index `ix_<field>` on its first `length` characters
+  (`LONGTEXT`, `utf8mb4_unicode_520_ci`) and an index `ix_<field>` on its first `length` characters
   (default 255; unique when declared, so unique on the prefix; comparisons are always on the whole
   value); on SQLite an index `idno_<collection>_ix_<field>` on an expression, `COLLATE NOCASE`, over
   the whole value (`length` is ignored). The indexed value is the field's query value when it holds
@@ -1058,8 +1116,9 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   load is skipped.
 - When it runs: `Idno\Pages\Admin\Plugins` reconciles a plugin's directory when the plugin is enabled
   (skipped on a non-SQL site; a failure is logged and shown as an error message, and the plugin is
-  enabled anyway); the upgrade will reconcile the core and enabled plugins. Until the site uses the
-  new tables, the site's database has no `idno_*` tables, so enabling a plugin creates nothing.
+  enabled anyway); `idno:upgrade` reconciles `Idno/` and every directory under `IdnoPlugins/`. On a
+  database without the tables (a 1.x site not yet upgraded) enabling a plugin creates nothing (pinned
+  by `Tests/Kernel/PluginIndexedFieldsTest`, on private databases).
 - Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`): `Idno\Common\Entity`: `access`,
   `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email`, `admin`; `Site`: `domain`;
   `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`;
@@ -1068,37 +1127,6 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   a unique index would make saves fail on existing sites). A new declaration on an existing
   first-party class ships with an empty migration, so that sites reconcile on upgrade.
 - Plugin authors: `docs/developers/plugins/indexed-fields.md`.
-
-#### MySQL schema
-
-- Each collection (`site`, `config`, `entities`, `reader`) is three tables: the main
-  table with the JSON document in `contents`, `<collection>_search` with the text for
-  full-text search, and `<collection>_metadata` with one row per field (cut to 255
-  bytes) for queries.
-- `warmup/schemas/mysql/mysql.sql` creates a new installation. The dated files beside it
-  are upgrades: `Idno\Legacy\LegacySchemaUpgrader::upgrade()` runs on every connection (when
-  the `db()` adapter is built) and applies, in order, each file listed in
-  `LegacySchemaUpgrader::UPGRADES` that is newer than the `schema` row of the `versions` table.
-  To change the schema, add a dated file that ends by recording its date in `versions`, add
-  the date to `UPGRADES`, make the same change in `mysql.sql` (including its version line),
-  and set the version row of `warmup/schemas/sqlite/sqlite.sql` to the same date.
-  `RepositoryDataConciergeTest` checks that an upgraded database and a new one agree.
-- An upgrade that fails is logged and tried again from the top on the next connection,
-  and MySQL can't roll back an `ALTER TABLE`, so every statement in an upgrade file
-  must be safe to apply to a table it has already changed.
-- Character sets: the connection is `utf8mb4`. The columns that hold text written by
-  people, `<collection>_search.search` and `<collection>_metadata.value`, are `utf8mb4`
-  with the `utf8mb4_unicode_520_ci` collation (`general_ci` and `unicode_ci` treat all
-  emoji as equal). Every other column is `utf8`, which MySQL reads as `utf8mb3`, and
-  holds ASCII only: identifiers, URLs, class and field names. Don't put free text in
-  them: a 4-byte character can't be stored there, and comparing one to such a column
-  is an SQL error (1267). `DbalRecordStore` lets that error propagate (it is not one of
-  `MySqlDialect::isRejectedOperand()`'s); the `db()` adapter logs it and returns its failure
-  value, as the old backend did (pinned in `RepositoryDataConciergeTest`). In-memory and on
-  SQLite such a query simply finds nothing.
-- Index keys must fit 767 bytes, the limit of the InnoDB row formats that older
-  installations still have: at most 191 characters of a `utf8mb4` column, 255 of a
-  `utf8` one.
 
 ## Content Plugins
 

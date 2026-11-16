@@ -7,17 +7,16 @@ namespace Tests\Storage;
 use Doctrine\DBAL\Connection;
 use Idno\Kernel;
 use Idno\Storage\Criteria;
-use Idno\Storage\DbalRecordStore;
-use Idno\Storage\FixedRecordDefaults;
 use Idno\Storage\Platform\SqliteConnectionSetup;
 use Idno\Storage\Platform\SqliteDialect;
+use Idno\Storage\SchemaMigrator;
 use PHPUnit\Framework\TestCase;
-use Tests\Unit\Storage\SqliteTestDatabase;
 
 /**
  * The container's `database_connection` service on a site whose database is SQLite (a kernel
  * booted without the legacy application, configured through IDNO_* variables, with a database file
- * in a temporary directory): it is set up for SqliteDialect on its first use, and not before.
+ * in a temporary directory): it is set up for SqliteDialect on its first use, and not before, and
+ * the schema migrations and the record store run on it.
  */
 final class SqliteConnectionTest extends TestCase
 {
@@ -104,8 +103,6 @@ final class SqliteConnectionTest extends TestCase
         $this->assertFileExists($file);
         $this->assertSame('wal', (string) $connection->fetchOne('pragma journal_mode'));
         $this->assertSame((string) SqliteDialect::BUSY_TIMEOUT_MILLISECONDS, (string) $connection->fetchOne('pragma busy_timeout'));
-        $this->assertSame('0', (string) $connection->fetchOne("select 'a_' < 'aZ' collate " . SqliteDialect::COLLATION));
-        $this->assertSame('1', (string) $connection->fetchOne('select ' . SqliteDialect::SEARCH_FUNCTION . "('a platypus', 'xx PLATY')"));
 
         $setups = array_filter($connection->getConfiguration()->getMiddlewares(), static fn (object $m): bool => $m instanceof SqliteConnectionSetup);
         $this->assertCount(1, $setups);
@@ -114,15 +111,15 @@ final class SqliteConnectionTest extends TestCase
     public function testARecordStoreWorksOnTheService(): void
     {
         $connection = $this->connection('sqlite', $this->dir . '/site.sqlite');
-        SqliteTestDatabase::loadSchema($connection);
-        $store = new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
+        (new SchemaMigrator($connection))->migrate();
+        $store = PrivateDatabase::recordStore($connection);
 
         $id = $store->save('entities', ['title' => 'A platypus', 'slug' => 'Red', 'created' => 1686700000]);
 
         $this->assertIsString($id);
         $this->assertSame([$id], array_column($store->find('entities', Criteria::fromLegacyArray(['slug' => 'red', '$search' => ['platy']]), 10, 0), '_id'));
         $this->assertTrue($store->delete('entities', $id));
-        $this->assertSame('0', (string) $connection->fetchOne('select count(*) from entities_metadata'));
+        $this->assertSame('0', (string) $connection->fetchOne('select count(*) from idno_entities'));
     }
 
     public function testAnInMemoryDatabaseIsSetUpToo(): void
@@ -130,7 +127,7 @@ final class SqliteConnectionTest extends TestCase
         $connection = $this->connection('sqlite', ':memory:');
 
         $this->assertSame('1', (string) $connection->fetchOne('pragma foreign_keys'));
-        $this->assertSame('0', (string) $connection->fetchOne("select 'a_' < 'aZ' collate " . SqliteDialect::COLLATION));
+        $this->assertSame((string) SqliteDialect::BUSY_TIMEOUT_MILLISECONDS, (string) $connection->fetchOne('pragma busy_timeout'));
     }
 
     public function testAMysqlConnectionIsNotTouched(): void

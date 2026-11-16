@@ -57,7 +57,7 @@ final class ConsoleCompatibilityTest extends TestCase
         [$code, $out] = $this->runCli('idno.php', 'list');
 
         $this->assertSame(0, $code);
-        foreach (['example', 'export', 'service-event-queue', 'version'] as $name) {
+        foreach (['example', 'export', 'service-event-queue', 'version', 'idno:upgrade'] as $name) {
             $this->assertMatchesRegularExpression('/^\s+' . preg_quote($name, '/') . '\s/m', $out, "$name not listed");
         }
     }

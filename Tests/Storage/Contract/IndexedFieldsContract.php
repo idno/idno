@@ -266,6 +266,22 @@ abstract class IndexedFieldsContract extends TestCase
         self::assertSame($long, $this->store->findById('entities', 'long')['f'] ?? null);
     }
 
+    /**
+     * Two values that differ only in an emoji are different values in an indexed field too (a
+     * collation that gave every four-byte character the same weight would equate them).
+     */
+    public function testValuesThatDifferOnlyInAnEmojiAreDifferentValues(): void
+    {
+        $this->indexes->reconcile(FieldRecord::class);
+        self::assertContains('f', $this->catalog->indexedFields('entities'));
+        $this->saveAll(['party' => ['f' => "#party\u{1F389}"], 'balloon' => ['f' => "#party\u{1F388}"]]);
+
+        self::assertSame(['balloon'], $this->ids(['f' => "#party\u{1F388}"]));
+        self::assertSame(['balloon'], $this->ids(['f' => ['$in' => ["#party\u{1F388}"]]]));
+        self::assertSame(['party'], $this->ids(['f' => ['$not' => "#party\u{1F388}"]]));
+        self::assertSame(['party'], $this->ids(['f' => "#party\u{1F389}"]));
+    }
+
     public function testAUniqueFieldRefusesADuplicateIgnoringCase(): void
     {
         self::assertSame(['entities.code'], $this->indexes->reconcile(UniqueRecord::class));

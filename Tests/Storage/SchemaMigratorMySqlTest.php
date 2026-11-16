@@ -128,7 +128,7 @@ final class SchemaMigratorMySqlTest extends TestCase
             $this->assertSame(['id', 'uuid', 'type', 'owner', 'created', 'publish_status', 'data', 'search'], array_keys($columns), $table);
             $this->assertSame(['type' => 'longtext', 'collation' => 'utf8mb4_bin'], $columns['data'], $table);
             foreach (['id', 'uuid', 'type', 'owner', 'publish_status', 'search'] as $column) {
-                $this->assertSame('utf8mb4_general_ci', $columns[$column]['collation'], $table . '.' . $column);
+                $this->assertSame('utf8mb4_unicode_520_ci', $columns[$column]['collation'], $table . '.' . $column);
             }
             $this->assertSame('bigint', $columns['created']['type'], $table);
             $this->assertSame('FULLTEXT', $this->connection()->fetchOne(
@@ -148,7 +148,7 @@ final class SchemaMigratorMySqlTest extends TestCase
 
         foreach (['idno_upgrade_progress', 'idno_upgrade_rejects'] as $table) {
             foreach ($this->columns($table) as $name => $column) {
-                $this->assertContains($column['collation'], [null, 'utf8mb4_general_ci'], $table . '.' . $name);
+                $this->assertContains($column['collation'], [null, 'utf8mb4_unicode_520_ci'], $table . '.' . $name);
             }
         }
         $this->assertSame('longblob', $this->columns('idno_upgrade_rejects')['contents']['type']);

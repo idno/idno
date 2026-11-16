@@ -13,7 +13,6 @@ use Doctrine\DBAL\Exception\ReadOnlyException;
 use Doctrine\DBAL\Exception\SyntaxErrorException;
 use Doctrine\DBAL\Exception\TableNotFoundException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
-use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\Platform\SqliteConnectionSetup;
 use Idno\Storage\Platform\SqliteDialect;
 use PHPUnit\Framework\TestCase;
@@ -39,62 +38,9 @@ final class SqliteDialectTest extends TestCase
         return new $class($driverError, null);
     }
 
-    /**
-     * A dialect on a connection that is never used (for everything but the upsert).
-     */
     private static function dialect(): SqliteDialect
     {
-        return new SqliteDialect(SqliteTestDatabase::connection());
-    }
-
-    public function testTheUpsertNamesItsConflictTargetFromTheTablesIndexes(): void
-    {
-        $dialect = new SqliteDialect(SqliteTestDatabase::withSchema());
-        $set = ' do update set "uuid" = excluded."uuid", "contents" = excluded."contents"';
-
-        // A unique index on _id alone: entities and reader.
-        foreach (['entities', 'reader'] as $table) {
-            $this->assertSame(
-                ['insert into "' . $table . '" ("uuid", "_id", "contents") values (?, ?, ?) on conflict ("_id")' . $set, ['uuid', '_id', 'contents']],
-                $dialect->upsert($table, ['uuid', '_id', 'contents'], ['uuid', 'contents']),
-            );
-        }
-        // _id is not unique: the primary key, uuid.
-        foreach (['site', 'config'] as $table) {
-            $this->assertSame(
-                ['insert into "' . $table . '" ("uuid", "_id", "contents") values (?, ?, ?) on conflict ("uuid")' . $set, ['uuid', '_id', 'contents']],
-                $dialect->upsert($table, ['uuid', '_id', 'contents'], ['uuid', 'contents']),
-            );
-        }
-        // The search tables: their primary key is _id.
-        foreach (['entities_search', 'site_search', 'config_search', 'reader_search'] as $table) {
-            $this->assertSame(
-                ['insert into "' . $table . '" ("_id", "search") values (?, ?) on conflict ("_id") do update set "search" = excluded."search"', ['_id', 'search']],
-                $dialect->upsert($table, ['_id', 'search'], ['search']),
-            );
-        }
-    }
-
-    public function testTheConflictTargetIsReadOncePerTable(): void
-    {
-        $connection = SqliteTestDatabase::withSchema();
-        $dialect = new SqliteDialect($connection);
-        $first = $dialect->upsert('entities', ['uuid', '_id'], ['uuid']);
-
-        // Were the indexes read again, the target would now be the primary key.
-        $connection->executeStatement('drop index entities__id');
-        $this->assertSame($first, $dialect->upsert('entities', ['uuid', '_id'], ['uuid']));
-        $this->assertStringContainsString('on conflict ("_id")', $dialect->upsert('ENTITIES', ['uuid', '_id'], ['uuid'])[0], 'cached by the name SQLite resolves');
-        $this->assertStringContainsString('on conflict ("uuid")', (new SqliteDialect($connection))->upsert('entities', ['uuid', '_id'], ['uuid'])[0]);
-    }
-
-    public function testATableWithoutAUniqueKeyCannotBeUpserted(): void
-    {
-        $dialect = new SqliteDialect(SqliteTestDatabase::withSchema());
-
-        $this->expectException(\LogicException::class);
-        $this->expectExceptionMessage('entities_metadata');
-        $dialect->upsert('entities_metadata', ['_id', 'name', 'value'], ['value']);
+        return new SqliteDialect();
     }
 
     public function testTheMinimumSqliteVersion(): void
@@ -130,6 +76,16 @@ final class SqliteDialectTest extends TestCase
 
         $this->assertSame(1, (int) $pdo->query("select json_valid('{}')")->fetchColumn());
         $this->assertSame(5000, (int) $pdo->query('pragma busy_timeout')->fetchColumn());
+        $this->assertSame(1, (int) $pdo->query('pragma foreign_keys')->fetchColumn());
+        // Nothing of its own is registered: the schema needs built-in collations and functions only.
+        foreach (["select 'a' = 'A' collate idno_ci", "select idno_search('a', 'a')"] as $sql) {
+            try {
+                $pdo->query($sql);
+                $this->fail($sql . ' should fail: nothing custom is registered');
+            } catch (\PDOException $e) {
+                $this->assertMatchesRegularExpression('/no such (collation sequence|function)/', $e->getMessage());
+            }
+        }
     }
 
     public function testTheConnectionSetupRefusesAConnectionThatIsNotPdoSqlite(): void
@@ -144,39 +100,31 @@ final class SqliteDialectTest extends TestCase
         (new SqliteConnectionSetup())->wrap($driver)->connect([]);
     }
 
-    public function testEverySearchTermGoesToTheSearchFunction(): void
+    /**
+     * Built-in functions only, whatever the site's search settings: a term of at most 5 bytes is one
+     * `like` substring (wildcards and `\` escapes as in SQL), a longer one matches any of its words
+     * with instr(), ignoring ASCII case; a long term with no word matches nothing.
+     */
+    public function testSearchTermsUseBuiltInFunctionsOnly(): void
     {
         $dialect = self::dialect();
 
         foreach ([[true, false], [false, false], [true, true]] as [$boolean, $bypass]) {
-            $this->assertSame(['idno_search(srch."search", ?)', ['abc@def.com'], false], $dialect->searchCondition('srch."search"', 'abc@def.com', $boolean, $bypass));
-            $this->assertSame(['idno_search(s, ?)', ['ab%c'], false], $dialect->searchCondition('s', 'ab%c', $boolean, $bypass));
+            $this->assertSame(['s like ? escape \'\\\'', ['%ab%c%'], false], $dialect->searchTextCondition('s', 'ab%c', $boolean, $bypass));
+            $this->assertSame(
+                ['(instr(lower(t."search"), lower(?)) > 0 or instr(lower(t."search"), lower(?)) > 0)', ['abc@def.com', 'walrus'], false],
+                $dialect->searchTextCondition('t."search"', ' abc@def.com  walrus ', $boolean, $bypass),
+            );
+            $this->assertSame(['(1 = 0)', [], false], $dialect->searchTextCondition('s', '       ', $boolean, $bypass));
         }
     }
 
-    public function testCreatedOperandsAreCheckedAndNormalised(): void
-    {
-        $dialect = self::dialect();
-
-        $this->assertSame('2023-06-04 01:02:03', $dialect->columnValue('created', '2023-6-4 1:2:3'));
-        $this->assertSame('2023-06-14 00:00:00', $dialect->columnValue('created', '2023-06-14'));
-        $this->assertSame('2023-06-14 00:00:00.5', $dialect->columnValue('created', '2023-06-14T00:00:00.500'));
-        foreach (['1686700100', '', '1', '2023-02-30 00:00:00', '24:00:00'] as $rejected) {
-            $this->assertNull($dialect->columnValue('created', $rejected), $rejected);
-        }
-        // Every other column takes any value; MySQL's dialect never changes a value.
-        $this->assertSame('1686700100', $dialect->columnValue('owner', '1686700100'));
-        $this->assertSame('1686700100', (new MySqlDialect())->columnValue('created', '1686700100'));
-    }
-
-    public function testIdentifiersPagingAndTables(): void
+    public function testIdentifiersAndPaging(): void
     {
         $dialect = self::dialect();
 
         $this->assertSame('"a""b"', $dialect->quoteIdentifier('a"b'));
         $this->assertSame('limit 10 offset 20', $dialect->limit(10, 20));
-        $this->assertSame("select name from sqlite_master where type = 'table'", $dialect->tableNamesQuery());
-        $this->assertSame('select 1', $dialect->tableNamesIgnoreCaseQuery());
     }
 
     public function testRefusedDataIsConstraintsAndLocks(): void
@@ -195,7 +143,6 @@ final class SqliteDialectTest extends TestCase
 
         foreach ([
             'missing table' => self::error('1 no such table: entities', TableNotFoundException::class),
-            'no connection setup' => self::error('1 no such collation sequence: idno_ci'),
             'read-only database' => self::error('8 attempt to write a readonly database', ReadOnlyException::class),
             'syntax error' => self::error('1 near "x": syntax error', SyntaxErrorException::class),
             'disk full' => self::error('13 database or disk is full'),

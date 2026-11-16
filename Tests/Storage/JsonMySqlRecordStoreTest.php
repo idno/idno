@@ -7,6 +7,12 @@ namespace Tests\Storage;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Platforms\MariaDBPlatform;
 use Idno\Storage\Criteria;
+use Idno\Storage\Criterion\AllOf;
+use Idno\Storage\Criterion\AnyOf;
+use Idno\Storage\Criterion\Equals;
+use Idno\Storage\Criterion\In;
+use Idno\Storage\Criterion\NotIn;
+use Idno\Storage\Criterion\Search;
 use Idno\Storage\FixedRecordDefaults;
 use Idno\Storage\IdentityTypeMap;
 use Idno\Storage\JsonRecordStore;
@@ -20,15 +26,12 @@ use Tests\Storage\Contract\RecordStoreContract;
  * the rig's server (PrivateDatabase::mysql('contract'), made once for the class and dropped after
  * it), never the site's tables. Skipped when the site's database is not MySQL or MariaDB.
  *
- * The search settings are the site's (`boolean_search`, `bypass_fulltext_search`), as for the
- * DbalRecordStore binding. The hooks it overrides, and why (the same on MySQL and MariaDB but one):
+ * The search settings are the site's (`boolean_search`, `bypass_fulltext_search`), as on the
+ * site. Text compares with utf8mb4_unicode_520_ci, whose behaviour the hooks' defaults describe.
+ * The hooks it overrides, and why (the same on MySQL and MariaDB but one):
  *  - ownsPrivateDatabase (true);
- *  - expectTextToSortFoldedToUpperCase (true): text compares with utf8mb4_general_ci;
- *  - expectEqualCreatedToBeOrderedById (true), expectValuesToBeCutAt255Bytes (false),
- *    expectNestedArraysToMatchTheirJson (false), expectFieldNamesToIgnoreCase (false),
- *    expectCreatedToBeComparedInTheTimeZoneOfItsSave (false), expectFloatsToMatchTheirJsonText
- *    (true): the store reads each field from the stored document, orders by `created` then id, and
- *    keeps `created` as a timestamp;
+ *  - expectCreatedToBeComparedInTheTimeZoneOfItsSave (false): the store keeps `created` as a
+ *    timestamp;
  *  - expectFloatsInExponentFormToMatchTheirJsonText: false on MySQL, whose JSON functions parse a
  *    number and print it their own way (1.0e+25 is `9.999999999999999e24`, 1.0e-5 `0.00001`); true
  *    on MariaDB, which keeps the number's text;
@@ -82,39 +85,9 @@ final class JsonMySqlRecordStoreTest extends RecordStoreContract
         return true;
     }
 
-    protected function expectTextToSortFoldedToUpperCase(): bool
-    {
-        return true;
-    }
-
-    protected function expectEqualCreatedToBeOrderedById(): bool
-    {
-        return true;
-    }
-
-    protected function expectValuesToBeCutAt255Bytes(): bool
-    {
-        return false;
-    }
-
-    protected function expectNestedArraysToMatchTheirJson(): bool
-    {
-        return false;
-    }
-
-    protected function expectFieldNamesToIgnoreCase(): bool
-    {
-        return false;
-    }
-
     protected function expectCreatedToBeComparedInTheTimeZoneOfItsSave(): bool
     {
         return false;
-    }
-
-    protected function expectFloatsToMatchTheirJsonText(): bool
-    {
-        return true;
     }
 
     protected function expectFloatsInExponentFormToMatchTheirJsonText(): bool
@@ -193,5 +166,73 @@ final class JsonMySqlRecordStoreTest extends RecordStoreContract
         } finally {
             $connection->executeStatement('drop table idno_later');
         }
+    }
+
+    // ------------------------------------------------ the SQL the store runs (moved from the old store's MySQL binding)
+
+    public function testAnEmptyAnyOfIsNotSentAsInvalidSql(): void
+    {
+        $record = $this->put($this->r(['slug' => 'x']));
+        $marker = new Equals('contract_marker', $this->marker);
+
+        $find = fn (Criteria $c): array => array_map(static fn (array $r): string => $r['_id'], $this->store()->find('entities', $c, 10, 0));
+        $this->assertSame([], $find(new Criteria(new AllOf([$marker, new AnyOf([])]))));
+        $this->assertSame([$record['_id']], $find(new Criteria(new AllOf([$marker, new AnyOf([new AnyOf([]), new Equals('slug', 'x')])]))));
+        $this->assertSame([$record['_id']], $find(new Criteria(new AllOf([$marker, new AllOf([])]))));
+        $this->assertSame([], $find(new Criteria(new AllOf([$marker, new In('slug', [])]))));
+        $this->assertSame([$record['_id']], $find(new Criteria(new AllOf([$marker, new NotIn('slug', [])]))));
+        $this->assertSame([], $find(new Criteria(new AllOf([$marker, new NotIn('missing', [])]))));
+        $this->assertSame([$record['_id']], $find(new Criteria(new AllOf([$marker, new AnyOf([new AllOf([new Equals('slug', 'x')]), new Equals('slug', 'y')])]))));
+    }
+
+    public function testASearchBelowTheTopLevelMatchesNothingWithoutQuerying(): void
+    {
+        $record = $this->put($this->r(['title' => 'xxabcxx', 'slug' => 'x']));
+        $marker = new Equals('contract_marker', $this->marker);
+
+        $this->assertCount(1, $this->store()->find('entities', new Criteria(new AllOf([$marker, new Search('abc')])), 10, 0));
+        foreach ([new AnyOf([new Search('abc')]), new AllOf([new Search('abc')]), new AnyOf([new AllOf([new Search('abc')]), new Equals('slug', 'x')])] as $nested) {
+            $criteria = new Criteria(new AllOf([$marker, $nested]));
+            $this->assertSame([], $this->store()->find('entities', $criteria, 10, 0));
+            $this->assertSame(0, $this->store()->count('entities', $criteria));
+        }
+        $this->assertNotNull($this->store()->findById('entities', $record['_id']));
+    }
+
+    public function testNegativePagingFindsNothing(): void
+    {
+        $this->put($this->r(['slug' => 'x']));
+
+        $this->assertSame([], $this->store()->find('entities', Criteria::all(), -1, 0));
+        $this->assertSame([], $this->store()->find('entities', Criteria::all(), 10, -1));
+    }
+
+    /**
+     * The tables that are no collections (the settings, the sessions, the migrations' bookkeeping)
+     * exist, but no store method touches them.
+     */
+    public function testATableThatIsNotACollectionIsRejected(): void
+    {
+        foreach (JsonRecordStore::SYSTEM_TABLES as $name) {
+            $this->assertFalse($this->store()->save($name, $this->r()), $name);
+            $this->assertSame([], $this->store()->find($name, Criteria::all(), 10, 0), $name);
+            $this->assertSame(0, $this->store()->count($name, Criteria::all()), $name);
+            $this->assertNull($this->store()->findLatest($name), $name);
+            $this->assertFalse($this->store()->delete($name, 'x'), $name);
+            $this->assertFalse($this->store()->deleteAll($name), $name);
+        }
+    }
+
+    /**
+     * A collection name is reduced to lower case, so it is found whatever its case, on a server
+     * whose table names are case-sensitive too (the rig's MySQL: lower_case_table_names = 0). The
+     * old store looked the name up as given there: `ENTITIES` was no collection on MySQL.
+     */
+    public function testACollectionNameIsMatchedWithoutRegardToCase(): void
+    {
+        $record = $this->put($this->r(['slug' => 'case']));
+
+        $this->assertSame($record['_id'], $this->store()->findById('ENTITIES', $record['_id'])['_id'] ?? null);
+        $this->assertSame(1, $this->store()->count('Entities', Criteria::fromLegacyArray(['contract_marker' => $this->marker, 'slug' => 'case'])));
     }
 }

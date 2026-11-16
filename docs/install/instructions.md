@@ -54,7 +54,7 @@ If you need to use a non-standard database port, you can also select this:
 
     dbport = "Your database port"
 
-Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. For now, you will need to load the SQL schema stored in `/warmup/schemas/mysql/mysql.sql`.
+Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. Then create Idno's tables in it: from the Idno directory, run `php bin/console idno:upgrade`.
 
 ### If you're using SQLite
 

@@ -20,7 +20,7 @@ use Tests\Storage\Fixtures\IndexedFields\FieldRecord;
  * (PrivateDatabase::mysql('indexed_fields'), dropped after it), reached through a second
  * connection that records its statements. Skipped when the site's database is not MySQL or MariaDB.
  *
- * An indexed field is a VIRTUAL generated column `ix_<field>` (utf8mb4_general_ci) with an index
+ * An indexed field is a VIRTUAL generated column `ix_<field>` (utf8mb4_unicode_520_ci) with an index
  * of the same name on a prefix of the value (255 characters unless declared otherwise).
  */
 final class IndexedFieldsMySqlTest extends IndexedFieldsContract
@@ -68,7 +68,7 @@ final class IndexedFieldsMySqlTest extends IndexedFieldsContract
         self::assertIsArray($column);
         self::assertSame('longtext', strtolower((string) $column['data_type']));
         self::assertStringContainsString('VIRTUAL', strtoupper((string) $column['extra']));
-        self::assertSame('utf8mb4_general_ci', $column['collation_name']);
+        self::assertSame('utf8mb4_unicode_520_ci', $column['collation_name']);
         self::assertSame(
             [['index_name' => 'ix_f', 'non_unique' => 1, 'sub_part' => 255]],
             array_map(static fn (array $row): array => ['index_name' => (string) $row['index_name'], 'non_unique' => (int) $row['non_unique'], 'sub_part' => (int) $row['sub_part']], $this->connection->fetchAllAssociative(

@@ -27,8 +27,9 @@ namespace Idno\Storage;
  *    "no results" or false. A save() that fails leaves nothing of the record stored.
  * The return values for "nothing there" (null, [], 0) are never used for a failure.
  *
- * The container's RecordStore service is a DbalRecordStore built at runtime by a factory, on the
- * site's database connection (see config/services.php); other implementations are built with new.
+ * The container's RecordStore service is a SettingsRecordStore over a JsonRecordStore, built at
+ * runtime by a factory on the site's database connection (see config/services.php); other
+ * implementations are built with new.
  */
 interface RecordStore
 {

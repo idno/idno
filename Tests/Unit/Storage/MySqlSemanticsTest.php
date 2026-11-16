@@ -8,8 +8,8 @@ use Idno\Storage\MySqlSemantics;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The shared rules directly. The stores that use them (InMemoryRecordStore, DbalRecordStore on
- * SQLite) are held to the storage contract, which covers them in depth.
+ * The shared rules directly. The stores that use them (InMemoryRecordStore, and JsonRecordStore
+ * for `created` operands) are held to the storage contract, which covers them in depth.
  */
 final class MySqlSemanticsTest extends TestCase
 {

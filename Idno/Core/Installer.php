@@ -213,7 +213,8 @@ namespace Idno\Core {
         }
 
         /**
-         * Install the mysql DB schema
+         * Check that the database can be connected to. It loads no SQL: the schema (the tables and
+         * their indexes) is created by the command `php bin/console idno:upgrade`.
          *
          * @param  type $host
          * @param  type $dbname
@@ -221,7 +222,7 @@ namespace Idno\Core {
          * @param  type $pass
          * @param  type $schema
          * @return boolean
-         * @throws \RuntimeException
+         * @throws \PDOException when the database cannot be connected to
          */
         protected function installSchema(
             $host,
@@ -235,7 +236,7 @@ namespace Idno\Core {
             $dbname = preg_replace("/[^a-zA-Z0-9\_\.]/", "", $dbname); // Sanitise $dbname
             $schema = preg_replace("/[^a-zA-Z0-9\_\.]/", "", strtolower($schema)); // Sanitise $schema
 
-            // Skip schema install for mongo, not necessary
+            // Skip the check for mongo, which has no schema
             if ($schema == 'mongo' || $schema == 'mongodb') {
                 return true;
             }
@@ -258,26 +259,6 @@ namespace Idno\Core {
 
             $dbh = new \PDO($database_string, $user, $pass);
             $dbh->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-
-            if ($sql = @file_get_contents("{$this->root_path}/warmup/schemas/$schema/$schema.sql")) {
-
-                $statements = explode(";\n", $sql); // Explode statements; only mysql can support multiple statements per line, and then not safely.
-                foreach ($statements as $sql) {
-                    $sql = trim($sql);
-                    if (!empty($sql)) {
-                        try {
-                            $statement = $dbh->prepare($sql);
-                            $statement->execute();
-                        } catch (\Exception $e) {
-                            $err = $dbh->errorInfo();
-                            throw new \RuntimeException('We couldn\'t automatically install the database schema: '.$err[2]);
-                        }
-                    }
-                }
-
-            } else {
-                throw new \RuntimeException("We couldn't find the schema doc.");
-            }
 
             return true;
         }

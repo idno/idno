@@ -27,17 +27,27 @@ class Kernel extends BaseKernel
     /**
      * The kernel the entry points (index.php, Idno/start.php, bin/console) run: environment
      * from APP_ENV (default "prod"), debug from APP_DEBUG ("1", "true", "on", "yes" are
-     * true; anything else, or unset, is false). Both are read from $_SERVER.
+     * true; anything else, or unset, is false). Both are read from $_SERVER. With $bootLegacy
+     * false the kernel boots without the legacy application (bin/console, for idno:upgrade).
      */
-    public static function fromGlobals(): self
+    public static function fromGlobals(bool $bootLegacy = true): self
     {
         $environment = $_SERVER['APP_ENV'] ?? '';
         $debug = $_SERVER['APP_DEBUG'] ?? false;
 
         return new self(
             is_string($environment) && $environment !== '' ? $environment : 'prod',
-            filter_var($debug, FILTER_VALIDATE_BOOLEAN)
+            filter_var($debug, FILTER_VALIDATE_BOOLEAN),
+            $bootLegacy
         );
+    }
+
+    /**
+     * Whether boot() boots the legacy application too.
+     */
+    public function bootsLegacy(): bool
+    {
+        return $this->bootLegacy;
     }
 
     public function getProjectDir(): string

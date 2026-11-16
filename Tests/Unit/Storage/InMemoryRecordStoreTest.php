@@ -27,15 +27,14 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - expectLongSearchTermToMatchSubstring (true): there is no full-text index, a long term is
  *    a substring match on each of its words;
  *  - ownsPrivateDatabase (true): the store is private to the test;
+ *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings;
  *  - expectTextToSortFoldedToUpperCase (true): text is ordered folded to upper case
  *    (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci;
- *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings;
- *  - expectEqualCreatedToBeOrderedById (true), expectValuesToBeCutAt255Bytes (false),
- *    expectNestedArraysToMatchTheirJson (false), expectFieldNamesToIgnoreCase (false),
- *    expectFloatsToMatchTheirJsonText (true): it matches on RecordIndex::queryValues(), as
- *    JsonRecordStore does (it keeps `created` as the text formatted at save time, so
- *    expectCreatedToBeComparedInTheTimeZoneOfItsSave keeps its default, true);
- *  - collections: entities, reader, site and config, the collections of the legacy schema it serves.
+ *  - expectAccentsToBeIgnored (false), expectTrailingSpacesToBeIgnored (false): upper-case folding
+ *    keeps accents and compares every character (it does equate `ß` and `SS`, as MySQL does).
+ * It matches on RecordIndex::queryValues(), as JsonRecordStore does, but keeps `created` as the
+ * text formatted at save time, so expectCreatedToBeComparedInTheTimeZoneOfItsSave keeps its
+ * default, true. collections: entities, reader, site and config, the collections it serves.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
 {
@@ -65,6 +64,16 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
         return true;
     }
 
+    protected function expectAccentsToBeIgnored(): bool
+    {
+        return false;
+    }
+
+    protected function expectTrailingSpacesToBeIgnored(): bool
+    {
+        return false;
+    }
+
     protected function expectTextToSortFoldedToUpperCase(): bool
     {
         return true;
@@ -73,31 +82,6 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
     protected function expectBooleanModeSearch(): bool
     {
         return false;
-    }
-
-    protected function expectEqualCreatedToBeOrderedById(): bool
-    {
-        return true;
-    }
-
-    protected function expectValuesToBeCutAt255Bytes(): bool
-    {
-        return false;
-    }
-
-    protected function expectNestedArraysToMatchTheirJson(): bool
-    {
-        return false;
-    }
-
-    protected function expectFieldNamesToIgnoreCase(): bool
-    {
-        return false;
-    }
-
-    protected function expectFloatsToMatchTheirJsonText(): bool
-    {
-        return true;
     }
 
     protected function collections(): array

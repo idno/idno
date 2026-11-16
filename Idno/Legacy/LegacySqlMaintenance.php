@@ -1,44 +1,42 @@
 <?php
 
-// No strict_types here, on purpose: this is legacy backend code moved unchanged, and it passes
-// database values to PHP functions as the legacy backend did.
+// No strict_types here, on purpose: this is legacy backend code, and it passes database values to
+// PHP functions as the legacy backend did.
 
 namespace Idno\Legacy;
 
 use Doctrine\DBAL\Connection;
 
 /**
- * The SQL the legacy db() API needs beyond the record store, moved unchanged in substance from
- * Idno\Data\MySQL for RepositoryDataConcierge: optimize(), exportRecords() and the connection check
- * of reconnectIfNeeded(). It runs on the native PDO of the shared DBAL connection.
- *
- * The statements are MySQL's. On SQLite: export() works (SQLite accepts `limit <offset>,<count>` and
- * back-quoted names); optimize() fails on its first statement, which is logged and ignored, as on
- * MySQL it returns false whatever happens.
+ * The SQL the legacy db() API needs beyond the record store, for RepositoryDataConcierge:
+ * optimize(), exportRecords() and the connection check of reconnectIfNeeded() (from the old
+ * backend, Idno\Data\MySQL, since removed), on the tables of the schema migrations. It runs on the
+ * native PDO of the shared DBAL connection.
  *
  * Not a container service: RepositoryDataConcierge builds it.
  */
 final class LegacySqlMaintenance
 {
+    /** The tables optimize() works on: the collections, the settings and the sessions. */
+    public const TABLES = ['idno_entities', 'idno_reader', 'idno_site', 'idno_settings', 'idno_sessions'];
+
     /**
-     * Optimize tables - this can reduce overall database storage space and query time
-     * (Idno\Data\MySQL::optimize()). Always false, as before.
+     * Optimize tables - this can reduce overall database storage space and query time: MySQL's and
+     * MariaDB's `optimize table` on each of TABLES, SQLite's `pragma optimize`. A failure is written
+     * to PHP's error log and ends the work. Always false, as the old backend's.
      *
      * @return bool
      */
     public function optimize(\PDO $client)
     {
         try {
-            $client->query("optimize table entities");
-            $client->query("optimize table entities_metadata");
-            $client->query("optimize table entities_search");
-            $client->query("optimize table config");
-            $client->query("optimize table config_metadata");
-            $client->query("optimize table config_search");
-            $client->query("optimize table reader");
-            $client->query("optimize table reader_metadata");
-            $client->query("optimize table reader_search");
-            $client->query("optimize table session");
+            if ($client->getAttribute(\PDO::ATTR_DRIVER_NAME) === 'sqlite') {
+                $client->query('pragma optimize');
+            } else {
+                foreach (self::TABLES as $table) {
+                    $client->query("optimize table {$table}");
+                }
+            }
         } catch (\Exception $e) {
             error_log($e->getMessage());
         }
@@ -47,16 +45,19 @@ final class LegacySqlMaintenance
     }
 
     /**
-     * Export a collection as SQL (Idno\Data\MySQL::exportRecords()): `insert` statements for a page
-     * of the main table's rows, each followed by its metadata rows. The collection must already be
-     * sanitised. Values are quoted by the same PDO (legacy quoted them with db()->getClient(), which
-     * is this PDO). False, logged through $logger, when a statement fails.
+     * Export a page of a table's rows as SQL (as Idno\Data\MySQL::exportRecords() did for its own
+     * tables): one `insert into <table> (<columns>) values (<values>);` line per row, each followed by
+     * an empty line, in the table's own order; '' for a page past the end. Only the columns given are
+     * exported (never a generated column, which an insert cannot set). The table and the columns
+     * must already be sanitised. Values are quoted by the same PDO. False, logged through $logger,
+     * when a statement fails (a table that does not exist, for example).
      *
-     * @param \Psr\Log\LoggerInterface $logger the site's logger (legacy: Idno::site()->logging())
+     * @param list<string>             $columns
+     * @param \Psr\Log\LoggerInterface $logger  the site's logger (legacy: Idno::site()->logging())
      *
      * @return bool|string
      */
-    public function export(\PDO $client, $collection, $limit, $offset, \Psr\Log\LoggerInterface $logger)
+    public function export(\PDO $client, $table, array $columns, $limit, $offset, \Psr\Log\LoggerInterface $logger)
     {
         try {
             $limit = (int)$limit;
@@ -64,11 +65,11 @@ final class LegacySqlMaintenance
 
             $file   = tempnam(\Idno\Core\Idno::site()->config()->getTempDir(), 'sqldump');
             /* @var \PDO $client */
-            $statement = $client->prepare("select * from {$collection} limit {$offset},{$limit}");
+            $select = implode(', ', array_map(static fn ($column) => '`' . $column . '`', $columns));
+            $statement = $client->prepare("select {$select} from {$table} limit {$offset},{$limit}");
             $output    = '';
             if ($response = $statement->execute()) {
                 while ($object = $statement->fetch(\PDO::FETCH_ASSOC)) {
-                    $uuid   = $object['uuid'];
                     $fields = array_keys($object);
                     $fields = array_map(
                         function ($v) {
@@ -77,37 +78,14 @@ final class LegacySqlMaintenance
                     );
                     $object = array_map(
                         function ($v) use ($client) {
-                            return $client->quote($v);
+                            return $client->quote((string)$v);
                         }, $object
                     );
-                    $line   = 'insert into ' . $collection . ' ';
+                    $line   = 'insert into ' . $table . ' ';
                     $line .= '(' . implode(',', $fields) . ')';
                     $line .= ' values ';
                     $line .= '(' . implode(',', $object) . ');';
                     $output .= $line . "\n";
-                    $metadata_statement = $client->prepare("select * from {$collection}_metadata where `_id` = :uuid");
-                    if ($metadata_response = $metadata_statement->execute([':uuid' => $uuid])) {
-                        while ($object = $metadata_statement->fetch(\PDO::FETCH_ASSOC)) {
-                            $fields = array_keys($object);
-                            $fields = array_map(
-                                function ($v) {
-                                    return '`' . $v . '`';
-                                }, $fields
-                            );
-                            $object = array_map(
-                                function ($v) use ($client) {
-                                    return $client->quote($v);
-                                }, $object
-                            );
-                            $line   = "insert into {$collection}_metadata ";
-                            $line .= '(' . implode(',', $fields) . ')';
-                            $line .= ' values ';
-                            $line .= '(' . implode(',', $object) . ');';
-                            $output .= $line . "\n";
-                        }
-                        unset($metadata_statement);
-                        gc_collect_cycles();    // Clean memory
-                    }
                     $output .= "\n";
                     unset($object);
                     unset($fields);

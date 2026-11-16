@@ -11,7 +11,10 @@
 #                    first (down.sh, which deletes its data), so each image starts empty.
 #
 # Starting one mode while the other is running stops the other first (down.sh, which wipes its
-# database). A configuration/config.ini the rig did not write is never replaced.
+# database). A configuration/config.ini the rig did not write is never replaced. Before the web
+# server starts, `bin/console idno:upgrade` creates the schema (the tables and the field indexes)
+# in the rig's environment (APP_ENV=test, APP_DEBUG=1, deprecations excluded, as composer console
+# runs it); on a database that has it already, it does nothing.
 set -euo pipefail
 
 RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,29 +55,24 @@ mkdir -p "$STATE_DIR/uploads"
 if [ "$MODE" = mysql ]; then
     # --renew-anon-volumes: whenever compose recreates the container (another image, or any change
     # to the service in docker-compose.yml), it starts on an empty data directory, never the previous
-    # container's: the test data is gone and the schema below is loaded again. A re-run that needs no
-    # new container keeps the running one and its data.
+    # container's: the test data is gone and the schema is created again (below). A re-run that needs
+    # no new container keeps the running one and its data.
     IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait --renew-anon-volumes
     echo "$MYSQL_IMAGE" > "$MYSQL_IMAGE_FILE"
     echo "$MODE" > "$MODE_FILE"
 
-    # The image's command-line client: mariadb in MariaDB's images (which drop the mysql name in
-    # 11), mysql in MySQL's.
-    db_client() {
-        IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" exec -T db \
-            sh -c 'exec "$(command -v mariadb || command -v mysql)" -uroot "$@"' db-client "$@"
-    }
-    # Load the schema only into an empty database, so a re-run on the same container keeps its data.
-    if [ -z "$(db_client -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
-        db_client known_unittest < warmup/schemas/mysql/mysql.sql
-        echo "Loaded MySQL schema."
-    fi
     DATABASE="$MYSQL_IMAGE on 127.0.0.1:33306, database known_unittest"
 else
-    # Loads the schema only into a database without tables, so re-running does not wipe test data.
-    php -d error_reporting=22527 "$RIG_DIR/sqlite_schema.php" "$STATE_DIR/site.sqlite"
+    # An empty database file (a re-run keeps the one there and its data).
+    touch "$STATE_DIR/site.sqlite"
     echo "$MODE" > "$MODE_FILE"
     DATABASE="SQLite, $STATE_DIR/site.sqlite"
+fi
+
+# The schema, before the first request. On failure the mode stays recorded, so down.sh cleans up.
+if ! APP_ENV=test APP_DEBUG=1 php -d error_reporting=22527 bin/console idno:upgrade; then
+    echo "The test rig could not create the schema: bin/console idno:upgrade failed (see above); the web server was not started. composer test:down cleans up." >&2
+    exit 1
 fi
 
 if [ -n "$(rig_server_pid)" ]; then

@@ -12,8 +12,11 @@ use Idno\Core\Idno;
 use Idno\Storage\Criteria;
 use Idno\Storage\EntityQuery;
 use Idno\Storage\EntityRepository;
+use Idno\Storage\JsonRecordStore;
 use Idno\Storage\RecordIndex;
 use Idno\Storage\RecordStore;
+use Idno\Storage\SchemaMigrator;
+use Idno\Storage\SettingsRecordStore;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
@@ -23,10 +26,13 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
  * no SQL of its own:
  *  - records (saveRecord(), getRecord(), getRecords(), countRecords(), ...) go to the RecordStore;
  *  - entities (getObjects(), countObjects(), getObject()) go to the EntityRepository;
- *  - the schema upgrade and `versions` go to LegacySchemaUpgrader, and optimize(), exportRecords()
- *    and the connection check of reconnectIfNeeded() to LegacySqlMaintenance;
+ *  - getVersions() is the schema's version (SchemaMigrator); the schema is created and upgraded by
+ *    the `idno:upgrade` command, never here (checkAndUpgradeSchema() does nothing);
+ *  - optimize(), exportRecords() and the connection check of reconnectIfNeeded() go to
+ *    LegacySqlMaintenance;
  *  - getClient() is the native PDO of the shared DBAL connection (`database_connection`, which the
- *    record store uses too), and the PHP session handler runs on that PDO: one database connection.
+ *    record store uses too), and the PHP session handler runs on that PDO, on the table
+ *    `idno_sessions`: one database connection.
  *
  * Construction connects, at the point of boot where the legacy backend connected (Idno::init()
  * fetches db() before anything else that needs the database), and a connection failure ends the
@@ -36,7 +42,8 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
  * used.
  *
  * Return values and failure values are the legacy backend's, with these deliberate differences
- * (all of them; AGENTS.md lists them too):
+ * in what the adapter itself does (AGENTS.md lists them, with the differences of the record
+ * store's rules, the tables of the schema migrations, which reach db() callers too):
  *  - a query the legacy backend sent to MySQL as invalid SQL (or that MySQL rejected for its
  *    operand) matches nothing: getRecords()/getObjects() give no results as before,
  *    countRecords()/countObjects() give 0 where the legacy backend gave false;
@@ -80,6 +87,9 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     /** The longest query shape written to the log (bytes). */
     private const MAX_SHAPE_LENGTH = 200;
 
+    /** The table of the PHP sessions (the old backend's was `session`). */
+    public const SESSION_TABLE = 'idno_sessions';
+
     /** @var string|null the database name, as the legacy backend's getDatabase() returned it */
     private $database;
 
@@ -102,7 +112,6 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         private readonly \Closure $repository,
         private readonly \Closure $logger,
         private readonly ?string $databaseName,
-        private readonly LegacySchemaUpgrader $schema = new LegacySchemaUpgrader(),
         private readonly LegacySqlMaintenance $maintenance = new LegacySqlMaintenance(),
     )
     {
@@ -113,7 +122,8 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Connects, as Idno\Data\MySQL::init() did, then runs the schema upgrade (MySQL only).
+     * Connects, as Idno\Data\MySQL::init() did. It does not create or upgrade the schema: that is
+     * the `idno:upgrade` command's work.
      */
     function init()
     {
@@ -145,11 +155,11 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Checks the current schema version and upgrades if necessary (MySQL only; a no-op on SQLite).
+     * Nothing: the schema is created and upgraded by the `idno:upgrade` command (SchemaMigrator).
+     * The old backend applied its upgrade files here.
      */
     function checkAndUpgradeSchema()
     {
-        $this->schema->upgrade($this->getClient(), $this->family);
     }
 
     /**
@@ -163,13 +173,21 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Retrieve version information from the schema
+     * Retrieve version information from the schema: one object, label `schema`, whose value is the
+     * newest schema migration executed on the database ('0' when none has been,
+     * SchemaMigrator::latest()). False, written to PHP's error log, when it cannot be read, as before.
      *
      * @return array|bool
      */
     function getVersions()
     {
-        return $this->schema->versions($this->getClient());
+        try {
+            return [(object)['label' => 'schema', 'value' => (new SchemaMigrator($this->connection))->latest()]];
+        } catch (\Exception $e) {
+            error_log($e->getMessage());
+        }
+
+        return false;
     }
 
     /**
@@ -183,15 +201,15 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * The session handler handleSession() installs: Symfony's PdoSessionHandler on the `session`
-     * table, with the legacy backend's options, on the shared connection's PDO.
+     * The session handler handleSession() installs: Symfony's PdoSessionHandler on the
+     * `idno_sessions` table, with the legacy backend's options, on the shared connection's PDO.
      */
     public function sessionHandler(): PdoSessionHandler
     {
         return new PdoSessionHandler(
             $this->getClient(),
             [
-                'db_table'    => 'session',
+                'db_table'    => self::SESSION_TABLE,
                 'db_id_col'   => 'session_id',
                 'db_data_col' => 'session_value',
                 'db_time_col' => 'session_time',
@@ -481,14 +499,27 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Export a collection as SQL.
+     * Export a page of a collection's table as SQL `insert` statements (`config`: its table
+     * `idno_settings`), '' past the end; false, logged, when it fails or the name is no collection.
      *
      * @param  string $collection
      * @return bool|string
      */
     function exportRecords($collection = 'entities', $limit = 10, $offset = 0)
     {
-        return $this->maintenance->export($this->getClient(), $this->sanitiseCollection($collection), $limit, $offset, $this->logger());
+        $collection = $this->sanitiseCollection($collection);
+        if (strtolower($collection) === SettingsRecordStore::COLLECTION) {
+            [$table, $columns] = [SettingsRecordStore::TABLE, SettingsRecordStore::COLUMNS];
+        } else {
+            [$table, $columns] = [JsonRecordStore::tableName($collection), JsonRecordStore::COLUMNS];
+        }
+        if ($table === null) {
+            $this->logger()->error(sprintf('exportRecords(): "%s" is no collection.', $collection));
+
+            return false;
+        }
+
+        return $this->maintenance->export($this->getClient(), $table, $columns, $limit, $offset, $this->logger());
     }
 
     /**

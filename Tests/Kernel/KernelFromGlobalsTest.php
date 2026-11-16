@@ -77,4 +77,19 @@ final class KernelFromGlobalsTest extends TestCase
 
         $this->assertSame('test', Kernel::fromGlobals()->getEnvironment());
     }
+
+    /**
+     * The legacy application is booted unless the caller says not (bin/console, for idno:upgrade);
+     * the environment and debug flag are read the same way either way.
+     */
+    public function testTheLegacyApplicationIsBootedUnlessTheCallerSaysNot(): void
+    {
+        $_SERVER['APP_ENV'] = 'test';
+        $_SERVER['APP_DEBUG'] = '1';
+
+        $this->assertTrue(Kernel::fromGlobals()->bootsLegacy());
+        $kernel = Kernel::fromGlobals(bootLegacy: false);
+        $this->assertFalse($kernel->bootsLegacy());
+        $this->assertSame(['test', true], [$kernel->getEnvironment(), $kernel->isDebug()]);
+    }
 }

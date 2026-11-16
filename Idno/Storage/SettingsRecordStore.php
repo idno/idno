@@ -46,7 +46,7 @@ use Idno\Storage\Platform\Dialect;
  *    removed. deleteAll() removes every row.
  *
  * Not registered by the container's directory scan (see config/services.php); built with new. The
- * site does not use it yet.
+ * container's RecordStore is one, over a JsonRecordStore (LegacyRecordStoreFactory).
  */
 final class SettingsRecordStore implements RecordStore
 {
@@ -54,6 +54,9 @@ final class SettingsRecordStore implements RecordStore
     public const COLLECTION = 'config';
 
     public const TABLE = 'idno_settings';
+
+    /** The columns of the table. */
+    public const COLUMNS = ['name', 'value', 'position'];
 
     /** The longest key, in bytes (the column is VARCHAR(190)). */
     public const MAX_KEY_BYTES = 190;

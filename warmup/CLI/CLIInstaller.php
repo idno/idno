@@ -260,7 +260,9 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     $this->writeConfig($ini_file, $config_name);
 
-                    $output->writeln("Your site should now be installed. Visit your site to create your first user!");
+                    $output->writeln("Your site's configuration is written. Now create its database tables: from " . $this->root_path . ", run");
+                    $output->writeln("    php bin/console idno:upgrade");
+                    $output->writeln("Then visit your site to create your first user!");
 
                     return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }

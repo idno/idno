@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Kernel;
 
-use Doctrine\DBAL\Connection;
 use Idno\Config\BootConfig;
 use Idno\Core\Idno;
 use Idno\Core\Logging;
@@ -15,12 +14,14 @@ use Idno\Storage\SchemaCatalog;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Symfony\Component\DependencyInjection\Exception\ServiceNotFoundException;
+use Tests\Storage\PrivateDatabase;
 
 /**
  * Enabling a plugin in the admin page (Idno\Pages\Admin\Plugins) creates the indexes its entity
  * classes declare, through the container's IndexedFields. Its method is called directly (on a page
  * built without its constructor, which would change the response headers and the exception
- * handler), with the fixture classes' directories as the plugin's directory.
+ * handler), with the fixture classes' directories as the plugin's directory. The indexes are made
+ * in private databases, never on the site's tables.
  */
 final class PluginIndexedFieldsTest extends TestCase
 {
@@ -62,22 +63,60 @@ final class PluginIndexedFieldsTest extends TestCase
         (new \ReflectionMethod(Plugins::class, 'reconcileIndexedFields'))->invoke($page, $plugin, $directory);
     }
 
+    /**
+     * On a site with the schema (the rig's, since the switch: its tables are made by idno:upgrade),
+     * enabling a plugin creates the indexes its entity classes declare. The page is given an
+     * IndexedFields on a private database with the schema migrations run, so that the site's own
+     * tables are never changed.
+     */
+    public function testEnablingAPluginOnASiteWithTheSchemaCreatesItsIndexes(): void
+    {
+        $site = new SchemaCatalog(Idno::container()->get('database_connection'));
+        self::assertTrue($site->hasTable('idno_entities'), 'the site has the schema');
+        $siteIndexes = $site->indexedFields('entities');
+        $private = PrivateDatabase::sqliteMemory();
+        $catalog = new SchemaCatalog($private);
+        self::assertSame([], $catalog->indexedFields('entities'));
+
+        try {
+            self::withContainer(
+                [IndexedFields::class => static fn (): IndexedFields => new IndexedFields($private, PrivateDatabase::dialect($private), $catalog)],
+                static fn () => self::reconcile('Fixtures', dirname(__DIR__) . '/Storage/Fixtures/IndexedFields'),
+            );
+
+            $catalog->forget();
+            self::assertSame([], array_values(array_diff(['actor_id', 'code', 'f'], $catalog->indexedFields('entities'))), 'the plugin\'s indexes exist');
+            self::assertContains('child_field', $catalog->indexedFields('reader'));
+            self::assertSame([], Idno::site()->session()->getMessages());
+            $site->forget();
+            self::assertSame($siteIndexes, $site->indexedFields('entities'), 'the site\'s own tables are untouched');
+        } finally {
+            PrivateDatabase::drop($private);
+        }
+    }
+
+    /**
+     * A site without the tables of the schema (a 1.x site not yet upgraded) gets nothing, and no
+     * message: here an IndexedFields on a private empty database.
+     */
     public function testASiteWithoutTheNewTablesGetsNothingAndNoMessage(): void
     {
-        $connection = Idno::container()->get('database_connection');
-        self::assertInstanceOf(Connection::class, $connection);
-        $catalog = new SchemaCatalog($connection);
-        if ($catalog->hasTable('idno_entities')) {
-            self::markTestSkipped('The site\'s database has the new tables: this test must not create indexes on them.');
+        $private = PrivateDatabase::sqliteMemory(migrate: false);
+        $catalog = new SchemaCatalog($private);
+
+        try {
+            self::withContainer(
+                [IndexedFields::class => static fn (): IndexedFields => new IndexedFields($private, PrivateDatabase::dialect($private), $catalog)],
+                static fn () => self::reconcile('Fixtures', dirname(__DIR__) . '/Storage/Fixtures/IndexedFields'),
+            );
+
+            $catalog->forget();
+            self::assertSame([], $catalog->tables());
+            self::assertSame([], Idno::site()->session()->getMessages());
+            self::assertSame('', (string) file_get_contents($this->logFile));
+        } finally {
+            PrivateDatabase::drop($private);
         }
-        $tables = $catalog->tables();
-
-        self::reconcile('Fixtures', dirname(__DIR__) . '/Storage/Fixtures/IndexedFields');
-
-        $catalog->forget();
-        self::assertSame($tables, $catalog->tables());
-        self::assertSame([], Idno::site()->session()->getMessages());
-        self::assertSame('', (string) file_get_contents($this->logFile));
     }
 
     public function testAFailureIsLoggedAndShown(): void

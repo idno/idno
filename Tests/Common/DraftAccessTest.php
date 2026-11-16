@@ -221,7 +221,7 @@ class DraftAccessTest extends \Tests\IdnoTestCase
         $legacy = $this->createEntity('PUBLIC', 'published');
         $contents = $legacy->saveToArray();
         unset($contents['publish_status']);
-        $statement = $client->prepare('update entities set contents = :contents where _id = :id');
+        $statement = $client->prepare('update idno_entities set data = :contents where id = :id');
         $this->assertTrue($statement->execute([':contents' => json_encode($contents), ':id' => $legacy->getID()]));
 
         $this->logOff();

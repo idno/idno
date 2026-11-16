@@ -66,6 +66,19 @@ final class SchemaMigratorTest extends TestCase
         $this->assertSame(self::BASELINE, (new SchemaMigrator($connection))->latest());
     }
 
+    /**
+     * migrate() returns what THIS call executed: the baseline on an empty database, nothing on one
+     * that has it (whoever ran it), so idno:upgrade reports only its own work.
+     */
+    public function testMigrateReturnsWhatItExecuted(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory(migrate: false);
+
+        $this->assertSame([self::BASELINE], (new SchemaMigrator($connection))->migrate());
+        $this->assertSame([], (new SchemaMigrator($connection))->migrate());
+        $connection->close();
+    }
+
     public function testMigrateTwiceIsANoOp(): void
     {
         $connection = PrivateDatabase::sqliteMemory();

@@ -5,91 +5,38 @@ declare(strict_types=1);
 namespace Idno\Storage;
 
 /**
- * What a store derives from a record to make it queryable.
+ * What a store derives from a record to make it queryable, for the stores that read fields from
+ * the stored document (JsonRecordStore, InMemoryRecordStore):
  *
- * For the legacy schema (DbalRecordStore), the same three things the old backend's
- * Idno\Data\MySQL::saveRecord() (since removed) wrote next to the document, reproduced exactly:
- *
- *  - metadataRows(): the rows of `<collection>_metadata`, which equality, $in, $not, $lt and $gt
- *    on document fields run against;
- *  - searchText(): the text of `<collection>_search`, which $search runs against;
- *  - columns(): the columns of the main table, which the fields of COLUMN_FIELDS are queried on.
- *
- * For the stores that read fields from the stored document (JsonRecordStore, InMemoryRecordStore),
- * queryValues() (what a query on a document field is compared with: whole values, the scalar
- * values of a list or object, elements that are arrays or objects not queryable),
- * searchText() (the `search` column), and columns() and created() (the other columns).
+ *  - queryValues(): what a query on a document field is compared with (whole values, the scalar
+ *    values of a list or object; elements that are arrays or objects are not queryable);
+ *  - searchText(): the text of the `search` column, which $search runs against (the old backend's
+ *    Idno\Data\MySQL::saveRecord(), since removed, wrote the same text);
+ *  - columns() and created(): the columns the fields of COLUMN_FIELDS are queried on.
  *
  * They take the record AS IT IS ENCODED INTO THE DOCUMENT: that is, after the store has
  * filled in a missing _id, siteid, uuid and owner, but before the defaults for entity_subtype,
- * publish_status and created, which these methods apply themselves (as saveRecord() does, after
- * encoding the document). A record read back from the database is therefore a valid input and
- * yields the rows that were written for it.
+ * publish_status and created, which these methods apply themselves. A record read back from the
+ * database is therefore a valid input and yields the same values.
  *
- * The class is pure: no application state, no database. metadataRows() has one deliberate
- * difference from saveRecord(), pinned by the contract: a value is cut to 255 BYTES on a character
- * boundary (never in the middle of a multibyte character, which makes MySQL reject the row and
- * the old saveRecord() lose the record while reporting success). queryValues() cuts nothing: it
- * follows the JSON store's rules, whose differences from today's store are listed on
- * JsonRecordStore and in AGENTS.md.
+ * The class is pure: no application state, no database. The differences of these rules from the
+ * old backend's are listed on JsonRecordStore and in AGENTS.md.
  */
 final class RecordIndex
 {
     /**
-     * The fields that are queried on the columns of the main table, not on the metadata rows (exact
+     * The fields that are queried on the columns of a collection table, not in the document (exact
      * names), in the order the old backend listed them (its getSchemaFields()). Every other field of
-     * a query is looked up in `<collection>_metadata`.
+     * a query is read from the document.
      */
     public const COLUMN_FIELDS = ['uuid', '_id', 'entity_subtype', 'owner', 'publish_status', 'created'];
-
-    /** The longest indexed value, in bytes. */
-    private const MAX_VALUE_BYTES = 255;
 
     private const DEFAULT_SUBTYPE = 'Idno\\Common\\Entity';
 
     private const DEFAULT_PUBLISH_STATUS = 'published';
 
-    /** What the `created` column holds, and what a query on it must be compared with. */
+    /** The form of `created` among the query values of queryValues(). */
     public const DATETIME_FORMAT = 'Y-m-d H:i:s';
-
-    /**
-     * The (name, value) rows saveRecord() writes to `<collection>_metadata` for this record, in
-     * the order it writes them: one row per list element, an element that is itself an array
-     * JSON-encoded, an associative array treated like the list of its values, an empty value
-     * (empty string, null, false, 0, '0') stored as '0', a field with an empty array not at all,
-     * every value cut to 255 bytes. The row for `created` holds the formatted datetime.
-     *
-     * @param array<int|string, mixed> $record
-     * @param int|null                 $now    the time used when the record has no `created` (default: now)
-     *
-     * @return list<array{name: string, value: string}>
-     *
-     * @throws \InvalidArgumentException when `created` is not a timestamp
-     */
-    public static function metadataRows(array $record, ?int $now = null): array
-    {
-        $rows = [];
-        foreach (self::withDefaults($record, $now ?? time()) as $key => $value) {
-            foreach (is_array($value) ? $value : [$value] as $element) {
-                if (is_array($element) || is_object($element)) {
-                    $element = json_encode($element);
-                    if ($element === false) {
-                        $element = json_encode([]);
-                    }
-                }
-                if (empty($element)) {
-                    $element = 0;
-                }
-                $element = (string) $element;
-                if (strlen($element) > self::MAX_VALUE_BYTES) {
-                    $element = mb_strcut($element, 0, self::MAX_VALUE_BYTES, 'UTF-8');
-                }
-                $rows[] = ['name' => (string) $key, 'value' => $element];
-            }
-        }
-
-        return $rows;
-    }
 
     /**
      * What a query on each top-level field of the record is compared with, by field name (exact,
@@ -184,14 +131,14 @@ final class RecordIndex
     }
 
     /**
-     * The text saveRecord() writes to `<collection>_search`: title, tags, description (each
+     * The text of the `search` column (the old saveRecord()'s search text): title, tags, description (each
      * followed by a space), the body without markup, the handle, and the scalar values of the
      * profile without markup, with newlines padded, carriage returns removed, '#' preceded by a
      * space, lower-cased (ASCII only, as strtolower() does) and passed through $uncurl.
      *
      * An ARRAY in tags, title, description or handle contributes the string `Array`, which is
      * what PHP makes of it when it is not pedantic, without the warning; an array body contributes
-     * nothing (today it is a TypeError).
+     * nothing (the old backend raised a TypeError).
      *
      * @param array<int|string, mixed> $record
      * @param callable(string): string $uncurl the quote-normalising function (Language::uncurlQuotes())
@@ -227,7 +174,7 @@ final class RecordIndex
     }
 
     /**
-     * The column values saveRecord() writes to the main table: one per field of COLUMN_FIELDS, plus
+     * The column values of a record (what the old saveRecord() wrote to its main table): one per field of COLUMN_FIELDS, plus
      * siteid (which is not a queryable column). entity_subtype defaults to
      * 'Idno\Common\Entity', publish_status to 'published', created to the time $now; a given
      * `created` (an integer, a float or numeric string that fits an integer) is formatted as
@@ -257,7 +204,7 @@ final class RecordIndex
     }
 
     /**
-     * The record with the defaults saveRecord() applies after it has encoded the document.
+     * The record with the defaults the old saveRecord() applied after it had encoded the document.
      *
      * @param array<int|string, mixed> $record
      *
@@ -277,7 +224,7 @@ final class RecordIndex
     }
 
     /**
-     * What date() accepts as a timestamp (today a TypeError for anything else).
+     * What date() accepts as a timestamp (anything else made the old backend raise a TypeError).
      */
     private static function timestamp(mixed $created): int
     {

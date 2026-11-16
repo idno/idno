@@ -10,8 +10,8 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 
 /**
  * Subprocess helper for SqliteConcurrencyTest: saves <count> records to the `entities`
- * collection of an SQLite database file through DbalRecordStore, on a connection set up as a
- * site's is, with ids <prefix>-1 ... <prefix>-<count>. It waits for the file <go> to exist before
+ * collection of an SQLite database file (with the schema) through the record store the site
+ * builds, on a connection set up as a site's is, with ids <prefix>-1 ... <prefix>-<count>. It waits for the file <go> to exist before
  * the first save, so that two writers start together. Exits 0 when every save returned its id;
  * otherwise prints the failures to stderr and exits 1.
  *
@@ -20,15 +20,11 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
 
-use Idno\Storage\DbalRecordStore;
-use Idno\Storage\FixedRecordDefaults;
-use Idno\Storage\Platform\SqliteDialect;
-use Tests\Unit\Storage\SqliteTestDatabase;
+use Tests\Storage\PrivateDatabase;
 
 [, $file, $prefix, $count, $go] = $argv + [null, '', '', '0', ''];
 
-$connection = SqliteTestDatabase::connection($file);
-$store = new DbalRecordStore($connection, new SqliteDialect($connection), new FixedRecordDefaults(), static fn (string $s): string => $s, true, false);
+$store = PrivateDatabase::recordStore(PrivateDatabase::sqliteFile($file, migrate: false));
 
 $deadline = microtime(true) + 10;
 while (!file_exists($go) && microtime(true) < $deadline) {

@@ -8,10 +8,10 @@ use Idno\Storage\RecordIndex;
 use PHPUnit\Framework\TestCase;
 
 /**
- * RecordIndex derives what the legacy backend writes next to a record. The expected values for
- * the three records at the top were READ FROM THE RIG'S DATABASE (the `entities`,
- * `entities_metadata` and `entities_search` rows Idno\Data\MySQL::saveRecord() wrote) and pasted
- * here; the document is the `contents` column. The rest pins single rules with small records.
+ * RecordIndex derives what a store queries from a record. The expected columns and search texts
+ * of the three records at the top were READ FROM A DATABASE OF THE OLD BACKEND (the `entities` and
+ * `entities_search` rows Idno\Data\MySQL::saveRecord() wrote) and pasted here; the document is the
+ * `contents` column. The rest pins single rules with small records.
  */
 final class RecordIndexTest extends TestCase
 {
@@ -52,16 +52,6 @@ final class RecordIndexTest extends TestCase
     }
 
     /**
-     * @param list<array{string, string}> $pairs
-     *
-     * @return list<array{name: string, value: string}>
-     */
-    private static function rows(array $pairs): array
-    {
-        return array_map(static fn (array $pair): array => ['name' => $pair[0], 'value' => $pair[1]], $pairs);
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private static function document(string $json): array
@@ -72,26 +62,12 @@ final class RecordIndexTest extends TestCase
         return $document;
     }
 
-    // ------------------------------------------------- rows written by the legacy backend
+    // ------------------------------------------------- rows written by the legacy backend (columns and search text)
 
     public function testAStatusEntityAsSavedByTheApplication(): void
     {
         $document = self::document('{"access":"PUBLIC","owner":"http:\/\/127.0.0.1:8089\/view\/8648c058-0f90-47d2-9c96-cafa0a3f91d9","body":"Making a test post via the API","tags":null,"publish_status":"published","slug":"making-a-test-post-via-the-api","created":1794698912,"updated":1794698912,"_id":"0c51fce2-a83e-43bc-a75f-a8e9d7b609fa","uuid":"http:\/\/127.0.0.1:8089\/view\/0c51fce2-a83e-43bc-a75f-a8e9d7b609fa","entity_subtype":"IdnoPlugins\\\\Status\\\\Status","siteid":null}');
 
-        $this->assertSame(self::rows([
-            ['access', 'PUBLIC'],
-            ['owner', 'http://127.0.0.1:8089/view/8648c058-0f90-47d2-9c96-cafa0a3f91d9'],
-            ['body', 'Making a test post via the API'],
-            ['tags', '0'],
-            ['publish_status', 'published'],
-            ['slug', 'making-a-test-post-via-the-api'],
-            ['created', '2026-11-14 23:28:32'],
-            ['updated', '1794698912'],
-            ['_id', '0c51fce2-a83e-43bc-a75f-a8e9d7b609fa'],
-            ['uuid', 'http://127.0.0.1:8089/view/0c51fce2-a83e-43bc-a75f-a8e9d7b609fa'],
-            ['entity_subtype', 'IdnoPlugins\\Status\\Status'],
-            ['siteid', '0'],
-        ]), RecordIndex::metadataRows($document));
         $this->assertSame([
             'uuid' => 'http://127.0.0.1:8089/view/0c51fce2-a83e-43bc-a75f-a8e9d7b609fa',
             '_id' => '0c51fce2-a83e-43bc-a75f-a8e9d7b609fa',
@@ -116,46 +92,6 @@ final class RecordIndexTest extends TestCase
             . '"long":"' . str_repeat('0123456789', 30) . '","wide":"' . str_repeat('é', 127) . 'abcd"}'
         );
 
-        $this->assertSame(self::rows([
-            ['_id', 'rec-rich-000dc0'],
-            ['uuid', 'http://rig.test/view/rich-25b95c'],
-            ['siteid', 'site-1'],
-            ['owner', 'http://rig.test/profile/ben'],
-            ['entity_subtype', 'Tests\\Rich'],
-            ['publish_status', 'draft'],
-            ['created', '2023-06-13 23:46:40'],
-            ['title', 'Café “quoted” it’s'],
-            ['tags', '#indieweb #php'],
-            ['description', 'A <b>bold</b> claim'],
-            ['body', "<p>Line one</p>\r\n<p>Line two #hash</p>\n<a href=\"http://x.test/\">link</a>"],
-            ['handle', 'ben'],
-            // The profile is an associative array: its values are the rows, the keys are not.
-            ['profile', 'Ben <i>W</i>'],
-            ['profile', 'http://rig.test/'],
-            ['profile', '["ignored"]'],
-            ['profile', '40'],
-            // A list: one row per element, the empty one stored as 0.
-            ['labels', 'red'],
-            ['labels', 'blue'],
-            ['labels', '0'],
-            // Elements that are arrays are JSON.
-            ['meta', '{"k":"v"}'],
-            ['meta', '{"n":[1,2]}'],
-            ['pair', 'alpha'],
-            ['pair', 'beta'],
-            ['count', '3'],
-            ['ratio', '1.5'],
-            ['yes', '1'],
-            ['no', '0'],
-            ['nothing', '0'],
-            ['zero', '0'],
-            ['zerostr', '0'],
-            ['emptystr', '0'],
-            // (`emptylist` has no row.) Values are cut to 255 bytes: 255 digits...
-            ['long', str_repeat('0123456789', 25) . '01234'],
-            // ...and 127 two-byte characters plus one byte.
-            ['wide', str_repeat('é', 127) . 'a'],
-        ]), RecordIndex::metadataRows($document));
         $this->assertSame([
             'uuid' => 'http://rig.test/view/rich-25b95c',
             '_id' => 'rec-rich-000dc0',
@@ -180,17 +116,6 @@ final class RecordIndexTest extends TestCase
         $now = strtotime('2026-11-15 03:31:46 UTC');
 
         // The defaults for the subtype, the publish status and the creation time come last.
-        $this->assertSame(self::rows([
-            ['title', 'Bare record'],
-            ['slug', 'bare'],
-            ['_id', 'rec-minimal-a541a4'],
-            ['uuid', 'http://rig.test/view/rec-minimal-a541a4'],
-            ['siteid', '0'],
-            ['owner', '0'],
-            ['entity_subtype', 'Idno\\Common\\Entity'],
-            ['publish_status', 'published'],
-            ['created', '2026-11-15 03:31:46'],
-        ]), RecordIndex::metadataRows($document, $now));
         $this->assertSame([
             'uuid' => 'http://rig.test/view/rec-minimal-a541a4',
             '_id' => 'rec-minimal-a541a4',
@@ -205,11 +130,11 @@ final class RecordIndexTest extends TestCase
 
     // ------------------------------------------------------------------ single rules
 
-    public function testTheRowForAGivenCreatedIsItsFormattedDatetimeAndIsReplacedInPlace(): void
+    public function testTheQueryValueOfAGivenCreatedIsItsFormattedDatetimeInPlace(): void
     {
-        $rows = RecordIndex::metadataRows(['created' => 1686700000, 'a' => 'b']);
+        $values = RecordIndex::queryValues(['created' => 1686700000, 'a' => 'b']);
 
-        $this->assertSame(self::rows([['created', '2023-06-13 23:46:40'], ['a', 'b'], ['entity_subtype', 'Idno\\Common\\Entity'], ['publish_status', 'published']]), $rows);
+        $this->assertSame(['created' => ['2023-06-13 23:46:40'], 'a' => ['b'], 'entity_subtype' => ['Idno\\Common\\Entity'], 'publish_status' => ['published']], $values);
     }
 
     public function testCreatedMayBeANumericStringOrAFloat(): void
@@ -244,25 +169,6 @@ final class RecordIndexTest extends TestCase
         $this->assertSame('1970-01-01 00:01:40', RecordIndex::columns(['created' => 0], 100)['created']);
         $this->assertSame('1970-01-01 00:01:40', RecordIndex::columns(['created' => ''], 100)['created']);
         $this->assertSame('1970-01-01 00:01:40', RecordIndex::columns(['created' => '0'], 100)['created']);
-    }
-
-    public function testEmptyValuesAreZeroAndAnEmptyListHasNoRow(): void
-    {
-        $rows = RecordIndex::metadataRows(['a' => '', 'b' => null, 'c' => false, 'd' => 0, 'e' => '0', 'f' => 0.0, 'g' => [], 'h' => [[]], 'i' => '0.0'], 1);
-
-        $this->assertSame(self::rows([
-            ['a', '0'], ['b', '0'], ['c', '0'], ['d', '0'], ['e', '0'], ['f', '0'],
-            ['h', '[]'], // an empty array that is an element is not empty: it is the JSON '[]'
-            ['i', '0.0'], // a non-empty string, even if it looks like zero
-            ['entity_subtype', 'Idno\\Common\\Entity'], ['publish_status', 'published'], ['created', '1970-01-01 00:00:01'],
-        ]), $rows);
-    }
-
-    public function testScalarsAreIndexedAsPhpStringsAndAnElementThatCannotBeEncodedIsAnEmptyList(): void
-    {
-        $rows = RecordIndex::metadataRows(['t' => true, 'i' => -3, 'f' => 0.1 + 0.2, 'bad' => [[NAN]], 'str' => "a\"b\\c"], 1);
-
-        $this->assertSame(['1', '-3', '0.3', '[]', "a\"b\\c"], array_column(array_slice($rows, 0, 5), 'value'));
     }
 
     public function testQueryValuesAreWholeScalarsAndTheScalarElementsOfAListOrObject(): void
@@ -307,26 +213,6 @@ final class RecordIndexTest extends TestCase
         $this->assertSame(42, RecordIndex::created(['created' => ''], 42));
         $this->expectException(\InvalidArgumentException::class);
         RecordIndex::created(['created' => 'yesterday']);
-    }
-
-    public function testIntegerKeysBecomeNames(): void
-    {
-        $this->assertSame(['0', '1'], array_column(array_slice(RecordIndex::metadataRows(['x', 'y'], 1), 0, 2), 'name'));
-    }
-
-    public function testAValueIsCutAt255BytesOnACharacterBoundary(): void
-    {
-        $at = static fn (string $value): string => RecordIndex::metadataRows(['v' => $value], 1)[0]['value'];
-
-        $this->assertSame(str_repeat('a', 255), $at(str_repeat('a', 300)));
-        $this->assertSame(str_repeat('a', 255), $at(str_repeat('a', 255)));
-        // 127 two-byte characters and one byte are exactly 255 bytes.
-        $this->assertSame(str_repeat('é', 127) . 'a', $at(str_repeat('é', 127) . 'abcd'));
-        // A cut that would fall inside the 128th character stops before it: 254 bytes (never half a character).
-        $this->assertSame(str_repeat('é', 127), $at(str_repeat('é', 200)));
-        $this->assertSame(254, strlen($at(str_repeat('é', 200))));
-        // Four-byte characters: 63 of them are 252 bytes, the 64th would end at 256.
-        $this->assertSame(str_repeat("\u{1F600}", 63), $at(str_repeat("\u{1F600}", 100)));
     }
 
     public function testSearchTextCoversTheIndexedFieldsOnly(): void

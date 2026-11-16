@@ -30,14 +30,14 @@ use Idno\Storage\Criterion\Search;
  *  - Operands and indexed values are compared AS STRINGS, the way MySQL compares them when
  *    every parameter is bound as a string: true is '1', false is '', an integer its decimal
  *    string. A null operand is NULL: no comparison with it is ever true.
- *  - Text comparison ignores case (MySQL's default collation) for values; a field is found by
- *    its exact name, as the document holds it (expectFieldNamesToIgnoreCase is false). `$lt`
- *    and `$gt` compare as text ('10' is less than '5'). Text is folded to UPPER
- *    case before it is compared, as utf8mb3_general_ci (MySQL's identifier columns) does, so the
- *    ASCII characters between Z and a (`[ \ ] ^ _` and the backtick) sort after the letters
- *    ('a_' is greater than 'aZ'), as utf8mb4_general_ci (JsonRecordStore on MySQL) orders them.
- *    Not emulated: accent insensitivity ('e' = 'é'), trailing-space padding, and the collation
- *    weights of non-ASCII characters.
+ *  - Text comparison ignores case (as MySQL's collation does) for values; a field is found by
+ *    its exact name, as the document holds it. `$lt` and `$gt` compare as text ('10' is less than
+ *    '5'). Text is folded to UPPER case (mb_strtoupper(), so `ß` equals `SS`) before it is
+ *    compared, so the ASCII characters between Z and a (`[ \ ] ^ _` and the backtick) sort after
+ *    the letters ('a_' is greater than 'aZ'), where MySQL's utf8mb4_unicode_520_ci sorts them
+ *    before the letters (the contract hook expectTextToSortFoldedToUpperCase). Not emulated:
+ *    accent insensitivity ('e' = 'é', expectAccentsToBeIgnored), trailing-space padding
+ *    (expectTrailingSpacesToBeIgnored), and the collation weights of non-ASCII characters.
  *  - The fields uuid, _id, entity_subtype, owner, publish_status and created are compared
  *    against the record's columns; every other field against its query values
  *    (RecordIndex::queryValues(): whole values; the scalar elements of a list or member values
@@ -77,17 +77,16 @@ use Idno\Storage\Criterion\Search;
  *    is not saved (false). The uuid is unique per collection: saving another _id with an existing
  *    uuid fails and changes nothing.
  *
- * Deliberately different from today's MySQL backend: an array in tags, title, description or
- * handle contributes `Array` to the search text and an array body nothing (MySQL's backend
- * raises); values are compared whole, records with an equal `created` are ordered by _id, nested
- * arrays and objects are not queryable, and field names are matched exactly (as JsonRecordStore
- * does); the MongoDB list form of `$or` counts 0 (MySQL's backend fails the count); there are no
- * limits on the range of `created` (a MySQL timestamp ends in 2038) or on the length of a field
- * name (64 characters in MySQL).
+ * As JsonRecordStore, and unlike the old MySQL backend (since removed): an array in tags, title,
+ * description or handle contributes `Array` to the search text and an array body nothing (the old
+ * backend raised); values are compared whole, records with an equal `created` are ordered by _id,
+ * nested arrays and objects are not queryable, and field names are matched exactly; the MongoDB
+ * list form of `$or` counts 0 (the old backend failed the count); there are no limits on the range
+ * of `created` or on the length of a field name.
  */
 final class InMemoryRecordStore implements RecordStore
 {
-    /** The collections of the legacy schema, which exist from the start. */
+    /** The collections that exist from the start (those of the old schema). */
     public const DEFAULT_COLLECTIONS = ['entities', 'reader', 'config', 'session', 'site'];
 
     /**

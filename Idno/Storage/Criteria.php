@@ -56,7 +56,7 @@ final class Criteria
      * nested AnyOf), and a key '$search' whose value is an array becomes a Search of its
      * element [0] (nothing when that is empty). A '$or' given as a LIST of conditions (the
      * MongoDB form) produces no children, so it is an AnyOf with none, which matches nothing
-     * (today it compiles to invalid SQL). A non-array '$or' or '$search' is an ordinary field.
+     * (the old SQL backend compiled it to invalid SQL). A non-array '$or' or '$search' is an ordinary field.
      *
      * Shapes legacy code binds as PHP arrays (a $not holding an array without a non-empty
      * $in, a non-array $in, an array operand to $lt/$gt, a non-scalar value) raise a PHP

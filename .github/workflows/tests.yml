@@ -58,8 +58,9 @@ jobs:
   phpunit-sqlite:
     # The whole suite on SQLite, through the local test rig exactly as a developer runs it
     # (docs/developers/testing.md): `composer test:up` writes configuration/config.ini, creates the
-    # database file and starts PHP's built-in web server on http://127.0.0.1:8089/; `composer test`
-    # runs PHPUnit against it. No service containers and no Docker.
+    # database file, creates the schema (bin/console idno:upgrade) and starts PHP's built-in web
+    # server on http://127.0.0.1:8089/; `composer test` runs PHPUnit against it. No service
+    # containers and no Docker.
     name: PHPUnit (PHP ${{ matrix.php }} / sqlite)
     runs-on: ubuntu-latest
 
@@ -155,15 +156,109 @@ jobs:
         if: matrix.db == 'mysql'
         run: |
           mysql -h 127.0.0.1 -uroot -e "GRANT ALL ON known_unittest.* TO 'root'@'%';"
-          mysql -h 127.0.0.1 -uroot known_unittest < warmup/schemas/mysql/mysql.sql
           cp Tests/build/config_mysql.ini configuration/config.ini
           sed -i "s/dbuser = 'travis'/dbuser = 'root'/" configuration/config.ini
           sed -i "s/dbhost = 'localhost'/dbhost = '127.0.0.1'/" configuration/config.ini
+
+      - name: Create the schema
+        if: matrix.db == 'mysql'
+        run: APP_ENV=test APP_DEBUG=1 php bin/console idno:upgrade
 
       - name: Configure MongoDB
         if: matrix.db == 'mongo'
         run: |
           cp Tests/build/config_default.ini configuration/config.ini
+
+      - name: Start web server
+        run: |
+          # Serve the checkout with PHP's built-in web server, using the same PHP
+          # binary as the tests. This avoids depending on which mod_php packages
+          # the runner's Ubuntu release happens to ship.
+
+          # The tests expect the site at http://localhost/ (PHPUnit's default IDNO_DOMAIN and
+          # IDNO_PORT, and the url set in Tests/build/config_*.ini); let the runner user bind port 80.
+          # Bind to localhost, not 0.0.0.0: the built-in server sets SERVER_NAME to the bind address.
+          sudo systemctl stop apache2 2>/dev/null || true
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+
+          # APP_ENV/APP_DEBUG: run the kernel in the test environment (as PHPUnit does),
+          # which also enables the test-only routes in Tests/Fixtures; Tests/build/router.php
+          # copies them into $_SERVER. var/ (the compiled container) is in the workspace,
+          # which this user owns, so the server can write it.
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
+            "${{ github.workspace }}/Tests/build/router.php" \
+            > "${{ github.workspace }}/php-server.log" 2>&1 &
+
+          # Wait for the server to accept connections
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost/; then
+              echo "Web server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Web server did not start"
+          cat "${{ github.workspace }}/php-server.log"
+          exit 1
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit
+
+      - name: Show web server log on failure
+        if: failure()
+        run: tail -n 200 ${{ github.workspace }}/php-server.log 2>/dev/null || true
+
+  phpunit-mariadb:
+    # The MySQL job on MariaDB 10.6 (the oldest MariaDB the schema supports), line for line.
+    name: PHPUnit (PHP ${{ matrix.php }} / mariadb)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
+          MARIADB_DATABASE: known_unittest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 --silent || mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: >-
+            curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
+            session, simplexml, openssl, gettext, mongodb
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress
+
+      - name: Install system packages
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      - name: Configure MariaDB database
+        run: |
+          mysql -h 127.0.0.1 -uroot -e "GRANT ALL ON known_unittest.* TO 'root'@'%';"
+          cp Tests/build/config_mysql.ini configuration/config.ini
+          sed -i "s/dbuser = 'travis'/dbuser = 'root'/" configuration/config.ini
+          sed -i "s/dbhost = 'localhost'/dbhost = '127.0.0.1'/" configuration/config.ini
+
+      - name: Create the schema
+        run: APP_ENV=test APP_DEBUG=1 php bin/console idno:upgrade
 
       - name: Start web server
         run: |

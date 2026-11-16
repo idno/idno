@@ -51,8 +51,11 @@ final class SchemaMigrator
 
     /**
      * Executes every pending migration, oldest first. Nothing happens when none is pending.
+     *
+     * @return list<string> the versions this call executed, oldest first (none when another
+     *                      process executed them first)
      */
-    public function migrate(): void
+    public function migrate(): array
     {
         $dependencies = $this->dependencies();
         $dependencies->getMetadataStorage()->ensureInitialized();
@@ -61,10 +64,12 @@ final class SchemaMigrator
             $versions[] = $migration->getVersion();
         }
         if ($versions === []) {
-            return;
+            return [];
         }
         $plan = $dependencies->getMigrationPlanCalculator()->getPlanForVersions($versions, Direction::UP);
-        $dependencies->getMigrator()->migrate($plan, (new MigratorConfiguration())->setAllOrNothing(false));
+        $executed = $dependencies->getMigrator()->migrate($plan, (new MigratorConfiguration())->setAllOrNothing(false));
+
+        return array_values(array_map(static fn (string|int $version): string => self::number(new Version((string) $version)), array_keys($executed)));
     }
 
     /**

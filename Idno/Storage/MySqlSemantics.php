@@ -5,23 +5,18 @@ declare(strict_types=1);
 namespace Idno\Storage;
 
 /**
- * The rules today's MySQL backend applies by itself (in the server, or through its full-text
- * index), written in PHP for the stores that do not run on MySQL: InMemoryRecordStore applies
- * them directly, and the SQLite dialect registers them on its connections (a collation and a
- * search function, see Platform\SqliteDialect::setUpConnection()). One copy, so the two cannot
- * drift apart.
+ * Rules MySQL applies by itself (in the server, or through its full-text index), written in PHP:
  *
- *  - datetime(): which literals MySQL accepts for the `created` column, in a form whose plain
- *    string comparison orders them correctly against the stored values; epoch(): the same
- *    literals as the timestamps JsonRecordStore compares its `created` column with (on every
- *    engine: a literal it rejects makes the query match nothing);
- *  - fold() and compare(): text comparison as `utf8mb3_general_ci` (MySQL's identifier columns)
- *    does it for ASCII (folded to UPPER case, so `[ \ ] ^ _` and the backtick sort after the
- *    letters: 'a_' > 'aZ'). MySQL's indexed values are `utf8mb4_unicode_520_ci`, which orders
- *    punctuation before the letters; that order is not reproduced here;
- *  - searchMatches(): the search rule of the stores without a full-text index (in memory, SQLite).
+ *  - datetime(): which literals MySQL accepts for a `created` operand; epoch(): the same literals
+ *    as the timestamps JsonRecordStore compares its `created` column with (on every engine: a
+ *    literal it rejects makes the query match nothing);
+ *  - fold() and compare(): the in-memory store's text comparison, which ignores case like MySQL's
+ *    collation (folded to UPPER case, so `[ \ ] ^ _` and the backtick sort after the letters:
+ *    'a_' > 'aZ', where MySQL's utf8mb4_unicode_520_ci sorts them before);
+ *  - searchMatches(): the search rule of the in-memory store, which has no full-text index.
  *
- * The known differences from MySQL are listed on InMemoryRecordStore.
+ * InMemoryRecordStore applies them directly; JsonRecordStore uses epoch(). The known differences
+ * from MySQL are listed on InMemoryRecordStore.
  *
  * Static helpers, not a container service (see config/services.php).
  */
@@ -96,7 +91,7 @@ final class MySqlSemantics
     }
 
     /**
-     * Whether a search text matches a search term. A term of more than 5 bytes is split on
+     * Whether a search text matches a search term (the in-memory store's search). A term of more than 5 bytes is split on
      * whitespace and matches when the text contains ANY of the words as a case-insensitive
      * substring (the words are plain text, no wildcards). A term of at most 5 bytes is one
      * substring, matched like SQL `LIKE '%term%'` without regard to case: '%' and '_' are

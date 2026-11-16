@@ -35,12 +35,26 @@ final class RigScriptsTest extends TestCase
         $this->root = (string) realpath(sys_get_temp_dir()) . '/idno-rig-test-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/Tests/rig', 0777, true);
         mkdir($this->root . '/bin');
-        foreach (['lib.sh', 'write-config.sh', 'up.sh', 'down.sh', 'config.ini', 'config.sqlite.ini', 'router.php', 'sqlite_schema.php', 'docker-compose.yml'] as $file) {
+        foreach (['lib.sh', 'write-config.sh', 'up.sh', 'down.sh', 'config.ini', 'config.sqlite.ini', 'router.php', 'docker-compose.yml'] as $file) {
             copy(self::rigDir() . '/' . $file, $this->root . '/Tests/rig/' . $file);
             chmod($this->root . '/Tests/rig/' . $file, 0755);
         }
-        // sqlite_schema.php loads the autoloader from the project root.
-        symlink(dirname(__DIR__, 2) . '/vendor', $this->root . '/vendor');
+        // up.sh runs `php bin/console idno:upgrade` (from the project root) before it starts the web
+        // server: a stand-in that records its arguments, the rig's environment and whether the web
+        // server had started, one line per run (and fails, exit 1, when the file console-fails exists).
+        $console = <<<'PHP'
+            <?php
+            $root = dirname(__DIR__);
+            file_put_contents($root . '/console.log', implode(' ', array_slice($argv, 1))
+                . ' APP_ENV=' . getenv('APP_ENV') . ' APP_DEBUG=' . getenv('APP_DEBUG') . ' error_reporting=' . ini_get('error_reporting')
+                . ' server=' . (is_file($root . '/Tests/rig/.server.pid') ? 'yes' : 'no') . "\n", FILE_APPEND);
+            if (is_file($root . '/console-fails')) {
+                fwrite(STDERR, "the stand-in upgrade failed\n");
+                exit(1);
+            }
+
+            PHP;
+        file_put_contents($this->root . '/bin/console', $console);
     }
 
     protected function tearDown(): void
@@ -114,16 +128,28 @@ final class RigScriptsTest extends TestCase
     /**
      * A `docker` first on the PATH that logs its arguments, after the image docker compose would
      * interpolate (`[<IDNO_RIG_MYSQL_IMAGE>] `); it fails (exit 1, as with Docker not running) or
-     * succeeds (and then answers the schema check as if the database had tables).
+     * succeeds.
      */
     private function dockerShim(bool $succeeds): void
     {
         $log = escapeshellarg($this->root . '/docker.log');
         $script = "#!/bin/sh\necho \"[\$IDNO_RIG_MYSQL_IMAGE] \$*\" >> $log\n" . ($succeeds
-            ? "case \"\$*\" in *'SHOW TABLES'*) echo versions ;; esac\nexit 0\n"
+            ? "exit 0\n"
             : "echo 'Cannot connect to the Docker daemon' >&2\nexit 1\n");
         file_put_contents($this->root . '/bin/docker', $script);
         chmod($this->root . '/bin/docker', 0755);
+    }
+
+    /**
+     * The runs of the bin/console stand-in, one line each.
+     *
+     * @return list<string>
+     */
+    private function consoleRuns(): array
+    {
+        $file = $this->root . '/console.log';
+
+        return is_file($file) ? array_values(array_filter(explode("\n", (string) file_get_contents($file)))) : [];
     }
 
     private function dockerLog(): string
@@ -403,6 +429,55 @@ final class RigScriptsTest extends TestCase
         $this->assertStringContainsString('compose -f ' . $this->root . '/Tests/rig/docker-compose.yml down -v', (string) file_get_contents($this->root . '/docker-was-run'), 'the data volume goes too');
     }
 
+    /**
+     * Before the web server starts, in either mode, the rig creates the schema with
+     * `bin/console idno:upgrade`, in the rig's environment: APP_ENV=test, APP_DEBUG=1 and
+     * deprecations excluded (error_reporting 22527), as `composer console` runs it. It loads no
+     * SQL file. Started again, it runs the command again (which does nothing on a database that
+     * has the schema) and starts no second server.
+     */
+    public function testUpCreatesTheSchemaWithTheUpgradeCommandBeforeTheWebServer(): void
+    {
+        [$code, $output] = $this->runScript('up.sh');
+        $this->assertSame(0, $code, $output);
+        $this->assertSame(['idno:upgrade APP_ENV=test APP_DEBUG=1 error_reporting=22527 server=no'], $this->consoleRuns());
+        $this->assertFileExists($this->stateDir() . '/site.sqlite');
+        $this->assertSame(0, filesize($this->stateDir() . '/site.sqlite'), 'the rig makes an empty database file; the command fills it');
+
+        [$code, $output] = $this->runScript('up.sh');
+        $this->assertSame(0, $code, $output);
+        $this->assertStringContainsString('Web server already running', $output);
+        $this->assertSame('idno:upgrade APP_ENV=test APP_DEBUG=1 error_reporting=22527 server=yes', $this->consoleRuns()[1]);
+
+        $this->runScript('down.sh');
+        $this->dockerShim(true);
+        [$code, $output] = $this->runScript('up.sh', 'mysql');
+        $this->assertSame(0, $code, $output);
+        $this->assertSame('idno:upgrade APP_ENV=test APP_DEBUG=1 error_reporting=22527 server=no', $this->consoleRuns()[2]);
+        $this->assertStringNotContainsString('exec', $this->dockerLog(), 'no SQL is loaded into the container');
+    }
+
+    /**
+     * When the upgrade command fails, up.sh says which step failed on stderr, exits non-zero and
+     * starts no web server; the mode stays recorded, so down.sh cleans up.
+     */
+    public function testAFailedUpgradeStopsTheStartWithAMessage(): void
+    {
+        touch($this->root . '/console-fails');
+
+        [$code, $output] = $this->runScript('up.sh');
+
+        $this->assertNotSame(0, $code, $output);
+        $this->assertStringContainsString('the stand-in upgrade failed', $output);
+        $this->assertStringContainsString('The test rig could not create the schema: bin/console idno:upgrade failed', $output);
+        $this->assertSame(0, $this->serverPid(), 'no web server was started');
+        $this->assertSame('sqlite', $this->mode());
+
+        [$code, $output] = $this->runScript('down.sh');
+        $this->assertSame(0, $code, $output);
+        $this->assertDirectoryDoesNotExist($this->stateDir());
+    }
+
     public function testTheMysqlModeRunsMysql8UnlessAnImageIsChosen(): void
     {
         $compose = (string) file_get_contents(self::rigDir() . '/docker-compose.yml');
@@ -431,7 +506,7 @@ final class RigScriptsTest extends TestCase
         $down = strpos($log, 'docker-compose.yml down -v');
         $this->assertNotFalse($down, $log);
         $this->assertGreaterThan($down, strpos($log, '[mariadb:10.6] compose -f ' . $this->root . '/Tests/rig/docker-compose.yml up -d --wait'), 'MariaDB starts after MySQL and its data are gone');
-        $this->assertStringContainsString('[mariadb:10.6] compose -f ' . $this->root . '/Tests/rig/docker-compose.yml exec -T db', $log, 'the schema check runs on the new image');
+        $this->assertCount(2, $this->consoleRuns(), 'the schema is created on the new image');
         $this->assertSame('mysql', $this->mode());
 
         // The same image again: nothing is stopped.

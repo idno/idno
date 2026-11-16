@@ -15,7 +15,7 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
  * session's advisory lock is held by the db() service's own connection (MySQL; null when no lock is
  * held, as with file sessions, and on other databases), the
  * `user_uuid` the session held when it was read, and, after it writes `probe` and closes the session,
- * whether its row is in the `session` table (a file session is destroyed before it exits).
+ * whether its row is in the `idno_sessions` table (a file session is destroyed before it exits).
  *
  * Usage: IDNO_SESSIONS_STORAGE=<class> php boot_session_storage.php <cookie name> [<session id>]
  */
@@ -41,7 +41,7 @@ $read = $_SESSION['user_uuid'] ?? null;
 
 $_SESSION['probe'] = 'written';
 session_write_close();
-$row = $pdo->prepare('select session_value from session where session_id = ?');
+$row = $pdo->prepare('select session_value from idno_sessions where session_id = ?');
 $row->execute([$sessionId]);
 $value = $row->fetchColumn();
 $saveHandler = ini_get('session.save_handler');
