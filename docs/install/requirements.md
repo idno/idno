@@ -5,7 +5,11 @@ Idno _requires_ the following server components:
 + A Web Server that supports URL rewriting (Apache + mod_rewrite recommended).
 + If you are using Apache, you also need to make sure support for .htaccess is enabled (using [the AllowOverride All directive](https://help.ubuntu.com/community/EnablingUseOfApacheHtaccessFiles)).
 + PHP 8.4 or above.
-+ MySQL 5+ / MariaDB or MongoDB. We recommend MySQL.
++ A database: MySQL 8.0 or above, or MariaDB 10.6 or above. We recommend MySQL or MariaDB. Idno refuses
+  to start on an older MySQL or MariaDB server, with a page that says so.
++ MongoDB is still supported, as before, but deprecated: use MySQL or MariaDB for a new site.
++ SQLite (3.38 or above, through PHP's `pdo_sqlite`) works for tests and development only in this
+  release: the installers do not set up SQLite sites, and Idno's PHP sessions on SQLite are not locked.
 
 Idno can either be installed at the root of a domain or subdomain, or in a subdirectory.
 
@@ -38,16 +42,16 @@ Additionally, Idno requires the following PHP components:
 + curl
 + date
 + dom
-+ exif
 + gd
++ gettext
 + json
 + libxml
 + mbstring
-+ mysql (or sqlite, depending on database backend)
++ openssl
++ pdo and pdo_mysql (and pdo_sqlite for tests and development on SQLite; mongodb for a MongoDB site)
 + reflection
 + session
-+ xmlrpc
-+ gettext
++ simplexml
 
 !!! note "Note" 
     You may need to restart the web server after installing these components. Idno's installer will tell you if a required module isn't available.

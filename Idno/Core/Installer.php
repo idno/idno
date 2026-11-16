@@ -214,7 +214,8 @@ namespace Idno\Core {
 
         /**
          * Check that the database can be connected to. It loads no SQL: the schema (the tables and
-         * their indexes) is created by the command `php bin/console idno:upgrade`.
+         * their indexes) is created by the upgrade, on the site's first page load in a browser or by
+         * the command `php bin/console idno:upgrade`.
          *
          * @param  type $host
          * @param  type $dbname

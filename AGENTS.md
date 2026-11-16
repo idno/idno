@@ -38,6 +38,7 @@ php -l path/to/File.php
 # The command line (Symfony's commands and the legacy console plugins), against the test rig
 composer console -- list
 composer console -- idno:upgrade   # create or upgrade the database (the rig runs it on test:up)
+composer console -- idno:upgrade --drop-legacy   # list (and with --yes delete) a completed upgrade's legacy_ tables
 ```
 
 - `composer test` is `IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit`:
@@ -45,6 +46,12 @@ composer console -- idno:upgrade   # create or upgrade the database (the rig run
   `pedantic_mode` turns them into exceptions). Do not run bare `vendor/bin/phpunit` locally. CI
   (`.github/workflows/tests.yml`) does run bare `vendor/bin/phpunit`, because its php.ini already
   excludes deprecations.
+- Every Composer script that runs PHPUnit or the rig (`test`, `test:unit`, `test:up`,
+  `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
+  Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
+  minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
+  Rough times: the unit tier a few seconds; the whole suite about a minute on SQLite, two to four
+  minutes on MySQL or MariaDB.
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
@@ -142,8 +149,8 @@ composer console -- idno:upgrade   # create or upgrade the database (the rig run
   - On SQLite, these skip, each with its reason: the tests on private MySQL databases
     (`JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`,
     `SchemaMigratorMySqlTest`, `InstallerSchemaTest`; their contracts run on SQLite in the unit
-    tier; and `Tests/Upgrade/LegacyDataCopierTest` and every case of `Tests/Upgrade/UpgradeEndToEndTest`
-    but the empty database's: no 1.x site runs on SQLite), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
+    tier; and `Tests/Upgrade/LegacyDataCopierTest`, `Tests/Upgrade/LegacyTablesTest` and every case of
+    `Tests/Upgrade/UpgradeEndToEndTest` but the empty database's: no 1.x site runs on SQLite), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
     it compiled into the container, lazy, the old backend's session, failures), and the `RepositoryDataConciergeTest` cases that need MySQL (`requireMysql()`: the old
     backend's MySQL connection, full-text settings, a lost MySQL connection, `database` names that
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
@@ -224,10 +231,14 @@ Idno/
                                ServerVersion (the MySQL/MariaDB floors), UpgradeRunner (one bounded step, or
                                a whole run), UpgradeGateListener (answers every request while the gate is
                                closed), UpgradeController (`POST /_upgrade/step`) and UpgradePage (the page);
+                               PublicMessage (what may be shown to anyone), EnabledPlugins (which plugins
+                               are enabled, read without the legacy application);
                                the copy of a 1.x database into the new schema: LegacyDataCopier (the
                                phases), its helpers LegacySource, RowWriter, ConfigCopier and DocumentCheck,
-                               UpgradeLock (one process at a time) and UpgradeProgress (a value object). See
-                               "The schema gate and the upgrade" and "Copying a 1.x database"
+                               UpgradeLock (one process at a time) and UpgradeProgress (a value object);
+                               LegacyTables (what a completed upgrade left: the legacy_ tables, the
+                               rejects; deleting the legacy_ tables). See "The schema gate and the
+                               upgrade", "Copying a 1.x database" and "The legacy tables"
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -246,8 +257,11 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                config.ini or the environment is never saved or announced, only resolved. Plugins and themes
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
-Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel) and black-box characterisation tests;
-                               Tests/Fixtures holds test-only controllers, a command and a service;
+Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel), storage (Tests/Storage,
+                               with the contracts in Tests/Storage/Contract), upgrade (Tests/Upgrade, on
+                               private 1.x databases) and black-box characterisation tests;
+                               Tests/Fixtures holds test-only controllers, a command, a service and DBAL
+                               middlewares;
                                Tests/rig/ is the local test rig, Tests/build/ the CI configs and router
 ```
 
@@ -464,7 +478,8 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   runner fetches the connection, which throws) and exits 1. The rig and CI run it before the first
   request (when it fails, `up.sh` says so on stderr and exits non-zero without starting the web
   server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private empty database)
-  and `Tests/Upgrade/UpgradeEndToEndTest` (a 1.x database).
+  and `Tests/Upgrade/UpgradeEndToEndTest` (a 1.x database). `--drop-legacy` (with `--yes`) deletes
+  the `legacy_` tables of a completed upgrade and does nothing else (see "The legacy tables").
 - **Legacy console plugins still work**: `Idno\Common\ConsolePlugin` subclasses
   (`getCommand()`, `getDescription()`, `getParameters()`, `execute()`) are found by
   `Idno\Console\Application` once the kernel (and so the legacy application) has booted,
@@ -489,7 +504,9 @@ Existing `Idno\Common\Page` classes keep working unchanged: plugins and core sti
 register them with `Idno::site()->routes()->addRoute($pattern, $handlerClass)` (Toro-style
 regex patterns, see `Idno\Core\PageHandler`), and they implement `getContent()` /
 `postContent()` / `putContent()` / `deleteContent()`. They are reached through the
-catch-all described above. Do not add new ones; add a controller instead.
+catch-all described above. Do not add new ones; add a controller instead, except where "Adding a
+route" says an endpoint must stay a legacy page (a logged-in user, a permission check or a
+state-changing browser request): the admin page `/admin/legacytables` is one, for that reason.
 
 `Idno\Legacy\` is where the shims between the kernel and the legacy application live
 (`LegacyBootstrap`, `LegacyServiceFactory`, `LegacySiteSettings`, `LegacyController`,
@@ -931,7 +948,8 @@ other new code may.
 ### Key design patterns
 
 - **Entity system**: All content inherits from `Idno\Common\Entity` (→ `BaseObject`).
-  Entities are stored as documents (MongoDB) or serialized blobs (MySQL). Key
+  Entities are stored as documents (MongoDB) or as JSON text, one row each, in `idno_<collection>`
+  (MySQL, MariaDB, SQLite; see "Database"). Key
   methods: `save()`, `delete()`, `getByUUID()`, `getActivityStreamsObjectType()`,
   `getFormattedContent()`.
 - **Plugin system**: Plugins extend `Idno\Common\Plugin`, register legacy routes via
@@ -967,7 +985,7 @@ other new code may.
   same in one run. The 1.x tables (`entities`, `entities_metadata`, `entities_search`, `config`,
   `session`, `versions`, ...) are no longer read or written by the site: `Idno\Upgrade\LegacyDataCopier`
   copies them into the new tables (see "Copying a 1.x database" below) and renames them
-  `legacy_<name>`.
+  `legacy_<name>`, which stay until the site's admin deletes them (see "The legacy tables" below).
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 #### The schema (migrations)
@@ -1356,6 +1374,60 @@ What it guarantees:
   MySQL and MariaDB and skips on an SQLite rig; run it on both servers
   (`IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql`) after changing the copier.
   `Tests/Unit/Upgrade/` pins the SQLite lock and `DocumentCheck`.
+
+#### The legacy tables
+
+A completed upgrade leaves the 1.x tables renamed `legacy_<name>` (the whole old database), the
+rejects (`idno_upgrade_rejects`, with each row's contents) and the progress rows. Nothing deletes
+them automatically. `Idno\Upgrade\LegacyTables` (a public container service: the legacy admin page
+fetches it with `Idno::container()->get()`; built from the `BootConfig` and service closures of the
+connection, the `SchemaCatalog`, the `LegacyDataCopier` and the `Dialect`, fetched only when needed,
+and nothing at all on a site whose database is not SQL, where every list is empty and `drop()` is 0):
+
+- `names()`: the `legacy_` + `LEGACY_TABLES` tables that exist, from the catalog (no statement beyond
+  the catalog's one, which the gate has read); `present()`: the same with a `COUNT(*)` each;
+  `rejects($limit = 100, $offset = 0)`: `n`, `collection`, `legacy_uuid`, `reason` (never `contents`),
+  ordered by `n`, limit 1 to `MAX_LIMIT` (1,000); `rejectCount()`; `reappeared()`: 1.x-named tables an
+  old process recreated after completion (`LegacyDataCopier::reappearedTables()`, MySQL/MariaDB only,
+  asked only when the catalog lists a 1.x name); `isComplete()`: `LegacyDataCopier::completion()`.
+- `worthShowing()` (the admin menu entry): no statement when legacy tables exist; else ONE
+  (`select 1 from idno_upgrade_rejects limit 1`); and only when the catalog lists a 1.x table name,
+  what `reappeared()` costs (three).
+- `drop()`: forgets the catalog, and with no legacy table returns 0; otherwise refuses with a
+  `\LogicException` (nothing dropped) unless the upgrade is complete; then drops exactly the
+  `legacy_` + `LEGACY_TABLES` tables, the `_metadata`/`_search` tables first (their foreign keys
+  reference `<c>`), ONE `DROP TABLE IF EXISTS` each, foreign-key checks left on (the same on MySQL 8
+  and MariaDB 10.6); forgets the catalog again and returns how many. A failure part-way is thrown and
+  leaves the rest; the next `drop()` finishes. Never dropped: the rejects, the progress rows, the
+  reappeared tables, any other `legacy_` table (`legacy_other`).
+- `/admin/legacytables` (`Idno\Pages\Admin\LegacyTables`, a LEGACY page: it needs the admin
+  gatekeeper and the CSRF check of `Page::post()`, which controllers do not have; route in
+  `Idno\Core\Admin::registerPages()`; templates `templates/default/admin/legacytables.tpl.php`,
+  `Themes/Twenty26/templates/modern/admin/legacytables.tpl.php` and the shared
+  `admin/legacytables/body`, which escapes every value from the database): GET (admins) changes
+  nothing and lists the tables with their counts, the rejects (100 a page, `?offset=`, the total and
+  where the contents are), the reappeared tables with what they are, or an empty state. POST: after
+  `Page::post()`'s token check, `adminGatekeeper()`, then only `confirm` exactly `delete` with a
+  complete upgrade calls `drop()`; every outcome is a session message (what was deleted, or why
+  nothing was) and a redirect to the page. The admin menu entry (both menus:
+  `templates/default/admin/menu.tpl.php`, `Themes/Twenty26/templates/modern/admin/menu.tpl.php`) is
+  `LegacyTables::showInMenu()`: false without a statement unless a logged-in admin is viewing (the
+  admin shell also draws the menu on the 403 page of an `/admin` URL); else `worthShowing()`, once
+  per request. On an SQLite or MongoDB site the route exists, the entry never appears, and the page
+  shows the empty state.
+- `idno:upgrade --drop-legacy` (no migration, no copy, no index: only this): nothing there → `Nothing
+  to delete: there are no legacy tables.`, exit 0; upgrade not complete → a line on stderr, exit 1;
+  without `--yes` → the tables with their row counts on stdout, `Nothing was deleted. ...` on stderr,
+  exit 1; with `--yes` → `Deleted <n> legacy tables: ...` and how many rejects are kept, exit 0 (a
+  failure: stderr, exit 1). `--yes` without `--drop-legacy`, or `--drop-legacy` with `--status`, does
+  nothing and exits 1.
+- Tests: `Tests/Upgrade/LegacyTablesTest` (a completed `LegacyFixture` upgrade, MySQL and MariaDB;
+  skips on SQLite), `Tests/Unit/Upgrade/LegacyTablesTest` (MongoDB: nothing fetched; SQLite: empty,
+  statement costs, the drop rules), `Tests/Characterisation/AdminLegacyTablesTest` (the rig site: who
+  gets the page, its empty state, no menu entry, POSTs without a token or the confirmation; it logs in
+  over HTTP), `UpgradeEndToEndTest::testTheAdminReviewsAndDeletesTheLegacyTables` (an upgraded site
+  in Twenty26: the entry, the list, escaping, the delete) and
+  `testTheConsoleDeletesTheLegacyTablesOnlyWhenToldTo`, `Tests/Kernel/UpgradeCommandTest`.
 
 #### The JSON record store
 
@@ -1804,6 +1876,10 @@ the CLI installer no longer writes one.
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Content Security Policy headers via template system (and, on the upgrade page, a strict
   per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
+- Deleting a site's data from the web: only `/admin/legacytables`, a legacy page (admin gatekeeper,
+  CSRF token, and the field `confirm` exactly `delete`), and only the `legacy_` tables of a completed
+  upgrade; never the rejects. Its template escapes every value read from the database. The console
+  equivalent needs `--drop-legacy --yes`
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions

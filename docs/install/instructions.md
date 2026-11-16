@@ -28,7 +28,9 @@ If you want to run the (almost) latest and greatest code, but aren't able to tra
 
 ### Use the automatic installer
 
-If you're using a MySQL back-end, you can get started by pointing your browser at your Idno site address. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below, or use the CLI installer.
+If you're using a MySQL (or MariaDB) back-end, you can get started by pointing your browser at your Idno site address. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below, or use the CLI installer.
+
+The installers write your configuration file; they do not create Idno's tables. On MySQL and MariaDB the database is set up the first time the site is loaded in a browser: a page saying "Idno is setting up its database" creates the tables in a few seconds, then continues to your site. If you have a shell, `php bin/console idno:upgrade`, run from your Idno directory, does the same.
 
 ### Use environment variables
 
@@ -54,18 +56,18 @@ If you need to use a non-standard database port, you can also select this:
 
     dbport = "Your database port"
 
-Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. Idno creates its tables the first time the site is loaded in a browser (or run `php bin/console idno:upgrade` from the Idno directory).
+Additionally, you will need to create the database referred to in this configuration file (MySQL 8.0 or later, or MariaDB 10.6 or later), and ensure that it can be connected to using the user credentials you supply. Idno creates its tables the first time the site is loaded in a browser (or run `php bin/console idno:upgrade` from the Idno directory).
 
 ### If you're using SQLite
 
-> **Warning: SQLite sites cannot be installed in this release.** The instructions below are out of date: with `database = "Sqlite3"` Idno connects to MySQL instead, using the file path as the database name, and it does not create an SQLite database. Use MySQL (or MongoDB).
+> **Warning: SQLite is for tests and development only in this release.** The installers do not set up SQLite sites, and Idno's PHP sessions on SQLite are not locked (two requests of one session at once can overwrite each other's session data). Use MySQL or MariaDB for a real site. Note that `database = "Sqlite3"`, which older instructions gave, does not mean SQLite: Idno connects to MySQL with it.
 
-As with MySQL, currently SQLite users need to create a ```config.ini``` in the root of their installation. This should contain the following information:
+For development, a configuration file can name an SQLite database file (SQLite 3.38 or later, with PHP's `pdo_sqlite`):
 
-    database = "Sqlite3"
-    dbname = "/path/to/sqlite.db"
+    database = "sqlite"
+    dbname = "/path/to/idno.sqlite"
 
-Assuming that you've got sqlite support built into PHP (this is usually provided by a module called php5-sqlite), and the location you select in dbname is writable, Idno will automatically set up your database.
+The directory must be writable by the web server. Idno creates its tables the first time the site is loaded (or with `php bin/console idno:upgrade`). Never put the file on a network filesystem (NFS, SMB).
 
 ### Set the filesystem
 

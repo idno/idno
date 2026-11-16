@@ -6,11 +6,11 @@ Idno has a number of PHP unit tests that can be run in order to check that thing
 
 Unit tests will automatically be run when you submit a pull request on GitHub. You should rectify any errors which are reported, as pull requests with errors will not be merged.
 
-Continuous integration (`.github/workflows/tests.yml`) runs, on PHP 8.4 and 8.5: the coding standard; the dependency-free unit tier (`composer test:unit`) as its own job; the whole suite on SQLite, through the test rig exactly as described below (`composer test:up`, then `composer test`, with no database server and no Docker); and the whole suite on MySQL and on MongoDB, each with its database server as a service.
+Continuous integration (`.github/workflows/tests.yml`) runs, on PHP 8.4 and 8.5: the coding standard; the dependency-free unit tier (`composer test:unit`) as its own job; the whole suite on SQLite, through the test rig exactly as described below (`composer test:up`, then `composer test`, with no database server and no Docker); and the whole suite on MySQL 8.0, on MariaDB 10.6 and on MongoDB, each with its database server as a service.
 
 ## Running unit tests on your local machine
 
-The tests need a database and a running copy of the site, because some of them make real HTTP requests to it. The repository includes a test rig that provides both: a database, and PHP's built-in web server on http://127.0.0.1:8089/. By default the database is SQLite, so you need nothing but PHP 8.4 or later with the extensions listed in `composer.json` (`pdo_sqlite` included). A MySQL mode, which needs Docker (or a compatible runtime such as OrbStack), is there for changes that depend on MySQL.
+The tests need a database and a running copy of the site, because some of them make real HTTP requests to it. The repository includes a test rig that provides both: a database, and PHP's built-in web server on http://127.0.0.1:8089/. By default the database is SQLite, so you need nothing but PHP 8.4 or later with the extensions listed in `composer.json` (`pdo_sqlite` included). A MySQL mode, which needs Docker (or a compatible runtime such as OrbStack), runs MySQL 8.0 or, with one environment variable, MariaDB 10.6, for changes that depend on them.
 
 ```bash
 composer install
@@ -20,7 +20,12 @@ composer test:down         # stop the rig and delete its database
 composer console -- list   # run bin/console against the rig with the same PHP flags
 
 composer test:up:mysql     # the same rig on MySQL 8 in Docker (127.0.0.1:33306)
+IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql   # the same, on MariaDB 10.6
 ```
+
+The Composer scripts that run PHPUnit or the rig (`test`, `test:unit`, `test:up`, `test:up:mysql`, `test:down`) have no time limit (`Composer\Config::disableProcessTimeout`): the whole suite on MySQL takes longer than Composer's default of 300 seconds.
+
+How long it takes, roughly, on a laptop: `composer test:unit` a few seconds; `composer test` about a minute on SQLite and two to four minutes on MySQL or MariaDB (the upgrade tests build private 1.x databases and run web servers of their own); `composer test:up:mysql` from nothing ten to thirty seconds, most of it waiting for the database server to start (longer the first time, while Docker downloads the image).
 
 `composer test` runs PHPUnit with `IDNO_DOMAIN=127.0.0.1` and `IDNO_PORT=8089`. If you run `vendor/bin/phpunit` yourself, set those two environment variables to the same values, and run PHP with `-d error_reporting=22527` (everything except deprecation and strict notices, as in a stock production `php.ini`). Idno's `pedantic_mode`, which the test configuration turns on, throws an exception for every reported error, so reported deprecations would otherwise stop the suite. Extra PHPUnit arguments can be passed after `--`, for example `composer test -- IdnoPlugins/ActivityPub/Tests/`.
 
@@ -33,7 +38,15 @@ Both modes run the same site: the same web server, port and router, `APP_ENV=tes
 
 In both modes, `composer test:up` creates the schema (the tables and their indexes) with `bin/console idno:upgrade` before it starts the web server, in the rig's environment; when the database has the schema already, the command does nothing.
 
-Use the MySQL rig for anything that touches the SQL dialect, search (MySQL's full-text index, which SQLite does not have: on SQLite a search term matches as a substring), the schema migrations, or how MySQL refuses data, and run the whole suite on it, and on MariaDB (`IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql`), before you submit such a change. Continuous integration runs SQLite, MySQL, MariaDB and MongoDB. On SQLite the tests that need MySQL are skipped, each with its reason (run `composer test -- -v` to see them): the tests on private MySQL databases of the rig's server (`Tests/Storage/JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`, `SchemaMigratorMySqlTest`, `Tests/Kernel/InstallerSchemaTest`), the tests of the MySQL connection (`Tests/Storage/DatabaseConnectionTest`), and the parts of `Tests/Kernel/RepositoryDataConciergeTest` that need MySQL. Everything else, the characterisation suite included, runs on both.
+Use the MySQL rig for anything that touches the SQL dialect, search (MySQL's full-text index, which SQLite does not have: on SQLite a search term matches as a substring), the schema migrations, the upgrade of a 1.x database, or how MySQL refuses data, and run the whole suite on it, and on MariaDB (`IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql`), before you submit such a change. MySQL and MariaDB differ in their JSON functions, which the new storage uses. Continuous integration runs SQLite, MySQL, MariaDB and MongoDB. On SQLite the tests that need MySQL or MariaDB are skipped, each with its reason (run `composer test -- -v` to see them): the tests on private MySQL databases of the rig's server (`Tests/Storage/JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`, `SchemaMigratorMySqlTest`, `Tests/Kernel/InstallerSchemaTest`), the tests of the MySQL connection (`Tests/Storage/DatabaseConnectionTest`), the parts of `Tests/Kernel/RepositoryDataConciergeTest` that need MySQL, and the tests of the upgrade from Idno 1.x (`Tests/Upgrade/LegacyDataCopierTest`, `LegacyTablesTest`, and `UpgradeEndToEndTest` except its empty-database case): no 1.x site runs on SQLite. Everything else, the characterisation suite included, runs on every rig.
+
+## Private test databases
+
+A test never writes to the rig site's own tables. A test that needs a database of its own makes one with `Tests\Storage\PrivateDatabase`: `sqliteMemory()` (SQLite in memory) and `sqliteFile($path)` (a file in a temporary directory the test makes and removes) need nothing but PHP; `mysql($purpose)` creates the database `<site database>_<purpose>` on the rig's MySQL or MariaDB server, with the schema unless `migrate: false`, and skips the test on an SQLite or MongoDB rig. Drop it in `tearDown()` with `PrivateDatabase::drop()`, which refuses to drop the site's own database.
+
+## The upgrade fixtures
+
+The tests of the upgrade from Idno 1.x build a 1.x database on a private MySQL or MariaDB database with `Tests\Upgrade\LegacyFixture`: `create($purpose)` loads the 1.x schema (`Tests/Upgrade/fixtures/mysql-schema-2020120301.sql`, Idno 1.6.4; with the schema version `2026111401`, also `mysql-upgrade-2026111401.sql`; optionally every table converted to a utf8mb4 collation), `insert()` writes a record laid out as Idno 1.x wrote it, `insertMany()` many small ones, `insertSite()` a site the web server can serve once upgraded (its settings, an admin user and a post), and `prepareNewSchema()` creates the new tables as the upgrade does. `Tests/Upgrade/UpgradeEndToEndTest` runs PHP's built-in web server on a free port (never 8089) on such a database, and drives the upgrade page, the admin pages and the console over HTTP and in subprocesses. Run these on MySQL and on MariaDB after changing the upgrade.
 
 ## The unit tier
 

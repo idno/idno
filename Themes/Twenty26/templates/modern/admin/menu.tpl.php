@@ -48,6 +48,13 @@
         <span><?= \Idno\Core\Idno::site()->language()->_('Logs') ?></span>
     </a>
     <?php } ?>
+    <?php if (\Idno\Pages\Admin\LegacyTables::showInMenu()) { ?>
+    <a href="<?= $baseUrl ?>admin/legacytables/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/legacytables/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'box'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Legacy tables') ?></span>
+    </a>
+    <?php } ?>
     <a href="<?= $baseUrl ?>admin/import/"
        class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/import/')) echo ' active'; ?>">
         <?= $this->__(['icon' => 'upload'])->draw('shell/icon') ?>

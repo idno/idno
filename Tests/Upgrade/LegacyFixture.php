@@ -194,13 +194,14 @@ final class LegacyFixture
      * is upgraded, at the site URL $url (`http://host:port/`): the site's configuration (its title,
      * URL and plugins), its `site` record (the host as `domain`), an admin user (`handle`) and one
      * public status update by that user whose body is `body`, each with `created` and `updated` as a
-     * 1.x save wrote them. Its records' uuids are under $url.
+     * 1.x save wrote them. Its records' uuids are under $url. The user's password is $password when
+     * given (random otherwise), and the configuration names $theme when given.
      *
      * @return array{user: string, handle: string, post: string, body: string} the user's and the
      *                                                                         post's _id, the
      *                                                                         handle, the body
      */
-    public function insertSite(string $url, string $handle = 'upgradeduser', array $plugins = ['Status', 'Text']): array
+    public function insertSite(string $url, string $handle = 'upgradeduser', array $plugins = ['Status', 'Text'], ?string $password = null, ?string $theme = null): array
     {
         $host = (string) parse_url($url, PHP_URL_HOST);
         $created = 1_700_000_000;
@@ -211,7 +212,7 @@ final class LegacyFixture
             'plugins' => $plugins,
             'open_registration' => false,
             'created' => $created,
-        ]);
+        ] + ($theme === null ? [] : ['theme' => $theme]));
         $this->insert('site', [
             'entity_subtype' => 'Idno\\Core\\Site',
             'domain' => $host,
@@ -226,7 +227,7 @@ final class LegacyFixture
             'entity_subtype' => 'Idno\\Entities\\User',
             'handle' => $handle,
             'email' => $handle . '@example.com',
-            'password' => password_hash(bin2hex(random_bytes(12)), PASSWORD_DEFAULT),
+            'password' => password_hash($password ?? bin2hex(random_bytes(12)), PASSWORD_DEFAULT),
             'title' => 'Upgraded User',
             'admin' => true,
             'access' => 'PUBLIC',

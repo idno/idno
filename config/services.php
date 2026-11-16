@@ -226,6 +226,20 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             service_closure(\Idno\Upgrade\LegacyDataCopier::class),
         ]);
     $services->set(\Idno\Upgrade\SchemaGate::class)->public();
+    // What a completed upgrade left behind (the legacy tables, the rejects), for the admin page
+    // /admin/legacytables (a legacy page, which fetches it with Idno::container()->get(), so it is
+    // public) and `idno:upgrade --drop-legacy`. It fetches the connection, the catalog (the shared
+    // instance the gate has read), the copier and the dialect only when needed, and nothing at all on
+    // a site whose database is not SQL.
+    $services->set(\Idno\Upgrade\LegacyTables::class)
+        ->args([
+            service(BootConfig::class),
+            service_closure('database_connection'),
+            service_closure(\Idno\Storage\SchemaCatalog::class),
+            service_closure(\Idno\Upgrade\LegacyDataCopier::class),
+            service_closure(\Idno\Storage\Platform\Dialect::class),
+        ])
+        ->public();
     // The upgrade itself (the step endpoint, idno:upgrade). It logs its failures on the `upgrade`
     // channel, as the copier does. Built when first fetched; it needs an SQL site.
     // Which plugins are enabled, read without the legacy application (the runner's idno:upgrade

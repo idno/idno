@@ -443,6 +443,137 @@ final class UpgradeEndToEndTest extends TestCase
     }
 
     /**
+     * The admin's page of what the upgrade left behind (/admin/legacytables), on an upgraded site in
+     * the Twenty26 theme: the menu entry, the legacy tables with their counts, the rejects (escaped,
+     * never their contents), and the delete, which needs the CSRF token AND the confirmation.
+     */
+    public function testTheAdminReviewsAndDeletesTheLegacyTables(): void
+    {
+        $password = bin2hex(random_bytes(12));
+        $this->fixture = LegacyFixture::create('e2e');
+        $this->connection = $this->fixture->connection;
+        $this->dbname = (string) $this->connection->getDatabase();
+        $site = $this->fixture->insertSite($this->url, plugins: ['Status', 'Text'], password: $password, theme: 'Twenty26');
+        $this->fixture->insertMany('entities', 30);
+        $odd = 'https://legacy.example/view/<i>odd</i>&amp;';
+        $this->fixture->insert('entities', ['title' => 'Unreadable'], ['uuid' => $odd], 'not <b>JSON</b> at all');
+        $this->runner()->run(static function (string $line): void {
+        });
+        $this->assertTrue($this->copier()->progress()->complete);
+        $this->startServer();
+        $cookie = $this->logIn($site['handle'], $password);
+        $html = ['Accept: text/html', 'Cookie: ' . $cookie];
+
+        $admin = $this->request('GET', '/admin/', $html);
+        $this->assertSame(200, $admin['status'], substr($admin['body'], 0, 2000) . $this->log());
+        $this->assertStringContainsString('idno-admin-nav', $admin['body'], 'the Twenty26 admin menu');
+        $this->assertStringContainsString($this->url . 'admin/legacytables/', $admin['body'], 'the menu entry, while there is something to see');
+
+        $page = $this->request('GET', '/admin/legacytables/', $html);
+        $this->assertSame(200, $page['status'], substr($page['body'], 0, 2000) . $this->log());
+        $this->assertStringContainsString('idno-admin-page-title', $page['body']);
+        $this->assertMatchesRegularExpression('#<code>legacy_entities</code></td><td>33</td>#', $page['body'], 'the 1.x entities with their count');
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            $this->assertStringContainsString('<code>legacy_' . $table . '</code>', $page['body']);
+        }
+        $this->assertStringContainsString('id="legacytables-rejects"', $page['body']);
+        $this->assertStringContainsString('<code>https://legacy.example/view/&lt;i&gt;odd&lt;/i&gt;&amp;amp;</code>', $page['body'], 'the uuid, escaped');
+        $this->assertStringNotContainsString('<i>odd</i>', $page['body']);
+        $this->assertStringContainsString('contents are not valid JSON', $page['body']);
+        $this->assertStringNotContainsString('JSON</b> at all', $page['body'], 'never the contents');
+        $this->assertStringNotContainsString('JSON&lt;/b&gt; at all', $page['body']);
+        $this->assertStringContainsString('name="confirm"', $page['body']);
+        $before = $this->tables();
+
+        // Without the CSRF token, and with the token but not the confirmation: nothing is deleted.
+        $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query(['confirm' => 'delete']));
+        $this->assertSame($before, $this->tables());
+        $token = $this->formToken($page['body'], 'admin/legacytables/');
+        $refused = $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query($token + ['confirm' => 'Delete']));
+        $this->assertSame(302, $refused['status'], $refused['body']);
+        $this->assertSame($before, $this->tables());
+        $this->assertStringContainsString('Nothing was deleted: type delete in the box to confirm.', $this->request('GET', '/admin/legacytables/', $html)['body']);
+
+        $deleted = $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query($token + ['confirm' => 'delete']));
+        $this->assertSame(302, $deleted['status'], $deleted['body'] . $this->log());
+        $this->assertStringStartsWith($this->url . 'admin/legacytables/', $deleted['headers']['location'] ?? '', 'back to the page (the legacy forward() keeps the template type)');
+        $tables = $this->tables();
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            $this->assertNotContains('legacy_' . $table, $tables);
+        }
+        $this->assertSame(1, (int) $this->db()->fetchOne('select count(*) from idno_upgrade_rejects'), 'the rejects are kept');
+        $after = $this->request('GET', '/admin/legacytables/', $html);
+        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities, legacy_entities_metadata, ', $after['body']);
+        $this->assertStringNotContainsString('id="legacytables-tables"', $after['body']);
+        $this->assertStringContainsString('id="legacytables-rejects"', $after['body']);
+        $this->assertStringContainsString($this->url . 'admin/legacytables/', $this->request('GET', '/admin/', $html)['body'], 'the rejects keep the entry');
+
+        $this->assertSame(200, $this->request('GET', '/', ['Accept: text/html'])['status'], 'the site is up');
+        $post = $this->request('GET', '/view/' . $site['post'], ['Accept: text/html']);
+        $this->assertSame(200, $post['status']);
+        $this->assertStringContainsString($site['body'], $post['body']);
+    }
+
+    /**
+     * `idno:upgrade --drop-legacy`: refused before completion, a list and exit 1 without --yes, the
+     * delete with it, then nothing to do.
+     */
+    public function testTheConsoleDeletesTheLegacyTablesOnlyWhenToldTo(): void
+    {
+        $this->oneXSite(30);
+        $this->fixture?->insert('entities', ['title' => 'Unreadable'], [], 'not JSON');
+        $runner = $this->runner();
+        for ($i = 0; $i < self::MAX_STEPS && $this->copier()->progress()->phase !== UpgradeProgress::VERIFYING; ++$i) {
+            $runner->step(microtime(true) - 1);
+        }
+        $this->assertSame(UpgradeProgress::VERIFYING, $this->copier()->progress()->phase);
+        $before = $this->tables();
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy', '--yes');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString('The upgrade from Idno 1.x is not complete', $stderr);
+        $this->assertSame($before, $this->tables(), 'nothing deleted, nothing upgraded');
+
+        $runner->run(static function (string $line): void {
+        });
+        $this->assertTrue($this->copier()->progress()->complete);
+        $before = $this->tables();
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--yes');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString('--yes', $stderr);
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString("legacy_entities: 33 rows\n", $stdout);
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            $this->assertMatchesRegularExpression('#^  legacy_' . $table . ': \d+ rows?$#m', $stdout);
+        }
+        $this->assertStringContainsString('--drop-legacy --yes', $stderr);
+        $this->assertSame($before, $this->tables(), 'without --yes nothing is deleted');
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy', '--yes');
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        // (stderr carries the booted legacy application's own log lines, such as a plugin's warning.)
+        $this->assertStringNotContainsString('legacy', $stderr);
+        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities, ', $stdout);
+        $this->assertStringContainsString('1 row that was not carried over is kept in idno_upgrade_rejects.', $stdout);
+        $tables = $this->tables();
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            $this->assertNotContains('legacy_' . $table, $tables);
+        }
+        $this->assertSame(1, (int) $this->db()->fetchOne('select count(*) from idno_upgrade_rejects'));
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy');
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame("Nothing to delete: there are no legacy tables.\n", $stdout);
+
+        [$exit, $stdout] = $this->console('idno:upgrade', '--status');
+        $this->assertSame(0, $exit);
+        $this->assertStringStartsWith("Schema status: current\n", $stdout);
+    }
+
+    /**
      * A database that refuses the first connection and would accept the next (error 1040, "Too many
      * connections", while every visitor's page is stepping): the gate saw it unreachable, and that is
      * final for the request. The legacy application does not boot on the database (nothing is
@@ -1084,6 +1215,61 @@ final class UpgradeEndToEndTest extends TestCase
         }
 
         return ['status' => $status, 'headers' => $headers, 'body' => (string) substr($raw, $size)];
+    }
+
+    /**
+     * Logs in through the login form over HTTP and returns the session cookie (`name=value`).
+     */
+    private function logIn(string $handle, string $password): string
+    {
+        $form = $this->request('GET', '/session/login', ['Accept: text/html']);
+        $this->assertSame(200, $form['status'], substr($form['body'], 0, 2000) . $this->log());
+        $cookie = $this->sessionCookie($form);
+        $this->assertNotNull($cookie, 'the login form starts a session');
+        $login = $this->request(
+            'POST',
+            '/session/login',
+            ['Accept: text/html', 'Cookie: ' . $cookie, 'Content-Type: application/x-www-form-urlencoded'],
+            http_build_query($this->formToken($form['body'], 'session/login') + ['email' => $handle, 'password' => $password]),
+        );
+        $this->assertSame(302, $login['status'], substr($login['body'], 0, 2000) . $this->log());
+
+        return $this->sessionCookie($login) ?? $cookie;
+    }
+
+    /**
+     * @param array{headers: array<string, string>} $answer
+     */
+    private function sessionCookie(array $answer): ?string
+    {
+        // answer() keeps the last header of each name; the session cookie is the last one set.
+        $header = $answer['headers']['set-cookie'] ?? '';
+
+        return preg_match('/^([A-Za-z0-9_]+)=([^;\s]+)/', $header, $m) === 1 && $m[2] !== 'deleted' ? $m[1] . '=' . $m[2] : null;
+    }
+
+    /**
+     * The CSRF token fields of the form in $html whose action ends with $action.
+     *
+     * @return array<string, string>
+     */
+    private function formToken(string $html, string $action): array
+    {
+        foreach (preg_split('/<form\b/i', $html) ?: [] as $form) {
+            if (preg_match('/^[^>]*action="[^"]*' . preg_quote($action, '/') . '"/', $form) !== 1) {
+                continue;
+            }
+            $fields = [];
+            foreach (['__bTs', '__bTk', '__bTa'] as $field) {
+                if (preg_match('/name="' . $field . '" value="([^"]*)"/', $form, $m) === 1) {
+                    $fields[$field] = html_entity_decode($m[1], ENT_QUOTES);
+                }
+            }
+            if (count($fields) === 3) {
+                return $fields;
+            }
+        }
+        $this->fail('No signed form posting to ' . $action . ' in the page.');
     }
 
     /**

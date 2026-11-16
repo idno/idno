@@ -154,6 +154,32 @@ final class UpgradeCommandTest extends TestCase
     }
 
     /**
+     * `--drop-legacy` deletes only legacy tables (there are none on a database that was never 1.x)
+     * and does nothing else: it creates no schema, even on an empty database. `--yes` alone does
+     * nothing.
+     */
+    public function testDropLegacyWithNothingToDeleteDoesNothingElse(): void
+    {
+        foreach ([['--drop-legacy'], ['--drop-legacy', '--yes']] as $options) {
+            [$exit, $stdout, $stderr] = $this->console('idno:upgrade', ...$options);
+
+            $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+            $this->assertSame("Nothing to delete: there are no legacy tables.\n", $stdout);
+            $this->assertSame([], $this->catalog()->tables(), 'no schema was created');
+        }
+
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--yes');
+        $this->assertSame(1, $exit);
+        $this->assertSame('', $stdout);
+        $this->assertSame("--yes is only for --drop-legacy: nothing was done.\n", $stderr);
+        $this->assertSame([], $this->catalog()->tables());
+
+        [$exit, , $stderr] = $this->console('idno:upgrade', '--drop-legacy', '--status');
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('not both', $stderr);
+    }
+
+    /**
      * While the gate is closed the commands that need the legacy application (its console plugins,
      * `version`) are not there, and the console says why; idno:upgrade opens the gate.
      */

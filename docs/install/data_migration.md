@@ -56,6 +56,9 @@ Unzip `<subdomain>.idno.co.zip` and then copy the contents of the directory call
 
 Load the SQL file into your Idno database using a command like: `mysql <database name> < <sql file name>`
 
+!!! note "Idno 2.0"
+    This guide was written for Idno 1.x. An export from an Idno 1.x site is in the 1.x table layout (`entities`, `config`, ...), which Idno 2.0 does not read directly. Load it into the database of an Idno 1.6.4 site set up as above, then upgrade that site to Idno 2.0 as described in [Upgrading Idno](upgrade.md): the upgrade copies the 1.x tables into the new ones.
+
 ## Does Everything Work?
 
 You should notice that your posts all appear, and hopefully your images too, but your test post and site name will be there, along with the test user. If you post very regularly, you will be missing the images that were uploaded in the time between when the data export was done by the Idno team and emailed to you, and when you started the migration. Those files are gone - you'll have to re-upload them by editing the recent posts with broken image links.

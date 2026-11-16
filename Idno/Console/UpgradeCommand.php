@@ -6,6 +6,7 @@ namespace Idno\Console;
 
 use Idno\Storage\SchemaMigrator;
 use Idno\Upgrade\LegacyDataCopier;
+use Idno\Upgrade\LegacyTables;
 use Idno\Upgrade\PublicMessage;
 use Idno\Upgrade\SchemaState;
 use Idno\Upgrade\SchemaStatus;
@@ -34,6 +35,12 @@ use Symfony\Component\Console\Output\OutputInterface;
  * refuses (an unsupported server, a 1.x database too old, renamed 1.x tables with no upgrade on
  * record) it prints the public message instead and exits 1.
  *
+ * With --drop-legacy it deletes the legacy tables a completed upgrade left (the 1.x tables renamed
+ * `legacy_<name>`, LegacyTables::drop()) and nothing else: no migration, no index, no copy. Without
+ * --yes it only lists them with their row counts and exits 1; it refuses (exit 1) while the upgrade
+ * is not complete, and exits 0 with one line when there is nothing to delete. The rejects
+ * (`idno_upgrade_rejects`) are never deleted.
+ *
  * It runs whether or not the legacy application booted (it does not, while the schema gate is
  * closed), so it takes nothing from the legacy application and no logger.
  */
@@ -45,6 +52,7 @@ final class UpgradeCommand extends Command
         private readonly SchemaState $state,
         private readonly SchemaMigrator $migrator,
         private readonly LegacyDataCopier $copier,
+        private readonly LegacyTables $legacyTables,
     )
     {
         parent::__construct();
@@ -53,11 +61,27 @@ final class UpgradeCommand extends Command
     protected function configure(): void
     {
         $this->addOption('status', null, InputOption::VALUE_NONE, 'Only print the schema\'s status, the pending migrations and the copy\'s progress; change nothing');
+        $this->addOption('drop-legacy', null, InputOption::VALUE_NONE, 'Delete the legacy_ tables a completed upgrade from Idno 1.x left (only with --yes; without it, list them); nothing else is done');
+        $this->addOption('yes', null, InputOption::VALUE_NONE, 'With --drop-legacy: really delete them (this cannot be undone)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $errors = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+        if ($input->getOption('yes') && !$input->getOption('drop-legacy')) {
+            $errors->writeln('--yes is only for --drop-legacy: nothing was done.');
+
+            return Command::FAILURE;
+        }
+        if ($input->getOption('drop-legacy')) {
+            if ($input->getOption('status')) {
+                $errors->writeln('Use --status or --drop-legacy, not both: nothing was done.');
+
+                return Command::FAILURE;
+            }
+
+            return $this->dropLegacy((bool) $input->getOption('yes'), $output, $errors);
+        }
         if ($input->getOption('status')) {
             return $this->status($output, $errors);
         }
@@ -113,6 +137,48 @@ final class UpgradeCommand extends Command
         }
         if ($status === SchemaStatus::Legacy) {
             $this->printProgress($this->copier->progress(), $output);
+        }
+
+        return Command::SUCCESS;
+    }
+
+    private function dropLegacy(bool $yes, OutputInterface $output, OutputInterface $errors): int
+    {
+        $present = $this->legacyTables->present();
+        if ($present === []) {
+            $output->writeln('Nothing to delete: there are no legacy tables.');
+
+            return Command::SUCCESS;
+        }
+        if (!$this->legacyTables->isComplete()) {
+            $errors->writeln('The upgrade from Idno 1.x is not complete: its legacy tables are still in use. Nothing was deleted.');
+
+            return Command::FAILURE;
+        }
+        if (!$yes) {
+            $output->writeln('These legacy tables of the Idno 1.x database would be deleted:');
+            foreach ($present as $table => $rows) {
+                $output->writeln('  ' . $table . ': ' . $rows . ($rows === 1 ? ' row' : ' rows'), OutputInterface::OUTPUT_PLAIN);
+            }
+            $errors->writeln('Nothing was deleted. To delete them, run idno:upgrade --drop-legacy --yes; this cannot be undone, so back up the database first.');
+
+            return Command::FAILURE;
+        }
+        try {
+            $dropped = $this->legacyTables->drop();
+        } catch (\Throwable $e) {
+            $errors->writeln('Not every legacy table could be deleted: ' . LegacyDataCopier::clean($e::class . ': ' . $e->getMessage()), OutputInterface::OUTPUT_PLAIN);
+            $errors->writeln('Run idno:upgrade --drop-legacy --yes again to delete the rest.');
+
+            return Command::FAILURE;
+        }
+        $output->writeln('Deleted ' . $dropped . ' legacy tables: ' . implode(', ', array_keys($present)) . '.', OutputInterface::OUTPUT_PLAIN);
+        $rejects = $this->legacyTables->rejectCount();
+        if ($rejects > 0) {
+            $kept = $rejects === 1
+                ? '1 row that was not carried over is kept in idno_upgrade_rejects.'
+                : $rejects . ' rows that were not carried over are kept in idno_upgrade_rejects.';
+            $output->writeln($kept);
         }
 
         return Command::SUCCESS;

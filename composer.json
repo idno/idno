@@ -115,11 +115,11 @@
         }
     },
     "scripts": {
-        "test:up": "Tests/rig/up.sh sqlite",
-        "test:up:mysql": "Tests/rig/up.sh mysql",
-        "test:down": "Tests/rig/down.sh",
+        "test:up": ["Composer\\Config::disableProcessTimeout", "Tests/rig/up.sh sqlite"],
+        "test:up:mysql": ["Composer\\Config::disableProcessTimeout", "Tests/rig/up.sh mysql"],
+        "test:down": ["Composer\\Config::disableProcessTimeout", "Tests/rig/down.sh"],
         "console": "php -d error_reporting=22527 bin/console",
-        "test:unit": "php -d error_reporting=22527 vendor/bin/phpunit -c phpunit.unit.xml",
-        "test": "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"
+        "test:unit": ["Composer\\Config::disableProcessTimeout", "php -d error_reporting=22527 vendor/bin/phpunit -c phpunit.unit.xml"],
+        "test": ["Composer\\Config::disableProcessTimeout", "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"]
     }
 }
