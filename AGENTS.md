@@ -103,8 +103,10 @@ composer console -- list
     or `mariadb-admin`/`mariadb`, whichever the image has). The image the database was started from
     is recorded in the per-checkout temporary directory (`mysql-image`; none recorded means
     `mysql:8.0`): `test:up:mysql` with another image stops the running database first (`down.sh`),
-    and the container is started with `--renew-anon-volumes`, so a new image always starts on an
-    empty data directory with today's schema loaded. `down.sh` removes the container's data volume
+    and the container is started with `--renew-anon-volumes`, so whenever compose recreates it (a new
+    image, or any change to the service in `docker-compose.yml`) it starts on an empty data directory
+    with today's schema loaded, and the previous test data is gone; a re-run that needs no new
+    container keeps its data. `down.sh` removes the container's data volume
     (`docker compose down -v`). On MariaDB 10.6 the existing suite fails where it pins MySQL 8's
     behaviour: the session `sql_mode` (`testTheConnectionMatchesTheLegacyBackendsConnection`,
     `testTheSessionMatchesTheLegacyConnection`) and the `created` operands MySQL rejects, which
@@ -810,7 +812,11 @@ test made them.
 - Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
   (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
   SQLite; any other platform aborts) and never changes once committed: a schema change is a new
-  migration. On MySQL and MariaDB a migration is not transactional (DDL commits implicitly).
+  migration. On MySQL and MariaDB a migration is not transactional (DDL commits implicitly), so a
+  run can be interrupted after some statements with no version recorded: every statement must be
+  safe to repeat (`CREATE TABLE IF NOT EXISTS`, and on SQLite `CREATE INDEX IF NOT EXISTS`), so that
+  the next run completes the schema (pinned by `testAnInterruptedBaselineCanBeRunAgain` on SQLite
+  and MySQL).
 - The baseline, `Version20261115000000` (irreversible), creates: `idno_entities`, `idno_reader`,
   `idno_site` (one row per document: `id`, `uuid` (unique), `type`, `owner`, `created` (epoch
   seconds, `BIGINT`), `publish_status`, `data` (the document's JSON text, `LONGTEXT` `utf8mb4_bin`),
@@ -819,7 +825,9 @@ test made them.
   order); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
   `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping). On MySQL/MariaDB
   every table is InnoDB, `utf8mb4`, and every text column names its collation:
-  `utf8mb4_general_ci` except the `utf8mb4_bin` ones above. On SQLite the same tables, with
+  `utf8mb4_general_ci` except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
+  which doctrine/migrations creates itself with the database's default charset and collation; it
+  holds only migration class names and timings. On SQLite the same tables, with
   `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
   index names prefixed with the table's (`idno_entities_type_created`), no full-text index, and no
   custom collation or function, so the file opens with standard SQLite tools.
@@ -833,7 +841,8 @@ test made them.
 - Tests: `Tests\Storage\PrivateDatabase` makes migrated databases of a test's own.
   `sqliteMemory()` (an in-memory database with `SqliteConnectionSetup`) needs nothing but PHP and
   works in the unit tier; `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
-  MariaDB server (dropping a leftover first) and returns a new connection to it (never the site's),
+  MariaDB server (dropping a leftover first; the site's dbname must match `^[A-Za-z0-9_]+$`) and
+  returns a new connection to it (never the site's), dropping it again if the migrations fail, and
   skipping the test on an SQLite or MongoDB site; `drop()` removes either (call it in `tearDown()`;
   it refuses to drop the site's own database). `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.

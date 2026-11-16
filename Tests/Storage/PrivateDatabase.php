@@ -24,7 +24,8 @@ use PHPUnit\Framework\Assert;
  *    site's). Needs the booted application (its boot configuration) and so the rig; skips the
  *    test, saying why, when the site's database is not MySQL (an SQLite rig, MongoDB).
  *
- * drop() removes what either made: call it in tearDown().
+ * If the migrations fail, mysql() drops the database it made before rethrowing. drop() removes
+ * what either made: call it in tearDown().
  */
 final class PrivateDatabase
 {
@@ -52,18 +53,15 @@ final class PrivateDatabase
             Assert::markTestSkipped('The site\'s database is not MySQL or MariaDB, so there is no MySQL server to make a private database on.');
         }
         $params = ConnectionParameters::fromLegacyConfig($config, $_SERVER);
-        $site = (string) ($params['dbname'] ?? '');
-        if ($site === '') {
-            throw new \LogicException('The site\'s configuration names no database.');
-        }
-        $name = $site . '_' . $purpose;
+        $name = self::siteDatabase($params) . '_' . $purpose;
 
         $server = $params;
         unset($server['dbname']);
         $admin = DriverManager::getConnection($server);
         try {
-            $admin->executeStatement('drop database if exists `' . $name . '`');
-            $admin->executeStatement('create database `' . $name . '` character set utf8mb4 collate utf8mb4_general_ci');
+            $quoted = $admin->quoteSingleIdentifier($name);
+            $admin->executeStatement('drop database if exists ' . $quoted);
+            $admin->executeStatement('create database ' . $quoted . ' character set utf8mb4 collate utf8mb4_general_ci');
         } catch (\Doctrine\DBAL\Exception $e) {
             Assert::markTestSkipped('The database user cannot create a private database: ' . $e->getMessage());
         } finally {
@@ -71,9 +69,38 @@ final class PrivateDatabase
         }
 
         $connection = DriverManager::getConnection(['dbname' => $name] + $params);
-        (new SchemaMigrator($connection))->migrate();
+        try {
+            (new SchemaMigrator($connection))->migrate();
+        } catch (\Throwable $e) {
+            // Leave nothing behind: the database is this call's own.
+            try {
+                $connection->executeStatement('drop database if exists ' . $connection->quoteSingleIdentifier($name));
+            } finally {
+                $connection->close();
+            }
+
+            throw $e;
+        }
 
         return $connection;
+    }
+
+    /**
+     * The site's database name, which private databases are named after.
+     *
+     * @param array<string, mixed> $params the site's DBAL connection parameters
+     */
+    private static function siteDatabase(array $params): string
+    {
+        $site = (string) ($params['dbname'] ?? '');
+        if (preg_match('/^[A-Za-z0-9_]+$/', $site) !== 1) {
+            throw new \LogicException(sprintf(
+                'The site\'s database name "%s" is not made of letters, digits and underscores only, so no private database is named after it.',
+                $site,
+            ));
+        }
+
+        return $site;
     }
 
     /**
@@ -85,11 +112,11 @@ final class PrivateDatabase
         if ($connection->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
             $name = (string) $connection->getDatabase();
             $config = \Idno\Core\Idno::container()->get(BootConfig::class)->all();
-            $site = (string) (ConnectionParameters::fromLegacyConfig($config, $_SERVER)['dbname'] ?? '');
-            if ($name === '' || $name === $site || !str_starts_with($name, $site . '_')) {
+            $site = self::siteDatabase(ConnectionParameters::fromLegacyConfig($config, $_SERVER));
+            if ($name === $site || !str_starts_with($name, $site . '_')) {
                 throw new \LogicException('Not a private database: ' . $name);
             }
-            $connection->executeStatement('drop database if exists `' . $name . '`');
+            $connection->executeStatement('drop database if exists ' . $connection->quoteSingleIdentifier($name));
         }
         $connection->close();
     }

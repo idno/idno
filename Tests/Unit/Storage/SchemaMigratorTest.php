@@ -81,6 +81,28 @@ final class SchemaMigratorTest extends TestCase
         $this->assertSame([], (new SchemaMigrator($connection))->pending());
     }
 
+    /**
+     * A first run interrupted after some of its statements (a killed request): some tables exist,
+     * the version is not recorded. Running it again completes the schema.
+     */
+    public function testAnInterruptedBaselineCanBeRunAgain(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory();
+        $connection->executeStatement('drop table idno_reader');
+        $connection->executeStatement('delete from idno_migrations');
+        $migrator = new SchemaMigrator($connection);
+        $this->assertSame([self::BASELINE], $migrator->pending());
+
+        $migrator->migrate();
+
+        $catalog = new SchemaCatalog($connection);
+        foreach (self::TABLES as $table) {
+            $this->assertTrue($catalog->hasTable($table), $table);
+        }
+        $this->assertCount(4, $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = 'idno_reader' and sql is not null"));
+        $this->assertSame([], $migrator->pending());
+    }
+
     public function testPendingListsTheBaselineOnAnEmptyDatabase(): void
     {
         $connection = self::emptyDatabase();

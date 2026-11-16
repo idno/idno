@@ -100,6 +100,27 @@ final class SchemaMigratorMySqlTest extends TestCase
         $this->assertSame(1, (int) $this->connection()->fetchOne('select count(*) from idno_migrations'));
     }
 
+    /**
+     * A first run interrupted after some of its statements (a killed request): some tables exist,
+     * the version is not recorded. Running it again completes the schema.
+     */
+    public function testAnInterruptedBaselineCanBeRunAgain(): void
+    {
+        $this->connection()->executeStatement('drop table idno_settings');
+        $this->connection()->executeStatement('drop table idno_migrations');
+        $migrator = new SchemaMigrator($this->connection());
+        $this->assertSame(['20261115000000'], $migrator->pending());
+
+        $migrator->migrate();
+
+        $catalog = new SchemaCatalog($this->connection());
+        foreach (self::TABLES as $table) {
+            $this->assertTrue($catalog->hasTable($table), $table);
+        }
+        $this->assertSame([], $migrator->pending());
+        $this->assertSame('20261115000000', $migrator->latest());
+    }
+
     public function testColumnsAndCollations(): void
     {
         foreach (['idno_entities', 'idno_reader', 'idno_site'] as $table) {

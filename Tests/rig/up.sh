@@ -50,8 +50,10 @@ mkdir -p "$STATE_DIR/uploads"
 # The mode file is written only once the database is up, so a start that fails (Docker not running)
 # leaves nothing that a later start of the other mode would have to stop.
 if [ "$MODE" = mysql ]; then
-    # --renew-anon-volumes: a container that must be recreated (another image) gets an empty data
-    # directory, never the previous image's.
+    # --renew-anon-volumes: whenever compose recreates the container (another image, or any change
+    # to the service in docker-compose.yml), it starts on an empty data directory, never the previous
+    # container's: the test data is gone and the schema below is loaded again. A re-run that needs no
+    # new container keeps the running one and its data.
     IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait --renew-anon-volumes
     echo "$MYSQL_IMAGE" > "$MYSQL_IMAGE_FILE"
     echo "$MODE" > "$MODE_FILE"
@@ -62,7 +64,7 @@ if [ "$MODE" = mysql ]; then
         IDNO_RIG_MYSQL_IMAGE="$MYSQL_IMAGE" docker compose -f "$RIG_DIR/docker-compose.yml" exec -T db \
             sh -c 'exec "$(command -v mariadb || command -v mysql)" -uroot "$@"' db-client "$@"
     }
-    # Load the schema only into an empty database, so re-running does not wipe test data.
+    # Load the schema only into an empty database, so a re-run on the same container keeps its data.
     if [ -z "$(db_client -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
         db_client known_unittest < warmup/schemas/mysql/mysql.sql
         echo "Loaded MySQL schema."

@@ -18,6 +18,10 @@ use Doctrine\Migrations\AbstractMigration;
  * The SQL is written out per platform and must never change: a migration is a snapshot of the
  * schema at its version. Later changes are new migrations. On SQLite the schema uses only built-in
  * collations, so the database file opens with standard SQLite tools.
+ *
+ * Every statement is safe to repeat (`IF NOT EXISTS`): on MySQL and MariaDB the migration is not
+ * transactional, so a run interrupted partway (a killed request, a refused statement) leaves some
+ * tables and no recorded version, and the next run must complete the schema rather than fail.
  */
 final class Version20261115000000 extends AbstractMigration
 {
@@ -54,7 +58,7 @@ final class Version20261115000000 extends AbstractMigration
     private function upMySql(): void
     {
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_entities (
+            CREATE TABLE IF NOT EXISTS idno_entities (
               id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               uuid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               type VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
@@ -72,7 +76,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_reader (
+            CREATE TABLE IF NOT EXISTS idno_reader (
               id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               uuid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               type VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
@@ -90,7 +94,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_site (
+            CREATE TABLE IF NOT EXISTS idno_site (
               id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               uuid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               type VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
@@ -108,7 +112,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_settings (
+            CREATE TABLE IF NOT EXISTS idno_settings (
               name VARCHAR(190) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
               value LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
               position INT NOT NULL,
@@ -116,7 +120,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_sessions (
+            CREATE TABLE IF NOT EXISTS idno_sessions (
               session_id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
               session_value MEDIUMBLOB NOT NULL,
               session_lifetime INT NOT NULL,
@@ -125,7 +129,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_upgrade_progress (
+            CREATE TABLE IF NOT EXISTS idno_upgrade_progress (
               collection VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               source_rows BIGINT NOT NULL,
               copied BIGINT NOT NULL,
@@ -137,7 +141,7 @@ final class Version20261115000000 extends AbstractMigration
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_upgrade_rejects (
+            CREATE TABLE IF NOT EXISTS idno_upgrade_rejects (
               n BIGINT NOT NULL AUTO_INCREMENT,
               collection VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
               legacy_uuid VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
@@ -152,7 +156,7 @@ final class Version20261115000000 extends AbstractMigration
     private function upSqlite(): void
     {
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_entities (
+            CREATE TABLE IF NOT EXISTS idno_entities (
               id TEXT NOT NULL COLLATE NOCASE,
               uuid TEXT NOT NULL COLLATE NOCASE,
               type TEXT NOT NULL COLLATE NOCASE,
@@ -164,12 +168,12 @@ final class Version20261115000000 extends AbstractMigration
               PRIMARY KEY (id)
             )
             SQL);
-        $this->addSql('CREATE UNIQUE INDEX idno_entities_uuid ON idno_entities (uuid)');
-        $this->addSql('CREATE INDEX idno_entities_type_created ON idno_entities (type, created)');
-        $this->addSql('CREATE INDEX idno_entities_owner_created ON idno_entities (owner, created)');
-        $this->addSql('CREATE INDEX idno_entities_created ON idno_entities (created)');
+        $this->addSql('CREATE UNIQUE INDEX IF NOT EXISTS idno_entities_uuid ON idno_entities (uuid)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_entities_type_created ON idno_entities (type, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_entities_owner_created ON idno_entities (owner, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_entities_created ON idno_entities (created)');
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_reader (
+            CREATE TABLE IF NOT EXISTS idno_reader (
               id TEXT NOT NULL COLLATE NOCASE,
               uuid TEXT NOT NULL COLLATE NOCASE,
               type TEXT NOT NULL COLLATE NOCASE,
@@ -181,12 +185,12 @@ final class Version20261115000000 extends AbstractMigration
               PRIMARY KEY (id)
             )
             SQL);
-        $this->addSql('CREATE UNIQUE INDEX idno_reader_uuid ON idno_reader (uuid)');
-        $this->addSql('CREATE INDEX idno_reader_type_created ON idno_reader (type, created)');
-        $this->addSql('CREATE INDEX idno_reader_owner_created ON idno_reader (owner, created)');
-        $this->addSql('CREATE INDEX idno_reader_created ON idno_reader (created)');
+        $this->addSql('CREATE UNIQUE INDEX IF NOT EXISTS idno_reader_uuid ON idno_reader (uuid)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_reader_type_created ON idno_reader (type, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_reader_owner_created ON idno_reader (owner, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_reader_created ON idno_reader (created)');
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_site (
+            CREATE TABLE IF NOT EXISTS idno_site (
               id TEXT NOT NULL COLLATE NOCASE,
               uuid TEXT NOT NULL COLLATE NOCASE,
               type TEXT NOT NULL COLLATE NOCASE,
@@ -198,12 +202,12 @@ final class Version20261115000000 extends AbstractMigration
               PRIMARY KEY (id)
             )
             SQL);
-        $this->addSql('CREATE UNIQUE INDEX idno_site_uuid ON idno_site (uuid)');
-        $this->addSql('CREATE INDEX idno_site_type_created ON idno_site (type, created)');
-        $this->addSql('CREATE INDEX idno_site_owner_created ON idno_site (owner, created)');
-        $this->addSql('CREATE INDEX idno_site_created ON idno_site (created)');
+        $this->addSql('CREATE UNIQUE INDEX IF NOT EXISTS idno_site_uuid ON idno_site (uuid)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_site_type_created ON idno_site (type, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_site_owner_created ON idno_site (owner, created)');
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_site_created ON idno_site (created)');
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_settings (
+            CREATE TABLE IF NOT EXISTS idno_settings (
               name TEXT NOT NULL,
               value TEXT NOT NULL,
               position INTEGER NOT NULL,
@@ -211,7 +215,7 @@ final class Version20261115000000 extends AbstractMigration
             )
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_sessions (
+            CREATE TABLE IF NOT EXISTS idno_sessions (
               session_id varchar(255) NOT NULL,
               session_value mediumblob NOT NULL,
               session_lifetime int(11) NOT NULL,
@@ -220,7 +224,7 @@ final class Version20261115000000 extends AbstractMigration
             )
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_upgrade_progress (
+            CREATE TABLE IF NOT EXISTS idno_upgrade_progress (
               collection TEXT NOT NULL,
               source_rows INTEGER NOT NULL,
               copied INTEGER NOT NULL,
@@ -232,7 +236,7 @@ final class Version20261115000000 extends AbstractMigration
             )
             SQL);
         $this->addSql(<<<'SQL'
-            CREATE TABLE idno_upgrade_rejects (
+            CREATE TABLE IF NOT EXISTS idno_upgrade_rejects (
               n INTEGER PRIMARY KEY AUTOINCREMENT,
               collection TEXT NOT NULL,
               legacy_uuid TEXT NOT NULL,

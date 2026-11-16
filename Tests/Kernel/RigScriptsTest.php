@@ -439,7 +439,7 @@ final class RigScriptsTest extends TestCase
         [$code, $output] = $this->runScript('up.sh', 'mysql');
         $this->assertSame(0, $code, $output);
         $this->assertStringNotContainsString('stopping it first', $output);
-        $this->assertStringNotContainsString('down', $this->dockerLog());
+        $this->assertStringNotContainsString('docker-compose.yml down', $this->dockerLog());
     }
 
     public function testTheTwoTemplatesDifferOnlyInTheirDatabaseSettings(): void
