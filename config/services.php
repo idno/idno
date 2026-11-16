@@ -55,6 +55,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySqlMaintenance.
+        // The upgrade's progress is a value object; the copier's helpers (the 1.x source, the writer
+        // of the new tables, the config copy, the document checks) are built by LegacyDataCopier.
+        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'RowWriter.php', 'UpgradeProgress.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -195,6 +198,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Storage\Platform\Dialect::class)
         ->factory([service(\Idno\Storage\DialectFactory::class), 'create']);
     $services->set(\Idno\Storage\IndexedFields::class)->public();
+
+    // The copy of a 1.x database into the new schema. It runs while the legacy application is NOT
+    // booted, so it cannot have the site's logger (Psr\Log\LoggerInterface is the legacy
+    // Idno\Core\Logging): it logs its failures on the Monolog channel `upgrade`, injected here by
+    // name, the one exception to the rule against injecting monolog.logger.* services. Its Dialect
+    // and connection are built when it is first fetched, without connecting; nothing fetches it while
+    // the kernel boots (nothing fetches it at all yet). Public, for the upgrade page and command.
+    $services->set(\Idno\Upgrade\UpgradeLock::class);
+    $services->set(\Idno\Upgrade\LegacyDataCopier::class)
+        ->arg('$logger', service('monolog.logger.upgrade'))
+        ->public();
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

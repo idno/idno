@@ -139,7 +139,7 @@ composer console -- idno:upgrade   # create or upgrade the database schema (the 
   - On SQLite, these skip, each with its reason: the tests on private MySQL databases
     (`JsonMySqlRecordStoreTest`, `SettingsRecordStoreMySqlTest`, `IndexedFieldsMySqlTest`,
     `SchemaMigratorMySqlTest`, `InstallerSchemaTest`; their contracts run on SQLite in the unit
-    tier), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
+    tier; and `Tests/Upgrade/LegacyDataCopierTest`: no 1.x site runs on SQLite), the MySQL connection service's tests (`Tests/Storage/DatabaseConnectionTest`: nothing of
     it compiled into the container, lazy, the old backend's session, failures), and the `RepositoryDataConciergeTest` cases that need MySQL (`requireMysql()`: the old
     backend's MySQL connection, full-text settings, a lost MySQL connection, `database` names that
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
@@ -214,6 +214,10 @@ Idno/
                                `config` (the site's configuration, ONE document) from the key/value table
                                `idno_settings` and every other collection from the store it decorates
                                (the container's RecordStore is one, over a JsonRecordStore)
+  Upgrade/                     The copy of a 1.x database into the new schema (modern style; runs while the
+                               legacy application is NOT booted): LegacyDataCopier (the phases), its helpers
+                               LegacySource, RowWriter, ConfigCopier and DocumentCheck, UpgradeLock (one
+                               process at a time) and UpgradeProgress (a value object). See "Copying a 1.x database"
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -465,7 +469,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -473,7 +477,8 @@ other new code may.
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
-  builds), or the container will try to autowire
+  builds; in `Idno/Upgrade/`, `UpgradeProgress.php` and the copier's helpers `ConfigCopier.php`,
+  `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`,
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
@@ -529,7 +534,9 @@ other new code may.
   for a statement holding a boolean-mode full-text search, whose parser rejects terms such as
   `abc@def.com`); every other driver error (lost connection, broken SQL) propagates. A write returns
   false when the database refuses the record's data (`Dialect::isRefusedData()`, an allowlist:
-  constraint violations, deadlock and lock-wait, and on MySQL and MariaDB 1292, 1366, 1406); every
+  constraint violations, deadlock and lock-wait, and on MySQL and MariaDB 1292, 1366, 1406, and the
+  JSON functions' refusals of a document: MySQL 3140, 3141, 3157; MariaDB 4035 to 4040 when the
+  message speaks of JSON, because MySQL uses those numbers for other errors); every
   other error propagates. `JsonRecordStore::save()` is ONE statement, so it returns the id only when
   the row is stored, false when the data was refused, and throws otherwise; `SettingsRecordStore`
   rolls its transaction back before it returns false or throws. The `RecordStore` interface states
@@ -880,8 +887,9 @@ other new code may.
   database in a later release. See the SQLite bullet under "Kernel and services".
 - The schema is created by `php bin/console idno:upgrade` (see "Console commands"): a new
   installation has no tables until it is run. The 1.x tables (`entities`, `entities_metadata`,
-  `entities_search`, `config`, `session`, `versions`, ...) are no longer read or written: a 1.x
-  site's data cannot be used yet, because carrying it into the new tables is not built yet.
+  `entities_search`, `config`, `session`, `versions`, ...) are no longer read or written by the
+  site. `Idno\Upgrade\LegacyDataCopier` copies them into the new tables (see "Copying a 1.x
+  database" below), but nothing calls it yet: a 1.x site's data cannot be used yet.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 
 #### The schema (migrations)
@@ -911,7 +919,8 @@ it before the first request).
   `search` (full-text indexed on MySQL/MariaDB); keys `type_created`, `owner_created`, `created`);
   `idno_settings` (`name` and `value` `utf8mb4_bin`, `position` INT: one row per settings key, in
   order; served as the collection `config` by `SettingsRecordStore`, below); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
-  `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping). On MySQL/MariaDB
+  `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping: see "Copying a 1.x
+  database"; the rejects are indexed on `(collection, legacy_uuid)`). On MySQL/MariaDB
   every table is InnoDB, `utf8mb4`, and every text column names its collation:
   `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`) except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
   which doctrine/migrations creates itself with the database's default charset and collation; it
@@ -940,6 +949,130 @@ it before the first request).
   builds on such a database, `dialect($connection)` the dialect of its platform. A test never writes
   to the rig site's tables directly. `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
   `Tests/Storage/SchemaMigratorMySqlTest` (MySQL and MariaDB) pin the baseline and the catalog.
+
+#### Copying a 1.x database
+
+A 1.x site's data is in its 1.x tables (per collection `entities`, `reader`, `site`, `config`: the
+tables `<c>`, `<c>_metadata`, `<c>_search`; and `versions`, `session`).
+`Idno\Upgrade\LegacyDataCopier` (MySQL and MariaDB only: no 1.x site runs on SQLite) copies them
+into the new schema's tables, which must exist first (the schema migrations and the indexes the
+classes under `Idno/` declare: it creates no table). Nothing in the kernel, `idno:upgrade` or any
+page calls it yet. It is a public container service (its `Dialect` and connection built when it is
+fetched, without connecting; nothing fetches it while the kernel boots). Its helpers, built with
+new: `LegacySource` (every statement that reads a 1.x table), `RowWriter` (writes `idno_<c>` and the
+rejects, verifies), `ConfigCopier` (the settings) and `DocumentCheck` (what a row's contents allow).
+
+It never writes to a 1.x table (no UPDATE, DELETE, ALTER or marker column); its only change to them
+is ONE `RENAME TABLE`. `testTheOneXTablesAreNeverWritten` compares `CHECKSUM TABLE` of every 1.x
+table before the first step with every `legacy_` table after completion.
+
+The phases (each resumable at any point; the state is in `idno_upgrade_progress`, one row per
+collection: `source_rows`, `source_existed`, `copied`, `rejected`, `position` (the copy cursor),
+`verify_cursor`, `error`, `completed_at`):
+
+1. **Copy**: per collection, a keyset pass by `uuid` over `<c>`, in batches; then the config.
+2. **Rename**: when every keyset pass has reached its end, the progress rows are marked ready
+   (`verify_cursor` set, one transaction), then ONE `RENAME TABLE` moves every table of
+   `LEGACY_TABLES` that exists to `legacy_<name>`. From then on no process of the old version can
+   write the source. A `legacy_<name>` that exists beside its `<name>` blocks it: nothing is renamed,
+   and the error names both and says that someone who knows what the `legacy_` table holds must check
+   it and move or remove it (it does not claim the rows were copied).
+3. **Verify**: a second keyset pass by `uuid` over the now immutable `legacy_<c>`, `VERIFY_BATCH`
+   (2,000) uuids at a time, with its own cursor: the uuids that are neither in `idno_<c>` nor among the
+   collection's rejects, by EXACT bytes, are copied or rejected by the same code as phase 1 (at most
+   `BATCH` per batch). Rows written behind the copy cursor, during the rename, or lost from the new
+   table are caught here. The config is computed again from `legacy_config` when its rows are not the
+   ones phase 1 used.
+4. **Complete**: `completed_at` is written for every collection. `UpgradeProgress::complete` is true
+   exactly then.
+
+What it guarantees:
+
+- `step($deadline)` (`microtime(true)`) takes `Idno\Upgrade\UpgradeLock` without waiting (another
+  process holding it: `progress()` is returned and nothing is done), works until the deadline or
+  completion, always finishes the batch it started, and checks the deadline only between batches:
+  with a deadline already past it does exactly one unit of work (a batch, the config, the rename or
+  the completion). `progress()` gives an `Idno\Upgrade\UpgradeProgress`: per collection source (the
+  count when the upgrade began), copied, rejected, done; `complete`; `error`; and `phase`
+  (`NOT_STARTED`, `COPYING`, `VERIFYING`, `COMPLETE`; "stopped" is `error !== null`), and
+  `noLegacyDatabase`: no table of `LEGACY_TABLES` under either name and no upgrade begun, in which case
+  `step()` writes nothing at all (not even a progress row; `idno_settings` untouched).
+  `legacySchemaVersion()` is the `schema` row of `versions`, or of `legacy_versions` after the rename,
+  or null. `step()` leaves the lock as it found it: when its caller already holds the lock, it works
+  under it and does not release it.
+- Bounded: no statement in a step reads a whole 1.x table, except one `COUNT(*)` per collection when
+  its progress row is made (`source_rows`, display only). Every other read of a 1.x table is a LIMIT on
+  a range of its `uuid` primary key, or a list of primary-key values; the config table is read with
+  `LIMIT 1001` (a site keeps its configuration in one row; more than 1,000 rows stops the upgrade with
+  a message). `testNoStatementReadsAOneXTableUnbounded` checks every statement of a whole upgrade.
+- Batches: at most `BATCH` (500) rows and about `BATCH_BYTES` (8 MiB) of contents and search text,
+  less when `memory_limit` leaves less than six times that free; a single row too large for the
+  memory left stops the upgrade with a message (raise `memory_limit`). Each batch is ONE transaction:
+  it locks the collection's progress row (`FOR UPDATE`, reading its cursor from the database), checks
+  that its connection still holds the lock (`IS_USED_LOCK() = CONNECTION_ID()`: a named lock belongs to
+  a session, and a reconnected session holds nothing), inserts the rows, verifies them, writes the
+  rejects and moves the counts and the cursor. Every value is bound; a row too large for one statement
+  (`max_allowed_packet`) has its search text written by a second statement, and a document too large
+  on its own stops the upgrade with a message saying to raise the setting.
+- Collations: a 1.x table may be `utf8`/`utf8mb3` `general_ci` as shipped, or converted to `utf8mb4`
+  in any collation. Every comparison of a 1.x column with a bound value converts the value to the
+  column's own character set and collation (`convert(? using <charset>) collate <collation>`, read from
+  `information_schema`), so the primary key's range is used; no 1.x column is ever compared with a
+  column of another table. Whether a row is accounted for is decided in PHP by the exact bytes of its
+  uuid. `testOneXTablesConvertedToUtf8mb4AreCopied` runs the whole copy on converted tables.
+- A copied row: `id` = `_id`, `uuid`, `type` = `TypeMap::typeFor(entity_subtype)`, `owner`,
+  `publish_status` from the 1.x columns; `created` the document's top-level `created` when it is a
+  timestamp by `RecordIndex::created()`'s rule (what a save would write), otherwise the 1.x column's
+  instant (read without decoding the whole document); `data` = `contents` byte for byte; `search` the
+  `_search` row's text, or ''.
+- Verification: each inserted row's columns and the SHA-256 of its `data` and `search`, read back from
+  the database, must equal the source's; any difference rolls the batch back, is stored as the error,
+  logged and thrown (`\UnexpectedValueException`).
+- Rejects (`idno_upgrade_rejects`, indexed on `(collection, legacy_uuid)`, with the row's exact
+  `contents` bytes and a reason of at most 255 characters): contents not valid UTF-8, not JSON,
+  nested deeper than PHP's 512 levels, not an object or array, or a row the database refuses
+  (`Dialect::isRefusedData()`, except lock waits and deadlocks, which are thrown and retried by the
+  next step): a document its JSON functions refuse (too deep: MySQL allows 100 levels, MariaDB 32), a
+  value a generated column cannot hold, an `_id` that is that of a copied row, or a `uuid` equal to a
+  copied row's under the new collation (`utf8mb4_unicode_520_ci`: `…/straße` and `…/strasse` were
+  different in 1.x). Of two such rows the one copied first is kept: in the copy pass the first in the
+  1.x table's `uuid` order (`utf8_general_ci` sorts `ß` as `s`, so `…/straße` before `…/strasse`); a row
+  written behind the cursor is reached by the verify pass and is the reject. A batch that hits a
+  refusal is redone row by row under savepoints: the good rows are copied, exactly the refused ones
+  are rejects. Nothing that is not JSON the engine accepts is ever left in `data` (a `JSON_VALID()`
+  check after the insert is defence in depth: with the core indexed fields the generated columns
+  refuse such documents first).
+- `config` (`ConfigCopier`): one transaction recomputes `idno_settings` and the config rejects: the
+  newest row (the 1.x `created` column, then the greatest uuid) whose contents are a document
+  `SettingsRecordStore::rowsOf()` can hold becomes the settings (written directly, no defaults); the
+  other valid rows are rejects `superseded configuration`, an invalid one gets its reason
+  (`cannot be the settings: ...`). With none usable the settings stay empty. The settings are each
+  key's value re-encoded by `json_encode()`, as a save writes them; the 1.x row stays in `legacy_config`.
+- Impossible states stop the upgrade with a stored error that says what was found, and nothing else is
+  written, in this step and every later one, and it is never `complete`: some 1.x tables renamed and
+  some not; tables renamed before the copy was marked ready; or a source the upgrade began with that is
+  no longer there under the name the phase reads (`<c>` while copying or before the rename,
+  `legacy_<c>` while verifying, `config`/`legacy_config` included). A collection's progress row records
+  whether its 1.x table existed when the row was made (`source_existed`): a collection this site never
+  had (no `reader` tables, say) is copied as empty and needs no table later; one whose table existed
+  and then vanished is the impossible state. `ConfigCopier` never deletes the settings unless it has a
+  readable config table and has read it (it throws without one).
+- Not detected: a 1.x row CHANGED after it was copied (its uuid is accounted for). Whoever runs the
+  upgrade must stop every process of the old version first.
+- `UpgradeLock`: on MySQL and MariaDB the named lock `idno_upgrade_` + the first 16 hex digits of the
+  SHA-1 of the database name (`GET_LOCK(name, 0)`); `acquire()` never takes it on a session that holds
+  it and `release()` releases until the session holds it no more (GET_LOCK is re-entrant); on SQLite an
+  exclusive non-blocking `flock()` on `<database file>.upgrade.lock` (an in-memory database always gets
+  it). `holds()` asks the server.
+- Tests: `Tests\Upgrade\LegacyFixture` makes a private 1.x database (`create($purpose, $schema,
+  $collation)`: the fixture schema `Tests/Upgrade/fixtures/mysql-schema-2020120301.sql`, with
+  `2026111401` also `mysql-upgrade-2026111401.sql`, with a collation every table converted to utf8mb4),
+  `insert()` writes a record laid out as 1.x `saveRecord()` did, `insertMany()` many small ones, and
+  `prepareNewSchema()` prepares it as the upgrade will (the migrations, then
+  `IndexedFields::reconcileDirectory()` of `Idno/`). `Tests/Upgrade/LegacyDataCopierTest` runs on
+  MySQL and MariaDB and skips on an SQLite rig; run it on both servers
+  (`IDNO_RIG_MYSQL_IMAGE=mariadb:10.6 composer test:up:mysql`) after changing the copier.
+  `Tests/Unit/Upgrade/` pins the SQLite lock and `DocumentCheck`.
 
 #### The JSON record store
 
@@ -1268,6 +1401,13 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
   the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
   format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
   directly, and never call `error_log()`: both bypass the log level.
+- The one exception: code in `Idno\Upgrade\` runs while the legacy application is NOT booted, so
+  the site's logger does not exist there. It must not take `Psr\Log\LoggerInterface` by autowiring
+  (that is the legacy logger); it logs its failures, and nothing else, on the Monolog channel
+  `upgrade` (declared in `config/packages/monolog.php`, written by the `symfony` handler at warning
+  and above), wired by name in `config/services.php`
+  (`->arg('$logger', service('monolog.logger.upgrade'))`). Its argument is named `$logger`, not
+  after the channel.
 - `Psr\Log\LoggerInterface $idno` / `$idnoLogger` (and any other channel-named argument, such as
   `$request` or `$consoleLogger`) hand out the raw Monolog channel and bypass the log level and
   line format: do not use channel-named logger arguments.

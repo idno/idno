@@ -125,6 +125,28 @@ final class JsonMySqlRecordStoreTest extends RecordStoreContract
         $this->assertSame("Ünïcode/slash \u{1F600} ", $row['search']);
     }
 
+    public function testAwkwardButValidDocumentsAreNeverRefused(): void
+    {
+        // isRefusedData() counts the JSON functions' refusals as refused data: a document the store
+        // builds must never meet them, or a malformed document would hide behind `false`.
+        $nested = 'bottom';
+        for ($i = 0; $i < 29; ++$i) {
+            $nested = [$nested];
+        }
+        $documents = [
+            'nested as deep as both servers accept' => ['deep' => $nested, 'access' => ['a' => ['b' => ['c' => 'PUBLIC']]]],
+            'a large string' => ['body' => str_repeat("Large \"text\" \\ with escapes\n", 40_000), 'title' => str_repeat('é', 10_000)],
+            'every scalar' => ['i' => PHP_INT_MAX, 'n' => PHP_INT_MIN, 'f' => 1.5e300, 'tiny' => 5.0e-324, 't' => true, 'false' => false, 'null' => null, 'empty' => '', 'list' => [], 'zero' => '0'],
+            'unusual keys' => ['' => 'empty key', ' ' => 'space', 'a.b' => 'dot', '$' => 'dollar', '$.x' => 'path', 'with "quote"' => 'q', "nul\u{0}" => 'nul', '日本' => 'cjk', '😀' => 'emoji', '0' => 'zero', 'access' => 'PUBLIC'],
+            'awkward strings in indexed fields' => ['access' => "\u{1F600}\u{0}", 'slug' => str_repeat('s', 70_000), 'url' => '"quoted"', 'canonical' => '\\', 'shorturl' => "\t\n"],
+        ];
+        foreach ($documents as $case => $fields) {
+            $record = $this->r($fields);
+            $this->assertSame($record['_id'], $this->store()->save('entities', $record), $case);
+            $this->assertSameRecord($record, $this->store()->findById('entities', $record['_id']), $case);
+        }
+    }
+
     public function testSavingTheSameRecordAgainReturnsItsId(): void
     {
         // The upsert changes no row (MySQL reports 0 affected rows), and the record is there.

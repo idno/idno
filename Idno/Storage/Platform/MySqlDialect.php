@@ -40,6 +40,21 @@ final class MySqlDialect implements Dialect
      */
     private const REFUSED_DATA_CODES = [1292, 1366, 1406];
 
+    /**
+     * MySQL's refusals of a JSON document (for its JSON functions, e.g. those of the generated
+     * column of an indexed field, or JSON_VALID()): ER_INVALID_JSON_TEXT (3140),
+     * ER_INVALID_JSON_TEXT_IN_PARAM (3141, not JSON, or a number too large for a double),
+     * ER_JSON_DOCUMENT_TOO_DEEP (3157, deeper than 100 levels).
+     */
+    private const MYSQL_JSON_REFUSALS = [3140, 3141, 3157];
+
+    /**
+     * MariaDB's: ER_JSON_BAD_CHR (4035) to ER_JSON_DEPTH (4040, deeper than 32 levels), syntax,
+     * escaping and end-of-text errors among them. MySQL uses some of these numbers for other errors,
+     * so they count only when the message speaks of JSON.
+     */
+    private const MARIADB_JSON_REFUSALS = [4035, 4036, 4037, 4038, 4039, 4040];
+
     /** ER_DUP_FIELDNAME and ER_DUP_KEYNAME: the column or index a DDL statement adds exists already. */
     private const ALREADY_DEFINED_CODES = [1060, 1061];
 
@@ -225,10 +240,18 @@ final class MySqlDialect implements Dialect
         return $parsedSearchTerm && $exception->getCode() === self::ER_PARSE_ERROR;
     }
 
+    /**
+     * A constraint, a lock wait or deadlock, a value the column cannot hold (1292, 1366, 1406), or a
+     * document the server's JSON functions refuse (MYSQL_JSON_REFUSALS, MARIADB_JSON_REFUSALS).
+     */
     public function isRefusedData(DriverException $exception): bool
     {
+        $code = $exception->getCode();
+
         return $exception instanceof ConstraintViolationException
             || $exception instanceof RetryableException
-            || in_array($exception->getCode(), self::REFUSED_DATA_CODES, true);
+            || in_array($code, self::REFUSED_DATA_CODES, true)
+            || in_array($code, self::MYSQL_JSON_REFUSALS, true)
+            || (in_array($code, self::MARIADB_JSON_REFUSALS, true) && str_contains($exception->getMessage(), 'JSON'));
     }
 }

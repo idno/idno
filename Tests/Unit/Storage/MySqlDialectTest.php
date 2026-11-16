@@ -26,9 +26,9 @@ final class MySqlDialectTest extends TestCase
     /**
      * @param class-string<DriverException> $class
      */
-    private static function error(int $code, string $class = DriverException::class): DriverException
+    private static function error(int $code, string $class = DriverException::class, string $message = ''): DriverException
     {
-        $driverError = new class ('SQLSTATE[HY000]: error ' . $code, $code) extends \Exception implements DriverError {
+        $driverError = new class ('SQLSTATE[HY000]: error ' . $code . ($message === '' ? '' : ' ' . $message), $code) extends \Exception implements DriverError {
             public function getSQLState(): ?string
             {
                 return 'HY000';
@@ -51,6 +51,13 @@ final class MySqlDialectTest extends TestCase
             'incorrect datetime value' => self::error(1292),
             'deadlock' => self::error(1213, DeadlockException::class),
             'lock wait timeout' => self::error(1205, LockWaitTimeoutException::class),
+            'MySQL: not JSON (a generated column of an indexed field)' => self::error(3141),
+            'MySQL: not JSON (a JSON column)' => self::error(3140),
+            'MySQL: a document deeper than 100 levels' => self::error(3157),
+            'MariaDB: syntax error in JSON text' => self::error(4038, DriverException::class, "Syntax error in JSON text in argument 1 to function 'json_extract' at position 1"),
+            'MariaDB: unexpected end of JSON text' => self::error(4037, DriverException::class, "Unexpected end of JSON text in argument 1 to function 'json_extract'"),
+            'MariaDB: a document deeper than 32 levels' => self::error(4040, DriverException::class, "Limit of 32 on JSON nested structures depth is reached in argument 1 to function 'json_extract' at position 32"),
+            'MariaDB: broken JSON string' => self::error(4035, DriverException::class, "Broken JSON string in argument 1 to function 'json_extract' at position 3"),
         ] as $case => $error) {
             $this->assertTrue($dialect->isRefusedData($error), $case);
         }
@@ -63,6 +70,8 @@ final class MySqlDialectTest extends TestCase
             'missing table' => self::error(1146, TableNotFoundException::class),
             'syntax error' => self::error(1064, SyntaxErrorException::class),
             'unknown error' => self::error(9999),
+            'a MariaDB JSON code that is about something else on MySQL' => self::error(4037, DriverException::class, 'Some other server error'),
+            'MariaDB: an invalid JSON path (the SQL is broken, not the data)' => self::error(4042),
         ] as $case => $error) {
             $this->assertFalse($dialect->isRefusedData($error), $case);
         }

@@ -132,9 +132,11 @@ final class Version20261115000000 extends AbstractMigration
             CREATE TABLE IF NOT EXISTS idno_upgrade_progress (
               collection VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
               source_rows BIGINT NOT NULL,
+              source_existed SMALLINT NOT NULL,
               copied BIGINT NOT NULL,
               rejected BIGINT NOT NULL,
               position VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
+              verify_cursor VARCHAR(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
               error TEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NULL,
               completed_at BIGINT NULL,
               PRIMARY KEY (collection)
@@ -148,7 +150,8 @@ final class Version20261115000000 extends AbstractMigration
               legacy_id VARCHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
               reason VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci NOT NULL,
               contents LONGBLOB NOT NULL,
-              PRIMARY KEY (n)
+              PRIMARY KEY (n),
+              KEY collection_uuid (collection, legacy_uuid)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci
             SQL);
     }
@@ -227,9 +230,11 @@ final class Version20261115000000 extends AbstractMigration
             CREATE TABLE IF NOT EXISTS idno_upgrade_progress (
               collection TEXT NOT NULL,
               source_rows INTEGER NOT NULL,
+              source_existed INTEGER NOT NULL,
               copied INTEGER NOT NULL,
               rejected INTEGER NOT NULL,
               position TEXT NULL,
+              verify_cursor TEXT NULL,
               error TEXT NULL,
               completed_at INTEGER NULL,
               PRIMARY KEY (collection)
@@ -245,5 +250,6 @@ final class Version20261115000000 extends AbstractMigration
               contents BLOB NOT NULL
             )
             SQL);
+        $this->addSql('CREATE INDEX IF NOT EXISTS idno_upgrade_rejects_collection_uuid ON idno_upgrade_rejects (collection, legacy_uuid)');
     }
 }

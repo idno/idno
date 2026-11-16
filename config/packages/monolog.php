@@ -13,7 +13,10 @@ return static function (ContainerConfigurator $container): void {
         ->private();
 
     $container->extension('monolog', [
-        'channels' => ['idno'],
+        // `upgrade`: the copy of a 1.x database (Idno\Upgrade\), which runs while the legacy
+        // application, and so the "idno" channel's logger, is not booted. The "symfony" handler
+        // writes it (warning and above); it logs failures only.
+        'channels' => ['idno', 'upgrade'],
         'handlers' => [
             // error_log() with message type 0: the same call, and the same "error_log"
             // ini setting, as the logger used before Monolog. No error handler is registered.

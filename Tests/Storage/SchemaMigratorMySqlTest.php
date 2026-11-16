@@ -152,6 +152,18 @@ final class SchemaMigratorMySqlTest extends TestCase
             }
         }
         $this->assertSame('longblob', $this->columns('idno_upgrade_rejects')['contents']['type']);
+        $this->assertSame(
+            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'completed_at'],
+            array_keys($this->columns('idno_upgrade_progress')),
+        );
+        $this->assertSame('varchar', $this->columns('idno_upgrade_progress')['verify_cursor']['type']);
+        // The rejects are looked up by collection and exact uuid while the copy is verified.
+        $this->assertSame(
+            [['collection', 1], ['legacy_uuid', 2]],
+            array_map(static fn (array $row): array => [(string) $row['c'], (int) $row['s']], $this->connection()->fetchAllAssociative(
+                "select column_name as c, seq_in_index as s from information_schema.statistics where table_schema = database() and table_name = 'idno_upgrade_rejects' and index_name = 'collection_uuid' order by seq_in_index",
+            )),
+        );
     }
 
     public function testCatalogReadsTablesWithOneStatement(): void

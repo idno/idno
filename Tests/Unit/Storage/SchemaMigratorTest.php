@@ -176,6 +176,11 @@ final class SchemaMigratorTest extends TestCase
         }
         $columns = array_column($connection->fetchAllAssociative('PRAGMA table_info(idno_settings)'), 'name');
         $this->assertSame(['name', 'value', 'position'], $columns);
+        $this->assertSame(
+            ['collection', 'source_rows', 'source_existed', 'copied', 'rejected', 'position', 'verify_cursor', 'error', 'completed_at'],
+            array_column($connection->fetchAllAssociative('PRAGMA table_info(idno_upgrade_progress)'), 'name'),
+        );
+        $this->assertSame(['collection', 'legacy_uuid'], array_column($connection->fetchAllAssociative('PRAGMA index_info(idno_upgrade_rejects_collection_uuid)'), 'name'));
     }
 
     public function testTheCatalogFindsIndexedFields(): void
