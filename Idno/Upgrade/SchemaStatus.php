@@ -23,9 +23,10 @@ namespace Idno\Upgrade;
  *    them, so that an empty site is never set up beside the content.
  *  - OneXBesideCompletedUpgrade: an upgrade is complete on record, and the three 1.x `entities`
  *    tables (`entities`, `entities_metadata`, `entities_search`) exist again
- *    (LegacyDataCopier::isOneXBesideCompletedUpgrade()). A booting 1.x process does not create those
- *    three, so they mean an undo or a restored backup: opening the site on the earlier copy would
- *    drop everything written to the 1.x site since. Nothing is done until someone removes one set.
+ *    (LegacyDataCopier::isOneXBesideCompletedUpgrade()). A booting 1.x process re-creates several
+ *    1.x tables, `entities_metadata` and `entities_search` among them, but never `entities`; all
+ *    three mean an undo or a restored backup: opening the site on the earlier copy would drop
+ *    everything written to the 1.x site since. Nothing is done until someone removes one set.
  *
  * The gate is closed (the legacy application does not boot) for Empty, PendingMigrations, Legacy,
  * LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade and UnsupportedServer; open for Current, Unreachable and NotApplicable.

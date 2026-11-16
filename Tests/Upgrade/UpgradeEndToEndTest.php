@@ -424,9 +424,11 @@ final class UpgradeEndToEndTest extends TestCase
     }
 
     /**
-     * After completion, 1.x tables an old worker recreates (its schema upgrader creates reader, site
-     * and versions tables) are ignored: the site stays open. So are two of the three `entities`
-     * tables: only all three mean a 1.x site is back (next test).
+     * After completion, 1.x tables an old worker recreates are ignored: the site stays open. A 1.x
+     * process booting after the rename runs every dated 1.x upgrade file and re-creates exactly
+     * `reader`, `versions`, `entities_search`, `entities_metadata`, `site`, `site_metadata` and
+     * `site_search` (never `entities`): two of the three `entities` tables, which is why only all
+     * three mean a 1.x site is back (next test). Another two-of-three set stays open as well.
      */
     public function testOneXTablesRecreatedAfterCompletionAreIgnored(): void
     {
@@ -434,7 +436,8 @@ final class UpgradeEndToEndTest extends TestCase
         $this->runner()->run(static function (string $line): void {
         });
         $this->assertTrue($this->copier()->progress()->complete);
-        $recreated = ['entities', 'entities_metadata', 'reader', 'reader_metadata', 'reader_search', 'site', 'versions'];
+        // What an old worker creates (its dated upgrade files), in LEGACY_TABLES order.
+        $recreated = ['entities_metadata', 'entities_search', 'reader', 'site', 'site_metadata', 'site_search', 'versions'];
         foreach ($recreated as $table) {
             $this->db()->executeStatement('create table ' . $table . ' like legacy_' . $table);
         }
@@ -442,6 +445,11 @@ final class UpgradeEndToEndTest extends TestCase
 
         $this->assertSame(200, $this->request('GET', '/', ['Accept: text/html'])['status'], $this->log());
         $this->assertSame($recreated, $this->copier()->reappearedTables());
+
+        // Another two of the three: still open.
+        $this->db()->executeStatement('drop table entities_search');
+        $this->db()->executeStatement('create table entities like legacy_entities');
+        $this->assertSame(200, $this->request('GET', '/', ['Accept: text/html'])['status'], $this->log());
     }
 
     /**
@@ -757,8 +765,9 @@ final class UpgradeEndToEndTest extends TestCase
                 $this->db()->executeStatement('set foreign_key_checks = 1');
             },
             '1.x tables recreated after completion' => function (): void {
-                // What an old worker creates; never all three `entities` tables (those close the site).
-                foreach (['entities', 'entities_metadata', 'reader', 'site', 'versions'] as $table) {
+                // What an old worker creates (its dated upgrade files): two of the three `entities`
+                // tables, never `entities` (all three close the site).
+                foreach (['reader', 'versions', 'entities_search', 'entities_metadata', 'site', 'site_metadata', 'site_search'] as $table) {
                     $this->db()->executeStatement('create table ' . $table . ' (x int)');
                 }
             },

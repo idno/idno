@@ -42,7 +42,7 @@ namespace Idno\Pages\Admin {
                 [
                     'available' => $tables->available(),
                     'tables' => $tables->present(),
-                    'complete' => $tables->isComplete(),
+                    'deletable' => $tables->deletable(),
                     'restored' => $tables->oneXBesideCompletedUpgrade(),
                     'reappeared' => $tables->reappeared(),
                     'rejects' => $count > 0 ? $tables->rejects(self::PAGE_SIZE, $offset) : [],

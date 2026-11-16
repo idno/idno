@@ -39,9 +39,9 @@
         <?php } ?>
         </tbody>
     </table>
-    <?php if (!empty($vars['restored'])) { ?>
+    <?php if (empty($vars['deletable']) && !empty($vars['restored'])) { ?>
     <p id="legacytables-restored"><strong><?= $language->esc_('These tables cannot be deleted now.') ?></strong> <?= htmlspecialchars(\Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
-    <?php } else if (!empty($vars['complete'])) { ?>
+    <?php } else if (!empty($vars['deletable'])) { ?>
     <form action="<?= $e($url) ?>" method="post">
         <p>
             <?= $language->esc_('The row counts are the database\'s estimates.') ?>

@@ -1093,8 +1093,10 @@ name in `config/services.php`).
   (Idno 1.6.4) or cannot be read (a `versions` table of another shape is "no version", never an
   exception). Everything else is not a 1.x database and asks nothing: a complete upgrade's `legacy_`
   tables, the same tables deleted by the admin, 1.x tables recreated after completion other than all
-  three `entities` tables (an old worker booting 1.x creates reader, site and versions tables; nothing
-  reads them; `LegacyDataCopier::reappearedTables()` lists them, read-only, for the admin), another
+  three `entities` tables (an old process booting 1.x code after the rename runs every dated 1.x
+  upgrade file and so re-creates `reader`, `versions`, `entities_search`, `entities_metadata`, `site`,
+  `site_metadata` and `site_search`, but never `entities`; nothing reads them;
+  `LegacyDataCopier::reappearedTables()` lists them, read-only, for the admin), another
   application's `entities`, `versions`, `config`,
   `session`, `site`, `reader`, `legacy_config`, .... One more case is closed: the three renamed tables
   `legacy_entities`, `legacy_entities_metadata` and `legacy_entities_search` with NO progress row at
@@ -1105,8 +1107,10 @@ name in `config/services.php`).
   never set up beside the content. And one more: a COMPLETE upgrade on record and `entities`,
   `entities_metadata` AND `entities_search` present again (`LegacyDataCopier::isOneXBesideCompletedUpgrade()`,
   the ONE predicate, which `LegacyTables` also uses) → `OneXBesideCompletedUpgrade`. A booting 1.x
-  process does not create those three, so they mean an undo or a restored backup: opening the site on
-  the earlier copy would silently drop what was written to 1.x since. It is handled exactly as
+  process re-creates two of those three (`entities_metadata`, `entities_search`) but never `entities`,
+  so all three mean an undo or a restored backup: opening the site on the earlier copy would silently
+  drop what was written to 1.x since. That is why the rule needs ALL THREE: never loosen it to two
+  (the predicate's docblock lists what an old process creates, file by file). It is handled exactly as
   `RenamedWithoutRecord` in every entry point (the page with no script and no form, the plain text,
   the step's JSON `error`, the runner's `step()`/`run()` returning before any lock, migration,
   reconcile or copy, `idno:upgrade` and `--status` exit 1, `Idno/start.php` and the console's closed
@@ -1410,7 +1414,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   MySQL/MariaDB the engine's estimate, `information_schema.tables.table_rows`, ONE statement for all;
   `COUNT(*)` each on SQLite, where there are none in practice), shown as approximate by the page and
   the console; `oneXBesideCompletedUpgrade()`: the gate's predicate on the catalog and
-  `completion()`; `deletable()`: complete and not that; `lastDropped()`: what the last `drop()`
+  `completion()`; `deletable()`: complete and not that (the one decision whether the page shows its delete form); `lastDropped()`: what the last `drop()`
   removed;
   `rejects($limit = 100, $offset = 0)`: `n`, `collection`, `legacy_uuid`, `reason` (never `contents`),
   ordered by `n`, limit 1 to `MAX_LIMIT` (1,000); `rejectCount()`; `reappeared()`: 1.x-named tables an

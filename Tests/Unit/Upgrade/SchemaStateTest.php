@@ -151,16 +151,19 @@ final class SchemaStateTest extends TestCase
 
     /**
      * A complete upgrade: its legacy_ tables, or none (the admin deleted them), or 1.x tables an old
-     * worker recreated (any but all three `entities` tables, which a booting 1.x process does not
-     * create: see the next test): open, and nothing beyond the probe is asked.
+     * worker recreated: open, and nothing beyond the probe is asked. A 1.x process booting after the
+     * rename re-creates `reader`, `versions`, `entities_search`, `entities_metadata`, `site`,
+     * `site_metadata` and `site_search`, never `entities`: two of the three `entities` tables, so the
+     * rule must need all three (see the next test).
      */
     public function testACompleteUpgradeIsOpenWhateverItsLegacyTables(): void
     {
-        $reappeared = ['entities', 'entities_metadata', 'reader', 'reader_metadata', 'reader_search', 'site', 'site_metadata', 'site_search', 'config', 'session', 'versions'];
+        $reappeared = ['reader', 'versions', 'entities_search', 'entities_metadata', 'site', 'site_metadata', 'site_search'];
         foreach ([
             'legacy_ tables kept' => ['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search', 'legacy_versions'],
             'legacy_ tables deleted' => [],
-            '1.x tables recreated after completion' => $reappeared,
+            'what an old worker creates after completion' => $reappeared,
+            'another two of the three, and other 1.x names' => ['entities', 'entities_metadata', 'reader_metadata', 'reader_search', 'config', 'session'],
         ] as $case => $tables) {
             $this->asked = [];
             self::assertSame(SchemaStatus::Current, $this->state('mysql', [...$tables, ...self::NEW_SCHEMA], completion: true)->status(), $case);
@@ -230,7 +233,8 @@ final class SchemaStateTest extends TestCase
 
     /**
      * After a COMPLETE upgrade, `entities`, `entities_metadata` AND `entities_search` present again
-     * mean an undo or a restored backup (a booting 1.x process does not create them): closed, with
+     * mean an undo or a restored backup (a booting 1.x process re-creates the last two, never
+     * `entities`): closed, with
      * its own status, decided from the catalog and the probe alone. SQLite never asks about 1.x
      * tables.
      */

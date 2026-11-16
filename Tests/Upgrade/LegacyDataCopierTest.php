@@ -386,8 +386,11 @@ final class LegacyDataCopierTest extends TestCase
      */
     public static function recreatedInTheVerifyPass(): iterable
     {
-        // What a booting 1.x process creates (its dated upgrade files).
-        yield 'reader, site and versions' => [['reader', 'reader_metadata', 'reader_search', 'site', 'site_metadata', 'site_search', 'versions']];
+        // What a 1.x process booting after the rename creates: it runs every dated upgrade file, each
+        // up to its first failing statement (LegacyDataCopier::isOneXBesideCompletedUpgrade() lists
+        // them file by file). In LEGACY_TABLES order.
+        yield 'what a booting 1.x process creates' => [['entities_metadata', 'entities_search', 'reader', 'site', 'site_metadata', 'site_search', 'versions']];
+        yield 'reader, site and versions only' => [['reader', 'reader_metadata', 'reader_search', 'site', 'site_metadata', 'site_search', 'versions']];
         // Every 1.x name: before, the copier took this for a rename still to do, and blocked it with
         // a message that pointed at the legacy_ tables, which hold the site.
         yield 'every 1.x table' => [LegacyDataCopier::LEGACY_TABLES];

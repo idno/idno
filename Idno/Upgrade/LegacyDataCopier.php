@@ -135,11 +135,26 @@ final class LegacyDataCopier
 
     /**
      * Whether a 1.x Idno database (isOneXDatabase(): all three `entities` tables) is present again
-     * beside a COMPLETE upgrade. A booting 1.x process creates no `entities` table (its dated upgrade
-     * files create reader, site and versions tables only), so this means an undo or a restored
-     * backup: the copy may be older than the 1.x site. The one rule, used by the schema gate
-     * (SchemaStatus::OneXBesideCompletedUpgrade) and by LegacyTables (no legacy_ table is dropped
-     * then). Other 1.x names recreated after completion stay ignored (reappearedTables()).
+     * beside a COMPLETE upgrade, which means an undo or a restored backup: the copy may be older than
+     * the 1.x site. The one rule, used by the schema gate (SchemaStatus::OneXBesideCompletedUpgrade)
+     * and by LegacyTables (no legacy_ table is dropped then). Other 1.x names recreated after
+     * completion stay ignored (reappearedTables()).
+     *
+     * Why all three. A process of the old version that boots after the rename finds no `versions`
+     * table and runs every dated 1.x upgrade file; each stops at its first failing statement, but the
+     * DDL before it stays. That creates `reader` (2014100801), `versions` (2016110301),
+     * `entities_search` (2019121401, before the INSERT that fails), `entities_metadata` (2020042101,
+     * after `SET FOREIGN_KEY_CHECKS = 0`, so its foreign key to the missing `entities` is accepted),
+     * `site`, `site_metadata` and `site_search` (2020111301). It never creates `entities` itself
+     * (only the 1.x installer's base schema does). So `entities_metadata` + `entities_search` without
+     * `entities` is the ordinary stray state, and it must keep the site open. NEVER loosen this rule to
+     * fewer than all three tables: with two, a stray old worker would close every upgraded site.
+     *
+     * $complete: the gate passes the probe's reading (every progress row has `completed_at`; it has
+     * already returned Legacy for any incomplete row), LegacyTables passes completion() === true
+     * (every one of COLLECTIONS has a completed row). The two differ only for hand-edited progress
+     * rows (a collection's row deleted); drop() refuses in either case (it also requires
+     * completion() === true).
      *
      * @param list<string> $tables
      */
