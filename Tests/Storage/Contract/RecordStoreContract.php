@@ -157,16 +157,6 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
-     * Whether a float with no fractional part (1.0, -0.0) comes back as a float. Every store
-     * today keeps the document as PHP's json_encode() writes it, which drops the ".0": the value
-     * comes back as an integer (1, 0).
-     */
-    protected function expectWholeFloatsToKeepTheirType(): bool
-    {
-        return false;
-    }
-
-    /**
      * The collections the binding may write to freely. A binding on a database the running site
      * reads from must not list one the site would pick records up from.
      *
@@ -524,6 +514,13 @@ abstract class RecordStoreContract extends TestCase
             $this->assertMatches(['meta' => '{"k":"v"}'], []);
             $this->assertMatches(['meta' => 'v'], []);
             $this->assertSameRecord($listOfObjects, $this->store()->findById('entities', $listOfObjects['_id']));
+
+            // Nor is a nested associative array (an object), by its JSON encoding or its values.
+            $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
+            $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
+            $this->assertMatches(['pair' => 'alpha'], []);
+            $this->assertSameRecord($assoc, $this->store()->findById('entities', $assoc['_id']));
+            $this->assertMatches([], [$listOfObjects, $assoc]);
         }
     }
 
@@ -1641,26 +1638,22 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSame($record['annotations'], $stored['annotations']);
     }
 
+    /**
+     * A store keeps the document as PHP's json_encode() writes it by default, which writes a
+     * float with no fractional part without its fraction: 1.0 is read back as the integer 1 and
+     * -0.0 as the integer 0. Integers beyond 2^53 and fractions survive exactly.
+     */
     public function testNumbersRoundTripExactly(): void
     {
-        $numbers = ['i' => 9007199254740993, 'f' => 0.1, 'whole' => 1.0, 'neg' => -0.0, 'big' => 1.0E+25];
-        $record = $this->put($this->r($numbers));
+        $record = $this->put($this->r(['i' => 9007199254740993, 'f' => 0.1, 'whole' => 1.0, 'neg' => -0.0, 'big' => 1.0E+25]));
 
         $stored = $this->store()->findById('entities', $record['_id']);
 
-        // Integers beyond 2^53 and fractions survive exactly.
-        foreach (['i', 'f', 'big'] as $name) {
-            $this->assertSame($numbers[$name], $stored[$name], $name);
-        }
-        if ($this->expectWholeFloatsToKeepTheirType()) {
-            $this->assertSame(1.0, $stored['whole']);
-            $this->assertSame(-0.0, $stored['neg']);
-        } else {
-            // The document is PHP's json_encode() of the record, which writes a float with no
-            // fraction without one: it comes back as an integer, and -0.0 as 0.
-            $this->assertSame(1, $stored['whole']);
-            $this->assertSame(0, $stored['neg']);
-        }
+        $this->assertSame(9007199254740993, $stored['i']);
+        $this->assertSame(0.1, $stored['f']);
+        $this->assertSame(1.0E+25, $stored['big']);
+        $this->assertSame(1, $stored['whole']);
+        $this->assertSame(0, $stored['neg']);
     }
 
     public function testEmptyObjectAndEmptyListRoundTrip(): void
