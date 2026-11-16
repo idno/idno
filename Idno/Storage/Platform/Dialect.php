@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Idno\Storage\Platform;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\DriverException;
 
 /**
@@ -130,6 +131,52 @@ interface Dialect
      * @return array{string, list<string>, bool}
      */
     public function searchTextCondition(string $column, string $term, bool $booleanSearch, bool $bypassFulltext): array;
+
+    // ------------------------------------------------ declared indexed fields (IndexedFields)
+
+    /**
+     * The SQL of the indexed value of a declared indexed field on the row aliased $alias of a
+     * collection table: the value the field's index holds, which the store compares (with
+     * textComparison(), the comparison its index serves) instead of fieldCondition()'s query
+     * values. It is the query value of fieldCondition() for a SCALAR field (the same SQL
+     * definition), and NULL when the field is absent or holds an array or object.
+     *
+     * @throws \InvalidArgumentException when $field is not a valid indexed field name (IndexedField::assertValidName())
+     */
+    public function indexedFieldValue(string $alias, string $field): string;
+
+    /**
+     * The DDL that creates the indexed field `$field` of the collection table $table (a name
+     * already reduced to letters, digits and underscores), to run in order: on MySQL and MariaDB
+     * the generated column `ix_<field>` and its index of the same name (on a prefix of $length
+     * characters), on SQLite the index `<table>_ix_<field>` on the indexed value. A statement may
+     * fail because a concurrent request made the same column or index first (isAlreadyDefined()).
+     * The field name is checked again here and written into the DDL only as validated: a JSON
+     * path in DDL cannot be a bound parameter.
+     *
+     * @param Connection $connection the connection the DDL runs on (it may ask which server it is)
+     * @param int        $length     the prefix length, 1 to 255 (ignored where the whole value is indexed)
+     *
+     * @return list<string>
+     *
+     * @throws \InvalidArgumentException when $field is not a valid indexed field name, or the length is out of range
+     */
+    public function indexedFieldStatements(Connection $connection, string $table, string $field, bool $unique, int $length): array;
+
+    /**
+     * The index of the indexed field on the collection table as it exists: whether it is unique,
+     * and its prefix length in characters (null when the whole value is indexed); null when the
+     * field has no index (on MySQL, also when its generated column exists without one).
+     *
+     * @return array{unique: bool, length: ?int}|null
+     */
+    public function indexedFieldIndex(Connection $connection, string $table, string $field): ?array;
+
+    /**
+     * Whether the error of one of indexedFieldStatements() says that the column or index it
+     * creates exists already.
+     */
+    public function isAlreadyDefined(DriverException $exception): bool;
 
     /**
      * Whether the error of a SELECT says that an operand of the query is not a value the

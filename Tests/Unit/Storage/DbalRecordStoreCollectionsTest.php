@@ -85,6 +85,26 @@ final class DbalRecordStoreCollectionsTest extends TestCase
                 return $this->mysql->searchTextCondition($column, $term, $booleanSearch, $bypassFulltext);
             }
 
+            public function indexedFieldValue(string $alias, string $field): string
+            {
+                return $this->mysql->indexedFieldValue($alias, $field);
+            }
+
+            public function indexedFieldStatements(Connection $connection, string $table, string $field, bool $unique, int $length): array
+            {
+                return $this->mysql->indexedFieldStatements($connection, $table, $field, $unique, $length);
+            }
+
+            public function indexedFieldIndex(Connection $connection, string $table, string $field): ?array
+            {
+                return $this->mysql->indexedFieldIndex($connection, $table, $field);
+            }
+
+            public function isAlreadyDefined(DriverException $exception): bool
+            {
+                return $this->mysql->isAlreadyDefined($exception);
+            }
+
             public function tableNamesQuery(): string
             {
                 return "select name from sqlite_master where type = 'table'";

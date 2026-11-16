@@ -7,6 +7,8 @@ namespace IdnoPlugins\ActivityPub\Entities;
  * Stored as a standard Idno entity, discriminated by entity_subtype.
  */
 #[\Idno\Storage\Attribute\AsEntity('activitypub_follower')]
+#[\Idno\Storage\Attribute\IndexedField('actor_uri')]
+#[\Idno\Storage\Attribute\IndexedField('user_uuid')]
 class ActivityPubFollower extends \Idno\Common\Entity
 {
 

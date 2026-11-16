@@ -51,8 +51,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // below), Attribute/ (attribute classes) and the RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
-        // builds them); they are not services.
-        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        // builds them); they are not services. EntityClassFinder is a static helper.
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySchemaUpgrader and LegacySqlMaintenance.
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
@@ -177,6 +177,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Storage\AttributeTypeMap::class);
     $services->alias(\Idno\Storage\TypeMap::class, \Idno\Storage\AttributeTypeMap::class)->public();
     $services->set(EntityRepository::class)->public();
+    // The SQL dialect of the site's database, built when first fetched (DialectFactory: it throws a
+    // \LogicException on a site whose database is not SQL), and IndexedFields, which creates the
+    // indexes entity classes declare (#[IndexedField]). Public: the legacy admin page that enables a
+    // plugin fetches IndexedFields with Idno::container()->get(). Nothing fetches either while the
+    // kernel boots; building them does not connect.
+    // Set explicitly (not only found by the scan), like the services above.
+    $services->set(\Idno\Storage\SchemaCatalog::class);
+    $services->set(\Idno\Storage\DialectFactory::class);
+    $services->set(\Idno\Storage\Platform\Dialect::class)
+        ->factory([service(\Idno\Storage\DialectFactory::class), 'create']);
+    $services->set(\Idno\Storage\IndexedFields::class)->public();
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

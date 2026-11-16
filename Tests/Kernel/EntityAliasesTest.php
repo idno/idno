@@ -15,6 +15,7 @@ use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Criteria;
 use Idno\Storage\FixedRecordDefaults;
 use Idno\Storage\IdentityTypeMap;
+use Idno\Storage\IndexedFields;
 use Idno\Storage\JsonRecordStore;
 use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\Platform\SqliteDialect;
@@ -25,7 +26,9 @@ use Tests\Storage\PrivateDatabase;
 
 /**
  * Every entity class declares the alias its records are stored under, once, and the declaration
- * agrees with the class: the walk covers every PHP file under Idno/ and IdnoPlugins/.
+ * agrees with the class: the walk covers every PHP file under Idno/ and IdnoPlugins/. The core and
+ * bundled classes' #[IndexedField] declarations give each collection the indexed fields listed in
+ * testTheCoreAndBundledClassesDeclareTheirIndexedFields().
  */
 final class EntityAliasesTest extends TestCase
 {
@@ -219,5 +222,48 @@ final class EntityAliasesTest extends TestCase
         self::assertSame(['aaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbb'], $found);
         self::assertSame(['cccccccccccccccccccccccc'], $ids($aliased->find('entities', Criteria::fromLegacyArray(['entity_subtype' => $note]), 10, 0)));
         self::assertSame([], $aliased->find('entities', Criteria::fromLegacyArray(['entity_subtype' => \IdnoPlugins\Photo\Photo::class]), 10, 0));
+    }
+
+    public function testTheCoreAndBundledClassesDeclareTheirIndexedFields(): void
+    {
+        $family = ConnectionParameters::driverFamily(Idno::container()->get(BootConfig::class)->all());
+        if (!in_array($family, ['mysql', 'sqlite'], true)) {
+            self::markTestSkipped('The site\'s database is not SQL (MySQL or SQLite).');
+        }
+        $this->connection = $family === 'mysql' ? PrivateDatabase::mysql('declared_indexes') : PrivateDatabase::sqliteMemory();
+        $dialect = $this->connection->getDatabasePlatform() instanceof AbstractMySQLPlatform
+            ? new MySqlDialect()
+            : new SqliteDialect($this->connection);
+        $catalog = new SchemaCatalog($this->connection);
+        $indexes = new IndexedFields($this->connection, $dialect, $catalog);
+        $root = dirname(__DIR__, 2);
+
+        $indexes->reconcileDirectory($root . '/Idno');
+        $indexes->reconcileDirectory($root . '/IdnoPlugins');
+
+        self::assertSame([], $indexes->conflicts());
+        $entity = ['access', 'canonical', 'shorturl', 'slug', 'url'];
+        $sorted = static function (array $fields): array {
+            sort($fields);
+
+            return $fields;
+        };
+        self::assertSame($sorted([...$entity, 'actor_uri', 'admin', 'category', 'code', 'email', 'handle', 'queue', 'source_url', 'user_uuid']), $catalog->indexedFields('entities'));
+        self::assertSame($sorted([...$entity, 'feed_url']), $catalog->indexedFields('reader'));
+        self::assertSame($sorted([...$entity, 'domain']), $catalog->indexedFields('site'));
+        // A real index of the expected name behind every one (information_schema.statistics on
+        // MySQL and MariaDB, pragma_index_list on SQLite), not merely a generated column.
+        foreach (['entities', 'reader', 'site'] as $collection) {
+            foreach ($catalog->indexedFields($collection) as $field) {
+                self::assertSame(['unique' => false, 'length' => $family === 'mysql' ? 255 : null], $dialect->indexedFieldIndex($this->connection, 'idno_' . $collection, $field), $collection . '.' . $field);
+            }
+            $names = $family === 'mysql'
+                ? $this->connection->fetchFirstColumn("select distinct index_name from information_schema.statistics where table_schema = database() and table_name = ? and index_name like 'ix\\_%'", ['idno_' . $collection])
+                : $this->connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = ? and name like ? escape '!'", ['idno_' . $collection, 'idno!_' . $collection . '!_ix!_%']);
+            $expected = array_map(static fn (string $field): string => $family === 'mysql' ? 'ix_' . $field : 'idno_' . $collection . '_ix_' . $field, $catalog->indexedFields($collection));
+            sort($names);
+            self::assertSame($expected, $names, $collection);
+        }
+        self::assertSame([], $indexes->reconcileDirectory($root . '/Idno'), 'idempotent');
     }
 }

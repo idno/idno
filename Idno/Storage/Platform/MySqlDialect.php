@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Idno\Storage\Platform;
 
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ConstraintViolationException;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\RetryableException;
+use Doctrine\DBAL\Platforms\MariaDBPlatform;
+use Idno\Storage\Attribute\IndexedField;
 
 /**
  * MySQL, as the old backend, Idno\Data\MySQL (since removed), used it: `insert ... on duplicate key update`, full-text
@@ -31,6 +34,9 @@ final class MySqlDialect implements Dialect
      * ER_DATA_TOO_LONG (1406, e.g. a field name longer than the 64 characters of `name`).
      */
     private const REFUSED_DATA_CODES = [1292, 1366, 1406];
+
+    /** ER_DUP_FIELDNAME and ER_DUP_KEYNAME: the column or index a DDL statement adds exists already. */
+    private const ALREADY_DEFINED_CODES = [1060, 1061];
 
     public function quoteIdentifier(string $name): string
     {
@@ -117,7 +123,9 @@ final class MySqlDialect implements Dialect
 
     /**
      * The query value (RecordIndex::queryValues()) of one JSON value: $text its unquoted text, $json
-     * the value as JSON (NULL for a JSON null on MySQL).
+     * the value as JSON (NULL for a JSON null on MySQL). The one definition of the scalar rule on
+     * MySQL and MariaDB: fieldCondition() applies it to each value JSON_TABLE gives, and the
+     * generated column of an indexed field (indexedFieldStatements()) to the field's value.
      */
     private static function text(string $text, string $json): string
     {
@@ -127,6 +135,78 @@ final class MySqlDialect implements Dialect
             . ' when \'NULL\' then \'0\''
             . ' when \'ARRAY\' then null when \'OBJECT\' then null'
             . ' else if(' . $text . ' + 0 = 0, \'0\', ' . $text . ') end';
+    }
+
+    /**
+     * The generated column `<alias>.ix_<field>`.
+     */
+    public function indexedFieldValue(string $alias, string $field): string
+    {
+        return $alias . '.' . $this->quoteIdentifier(self::indexedColumn($field));
+    }
+
+    /**
+     * A VIRTUAL generated column `ix_<field>` (LONGTEXT, utf8mb4_general_ci, the collation of the
+     * table's text columns) whose value is text() of the field's JSON value, NULL when the field is
+     * absent, then an index `ix_<field>` on its first $length characters. The whole value is in the
+     * column, so a comparison is on the whole value; a unique index is unique on the prefix.
+     *
+     * The text of a string is unquoted in full UTF-8: JSON_UNQUOTE() on MySQL; on MariaDB, whose
+     * JSON_UNQUOTE() returns utf8mb3 (a four-byte character becomes '?'), JSON_VALUE(), which
+     * MySQL cannot use instead (its result is a VARCHAR(512): a longer string gives NULL). Other
+     * values are JSON_UNQUOTE()d on both: their text is ASCII.
+     */
+    public function indexedFieldStatements(Connection $connection, string $table, string $field, bool $unique, int $length): array
+    {
+        $column = $this->quoteIdentifier(self::indexedColumn($field));
+        if ($length < 1 || $length > IndexedField::MAX_LENGTH) {
+            throw new \InvalidArgumentException(sprintf('An index prefix is 1 to %d characters, not %d.', IndexedField::MAX_LENGTH, $length));
+        }
+        $document = $this->quoteIdentifier('data');
+        // The field name is validated: letters, digits and underscores only.
+        $path = '\'$."' . $field . '"\'';
+        $json = 'json_extract(' . $document . ', ' . $path . ')';
+        $text = $connection->getDatabasePlatform() instanceof MariaDBPlatform
+            ? 'if(json_type(' . $json . ') = \'STRING\', json_value(' . $document . ', ' . $path . '), json_unquote(' . $json . '))'
+            : 'json_unquote(' . $json . ')';
+        $value = 'case when ' . $json . ' is null then null else ' . self::text($text, $json) . ' end';
+        $quotedTable = $this->quoteIdentifier($table);
+
+        return [
+            'alter table ' . $quotedTable . ' add column ' . $column . ' longtext character set utf8mb4 collate utf8mb4_general_ci generated always as (' . $value . ') virtual',
+            'create ' . ($unique ? 'unique ' : '') . 'index ' . $column . ' on ' . $quotedTable . ' (' . $column . '(' . $length . '))',
+        ];
+    }
+
+    public function indexedFieldIndex(Connection $connection, string $table, string $field): ?array
+    {
+        $row = $connection->fetchNumeric(
+            'select non_unique, sub_part from information_schema.statistics where table_schema = database() and table_name = ? and index_name = ? order by seq_in_index limit 1',
+            [$table, self::indexedColumn($field)],
+        );
+        if ($row === false) {
+            return null;
+        }
+
+        return ['unique' => (int) $row[0] === 0, 'length' => $row[1] === null ? null : (int) $row[1]];
+    }
+
+    /**
+     * ER_DUP_FIELDNAME (the column exists) or ER_DUP_KEYNAME (the index exists).
+     */
+    public function isAlreadyDefined(DriverException $exception): bool
+    {
+        return in_array($exception->getCode(), self::ALREADY_DEFINED_CODES, true);
+    }
+
+    /**
+     * `ix_<field>`, the field validated.
+     */
+    private static function indexedColumn(string $field): string
+    {
+        IndexedField::assertValidName($field);
+
+        return 'ix_' . $field;
     }
 
     /**

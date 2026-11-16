@@ -6,6 +6,7 @@ namespace Idno\Entities\Reader {
     use Idno\Core\Webservice;
 
     #[\Idno\Storage\Attribute\AsEntity('feed', collection: 'reader')]
+    #[\Idno\Storage\Attribute\IndexedField('feed_url')]
     class Feed extends Entity
     {
 

@@ -43,6 +43,11 @@ use Idno\Storage\Platform\Dialect;
  *    Dialect::fieldCondition(), the field named by its exact name. Values are bound as strings
  *    (true is '1', false ''), as today, except that a float operand of a document field is
  *    RecordIndex::floatText(), the text its query value has, so that a float finds itself.
+ *    A field the SchemaCatalog lists as indexed for the collection (#[IndexedField], made by
+ *    IndexedFields) is compared with its indexed value instead (Dialect::indexedFieldValue(), a
+ *    plain comparison its index serves), which is its query value when the field holds a scalar and
+ *    NULL otherwise: such a field matches scalar values only (a list or object in it is not
+ *    found); for every other record the result is the same with or without the index.
  *    Results are ordered by `created`, newest first, then `id` descending.
  *  - Search: today's rules, against the `search` column (Dialect::searchTextCondition()); a search
  *    anywhere but at the top level makes the query match nothing, as do an AnyOf with no children
@@ -222,16 +227,29 @@ final class JsonRecordStore implements RecordStore
     }
 
     /**
-     * The table of the collection, or null when the name is no collection.
+     * The table a collection is kept in, whether or not it exists: `idno_` and the name reduced to
+     * letters, digits and underscores and lower-cased; null when the name can be no collection (it
+     * reduces to nothing, or names one of SYSTEM_TABLES). The one place this reduction is made
+     * (IndexedFields uses it too).
      */
-    private function table(string $collection): ?string
+    public static function tableName(string $collection): ?string
     {
         $name = strtolower(preg_replace('/[^a-zA-Z0-9_]/', '', $collection) ?? '');
         if ($name === '' || in_array($name, self::SYSTEM_TABLES, true)) {
             return null;
         }
 
-        return $this->catalog->hasTable(self::TABLE_PREFIX . $name) ? self::TABLE_PREFIX . $name : null;
+        return self::TABLE_PREFIX . $name;
+    }
+
+    /**
+     * The table of the collection, or null when the name is no collection.
+     */
+    private function table(string $collection): ?string
+    {
+        $table = self::tableName($collection);
+
+        return $table !== null && $this->catalog->hasTable($table) ? $table : null;
     }
 
     /**
@@ -408,6 +426,9 @@ final class JsonRecordStore implements RecordStore
         }
         // A float is compared as the text of its query value (RecordIndex::floatText()), so it finds itself.
         $values = array_map(static fn (string|int|float|bool|null $operand): ?string => is_float($operand) ? RecordIndex::floatText($operand) : self::bind($operand), $operands);
+        if (in_array($criterion->field, $this->catalog->indexedFields(substr($context->table, strlen(self::TABLE_PREFIX))), true)) {
+            return $this->indexedCondition($criterion->field, $operator, $values, $context);
+        }
         $path = self::path($criterion->field);
         if ($path === null) {
             // No document holds a field of that name: no record has a value to compare.
@@ -422,6 +443,27 @@ final class JsonRecordStore implements RecordStore
         }
 
         return '(' . $sql . ')';
+    }
+
+    /**
+     * The condition on a declared indexed field: a comparison of its indexed value
+     * (Dialect::indexedFieldValue(), NULL unless the field holds a scalar), which its index serves.
+     * The same values and operators as the condition on query values, so the result is the same
+     * for every record whose field is absent or a scalar.
+     *
+     * @param list<?string>                                                       $values not empty for `in`
+     * @param object{table: string, parsedSearchTerm: bool, params: list<?string>} $context
+     */
+    private function indexedCondition(string $field, string $operator, array $values, object $context): string
+    {
+        $value = $this->dialect->indexedFieldValue('t', $field);
+        if ($operator === 'not in' && $values === []) {
+            // Not in nothing: every record whose field has a value.
+            return '(' . $value . ' is not null)';
+        }
+        array_push($context->params, ...$values);
+
+        return '(' . $this->dialect->textComparison($value, $operator, self::placeholders($operator, $values)) . ')';
     }
 
     /**

@@ -37,6 +37,7 @@ namespace Idno\Pages\Admin {
                 switch ($action) {
                     case 'install':
                         if (\Idno\Core\Idno::site()->plugins()->enable($plugin)) {
+                            $this->reconcileIndexedFields($plugin);
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('The plugin was enabled.'));
 
                             echo json_encode(
@@ -77,6 +78,38 @@ namespace Idno\Pages\Admin {
                 ]
             );
             //$this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/plugins/');
+        }
+
+        /**
+         * Creates the indexes that the plugin's entity classes declare (#[IndexedField]). A site
+         * whose database is not SQL (MongoDB) has none and is skipped. Any failure (a missing or
+         * broken service included) is logged and shown, and never stops the plugin from being enabled.
+         *
+         * @param string      $plugin
+         * @param string|null $directory the plugin's directory (default: found as Plugins finds it)
+         */
+        private function reconcileIndexedFields($plugin, $directory = null)
+        {
+            if ($directory === null) {
+                $directory = \Idno\Core\Idno::site()->config()->path . '/IdnoPlugins/' . $plugin;
+                if (!is_dir($directory) && !empty(\Idno\Core\Idno::site()->config()->external_plugin_path)) {
+                    $directory = \Idno\Core\Idno::site()->config()->external_plugin_path . '/IdnoPlugins/' . $plugin;
+                }
+            }
+            try {
+                $database = \Idno\Storage\ConnectionParameters::driverFamily(\Idno\Core\Idno::container()->get(\Idno\Config\BootConfig::class)->all());
+                if ($database !== 'mysql' && $database !== 'sqlite') {
+                    return; // Not an SQL site: it has no indexed fields.
+                }
+                $indexes = \Idno\Core\Idno::container()->get(\Idno\Storage\IndexedFields::class);
+                $indexes->reconcileDirectory($directory);
+                foreach ($indexes->conflicts() as $conflict) {
+                    \Idno\Core\Idno::site()->logging()->warning('Indexed field of plugin ' . $plugin . ': ' . $conflict);
+                }
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->error('Could not create the indexes of plugin ' . $plugin . ': ' . get_class($e) . ': ' . $e->getMessage());
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('The plugin was enabled, but the indexes it declares could not be created. The site works without them; the error was logged.'));
+            }
         }
 
     }

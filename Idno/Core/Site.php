@@ -6,6 +6,7 @@ use Idno\Common\Entity;
 use Idno\Core\Idno;
 
 #[\Idno\Storage\Attribute\AsEntity('site', collection: 'site')]
+#[\Idno\Storage\Attribute\IndexedField('domain')]
 class Site extends Entity
 {
 

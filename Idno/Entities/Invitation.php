@@ -12,6 +12,8 @@ namespace Idno\Entities {
     use Idno\Core\Email;
 
     #[\Idno\Storage\Attribute\AsEntity('invitation')]
+    #[\Idno\Storage\Attribute\IndexedField('email')]
+    #[\Idno\Storage\Attribute\IndexedField('code')]
     class Invitation extends \Idno\Common\Entity
     {
 

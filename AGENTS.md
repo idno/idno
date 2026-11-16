@@ -204,7 +204,10 @@ Idno/
                                used by the site yet), with TypeMap (a class's value in the `type` column),
                                AttributeTypeMap (the aliases the entity classes declare with
                                Attribute/AsEntity) and IdentityTypeMap (no aliases); RecordIndex::queryValues() is what a
-                               query on a document field compares with, in that store and in memory
+                               query on a document field compares with, in that store and in memory;
+                               IndexedFields (creates the indexes entity classes declare with
+                               Attribute/IndexedField), EntityClassFinder (the classes of a directory that
+                               carry those attributes) and DialectFactory (the container's Dialect)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -434,7 +437,7 @@ other new code may.
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
-  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityQuery.php`,
+  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
   `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
@@ -931,6 +934,9 @@ afterwards calls `SchemaCatalog::forget()`.
   (`expectNonAsciiCaseToBeIgnored`); a field is found by its exact name (`expectFieldNamesToIgnoreCase`);
   `created` is a timestamp, so a query's datetime literal is read in the time zone of the query, not
   compared with the text formatted at save time (`expectCreatedToBeComparedInTheTimeZoneOfItsSave`);
+  a field with a declared index (#[IndexedField], below) matches scalar values only: a record whose
+  field holds a list or an object is not found by a query on it once the index exists (no hook:
+  pinned by `IndexedFieldsContract::testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed`);
   a float is queried as the text `json_encode()` wrote (`0.30000000000000004`, not PHP's 14-digit
   `0.3`; `expectFloatsToMatchTheirJsonText`), and a float OPERAND of a document-field condition is
   converted the same way (`RecordIndex::floatText()`, shared by the stored values and the operands
@@ -940,6 +946,69 @@ afterwards calls `SchemaCatalog::forget()`.
   there such a float is found neither by its text nor by the same float, only by MySQL's text
   (`expectFloatsInExponentFormToMatchTheirJsonText`, the one hook whose value differs between MySQL
   and MariaDB).
+
+#### Declared indexed fields
+
+A query on a document field scans the table (it is computed from `data`). An entity class can
+declare a top-level field as indexed, with a repeatable attribute directly above the class, next to
+its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `unique: true`,
+`length: 1..255`). Declare a field only because hot queries look it up; never for correctness.
+
+- The name matches `[a-z0-9_]{1,48}` and is not a `RecordIndex::COLUMN_FIELDS` name (`uuid`, `_id`,
+  `entity_subtype`, `owner`, `publish_status`, `created` have columns of their own); the attribute
+  throws `\InvalidArgumentException` otherwise, and the dialects check it again where they build
+  DDL or SQL (the JSON path in DDL cannot be a bound parameter, so it is written only from the
+  validated name).
+- What exists: on MySQL/MariaDB a `VIRTUAL` generated column `ix_<field>` of `idno_<collection>`
+  (`LONGTEXT`, `utf8mb4_general_ci`) and an index `ix_<field>` on its first `length` characters
+  (default 255; unique when declared, so unique on the prefix; comparisons are always on the whole
+  value); on SQLite an index `idno_<collection>_ix_<field>` on an expression, `COLLATE NOCASE`, over
+  the whole value (`length` is ignored). The indexed value is the field's query value when it holds
+  a scalar (the same SQL definition the ad-hoc path uses: `MySqlDialect::text()`,
+  `SqliteDialect::scalarText()`), NULL when it is absent or holds an array or object. On MariaDB a
+  string is unquoted with `JSON_VALUE()` (its `JSON_UNQUOTE()` returns utf8mb3 and loses four-byte
+  characters); on MySQL with `JSON_UNQUOTE()` (its `JSON_VALUE()` returns a `VARCHAR(512)`).
+  `SchemaCatalog::indexedFields()` lists them.
+- Queries: `JsonRecordStore` compares a field the catalog lists as indexed for the collection with
+  its indexed value (`Dialect::indexedFieldValue()`, a plain comparison through
+  `Dialect::textComparison()`: MySQL's `t.ix_<field>`, never the `JSON_TABLE` semi-join; on SQLite
+  the indexed expression, which SQLite matches to the index for `=` and `in`). So the field matches
+  scalar values only; every other result is the same before and after the index exists, for every
+  operator (pinned by `Tests/Storage/Contract/IndexedFieldsContract`, run on SQLite in the unit tier,
+  `Tests/Unit/Storage/IndexedFieldsSqliteTest`, and on MySQL and MariaDB,
+  `Tests/Storage/IndexedFieldsMySqlTest`, which also EXPLAINs the hot queries on the core
+  declarations). The store and `IndexedFields` must share the `SchemaCatalog` (the container's is
+  one shared service), or the store sees a new index only after its own catalog is forgotten.
+- `Idno\Storage\IndexedFields` (a public container service: the connection, the container's
+  `Dialect`, built by `DialectFactory` from the boot configuration, and the `SchemaCatalog`; fetching
+  it on a site whose database is not SQL throws a `\LogicException`): `reconcile(...$classes)` applies
+  the declarations of each class AND its parent classes to the collection of the class's OWN
+  `#[AsEntity]` (a class without one creates nothing by itself; `Idno\Common\Entity`'s declarations
+  reach `entities`, `reader` and `site` through its subclasses), skips a collection whose table does
+  not exist (nothing created, nothing reported), creates what is missing (idempotent; an interrupted
+  creation is completed; a column or index a concurrent request made first, `Dialect::isAlreadyDefined()`,
+  is no failure), calls `SchemaCatalog::forget()`, and returns the `collection.field` names it
+  created. An index is never dropped or altered: a removed declaration leaves its index, and a
+  declaration whose options differ from the existing index changes nothing and is listed by
+  `conflicts()` (of the last call). Every declaration is read and validated before any DDL.
+  `reconcileDirectory($dir)` reconciles what `EntityClassFinder::in($dir)` finds: PHP files with a
+  line that starts (after indentation) with `#[AsEntity` or `#[IndexedField` (imported or fully
+  qualified; a mention in a comment or docblock does not count), the class name derived
+  from the path (PSR-4 under the project, or under the nearest `Idno`/`IdnoPlugins` directory outside
+  it), loaded through the autoloader (never `require`), confirmed by reflection; a file that fails to
+  load is skipped.
+- When it runs: `Idno\Pages\Admin\Plugins` reconciles a plugin's directory when the plugin is enabled
+  (skipped on a non-SQL site; a failure is logged and shown as an error message, and the plugin is
+  enabled anyway); the upgrade will reconcile the core and enabled plugins. Until the site uses the
+  new tables, the site's database has no `idno_*` tables, so enabling a plugin creates nothing.
+- Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`): `Idno\Common\Entity`: `access`,
+  `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email`, `admin`; `Site`: `domain`;
+  `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`;
+  `Reader\Feed`, `Reader\Subscription`, `Reader\FeedItem`: `feed_url`; `StaticPage`: `category`;
+  `ActivityPubFollower`: `actor_uri`, `user_uuid`. None is unique (nothing enforces uniqueness today;
+  a unique index would make saves fail on existing sites). A new declaration on an existing
+  first-party class ships with an empty migration, so that sites reconcile on upgrade.
+- Plugin authors: `docs/developers/plugins/indexed-fields.md`.
 
 #### MySQL schema
 

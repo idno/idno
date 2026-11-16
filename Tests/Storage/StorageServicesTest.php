@@ -13,7 +13,9 @@ use Idno\Legacy\LegacyRecordDefaults;
 use Idno\Legacy\LegacyRecordStoreFactory;
 use Idno\Storage\AccessContext;
 use Idno\Storage\DbalRecordStore;
+use Idno\Storage\DialectFactory;
 use Idno\Storage\EntityRepository;
+use Idno\Storage\IndexedFields;
 use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\Platform\SqliteDialect;
 use Idno\Storage\RecordStore;
@@ -260,11 +262,55 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $container = $this->kernel->getContainer();
 
         $this->assertSame($database, $container->get(BootConfig::class)->get('database'));
-        foreach ([RecordStore::class, AccessContext::class, EntityRepository::class] as $id) {
+        foreach ([RecordStore::class, AccessContext::class, EntityRepository::class, IndexedFields::class] as $id) {
             $this->assertTrue($container->has($id), $id);
             $this->assertFalse($container->initialized($id), $id . ' was built while the kernel booted');
         }
         $this->assertFalse($container->initialized('database_connection'));
         $this->assertFileDoesNotExist($this->cacheDir . '/site.db');
+    }
+
+    /**
+     * IndexedFields is built when first fetched: on an SQL site with the dialect of its database and
+     * without connecting; on any other site fetching it throws a \LogicException (the admin page
+     * then skips reconciling).
+     *
+     * @dataProvider databases
+     */
+    public function testIndexedFieldsAreBuiltOnAnSqlSiteOnlyAndWithoutConnecting(string $database): void
+    {
+        $this->cacheDir = sys_get_temp_dir() . '/idno-test-cache-' . bin2hex(random_bytes(6));
+        $this->setServer('IDNO_CACHE_DIR', $this->cacheDir);
+        $this->setServer('IDNO_DATABASE', $database);
+        $this->setServer('IDNO_DBNAME', $database === 'sqlite' ? $this->cacheDir . '/site.db' : null);
+        $this->kernel = new Kernel('test', true, bootLegacy: false);
+        $this->kernel->boot();
+        $container = $this->kernel->getContainer();
+
+        $dialects = ['mysql' => MySqlDialect::class, 'sqlite' => SqliteDialect::class, 'SomePluginBackend' => MySqlDialect::class];
+        if ($database === 'mongo') {
+            $this->expectException(\LogicException::class);
+            $container->get(IndexedFields::class);
+
+            return;
+        }
+        $indexes = $container->get(IndexedFields::class);
+        $this->assertInstanceOf(IndexedFields::class, $indexes);
+        $this->assertInstanceOf($dialects[$database], self::property($indexes, 'dialect'));
+        $this->assertSame($container->get('database_connection'), self::property($indexes, 'connection'));
+        if ($database === 'sqlite') {
+            $this->assertSame($container->get('database_connection'), self::property(self::property($indexes, 'dialect'), 'connection'));
+        }
+        $this->assertFalse($container->get('database_connection')->isConnected(), 'building it does not connect');
+        $this->assertFileDoesNotExist($this->cacheDir . '/site.db');
+    }
+
+    public function testTheDialectFactoryRefusesADatabaseThatIsNotSql(): void
+    {
+        $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql', 'host' => '127.0.0.1', 'dbname' => 'never_connected']);
+        $this->assertInstanceOf(MySqlDialect::class, (new DialectFactory(new BootConfig(['database' => 'beanstalk-mysql'], false), $connection))->create());
+
+        $this->expectException(\LogicException::class);
+        (new DialectFactory(new BootConfig(['database' => 'mongodb'], false), $connection))->create();
     }
 }

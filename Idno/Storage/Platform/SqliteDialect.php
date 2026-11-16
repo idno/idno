@@ -8,6 +8,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception\ConstraintViolationException;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\RetryableException;
+use Idno\Storage\Attribute\IndexedField;
 use Idno\Storage\MySqlSemantics;
 
 /**
@@ -221,16 +222,93 @@ final class SqliteDialect implements Dialect
         $raw = '(case when v.key is null then ' . $document . ' -> ?'
             . ' when typeof(v.key) = \'integer\' then (' . $document . ' -> ?) -> v.key'
             . ' else (' . $document . ' -> ?) -> (\'$.\' || json_quote(v.key)) end)';
-        $value = 'case v.type'
-            . ' when \'text\' then (case when v.atom = \'\' then \'0\' else v.atom end)'
-            . ' when \'true\' then \'1\' when \'false\' then \'0\' when \'null\' then \'0\''
-            . ' when \'integer\' then (case when v.atom = 0 then \'0\' else cast(v.atom as text) end)'
-            . ' when \'real\' then (case when v.atom = 0 then \'0\' else ' . $raw . ' end)'
-            . ' end';
         $sql = 'exists (select 1 from json_each(' . $document . ', ?) as v where '
-            . $this->textComparison('(' . $value . ')', $operator, $operands) . ')';
+            . $this->textComparison('(' . self::scalarText('v.type', 'v.atom', $raw) . ')', $operator, $operands) . ')';
 
         return [$sql, 4];
+    }
+
+    /**
+     * The query value (RecordIndex::queryValues()) of one JSON value, NULL for an array or object:
+     * $type its JSON type as json_type() and json_each() name it, $atom its SQL value, $raw its JSON
+     * text. The one definition of the scalar rule on SQLite: fieldCondition() applies it to each
+     * value json_each() gives, and an indexed field's index (indexedFieldValue()) to the field's
+     * value. Built-in functions only.
+     */
+    private static function scalarText(string $type, string $atom, string $raw): string
+    {
+        return 'case ' . $type
+            . ' when \'text\' then (case when ' . $atom . ' = \'\' then \'0\' else ' . $atom . ' end)'
+            . ' when \'true\' then \'1\' when \'false\' then \'0\' when \'null\' then \'0\''
+            . ' when \'integer\' then (case when ' . $atom . ' = 0 then \'0\' else cast(' . $atom . ' as text) end)'
+            . ' when \'real\' then (case when ' . $atom . ' = 0 then \'0\' else ' . $raw . ' end)'
+            . ' end';
+    }
+
+    /**
+     * scalarText() of the field's value in the document of the row aliased $alias: NULL when the
+     * field is absent or holds an array or object. The same SQL as the index on the field
+     * (indexedFieldStatements()), so that SQLite uses the index for `=` and `in`.
+     */
+    public function indexedFieldValue(string $alias, string $field): string
+    {
+        return self::indexedExpression($alias . '.' . $this->quoteIdentifier('data'), $field);
+    }
+
+    /**
+     * `create [unique] index if not exists <table>_ix_<field> on <table> (<indexed value> collate
+     * nocase)`: an index on the expression indexedFieldValue() compares, with the collation of the
+     * comparison (textComparison()), over the whole value ($length is ignored). Built-in functions
+     * and collations only, so the database file stays usable with standard SQLite tools.
+     */
+    public function indexedFieldStatements(Connection $connection, string $table, string $field, bool $unique, int $length): array
+    {
+        IndexedField::assertValidName($field);
+        if ($length < 1 || $length > IndexedField::MAX_LENGTH) {
+            throw new \InvalidArgumentException(sprintf('An index prefix is 1 to %d characters, not %d.', IndexedField::MAX_LENGTH, $length));
+        }
+
+        return [
+            'create ' . ($unique ? 'unique ' : '') . 'index if not exists ' . $this->quoteIdentifier(self::indexName($table, $field))
+            . ' on ' . $this->quoteIdentifier($table) . ' (' . self::indexedExpression($this->quoteIdentifier('data'), $field) . ' collate nocase)',
+        ];
+    }
+
+    public function indexedFieldIndex(Connection $connection, string $table, string $field): ?array
+    {
+        $unique = $connection->fetchOne('select "unique" from pragma_index_list(?) where name = ?', [$table, self::indexName($table, $field)]);
+
+        return $unique === false ? null : ['unique' => (int) $unique === 1, 'length' => null];
+    }
+
+    /**
+     * Never: the index is created `if not exists`.
+     */
+    public function isAlreadyDefined(DriverException $exception): bool
+    {
+        return false;
+    }
+
+    /**
+     * `<table>_ix_<field>`, the field validated.
+     */
+    private static function indexName(string $table, string $field): string
+    {
+        IndexedField::assertValidName($field);
+
+        return $table . '_ix_' . $field;
+    }
+
+    /**
+     * The indexed value of the field in $document (a qualified, quoted `data` column).
+     */
+    private static function indexedExpression(string $document, string $field): string
+    {
+        IndexedField::assertValidName($field);
+        // The field name is validated: letters, digits and underscores only.
+        $path = '\'$."' . $field . '"\'';
+
+        return '(' . self::scalarText('json_type(' . $document . ', ' . $path . ')', 'json_extract(' . $document . ', ' . $path . ')', '(' . $document . ' -> ' . $path . ')') . ')';
     }
 
     /**

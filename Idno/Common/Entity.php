@@ -17,6 +17,11 @@ namespace Idno\Common {
     use Idno\Entities\User;
 
     #[\Idno\Storage\Attribute\AsEntity('entity')]
+    #[\Idno\Storage\Attribute\IndexedField('access')]
+    #[\Idno\Storage\Attribute\IndexedField('slug')]
+    #[\Idno\Storage\Attribute\IndexedField('shorturl')]
+    #[\Idno\Storage\Attribute\IndexedField('url')]
+    #[\Idno\Storage\Attribute\IndexedField('canonical')]
     abstract class Entity extends Component implements EntityInterface
     {
         // Which collection should this be stored in?

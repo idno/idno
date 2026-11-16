@@ -6,6 +6,7 @@ namespace IdnoPlugins\StaticPages {
     use Idno\Entities\User;
 
     #[\Idno\Storage\Attribute\AsEntity('static_page')]
+    #[\Idno\Storage\Attribute\IndexedField('category')]
     class StaticPage extends Entity
     {
 
