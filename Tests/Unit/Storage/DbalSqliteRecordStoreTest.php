@@ -32,7 +32,10 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - expectLongSearchTermToMatchSubstring (true), expectBooleanModeSearch (false): no
  *    full-text index; a long term's words are matched as substrings;
  *  - expectTextToSortFoldedToUpperCase (true): the `idno_ci` collation orders text folded to
- *    upper case (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci.
+ *    upper case (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci;
+ *  - collections: entities, reader, site and config, the collections of the schema.
+ *
+ * Field names over 64 characters are stored (the contract's default; MySQL refuses them).
  */
 final class DbalSqliteRecordStoreTest extends RecordStoreContract
 {
@@ -84,6 +87,11 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
         return false;
     }
 
+    protected function collections(): array
+    {
+        return ['entities', 'reader', 'site', 'config'];
+    }
+
     // ------------------------------------------------ specific to SQLite
 
     /**
@@ -116,16 +124,6 @@ final class DbalSqliteRecordStoreTest extends RecordStoreContract
         $this->expectException(\Doctrine\DBAL\Exception::class);
         $this->expectExceptionMessage('no such collation sequence: idno_ci');
         SqliteTestDatabase::loadSchema($plain);
-    }
-
-    public function testAFieldNameLongerThan64CharactersIsStored(): void
-    {
-        // MySQL refuses it (`name` is varchar(64): save() is false, DbalMySqlRecordStoreTest);
-        // SQLite does not enforce lengths, like the in-memory store.
-        $name = str_repeat('n', 65);
-        $record = $this->put($this->r([$name => 'v']));
-
-        $this->assertMatches([$name => 'v'], [$record]);
     }
 
     public function testANulByteIsStoredAndMatched(): void

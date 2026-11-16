@@ -97,6 +97,87 @@ abstract class RecordStoreContract extends TestCase
     }
 
     /**
+     * Whether records with an equal `created` come back in a defined order: the one with the
+     * greater `_id` first (so newest first, then `_id` descending, for find() and paging alike).
+     * Today's stores leave the order of such records undefined.
+     */
+    protected function expectEqualCreatedToBeOrderedById(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether a value is queryable only up to its first 255 bytes (cut on a character boundary),
+     * so a longer value never equals a query for the whole of it. A store that compares whole
+     * values overrides this to false.
+     */
+    protected function expectValuesToBeCutAt255Bytes(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether an array nested in a list (`['meta' => [['k' => 'v']]]`) is queryable as its JSON
+     * encoding (`{"k":"v"}`), and an associative array as the list of its values. A store on
+     * which nested arrays and objects are not queryable overrides this to false.
+     */
+    protected function expectNestedArraysToMatchTheirJson(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a save is refused (false, nothing stored) when a document field name is longer
+     * than 64 characters. MySQL's metadata `name` column is a varchar(64); in memory and on
+     * SQLite lengths are not enforced. The MySQL binding overrides this to true.
+     */
+    protected function expectLongFieldNamesToBeRefused(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether re-saving an existing record with ANOTHER existing record's uuid overwrites that
+     * other record (MySQL's `on duplicate key update` takes the key that conflicts) rather than
+     * being refused with both records intact. The MySQL binding overrides this to true.
+     */
+    protected function expectUuidClashOnResaveToOverwrite(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether text compares equal across the case of non-ASCII letters (`ÉTÉ` equals `été`).
+     * MySQL, the in-memory store and SQLite today do; a store that folds ASCII case only
+     * overrides this to false. ASCII case is ignored on every binding.
+     */
+    protected function expectNonAsciiCaseToBeIgnored(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Whether a float with no fractional part (1.0, -0.0) comes back as a float. Every store
+     * today keeps the document as PHP's json_encode() writes it, which drops the ".0": the value
+     * comes back as an integer (1, 0).
+     */
+    protected function expectWholeFloatsToKeepTheirType(): bool
+    {
+        return false;
+    }
+
+    /**
+     * The collections the binding may write to freely. A binding on a database the running site
+     * reads from must not list one the site would pick records up from.
+     *
+     * @return list<string>
+     */
+    protected function collections(): array
+    {
+        return ['entities'];
+    }
+
+    /**
      * Whether text values are ordered as the in-memory store and SQLite order them: folded to upper
      * case and compared code point by code point (MySqlSemantics::compare()), so `_` (between `Z`
      * and `a` in ASCII) sorts after every letter. MySQL orders the indexed values by their column's
@@ -379,14 +460,20 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['labels' => 'green'], []);
     }
 
-    public function testLongValueIsMatchedOnItsFirst255Characters(): void
+    public function testAValueLongerThan255BytesIsMatchedInFull(): void
     {
         $long = str_repeat('abcdefghij', 30); // 300 characters
         $record = $this->put($this->r(['note' => $long]));
 
-        // Only the first 255 characters are indexed, so the whole value is never equal.
-        $this->assertMatches(['note' => $long], []);
-        $this->assertMatches(['note' => substr($long, 0, 255)], [$record]);
+        if ($this->expectValuesToBeCutAt255Bytes()) {
+            // Only the first 255 characters are indexed, so the whole value is never equal.
+            $this->assertMatches(['note' => $long], []);
+            $this->assertMatches(['note' => substr($long, 0, 255)], [$record]);
+        } else {
+            // The whole value is compared: only the whole value is equal.
+            $this->assertMatches(['note' => $long], [$record]);
+            $this->assertMatches(['note' => substr($long, 0, 255)], []);
+        }
         // ...and the record itself still carries the full value.
         $this->assertSame($long, $this->store()->findById('entities', $record['_id'])['note']);
     }
@@ -419,17 +506,25 @@ abstract class RecordStoreContract extends TestCase
 
     public function testNestedArrayValueIsMatchedAsJson(): void
     {
-        // An element that is itself an array is indexed as its JSON encoding.
         $listOfObjects = $this->put($this->r(['meta' => [['k' => 'v']]]));
-        $this->assertMatches(['meta' => '{"k":"v"}'], [$listOfObjects]);
 
-        // An associative array is NOT indexed as JSON: it is treated like a list of its values.
-        $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
-        $this->assertMatches(['pair' => 'alpha'], [$assoc]);
-        $this->assertMatches(['pair' => 'beta'], [$assoc]);
-        $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
-        // Keys are not indexed.
-        $this->assertMatches(['pair' => 'a'], []);
+        if ($this->expectNestedArraysToMatchTheirJson()) {
+            // An element that is itself an array is indexed as its JSON encoding.
+            $this->assertMatches(['meta' => '{"k":"v"}'], [$listOfObjects]);
+
+            // An associative array is NOT indexed as JSON: it is treated like a list of its values.
+            $assoc = $this->put($this->r(['pair' => ['a' => 'alpha', 'b' => 'beta']]));
+            $this->assertMatches(['pair' => 'alpha'], [$assoc]);
+            $this->assertMatches(['pair' => 'beta'], [$assoc]);
+            $this->assertMatches(['pair' => '{"a":"alpha","b":"beta"}'], []);
+            // Keys are not indexed.
+            $this->assertMatches(['pair' => 'a'], []);
+        } else {
+            // A nested array is not queryable, whatever it is queried for; the record keeps it.
+            $this->assertMatches(['meta' => '{"k":"v"}'], []);
+            $this->assertMatches(['meta' => 'v'], []);
+            $this->assertSameRecord($listOfObjects, $this->store()->findById('entities', $listOfObjects['_id']));
+        }
     }
 
     // ------------------------------------------------- $in, $not, $not => $in
@@ -906,9 +1001,15 @@ abstract class RecordStoreContract extends TestCase
         $prefix = str_repeat('é', 127) . 'a';
         $record = $this->put($this->r(['note' => $prefix . 'bbbb']));
 
-        $this->assertMatches(['note' => $prefix], [$record]);
-        $this->assertMatches(['note' => $prefix . 'b'], []);
-        $this->assertMatches(['note' => $prefix . 'bbbb'], []);
+        if ($this->expectValuesToBeCutAt255Bytes()) {
+            $this->assertMatches(['note' => $prefix], [$record]);
+            $this->assertMatches(['note' => $prefix . 'b'], []);
+            $this->assertMatches(['note' => $prefix . 'bbbb'], []);
+        } else {
+            $this->assertMatches(['note' => $prefix], []);
+            $this->assertMatches(['note' => $prefix . 'b'], []);
+            $this->assertMatches(['note' => $prefix . 'bbbb'], [$record]);
+        }
         $this->assertSame($prefix . 'bbbb', $this->store()->findById('entities', $record['_id'])['note']);
     }
 
@@ -922,10 +1023,17 @@ abstract class RecordStoreContract extends TestCase
 
         // The record is stored byte for byte...
         $this->assertSame($value, $this->store()->findById('entities', $record['_id'])['note']);
-        // ...and indexed up to the last whole character that fits in 255 bytes: 127 of them, 254 bytes.
-        $this->assertMatches(['note' => str_repeat('é', 127)], [$record]);
-        $this->assertMatches(['note' => str_repeat('é', 128)], []);
-        $this->assertMatches(['note' => $value], []);
+        if ($this->expectValuesToBeCutAt255Bytes()) {
+            // ...and indexed up to the last whole character that fits in 255 bytes: 127 of them, 254 bytes.
+            $this->assertMatches(['note' => str_repeat('é', 127)], [$record]);
+            $this->assertMatches(['note' => str_repeat('é', 128)], []);
+            $this->assertMatches(['note' => $value], []);
+        } else {
+            // ...and indexed whole: only the whole value is equal.
+            $this->assertMatches(['note' => str_repeat('é', 127)], []);
+            $this->assertMatches(['note' => str_repeat('é', 128)], []);
+            $this->assertMatches(['note' => $value], [$record]);
+        }
     }
 
     public function testSearchTermLengthIsCountedInBytes(): void
@@ -1499,5 +1607,158 @@ abstract class RecordStoreContract extends TestCase
         // MySQL: +hello -world finds the records with "hello" and without "world". Without boolean
         // mode the words '+hello' and '-world' are substrings no record contains.
         $this->assertMatches(['$search' => ['+hello -world']], $this->expectBooleanModeSearch() ? [$there] : []);
+    }
+
+    // ------------------------------------------- what the new schema must keep or change
+
+    public function testEqualCreatedIsOrderedByIdDescending(): void
+    {
+        $ids = [];
+        foreach (['a1', 'a2', 'a3', 'a4'] as $suffix) {
+            $ids[] = $this->put($this->r(['_id' => $this->marker . '-' . $suffix, 'created' => self::BASE_TIME]))['_id'];
+        }
+        [$a1, $a2, $a3, $a4] = $ids;
+
+        if ($this->expectEqualCreatedToBeOrderedById()) {
+            $this->assertSame([$a4, $a3, $a2, $a1], $this->ids([]));
+            $this->assertSame([$a3, $a2], $this->ids([], 'entities', 2, 1));
+        } else {
+            $found = $this->ids([]);
+            sort($found);
+            $this->assertSame($ids, $found);
+            $this->assertCount(2, $this->ids([], 'entities', 2, 1));
+        }
+    }
+
+    public function testNestedObjectKeyOrderIsPreserved(): void
+    {
+        $record = $this->put($this->r(['annotations' => ['z' => ['b' => 1, 'a' => 2], 'm' => [], 'a' => ['y' => 1]]]));
+
+        $stored = $this->store()->findById('entities', $record['_id']);
+
+        $this->assertSame(['z', 'm', 'a'], array_keys($stored['annotations']));
+        $this->assertSame(['b', 'a'], array_keys($stored['annotations']['z']));
+        $this->assertSame($record['annotations'], $stored['annotations']);
+    }
+
+    public function testNumbersRoundTripExactly(): void
+    {
+        $numbers = ['i' => 9007199254740993, 'f' => 0.1, 'whole' => 1.0, 'neg' => -0.0, 'big' => 1.0E+25];
+        $record = $this->put($this->r($numbers));
+
+        $stored = $this->store()->findById('entities', $record['_id']);
+
+        // Integers beyond 2^53 and fractions survive exactly.
+        foreach (['i', 'f', 'big'] as $name) {
+            $this->assertSame($numbers[$name], $stored[$name], $name);
+        }
+        if ($this->expectWholeFloatsToKeepTheirType()) {
+            $this->assertSame(1.0, $stored['whole']);
+            $this->assertSame(-0.0, $stored['neg']);
+        } else {
+            // The document is PHP's json_encode() of the record, which writes a float with no
+            // fraction without one: it comes back as an integer, and -0.0 as 0.
+            $this->assertSame(1, $stored['whole']);
+            $this->assertSame(0, $stored['neg']);
+        }
+    }
+
+    public function testEmptyObjectAndEmptyListRoundTrip(): void
+    {
+        $record = $this->put($this->r(['o' => [], 'l' => []]));
+
+        $stored = $this->store()->findById('entities', $record['_id']);
+
+        $this->assertSame([], $stored['o']);
+        $this->assertSame([], $stored['l']);
+    }
+
+    public function testLongFieldNameIsStoredOrRefused(): void
+    {
+        $name = str_repeat('n', 70);
+        $record = $this->r([$name => 'v']);
+        $this->track($record['_id']);
+
+        if ($this->expectLongFieldNamesToBeRefused()) {
+            // `name` is varchar(64): the database rejects the row and the save is rolled back.
+            $this->assertFalse($this->store()->save('entities', $record));
+            $this->assertNull($this->store()->findById('entities', $record['_id']));
+        } else {
+            $this->assertSame($record['_id'], $this->store()->save('entities', $record));
+            $this->assertMatches([$name => 'v'], [$record]);
+            $this->assertSame('v', $this->store()->findById('entities', $record['_id'])[$name]);
+        }
+    }
+
+    public function testUuidClashOnResave(): void
+    {
+        $a = $this->put($this->r(['title' => 'a']));
+        $b = $this->put($this->r(['title' => 'b']));
+        $clash = $b;
+        $clash['uuid'] = $a['uuid'];
+
+        $result = $this->store()->save('entities', $clash);
+
+        if ($this->expectUuidClashOnResaveToOverwrite()) {
+            // The row that held a's uuid now holds b's document (so a's own record is gone from
+            // it), and b's own row is untouched.
+            $this->assertSame($b['_id'], $result);
+            $this->assertSame('b', $this->store()->findById('entities', $a['_id'])['title']);
+            $this->assertSame($b['_id'], $this->store()->findById('entities', $a['_id'])['_id']);
+            $this->assertSame('b', $this->store()->findByUuid('entities', $a['uuid'])['title']);
+            $this->assertSameRecord($b, $this->store()->findById('entities', $b['_id']));
+            $this->assertSameRecord($b, $this->store()->findByUuid('entities', $b['uuid']));
+        } else {
+            $this->assertFalse($result);
+            $this->assertSameRecord($a, $this->store()->findById('entities', $a['_id']));
+            $this->assertSameRecord($b, $this->store()->findById('entities', $b['_id']));
+            $this->assertSameRecord($a, $this->store()->findByUuid('entities', $a['uuid']));
+            $this->assertSameRecord($b, $this->store()->findByUuid('entities', $b['uuid']));
+            $this->assertMatches([], [$a, $b]);
+        }
+    }
+
+    public function testNonAsciiCase(): void
+    {
+        $upper = $this->put($this->r(['f' => 'ÉTÉ']));
+        $mixed = $this->put($this->r(['f' => 'Été']));
+        $ascii = $this->put($this->r(['g' => 'Summer']));
+
+        // ASCII case is ignored on every binding.
+        $this->assertMatches(['g' => 'summer'], [$ascii]);
+        $this->assertMatches(['g' => 'SUMMER'], [$ascii]);
+        // The same letters in another case match each other exactly when non-ASCII case is ignored.
+        $this->assertMatches(['f' => 'ÉTÉ'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : [$upper]);
+        $this->assertMatches(['f' => 'été'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : []);
+        $this->assertMatches(['f' => 'Été'], $this->expectNonAsciiCaseToBeIgnored() ? [$upper, $mixed] : [$mixed]);
+    }
+
+    public function testEveryCollectionRoundTripsAndQueries(): void
+    {
+        $collections = $this->collections();
+        $records = [];
+        foreach ($collections as $collection) {
+            $first = $this->put($this->r(['slug' => 'first-' . $collection]), $collection);
+            $second = $this->put($this->r(['slug' => 'second-' . $collection]), $collection);
+            $records[$collection] = [$first, $second];
+
+            $this->assertSameRecord($first, $this->store()->findById($collection, $first['_id']), $collection);
+            $this->assertSame([$first['_id']], $this->ids(['slug' => 'first-' . $collection], $collection), $collection);
+            $this->assertSame(2, $this->store()->count($collection, $this->criteria([self::MARKER_FIELD => $this->marker])), $collection);
+        }
+
+        foreach ($collections as $collection) {
+            [$first, $second] = $records[$collection];
+            foreach ($collections as $other) {
+                if ($other !== $collection) {
+                    $this->assertNull($this->store()->findById($other, $first['_id']), $collection . ' in ' . $other);
+                    $this->assertSame([], $this->ids(['slug' => 'first-' . $collection], $other), $collection . ' in ' . $other);
+                }
+            }
+            $this->assertTrue($this->store()->delete($collection, $first['_id']), $collection);
+            $this->assertNull($this->store()->findById($collection, $first['_id']), $collection);
+            $this->assertSame([$second['_id']], $this->ids([], $collection), $collection);
+            $this->assertSame(1, $this->store()->count($collection, $this->criteria([self::MARKER_FIELD => $this->marker])), $collection);
+        }
     }
 }

@@ -30,9 +30,14 @@ use Tests\Storage\Contract\RecordStoreContract;
  * The store shares the rig's database (`known_unittest`, the tables the running site uses), so
  * deleteAll() stays skipped (ownsPrivateDatabase() is false) and the contract cleans up by marker.
  *
- * It overrides no expectation hook: the contract's defaults are this binding's values (MySQL:
- * whole-word boolean-mode full-text search, four-byte characters stored in the utf8mb4 search
- * and metadata columns, text ordered by utf8mb4_unicode_520_ci).
+ * It overrides two expectation hooks; the contract's other defaults are this binding's values
+ * (MySQL: whole-word boolean-mode full-text search, four-byte characters stored in the utf8mb4
+ * search and metadata columns, text ordered by utf8mb4_unicode_520_ci, text compared ignoring the
+ * case of non-ASCII letters):
+ *  - expectLongFieldNamesToBeRefused (true): the metadata `name` column is a varchar(64);
+ *  - expectUuidClashOnResaveToOverwrite (true): `on duplicate key update` takes the uuid key.
+ * It writes to `entities` only (the contract's default collections()): a record in `site` or
+ * `config` would be read by the running site.
  */
 final class DbalMySqlRecordStoreTest extends RecordStoreContract
 {
@@ -72,6 +77,16 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
             }
         }
         $this->serverBackup = [];
+    }
+
+    protected function expectLongFieldNamesToBeRefused(): bool
+    {
+        return true;
+    }
+
+    protected function expectUuidClashOnResaveToOverwrite(): bool
+    {
+        return true;
     }
 
     protected function store(): RecordStore
@@ -267,16 +282,6 @@ final class DbalMySqlRecordStoreTest extends RecordStoreContract
         $this->assertSame(0, (int) $connection->fetchOne('select count(*) from entities_search where _id = ?', [$record['_id']]), 'the search row was rolled back');
         $this->assertNull($this->store()->findById('entities', $record['_id']));
         $this->put($this->r(['slug' => 'after']));
-    }
-
-    public function testAFieldNameLongerThanTheColumnIsNotStored(): void
-    {
-        // `name` is varchar(64): MySQL rejects the row and the save is rolled back (false).
-        $record = $this->r([str_repeat('n', 65) => 'v']);
-        $this->track($record['_id']);
-
-        $this->assertFalse($this->store()->save('entities', $record));
-        $this->assertNull($this->store()->findById('entities', $record['_id']));
     }
 
     public function testConnectionFailuresAreNotNoResults(): void

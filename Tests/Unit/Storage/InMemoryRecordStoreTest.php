@@ -29,7 +29,8 @@ use Tests\Storage\Contract\RecordStoreContract;
  *  - ownsPrivateDatabase (true): the store is private to the test;
  *  - expectTextToSortFoldedToUpperCase (true): text is ordered folded to upper case
  *    (MySqlSemantics::compare()), not by MySQL's utf8mb4_unicode_520_ci;
- *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings.
+ *  - expectBooleanModeSearch (false): no full-text index, long terms are words matched as substrings;
+ *  - collections: entities, reader, site and config, the collections of the legacy schema it serves.
  */
 final class InMemoryRecordStoreTest extends RecordStoreContract
 {
@@ -67,6 +68,11 @@ final class InMemoryRecordStoreTest extends RecordStoreContract
     protected function expectBooleanModeSearch(): bool
     {
         return false;
+    }
+
+    protected function collections(): array
+    {
+        return ['entities', 'reader', 'site', 'config'];
     }
 
     // ------------------------------------------------ specific to this implementation
