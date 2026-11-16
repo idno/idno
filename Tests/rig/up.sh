@@ -1,40 +1,67 @@
 #!/usr/bin/env bash
-# Start the local test rig: MySQL in Docker plus PHP's built-in web server.
+# Start the local test rig: a database plus PHP's built-in web server on http://127.0.0.1:8089/.
+#
+#   up.sh [sqlite]   SQLite (composer test:up): needs nothing but PHP. The database file and the
+#                    upload directory are in a directory under the system temp directory that is
+#                    specific to this checkout (see lib.sh).
+#   up.sh mysql      MySQL 8 in Docker on 127.0.0.1:33306 (composer test:up:mysql).
+#
+# Starting one mode while the other is running stops the other first (down.sh, which wipes its
+# database). A configuration/config.ini the rig did not write is never replaced.
 set -euo pipefail
 
 RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$RIG_DIR/../.." && pwd)"
-PID_FILE="$RIG_DIR/.server.pid"
+. "$RIG_DIR/lib.sh"
 HOST=127.0.0.1
-PORT=8089
+# The web server's port: 8089 (the rig's config says so). IDNO_RIG_PORT is for Tests/Kernel/RigScriptsTest only.
+PORT="${IDNO_RIG_PORT:-8089}"
+
+MODE="${1:-sqlite}"
+case "$MODE" in
+    sqlite|mysql) ;;
+    *) echo "Usage: $0 [sqlite|mysql]" >&2; exit 2 ;;
+esac
 
 cd "$ROOT"
 
-# Configuration first, so we fail before starting anything if the developer's config differs.
-UPLOADPATH="$(php -r 'echo rtrim(sys_get_temp_dir(), "/") . "/idno-test-uploads/";')"
-mkdir -p "$UPLOADPATH"
-EXPECTED="$(sed "s#__UPLOADPATH__#$UPLOADPATH#" "$RIG_DIR/config.ini")"
-mkdir -p configuration
-if [ ! -e configuration/config.ini ]; then
-    printf '%s\n' "$EXPECTED" > configuration/config.ini
-    echo "Wrote configuration/config.ini for the test rig."
-elif [ "$(cat configuration/config.ini)" != "$EXPECTED" ]; then
-    echo "configuration/config.ini already exists and differs from Tests/rig/config.ini." >&2
-    echo "Not overwriting it. Move it aside (or compare the two) and run again." >&2
-    exit 1
+# Configuration first, so we fail before starting or stopping anything if the developer's config is there.
+"$RIG_DIR/write-config.sh" "$MODE" --check
+
+# Something may be running when up.sh left a mode (down.sh removes it) or a web server pid behind.
+RUNNING=""
+if [ -f "$MODE_FILE" ] || [ -f "$PID_FILE" ]; then
+    RUNNING="$(rig_mode)"
+fi
+if [ -n "$RUNNING" ] && [ "$RUNNING" != "$MODE" ]; then
+    echo "The test rig was last started in $RUNNING mode: stopping it first."
+    "$RIG_DIR/down.sh"
 fi
 
-docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait
+mkdir -p "$STATE_DIR/uploads"
+"$RIG_DIR/write-config.sh" "$MODE"
 
-# Load the schema only into an empty database, so re-running does not wipe test data.
-DB="docker compose -f $RIG_DIR/docker-compose.yml exec -T db mysql -uroot"
-if [ -z "$($DB -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
-    $DB known_unittest < warmup/schemas/mysql/mysql.sql
-    echo "Loaded MySQL schema."
+# The mode file is written only once the database is up, so a start that fails (Docker not running)
+# leaves nothing that a later start of the other mode would have to stop.
+if [ "$MODE" = mysql ]; then
+    docker compose -f "$RIG_DIR/docker-compose.yml" up -d --wait
+    echo "$MODE" > "$MODE_FILE"
+
+    # Load the schema only into an empty database, so re-running does not wipe test data.
+    DB="docker compose -f $RIG_DIR/docker-compose.yml exec -T db mysql -uroot"
+    if [ -z "$($DB -N -B known_unittest -e 'SHOW TABLES' 2>/dev/null)" ]; then
+        $DB known_unittest < warmup/schemas/mysql/mysql.sql
+        echo "Loaded MySQL schema."
+    fi
+    DATABASE="MySQL on 127.0.0.1:33306, database known_unittest"
+else
+    # Loads the schema only into a database without tables, so re-running does not wipe test data.
+    php -d error_reporting=22527 "$RIG_DIR/sqlite_schema.php" "$STATE_DIR/site.sqlite"
+    echo "$MODE" > "$MODE_FILE"
+    DATABASE="SQLite, $STATE_DIR/site.sqlite"
 fi
 
-if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
-    echo "Web server already running (pid $(cat "$PID_FILE"))."
+if [ -n "$(rig_server_pid)" ]; then
+    echo "Web server already running (pid $(rig_server_pid))."
 else
     # error_reporting mirrors a stock production php.ini (what CI's Apache uses). With
     # pedantic_mode on, any reported deprecation (e.g. dynamic properties) is thrown as an exception.
@@ -65,5 +92,5 @@ else
     fi
 fi
 
-echo "Test rig up: http://$HOST:$PORT/ (MySQL on 127.0.0.1:33306, database known_unittest)"
+echo "Test rig up ($MODE): http://$HOST:$PORT/ ($DATABASE)"
 echo "Run tests with: composer test"

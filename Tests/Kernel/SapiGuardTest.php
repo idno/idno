@@ -63,6 +63,8 @@ final class SapiGuardTest extends TestCase
             'boot_routes.php' => ['Tests/Kernel/boot_routes.php'],
             'boot_cache_dir.php' => ['Tests/Kernel/boot_cache_dir.php'],
             '_bootstrap.php' => ['Tests/_bootstrap.php'],
+            'rig SQLite schema loader' => ['Tests/rig/sqlite_schema.php'],
+            'SQLite concurrency writer' => ['Tests/Storage/sqlite_writer.php'],
         ];
     }
 

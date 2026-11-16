@@ -27,7 +27,8 @@ use Tests\Unit\Storage\SqliteTestDatabase;
 /**
  * The legacy db() service on an SQL site is Idno\Legacy\RepositoryDataConcierge: the old backend's
  * API (Idno\Data\MySQL / AbstractSQL) served by the storage layer, on the shared DBAL connection.
- * Rig tests (MySQL), plus the adapter built over an SQLite database.
+ * Rig tests on the rig's database (MySQL or SQLite; the tests that need MySQL skip on SQLite and
+ * say why), plus the adapter built over an SQLite database of its own.
  */
 final class RepositoryDataConciergeTest extends IdnoTestCase
 {
@@ -110,8 +111,20 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     {
         parent::setUp();
         $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
+        if (!in_array(ConnectionParameters::driverFamily($config), ['mysql', 'sqlite'], true)) {
+            $this->markTestSkipped('The site\'s database is not SQL (MySQL or SQLite): db() is not the adapter.');
+        }
+    }
+
+    /**
+     * Skips a test that needs the site's database to be MySQL (the rig's MySQL mode or CI's MySQL
+     * job), saying why.
+     */
+    private function requireMysql(string $why): void
+    {
+        $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
         if (ConnectionParameters::driverFamily($config) !== 'mysql') {
-            $this->markTestSkipped('The site\'s database is not MySQL.');
+            $this->markTestSkipped('Needs a MySQL site: ' . $why);
         }
     }
 
@@ -212,6 +225,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testTheConnectionMatchesTheLegacyBackendsConnection(): void
     {
+        $this->requireMysql('it compares the shared connection\'s MySQL session with a connection of the old backend (Idno\\Data\\MySQL).');
         $query = 'SELECT @@session.sql_mode, @@session.time_zone, @@character_set_client, @@collation_connection, @@character_set_connection, @@character_set_results, @@session.autocommit';
         $legacy = (new \Idno\Data\MySQL())->getClient();
         $this->assertNotSame($legacy, Idno::site()->db()->getClient());
@@ -280,6 +294,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testARefusedSaveReturnsFalseAndStoresNothing(): void
     {
+        $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores; it also runs the old backend.');
         $db = Idno::site()->db();
         $marker = 't7-' . bin2hex(random_bytes(6));
         $refused = ['t7marker' => $marker, 't7note' => "a seal \u{1F9AD}", 'access' => 'PUBLIC', 'created' => 1_700_000_000];
@@ -316,6 +331,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testEntitySaveOfARefusedRecordReturnsFalseAndFiresNoEvent(): void
     {
+        $this->requireMysql('the refused value is a 4-byte character, which MySQL\'s utf8mb3 tables refuse and SQLite stores.');
         $marker = 't7-' . bin2hex(random_bytes(6));
         $fired = [];
         $listener = static function (\Idno\Core\Event $event) use (&$fired, $marker): void {
@@ -351,6 +367,43 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * Ruling P7 (I1a), through Entity::save(), with a refusal both databases make: a NEW entity whose
+     * uuid is another record's (the uuid is unique) returns false and fires no `saved` event, and the
+     * other record is left as it was. (The 4-byte case above needs MySQL.)
+     */
+    public function testEntitySaveOfANewRecordWithAnExistingUuidReturnsFalseAndFiresNoEvent(): void
+    {
+        $marker = 't7-' . bin2hex(random_bytes(6));
+        $fired = [];
+        $listener = static function (\Idno\Core\Event $event, string $name) use (&$fired, $marker): void {
+            $object = $event->data()['object'] ?? null;
+            if ($object instanceof Entity && $object->t7marker === $marker) {
+                $fired[] = $name;
+            }
+        };
+        $existing = $this->status('Existing ' . $marker, $marker, 1_700_000_000);
+        $dispatcher = (new \ReflectionProperty(\Idno\Core\EventDispatcher::class, 'dispatcher'))->getValue(Idno::site()->events());
+        $dispatcher->addListener('saved', $listener);
+        $dispatcher->addListener('updated', $listener);
+        try {
+            $clash = new Status();
+            $clash->setOwner($this->user());
+            $clash->body = 'Clashing ' . $marker;
+            $clash->t7marker = $marker;
+            $clash->uuid = $existing->getUUID();
+            $clash->setAccess('PUBLIC');
+
+            $this->assertFalse($clash->save(true));
+            $this->assertSame([], $fired, 'no saved or updated event for a refused save');
+            $this->assertSame(1, Idno::site()->db()->countRecords(['t7marker' => $marker]));
+            $this->assertSame('Existing ' . $marker, Idno::site()->db()->getRecordByUUID($existing->getUUID())['body']);
+        } finally {
+            $dispatcher->removeListener('saved', $listener);
+            $dispatcher->removeListener('updated', $listener);
+        }
+    }
+
+    /**
      * I1c: a string $readGroups is one read group. OBSERVED reasoning, not runnable on the rig: the old
      * backend ran `'$in' => 'PUBLIC'` into foreach (a warning, an exception here) and found nothing.
      */
@@ -371,6 +424,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testSearchSettingsAreReadAtQueryTime(): void
     {
+        $this->requireMysql('bypass_fulltext_search changes MySQL\'s full-text search only; SQLite always matches substrings (ruling P8).');
         $config = Idno::site()->config();
         $previous = [$config->bypass_fulltext_search, $config->boolean_search];
         $store = (new \Idno\Legacy\LegacyRecordStoreFactory(
@@ -400,12 +454,20 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * M6: what db() builds for a `database` value that is not a known name, in a fresh process: a
-     * loadable backend class is built by componentFactory() as before; a name that is no class gets
-     * the adapter on MySQL (componentFactory() fell back to Idno\Data\MySQL).
+     * loadable backend class is built by componentFactory() as before.
      */
-    public function testDbBuildsALoadableBackendClassAndFallsBackToTheAdapter(): void
+    public function testDbBuildsALoadableBackendClass(): void
     {
         $this->assertSame(['class' => FixtureDataBackend::class, 'family' => 'other'], $this->bootWithDatabase(FixtureDataBackend::class));
+    }
+
+    /**
+     * M6: a `database` name that is no class gets the adapter on MySQL (componentFactory() fell back
+     * to Idno\Data\MySQL).
+     */
+    public function testDbFallsBackToTheAdapterOnMysqlForANameThatIsNoClass(): void
+    {
+        $this->requireMysql('a `database` name that is no class means MySQL, so the subprocess connects to the rig\'s MySQL server.');
         $this->assertSame(['class' => RepositoryDataConcierge::class, 'family' => 'mysql'], $this->bootWithDatabase('NoSuchBackend'));
     }
 
@@ -702,6 +764,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testASessionWrittenByTheOldBackendIsReadByTheAdapter(): void
     {
+        $this->requireMysql('the session is written by the old MySQL backend (Idno\\Data\\MySQL), in a subprocess.');
         $user = $this->user();
         $this->assertSame(403, $this->get('account/settings/')['status'], 'anonymous visitors have no account settings');
 
@@ -720,20 +783,94 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
     }
 
+    /**
+     * A visitor who logs in through the login form stays logged in on the following requests: the
+     * session the adapter's handler wrote is read back (on MySQL and on SQLite, where it is not locked).
+     */
+    public function testALoginSessionSurvivesAcrossRequests(): void
+    {
+        $user = $this->user();
+        $previousPassword = $user->password;
+        $password = bin2hex(random_bytes(12));
+        $user->setPassword($password);
+        $this->assertNotFalse($user->save(true));
+        $name = Idno::site()->config()->sessionname;
+        $sessions = [];
+        try {
+            $form = $this->get('session/login');
+            $this->assertSame(200, $form['status']);
+            $cookies = [$name => (string) ($form['cookies'][$name] ?? '')];
+            $sessions[] = $cookies[$name];
+            $fields = ['email' => $user->getHandle(), 'password' => $password, 'fwd' => Idno::site()->config()->getURL()];
+            foreach (['__bTs', '__bTk', '__bTa'] as $token) {
+                $this->assertSame(1, preg_match('/name="' . $token . '" value="([^"]*)"/', $form['body'], $m), $token);
+                $fields[$token] = html_entity_decode($m[1]);
+            }
+
+            $login = self::request(Idno::site()->config()->getURL() . 'session/login', $cookies, $fields);
+            $this->assertSame(302, $login['status'], 'logged in and forwarded');
+            if (isset($login['cookies'][$name])) {
+                $cookies[$name] = $login['cookies'][$name];
+                $sessions[] = $cookies[$name];
+            }
+
+            foreach ([1, 2] as $request) {
+                $page = $this->get('account/settings/', $cookies);
+                $this->assertSame(200, $page['status'], 'request ' . $request . ' after logging in is logged in');
+                $this->assertStringContainsString($user->getHandle(), $page['body']);
+            }
+            $statement = Idno::site()->db()->getClient()->prepare('select session_value from session where session_id = ?');
+            $statement->execute([$cookies[$name]]);
+            $this->assertStringContainsString('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '"', (string) $statement->fetchColumn());
+        } finally {
+            foreach (array_filter($sessions) as $sessionId) {
+                $this->deleteSession($sessionId);
+            }
+            $user->password = $previousPassword;
+            $user->save(true);
+        }
+    }
+
+    // ------------------------------------------------ search through the site
+
+    /**
+     * The site's search page finds a post by a word of its body: whole words through MySQL's full-text
+     * index, substrings on SQLite (ruling P8); a whole word is found on both.
+     */
+    public function testTheSearchPageFindsAPost(): void
+    {
+        $word = 'seawalrus' . bin2hex(random_bytes(5));
+        $status = $this->status('Looking for the ' . $word . ' today', 't7-' . bin2hex(random_bytes(6)), time());
+
+        $found = $this->get('content/all/?q=' . $word);
+        $this->assertSame(200, $found['status']);
+        $this->assertStringContainsString($word, $found['body']);
+        $this->assertStringContainsString($status->getURL(), $found['body']);
+
+        $missing = $this->get('content/all/?q=seawalrus' . bin2hex(random_bytes(5)));
+        $this->assertSame(200, $missing['status']);
+        $this->assertStringNotContainsString($status->getURL(), $missing['body']);
+    }
+
     // ------------------------------------------------ an unreachable database
 
+    /**
+     * The trigger is the site's own database made unreachable: on MySQL a server on a closed port, on
+     * SQLite a database file in a directory that does not exist (see unreachableDatabase()).
+     */
     public function testUnreachableDatabaseShowsTheLegacyErrorPage(): void
     {
-        $port = self::closedPort();
-        $response = $this->serveUnreachable($port, []);
+        [$database, $message, $connectionString] = $this->unreachableDatabase();
+        $response = $this->serveUnreachable($database, []);
 
         $this->assertSame(500, $response['status']);
-        $this->assertSame($this->legacyErrorPage($port), $response['body']);
+        $this->assertSame($this->legacyErrorPage($message, $connectionString), $response['body']);
     }
 
     public function testUnreachableDatabaseWithForwardOnEmptyRedirects(): void
     {
-        $response = $this->serveUnreachable(self::closedPort(), ['IDNO_FORWARD_ON_EMPTY' => 'http://forward.example.test/away']);
+        [$database] = $this->unreachableDatabase();
+        $response = $this->serveUnreachable($database, ['IDNO_FORWARD_ON_EMPTY' => 'http://forward.example.test/away']);
 
         $this->assertSame(302, $response['status']);
         $this->assertSame('http://forward.example.test/away', $response['headers']['location'] ?? null);
@@ -741,21 +878,20 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * OBSERVED on the commit before Task 7: the console prints the error page on stdout, writes the
-     * driver's message twice to the error log (stderr) and exits 0; with forward_on_empty set, it
-     * prints nothing, writes the message once and exits 0.
+     * OBSERVED on the commit before Task 7 (MySQL): the console prints the error page on stdout, writes
+     * the driver's message twice to the error log (stderr) and exits 0; with forward_on_empty set, it
+     * prints nothing, writes the message once and exits 0. SQLite: the same, with its driver's message.
      */
     public function testUnreachableDatabaseOnTheConsole(): void
     {
-        $port = self::closedPort();
-        $message = self::connectionError($port);
+        [$database, $message, $connectionString] = $this->unreachableDatabase();
 
-        [$exit, $stdout, $stderr] = $this->console($port, []);
+        [$exit, $stdout, $stderr] = $this->console($database, []);
         $this->assertSame(0, $exit);
-        $this->assertSame($this->legacyErrorPage($port), $stdout);
+        $this->assertSame($this->legacyErrorPage($message, $connectionString), $stdout);
         $this->assertSame([$message, $message], self::lines($stderr));
 
-        [$exit, $stdout, $stderr] = $this->console($port, ['IDNO_FORWARD_ON_EMPTY' => 'http://forward.example.test/away']);
+        [$exit, $stdout, $stderr] = $this->console($database, ['IDNO_FORWARD_ON_EMPTY' => 'http://forward.example.test/away']);
         $this->assertSame(0, $exit);
         $this->assertSame('', $stdout);
         $this->assertSame([$message], self::lines($stderr));
@@ -914,15 +1050,19 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * @param array<string, string> $cookies
+     * @param array<string, string>      $cookies
+     * @param array<string, string>|null $post    form fields to POST (null: a GET)
      *
      * @return array{status: int, headers: array<string, string>, cookies: array<string, string>, body: string}
      */
-    private static function request(string $url, array $cookies = []): array
+    private static function request(string $url, array $cookies = [], ?array $post = null): array
     {
         $headers = [];
         $cookiesSet = [];
         $ch = curl_init($url);
+        if ($post !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
+        }
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 20,
@@ -975,6 +1115,37 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * The site's database made unreachable, by driver family: the environment that does it, the
+     * message of the PDOException connecting raises (what the error log and the page show), and the
+     * connection string the page shows in debug mode. MySQL: a server on a closed port. SQLite: a
+     * database file in a directory that does not exist (pdo_sqlite cannot create it).
+     *
+     * @return array{0: array<string, string>, 1: string, 2: string}
+     */
+    private function unreachableDatabase(): array
+    {
+        $config = Idno::site()->config();
+        if (ConnectionParameters::driverFamily(Idno::container()->get(\Idno\Config\BootConfig::class)->all()) === 'sqlite') {
+            $path = sys_get_temp_dir() . '/idno-no-such-dir-' . bin2hex(random_bytes(6)) . '/site.sqlite';
+            try {
+                new \PDO('sqlite:' . $path);
+                self::fail('The SQLite database ' . $path . ' could be opened');
+            } catch (\PDOException $e) {
+                $message = $e->getMessage();
+            }
+
+            return [['IDNO_DBNAME' => $path], $message, 'sqlite:' . $path];
+        }
+        $port = self::closedPort();
+
+        return [
+            ['IDNO_DBHOST' => '127.0.0.1', 'IDNO_DBPORT' => (string) $port],
+            self::connectionError($port),
+            'mysql:host=127.0.0.1;dbname=' . $config->dbname . ';charset=utf8;port=' . $port,
+        ];
+    }
+
+    /**
      * The message of the PDOException a connection to the closed port raises (what the old backend logged).
      */
     private static function connectionError(int $port): string
@@ -991,12 +1162,12 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      * statics/db.php as Idno\Data\MySQL::init() rendered it: in debug mode with the driver's message
      * and the connection string.
      */
-    private function legacyErrorPage(int $port): string
+    private function legacyErrorPage(string $driverMessage, string $connectionString): string
     {
         $config = Idno::site()->config();
         $message = '';
         if ($config->debug) {
-            $message = '<p>' . self::connectionError($port) . '</p><p>mysql:host=127.0.0.1;dbname=' . $config->dbname . ';charset=utf8;port=' . $port . '</p>';
+            $message = '<p>' . $driverMessage . '</p><p>' . $connectionString . '</p>';
         }
         $code = 'http_response_code(500); $message = $argv[1]; include $argv[2];';
         [, $stdout] = self::runProcess(escapeshellarg(PHP_BINARY) . ' -r ' . escapeshellarg($code) . ' -- ' . escapeshellarg($message) . ' ' . escapeshellarg(dirname(__DIR__, 2) . '/statics/db.php'), []);
@@ -1006,15 +1177,16 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * Serves one GET / through Tests/Kernel/boot_db_unreachable.php (PHP's built-in web server) with
-     * the database port closed.
+     * the database unreachable.
      *
+     * @param array<string, string> $database what unreachableDatabase() returned
      * @param array<string, string> $env
      *
      * @return array{status: int, headers: array<string, string>, cookies: array<string, string>, body: string}
      */
-    private function serveUnreachable(int $dbPort, array $env): array
+    private function serveUnreachable(array $database, array $env): array
     {
-        $env += ['IDNO_DBHOST' => '127.0.0.1', 'IDNO_DBPORT' => (string) $dbPort, 'APP_ENV' => 'test', 'APP_DEBUG' => '1', 'PATH' => (string) getenv('PATH')];
+        $env += $database + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'PATH' => (string) getenv('PATH')];
         $script = __DIR__ . '/boot_db_unreachable.php';
         for ($attempt = 0; $attempt < 5; $attempt++) {
             $port = random_int(20000, 60000);
@@ -1043,15 +1215,16 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * Runs `bin/console list` with the database port closed.
+     * Runs `bin/console list` with the database unreachable.
      *
+     * @param array<string, string> $database what unreachableDatabase() returned
      * @param array<string, string> $env
      *
      * @return array{0: int, 1: string, 2: string}
      */
-    private function console(int $dbPort, array $env): array
+    private function console(array $database, array $env): array
     {
-        $env += ['IDNO_DBHOST' => '127.0.0.1', 'IDNO_DBPORT' => (string) $dbPort, 'APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9'];
+        $env += $database + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9'];
 
         return self::runProcess(escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 -d log_errors=1 -d error_log= ' . escapeshellarg(dirname(__DIR__, 2) . '/bin/console') . ' list', $env);
     }

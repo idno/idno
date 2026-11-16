@@ -84,6 +84,32 @@ final class SqliteConcurrencyTest extends TestCase
         $this->assertLessThan(SqliteDialect::BUSY_TIMEOUT_MILLISECONDS / 1000, $waited);
     }
 
+    public function testConcurrentWritersDoNotFail(): void
+    {
+        // Two processes (as two web requests would be) each save 200 records to the same file at
+        // the same time: every save waits for the other's write lock and succeeds.
+        $go = $this->dir . '/go';
+        $processes = [];
+        foreach (['first', 'second'] as $prefix) {
+            $process = proc_open([PHP_BINARY, '-d', 'error_reporting=22527', __DIR__ . '/sqlite_writer.php', $this->file, $prefix, '200', $go], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            $this->assertIsResource($process);
+            $processes[$prefix] = [$process, $pipes];
+        }
+        touch($go);
+
+        foreach ($processes as $prefix => [$process, $pipes]) {
+            $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            $this->assertSame(0, proc_close($process), 'writer ' . $prefix . ' failed: ' . $output);
+        }
+
+        $store = self::store(SqliteTestDatabase::connection($this->file));
+        $this->assertSame(400, $store->count('entities', Criteria::all()));
+        $this->assertSame('record 200', $store->findById('entities', 'first-200')['title'] ?? null);
+        $this->assertSame('record 200', $store->findById('entities', 'second-200')['title'] ?? null);
+    }
+
     public function testAWriteThatCannotGetTheLockWithinTheBusyTimeoutIsNotStored(): void
     {
         $holder = SqliteTestDatabase::connection($this->file);

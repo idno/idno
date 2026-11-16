@@ -114,7 +114,8 @@
         }
     },
     "scripts": {
-        "test:up": "Tests/rig/up.sh",
+        "test:up": "Tests/rig/up.sh sqlite",
+        "test:up:mysql": "Tests/rig/up.sh mysql",
         "test:down": "Tests/rig/down.sh",
         "console": "php -d error_reporting=22527 bin/console",
         "test:unit": "php -d error_reporting=22527 vendor/bin/phpunit -c phpunit.unit.xml",

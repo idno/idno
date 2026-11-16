@@ -95,6 +95,7 @@ configbackup.ini
 !/Tests/rig/config.ini
 /Tests/rig/.server.pid
 /Tests/rig/.server.log
+/Tests/rig/.mode
 /Tests/rig/baseline.xml
 
 /var/*

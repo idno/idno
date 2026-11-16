@@ -98,24 +98,20 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         return (new \ReflectionProperty($object, $name))->getValue($object);
     }
 
-    private static function skipUnlessMysql(): void
-    {
-        $config = Idno::container()->get(BootConfig::class)->all();
-        if (\Idno\Storage\ConnectionParameters::driverFamily($config) !== 'mysql') {
-            self::markTestSkipped('The site\'s database is not MySQL.');
-        }
-    }
-
     // ------------------------------------------------ on the rig
 
     public function testTheServicesResolveOnTheSite(): void
     {
-        self::skipUnlessMysql();
+        $family = \Idno\Storage\ConnectionParameters::driverFamily(Idno::container()->get(BootConfig::class)->all());
+        $dialects = ['mysql' => MySqlDialect::class, 'sqlite' => SqliteDialect::class];
+        if (!isset($dialects[$family])) {
+            self::markTestSkipped('The site\'s database is not SQL (MySQL or SQLite).');
+        }
         $container = Idno::container();
 
         $store = $container->get(RecordStore::class);
         $this->assertInstanceOf(DbalRecordStore::class, $store);
-        $this->assertInstanceOf(MySqlDialect::class, self::property($store, 'dialect'));
+        $this->assertInstanceOf($dialects[$family], self::property($store, 'dialect'));
         $this->assertSame($container->get('database_connection'), self::property($store, 'connection'));
         $this->assertInstanceOf(LegacyRecordDefaults::class, self::property($store, 'defaults'));
         // Read from the legacy config each time a search is built (Task 7 fix M1; was: read once).

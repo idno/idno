@@ -17,10 +17,11 @@ system as Idno.
 # Install dependencies
 composer install
 
-# Local test rig: MySQL in Docker (127.0.0.1:33306) + php -S web server (http://127.0.0.1:8089/)
-composer test:up      # start the rig (creates configuration/config.ini if absent; never overwrites)
-composer test         # run the full suite (core + plugins + unit tier); needs the rig
-composer test:down    # stop the rig
+# Local test rig: a database + php -S web server (http://127.0.0.1:8089/)
+composer test:up        # start the rig on SQLite: needs nothing but PHP (the default)
+composer test:up:mysql  # start the rig on MySQL 8 in Docker (127.0.0.1:33306)
+composer test           # run the full suite (core + plugins + unit tier); needs the rig, either mode
+composer test:down      # stop the rig, whichever mode, and delete its database
 
 # The dependency-free unit tier (Tests/Unit/): needs no rig, no database server, no configuration
 composer test:unit
@@ -57,7 +58,7 @@ composer console -- list
   allowed: the storage contract runs on one in the unit tier. It must not depend on which
   bootstrap ran: `Tests/Unit/` is also part of `composer test` (it falls under the `Idno Basic
   Unit Tests` suite's `Tests/` directory, once), where it runs after the full bootstrap.
-  **Everything else** (`composer test`) needs the rig: kernel tests (`Tests/Kernel`),
+  **Everything else** (`composer test`) needs the rig, in either mode (see below): kernel tests (`Tests/Kernel`),
   the storage contract bound to MySQL (`Tests/Storage`: against the legacy backend,
   `LegacyMySqlRecordStoreTest`, which constructs `Idno\Data\MySQL` itself since `db()` is no longer
   one, and against `DbalRecordStore`, `DbalMySqlRecordStoreTest`, which
@@ -68,14 +69,56 @@ composer console -- list
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
   `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against the legacy backend's
   `getObjects()`/`countObjects()`/`getObject()` in `LegacyEntityQueryTest` (also on an
-  `Idno\Data\MySQL` it constructs, with `db()`'s ignore-access flag copied to it) and against
-  `EntityRepository` in `EntityRepositoryTest`; the storage services are tested in
+  `Idno\Data\MySQL` it constructs, with `db()`'s ignore-access flag copied to it; MySQL only) and against
+  `EntityRepository` in `EntityRepositoryTest` (MySQL and SQLite); the storage services are tested in
   `StorageServicesTest`, and `EntityRepository::count()`'s criteria in the unit tier,
   `Tests/Unit/Storage/EntityRepositoryCriteriaTest`; the `db()` adapter in
   `Tests/Kernel/RepositoryDataConciergeTest`), the black-box characterisation suite
   (`Tests/Characterisation`, which drives the running site over HTTP) and the plugin tests.
 - Tests bootstrap from environment variables `IDNO_DOMAIN` / `IDNO_PORT` (default `localhost`, 80)
 - Tests require a running database and web server; `composer test:up` provides both (see `Tests/rig/` and `docs/developers/testing.md`)
+- The rig has two modes, with the same web server (`php -S` on 127.0.0.1:8089, `Tests/rig/router.php`,
+  `APP_ENV=test`, `APP_DEBUG=1`), the same `pedantic_mode` and the same plugins; only the database
+  settings differ (`Tests/rig/config.sqlite.ini` and `Tests/rig/config.ini`, pinned by
+  `Tests/Kernel/RigScriptsTest`):
+  - **SQLite** (`composer test:up`, the default): no Docker, nothing but PHP. The database file
+    (`site.sqlite`, with its `-wal`/`-shm` files) and the upload directory (`uploads/`) are in
+    `<sys_get_temp_dir()>/idno-test-rig-<first 12 hex digits of the SHA-256 of the checkout's real
+    path>/`, so two checkouts (git worktrees) never share a database or uploads. `up.sh` creates it and
+    loads `warmup/schemas/sqlite/sqlite.sql` through a set-up connection (`Tests/rig/sqlite_schema.php`;
+    a database that already has tables is left as it is). No step of this mode runs `docker`.
+  - **MySQL** (`composer test:up:mysql`): MySQL 8 in Docker on 127.0.0.1:33306, database
+    `known_unittest`, schema `warmup/schemas/mysql/mysql.sql` (as before); the upload directory is
+    in the same per-checkout temporary directory. Use it for anything that touches the SQL dialect,
+    search (MySQL's full-text index), the schema upgrader (`LegacySchemaUpgrader`), MySQL's
+    refusals (4-byte characters in `utf8mb3`, error codes) or the legacy MySQL backend: the tests
+    bound to those skip on SQLite and say why. Run the whole suite on MySQL before merging such a
+    change (CI runs MySQL and MongoDB, not SQLite).
+  - Starting one mode while the other is running stops the other first (`down.sh`, which deletes its
+    database). `composer test:down` stops whichever is running (it is safe when nothing is), deletes
+    the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
+    `configuration/config.ini` as it is. It always completes that cleanup: when the container cannot
+    be stopped (Docker absent or not running) it prints a warning and carries on. It signals only
+    the rig's own `php -S` (the process in `Tests/rig/.server.pid` must be `php ... -S 127.0.0.1:<port>
+    ... Tests/rig/router.php`; any other process is left alone and the stale pid file removed). The
+    mode is recorded in `Tests/rig/.mode` (gitignored) only once its database is up, so a
+    `test:up:mysql` that fails (Docker not running) leaves nothing a plain `test:up` must stop.
+    `IDNO_RIG_PORT` overrides the web server's port for `RigScriptsTest` only (the rig's config says 8089).
+  - `configuration/config.ini`: every config the rig writes starts with the marker line
+    `; idno-test-rig: generated by the local test rig (Tests/rig/); composer test:up may replace this file.`
+    (`Tests/rig/lib.sh`; a file starting with the rig's older first line,
+    `; Idno configuration for the local test rig (see Tests/rig/up.sh).`, counts as the rig's too). The
+    rig writes the file when there is none and replaces one that carries the marker (that is how the
+    mode switches); it never touches one without the marker (a developer's own): `up.sh` exits 1 and
+    says so, before starting or stopping anything.
+  - On SQLite, these skip, each with its reason: the storage contract against the legacy MySQL
+    backend and against `DbalRecordStore` on the rig's MySQL (`LegacyMySqlRecordStoreTest`,
+    `DbalMySqlRecordStoreTest`; the contract runs on SQLite in the unit tier, `DbalSqliteRecordStoreTest`),
+    the entity query contract against the legacy backend (`LegacyEntityQueryTest`; `EntityRepositoryTest`
+    runs on both, `EntityQueryContract::driverFamilies()`), and the `RepositoryDataConciergeTest` cases
+    that need MySQL (`requireMysql()`: the old backend, `utf8mb3` refusals, full-text settings, a
+    `database` name that means MySQL). Nothing else skips (the unreachable-database tests run on
+    both: a closed port on MySQL, a database file in a missing directory on SQLite); the characterisation suite runs in full on both.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI does not use the rig: it copies `Tests/build/config_mysql.ini` (or `config_default.ini` for the
   MongoDB jobs) to `configuration/config.ini` and serves the site at `http://localhost/` with
@@ -83,7 +126,9 @@ composer console -- list
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
   from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
-  `Tests/rig/config.ini` and `Tests/build/config_*.ini` in step.
+  `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_*.ini` in step
+  (`Tests/Kernel/RigScriptsTest` checks the rig's two and the two CI uses, `config_mysql.ini` and
+  `config_default.ini`).
 
 ## Architecture
 
@@ -414,8 +459,9 @@ other new code may.
 - SQLite (`Idno\Storage\Platform\SqliteDialect`, schema `warmup/schemas/sqlite/sqlite.sql`, SQLite
   3.24 or later through `pdo_sqlite`; the connection setup refuses an older library): the same
   store, held to the same contract with the in-memory store's hook values. **In this phase SQLite
-  is for tests and development only**: no site is installed on it (the installer does not create
-  SQLite sites), and an SQLite site's PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the store uses MUST have `SqliteConnectionSetup` among its
+  is for tests and development only** (it becomes a supported production database in phase 2b): no
+  site is installed on it (the installer does not create SQLite sites; the test rig's SQLite mode is
+  the one SQLite site, see "Build & Test"), and an SQLite site's PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the store uses MUST have `SqliteConnectionSetup` among its
   DBAL middlewares (the `database_connection` service of an SQLite site has it; a connection you
   build yourself needs `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
   `Tests/Unit/Storage/SqliteTestDatabase` does; the middleware refuses any connection that is not
@@ -455,8 +501,9 @@ other new code may.
     uuid (false on both), an existing record with a new uuid, and every case in `site`/`config` are
     the same on both (pinned in `DbalSqliteRecordStoreTest`).
   - A write that cannot get the write lock within the busy timeout ("database is locked") is
-    refused data: `save()` returns false. Nothing creates the SQLite schema for a site yet (no
-    installer or rig support).
+    refused data: `save()` returns false (two processes writing at once both succeed: each waits for
+    the other's lock, `SqliteConcurrencyTest::testConcurrentWritersDoNotFail`). The installer does not
+    create the SQLite schema for a site; the test rig loads it (`Tests/rig/sqlite_schema.php`).
 - The storage services, public, all built at runtime when first fetched: `Idno\Storage\RecordStore`
   (a `DbalRecordStore` built by `Idno\Legacy\LegacyRecordStoreFactory`: on the `database_connection`
   service, `MySqlDialect` for a MySQL site and `SqliteDialect` on the same connection for an SQLite
@@ -668,7 +715,8 @@ other new code may.
   used at runtime and is scheduled for deletion.
 - **SQLite** — the same store with `SqliteDialect` (schema: `warmup/schemas/sqlite/sqlite.sql`);
   `database = sqlite` (with `dbname` the file's path) gives `db()` the same adapter. For tests and
-  development in this phase: nothing installs the schema for a site yet. See the SQLite
+  development in this phase (the default test rig runs on it; the installer does not create the
+  schema for a site); a supported production database from phase 2b. See the SQLite
   bullet under "Kernel and services" for the limits of the database file.
 - Configured via `config.ini` (`database` / `dbname` / `dbhost` / etc.)
 

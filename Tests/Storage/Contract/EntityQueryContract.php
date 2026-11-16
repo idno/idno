@@ -36,7 +36,8 @@ use IdnoPlugins\Text\Entry;
  *   e_pub        Text Entry, PUBLIC
  *   r_pub        Reply (a subclass of Status), PUBLIC
  *
- * Bindings must be MySQL-bound (they skip on another database): these are MySQL's semantics.
+ * These are MySQL's semantics: a binding runs on MySQL, and on another database only when it reproduces
+ * them there (driverFamilies(); EntityRepository does on SQLite). On any other database it skips.
  */
 abstract class EntityQueryContract extends \Tests\IdnoTestCase
 {
@@ -109,9 +110,21 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     {
         parent::setUpBeforeClass();
         $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
-        if (\Idno\Storage\ConnectionParameters::driverFamily($config) !== 'mysql') {
-            self::markTestSkipped('The site\'s database is not MySQL.');
+        $family = \Idno\Storage\ConnectionParameters::driverFamily($config);
+        if (!in_array($family, static::driverFamilies(), true)) {
+            self::markTestSkipped(sprintf('The site\'s database (%s) is not one this binding runs on (%s).', $family, implode(', ', static::driverFamilies())));
         }
+    }
+
+    /**
+     * The databases (ConnectionParameters::driverFamily()) the binding runs on. The expectations are
+     * MySQL's: a binding on another database must reproduce them there.
+     *
+     * @return list<string>
+     */
+    protected static function driverFamilies(): array
+    {
+        return ['mysql'];
     }
 
     protected function setUp(): void

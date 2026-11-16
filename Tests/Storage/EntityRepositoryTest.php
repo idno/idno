@@ -16,7 +16,7 @@ use Tests\Storage\Contract\EntityQueryContract;
 
 /**
  * The entity query contract against EntityRepository over the container's RecordStore (a
- * DbalRecordStore on the rig's MySQL database) with LegacyAccessContext: the same expectations as
+ * DbalRecordStore on the rig's database, MySQL or SQLite) with LegacyAccessContext: the same expectations as
  * LegacyEntityQueryTest, except two deliberate differences, each behind a hook: find() returns entities
  * only (expectUnhydratableRecordAsFalse()), and a caller condition on `access` or `entity_subtype` that
  * parses to nothing leaves the viewer's read groups or the types in force
@@ -34,6 +34,14 @@ final class EntityRepositoryTest extends EntityQueryContract
         $this->assertInstanceOf(RecordStore::class, $store);
 
         return $this->repository ??= new EntityRepository($store, new LegacyAccessContext());
+    }
+
+    /**
+     * EntityRepository reproduces MySQL's semantics on SQLite too (MySqlSemantics, the SQLite dialect).
+     */
+    protected static function driverFamilies(): array
+    {
+        return ['mysql', 'sqlite'];
     }
 
     protected function expectUnhydratableRecordAsFalse(): bool
