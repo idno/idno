@@ -18,6 +18,10 @@ use Doctrine\DBAL\Driver\Statement;
  * statement whose SQL matches it fails with a driver error that is not a refusal of the data (an
  * I/O error, as the driver would raise it: a PDOException wrapped in a driver exception). The
  * statements before and after it run normally. For tests.
+ *
+ * It also sees `BEGIN` (beginTransaction()) and `COMMIT` (commit()) as statements, so that they can
+ * be failed too, and can run a hook just before the Nth statement matching a pattern (hookOn()):
+ * a test uses it to do something on ANOTHER connection at a chosen point of a transaction.
  */
 final class FailingStatementMiddleware implements Middleware
 {
@@ -42,6 +46,26 @@ final class FailingStatementMiddleware implements Middleware
         $this->matched = 0;
     }
 
+    private ?string $hookPattern = null;
+
+    private int $hookNth = 1;
+
+    private int $hookMatched = 0;
+
+    private ?\Closure $hook = null;
+
+    /**
+     * Runs the hook once, just before the $nth statement (counted from now) whose SQL matches the
+     * regular expression is executed. The hook must not use this middleware's connection.
+     */
+    public function hookOn(string $pattern, \Closure $hook, int $nth = 1): void
+    {
+        $this->hookPattern = $pattern;
+        $this->hookNth = $nth;
+        $this->hookMatched = 0;
+        $this->hook = $hook;
+    }
+
     public function disarm(): void
     {
         $this->pattern = null;
@@ -52,6 +76,11 @@ final class FailingStatementMiddleware implements Middleware
      */
     public function check(string $sql): void
     {
+        if ($this->hook !== null && $this->hookPattern !== null && preg_match($this->hookPattern, $sql) === 1 && ++$this->hookMatched === $this->hookNth) {
+            $hook = $this->hook;
+            $this->hook = null;
+            $hook();
+        }
         if ($this->pattern === null || preg_match($this->pattern, $sql) !== 1) {
             return;
         }
@@ -83,6 +112,25 @@ final class FailingStatementMiddleware implements Middleware
                     public function __construct(DriverConnection $connection, private readonly FailingStatementMiddleware $middleware)
                     {
                         parent::__construct($connection);
+                    }
+
+                    public function beginTransaction(): void
+                    {
+                        $this->middleware->check('BEGIN');
+                        parent::beginTransaction();
+                    }
+
+                    public function commit(): void
+                    {
+                        try {
+                            $this->middleware->check('COMMIT');
+                        } catch (\Throwable $e) {
+                            // A commit the database fails has not committed: its transaction is aborted.
+                            parent::rollBack();
+
+                            throw $e;
+                        }
+                        parent::commit();
                     }
 
                     public function prepare(string $sql): Statement

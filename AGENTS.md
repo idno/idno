@@ -71,7 +71,10 @@ composer console -- list
   record store" under "Database"); the contract also runs against `JsonRecordStore` on in-memory
   SQLite in the unit tier (`Tests/Unit/Storage/JsonSqliteRecordStoreTest`) and on a private MySQL or
   MariaDB database of the rig's server (`Tests/Storage/JsonMySqlRecordStoreTest`, which skips on
-  SQLite); the
+  SQLite); `SettingsRecordStore` has the same two bindings of one test case
+  (`Tests/Storage/Contract/SettingsRecordStoreContract`: `Tests/Unit/Storage/SettingsRecordStoreTest`
+  on an SQLite file in a temporary directory and `Tests/Storage/SettingsRecordStoreMySqlTest` on a private MySQL or MariaDB
+  database); the
   SQLite tests that need a kernel or a database file, `SqliteConnectionTest` and
   `SqliteConcurrencyTest`, are in `Tests/Storage`; the entity query contract,
   `Tests/Storage/Contract/EntityQueryContract`, needs the rig and runs against
@@ -207,7 +210,11 @@ Idno/
                                query on a document field compares with, in that store and in memory;
                                IndexedFields (creates the indexes entity classes declare with
                                Attribute/IndexedField), EntityClassFinder (the classes of a directory that
-                               carry those attributes) and DialectFactory (the container's Dialect)
+                               carry those attributes) and DialectFactory (the container's Dialect);
+                               SettingsRecordStore, a RecordStore decorator that serves the collection
+                               `config` (the site's configuration, ONE document) from the key/value table
+                               `idno_settings` and every other collection from the store it decorates (not
+                               used by the site yet)
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -439,11 +446,11 @@ other new code may.
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
-  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php` and `RecordIndex.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
+  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`,
   `LegacySchemaUpgrader.php` and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`, `DbalRecordStore.php`,
-  `JsonRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
+  `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
   `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
@@ -837,7 +844,7 @@ test made them.
   seconds, `BIGINT`), `publish_status`, `data` (the document's JSON text, `LONGTEXT` `utf8mb4_bin`),
   `search` (full-text indexed on MySQL/MariaDB); keys `type_created`, `owner_created`, `created`);
   `idno_settings` (`name` and `value` `utf8mb4_bin`, `position` INT: one row per settings key, in
-  order); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
+  order; served as the collection `config` by `SettingsRecordStore`, below); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
   `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping). On MySQL/MariaDB
   every table is InnoDB, `utf8mb4`, and every text column names its collation:
   `utf8mb4_general_ci` except the `utf8mb4_bin` ones above. The one exception is `idno_migrations`,
@@ -946,6 +953,58 @@ afterwards calls `SchemaCatalog::forget()`.
   there such a float is found neither by its text nor by the same float, only by MySQL's text
   (`expectFloatsInExponentFormToMatchTheirJsonText`, the one hook whose value differs between MySQL
   and MariaDB).
+
+#### The settings store (not used by the site yet)
+
+The legacy application keeps the site's configuration as ONE document in the collection `config`
+(`Idno\Core\Config` reads "the latest record of `config`" and saves "this record to `config`").
+`Idno\Storage\SettingsRecordStore` (built with new: the store it decorates, the connection, a
+`Dialect` and `RecordDefaults`; `COLLECTION` is `config`) serves that collection from `idno_settings`
+and passes every other collection to the inner store unchanged. The container does not build it yet;
+the site still uses `DbalRecordStore` and its `config` table.
+
+- Layout: one row per top-level key of the document. `name` is the key (case-sensitive, binary
+  collation; at most 190 bytes), `value` the key's value as JSON text (`json_encode()` with no flags,
+  as `JsonRecordStore` encodes a document, so a value reads back as the JSON store gives it: a whole
+  float is written as `json_encode()` writes it, nested key order is kept) and `position` the key's
+  index in the document: reads are `order by position`, so the keys come back in the order they
+  were saved. An integer key of a document is a string key of the table and comes back as an int key
+  (what `json_decode()` gives for an object). `SettingsRecordStore::rowsOf($document)` returns
+  `key => JSON` in document order (the position is the index); it is pure and static, applies no
+  defaults and throws `\InvalidArgumentException` for a document the table cannot hold: a later step
+  writes settings rows with it while the application is not running.
+- The collection holds at most one document (a deliberate difference from the old `config` table,
+  which could hold several): saving a record with another `_id` replaces the document, and
+  `count()` is 0 or 1. The collection name is reduced as the other stores reduce it (`Config` is
+  `config`).
+- `save()` fills in the defaults as the inner store does, then in ONE transaction deletes EVERY row
+  (`delete from idno_settings`) and inserts one row per key. The delete comes first because it is a
+  write that depends on no earlier read: it takes the write lock before anything is decided, so two
+  saves are serialised and the table holds exactly one of the two documents (an earlier read of the
+  existing keys let a concurrent save's new key survive on MySQL). A save that cannot get the lock in
+  time (a lock wait timeout or deadlock on MySQL/MariaDB, SQLite's busy timeout) is refused data:
+  false, the previous document intact. It returns the `_id`. It also returns false, leaving the
+  previous document untouched, for a save the data makes impossible: a value that cannot be encoded
+  as JSON, an empty key, a key over 190 bytes (counted in bytes, on every engine) or not UTF-8, or a
+  key ending in a space (`utf8mb4_bin` pads with spaces, so on MySQL and MariaDB `a` and `a ` would
+  be the same key: refused everywhere instead of merged on one engine), and for a refusal by the
+  database (`Dialect::isRefusedData()`). A `created` that is not a timestamp throws
+  `\InvalidArgumentException`. Any other failure is thrown after the transaction is rolled back,
+  with nothing stored and the connection usable; a missing `idno_settings` is such a failure, not
+  an unknown collection (pinned by `testAFailingStatementIsThrownAndRolledBack`, which fails the
+  begin, the delete, each insert and the commit in turn, `testAMissingSettingsTableIsThrown`, and,
+  with a second connection, the two-writer tests of `SettingsRecordStoreContract`).
+- `findLatest()`, `findById()`, `findByUuid()`, `find()` and `count()` assemble the document from
+  the rows (one `select`) and, for criteria, evaluate them on it with an `InMemoryRecordStore`
+  (the reference implementation of the rules: nothing is matched twice). `find()` returns the
+  document or nothing, honouring `limit` and `offset`. A stored document the in-memory evaluator
+  cannot hold (a row whose JSON decodes to a value with no JSON text, such as `1e999`, which is INF)
+  makes `find()` and `count()` throw `\UnexpectedValueException`; the plain finders return it. Search
+  text is not normalised (no quote normaliser). `delete($id)` is atomic: in one transaction a
+  conditional `delete ... where name = '_id' and value in (...)` removes the `_id` row only if it
+  still holds the id (and holds its lock), then every other row; any other id, or a document that
+  replaced the first a moment ago, is "no such record" (true) and nothing is removed. `deleteAll()`
+  removes every row.
 
 #### Declared indexed fields
 

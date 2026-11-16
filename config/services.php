@@ -51,8 +51,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // below), Attribute/ (attribute classes) and the RecordStore implementations, built with new, not services: the container's RecordStore is
         // built by LegacyRecordStoreFactory (below). BootConfigConnectionFactory is wired by hand below.
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
-        // builds them); they are not services. EntityClassFinder is a static helper.
-        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php'],
+        // builds them); they are not services. EntityClassFinder is a static helper. SettingsRecordStore (a RecordStore decorator that serves `config` from the settings table) is built with new, like the other RecordStore implementations.
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'DbalRecordStore.php', 'EntityClassFinder.php', 'EntityQuery.php', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySchemaUpgrader and LegacySqlMaintenance.
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacySchemaUpgrader.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
