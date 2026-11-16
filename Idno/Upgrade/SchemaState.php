@@ -33,10 +33,13 @@ use Idno\Storage\SchemaMigrator;
  *       `entities_metadata` AND `entities_search`) with no complete upgrade on record → Legacy, or
  *       LegacyTooOld when its schema version is below OLDEST_LEGACY_SCHEMA or cannot be read (only
  *       then are the 1.x version statements sent);
+ *     - a complete upgrade on record and the three 1.x `entities` tables present again
+ *       (LegacyDataCopier::isOneXBesideCompletedUpgrade()) → OneXBesideCompletedUpgrade (closed;
+ *       nothing is done): an undo or a restored backup;
  *     - otherwise the three renamed tables (LegacyDataCopier::isRenamedOneXDatabase()) with no
  *       progress row at all → RenamedWithoutRecord (closed; nothing is done);
  *     - everything else is not a 1.x database: a complete upgrade's `legacy_` tables, 1.x tables
- *       recreated after completion, another application's `entities`, `versions`, `legacy_config`
+ *       recreated after completion (any but all three `entities` tables), another application's `entities`, `versions`, `legacy_config`
  *       ... ask nothing and never close the gate.
  *  7. Empty when there is no `idno_migrations` table; PendingMigrations when the probe says so;
  *     otherwise Current.
@@ -98,6 +101,10 @@ final class SchemaState
         if ($family === 'mysql') {
             if ($probe['incomplete']) {
                 return SchemaStatus::Legacy;
+            }
+            if (LegacyDataCopier::isOneXBesideCompletedUpgrade($tables, $probe['complete'])) {
+                // An undo or a restored backup beside the copy: never open the site on either.
+                return SchemaStatus::OneXBesideCompletedUpgrade;
             }
             if (!$probe['complete'] && LegacyDataCopier::isOneXDatabase($tables)) {
                 $legacyVersion = ($this->copier)()->legacySchemaVersion();

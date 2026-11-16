@@ -151,11 +151,12 @@ final class SchemaStateTest extends TestCase
 
     /**
      * A complete upgrade: its legacy_ tables, or none (the admin deleted them), or 1.x tables an old
-     * worker recreated: open, and nothing beyond the probe is asked.
+     * worker recreated (any but all three `entities` tables, which a booting 1.x process does not
+     * create: see the next test): open, and nothing beyond the probe is asked.
      */
     public function testACompleteUpgradeIsOpenWhateverItsLegacyTables(): void
     {
-        $reappeared = ['entities', 'entities_metadata', 'entities_search', 'reader', 'site', 'versions'];
+        $reappeared = ['entities', 'entities_metadata', 'reader', 'reader_metadata', 'reader_search', 'site', 'site_metadata', 'site_search', 'config', 'session', 'versions'];
         foreach ([
             'legacy_ tables kept' => ['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search', 'legacy_versions'],
             'legacy_ tables deleted' => [],
@@ -225,6 +226,27 @@ final class SchemaStateTest extends TestCase
 
         self::assertSame(SchemaStatus::Current, $this->state('mysql', [...$renamed, ...self::NEW_SCHEMA], completion: true)->status(), 'a complete upgrade');
         self::assertSame(SchemaStatus::Legacy, $this->state('mysql', [...$renamed, ...self::NEW_SCHEMA], completion: false)->status(), 'an upgrade in progress');
+    }
+
+    /**
+     * After a COMPLETE upgrade, `entities`, `entities_metadata` AND `entities_search` present again
+     * mean an undo or a restored backup (a booting 1.x process does not create them): closed, with
+     * its own status, decided from the catalog and the probe alone. SQLite never asks about 1.x
+     * tables.
+     */
+    public function testTheOneXEntitiesTablesBesideACompletedUpgradeCloseTheGate(): void
+    {
+        $restored = ['entities', 'entities_metadata', 'entities_search', 'versions'];
+        foreach (['legacy_ tables deleted' => [], 'legacy_ tables kept' => ['legacy_entities', 'legacy_entities_metadata', 'legacy_entities_search']] as $case => $legacy) {
+            $this->asked = [];
+            self::assertSame(SchemaStatus::OneXBesideCompletedUpgrade, $this->state('mysql', [...$restored, ...$legacy, ...self::NEW_SCHEMA], completion: true, legacyVersion: 2020120301)->status(), $case);
+            self::assertSame(['version' => 1, 'tables' => 1, 'probe' => 1], $this->asked, $case . ': nothing beyond the probe');
+        }
+        self::assertTrue(SchemaStatus::OneXBesideCompletedUpgrade->closesTheGate());
+        self::assertTrue(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata', 'entities_search'], true));
+        self::assertFalse(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata', 'entities_search'], false));
+        self::assertFalse(LegacyDataCopier::isOneXBesideCompletedUpgrade(['entities', 'entities_metadata'], true));
+        self::assertSame(SchemaStatus::Current, $this->state('sqlite', [...$restored, ...self::NEW_SCHEMA], completion: true)->status(), 'SQLite never asks about 1.x tables');
     }
 
     public function testTheEvidenceRule(): void

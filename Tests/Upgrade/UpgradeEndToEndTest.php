@@ -424,8 +424,9 @@ final class UpgradeEndToEndTest extends TestCase
     }
 
     /**
-     * After completion, 1.x tables an old worker recreates (its schema upgrader) are ignored: the
-     * site stays open.
+     * After completion, 1.x tables an old worker recreates (its schema upgrader creates reader, site
+     * and versions tables) are ignored: the site stays open. So are two of the three `entities`
+     * tables: only all three mean a 1.x site is back (next test).
      */
     public function testOneXTablesRecreatedAfterCompletionAreIgnored(): void
     {
@@ -433,13 +434,63 @@ final class UpgradeEndToEndTest extends TestCase
         $this->runner()->run(static function (string $line): void {
         });
         $this->assertTrue($this->copier()->progress()->complete);
-        foreach (['entities', 'entities_metadata', 'entities_search', 'reader', 'site', 'versions'] as $table) {
+        $recreated = ['entities', 'entities_metadata', 'reader', 'reader_metadata', 'reader_search', 'site', 'versions'];
+        foreach ($recreated as $table) {
             $this->db()->executeStatement('create table ' . $table . ' like legacy_' . $table);
         }
         $this->startServer();
 
         $this->assertSame(200, $this->request('GET', '/', ['Accept: text/html'])['status'], $this->log());
-        $this->assertSame(['entities', 'entities_metadata', 'entities_search', 'reader', 'site', 'versions'], $this->copier()->reappearedTables());
+        $this->assertSame($recreated, $this->copier()->reappearedTables());
+    }
+
+    /**
+     * After completion, `entities`, `entities_metadata` AND `entities_search` back again (the undo's
+     * RENAME, a restored backup) close the site, in every entry point, with one message: the earlier
+     * copy is never opened over a 1.x site that may have changed since. Nothing is changed, and
+     * `--drop-legacy` refuses too (with and without --yes).
+     */
+    public function testTheOneXEntitiesTablesBackBesideACompletedUpgradeCloseTheSite(): void
+    {
+        $this->oneXSite(30);
+        $this->runner()->run(static function (string $line): void {
+        });
+        $this->assertTrue($this->copier()->progress()->complete);
+        foreach (LegacyDataCopier::EVIDENCE_TABLES as $table) {
+            $this->db()->executeStatement('create table ' . $table . ' like legacy_' . $table);
+        }
+        $before = $this->snapshot();
+        $message = \Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text;
+        $this->startServer();
+
+        $page = $this->request('GET', '/', ['Accept: text/html']);
+        $this->assertSame(503, $page['status'], $this->log());
+        $this->assertStringContainsString(htmlspecialchars($message, ENT_QUOTES | ENT_HTML5), $page['body']);
+        $this->assertStringNotContainsString('<script', $page['body']);
+        $this->assertStringNotContainsString('<form', $page['body']);
+        $plain = $this->request('GET', '/feed.xml', ['Accept: application/rss+xml']);
+        $this->assertSame(503, $plain['status']);
+        $this->assertSame('Idno cannot start: ' . $message . "\n", $plain['body']);
+        $answer = $this->request('POST', '/_upgrade/step', ['Accept: application/json']);
+        $this->assertSame('error', json_decode($answer['body'], true)['status'] ?? null, $answer['body']);
+        $this->assertSame($message, json_decode($answer['body'], true)['message'] ?? null);
+
+        [$exit, , $stderr] = $this->console('idno:upgrade');
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString($message, $stderr);
+        [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--status');
+        $this->assertSame(1, $exit);
+        $this->assertStringStartsWith('Schema status: ' . \Idno\Upgrade\SchemaStatus::OneXBesideCompletedUpgrade->value . "\n", $stdout);
+        $this->assertStringContainsString($message, $stderr);
+        foreach ([['--drop-legacy'], ['--drop-legacy', '--yes']] as $options) {
+            [$exit, $stdout, $stderr] = $this->console('idno:upgrade', ...$options);
+            $this->assertSame(1, $exit, implode(' ', $options) . "\nstdout: $stdout\nstderr: $stderr");
+            $this->assertStringContainsString($message, $stderr);
+        }
+        [$exit, , $stderr] = $this->console('version');
+        $this->assertNotSame(0, $exit);
+        $this->assertStringContainsString(\Idno\Upgrade\SchemaGate::CLOSED_MESSAGE, $stderr);
+        $this->assertSame($before, $this->snapshot(), 'nothing was changed, no legacy_ table dropped');
     }
 
     /**
@@ -472,7 +523,8 @@ final class UpgradeEndToEndTest extends TestCase
         $page = $this->request('GET', '/admin/legacytables/', $html);
         $this->assertSame(200, $page['status'], substr($page['body'], 0, 2000) . $this->log());
         $this->assertStringContainsString('idno-admin-page-title', $page['body']);
-        $this->assertMatchesRegularExpression('#<code>legacy_entities</code></td><td>33</td>#', $page['body'], 'the 1.x entities with their count');
+        $this->assertMatchesRegularExpression('#<code>legacy_entities</code></td><td>\d+</td>#', $page['body'], 'the 1.x entities with their (approximate) count');
+        $this->assertStringContainsString('approximate', $page['body']);
         foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
             $this->assertStringContainsString('<code>legacy_' . $table . '</code>', $page['body']);
         }
@@ -488,6 +540,9 @@ final class UpgradeEndToEndTest extends TestCase
         // Without the CSRF token, and with the token but not the confirmation: nothing is deleted.
         $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query(['confirm' => 'delete']));
         $this->assertSame($before, $this->tables());
+        $answer = $this->request('GET', '/admin/legacytables/', $html)['body'];
+        $this->assertStringContainsString('Invalid token.', $answer, 'refused by the token check');
+        $this->assertStringNotContainsString('Deleted ', $answer);
         $token = $this->formToken($page['body'], 'admin/legacytables/');
         $refused = $this->request('POST', '/admin/legacytables/', [...$html, 'Content-Type: application/x-www-form-urlencoded'], http_build_query($token + ['confirm' => 'Delete']));
         $this->assertSame(302, $refused['status'], $refused['body']);
@@ -503,7 +558,7 @@ final class UpgradeEndToEndTest extends TestCase
         }
         $this->assertSame(1, (int) $this->db()->fetchOne('select count(*) from idno_upgrade_rejects'), 'the rejects are kept');
         $after = $this->request('GET', '/admin/legacytables/', $html);
-        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities, legacy_entities_metadata, ', $after['body']);
+        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities_metadata, legacy_entities_search, ', $after['body'], 'what drop() removed, in the order it dropped them');
         $this->assertStringNotContainsString('id="legacytables-tables"', $after['body']);
         $this->assertStringContainsString('id="legacytables-rejects"', $after['body']);
         $this->assertStringContainsString($this->url . 'admin/legacytables/', $this->request('GET', '/admin/', $html)['body'], 'the rejects keep the entry');
@@ -545,9 +600,9 @@ final class UpgradeEndToEndTest extends TestCase
 
         [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--drop-legacy');
         $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
-        $this->assertStringContainsString("legacy_entities: 33 rows\n", $stdout);
+        $this->assertStringContainsString('approximate', $stdout);
         foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
-            $this->assertMatchesRegularExpression('#^  legacy_' . $table . ': \d+ rows?$#m', $stdout);
+            $this->assertMatchesRegularExpression('#^  legacy_' . $table . ': about \d+ rows?$#m', $stdout);
         }
         $this->assertStringContainsString('--drop-legacy --yes', $stderr);
         $this->assertSame($before, $this->tables(), 'without --yes nothing is deleted');
@@ -556,7 +611,8 @@ final class UpgradeEndToEndTest extends TestCase
         $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
         // (stderr carries the booted legacy application's own log lines, such as a plugin's warning.)
         $this->assertStringNotContainsString('legacy', $stderr);
-        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities, ', $stdout);
+        $this->assertStringContainsString('Deleted 14 legacy tables: legacy_entities_metadata, ', $stdout, 'what drop() removed, in the order it dropped them');
+        $this->assertStringContainsString(', legacy_session.', $stdout);
         $this->assertStringContainsString('1 row that was not carried over is kept in idno_upgrade_rejects.', $stdout);
         $tables = $this->tables();
         foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
@@ -701,7 +757,8 @@ final class UpgradeEndToEndTest extends TestCase
                 $this->db()->executeStatement('set foreign_key_checks = 1');
             },
             '1.x tables recreated after completion' => function (): void {
-                foreach (LegacyDataCopier::EVIDENCE_TABLES as $table) {
+                // What an old worker creates; never all three `entities` tables (those close the site).
+                foreach (['entities', 'entities_metadata', 'reader', 'site', 'versions'] as $table) {
                     $this->db()->executeStatement('create table ' . $table . ' (x int)');
                 }
             },

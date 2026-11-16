@@ -43,6 +43,7 @@ namespace Idno\Pages\Admin {
                     'available' => $tables->available(),
                     'tables' => $tables->present(),
                     'complete' => $tables->isComplete(),
+                    'restored' => $tables->oneXBesideCompletedUpgrade(),
                     'reappeared' => $tables->reappeared(),
                     'rejects' => $count > 0 ? $tables->rejects(self::PAGE_SIZE, $offset) : [],
                     'reject_count' => $count,
@@ -64,18 +65,24 @@ namespace Idno\Pages\Admin {
             if ($this->getInput('confirm') !== 'delete') {
                 $session->addErrorMessage($language->_('Nothing was deleted: type delete in the box to confirm.'));
             } else {
-                $names = $tables->names();
-                if ($names === []) {
+                if ($tables->oneXBesideCompletedUpgrade()) {
+                    $session->addErrorMessage($language->_('Nothing was deleted.') . ' ' . \Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text);
+                } else if ($tables->names() === []) {
                     $session->addMessage($language->_('There were no legacy tables to delete.'));
                 } else if (!$tables->isComplete()) {
                     $session->addErrorMessage($language->_('Nothing was deleted: the upgrade from Idno 1.x is not complete.'));
                 } else {
                     try {
                         $dropped = $tables->drop();
-                        $session->addMessage($language->_('Deleted %d legacy tables: %s.', [$dropped, implode(', ', $names)]));
+                        $session->addMessage($language->_('Deleted %d legacy tables: %s.', [$dropped, implode(', ', $tables->lastDropped())]));
                     } catch (\Throwable $e) {
                         \Idno\Core\Idno::site()->logging()->error('Could not delete the legacy tables: ' . \Idno\Upgrade\LegacyDataCopier::clean(get_class($e) . ': ' . $e->getMessage()));
-                        $session->addErrorMessage($language->_('Not every legacy table could be deleted. The error was logged; try again, or see the server\'s error log.'));
+                        $done = $tables->lastDropped() === [] ? '' : ' ' . $language->_('Deleted before the error: %s.', [implode(', ', $tables->lastDropped())]);
+                        if ($e instanceof \Idno\Upgrade\LegacyTableReferenced) {
+                            $session->addErrorMessage($language->_('A table outside the Idno 1.x tables refers to the legacy table %s (it has a foreign key into it), so that table cannot be deleted. Deal with the table that refers to it first (the server\'s error log names it), then delete the legacy tables again.', [$e->table]) . $done);
+                        } else {
+                            $session->addErrorMessage($language->_('Not every legacy table could be deleted. The error was logged; try again, or see the server\'s error log.') . $done);
+                        }
                     }
                 }
             }

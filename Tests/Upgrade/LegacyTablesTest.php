@@ -13,10 +13,12 @@ use Idno\Storage\Platform\Dialect;
 use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\SchemaCatalog;
 use Idno\Upgrade\LegacyDataCopier;
+use Idno\Upgrade\LegacyTableReferenced;
 use Idno\Upgrade\LegacyTables;
 use Idno\Upgrade\UpgradeLock;
 use Idno\Upgrade\UpgradeProgress;
 use PHPUnit\Framework\TestCase;
+use Tests\Storage\StatementRecorder;
 use Tests\Unit\Storage\FailingStatementMiddleware;
 
 /**
@@ -55,17 +57,30 @@ final class LegacyTablesTest extends TestCase
         $fixture->insert('config', ['title' => 'A 1.x site', 'created' => 1_700_000_000]);
         $this->complete();
 
-        $legacy = $this->legacyTables();
+        $recorder = new StatementRecorder();
+        $legacy = $this->legacyTables($this->connect($recorder));
+        $legacy->names(); // the catalog, read at boot in a request
+        $recorder->statements = [];
         $present = $legacy->present();
 
         $expected = [];
         foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
             $expected['legacy_' . $table] = (int) $fixture->connection->fetchOne('select count(*) from ' . $fixture->connection->quoteSingleIdentifier('legacy_' . $table));
         }
-        self::assertSame($expected, $present, 'every renamed table, in the order of LEGACY_TABLES, with its row count');
-        self::assertSame(4, $present['legacy_entities']);
-        self::assertSame(1, $present['legacy_config']);
-        self::assertGreaterThan(0, $present['legacy_entities_metadata']);
+        self::assertSame(array_keys($expected), array_keys($present), 'every renamed table, in the order of LEGACY_TABLES');
+        foreach ($present as $table => $rows) {
+            self::assertIsInt($rows, $table);
+            self::assertGreaterThanOrEqual(0, $rows, $table . ': an estimate, never negative');
+        }
+        self::assertCount(1, $recorder->statements, 'ONE statement for the 14 estimates, never a COUNT(*): ' . json_encode($recorder->statements));
+        self::assertStringContainsString('information_schema.tables', $recorder->statements[0]['sql']);
+        // The estimate is the engine's statistics; ANALYZE TABLE refreshes them, and on tables this
+        // small (one page) MySQL 8 and MariaDB 10.6 then report the exact count.
+        foreach (array_keys($expected) as $table) {
+            $fixture->connection->fetchAllAssociative('analyze table ' . $fixture->connection->quoteSingleIdentifier($table));
+        }
+        self::assertSame($expected, $this->legacyTables()->present(), 'after ANALYZE TABLE, the real counts');
+        self::assertSame(4, $expected['legacy_entities']);
         self::assertSame(array_keys($expected), $legacy->names());
         self::assertTrue($legacy->isComplete());
         self::assertTrue($legacy->worthShowing());
@@ -197,8 +212,76 @@ final class LegacyTablesTest extends TestCase
         self::assertNotContains('legacy_entities_search', $left);
         self::assertContains('legacy_entities', $left);
 
-        self::assertSame(count(LegacyDataCopier::LEGACY_TABLES) - 2, $this->legacyTables()->drop());
+        $again = $this->legacyTables();
+        self::assertSame(count(LegacyDataCopier::LEGACY_TABLES) - 2, $again->drop(), 'only the tables that were still there');
+        self::assertNotContains('legacy_entities_metadata', $again->lastDropped());
         self::assertSame([], array_values(array_filter($this->tables(), static fn (string $table): bool => str_starts_with($table, 'legacy_'))));
+    }
+
+    /**
+     * After a completed upgrade, `entities`, `entities_metadata` AND `entities_search` present again
+     * (an undo, a restored backup) make the database ambiguous: drop() refuses, with the schema gate's
+     * message, and deletes nothing; the page offers no delete. The same predicate closes the gate.
+     */
+    public function testDropRefusesWhenTheOneXEntitiesTablesAreBackBesideACompletedUpgrade(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 3);
+        $this->complete();
+        foreach (LegacyDataCopier::EVIDENCE_TABLES as $table) {
+            $fixture->connection->executeStatement('create table ' . $table . ' like legacy_' . $table);
+        }
+        $before = $this->tables();
+
+        $legacy = $this->legacyTables();
+        self::assertTrue($legacy->isComplete());
+        self::assertTrue($legacy->oneXBesideCompletedUpgrade());
+        self::assertFalse($legacy->deletable());
+        try {
+            $legacy->drop();
+            self::fail('drop() refuses beside a restored 1.x site.');
+        } catch (\LogicException $e) {
+            self::assertSame(\Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text, $e->getMessage());
+        }
+        self::assertSame($before, $this->tables(), 'nothing was dropped');
+
+        $fixture->connection->executeStatement('drop table entities_metadata');
+        $legacy = $this->legacyTables();
+        self::assertFalse($legacy->oneXBesideCompletedUpgrade(), 'two of the three are not a 1.x site');
+        self::assertTrue($legacy->deletable());
+    }
+
+    /**
+     * A table outside the fourteen whose foreign key references a legacy table (a 1.x plugin's, which
+     * followed the rename) makes its DROP fail every time: drop() says so, naming the table and the
+     * constraint, after dropping what it could; once that table is dealt with, drop() finishes.
+     */
+    public function testADropBlockedByAForeignKeyFromAnotherTableIsExplained(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 3);
+        $this->complete();
+        $db = $fixture->connection;
+        $db->executeStatement('create table plugin_things (id int primary key, entity_id varchar(36) character set utf8, constraint plugin_things_entity foreign key (entity_id) references legacy_entities (_id)) engine=InnoDB');
+
+        $legacy = $this->legacyTables();
+        try {
+            $legacy->drop();
+            self::fail('The referenced table cannot be dropped.');
+        } catch (LegacyTableReferenced $e) {
+            self::assertSame('legacy_entities', $e->table);
+            self::assertStringContainsString('plugin_things', $e->getMessage());
+            self::assertStringContainsString('plugin_things_entity', $e->getMessage());
+            self::assertInstanceOf(\Doctrine\DBAL\Exception::class, $e->getPrevious());
+        }
+        self::assertContains('legacy_entities', $this->tables());
+        self::assertNotContains('legacy_entities_metadata', $this->tables(), 'the tables before it were dropped');
+        self::assertSame(['legacy_entities_metadata', 'legacy_entities_search', 'legacy_reader_metadata', 'legacy_reader_search', 'legacy_site_metadata', 'legacy_site_search', 'legacy_config_metadata', 'legacy_config_search'], $legacy->lastDropped());
+
+        $db->executeStatement('drop table plugin_things');
+        $again = $this->legacyTables();
+        self::assertSame(6, $again->drop());
+        self::assertSame(['legacy_entities', 'legacy_reader', 'legacy_site', 'legacy_config', 'legacy_versions', 'legacy_session'], $again->lastDropped());
     }
 
     /**
@@ -238,7 +321,7 @@ final class LegacyTablesTest extends TestCase
         return $this->fixture->connection;
     }
 
-    private function connect(FailingStatementMiddleware $middleware): Connection
+    private function connect(\Doctrine\DBAL\Driver\Middleware $middleware): Connection
     {
         $connection = DriverManager::getConnection($this->connection()->getParams(), (new Configuration())->setMiddlewares([$middleware]));
 

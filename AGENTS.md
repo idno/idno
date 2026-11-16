@@ -468,8 +468,8 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   prints `Schema status: <status>` (the `SchemaStatus` value), the pending migrations (`Pending
   migration: <version>`, or `No migration is pending.`) and, for a 1.x database, the copy's phase,
   counts, stored error and its detail, and changes nothing. It exits 1, with the public message on stderr, for an unsupported database server, a
-  1.x database too old to upgrade, and renamed 1.x tables with no upgrade on record (exit 0 for every
-  other status). It runs whether or not the legacy application booted
+  1.x database too old to upgrade, renamed 1.x tables with no upgrade on record, and the 1.x tables
+  beside a completed upgrade (exit 0 for every other status). It runs whether or not the legacy application booted
   (with the gate closed it does not), so it takes no logger and nothing from the legacy application.
   It reports the migrations THIS run executed (`SchemaMigrator::migrate()` returns them), never one
   another process ran meanwhile; while another process holds the `UpgradeLock` it says so once and
@@ -554,8 +554,9 @@ other new code may.
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
-  builds; in `Idno/Upgrade/`, `UpgradeProgress.php`, the enum `SchemaStatus.php`, the static
-  helpers `ServerVersion.php` and `UpgradePage.php`, and the copier's helpers `ConfigCopier.php`,
+  builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
+  enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
+  `ServerVersion.php` and `UpgradePage.php`, and the copier's helpers `ConfigCopier.php`,
   `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`,
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
@@ -1091,22 +1092,34 @@ name in `config/services.php`).
   upgrade is on record: `Legacy`, or `LegacyTooOld` when `legacySchemaVersion()` is below 2020120301
   (Idno 1.6.4) or cannot be read (a `versions` table of another shape is "no version", never an
   exception). Everything else is not a 1.x database and asks nothing: a complete upgrade's `legacy_`
-  tables, the same tables deleted by the admin, 1.x tables recreated after completion (an old worker
-  re-running its 1.x schema upgrader; nothing reads them; `LegacyDataCopier::reappearedTables()`
-  lists them, read-only, for the admin), another application's `entities`, `versions`, `config`,
+  tables, the same tables deleted by the admin, 1.x tables recreated after completion other than all
+  three `entities` tables (an old worker booting 1.x creates reader, site and versions tables; nothing
+  reads them; `LegacyDataCopier::reappearedTables()` lists them, read-only, for the admin), another
+  application's `entities`, `versions`, `config`,
   `session`, `site`, `reader`, `legacy_config`, .... One more case is closed: the three renamed tables
   `legacy_entities`, `legacy_entities_metadata` and `legacy_entities_search` with NO progress row at
   all (an operator dropped the new tables to start again without renaming the 1.x ones back; also on
   an empty database) → `RenamedWithoutRecord`: no step migrates, reconciles or copies anything (not
   even the baseline), the page and `idno:upgrade` (exit 1) say `PublicMessage::renamedWithoutRecord()`
   (rename them back to upgrade that site, or remove them to set up a new one), so an empty site is
-  never set up beside the content. The information is free: the catalog and the probe. Pinned in
+  never set up beside the content. And one more: a COMPLETE upgrade on record and `entities`,
+  `entities_metadata` AND `entities_search` present again (`LegacyDataCopier::isOneXBesideCompletedUpgrade()`,
+  the ONE predicate, which `LegacyTables` also uses) → `OneXBesideCompletedUpgrade`. A booting 1.x
+  process does not create those three, so they mean an undo or a restored backup: opening the site on
+  the earlier copy would silently drop what was written to 1.x since. It is handled exactly as
+  `RenamedWithoutRecord` in every entry point (the page with no script and no form, the plain text,
+  the step's JSON `error`, the runner's `step()`/`run()` returning before any lock, migration,
+  reconcile or copy, `idno:upgrade` and `--status` exit 1, `Idno/start.php` and the console's closed
+  line), with `PublicMessage::oneXBesideCompletedUpgrade()` (nothing was changed; to upgrade the 1.x
+  site again remove the `idno_` tables first; to keep the upgraded site remove or rename the 1.x
+  tables). The information is free: the catalog and the probe. Pinned in
   `SchemaStateTest` (`testAnUpgradeOnRecordAndNotCompleteIsAlwaysClosed`,
-  `testACompleteUpgradeIsOpenWhateverItsLegacyTables`, `testForeignTablesNeverCloseTheGate`) and
+  `testACompleteUpgradeIsOpenWhateverItsLegacyTables`, `testForeignTablesNeverCloseTheGate`,
+  `testTheOneXEntitiesTablesBesideACompletedUpgradeCloseTheGate`) and
   `UpgradeEndToEndTest`. The copier's own idea of "there is a 1.x database here"
   (`UpgradeProgress::$noLegacyDatabase`) uses the same evidence.
-- Closed for `Empty`, `PendingMigrations`, `Legacy`, `LegacyTooOld`, `RenamedWithoutRecord` and
-  `UnsupportedServer`; open
+- Closed for `Empty`, `PendingMigrations`, `Legacy`, `LegacyTooOld`, `RenamedWithoutRecord`,
+  `OneXBesideCompletedUpgrade` and `UnsupportedServer`; open
   for `Current`, `Unreachable` and `NotApplicable`.
 - `Unreachable` is final for the request (and the process): `Idno\Storage\Platform\ConnectFailureIsFinal`,
   a DBAL middleware `BootConfigConnectionFactory` adds last to the site's connection, makes every
@@ -1127,7 +1140,8 @@ name in `config/services.php`).
   `Accept` includes `text/html`: the upgrade page, status 503, a `Content-Security-Policy` with a
   per-response nonce that allows only the page's own inline script and style, its requests to its
   own origin and its form's post; everything else: 503 `text/plain`, `Idno is upgrading its
-  database.`, or for `LegacyTooOld`/`UnsupportedServer` `Idno cannot start: <why>`; both with
+  database.`, or for `LegacyTooOld`, `UnsupportedServer`, `RenamedWithoutRecord` and
+  `OneXBesideCompletedUpgrade` `Idno cannot start: <why>`; both with
   `Retry-After: 30` and `Cache-Control: no-store`; a `HEAD` gets the headers only), except a request
   the router will match to the step route: `UpgradePage::isStepRequest()`, a POST both as sent
   (`getRealMethod()`) and as Symfony reads it (`getMethod()`, which honours `X-HTTP-Method-Override`),
@@ -1158,8 +1172,9 @@ name in `config/services.php`).
   changed, and where to look if it stops (the stored public error is shown). Its script POSTs the step
   URL until `current` and reloads; on `error`, `too_old` or `unsupported` it stops and shows the
   message; on a network failure or an answer that is not JSON it retries after 2 s, doubling to 60 s;
-  never more than one request a second. A `<noscript>` form posts `?html=1`. `LegacyTooOld` and
-  `UnsupportedServer` have no script and no form. Everything from the database or the request is
+  never more than one request a second. A `<noscript>` form posts `?html=1`. `LegacyTooOld`,
+  `UnsupportedServer`, `RenamedWithoutRecord` and `OneXBesideCompletedUpgrade` have no script and no
+  form. Everything from the database or the request is
   escaped (HTML in the markup, JSON with HTML characters escaped in the script, `textContent` only).
   The 1.6.4 sentence is `PublicMessage::tooOld()` everywhere; the progress wording is
   `UpgradeProgress::countText()`/`line()` (`entities: 1500 of 12000 copied, 3 not carried over`) in the
@@ -1189,8 +1204,8 @@ name in `config/services.php`).
   or row is not there; any other database error is a warning line for the plugin phase (no plugin
   indexes), never silently "no plugins".
 - `UpgradeRunner::step($deadline)` (a public service, built when first fetched; the web step): the
-  status (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`, `Unreachable` stop at once:
-  `unsupported`, `too_old`, `error`, `error`; `Current` and `NotApplicable` are `current`, nothing done, no lock); the `UpgradeLock`
+  status (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade`,
+  `Unreachable` stop at once: `unsupported`, `too_old`, `error`, `error`, `error`; `Current` and `NotApplicable` are `current`, nothing done, no lock); the `UpgradeLock`
   without waiting (not got: `working` with `locked`, nothing done; the copy's progress when it can be
   read, else none, never an error), held around everything that follows so that two processes never
   migrate or create indexes at once (`LegacyDataCopier::step()` works under a lock its caller holds
@@ -1344,8 +1359,14 @@ What it guarantees:
   (`cannot be the settings: ...`). With none usable the settings stay empty. The settings are each
   key's value re-encoded by `json_encode()`, as a save writes them; the 1.x row stays in `legacy_config`.
 - Impossible states stop the upgrade with a stored error that says what was found, and nothing else is
-  written, in this step and every later one, and it is never `complete`: some 1.x tables renamed and
-  some not; tables renamed before the copy was marked ready; or a source the upgrade began with that is
+  written, in this step and every later one, and it is never `complete`: in the verify phase (marked
+  ready and the renamed `entities` tables there: only the rename makes them, since a `legacy_` table
+  beside its 1.x one blocks marking ready) tables under 1.x names again, created by an old process
+  after the rename (`PublicMessage::recreatedAfterRename()`: the `legacy_` tables are the site's
+  original data and must be kept; stop the process; remove the newly created old-name tables; checked
+  before the two rules after it, which would otherwise read it as a rename still to do or a database
+  renamed by halves); some 1.x tables renamed and some not; tables renamed before the copy was marked
+  ready; or a source the upgrade began with that is
   no longer there under the name the phase reads (`<c>` while copying or before the rename,
   `legacy_<c>` while verifying, `config`/`legacy_config` included). A collection's progress row records
   whether its 1.x table existed when the row was made (`source_existed`): a collection this site never
@@ -1385,7 +1406,12 @@ connection, the `SchemaCatalog`, the `LegacyDataCopier` and the `Dialect`, fetch
 and nothing at all on a site whose database is not SQL, where every list is empty and `drop()` is 0):
 
 - `names()`: the `legacy_` + `LEGACY_TABLES` tables that exist, from the catalog (no statement beyond
-  the catalog's one, which the gate has read); `present()`: the same with a `COUNT(*)` each;
+  the catalog's one, which the gate has read); `present()`: the same with APPROXIMATE row counts (on
+  MySQL/MariaDB the engine's estimate, `information_schema.tables.table_rows`, ONE statement for all;
+  `COUNT(*)` each on SQLite, where there are none in practice), shown as approximate by the page and
+  the console; `oneXBesideCompletedUpgrade()`: the gate's predicate on the catalog and
+  `completion()`; `deletable()`: complete and not that; `lastDropped()`: what the last `drop()`
+  removed;
   `rejects($limit = 100, $offset = 0)`: `n`, `collection`, `legacy_uuid`, `reason` (never `contents`),
   ordered by `n`, limit 1 to `MAX_LIMIT` (1,000); `rejectCount()`; `reappeared()`: 1.x-named tables an
   old process recreated after completion (`LegacyDataCopier::reappearedTables()`, MySQL/MariaDB only,
@@ -1393,19 +1419,29 @@ and nothing at all on a site whose database is not SQL, where every list is empt
 - `worthShowing()` (the admin menu entry): no statement when legacy tables exist; else ONE
   (`select 1 from idno_upgrade_rejects limit 1`); and only when the catalog lists a 1.x table name,
   what `reappeared()` costs (three).
-- `drop()`: forgets the catalog, and with no legacy table returns 0; otherwise refuses with a
-  `\LogicException` (nothing dropped) unless the upgrade is complete; then drops exactly the
+- `drop()`: forgets the catalog; refuses with a `\LogicException` whose message is
+  `PublicMessage::oneXBesideCompletedUpgrade()` when the 1.x `entities` tables are back beside the
+  complete upgrade (`idno:upgrade --drop-legacy` runs while the gate is closed, so the guard is in
+  `drop()` itself); with no legacy table returns 0; otherwise refuses with a `\LogicException`
+  (nothing dropped) unless the upgrade is complete; then drops exactly the
   `legacy_` + `LEGACY_TABLES` tables, the `_metadata`/`_search` tables first (their foreign keys
   reference `<c>`), ONE `DROP TABLE IF EXISTS` each, foreign-key checks left on (the same on MySQL 8
-  and MariaDB 10.6); forgets the catalog again and returns how many. A failure part-way is thrown and
-  leaves the rest; the next `drop()` finishes. Never dropped: the rejects, the progress rows, the
+  and MariaDB 10.6); forgets the catalog again and returns how many it removed (tables that existed
+  when it started). A failure part-way is thrown and leaves the rest; the next `drop()` finishes,
+  except when a table outside the fourteen has a foreign key into a legacy table (a 1.x plugin's table
+  that referenced `entities` followed the rename): that refusal (MySQL 3730, MariaDB 1451/1217, DBAL's
+  `ForeignKeyConstraintViolationException`) is thrown as `Idno\Upgrade\LegacyTableReferenced`, naming
+  the table and the referencing `<table>.<constraint>`s; the page logs it and tells the admin a table
+  outside the fourteen refers to a legacy table and must be dealt with first; the console prints it. Never dropped: the rejects, the progress rows, the
   reappeared tables, any other `legacy_` table (`legacy_other`).
 - `/admin/legacytables` (`Idno\Pages\Admin\LegacyTables`, a LEGACY page: it needs the admin
   gatekeeper and the CSRF check of `Page::post()`, which controllers do not have; route in
   `Idno\Core\Admin::registerPages()`; templates `templates/default/admin/legacytables.tpl.php`,
   `Themes/Twenty26/templates/modern/admin/legacytables.tpl.php` and the shared
   `admin/legacytables/body`, which escapes every value from the database): GET (admins) changes
-  nothing and lists the tables with their counts, the rejects (100 a page, `?offset=`, the total and
+  nothing and lists the tables with their approximate counts (with the 1.x `entities` tables back
+  beside the upgrade: no delete form, and the gate's message instead; the gate is closed then, so the
+  page is reached only in a process whose legacy application booted anyway), the rejects (100 a page, `?offset=`, the total and
   where the contents are), the reappeared tables with what they are, or an empty state. POST: after
   `Page::post()`'s token check, `adminGatekeeper()`, then only `confirm` exactly `delete` with a
   complete upgrade calls `drop()`; every outcome is a session message (what was deleted, or why
@@ -1415,9 +1451,11 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   admin shell also draws the menu on the 403 page of an `/admin` URL); else `worthShowing()`, once
   per request. On an SQLite or MongoDB site the route exists, the entry never appears, and the page
   shows the empty state.
-- `idno:upgrade --drop-legacy` (no migration, no copy, no index: only this): nothing there → `Nothing
+- `idno:upgrade --drop-legacy` (no migration, no copy, no index: only this): the 1.x `entities`
+  tables back beside the completed upgrade → the gate's message on stderr, exit 1 (with or without
+  `--yes`); nothing there → `Nothing
   to delete: there are no legacy tables.`, exit 0; upgrade not complete → a line on stderr, exit 1;
-  without `--yes` → the tables with their row counts on stdout, `Nothing was deleted. ...` on stderr,
+  without `--yes` → the tables with `about <n> rows` on stdout, `Nothing was deleted. ...` on stderr,
   exit 1; with `--yes` → `Deleted <n> legacy tables: ...` and how many rejects are kept, exit 0 (a
   failure: stderr, exit 1). `--yes` without `--drop-legacy`, or `--drop-legacy` with `--status`, does
   nothing and exits 1.
@@ -1427,7 +1465,11 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   gets the page, its empty state, no menu entry, POSTs without a token or the confirmation; it logs in
   over HTTP), `UpgradeEndToEndTest::testTheAdminReviewsAndDeletesTheLegacyTables` (an upgraded site
   in Twenty26: the entry, the list, escaping, the delete) and
-  `testTheConsoleDeletesTheLegacyTablesOnlyWhenToldTo`, `Tests/Kernel/UpgradeCommandTest`.
+  `testTheConsoleDeletesTheLegacyTablesOnlyWhenToldTo`, `Tests/Kernel/UpgradeCommandTest`; the guard
+  beside a restored 1.x site in `LegacyTablesTest::testDropRefusesWhenTheOneXEntitiesTablesAreBackBesideACompletedUpgrade`
+  and, through every entry point and the console's `--drop-legacy`,
+  `UpgradeEndToEndTest::testTheOneXEntitiesTablesBackBesideACompletedUpgradeCloseTheSite`; the foreign
+  key from another table in `LegacyTablesTest::testADropBlockedByAForeignKeyFromAnotherTableIsExplained`.
 
 #### The JSON record store
 

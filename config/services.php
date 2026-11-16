@@ -57,8 +57,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // LegacySqlMaintenance.
         // The upgrade's progress is a value object; the copier's helpers (the 1.x source, the writer
         // of the new tables, the config copy, the document checks) are built by LegacyDataCopier;
-        // SchemaStatus is an enum, ServerVersion and UpgradePage static helpers.
-        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
+        // SchemaStatus is an enum, ServerVersion and UpgradePage static helpers, LegacyTableReferenced
+        // an exception.
+        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
         'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

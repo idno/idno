@@ -16,8 +16,8 @@ use Psr\Log\LoggerInterface;
  *
  * A step, in this order:
  *
- *  1. The status (SchemaState, read afresh). UnsupportedServer, LegacyTooOld, RenamedWithoutRecord
- *     and Unreachable stop here (nothing is written; status `unsupported`, `too_old` or `error`); Current and
+ *  1. The status (SchemaState, read afresh). UnsupportedServer, LegacyTooOld, RenamedWithoutRecord,
+ *     OneXBesideCompletedUpgrade and Unreachable stop here (nothing is written; status `unsupported`, `too_old` or `error`); Current and
  *     NotApplicable are `current`: a step does nothing for either. run() differs for Current: its
  *     first step that gets the lock re-checks the CORE declared indexes of a current database. Once
  *     a run's step reports `current`, run() goes on to the plugin phase (finishWithPlugins()).
@@ -207,6 +207,8 @@ final class UpgradeRunner
                     return self::result('too_old', null, PublicMessage::tooOld()->text);
                 case SchemaStatus::RenamedWithoutRecord:
                     return self::result('error', null, PublicMessage::renamedWithoutRecord()->text);
+                case SchemaStatus::OneXBesideCompletedUpgrade:
+                    return self::result('error', null, PublicMessage::oneXBesideCompletedUpgrade()->text);
                 case SchemaStatus::Current:
                     if (!$reconcile) {
                         return self::result('current');
@@ -261,6 +263,7 @@ final class UpgradeRunner
                 SchemaStatus::UnsupportedServer => self::result('unsupported', null, ($this->state->refusal() ?? PublicMessage::serverRequirement())->text),
                 SchemaStatus::LegacyTooOld => self::result('too_old', null, PublicMessage::tooOld()->text),
                 SchemaStatus::RenamedWithoutRecord => self::result('error', null, PublicMessage::renamedWithoutRecord()->text),
+                SchemaStatus::OneXBesideCompletedUpgrade => self::result('error', null, PublicMessage::oneXBesideCompletedUpgrade()->text),
                 SchemaStatus::Unreachable => self::result('error', null, PublicMessage::unreachable()->text),
                 SchemaStatus::Legacy => $this->legacyResult(),
                 default => self::result('working'),

@@ -43,6 +43,34 @@ final class PublicMessage
         return new self('The tables of an Idno 1.x site exist under their renamed names (legacy_entities, legacy_entities_metadata, legacy_entities_search, ...) but no upgrade is on record. Nothing was changed. To upgrade that site, rename them back to their 1.x names (without the legacy_ prefix); to set up a new site instead, remove them.');
     }
 
+    /**
+     * SchemaStatus::OneXBesideCompletedUpgrade: a completed upgrade, and the 1.x tables again.
+     */
+    public static function oneXBesideCompletedUpgrade(): self
+    {
+        return new self('This database holds a site already upgraded to this version of Idno and, again, the tables of an Idno 1.x site (entities, entities_metadata, entities_search), for example after the upgrade was undone or a backup restored. Nothing was changed. To upgrade the 1.x site again, remove the tables whose names begin with idno_ first. To keep the upgraded site, remove or rename the 1.x tables.');
+    }
+
+    /**
+     * In the verify pass (the rename has happened), tables under 1.x names exist again: an old Idno
+     * process created them. The legacy_ tables hold the site's original data.
+     *
+     * @param list<string> $recreated
+     */
+    public static function recreatedAfterRename(array $recreated): self
+    {
+        $one = count($recreated) === 1;
+
+        return new self(sprintf(
+            'The upgrade renamed this site\'s 1.x tables legacy_<name> and was checking its copy against them, but %s %s under the old %s again: created by an old Idno process after the rename. The legacy_ tables are this site\'s original data and must be kept. Nothing was changed. Stop every process of the old Idno version, then remove the newly created %s under the old %s (not the legacy_ ones); the upgrade then goes on.',
+            self::tables($recreated),
+            $one ? 'exists' : 'exist',
+            $one ? 'name' : 'names',
+            $one ? 'table' : 'tables',
+            $one ? 'name' : 'names',
+        ));
+    }
+
     public static function unreachable(): self
     {
         return new self('The database cannot be reached right now. The upgrade carries on once it can be.');
@@ -143,11 +171,14 @@ final class PublicMessage
         $pairs = implode(', ', array_map(static fn (string $table): string => $table . ' and legacy_' . $table, self::names($tables)));
 
         return new self(sprintf(
-            'The 1.x tables cannot be renamed: %s both exist. Nothing was changed. Someone who knows what the legacy_ %s must check %s and move or remove %s; the upgrade then goes on.',
+            'The 1.x tables cannot be renamed: %s both exist. Nothing was changed. The tables without the prefix hold this site and are what the upgrade is copying; this upgrade did not create the legacy_ %s. Someone must examine both before anything is moved: find out what made the legacy_ %s and what %s, and move %s out of this database (or rename %s) only once it is clear %s not this site\'s data. The upgrade then goes on.',
             $pairs,
-            $one ? 'table holds' : 'tables hold',
+            $one ? 'table' : 'tables',
+            $one ? 'table' : 'tables',
+            $one ? 'it holds' : 'they hold',
             $one ? 'it' : 'them',
             $one ? 'it' : 'them',
+            $one ? 'it is' : 'they are',
         ));
     }
 

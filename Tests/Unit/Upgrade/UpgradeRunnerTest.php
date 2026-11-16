@@ -413,6 +413,24 @@ final class UpgradeRunnerTest extends TestCase
         })['status']);
     }
 
+    /**
+     * The three 1.x `entities` tables beside a completed upgrade: the step and the run do nothing at
+     * all (no lock, no migration, no copy) and say what to do.
+     */
+    public function testOneXTablesBesideACompletedUpgradeStopEverything(): void
+    {
+        $tables = ['entities', 'entities_metadata', 'entities_search', 'idno_migrations', 'idno_upgrade_progress'];
+        $result = $this->runner($this->fakeState($tables, complete: true))->step(microtime(true) + 5);
+
+        self::assertSame('error', $result['status']);
+        self::assertSame(PublicMessage::oneXBesideCompletedUpgrade()->text, $result['message']);
+        self::assertFalse($result['locked']);
+        self::assertSame([], (new SchemaCatalog($this->db()))->tables(), 'nothing was created');
+        self::assertSame('error', $this->runner($this->fakeState($tables, complete: true))->run(static function (string $line): void {
+        })['status']);
+        self::assertSame([], (new SchemaCatalog($this->db()))->tables());
+    }
+
     public function testATooOldOneXDatabaseIsRefusedAndNothingIsWritten(): void
     {
         $result = $this->runner($this->fakeState(['entities', 'entities_metadata', 'entities_search', 'versions'], legacyVersion: 2019121401))->step(microtime(true) + 5);
@@ -599,7 +617,7 @@ final class UpgradeRunnerTest extends TestCase
      *
      * @param list<string> $tables
      */
-    private function fakeState(array $tables, ?int $legacyVersion = null, string $server = '8.0.46'): SchemaState
+    private function fakeState(array $tables, ?int $legacyVersion = null, string $server = '8.0.46', bool $complete = false): SchemaState
     {
         return new SchemaState(
             new BootConfig(['database' => 'mysql'], false),
@@ -625,11 +643,15 @@ final class UpgradeRunnerTest extends TestCase
                     return $this->tables;
                 }
             },
-            static fn (): object => new class () {
+            static fn (): object => new class ($complete) {
+                public function __construct(private readonly bool $complete)
+                {
+                }
+
                 /** @return array{pending: bool, incomplete: bool, complete: bool} */
                 public function probe(?string $progressTable = null): array
                 {
-                    return ['pending' => true, 'incomplete' => false, 'complete' => false];
+                    return ['pending' => !$this->complete, 'incomplete' => false, 'complete' => $this->complete && $progressTable !== null];
                 }
             },
             static fn (): object => new class ($legacyVersion) {

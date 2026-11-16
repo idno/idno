@@ -31,7 +31,7 @@
     <h2 class="idno-admin-card-title"><?= $language->esc_('Tables of the Idno 1.x database') ?></h2>
     <table class="table">
         <thead>
-            <tr><th><?= $language->esc_('Table') ?></th><th><?= $language->esc_('Rows') ?></th></tr>
+            <tr><th><?= $language->esc_('Table') ?></th><th><?= $language->esc_('Rows (approximate)') ?></th></tr>
         </thead>
         <tbody>
         <?php foreach ($tables as $name => $rows) { ?>
@@ -39,9 +39,12 @@
         <?php } ?>
         </tbody>
     </table>
-    <?php if (!empty($vars['complete'])) { ?>
+    <?php if (!empty($vars['restored'])) { ?>
+    <p id="legacytables-restored"><strong><?= $language->esc_('These tables cannot be deleted now.') ?></strong> <?= htmlspecialchars(\Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
+    <?php } else if (!empty($vars['complete'])) { ?>
     <form action="<?= $e($url) ?>" method="post">
         <p>
+            <?= $language->esc_('The row counts are the database\'s estimates.') ?>
             <?= $language->esc_('Deleting these tables cannot be undone, and afterwards the upgrade can no longer be reversed. Make a backup of the database first if you might want them again. The rows that were not carried over (below) are kept.') ?>
         </p>
         <p>

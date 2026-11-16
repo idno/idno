@@ -361,6 +361,82 @@ final class LegacyDataCopierTest extends TestCase
         self::assertSame(0, (int) $fixture->connection->fetchOne('select count(*) from legacy_entities'));
     }
 
+    /**
+     * Before the rename, a `legacy_<name>` that exists beside the 1.x table blocks it, and the message
+     * says both sets must be examined: it never tells which to delete.
+     */
+    public function testTheBlockedRenameMessageSaysToExamineBothSets(): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insert('entities', ['title' => 'A post']);
+        $fixture->connection->executeStatement('create table legacy_entities (x int)');
+
+        $this->copier()->step(microtime(true) + self::FAR);
+        $error = (string) $this->copier()->progress()->error;
+
+        self::assertSame(\Idno\Upgrade\PublicMessage::renameBlocked(['entities'])->text, $error);
+        self::assertStringContainsString('examine', $error);
+        self::assertStringContainsString('without the prefix hold this site', $error);
+        self::assertStringNotContainsString('remove them', $error);
+        self::assertStringNotContainsString('remove it', $error);
+    }
+
+    /**
+     * @return iterable<string, array{list<string>}>
+     */
+    public static function recreatedInTheVerifyPass(): iterable
+    {
+        // What a booting 1.x process creates (its dated upgrade files).
+        yield 'reader, site and versions' => [['reader', 'reader_metadata', 'reader_search', 'site', 'site_metadata', 'site_search', 'versions']];
+        // Every 1.x name: before, the copier took this for a rename still to do, and blocked it with
+        // a message that pointed at the legacy_ tables, which hold the site.
+        yield 'every 1.x table' => [LegacyDataCopier::LEGACY_TABLES];
+    }
+
+    /**
+     * In the verify pass (the rename has happened: the legacy_ tables are the site's original data),
+     * 1.x-named tables that exist again were created by an old process after the rename. The upgrade
+     * stops with its own message (keep the legacy_ tables; stop the process; remove the new old-name
+     * tables), writes nothing, and goes on once they are removed.
+     *
+     * @dataProvider recreatedInTheVerifyPass
+     *
+     * @param list<string> $recreated
+     */
+    public function testOneXTablesRecreatedInTheVerifyPassStopTheUpgradeAndKeepTheLegacyTables(array $recreated): void
+    {
+        $fixture = $this->fixture();
+        $fixture->insertMany('entities', 30);
+        $fixture->insert('config', ['title' => 'Site']);
+        $copier = $this->copier();
+        for ($i = 0; $i < 50 && $copier->progress()->phase !== UpgradeProgress::VERIFYING; ++$i) {
+            $copier->step(microtime(true) - 1);
+        }
+        self::assertSame(UpgradeProgress::VERIFYING, $copier->progress()->phase);
+        foreach ($recreated as $table) {
+            $fixture->connection->executeStatement('create table ' . $table . ' like legacy_' . $table);
+        }
+        $before = $this->rowCounts();
+
+        $progress = $copier->step(microtime(true) + self::FAR);
+
+        self::assertFalse($progress->complete);
+        self::assertSame(\Idno\Upgrade\PublicMessage::recreatedAfterRename($recreated)->text, $progress->error);
+        self::assertStringContainsString('must be kept', (string) $progress->error);
+        self::assertStringNotContainsString('cannot be renamed', (string) $progress->error);
+        self::assertSame($before, $this->rowCounts(), 'nothing was written');
+        foreach (LegacyDataCopier::LEGACY_TABLES as $table) {
+            self::assertContains('legacy_' . $table, $this->tables(), 'nothing was renamed');
+        }
+
+        $fixture->connection->executeStatement('set foreign_key_checks = 0');
+        $fixture->connection->executeStatement('drop table ' . implode(', ', $recreated));
+        $fixture->connection->executeStatement('set foreign_key_checks = 1');
+        $progress = $this->complete($copier);
+        self::assertNull($progress->error);
+        self::assertSame(30, (int) $fixture->connection->fetchOne('select count(*) from idno_entities'));
+    }
+
     public function testTheNewerOneXSchemaIsAccepted(): void
     {
         $fixture = $this->fixture(2026111401);

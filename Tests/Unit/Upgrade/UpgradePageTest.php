@@ -68,6 +68,19 @@ final class UpgradePageTest extends TestCase
         self::assertSame('Idno cannot start: ' . \Idno\Upgrade\PublicMessage::renamedWithoutRecord()->text . "\n", UpgradePage::text(SchemaStatus::RenamedWithoutRecord));
     }
 
+    public function testOneXTablesBesideACompletedUpgradeAreExplainedWithoutScriptOrForm(): void
+    {
+        $message = \Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text;
+        $html = html_entity_decode(UpgradePage::html(SchemaStatus::OneXBesideCompletedUpgrade, null, '', self::NONCE), ENT_QUOTES | ENT_HTML5);
+
+        self::assertStringContainsString($message, $html);
+        self::assertStringContainsString('idno_', $message);
+        self::assertStringContainsString('Nothing was changed', $message);
+        self::assertStringNotContainsString('<script', $html);
+        self::assertStringNotContainsString('<form', $html);
+        self::assertSame('Idno cannot start: ' . $message . "\n", UpgradePage::text(SchemaStatus::OneXBesideCompletedUpgrade));
+    }
+
     public function testAnUnsupportedServerIsToldWhatIsRequired(): void
     {
         $refusal = \Idno\Upgrade\PublicMessage::unsupportedServer('MySQL', '5.7.44');
@@ -151,7 +164,7 @@ final class UpgradePageTest extends TestCase
      */
     public function testThePageIsSelfContained(): void
     {
-        foreach ([SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy, SchemaStatus::LegacyTooOld, SchemaStatus::UnsupportedServer, SchemaStatus::RenamedWithoutRecord] as $status) {
+        foreach ([SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy, SchemaStatus::LegacyTooOld, SchemaStatus::UnsupportedServer, SchemaStatus::RenamedWithoutRecord, SchemaStatus::OneXBesideCompletedUpgrade] as $status) {
             $html = UpgradePage::html($status, null, '', self::NONCE, \Idno\Upgrade\PublicMessage::unsupportedServer('MariaDB', '10.4.32'));
 
             self::assertDoesNotMatchRegularExpression('#https?:|//[a-z]#i', $html, $status->value);

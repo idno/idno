@@ -134,6 +134,21 @@ final class LegacyDataCopier
     }
 
     /**
+     * Whether a 1.x Idno database (isOneXDatabase(): all three `entities` tables) is present again
+     * beside a COMPLETE upgrade. A booting 1.x process creates no `entities` table (its dated upgrade
+     * files create reader, site and versions tables only), so this means an undo or a restored
+     * backup: the copy may be older than the 1.x site. The one rule, used by the schema gate
+     * (SchemaStatus::OneXBesideCompletedUpgrade) and by LegacyTables (no legacy_ table is dropped
+     * then). Other 1.x names recreated after completion stay ignored (reappearedTables()).
+     *
+     * @param list<string> $tables
+     */
+    public static function isOneXBesideCompletedUpgrade(array $tables, bool $complete): bool
+    {
+        return $complete && self::isOneXDatabase($tables);
+    }
+
+    /**
      * Whether these tables show a 1.x Idno database the upgrade renamed: `legacy_` + each of
      * EVIDENCE_TABLES present.
      *
@@ -453,6 +468,14 @@ final class LegacyDataCopier
         $marked = count(array_filter($rows, static fn (array $row): bool => $row['verify_cursor'] !== null));
         if ($marked > 0 && !self::ready($rows)) {
             return PublicMessage::inconsistentProgress();
+        }
+        if ($old !== [] && self::ready($rows) && self::isRenamedOneXDatabase($tables)) {
+            // The rename has happened (marked ready, and the renamed `entities` tables exist: a
+            // legacy_ table beside its 1.x one blocks marking ready, so only the rename makes them):
+            // the legacy_ tables are the site's original data, and the 1.x-named tables were created
+            // after it by an old process. Before, this read as a rename still to do (all of them
+            // back) or a database renamed by halves (some).
+            return PublicMessage::recreatedAfterRename($old);
         }
         $partly = array_values(array_diff($renamed, $old));
         if ($old !== [] && $partly !== []) {

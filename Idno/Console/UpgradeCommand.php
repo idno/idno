@@ -6,6 +6,7 @@ namespace Idno\Console;
 
 use Idno\Storage\SchemaMigrator;
 use Idno\Upgrade\LegacyDataCopier;
+use Idno\Upgrade\LegacyTableReferenced;
 use Idno\Upgrade\LegacyTables;
 use Idno\Upgrade\PublicMessage;
 use Idno\Upgrade\SchemaState;
@@ -118,6 +119,7 @@ final class UpgradeCommand extends Command
             SchemaStatus::UnsupportedServer => $this->state->refusal() ?? PublicMessage::serverRequirement(),
             SchemaStatus::LegacyTooOld => PublicMessage::tooOld(),
             SchemaStatus::RenamedWithoutRecord => PublicMessage::renamedWithoutRecord(),
+            SchemaStatus::OneXBesideCompletedUpgrade => PublicMessage::oneXBesideCompletedUpgrade(),
             default => null,
         };
         if ($refused !== null) {
@@ -144,6 +146,11 @@ final class UpgradeCommand extends Command
 
     private function dropLegacy(bool $yes, OutputInterface $output, OutputInterface $errors): int
     {
+        if ($this->legacyTables->oneXBesideCompletedUpgrade()) {
+            $errors->writeln(PublicMessage::oneXBesideCompletedUpgrade()->text, OutputInterface::OUTPUT_PLAIN);
+
+            return Command::FAILURE;
+        }
         $present = $this->legacyTables->present();
         if ($present === []) {
             $output->writeln('Nothing to delete: there are no legacy tables.');
@@ -156,9 +163,9 @@ final class UpgradeCommand extends Command
             return Command::FAILURE;
         }
         if (!$yes) {
-            $output->writeln('These legacy tables of the Idno 1.x database would be deleted:');
+            $output->writeln('These legacy tables of the Idno 1.x database would be deleted (approximate row counts):');
             foreach ($present as $table => $rows) {
-                $output->writeln('  ' . $table . ': ' . $rows . ($rows === 1 ? ' row' : ' rows'), OutputInterface::OUTPUT_PLAIN);
+                $output->writeln('  ' . $table . ': about ' . $rows . ($rows === 1 ? ' row' : ' rows'), OutputInterface::OUTPUT_PLAIN);
             }
             $errors->writeln('Nothing was deleted. To delete them, run idno:upgrade --drop-legacy --yes; this cannot be undone, so back up the database first.');
 
@@ -167,12 +174,20 @@ final class UpgradeCommand extends Command
         try {
             $dropped = $this->legacyTables->drop();
         } catch (\Throwable $e) {
-            $errors->writeln('Not every legacy table could be deleted: ' . LegacyDataCopier::clean($e::class . ': ' . $e->getMessage()), OutputInterface::OUTPUT_PLAIN);
-            $errors->writeln('Run idno:upgrade --drop-legacy --yes again to delete the rest.');
+            if ($this->legacyTables->lastDropped() !== []) {
+                $output->writeln('Deleted before the error: ' . implode(', ', $this->legacyTables->lastDropped()) . '.', OutputInterface::OUTPUT_PLAIN);
+            }
+            if ($e instanceof LegacyTableReferenced) {
+                $errors->writeln(LegacyDataCopier::clean($e->getMessage()), OutputInterface::OUTPUT_PLAIN);
+                $errors->writeln('Deal with that table first; running the command again cannot succeed until then.');
+            } else {
+                $errors->writeln('Not every legacy table could be deleted: ' . LegacyDataCopier::clean($e::class . ': ' . $e->getMessage()), OutputInterface::OUTPUT_PLAIN);
+                $errors->writeln('Run idno:upgrade --drop-legacy --yes again to delete the rest.');
+            }
 
             return Command::FAILURE;
         }
-        $output->writeln('Deleted ' . $dropped . ' legacy tables: ' . implode(', ', array_keys($present)) . '.', OutputInterface::OUTPUT_PLAIN);
+        $output->writeln('Deleted ' . $dropped . ' legacy tables: ' . implode(', ', $this->legacyTables->lastDropped()) . '.', OutputInterface::OUTPUT_PLAIN);
         $rejects = $this->legacyTables->rejectCount();
         if ($rejects > 0) {
             $kept = $rejects === 1

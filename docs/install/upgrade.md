@@ -88,6 +88,10 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
     * *superseded configuration*: an older copy of your site's settings. Idno 1.x could keep several;
       the newest became your settings. This one is normal and needs nothing from you.
     * *cannot be the settings: ...*: a settings record that the new settings table cannot hold.
+    * *the database refused the settings: ...*: the database server would not store the newest
+      settings record (for example a value it cannot hold). The next-newest usable record becomes your
+      settings instead; if none can, the site starts with empty settings, and you set them again on
+      the admin pages.
 
 ## Afterwards
 
@@ -107,15 +111,23 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
 * **Deleting the old tables.** When you are sure the upgrade went well, delete the `legacy_` tables
   to free the space they take: on the "Legacy tables" admin page, type `delete` in the box and press
   "Delete the legacy tables". With a shell, `php bin/console idno:upgrade --drop-legacy` lists them
-  with their row counts, and `php bin/console idno:upgrade --drop-legacy --yes` deletes them. Only
+  with their row counts, and `php bin/console idno:upgrade --drop-legacy --yes` deletes them. (The
+  row counts are the database's own estimates, so they are approximate.) Only
   the renamed 1.x tables are deleted; the rows that were not carried over (`idno_upgrade_rejects`)
   are kept. **This cannot be undone**: once they are deleted, the only way back to Idno 1.x is your
-  backup. If the page or the command stops part-way, run it again to finish.
+  backup. If the page or the command stops part-way, run it again to finish. If it says that a table
+  outside the Idno 1.x tables refers to a legacy table, run again cannot help: a table of an old
+  plugin, say, has a foreign key into one of them. The server's error log (or the command) names that
+  table; remove it, or its foreign key, first. Idno also refuses to delete anything while the old
+  1.x tables are back beside the upgraded site (see "If the upgrade stops").
 * **Tables created by an old Idno process.** If an old Idno process was still running after the
   upgrade, it may have created tables with the old names (`entities`, `versions`, ...) again. The site
   never reads them, and the "Legacy tables" page lists them under "Tables created by an old Idno
   process". Stop that process; then remove those tables with your database tool if you wish. Idno
-  does not delete them for you.
+  does not delete them for you. The one exception: if the three tables `entities`,
+  `entities_metadata` and `entities_search` are all back, an old Idno process did not make them (it
+  does not create those); Idno takes it that the 1.x site was restored, and closes the site with the
+  message described under "If the upgrade stops".
 
 ## If the upgrade stops
 
@@ -143,13 +155,33 @@ prints them (on a `Detail:` line). After you have dealt with the cause, load the
   not (someone deleted them to start again, for example). Nothing was changed. To upgrade that site,
   rename the tables back with the statement under "Undoing the upgrade", then load the page again. To
   set up a new, empty site instead, remove the `legacy_` tables.
+* **"This database holds a site already upgraded to this version of Idno and, again, the tables of
+  an Idno 1.x site ..."** The upgrade finished once, and then the tables `entities`,
+  `entities_metadata` and `entities_search` came back: the upgrade was undone (the tables renamed
+  back), or a backup of the 1.x database was restored into the same database. Idno will not choose
+  for you, because opening the upgraded site would hide everything written to the 1.x site since,
+  and nothing was changed. Choose one:
+    * **to upgrade the 1.x site again** (the usual case after going back to 1.x for a while): remove
+      the tables whose names begin with `idno_`, then load the page again. The upgrade starts afresh
+      from the 1.x tables;
+    * **to keep the upgraded site** (the 1.x tables are an old copy you do not need): remove the 1.x
+      tables, or rename them out of the way, then load the page again.
+
+  Until you do, neither the site nor `idno:upgrade --drop-legacy` deletes anything.
+* **"The upgrade renamed this site's 1.x tables legacy_<name> and was checking its copy against them,
+  but ... exist under the old names again"** An old Idno process created tables with the old names
+  after the upgrade had renamed the originals. The `legacy_` tables are your site's original data:
+  keep them. Stop every process of the old Idno version, then remove the newly created tables named in
+  the message (the ones *without* the prefix), and load the page again. Nothing was changed.
 * **"Some 1.x tables are renamed (...) and some are not (...)"**, **"The 1.x tables are renamed
   (...) but the copy had not finished"**, **"The upgrade's progress rows are inconsistent"**:
   something other than the upgrade changed the tables while it ran. Most often an old Idno process
   is still running and has created tables with the old names again. Stop every old process. Tables
   under the old names that appeared after the rename are new (the upgrade had renamed the originals):
   check that they hold nothing you need and remove them, never the `legacy_` ones, which hold your
-  1.x site. If you are not sure, restore your backup and start again.
+  1.x site. **But if you, or anyone else, renamed tables by hand**, the tables under the old names
+  may be the real 1.x tables: compare the row counts of both sets (a new, empty table holds few or no
+  rows), and if you are not sure, restore your backup and start again.
 * **"The upgrade began with 1.x tables that are no longer there: ..."** Tables the upgrade was
   reading have been deleted or renamed by something else. Restore them (from your backup if need be)
   under the names given; the upgrade then goes on.
@@ -157,12 +189,12 @@ prints them (on a `Detail:` line). After you have dealt with the cause, load the
   a table during the upgrade. Stop every old process, check the table named in the message and move
   or remove it; the upgrade then goes on.
 * **"The 1.x tables cannot be renamed: X and legacy_X both exist."** Before renaming, the upgrade
-  found a `legacy_` table already there. If you have never upgraded this site before, it belongs to
-  something else: check it, and move or remove it. **If the upgrade had already started checking the
-  copy** (the page said "Checking the copy against the old tables"), the `legacy_` tables are your
-  1.x site, renamed by this upgrade, and the tables without the prefix are new ones an old Idno
-  process created: stop that process and remove the tables *without* the prefix. Never remove the
-  `legacy_` tables in that case.
+  found a `legacy_` table it did not make. The tables without the prefix hold your site and are what
+  the upgrade is copying. Examine both before moving anything: find out what made the `legacy_` table
+  and what it holds (an earlier attempt, a backup someone loaded, another application). Only once you
+  are sure it is not your site's data, move it out of this database or rename it; the upgrade then
+  goes on. (When tables reappear after the upgrade has renamed the originals, you see the previous
+  message instead.)
 * Only from `idno:upgrade`: **"Another process has been upgrading the database for 60 seconds ..."**
   (the upgrade page is open in a browser, or another `idno:upgrade` runs: let it finish, or close the
   page, then run the command again) and **"The upgrade made no progress in 5 steps in a row."** (run
@@ -197,7 +229,9 @@ RENAME TABLE
 
 The statement renames all of them or none. It fails, changing nothing, if one of the `legacy_` tables
 does not exist (leave that line out) or if a table with the old name exists already (an old Idno
-process may have created it: check that it holds nothing you need and remove it first).
+process may have created it: check that it holds nothing you need and remove it first). Once the 1.x
+tables are back, the new version of Idno no longer opens the site (it shows a message saying both
+copies are there) until you either go back to 1.x or remove one of the two sets.
 
 **After you have used the upgraded site**, posts, comments and other changes made since the upgrade
 are only in the new tables: going back to the old tables loses them. Restoring your backup loses them
@@ -205,8 +239,11 @@ too.
 
 **Upgrading again later.** If you went back to Idno 1.x and want to upgrade again, first delete the
 new tables, whose names begin with `idno_` (or restore the backup you made before the first
-upgrade). Otherwise the new version takes them for a finished upgrade and opens the site on that old
-copy, without your 1.x site's later changes.
+upgrade). If you do not, the new version finds both a finished upgrade and your 1.x tables, and stops
+with the message "This database holds a site already upgraded to this version of Idno and, again,
+the tables of an Idno 1.x site ..." instead of opening the old copy (see "If the upgrade stops").
+If you went back before the upgrade had finished, delete the `idno_` tables too: otherwise the upgrade
+carries on from where it stopped and misses changes made in 1.x to rows it had already copied.
 
 Once the `legacy_` tables are deleted, the upgrade can only be undone from your backup.
 

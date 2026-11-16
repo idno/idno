@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Idno\Upgrade;
 
+use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\DriverException;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Idno\Config\BootConfig;
 use Idno\Storage\ConnectionParameters;
@@ -18,7 +21,9 @@ use Idno\Storage\SchemaCatalog;
  *  - the legacy tables: the 1.x tables the upgrade renamed `legacy_<name>` (each name of
  *    LegacyDataCopier::LEGACY_TABLES), kept until the admin deletes them; names() reads them from
  *    the SchemaCatalog (the request's one catalog statement, already read by the schema gate),
- *    present() adds each one's row count (one COUNT(*) per table);
+ *    present() adds each one's APPROXIMATE row count (the engine's estimate, ONE statement on MySQL
+ *    and MariaDB: `information_schema.tables.table_rows`; a COUNT(*) each on SQLite, where they do
+ *    not occur);
  *  - the rejects: the rows the upgrade could not carry (`idno_upgrade_rejects`), listed by
  *    collection, 1.x uuid and reason (never their contents), and never deleted;
  *  - the reappeared tables: 1.x tables an old Idno process created again after the upgrade completed
@@ -26,9 +31,13 @@ use Idno\Storage\SchemaCatalog;
  *    here.
  *
  * drop() deletes the legacy tables, and only those: exactly `legacy_` + a name of LEGACY_TABLES,
- * only once the upgrade is complete. The 1.x child tables (`<c>_metadata`, `<c>_search`, whose
- * foreign keys reference `<c>`) are dropped before their parent, one `DROP TABLE IF EXISTS` each,
- * so foreign-key checks stay on; a failure part-way leaves the rest, and drop() again finishes.
+ * only once the upgrade is complete, and never while the three 1.x `entities` tables are back beside
+ * it (LegacyDataCopier::isOneXBesideCompletedUpgrade(), the schema gate's own rule: an undo or a
+ * restored backup, where the legacy_ tables may be the only copy of something). The 1.x child tables
+ * (`<c>_metadata`, `<c>_search`, whose foreign keys reference `<c>`) are dropped before their parent,
+ * one `DROP TABLE IF EXISTS` each, so foreign-key checks stay on; a failure part-way leaves the rest,
+ * and drop() again finishes, except when a table outside the fourteen has a foreign key into a
+ * legacy table (LegacyTableReferenced): that must be dealt with first.
  *
  * On a site whose database is not SQL (MongoDB) there is never anything: nothing is fetched (no
  * connection, no catalog), every list is empty, drop() returns 0. Each closure returns the service
@@ -41,6 +50,12 @@ final class LegacyTables
 
     /** The most rejects one call to rejects() returns. */
     public const MAX_LIMIT = 1000;
+
+    /** MySQL's and MariaDB's errors for a DROP refused by another table's foreign key. */
+    private const FOREIGN_KEY_ERRORS = [1217, 1451, 3730];
+
+    /** @var list<string> the tables the last drop() removed */
+    private array $lastDropped = [];
 
     /**
      * @param \Closure(): Connection       $connection
@@ -92,14 +107,36 @@ final class LegacyTables
     }
 
     /**
-     * The legacy tables that exist, each with its row count: one COUNT(*) per table.
+     * The legacy tables that exist, each with an APPROXIMATE row count: on MySQL and MariaDB the
+     * engine's estimate (`information_schema.tables.table_rows`, ONE statement for all of them,
+     * whatever their size; InnoDB's statistics, which ANALYZE TABLE refreshes), on SQLite a COUNT(*)
+     * each (it has no estimate; no 1.x site runs on SQLite). Show them as approximate.
      *
-     * @return array<string, int> table name => row count
+     * @return array<string, int> table name => approximate row count (0 or more)
      */
     public function present(): array
     {
-        $present = [];
-        foreach ($this->names() as $table) {
+        $names = $this->names();
+        if ($names === []) {
+            return [];
+        }
+        $present = array_fill_keys($names, 0);
+        if ($this->family() === 'mysql') {
+            $rows = ($this->connection)()->fetchAllNumeric(
+                'select table_name, table_rows from information_schema.tables where table_schema = database() and table_name in (?)',
+                [$names],
+                [ArrayParameterType::STRING],
+            );
+            foreach ($rows as [$table, $count]) {
+                $table = strtolower((string) $table);
+                if (array_key_exists($table, $present)) {
+                    $present[$table] = max(0, (int) $count);
+                }
+            }
+
+            return $present;
+        }
+        foreach ($names as $table) {
             $present[$table] = (int) ($this->connection)()->fetchOne('select count(*) from ' . $this->q($table));
         }
 
@@ -174,6 +211,44 @@ final class LegacyTables
     }
 
     /**
+     * Whether the three 1.x `entities` tables are back beside a complete upgrade
+     * (LegacyDataCopier::isOneXBesideCompletedUpgrade(), the schema gate's rule): then nothing may be
+     * deleted. One statement (the completion) when the catalog lists all three, none otherwise.
+     */
+    public function oneXBesideCompletedUpgrade(): bool
+    {
+        if (!$this->available()) {
+            return false;
+        }
+        $tables = ($this->catalog)()->tables();
+        if (!LegacyDataCopier::isOneXDatabase($tables)) {
+            return false;
+        }
+
+        return LegacyDataCopier::isOneXBesideCompletedUpgrade($tables, $this->isComplete());
+    }
+
+    /**
+     * Whether drop() may delete the legacy tables: the upgrade is complete and no 1.x site is back
+     * beside it. (Whether there is anything to delete is names().)
+     */
+    public function deletable(): bool
+    {
+        return $this->isComplete() && !$this->oneXBesideCompletedUpgrade();
+    }
+
+    /**
+     * The tables the last drop() removed (each existed when it started), in the order dropped; also
+     * after a drop() that failed part-way.
+     *
+     * @return list<string>
+     */
+    public function lastDropped(): array
+    {
+        return $this->lastDropped;
+    }
+
+    /**
      * Whether there is anything for the admin to see: legacy tables, rejects or reappeared tables.
      * For the admin menu: no statement when legacy tables exist (the catalog says so); otherwise one
      * (`select 1 from idno_upgrade_rejects limit 1`), and only when the catalog lists a table of a 1.x
@@ -192,20 +267,29 @@ final class LegacyTables
     }
 
     /**
-     * Deletes the legacy tables (exactly `legacy_` + a name of LegacyDataCopier::LEGACY_TABLES) and
-     * returns how many it deleted. The catalog is read afresh first, and forgotten after. The rejects
-     * and the upgrade's progress rows are never deleted. With no legacy table there is nothing to do
-     * (0). A failure part-way is thrown; the tables not yet dropped stay, and drop() again finishes.
+     * Deletes the legacy tables (exactly `legacy_` + a name of LegacyDataCopier::LEGACY_TABLES that
+     * exists when it starts) and returns how many it removed (lastDropped() names them). The catalog
+     * is read afresh first, and forgotten after. The rejects and the upgrade's progress rows are never
+     * deleted. With no legacy table there is nothing to do (0). A failure part-way is thrown; the
+     * tables not yet dropped stay, and drop() again finishes, except after a LegacyTableReferenced.
      *
-     * @throws \LogicException when there are legacy tables and the upgrade is not complete (nothing is dropped)
+     * @throws \LogicException       when the 1.x `entities` tables are back beside the complete upgrade
+     *                               (its message is PublicMessage::oneXBesideCompletedUpgrade()), or
+     *                               there are legacy tables and the upgrade is not complete; nothing
+     *                               is dropped
+     * @throws LegacyTableReferenced when another table's foreign key refers to the table being dropped
      */
     public function drop(): int
     {
+        $this->lastDropped = [];
         if (!$this->available()) {
             return 0;
         }
         $catalog = ($this->catalog)();
         $catalog->forget();
+        if ($this->oneXBesideCompletedUpgrade()) {
+            throw new \LogicException(PublicMessage::oneXBesideCompletedUpgrade()->text);
+        }
         $names = $this->names();
         if ($names === []) {
             return 0;
@@ -213,17 +297,24 @@ final class LegacyTables
         if (!$this->isComplete()) {
             throw new \LogicException('The upgrade of the 1.x database is not complete: its legacy tables are still in use, and none was deleted.');
         }
-        $dropped = 0;
         try {
             foreach (self::dropOrder($names) as $table) {
-                ($this->connection)()->executeStatement('drop table if exists ' . $this->q($table));
-                ++$dropped;
+                try {
+                    ($this->connection)()->executeStatement('drop table if exists ' . $this->q($table));
+                } catch (DriverException $e) {
+                    if ($e instanceof ForeignKeyConstraintViolationException || in_array($e->getCode(), self::FOREIGN_KEY_ERRORS, true)) {
+                        throw new LegacyTableReferenced($table, $this->referencesTo($table), $e);
+                    }
+
+                    throw $e;
+                }
+                $this->lastDropped[] = $table;
             }
         } finally {
             $catalog->forget();
         }
 
-        return $dropped;
+        return count($this->lastDropped);
     }
 
     /**
@@ -239,6 +330,29 @@ final class LegacyTables
         $children = array_values(array_filter($names, static fn (string $name): bool => str_ends_with($name, '_metadata') || str_ends_with($name, '_search')));
 
         return [...$children, ...array_values(array_diff($names, $children))];
+    }
+
+    /**
+     * `<table>.<constraint>` of each foreign key of another table into $table (MySQL and MariaDB,
+     * from information_schema; [] elsewhere, or when it cannot be read).
+     *
+     * @return list<string>
+     */
+    private function referencesTo(string $table): array
+    {
+        if ($this->family() !== 'mysql') {
+            return [];
+        }
+        try {
+            $rows = ($this->connection)()->fetchAllNumeric(
+                'select table_name, constraint_name from information_schema.referential_constraints where constraint_schema = database() and referenced_table_name = ?',
+                [$table],
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return array_map(static fn (array $row): string => $row[0] . '.' . $row[1], $rows);
     }
 
     private function hasRejectsTable(): bool

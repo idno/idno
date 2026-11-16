@@ -70,9 +70,12 @@ namespace Tests\Characterisation {
             $post = $this->site()->request('POST', 'admin/legacytables/', ['Cookie' => $cookie], ['confirm' => 'delete']);
             $this->assertContains($post->status, [200, 302, 303], substr($post->body, 0, 2000));
 
+            $this->assertStringNotContainsString('There were no legacy tables to delete.', $post->body, 'postContent() was not reached');
+
             $page = $this->site()->request('GET', 'admin/legacytables/', ['Cookie' => $cookie]);
             $this->assertSame(200, $page->status);
             $this->assertStringContainsString('Invalid token.', $page->body);
+            $this->assertStringNotContainsString('There were no legacy tables to delete.', $page->body, 'postContent() was not reached');
             $this->assertStringContainsString('id="legacytables-empty"', $page->body);
         }
 

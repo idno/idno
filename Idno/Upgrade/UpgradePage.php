@@ -93,6 +93,7 @@ final class UpgradePage
         return match ($status) {
             SchemaStatus::LegacyTooOld => 'Idno cannot start: ' . PublicMessage::tooOld()->text . "\n",
             SchemaStatus::RenamedWithoutRecord => 'Idno cannot start: ' . PublicMessage::renamedWithoutRecord()->text . "\n",
+            SchemaStatus::OneXBesideCompletedUpgrade => 'Idno cannot start: ' . PublicMessage::oneXBesideCompletedUpgrade()->text . "\n",
             SchemaStatus::UnsupportedServer => 'Idno cannot start: ' . ($refusal ?? PublicMessage::serverRequirement())->text . "\n",
             default => "Idno is upgrading its database.\n",
         };
@@ -121,6 +122,8 @@ final class UpgradePage
                 . self::paragraph(PublicMessage::tooOld()->text),
             SchemaStatus::RenamedWithoutRecord => self::heading('This site\'s old tables need attention')
                 . self::paragraph(PublicMessage::renamedWithoutRecord()->text),
+            SchemaStatus::OneXBesideCompletedUpgrade => self::heading('This database holds two copies of the site')
+                . self::paragraph(PublicMessage::oneXBesideCompletedUpgrade()->text),
             SchemaStatus::UnsupportedServer => self::heading('This database server is too old for Idno')
                 . self::paragraph(($refusal ?? PublicMessage::serverRequirement())->text)
                 . self::paragraph('Upgrade the database server, or move the database to one that is new enough, then load this page again. Nothing has been changed.'),
