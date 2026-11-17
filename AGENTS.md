@@ -246,6 +246,14 @@ Each content plugin has an `Entry.php` entity class that defines
   must implement `updateMetadata()` for this to apply.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
+- Error page: an exception thrown while a page is being served goes to
+  `Page::exception()`, which draws `templates/default/pages/500.tpl.php`. The page shows
+  the exception's message to every visitor, and the whole exception (message and stack
+  trace) when `debug` is set in the configuration. Both are passed through
+  `htmlspecialchars()`, because a message can contain text taken from the request. So an
+  exception message is plain text: HTML in it is displayed, not rendered. The message is
+  still shown to visitors, so don't put anything in one that they shouldn't see.
+  `Tests/Core/ErrorPageTest.php` checks this.
 - Content Security Policy headers via template system
 - Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
   that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The
