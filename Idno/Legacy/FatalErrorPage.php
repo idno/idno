@@ -7,7 +7,12 @@ namespace Idno\Legacy;
 /**
  * Catches premature shutdowns (fatal errors) and outputs some friendlier text.
  *
- * Moved unchanged from Idno/start.php.
+ * The page tells visitors only that there was a problem. The message, file, line, stack trace and
+ * page address go to the error log; the page shows them only when the site is in debug mode, and
+ * then as text (they can contain text taken from the request). An error before the legacy
+ * application exists (while the kernel boots) is treated as not in debug mode.
+ *
+ * Moved from Idno/start.php.
  */
 final class FatalErrorPage
 {
@@ -51,9 +56,26 @@ final class FatalErrorPage
 
                     $title = $heading = "Oh no! Idno experienced a problem!";
                     $body = "<p>Idno experienced a problem with this page and couldn't continue.</p>";
-                    $body .= "<p><strong>$message_text</strong></p>";
-                    $body .= "<p>The technical details are as follows:</p>";
-                    $body .= "<pre>$error_message</pre>";
+
+                    // The page also covers the kernel boot, when the legacy application (or even
+                    // the autoloader) may not exist yet: then the error goes to PHP's error log.
+                    $site = class_exists(\Idno\Core\Idno::class) ? \Idno\Core\Idno::site() : null;
+
+                    // The technical details are logged below. Visitors only see them when the site
+                    // is in debug mode (unknown until the configuration is loaded: then they are
+                    // withheld), and then as text: the message and the page address can contain
+                    // text taken from the request.
+                    $debug = false;
+                    try {
+                        $config = $site?->config();
+                        $debug = is_object($config) && !empty($config->debug);
+                    } catch (\Throwable $e) {
+                    }
+                    if ($debug) {
+                        $body .= "<p><strong>" . htmlspecialchars($message_text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</strong></p>";
+                        $body .= "<p>The technical details are as follows:</p>";
+                        $body .= "<pre>" . htmlspecialchars($error_message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</pre>";
+                    }
 
                     if (file_exists(dirname(__DIR__, 2) . '/support.inc')) {
                         include dirname(__DIR__, 2) . '/support.inc';
@@ -62,10 +84,6 @@ final class FatalErrorPage
                     }
 
                     include dirname(__DIR__, 2) . '/statics/error-page.php';
-
-                    // The page also covers the kernel boot, when the legacy application (or even
-                    // the autoloader) may not exist yet: then the error goes to PHP's error log.
-                    $site = class_exists(\Idno\Core\Idno::class) ? \Idno\Core\Idno::site() : null;
 
                     if ($site !== null) {
                         $stats = $site->statistics();

@@ -2068,12 +2068,32 @@ the CLI installer no longer writes one.
   must implement `updateMetadata()` for this to apply.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
+- Error page: an exception thrown while a page is being served goes to
+  `Page::exception()`, which draws `templates/default/pages/500.tpl.php`. The page shows
+  the exception's message to every visitor, and the whole exception (message and stack
+  trace) when `debug` is set in the configuration. Both are passed through
+  `htmlspecialchars()`, because a message can contain text taken from the request. So an
+  exception message is plain text: HTML in it is displayed, not rendered. The message is
+  still shown to visitors, so don't put anything in one that they shouldn't see.
+  `Tests/Core/ErrorPageTest.php` checks this.
 - Content Security Policy headers via template system (and, on the upgrade page, a strict
   per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
 - Deleting a site's data from the web: only `/admin/legacytables`, a legacy page (admin gatekeeper,
   CSRF token, and the field `confirm` exactly `delete`), and only the `legacy_` tables of a completed
   upgrade; never the rejects. Its template escapes every value read from the database. The console
   equivalent needs `--drop-legacy --yes`
+- Fatal-error page: the shutdown function `Idno\Legacy\FatalErrorPage` registers (`index.php` and
+  `Idno/start.php` register it first, before the autoloader; `LegacyBootstrap` again, a no-op)
+  answers a request that died of an uncaught error with a 500 page drawn by
+  `statics/error-page.php`. The page tells visitors only that there was a problem. The message,
+  file, line, stack trace and page address are written to PHP's error log. They are shown on the
+  page only when `debug` is set in the configuration, and then passed through `htmlspecialchars()`,
+  because they can contain text taken from the request. An error before the legacy application
+  exists (while the kernel boots, so before the configuration is loaded) is treated as not in debug
+  mode. `statics/error-page.php` prints `$body` as HTML, so escape anything put into it that is not
+  fixed text. `Tests/Core/FatalErrorPageTest.php` checks this by running
+  `Tests/Core/fixtures/fatal_error.php` in its own PHP process, and
+  `Tests/Kernel/FatalErrorPageTest.php` the error during the kernel's boot.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions

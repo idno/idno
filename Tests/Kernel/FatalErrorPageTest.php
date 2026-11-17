@@ -8,7 +8,9 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Idno\Legacy\FatalErrorPage also covers the kernel boot, when the legacy application may not
- * exist yet: the page must still render, and the error go to PHP's error log.
+ * exist yet: the page must still render, without the error's details (nobody can say yet whether
+ * the site is in debug mode), and the error go to PHP's error log. Tests\Core\FatalErrorPageTest
+ * covers the page once the site has booted.
  */
 final class FatalErrorPageTest extends TestCase
 {
@@ -25,7 +27,9 @@ final class FatalErrorPageTest extends TestCase
         exec('rm -rf ' . escapeshellarg($base));
 
         $this->assertStringContainsString('Oh no! Idno experienced a problem!', $output);
-        $this->assertStringContainsString('the kernel failed to boot', $output);
+        $this->assertStringNotContainsString('the kernel failed to boot', $output);
+        $this->assertStringNotContainsString('.php', $output);
+        $this->assertStringContainsString('the kernel failed to boot', $logged);
         // Before the null guards: "Call to a member function statistics() on null", a second fatal.
         $this->assertStringNotContainsString('on null', $output . $logged);
         $this->assertStringContainsString('Fatal Error: ', $logged);
