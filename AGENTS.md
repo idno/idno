@@ -247,6 +247,16 @@ Each content plugin has an `Entry.php` entity class that defines
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Content Security Policy headers via template system
+- Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
+  that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The
+  page tells visitors only that there was a problem. The message, file, line, stack trace
+  and page address are written to PHP's error log. They are shown on the page only when
+  `debug` is set in the configuration, and then passed through `htmlspecialchars()`,
+  because they can contain text taken from the request. An error that happens before the
+  configuration is loaded is treated as not in debug mode. `statics/error-page.php` prints
+  `$body` as HTML, so escape anything put into it that is not fixed text.
+  `Tests/Core/FatalErrorPageTest.php` checks this by running
+  `Tests/Core/fixtures/fatal_error.php` in its own PHP process.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions

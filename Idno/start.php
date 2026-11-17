@@ -36,9 +36,19 @@
 
                 $title = $heading = "Oh no! Idno experienced a problem!";
                 $body = "<p>Idno experienced a problem with this page and couldn't continue.</p>";
-                $body .= "<p><strong>$message_text</strong></p>";
-                $body .= "<p>The technical details are as follows:</p>";
-                $body .= "<pre>$error_message</pre>";
+
+                // The technical details are logged below. Visitors only see them when the site is in
+                // debug mode (which is unknown until the configuration is loaded), and then as text:
+                // the message and the page address can contain text taken from the request.
+                $debug = false;
+                if (class_exists('\Idno\Core\Idno', false) && \Idno\Core\Idno::site()) {
+                    $debug = !empty(\Idno\Core\Idno::site()->config()->debug);
+                }
+                if ($debug) {
+                    $body .= "<p><strong>" . htmlspecialchars($message_text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</strong></p>";
+                    $body .= "<p>The technical details are as follows:</p>";
+                    $body .= "<pre>" . htmlspecialchars($error_message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "</pre>";
+                }
 
                 if (file_exists(dirname(dirname(__FILE__)) . '/support.inc')) {
                     include dirname(dirname(__FILE__)) . '/support.inc';
