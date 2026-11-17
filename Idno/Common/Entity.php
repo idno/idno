@@ -14,6 +14,7 @@ namespace Idno\Common {
 
     use Idno\Core\Idno;
     use Idno\Core\Webmention;
+    use Idno\Entities\Annotation;
     use Idno\Entities\User;
 
     abstract class Entity extends Component implements EntityInterface
@@ -2769,6 +2770,12 @@ namespace Idno\Common {
          */
         function getAnnotation($uuid)
         {
+            // Prioritize Annotation methods
+            $annotation = Annotation::getByUUID($uuid);
+            if (!$annotation) {
+                return $annotation;
+            }
+
             if (!empty($this->annotations) && is_array($this->annotations)) {
                 foreach ($this->annotations as $subtype => $array) {
                     if (isset($array[$uuid])) {
