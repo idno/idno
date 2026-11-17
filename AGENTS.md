@@ -840,6 +840,11 @@ other new code may.
       scalar values only: a record whose field holds a list or an object is not found by a query on it
       (before its index exists it is; results are the same with and without the index only while every
       record holds single values in the field, which is what a declaration promises);
+    - DIFFERENCE (`access`): the schema indexes `access` in every collection, so it too matches
+      scalar values only (a record whose `access` is a list or an object is found by no query on
+      `access`, so listings show it only to admins and with ignore-access), and on MySQL and MariaDB a record whose
+      `access` is longer than 255 characters is refused (false), where the old backend stored it and
+      compared its first 255 bytes;
     - DIFFERENCE (undeclared fields): a lookup on a document field that is NOT declared is served by
       no index (1.x had the metadata table for every field): it reads the documents of the matching
       types (measured at about 0.7 s per 100,000 entities on MySQL 8), so a field hot code looks up
@@ -1031,8 +1036,10 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
   pending), `latest()` is the newest executed version, `'0'` when none. It writes no output.
 - Migration classes (`Idno/Storage/Migrations/Version<YYYYMMDDhhmmss>.php`) are not services
   (excluded in `config/services.php`). Each holds literal SQL per platform (MySQL/MariaDB and
-  SQLite; any other platform aborts) and never changes once committed: a schema change is a new
-  migration. On MySQL and MariaDB a migration is not transactional (DDL commits implicitly), so a
+  SQLite; any other platform aborts) and never changes once released: a schema change is a new
+  migration. (2.0 is not released yet. The baseline was last edited in place to add `ix_access`,
+  below; a development database created from an earlier build must be recreated, `composer
+  test:down` then `test:up...` for the rig, or it keeps its slower index on `access`.) On MySQL and MariaDB a migration is not transactional (DDL commits implicitly), so a
   run can be interrupted after some statements with no version recorded: every statement must be
   safe to repeat (`CREATE TABLE IF NOT EXISTS`, and on SQLite `CREATE INDEX IF NOT EXISTS`), so that
   the next run completes the schema (pinned by `testAnInterruptedBaselineCanBeRunAgain` on SQLite
@@ -1049,7 +1056,8 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
 - The baseline, `Version20261115000000` (irreversible), creates: `idno_entities`, `idno_reader`,
   `idno_site` (one row per document: `id`, `uuid` (unique), `type`, `owner`, `created` (epoch
   seconds, `BIGINT`), `publish_status`, `data` (the document's JSON text, `LONGTEXT` `utf8mb4_bin`),
-  `search` (full-text indexed on MySQL/MariaDB); keys `type_created`, `owner_created`, `created`);
+  `search` (full-text indexed on MySQL/MariaDB), `ix_access` (below); keys `type_created`,
+  `owner_created`, `created`, `ix_access`);
   `idno_settings` (`name` and `value` `utf8mb4_bin`, `position` INT: one row per settings key, in
   order; served as the collection `config` by `SettingsRecordStore`, below); `idno_sessions` (the `session` table's columns, `session_id` `utf8mb4_bin`);
   `idno_upgrade_progress` and `idno_upgrade_rejects` (the upgrade's bookkeeping: see "Copying a 1.x
@@ -1064,6 +1072,41 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
   `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
   index names prefixed with the table's (`idno_entities_type_created`), no full-text index, and no
   custom collation or function, so the file opens with standard SQLite tools.
+- `access` is indexed by the baseline itself, in all three collection tables, because every entity
+  query filters on it (`EntityRepository` adds `access in (<read groups>)` for everyone but an
+  admin). On MySQL and MariaDB: `ix_access`, a STORED generated column, `VARCHAR(255)`
+  `utf8mb4_unicode_520_ci`, whose value is the indexed value of the document's `access` (the same
+  rule as a declared indexed field's: the scalar's query value, NULL when the field is absent or
+  holds a list or an object; the expression is written out in the migration, with JSON_VALUE() on
+  MariaDB), and the index `ix_access (type, ix_access)` on the whole column. On SQLite: the index
+  `idno_<collection>_ix_access` on `type` and the same value (`COLLATE NOCASE`). Both carry the
+  names a declared indexed field's column and index have, so `SchemaCatalog::indexedFields()` lists
+  `access` for every collection from the first migration on and `JsonRecordStore` compares
+  `t.ix_access` (the indexed expression on SQLite) with no code of its own for it; no class
+  declares `access`, and a class that does creates nothing and reports no conflict. Why this shape
+  and not a declared index (a VIRTUAL `LONGTEXT` column with a 255-character prefix index): a
+  prefix index cannot answer a query by itself, so the count every listing page makes (types and
+  read groups) read every matching row and parsed its document; the whole value with the type in
+  one index answers it from the index alone, and a STORED value is read from the row, without
+  parsing JSON, when the rows come from another index (an owner's posts, a deep page). The type
+  is the index's first column on purpose: with `access` first, MariaDB 10.6 chose this index and
+  a filesort for every listing page from about the fiftieth on (0.27 s at 100,000 entities, where
+  reading `created` backwards takes a few milliseconds); do not reorder it, and do not add a second
+  index that starts with `ix_access` (the index is named `ix_access` so that a class declaring
+  `access` finds it and creates none). Measured at 100,000 entities, before and after: a visitor's
+  homepage count 0.97 s to 0.015 s on MySQL 8 and 0.62 s to 0.010 s on MariaDB 10.6; one owner's
+  count 0.23 s to 0.07 s and 0.61 s to 0.06 s; page 500 of the listing 1.05 s to 0.005 s and
+  0.040 s to 0.009 s. Pinned by
+  `SchemaMigratorMySqlTest` / `SchemaMigratorTest` (the shape),
+  `IndexedFieldsContract::testTheSchemasAccessIndexMatchesAsADeclaredFieldDoes` (every operator
+  matches as on a declared field holding the same values, on all three engines) and
+  `IndexedFieldsMySqlTest::testACountByTypesAndAccessIsAnsweredFromTheIndex` (EXPLAIN: the key
+  `ix_access`, `Using index`). The column holds 255 characters, as `uuid` and `owner` do (an
+  access value is `PUBLIC`, `SITE` or the uuid of a user or an access group): on MySQL and
+  MariaDB a record whose `access` is longer is refused data (error 1406: `save()` returns false,
+  the copy of a 1.x database makes the row a reject), never cut; SQLite enforces no lengths and
+  stores it. That relies on the server's strict `sql_mode` (the default of MySQL 8 and MariaDB
+  10.6), as the lengths of `id`, `uuid` and `owner` do.
 - `Idno\Storage\SchemaCatalog` (a container service on the `Connection`; queries nothing when
   constructed; the schema gate reads it at boot on an SQL site, and the record store reuses what it
   read): `tables()` (lower case, sorted; SQLite's internal tables left out), `hasTable()`
@@ -1761,8 +1804,9 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   upgrade. On a
   database without the tables (a 1.x site not yet upgraded) enabling a plugin creates nothing (pinned
   by `Tests/Kernel/PluginIndexedFieldsTest`, on private databases).
-- Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`, and by `UpgradeCommandTest::CORE_INDEXES`): `Idno\Common\Entity`: `access`,
-  `slug`, `shorturl`, `url`, `canonical`; `User`: `handle`, `email` (not `admin`: `AccessGroup`, in
+- Core declarations (pinned by `Tests/Kernel/EntityAliasesTest`, and by `UpgradeCommandTest::CORE_INDEXES`): `Idno\Common\Entity`:
+  `slug`, `shorturl`, `url`, `canonical` (not `access`: the baseline schema indexes it itself, see
+  "The schema (migrations)"); `User`: `handle`, `email` (not `admin`: `AccessGroup`, in
   the same collection, stores `admin`, `read` and `write` as lists of user uuids, and
   `User::getXAccessGroupIDs('admin')` looks groups up by them; pinned by
   `Tests/Data/AccessGroupPermissionLookupTest`); `Site`: `domain`;

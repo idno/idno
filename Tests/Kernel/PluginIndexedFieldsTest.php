@@ -76,7 +76,7 @@ final class PluginIndexedFieldsTest extends TestCase
         $siteIndexes = $site->indexedFields('entities');
         $private = PrivateDatabase::sqliteMemory();
         $catalog = new SchemaCatalog($private);
-        self::assertSame([], $catalog->indexedFields('entities'));
+        self::assertSame(['access'], $catalog->indexedFields('entities'), 'only the schema\'s own index');
 
         try {
             self::withContainer(

@@ -125,9 +125,9 @@ final class SchemaMigratorMySqlTest extends TestCase
     {
         foreach (['idno_entities', 'idno_reader', 'idno_site'] as $table) {
             $columns = $this->columns($table);
-            $this->assertSame(['id', 'uuid', 'type', 'owner', 'created', 'publish_status', 'data', 'search'], array_keys($columns), $table);
+            $this->assertSame(['id', 'uuid', 'type', 'owner', 'created', 'publish_status', 'data', 'search', 'ix_access'], array_keys($columns), $table);
             $this->assertSame(['type' => 'longtext', 'collation' => 'utf8mb4_bin'], $columns['data'], $table);
-            foreach (['id', 'uuid', 'type', 'owner', 'publish_status', 'search'] as $column) {
+            foreach (['id', 'uuid', 'type', 'owner', 'publish_status', 'search', 'ix_access'] as $column) {
                 $this->assertSame('utf8mb4_unicode_520_ci', $columns[$column]['collation'], $table . '.' . $column);
             }
             $this->assertSame('bigint', $columns['created']['type'], $table);
@@ -164,6 +164,41 @@ final class SchemaMigratorMySqlTest extends TestCase
                 "select column_name as c, seq_in_index as s from information_schema.statistics where table_schema = database() and table_name = 'idno_upgrade_rejects' and index_name = 'collection_uuid' order by seq_in_index",
             )),
         );
+    }
+
+    /**
+     * `access` is in every entity query, so the baseline indexes it itself: a STORED generated column
+     * (no JSON is parsed to check a row found through another index) holding the whole value, and an
+     * index on the type and it, which answers a count by types and access without reading a row. The
+     * type comes first: with `access` first MariaDB's optimizer chooses this index and a filesort for a
+     * listing page beyond the first few dozen, over reading `created` backwards.
+     */
+    public function testEveryCollectionTableHoldsAccessInAStoredColumnIndexedWithTheType(): void
+    {
+        foreach (['idno_entities', 'idno_reader', 'idno_site'] as $table) {
+            $column = $this->connection()->fetchAssociative(
+                'select data_type as data_type, character_maximum_length as length, collation_name as collation_name, extra as extra, is_nullable as nullable from information_schema.columns where table_schema = database() and table_name = ? and column_name = ?',
+                [$table, 'ix_access'],
+            );
+            $this->assertIsArray($column, $table);
+            $this->assertSame('varchar', strtolower((string) $column['data_type']), $table);
+            $this->assertSame(255, (int) $column['length'], $table);
+            $this->assertSame('utf8mb4_unicode_520_ci', $column['collation_name'], $table);
+            $this->assertStringContainsString('STORED', strtoupper((string) $column['extra']), $table);
+            $this->assertSame('YES', $column['nullable'], $table);
+            $this->assertSame(
+                [['type', 1, null, 1], ['ix_access', 2, null, 1]],
+                array_map(static fn (array $row): array => [(string) $row['c'], (int) $row['s'], $row['p'] === null ? null : (int) $row['p'], (int) $row['n']], $this->connection()->fetchAllAssociative(
+                    "select column_name as c, seq_in_index as s, sub_part as p, non_unique as n from information_schema.statistics where table_schema = database() and table_name = ? and index_name = 'ix_access' order by seq_in_index",
+                    [$table],
+                )),
+                $table,
+            );
+        }
+        $catalog = new SchemaCatalog($this->connection());
+        foreach (['entities', 'reader', 'site'] as $collection) {
+            $this->assertSame(['access'], $catalog->indexedFields($collection), $collection);
+        }
     }
 
     public function testCatalogReadsTablesWithOneStatement(): void
@@ -221,7 +256,7 @@ final class SchemaMigratorMySqlTest extends TestCase
 
             $catalog = new SchemaCatalog($counted);
             $this->assertContains('idno_entities', $catalog->tables());
-            $this->assertSame([], $catalog->indexedFields('entities'));
+            $this->assertSame(['access'], $catalog->indexedFields('entities'));
             $this->assertTrue($catalog->hasTable('idno_settings'));
             $this->assertFalse($catalog->hasTable('entities'));
 
@@ -234,14 +269,14 @@ final class SchemaMigratorMySqlTest extends TestCase
     public function testTheCatalogFindsIndexedFields(): void
     {
         $catalog = new SchemaCatalog($this->connection());
-        $this->assertSame([], $catalog->indexedFields('entities'));
+        $this->assertSame(['access'], $catalog->indexedFields('entities'), 'the schema\'s own');
 
         $this->connection()->executeStatement(
             "alter table idno_entities add column ix_slug varchar(255) generated always as (json_unquote(json_extract(data, '$.slug'))) virtual, add index ix_slug (ix_slug)",
         );
         $catalog->forget();
 
-        $this->assertSame(['slug'], $catalog->indexedFields('entities'));
-        $this->assertSame([], $catalog->indexedFields('reader'));
+        $this->assertSame(['access', 'slug'], $catalog->indexedFields('entities'));
+        $this->assertSame(['access'], $catalog->indexedFields('reader'));
     }
 }

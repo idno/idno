@@ -26,6 +26,7 @@ use Idno\Storage\Platform\Dialect;
 use Idno\Storage\RecordIndex;
 use Idno\Storage\SchemaCatalog;
 use PHPUnit\Framework\TestCase;
+use Tests\Storage\Fixtures\IndexedFields\AccessRecord;
 use Tests\Storage\Fixtures\IndexedFields\ActorRecord;
 use Tests\Storage\Fixtures\IndexedFields\ActorRecordWithoutIndex;
 use Tests\Storage\Fixtures\IndexedFields\ChildRecord;
@@ -138,13 +139,13 @@ abstract class IndexedFieldsContract extends TestCase
 
     public function testReconcileCreatesTheIndexAndIsIdempotent(): void
     {
-        self::assertSame([], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access'], $this->catalog->indexedFields('entities'), 'the schema\'s own');
 
         self::assertSame(['entities.actor_id'], $this->indexes->reconcile(ActorRecord::class));
-        self::assertSame(['actor_id'], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access', 'actor_id'], $this->catalog->indexedFields('entities'));
         self::assertSame([], $this->indexes->reconcile(ActorRecord::class));
         self::assertSame([], $this->indexes->conflicts());
-        self::assertSame(['actor_id'], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access', 'actor_id'], $this->catalog->indexedFields('entities'));
         self::assertSame(['unique' => false, 'length' => $this->expectedLength(IndexedField::MAX_LENGTH)], $this->dialect->indexedFieldIndex($this->connection, 'idno_entities', 'actor_id'));
     }
 
@@ -235,6 +236,106 @@ abstract class IndexedFieldsContract extends TestCase
         self::assertSame(['upper', 'value'], $before['equals'][0]);
         self::assertSame(['int'], $before['equals int text'][0]);
         self::assertSame(23, $before['not in nothing'][1]);
+    }
+
+    /**
+     * `access` is indexed by the schema itself, in every collection (no class declares it, and
+     * reconciling creates nothing for it): a query on it matches exactly what a query on a declared
+     * field holding the same values matches, for every operator.
+     */
+    public function testTheSchemasAccessIndexMatchesAsADeclaredFieldDoes(): void
+    {
+        foreach (['entities', 'reader', 'site'] as $collection) {
+            self::assertContains('access', $this->catalog->indexedFields($collection), $collection);
+        }
+        self::assertSame(['entities.f'], $this->indexes->reconcile(FieldRecord::class));
+
+        $values = [
+            'value' => 'value',
+            'upper' => 'VALUE',
+            'public' => 'PUBLIC',
+            'empty' => '',
+            'true' => true,
+            'false' => false,
+            'null' => null,
+            'zero' => 0,
+            'zero_text' => '0',
+            'int' => 42,
+            'float' => 1.5,
+            'small_float' => 0.1 + 0.2,
+            'other' => 'zeta',
+            'unicode' => "Été \u{1F600}",
+            'underscore' => 'a_b',
+            'quote' => "say \"hi\" \\ back\nline",
+            'emoji' => "\u{1F600}",
+            'null_text' => 'null',
+            'true_text' => 'true',
+            'one' => 1,
+            'longest' => str_repeat('x', 254) . 'y',
+            'list' => ['PUBLIC', 'b'],
+            'object' => ['k' => 'PUBLIC'],
+        ];
+        $records = ['missing' => ['g' => 'value']];
+        foreach ($values as $id => $value) {
+            $records[$id] = ['access' => $value, 'f' => $value];
+        }
+        $this->saveAll($records);
+
+        $queries = static fn (string $field): array => [
+            'equals' => new Equals($field, 'value'),
+            'equals public' => new Equals($field, 'public'),
+            'equals longest' => new Equals($field, str_repeat('x', 254) . 'y'),
+            'equals a prefix of longest' => new Equals($field, str_repeat('x', 254)),
+            'equals emoji' => new Equals($field, "\u{1F600}"),
+            'equals quote' => new Equals($field, "say \"hi\" \\ back\nline"),
+            'equals 1' => new Equals($field, 1),
+            'equals true' => new Equals($field, true),
+            'equals false' => new Equals($field, false),
+            'equals 0' => new Equals($field, '0'),
+            'equals null' => new Equals($field, null),
+            'equals float' => new Equals($field, 1.5),
+            'equals small float' => new Equals($field, 0.1 + 0.2),
+            'in' => new In($field, ['PUBLIC', 'zeta', '1']),
+            'in with null' => new In($field, ['zeta', null]),
+            'in nothing' => new In($field, []),
+            'not equals' => new NotEquals($field, 'PUBLIC'),
+            'not in' => new NotIn($field, ['value', '0']),
+            'not in nothing' => new NotIn($field, []),
+            'less than' => new LessThan($field, 'm'),
+            'less than underscore' => new LessThan($field, 'aZ'),
+            'greater than' => new GreaterThan($field, 'm'),
+            'any of' => new AnyOf([new Equals($field, 'value'), new Equals($field, 42)]),
+            'all of' => new AllOf([new NotEquals($field, 'value'), new LessThan($field, 'b')]),
+        ];
+        $declared = $queries('f');
+        foreach ($queries('access') as $name => $query) {
+            self::assertSame(
+                [$this->ids($declared[$name]), $this->store->count('entities', self::criteria($declared[$name]))],
+                [$this->ids($query), $this->store->count('entities', self::criteria($query))],
+                $name,
+            );
+        }
+        self::assertStringContainsString($this->dialect->indexedFieldValue('t', 'access'), $this->recorder->last('/^select count/')['sql'], 'the query goes through the index');
+        // A few results, so that the comparison is not between two empty sets.
+        self::assertSame(['public'], $this->ids(new Equals('access', 'public')));
+        self::assertSame(['longest'], $this->ids(new Equals('access', str_repeat('X', 254) . 'Y')));
+        self::assertSame([], $this->ids(new Equals('access', str_repeat('x', 254))));
+        self::assertSame(['one', 'true'], $this->ids(new Equals('access', 1)));
+        self::assertSame(21, $this->store->count('entities', self::criteria(new NotIn('access', []))), 'every scalar value, no list, object or missing field');
+    }
+
+    /**
+     * No class needs to declare `access`, and one that does changes nothing.
+     */
+    public function testDeclaringAccessCreatesNothing(): void
+    {
+        $before = $this->dialect->indexedFieldIndex($this->connection, 'idno_entities', 'access');
+        self::assertNotNull($before);
+        self::assertFalse($before['unique']);
+
+        self::assertSame([], $this->indexes->reconcile(AccessRecord::class));
+        self::assertSame([], $this->indexes->conflicts());
+        self::assertSame($before, $this->dialect->indexedFieldIndex($this->connection, 'idno_entities', 'access'));
     }
 
     public function testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed(): void
@@ -340,7 +441,7 @@ abstract class IndexedFieldsContract extends TestCase
         } catch (\InvalidArgumentException) {
             // As it should, before creating anything (not even the class's valid declaration).
         }
-        self::assertSame([], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access'], $this->catalog->indexedFields('entities'));
     }
 
     public function testAColumnFieldNameIsRejected(): void
@@ -382,7 +483,7 @@ abstract class IndexedFieldsContract extends TestCase
         self::assertSame([], $this->indexes->reconcile(ActorRecordWithoutIndex::class));
         self::assertSame([], $this->indexes->reconcileDirectory(sys_get_temp_dir() . '/idno-no-such-directory-' . bin2hex(random_bytes(4))));
 
-        self::assertSame(['actor_id'], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access', 'actor_id'], $this->catalog->indexedFields('entities'));
         self::assertNotNull($this->dialect->indexedFieldIndex($this->connection, 'idno_entities', 'actor_id'));
         self::assertSame(['a'], $this->ids(['actor_id' => 'X']));
     }
@@ -404,15 +505,15 @@ abstract class IndexedFieldsContract extends TestCase
     public function testDeclarationsOfParentClassesApply(): void
     {
         self::assertSame(['reader.parent_field', 'reader.child_field'], $this->indexes->reconcile(ChildRecord::class));
-        self::assertSame(['child_field', 'parent_field'], $this->catalog->indexedFields('reader'));
-        self::assertSame([], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access', 'child_field', 'parent_field'], $this->catalog->indexedFields('reader'));
+        self::assertSame(['access'], $this->catalog->indexedFields('entities'));
     }
 
     public function testAClassWithoutItsOwnEntityTypeCreatesNothing(): void
     {
         self::assertSame([], $this->indexes->reconcile(DeclaringParent::class, \stdClass::class));
-        self::assertSame([], $this->catalog->indexedFields('entities'));
-        self::assertSame([], $this->catalog->indexedFields('reader'));
+        self::assertSame(['access'], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access'], $this->catalog->indexedFields('reader'));
     }
 
     public function testACollectionWithoutATableIsSkipped(): void
@@ -425,6 +526,7 @@ abstract class IndexedFieldsContract extends TestCase
     {
         $classes = EntityClassFinder::in(self::fixtures());
         self::assertSame([
+            AccessRecord::class,
             ActorRecord::class,
             ActorRecordWithoutIndex::class,
             ChildRecord::class,

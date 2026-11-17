@@ -42,8 +42,9 @@ Options:
 The declarations of a class's parent classes count too. They are applied to the collection of the
 class's own `AsEntity` attribute (`entities` unless it says otherwise). A class without its own
 `AsEntity` (an abstract base class, for example) creates nothing by itself: its declarations take
-effect through its subclasses. `\Idno\Common\Entity` already declares `access`, `slug`, `shorturl`,
-`url` and `canonical` for every entity.
+effect through its subclasses. `\Idno\Common\Entity` already declares `slug`, `shorturl`, `url` and
+`canonical` for every entity. `access` needs no declaration: the database schema itself indexes it
+in every collection, because every query filters on it.
 
 ## When the index is created
 

@@ -115,7 +115,7 @@ final class SchemaMigratorTest extends TestCase
         foreach (self::TABLES as $table) {
             $this->assertTrue($catalog->hasTable($table), $table);
         }
-        $this->assertCount(4, $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = 'idno_reader' and sql is not null"));
+        $this->assertCount(5, $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = 'idno_reader' and sql is not null"));
         $this->assertSame([], $migrator->pending());
     }
 
@@ -216,9 +216,9 @@ final class SchemaMigratorTest extends TestCase
         $connection = PrivateDatabase::sqliteMemory();
 
         $indexes = $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = 'idno_entities' and sql is not null order by name");
-        $this->assertSame(['idno_entities_created', 'idno_entities_owner_created', 'idno_entities_type_created', 'idno_entities_uuid'], $indexes);
+        $this->assertSame(['idno_entities_created', 'idno_entities_ix_access', 'idno_entities_owner_created', 'idno_entities_type_created', 'idno_entities_uuid'], $indexes);
         foreach (['idno_reader', 'idno_site'] as $table) {
-            $this->assertCount(4, $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = ? and sql is not null", [$table]), $table);
+            $this->assertCount(5, $connection->fetchFirstColumn("select name from sqlite_master where type = 'index' and tbl_name = ? and sql is not null", [$table]), $table);
         }
         $columns = array_column($connection->fetchAllAssociative('PRAGMA table_info(idno_settings)'), 'name');
         $this->assertSame(['name', 'value', 'position'], $columns);
@@ -229,20 +229,40 @@ final class SchemaMigratorTest extends TestCase
         $this->assertSame(['collection', 'legacy_uuid'], array_column($connection->fetchAllAssociative('PRAGMA index_info(idno_upgrade_rejects_collection_uuid)'), 'name'));
     }
 
+    /**
+     * `access` is in every entity query, so the baseline indexes it itself, with the type: the
+     * index a declared field gets (the catalog lists it), plus the type.
+     */
+    public function testEveryCollectionTableIndexesAccessWithTheType(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory();
+        $catalog = new SchemaCatalog($connection);
+
+        foreach (['entities', 'reader', 'site'] as $collection) {
+            $this->assertSame(['access'], $catalog->indexedFields($collection), $collection);
+            $columns = $connection->fetchAllAssociative('PRAGMA index_xinfo(idno_' . $collection . '_ix_access)');
+            $key = array_values(array_filter($columns, static fn (array $column): bool => (int) $column['key'] === 1));
+            $this->assertCount(2, $key, $collection);
+            $this->assertSame('type', $key[0]['name'], $collection);
+            $this->assertNull($key[1]['name'], $collection . ': an expression');
+            $this->assertSame('NOCASE', $key[1]['coll'], $collection);
+        }
+    }
+
     public function testTheCatalogFindsIndexedFields(): void
     {
         $connection = PrivateDatabase::sqliteMemory();
         $catalog = new SchemaCatalog($connection);
-        $this->assertSame([], $catalog->indexedFields('entities'));
+        $this->assertSame(['access'], $catalog->indexedFields('entities'), 'the schema\'s own');
 
         $connection->executeStatement("create index idno_entities_ix_slug on idno_entities (json_extract(data, '$.slug'))");
         $connection->executeStatement("create index idno_reader_ix_feed on idno_reader (json_extract(data, '$.feed'))");
-        $this->assertSame([], $catalog->indexedFields('entities'), 'read once, until forgotten');
+        $this->assertSame(['access'], $catalog->indexedFields('entities'), 'read once, until forgotten');
 
         $catalog->forget();
-        $this->assertSame(['slug'], $catalog->indexedFields('entities'));
-        $this->assertSame(['feed'], $catalog->indexedFields('reader'));
-        $this->assertSame([], $catalog->indexedFields('site'));
+        $this->assertSame(['access', 'slug'], $catalog->indexedFields('entities'));
+        $this->assertSame(['access', 'feed'], $catalog->indexedFields('reader'));
+        $this->assertSame(['access'], $catalog->indexedFields('site'));
         $this->assertSame([], $catalog->indexedFields('nonesuch'));
     }
 

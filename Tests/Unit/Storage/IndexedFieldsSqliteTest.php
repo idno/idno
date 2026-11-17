@@ -57,7 +57,7 @@ final class IndexedFieldsSqliteTest extends IndexedFieldsContract
         $this->saveAll(['a' => ['f' => 'x', 'code' => 'c'], 'b' => ['f' => 'y']]);
 
         $indexes = $this->connection->fetchAllKeyValue("select name, sql from sqlite_master where type = 'index' and name like 'idno_entities_ix_%' order by name");
-        self::assertSame(['idno_entities_ix_code', 'idno_entities_ix_f'], array_keys($indexes));
+        self::assertSame(['idno_entities_ix_access', 'idno_entities_ix_code', 'idno_entities_ix_f'], array_keys($indexes));
         self::assertStringStartsWith('CREATE UNIQUE INDEX', strtoupper((string) $indexes['idno_entities_ix_code']));
         self::assertStringContainsString('collate nocase', strtolower((string) $indexes['idno_entities_ix_f']));
         self::assertStringNotContainsString('idno_ci', (string) $indexes['idno_entities_ix_f'], 'built-in collations only');
@@ -68,5 +68,33 @@ final class IndexedFieldsSqliteTest extends IndexedFieldsContract
             $plan = implode("\n", array_column($this->connection->fetchAllAssociative('explain query plan ' . $statement['sql'], $statement['params']), 'detail'));
             self::assertStringContainsString('USING INDEX idno_entities_ix_f', $plan, $statement['sql']);
         }
+    }
+
+    /**
+     * SQLite enforces no lengths (as for `_id` and `uuid`): an access value longer than the 255
+     * characters of MySQL's column is stored, and found by the whole value.
+     */
+    public function testAnAccessValueOfAnyLengthIsStored(): void
+    {
+        $long = str_repeat('x', 300);
+        $this->saveAll(['long' => ['access' => $long]]);
+
+        self::assertSame(['long'], $this->ids(['access' => $long]));
+        self::assertSame([], $this->ids(['access' => str_repeat('x', 255)]));
+    }
+
+    public function testAQueryOnAccessUsesTheSchemasIndex(): void
+    {
+        $this->saveAll(['a' => ['access' => 'PUBLIC', 'entity_subtype' => 'status'], 'b' => ['access' => 'SITE', 'entity_subtype' => 'status']]);
+
+        self::assertSame(1, $this->store->count('entities', self::criteria(['entity_subtype' => ['$in' => ['status', 'article']], 'access' => ['$in' => ['PUBLIC']]])));
+        $statement = $this->recorder->last('/^select count/');
+        $plan = implode("\n", array_column($this->connection->fetchAllAssociative('explain query plan ' . $statement['sql'], $statement['params']), 'detail'));
+        self::assertStringContainsString('INDEX idno_entities_ix_access', $plan, $statement['sql']);
+
+        // The index is on the very expression queries compare (SQLite uses it only then): the
+        // migration writes it out, the dialect builds it.
+        $index = (string) $this->connection->fetchOne("select sql from sqlite_master where type = 'index' and name = 'idno_entities_ix_access'");
+        self::assertStringContainsString(str_replace('t."data"', '"data"', $this->dialect->indexedFieldValue('t', 'access')) . ' COLLATE NOCASE', $index);
     }
 }

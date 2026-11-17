@@ -242,6 +242,7 @@ final class EntityAliasesTest extends TestCase
         $indexes->reconcileDirectory($root . '/IdnoPlugins');
 
         self::assertSame([], $indexes->conflicts());
+        // Idno\Common\Entity's declarations, and `access`, which the baseline schema indexes itself.
         $entity = ['access', 'canonical', 'shorturl', 'slug', 'url'];
         $sorted = static function (array $fields): array {
             sort($fields);
@@ -255,7 +256,8 @@ final class EntityAliasesTest extends TestCase
         // MySQL and MariaDB, pragma_index_list on SQLite), not merely a generated column.
         foreach (['entities', 'reader', 'site'] as $collection) {
             foreach ($catalog->indexedFields($collection) as $field) {
-                self::assertSame(['unique' => false, 'length' => $family === 'mysql' ? 255 : null], $dialect->indexedFieldIndex($this->connection, 'idno_' . $collection, $field), $collection . '.' . $field);
+                // (A declared field's index is on a prefix of its column on MySQL; the schema's on access is on the whole column.)
+                self::assertSame(['unique' => false, 'length' => $family === 'mysql' && $field !== 'access' ? 255 : null], $dialect->indexedFieldIndex($this->connection, 'idno_' . $collection, $field), $collection . '.' . $field);
             }
             $names = $family === 'mysql'
                 ? $this->connection->fetchFirstColumn("select distinct index_name from information_schema.statistics where table_schema = database() and table_name = ? and index_name like 'ix\\_%'", ['idno_' . $collection])

@@ -96,7 +96,7 @@ final class IndexedFieldsMySqlTest extends IndexedFieldsContract
         self::assertCount(2, $statements);
         $this->connection->executeStatement($statements[0]);
         $this->catalog->forget();
-        self::assertSame(['actor_id'], $this->catalog->indexedFields('entities'));
+        self::assertSame(['access', 'actor_id'], $this->catalog->indexedFields('entities'));
         self::assertNull($this->dialect->indexedFieldIndex($this->connection, 'idno_entities', 'actor_id'));
 
         self::assertSame(['entities.actor_id'], $this->indexes->reconcile(ActorRecord::class));
@@ -120,13 +120,73 @@ final class IndexedFieldsMySqlTest extends IndexedFieldsContract
         }
     }
 
+    /**
+     * The count every listing page makes (the types, and the read groups of whoever is asking) is
+     * answered from the index on `access` and `type` alone: no row is read, no document parsed.
+     */
+    public function testACountByTypesAndAccessIsAnsweredFromTheIndex(): void
+    {
+        $types = ['status', 'article', 'photo', 'like'];
+        $rows = [];
+        for ($n = 0; $n < 2000; $n++) {
+            $id = sprintf('%024x', $n + 1);
+            $type = $n % 10 === 0 ? 'user' : $types[$n % 4];
+            $document = ['_id' => $id, 'uuid' => 'http://indexed.test/view/' . $id, 'entity_subtype' => $type, 'created' => 1_700_000_000 + $n, 'owner' => 'http://indexed.test/profile/user' . ($n % 5), 'access' => $n % 20 === 3 ? 'SITE' : ($n % 20 === 7 ? 'http://indexed.test/group/' . ($n % 3) : 'PUBLIC'), 'body' => str_repeat('text ', 40)];
+            $rows[] = [$id, $document['uuid'], $type, $document['owner'], (string) $document['created'], 'published', (string) json_encode($document), ''];
+        }
+        foreach (array_chunk($rows, 250) as $chunk) {
+            $this->connection->executeStatement(
+                'insert into idno_entities (id, uuid, type, owner, created, publish_status, data, search) values ' . implode(', ', array_fill(0, count($chunk), '(?, ?, ?, ?, ?, ?, ?, ?)')),
+                array_merge(...$chunk),
+            );
+        }
+        $this->connection->fetchAllAssociative('analyze table idno_entities');
+
+        $counts = [
+            'a visitor' => [['entity_subtype' => ['$in' => $types], 'access' => ['$in' => ['PUBLIC']]], 1600],
+            'a member' => [['entity_subtype' => ['$in' => $types], 'access' => ['$in' => ['PUBLIC', 'SITE', 'http://indexed.test/group/1']]], 1734],
+            'any type' => [['access' => ['$in' => ['PUBLIC']]], 1800],
+        ];
+        foreach ($counts as $name => [$query, $expected]) {
+            self::assertSame($expected, $this->store->count('entities', Criteria::fromLegacyArray($query)), $name);
+            $statement = $this->recorder->last('/^select count/');
+            $plan = $this->connection->fetchAllAssociative('explain ' . $statement['sql'], $statement['params']);
+            $description = $name . ': ' . $statement['sql'] . "\n" . json_encode($plan, JSON_PRETTY_PRINT);
+            self::assertCount(1, $plan, $description);
+            // (Without a type the index can only be scanned whole: which plan wins there is the optimizer's choice.)
+            if (isset($query['entity_subtype'])) {
+                self::assertSame('ix_access', $plan[0]['key'], $description);
+                self::assertStringContainsString('Using index', (string) $plan[0]['Extra'], $description);
+            }
+        }
+    }
+
+    /**
+     * The column holds 255 characters, as `uuid` and `owner` do (an access value is PUBLIC, SITE or
+     * the uuid of a user or an access group): a record with a longer one is refused, never cut.
+     */
+    public function testAnAccessValueLongerThanItsColumnIsRefused(): void
+    {
+        $longest = str_repeat('é', 255);
+        $this->saveAll(['longest' => ['access' => $longest]]);
+        self::assertSame(['longest'], $this->ids(['access' => $longest]));
+
+        self::assertFalse($this->store->save('entities', ['_id' => 'longer', 'uuid' => 'http://indexed.test/view/longer', 'created' => 1_700_000_100, 'access' => $longest . 'x']));
+        self::assertNull($this->store->findById('entities', 'longer'));
+
+        // An update is refused too, and leaves the record as it was.
+        self::assertFalse($this->store->save('entities', ['_id' => 'longest', 'uuid' => 'http://indexed.test/view/longest', 'created' => 1_700_000_000, 'access' => $longest . 'x']));
+        self::assertSame($longest, $this->store->findById('entities', 'longest')['access'] ?? null);
+    }
+
     public function testHotQueriesUseAnIndex(): void
     {
         $root = dirname(__DIR__, 2);
         $created = array_merge($this->indexes->reconcileDirectory($root . '/Idno'), $this->indexes->reconcileDirectory($root . '/IdnoPlugins'));
-        foreach (['entities.slug', 'entities.access', 'entities.handle', 'entities.email'] as $field) {
+        foreach (['entities.slug', 'entities.handle', 'entities.email'] as $field) {
             self::assertContains($field, $created);
         }
+        self::assertNotContains('entities.access', $created, 'the schema indexes access itself');
 
         $user = 'Idno\\Entities\\User';
         $types = ['IdnoPlugins\\Status\\Status' => 300, 'IdnoPlugins\\Text\\Entry' => 300, 'IdnoPlugins\\Photo\\Photo' => 300, 'IdnoPlugins\\Like\\Like' => 300, $user => 200, 'Idno\\Entities\\AsynchronousQueuedEvent' => 300, 'IdnoPlugins\\ActivityPub\\Entities\\ActivityPubFollower' => 300];

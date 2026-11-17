@@ -1280,6 +1280,26 @@ final class LegacyDataCopierTest extends TestCase
         self::assertCount(0, $this->store()->find('entities', Criteria::fromLegacyArray(['access' => 'PUBLIC']), 10, 0));
     }
 
+    /**
+     * The schema's `ix_access` column holds 255 characters (as `uuid` and `owner` do): a 1.x row
+     * with a longer access value is a reject, as a save of it is refused; nothing is ever cut.
+     */
+    public function testARowWhoseAccessIsLongerThanItsColumnIsAReject(): void
+    {
+        $fixture = $this->fixture();
+        $longest = $fixture->insert('entities', ['uuid' => 'https://legacy.example/view/1', 'access' => str_repeat('a', 255)]);
+        $longer = $fixture->insert('entities', ['uuid' => 'https://legacy.example/view/2', 'access' => str_repeat('a', 256)]);
+
+        $progress = $this->complete($this->copier());
+
+        self::assertSame(['source' => 2, 'copied' => 1, 'rejected' => 1, 'done' => true], $progress->collections['entities']);
+        self::assertSame([$longest['_id']], $fixture->connection->fetchFirstColumn('select id from idno_entities'));
+        $rejects = $this->rejects();
+        self::assertSame([$longer['uuid']], array_column($rejects, 'legacy_uuid'));
+        self::assertStringStartsWith('the database refused the document', $rejects[0]['reason']);
+        self::assertCount(1, $this->store()->find('entities', Criteria::fromLegacyArray(['access' => str_repeat('a', 255)]), 10, 0));
+    }
+
     public function testUuidsEqualUnderTheNewCollationAreCopiedOnceAndTheOtherIsRejected(): void
     {
         $fixture = $this->fixture();

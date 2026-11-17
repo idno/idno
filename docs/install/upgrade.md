@@ -87,7 +87,8 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
       read.
     * *the database refused the document: ...*: the database server will not store it. The most
       likely case is a record nested more deeply than the server allows: MariaDB accepts JSON nested
-      at most 31 levels deep (MySQL 100).
+      at most 31 levels deep (MySQL 100). Another is a record whose `access` value is longer than
+      255 characters.
     * *its uuid equals that of the copied record ...*: two records whose addresses differ only in a
       way the new database treats as equal. The new database compares text the way the last 1.x
       versions compared post contents: ignoring capital letters, accents and trailing spaces, and
@@ -357,7 +358,9 @@ its schema migrations (`Idno/Storage/Migrations/`, run by the upgrade page and `
   `reader` and `site`. Columns: `id` (the record's `_id`), `uuid`, `type` (the entity's alias, see
   below), `owner`, `created` (seconds since 1970), `publish_status`, `data` (the whole record as
   JSON text, exactly as PHP's `json_encode()` wrote it) and `search` (the search text). On MySQL and
-  MariaDB each declared indexed field adds a generated column `ix_<field>`.
+  MariaDB there is also `ix_access`, a copy of the record's `access` that the database keeps itself
+  (with an index, because every query filters on it), and each declared indexed field adds a
+  generated column `ix_<field>`.
 * `idno_settings`: the site's settings (the collection `config`), one row per setting (`name`,
   `value` as JSON text, `position`).
 * `idno_sessions`: PHP sessions.
@@ -449,4 +452,5 @@ The new tables also change what some queries match:
 * **Decimal numbers are compared as their JSON text.** A number still finds itself, but the string `'0.3'` no longer finds the number `0.1 + 0.2` (stored as `0.30000000000000004`). On MySQL 8 (not MariaDB or SQLite) a number that JSON writes in exponent form (`1.0e+25`) is not found by the same number.
 * **Settings.** The `config` collection holds one document (saving another replaces it), and a settings key that ends in a space is refused.
 * **Indexed fields match plain values only.** A field that an entity class declares as indexed (`#[IndexedField]`) no longer finds an item where that field holds a list or an object, once its index exists. Declare only fields that hold one value in every record of the collection, whatever class stored it.
+* **`access` is one plain value of at most 255 characters.** The database indexes every item's `access` (who may read it), so it behaves as an indexed field does: an item whose `access` is a list or an object is not found by any query on `access`, so listings show it only to administrators. On MySQL and MariaDB an item whose `access` is longer than 255 characters is refused when it is saved (`false`), as an over-long `uuid` or `owner` is; that relies on the server's strict SQL mode, which is the default. Idno itself only ever stores `PUBLIC`, `SITE`, or the address of a user or an access group there.
 * As before, a whole decimal number (`1.0`) reads back as the integer `1`.

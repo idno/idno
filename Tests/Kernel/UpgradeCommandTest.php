@@ -44,9 +44,9 @@ final class UpgradeCommandTest extends TestCase
 
     /** The indexes the classes under Idno/ declare (#[IndexedField]), per collection. */
     private const CORE_INDEXES = [
-        'entities' => ['access', 'canonical', 'code', 'email', 'handle', 'queue', 'shorturl', 'slug', 'source_url', 'url'],
-        'reader' => ['access', 'canonical', 'feed_url', 'shorturl', 'slug', 'url'],
-        'site' => ['access', 'canonical', 'domain', 'shorturl', 'slug', 'url'],
+        'entities' => ['canonical', 'code', 'email', 'handle', 'queue', 'shorturl', 'slug', 'source_url', 'url'],
+        'reader' => ['canonical', 'feed_url', 'shorturl', 'slug', 'url'],
+        'site' => ['canonical', 'domain', 'shorturl', 'slug', 'url'],
     ];
 
     private ?Connection $connection = null;
@@ -116,6 +116,9 @@ final class UpgradeCommandTest extends TestCase
             foreach ($fields as $field) {
                 $this->assertStringContainsString('Created the index ' . $collection . '.' . $field . '.', $stdout);
             }
+            // `access` is indexed by the baseline schema itself: there from the start, never reported.
+            $this->assertContains('access', $catalog->indexedFields($collection), $collection);
+            $this->assertStringNotContainsString('Created the index ' . $collection . '.access.', $stdout);
         }
     }
 

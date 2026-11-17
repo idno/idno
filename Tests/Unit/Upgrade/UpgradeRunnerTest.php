@@ -82,7 +82,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertFalse($result['locked']);
         self::assertSame([], (new SchemaMigrator($this->db()))->pending());
         $catalog = new SchemaCatalog($this->db());
-        self::assertContains('access', $catalog->indexedFields('entities'), 'the core indexes are made in the same step');
+        self::assertContains('slug', $catalog->indexedFields('entities'), 'the core indexes are made in the same step');
         self::assertContains('feed_url', $catalog->indexedFields('reader'));
         self::assertTrue((new UpgradeLock($this->other()))->acquire(), 'the lock is released');
     }
@@ -143,7 +143,8 @@ final class UpgradeRunnerTest extends TestCase
     public function testAStepKilledBeforeTheIndexesLeavesTheGateClosed(): void
     {
         $failing = new FailingStatementMiddleware();
-        $failing->failOn('/^create (unique )?index if not exists "?idno_\w+_ix_/i');
+        // (The statements of a declared index, lower case and quoted; not the baseline's own index on access.)
+        $failing->failOn('/^create (unique )?index if not exists "idno_\w+_ix_/');
         $this->connection?->close();
         $this->connection = $this->connect($this->recorder, $failing);
 
@@ -159,7 +160,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame('current', $this->runner()->step(microtime(true) + 5)['status']);
         self::assertSame([], (new SchemaMigrator($this->db()))->pending());
         $catalog = new SchemaCatalog($this->db());
-        foreach (['access', 'handle', 'email', 'slug'] as $field) {
+        foreach (['handle', 'email', 'slug'] as $field) {
             self::assertContains($field, $catalog->indexedFields('entities'), $field);
         }
     }
@@ -222,7 +223,7 @@ final class UpgradeRunnerTest extends TestCase
     {
         $this->runner()->run(static function (string $line): void {
         });
-        $this->db()->executeStatement('drop index idno_entities_ix_access');
+        $this->db()->executeStatement('drop index idno_entities_ix_slug');
         $lock = new UpgradeLock($this->other());
         self::assertTrue($lock->acquire());
 
@@ -234,7 +235,7 @@ final class UpgradeRunnerTest extends TestCase
 
         self::assertSame('current', $result['status']);
         self::assertStringStartsWith('Waiting: another process is upgrading the database', $lines[0]);
-        self::assertContains('Created the index entities.access.', $lines);
+        self::assertContains('Created the index entities.slug.', $lines);
     }
 
     public function testRunGivesUpWhenTheLockIsHeldTooLong(): void
@@ -280,7 +281,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame('current', $result['status'], (string) $result['message']);
         self::assertSame([], (new SchemaMigrator($this->db()))->pending());
         $catalog = new SchemaCatalog($this->db());
-        self::assertContains('access', $catalog->indexedFields('entities'));
+        self::assertContains('slug', $catalog->indexedFields('entities'));
         self::assertNotContains('upgrade_good_field', $catalog->indexedFields('entities'));
     }
 
@@ -504,7 +505,7 @@ final class UpgradeRunnerTest extends TestCase
 
         self::assertSame('current', $result['status']);
         self::assertSame('Ran the migration ' . self::BASELINE . '.', $lines[0]);
-        self::assertContains('Created the index entities.access.', $lines);
+        self::assertContains('Created the index entities.slug.', $lines);
         self::assertContains('Created the index reader.feed_url.', $lines);
 
         $lines = [];
@@ -523,17 +524,17 @@ final class UpgradeRunnerTest extends TestCase
     {
         $this->runner()->run(static function (string $line): void {
         });
-        $this->db()->executeStatement('drop index idno_entities_ix_access');
+        $this->db()->executeStatement('drop index idno_entities_ix_slug');
         (new SchemaCatalog($this->db()))->forget();
 
         self::assertSame('current', $this->runner()->step(microtime(true) + 5)['status']);
-        self::assertNotContains('access', (new SchemaCatalog($this->db()))->indexedFields('entities'), 'a step leaves a current schema alone');
+        self::assertNotContains('slug', (new SchemaCatalog($this->db()))->indexedFields('entities'), 'a step leaves a current schema alone');
 
         $lines = [];
         $this->runner()->run(static function (string $line) use (&$lines): void {
             $lines[] = $line;
         });
-        self::assertSame(['Created the index entities.access.'], $lines);
+        self::assertSame(['Created the index entities.slug.'], $lines);
     }
 
     // ------------------------------------------------------------------ helpers
@@ -557,13 +558,15 @@ final class UpgradeRunnerTest extends TestCase
     }
 
     /**
-     * The number of declared-field indexes on the three collections.
+     * The number of declared-field indexes on the three collections (the schema's own index on
+     * `access`, which every table has from the baseline, left out).
      */
     private function indexCount(): int
     {
         $catalog = new SchemaCatalog($this->db());
+        $declared = static fn (string $collection): int => count(array_diff($catalog->indexedFields($collection), ['access']));
 
-        return count($catalog->indexedFields('entities')) + count($catalog->indexedFields('reader')) + count($catalog->indexedFields('site'));
+        return $declared('entities') + $declared('reader') + $declared('site');
     }
 
     /**
