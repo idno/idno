@@ -52,7 +52,7 @@ final class SapiGuardTest extends TestCase
     }
 
     /** The directories whose PHP scripts (files that declare no class) are found by scripts(). */
-    private const SCRIPT_DIRECTORIES = ['Tests/Kernel', 'Tests/rig', 'Tests/Storage'];
+    private const SCRIPT_DIRECTORIES = ['Tests/Kernel', 'Tests/rig', 'Tests/Storage', 'Tests/Unit/Upgrade/Mongo'];
 
     /**
      * The PHP scripts (files that declare no class, interface or trait) in SCRIPT_DIRECTORIES, from
@@ -89,6 +89,8 @@ final class SapiGuardTest extends TestCase
             'idno.php' => ['idno.php'],
             'known.php' => ['known.php'],
             '_bootstrap.php' => ['Tests/_bootstrap.php'],
+            // Beside the import's fixtures, which are not scripts (expected.php only returns an array).
+            'Tests/Import/fixtures/capture.php' => ['Tests/Import/fixtures/capture.php'],
         ];
         foreach (self::scripts()['cli'] as $script) {
             $scripts[$script] = [$script];

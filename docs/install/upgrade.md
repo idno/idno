@@ -6,7 +6,8 @@ part is for developers of plugins and themes.
 
 If your site runs on **MongoDB**, the database part of this page does not apply to you: a MongoDB
 site upgrades exactly as before (replace the files, load the site). Read "Before you start" and
-"Other changes in 2.0".
+"Other changes in 2.0". To move a MongoDB site to MySQL, MariaDB or SQLite, see "Moving a MongoDB
+site".
 
 ## Before you start
 
@@ -290,6 +291,60 @@ If you went back before the upgrade had finished, delete all the `idno_` tables 
 upgrade carries on from where it stopped and misses changes made in 1.x to rows it had already copied.
 
 Once the `legacy_` tables are deleted, the upgrade can only be undone from your backup.
+
+## Moving a MongoDB site
+
+`php bin/console idno:import:mongo` copies a MongoDB site (its records and the files it keeps in
+GridFS) into a new MySQL, MariaDB or SQLite database and the upload directory. It reads MongoDB with
+the PHP extension `mongodb` alone (`pecl install mongodb`); the `mongodb/mongodb` library is not
+needed. Your MongoDB database is only read: nothing in it is changed.
+
+1. **Stop every process of the site** (the web server's PHP, the queue and cron services): the import
+   must see a database nobody writes to. If it finds the counts changed while it ran, it stops.
+2. **Make a new, empty database** (MySQL 8.0 or later, MariaDB 10.6 or later), and a user that can
+   create tables in it. For SQLite, choose where the database file will be (not on a network
+   filesystem); the file must not exist yet, or be empty. The import refuses a database that holds
+   any table at all.
+3. **Keep `config.ini` as it is**: the import reads the MongoDB settings from it (`dbstring`,
+   `dbname`, `dbuser`, `dbpass`, `dbauthsrc`), and the upload directory (`uploadpath`). Give other
+   ones with `--source-uri`, `--source-db` and `--upload-path`.
+4. **Run the import**:
+
+   ```
+   php bin/console idno:import:mongo --target=mysql://user@host/newdatabase
+   ```
+
+   With a user and no password in the URL, it asks for the password (hidden). You can also put the
+   password in the URL (percent-encode `@`, `:`, `/` and `%` in it), or give the whole URL in the
+   environment variable `IMPORT_TARGET_URL` instead of `--target`. For SQLite:
+   `--target=sqlite:///data/idno.sqlite` (relative to Idno's directory) or
+   `--target=sqlite:////var/lib/idno/idno.sqlite` (absolute). The files go into the upload directory,
+   under the directory named after your site (its `file_path_host`, or its host less `www.`); give
+   another with `--file-host`. The import never prints the database password.
+5. **Put the printed lines in `config.ini`**, in place of the MongoDB settings: `database`, `dbname`,
+   `dbhost`, `dbuser`, `dbpass` (where it prints `<the password you gave>`, write the password),
+   `filesystem = "local"` and `uploadpath`.
+6. **Run `php bin/console idno:upgrade`**, then start the site again. Users log in again (sessions are
+   not carried over).
+
+What it carries over: the records of `entities`, `reader` and `site`, the site's configuration (the
+`config` document the site loaded; any older one is not used), and every GridFS file, with its
+metadata, under its own id, so every link to a file keeps working. Each file's size, and its bytes,
+are checked once copied. Other collections are listed at the end and not copied: Idno 2 does not read
+them (sessions, for example).
+
+**Rejects.** A record that cannot be kept is not copied, and the import goes on: a record without a
+`uuid` or `_id`, one holding a value with no place in the new database (binary data, a regular
+expression, ...), one too deeply nested for the database, a second record with a `uuid` another record
+has (the database compares them ignoring case, and on MySQL and MariaDB accents too: of the two, the
+one created first is kept), or an older configuration. Each is a row of the table
+`idno_upgrade_rejects` of the new database, with the record exactly as MongoDB held it (Extended
+JSON, in `contents`) and why (`reason`); the import prints each one and how many there were.
+
+**If the import stops** (it says why: a database it cannot reach, a target that is not empty, a file
+whose bytes do not check, ...), nothing is lost: MongoDB is unchanged. The new database is left
+unfinished (the site would not open on it): delete it, make a new, empty one, and run the import
+again. Files already copied into the upload directory are checked and kept, not copied again.
 
 ## Other changes in 2.0
 

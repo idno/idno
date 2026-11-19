@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Idno\Storage;
 
-use Doctrine\Bundle\DoctrineBundle\ConnectionFactory;
+use Doctrine\Bundle\DoctrineBundle\ConnectionFactory as BundleConnectionFactory;
 use Doctrine\DBAL\Configuration;
 use Doctrine\DBAL\Connection;
 use Idno\Config\BootConfig;
-use Idno\Storage\Platform\ConnectFailureIsFinal;
-use Idno\Storage\Platform\SqliteConnectionSetup;
 
 /**
  * Decorates DoctrineBundle's connection factory (`doctrine.dbal.connection_factory`, see
@@ -23,7 +21,8 @@ use Idno\Storage\Platform\SqliteConnectionSetup;
  * copy of the Configuration), so that every physical connection is set up for SqliteDialect when
  * it connects. On every site it adds Platform\ConnectFailureIsFinal last (on that copy): when the
  * connection's first attempt to connect fails, no later attempt is made, so the database the
- * schema gate saw as unreachable stays so for the request.
+ * schema gate saw as unreachable stays so for the request. Both the parameters and the middlewares
+ * are ConnectionFactory's, the one place that decides them for any legacy configuration.
  *
  * This class is wired by hand in config/services.php, not by the directory scan.
  */
@@ -33,7 +32,7 @@ final class BootConfigConnectionFactory
      * @param array<string, mixed> $server the RDS_* environment variables (null when unset), for `beanstalk-mysql`
      */
     public function __construct(
-        private readonly ConnectionFactory $inner,
+        private readonly BundleConnectionFactory $inner,
         private readonly BootConfig $bootConfig,
         private readonly array $server,
         private readonly string $projectDir,
@@ -49,20 +48,11 @@ final class BootConfigConnectionFactory
      */
     public function createConnection(array $params, ?Configuration $config = null, array $mappingTypes = []): Connection
     {
-        $legacy = ConnectionParameters::fromLegacyConfig($this->bootConfig->all(), array_filter($this->server, static fn (mixed $value): bool => $value !== null), $this->projectDir);
+        $legacy = ConnectionFactory::parameters($this->bootConfig->all(), array_filter($this->server, static fn (mixed $value): bool => $value !== null), $this->projectDir);
         foreach (ConnectionParameters::IDENTITY_KEYS as $key) {
             unset($params[$key]);
         }
-
-        $config = clone ($config ?? new Configuration());
-        $middlewares = $config->getMiddlewares();
-        if ($legacy['driver'] === 'pdo_sqlite') {
-            $middlewares[] = new SqliteConnectionSetup();
-        }
-        // Last, so that it sees every failure: a first connect that fails is final (the schema gate
-        // has seen the database unreachable; nothing may boot on a second attempt that succeeds).
-        $middlewares[] = new ConnectFailureIsFinal();
-        $config->setMiddlewares($middlewares);
+        $config = ConnectionFactory::configuration($legacy, $config);
 
         return $this->inner->createConnection($legacy + $params, $config, $mappingTypes);
     }

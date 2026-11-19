@@ -54,14 +54,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Migrations/ holds the schema migrations, which SchemaMigrator runs (doctrine/migrations
         // builds them); they are not services. EntityClassFinder is a static helper. SettingsRecordStore (a RecordStore decorator that serves `config` from the settings table) is built with new, like the other RecordStore implementations.
         // Files/ (the file store on Flysystem, its value object, its exception and the filesystem factory) is built with new or by a factory, not autowired.
-        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'Files', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
+        // ConnectionFactory is a static helper (the connection a legacy configuration gives).
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'Files', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySqlMaintenance.
         // The upgrade's progress is a value object; the copier's helpers (the 1.x source, the writer
         // of the new tables, the config copy, the document checks) are built by LegacyDataCopier;
         // SchemaStatus is an enum, ServerVersion and UpgradePage static helpers, LegacyTableReferenced
-        // an exception.
-        'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
+        // an exception. Mongo/ (the MongoDB import: its source interface and the extension's source,
+        // the importer, the key unescaping helper, its record defaults and stream) is built with new by
+        // the import command.
+        'Upgrade' => ['ConfigCopier.php', 'Mongo', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -278,6 +281,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Upgrade\UpgradeController::class)
         ->arg('$logger', service('monolog.logger.upgrade'))
         ->arg('$stepSeconds', \Idno\Upgrade\UpgradeRunner::STEP_SECONDS);
+
+    // The MongoDB import (idno:import:mongo). It runs whether or not the legacy application booted, so
+    // like the upgrade it logs its failures on the `upgrade` channel; it builds its target connection,
+    // stores and file store itself, from its options and the boot configuration.
+    $services->set(\Idno\Console\ImportMongoCommand::class)
+        ->arg('$logger', service('monolog.logger.upgrade'))
+        ->arg('$projectDir', '%kernel.project_dir%');
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

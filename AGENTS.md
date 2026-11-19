@@ -27,6 +27,10 @@ composer test:down      # stop the rig, whichever mode, and delete its database
 # The dependency-free unit tier (Tests/Unit/): needs no rig, no database server, no configuration
 composer test:unit
 
+# The MongoDB import's end-to-end test (Tests/Import) against a real MongoDB, in Docker (needs nothing
+# but Docker; see "Importing a MongoDB site")
+composer test:mongo-import
+
 # Run one directory or file (a plugin's tests, the kernel tests, ...)
 composer test -- IdnoPlugins/ActivityPub/Tests/
 composer test -- Tests/Kernel
@@ -39,6 +43,7 @@ php -l path/to/File.php
 composer console -- list
 composer console -- idno:upgrade   # create or upgrade the database (the rig runs it on test:up)
 composer console -- idno:upgrade --drop-legacy   # list (and with --yes delete) a completed upgrade's legacy_ tables
+composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # move a MongoDB site into a new, empty database
 ```
 
 - `composer test` is `IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit`:
@@ -241,7 +246,10 @@ Idno/
                                UpgradeLock (one process at a time) and UpgradeProgress (a value object);
                                LegacyTables (what a completed upgrade left: the legacy_ tables, the
                                rejects; deleting the legacy_ tables). See "The schema gate and the
-                               upgrade", "Copying a 1.x database" and "The legacy tables"
+                               upgrade", "Copying a 1.x database" and "The legacy tables";
+                               Mongo/ is the import of a MongoDB site (MongoImporter, MongoSource and
+                               ExtMongoSource on the mongodb extension, MongoDocument, ChunkStream,
+                               ImportRecordDefaults): see "Importing a MongoDB site"
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
@@ -264,10 +272,12 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                (no per-host directories)
 Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel), storage (Tests/Storage,
                                with the contracts in Tests/Storage/Contract), upgrade (Tests/Upgrade, on
-                               private 1.x databases) and black-box characterisation tests;
+                               private 1.x databases), the MongoDB import (Tests/Import, with its captured
+                               fixture and the importer's contract) and black-box characterisation tests;
                                Tests/Fixtures holds test-only controllers, a command, a service and DBAL
                                middlewares;
-                               Tests/rig/ is the local test rig, Tests/build/ the CI configs and router
+                               Tests/rig/ is the local test rig (and mongo-import.sh with its Dockerfile,
+                               the import's test in Docker), Tests/build/ the CI configs and router
 ```
 
 ### Entry points
@@ -519,6 +529,13 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private empty database)
   and `Tests/Upgrade/UpgradeEndToEndTest` (a 1.x database). `--drop-legacy` (with `--yes`) deletes
   the `legacy_` tables of a completed upgrade and does nothing else (see "The legacy tables").
+- **`idno:import:mongo`** (`Idno\Console\ImportMongoCommand`): moves a MongoDB site into a new,
+  empty MySQL, MariaDB or SQLite database and its GridFS files into the upload directory
+  (`--target=<database URL>` or the environment variable `IMPORT_TARGET_URL`, `--upload-path`,
+  `--file-host`, `--source-uri`, `--source-db`); see "Importing a MongoDB site". Like `idno:upgrade` it
+  takes nothing from the legacy application (its logger is the `upgrade` channel, wired by name in
+  `config/services.php` with `%kernel.project_dir%`) and builds its target connection
+  (`ConnectionFactory::forConfig()`), stores and file store itself.
 - **Legacy console plugins still work**: `Idno\Common\ConsolePlugin` subclasses
   (`getCommand()`, `getDescription()`, `getParameters()`, `execute()`) are found by
   `Idno\Console\Application` once the kernel (and so the legacy application) has booted,
@@ -589,14 +606,15 @@ other new code may.
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
-  `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
+  `ConnectionFactory.php`, `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `FlysystemFile.php`, `FlysystemFileSystem.php`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
   enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
   `ServerVersion.php` and `UpgradePage.php`, and the copier's helpers `ConfigCopier.php`,
-  `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`), or the container will try to autowire
+  `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`, and `Mongo/`, the MongoDB import, built with
+  new by its command), or the container will try to autowire
   them. `RecordStore` implementations (`InMemoryRecordStore.php`,
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
@@ -606,7 +624,9 @@ other new code may.
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
   the service is first fetched, replaces the parameters with `ConnectionParameters::fromLegacyConfig()`
-  of the `BootConfig` (plus the `RDS_*` environment variables for `beanstalk-mysql`), so no
+  of the `BootConfig` (through `Idno\Storage\ConnectionFactory`, a static helper that is the one place
+  deciding a legacy configuration's parameters and middlewares: `ConnectionFactory::forConfig()` gives
+  the same connection, lazy, for any configuration, as the MongoDB import builds its target) (plus the `RDS_*` environment variables for `beanstalk-mysql`), so no
   configuration value is compiled into the container. It reproduces the legacy connection
   exactly: DSN charset `utf8mb4` (the schema's tables are utf8mb4), `Pdo\Mysql::ATTR_LOCAL_INFILE => 1`,
   `ERRMODE_EXCEPTION`, emulated prepares, the same session `sql_mode` and time zone. On a site whose
@@ -1052,7 +1072,8 @@ other new code may.
 
 ### Database
 
-- **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents
+- **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents; a site is
+  moved off it with `idno:import:mongo` (see "Importing a MongoDB site")
 - **MySQL 8.0 and MariaDB 10.6** (or later) — store each document as JSON text in the tables of the
   schema migrations (below), through `Idno\Storage\JsonRecordStore` and `SettingsRecordStore` on the
   DBAL connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over them (see the `db()` bullet
@@ -1795,6 +1816,96 @@ The container's services and the legacy filesystem:
 - Tests: `Tests/Kernel/LegacyFileSystemTest` (a temporary upload directory of its own),
   `Tests/Characterisation/FileServingTest` (the file page over HTTP, range quirks pinned),
   `Tests/Core/FilesystemTest`.
+
+#### Importing a MongoDB site
+
+`php bin/console idno:import:mongo` (`Idno\Console\ImportMongoCommand`) runs `Idno\Upgrade\Mongo\MongoImporter`
+from a MongoDB database (`MongoSource`) into a NEW, EMPTY SQL database, and copies the GridFS files
+into a `FileStore`. It reads MongoDB with the `mongodb` extension ALONE (`ExtMongoSource` on
+`MongoDB\Driver\Manager`): nothing of it may use the `mongodb/mongodb` library (`MongoDB\Client`,
+`MongoDB\Collection`, `MongoDB\GridFS`), which a site moving off MongoDB need not have. It runs
+whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built with new
+(excluded from the container scan).
+
+- The importer, in order: (1) the target must hold no table at all (`SchemaCatalog::tables()` is
+  `[]`), else a `\RuntimeException` and nothing written; the source's collections are listed before
+  anything is written (an unreachable MongoDB stops it there); (2) every migration but the newest
+  (`SchemaMigrator::migrate(exceptLast: true)`), then the core declared indexes
+  (`IndexedFields::reconcileDirectory()` of `Idno/`); (3) `entities`, `reader`, `site`, each in `_id`
+  order, in transactions of 200: keys unescaped (`MongoDocument::unescapeKeys()`: `%2E` → `.`, `%24`
+  → `$`, `%25` → `%`, once each, in that order; a key that changes moves after the others, as the old
+  backend's `unsanitizeFields()` left it; two keys becoming one is a reject), a non-empty `_id` and
+  uuid required, saved through a `JsonRecordStore` with `ImportRecordDefaults` (fills in nothing:
+  asking it for an id or a uuid is a `\LogicException`; `siteid` null), `AttributeTypeMap` and the
+  site's quote normaliser (`Idno\Core\Language::uncurlQuotes()`, called on an instance made without
+  its constructor, which needs the legacy application; the method uses nothing of the instance), so
+  the search text is what the site's store writes; then read back and compared (`===`) with the
+  document as the store writes it (`siteid` null and `owner` '' when empty): a difference is a
+  `\RuntimeException`. A reject (`idno_upgrade_rejects`: `collection`, `legacy_uuid` (at most 255
+  characters), `legacy_id` (36), `reason` (`RowWriter::reason()`), `contents` = the document's
+  canonical Extended JSON): no plain form (`a value of type <class> cannot be imported`), no `_id`, no
+  uuid, no JSON form, an `_id` or a uuid another imported record holds under the database's collation
+  (found before the save, so a record is never replaced; of two, the smaller `_id` is kept), a record
+  `RecordIndex` cannot index or the store refuses (too deep for the server's JSON functions, an
+  `access` over 255 characters, ...). Each reject is logged (warning) and reported; (4) `config`: at most
+  1000 documents; the one `Mongo::getAnyRecord()` loaded (greatest `created` in MongoDB's order of
+  types, missing lowest; among equals, which MongoDB leaves undefined, the greatest `_id`) whose keys
+  `SettingsRecordStore::rowsOf()` accepts becomes `idno_settings` (written as `rowsOf()` lays it out,
+  no defaults; read back through a `SettingsRecordStore`); the others are rejects `superseded
+  configuration` or `cannot be the settings: ...`; (5) files in `_id` order: `FileStore::storeAs()`
+  under the file's own id, streamed through `ChunkStream` (one piece in memory), then checked: the bytes
+  read equal the recorded length, the stored size, the md5 when GridFS recorded one, the SHA-256 of
+  the stored bytes against the bytes read, the metadata; a file there already with the same length,
+  metadata and bytes (md5, or SHA-256 against the source) is skipped; one with the same length and
+  other bytes and no md5 stops the import (its source stream is spent); (6) counts: every collection's
+  rows and rejects in the target must equal what was imported and rejected, and what was read must
+  equal the source's count when the collection was begun (a site still writing stops it); (7) LAST the
+  newest migration, so a site pointed at the target stays closed until everything is in. Other
+  collections are returned as `notImported` (names only). Any failure leaves the newest migration
+  pending: import again into a new, empty database.
+- `ExtMongoSource`: `ObjectId` → its 24 hex digits, `UTCDateTime` → epoch seconds (int, rounded down),
+  `Int64` → int; any other BSON object makes the document a reject (`document` null, `reason`). A
+  file's metadata is `MongoDocument::fileMetadata()` (what `MongoDBFileSystem::findOne()` put in
+  `$file->metadata`: keys unescaped, the `metadata` sub-document but `_id`, then every top-level field
+  but `_id`/`metadata` over it, `filename` reduced to its base name; a `UTCDateTime` as its string);
+  its stream yields the chunks in order of `n`, one fetched at a time (`batchSize` 1); a missing chunk
+  throws from the read. A file whose `_id` is not an ObjectId, or whose metadata holds another BSON
+  type, stops the import (the site could never serve it).
+- The command: refuses (exit 1, before connecting) without the extension, a target, a source (the
+  site's `dbstring`/`dbname`/`dbuser`/`dbpass`/`dbauthsrc` when its database is MongoDB, else
+  `--source-uri` and `--source-db`) or an upload path (`--upload-path`, else `uploadpath`). A target
+  URL is `mysql://` (or `mariadb://`) with a host and a database name, or `sqlite:///relative` /
+  `sqlite:////absolute` (read with `ConnectionParameters::fromUrl()`; user and password
+  percent-decoded); anything else is refused. A user and no password asks for it, hidden, on an
+  interactive terminal. The files' directory: `--file-host`; else the boot `file_path_host`; else the
+  imported configuration's `file_path_host`; else the host of the boot `url`, else of the imported
+  `url`, with `www.` removed as `Config::pathHost()` removes it; with none, a `\RuntimeException` at the
+  first file (no file written). Passwords (the target's, and the source's from the configuration or
+  the URI) are never printed: a connection failure is a fixed line and the exception's class; every
+  other message is printed and logged (`upgrade` channel) with each password replaced. On success it
+  prints the counts, the collections not imported, the `config.ini` lines (`database`, `dbname`,
+  `dbhost`, `dbport` when given, `dbuser`, `dbpass = "<the password you gave>"`, `filesystem = "local"`,
+  `uploadpath`, and `file_path_host` when `--file-host` was given) and `Now run php bin/console
+  idno:upgrade`; exit 0.
+- Tests: `Tests/Unit/Upgrade/Mongo/` (`MongoDocumentTest`; `MongoImporterTest`, the importer's contract
+  `Tests/Import/Contract/MongoImporterContract` on an SQLite file with an `ArrayMongoSource`, plus a 64
+  MiB file imported under `memory_limit=32M` in a subprocess, `import_large_file.php`, on the local
+  Flysystem adapter), `Tests/Unit/Storage/ConnectionFactoryTest`, `Tests/Import/MongoImporterMySqlTest`
+  (the same contract on a private MySQL or MariaDB database; skips on SQLite) and
+  `Tests/Import/MongoImportEndToEndTest`: the site captured from the old backend
+  (`Tests/Import/fixtures/mongo-site.ndjson`, every document as canonical Extended JSON, and
+  `expected.php`, what the backend returned, both written by `fixtures/capture.php`) loaded into a
+  private MongoDB database, the command run in a subprocess configured for MongoDB, the records and
+  files compared, the imported site served (`php -S`, after `idno:upgrade`). It needs the extension and
+  `IDNO_TEST_MONGO_URL` (skips without the variable, fails with it and no extension).
+  `composer test:mongo-import` (`Tests/rig/mongo-import.sh`) runs it in Docker: a `mongo:6` container
+  with a throwaway password (on 127.0.0.1:27018) and a PHP 8.4 image with the extension
+  (`Tests/rig/mongo-import.Dockerfile`) built around a COPY of the checkout (never the checkout itself:
+  the rig it starts writes the copy's `configuration/config.ini`), on the SQLite rig; it removes the
+  containers, their volumes and the network whatever happens. `mongo-import.sh capture` recaptures the
+  fixture. Until the old MongoDB backend is removed, the container's copy (and the CI job
+  `mongo-import`) also install `mongodb/mongodb`, for the backend that a process configured for MongoDB
+  boots; the import itself never needs it.
 
 #### The settings store
 

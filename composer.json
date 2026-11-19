@@ -104,7 +104,8 @@
     "suggest": {
         "ext-pdo_mysql": "A site on MySQL or MariaDB needs it; Idno needs this or ext-pdo_sqlite",
         "ext-pdo_sqlite": "A site on SQLite needs it (SQLite 3.38 or later); Idno needs this or ext-pdo_mysql",
-        "mongodb/mongodb": "Required for MongoDB storage support (^2.0)"
+        "mongodb/mongodb": "Required for MongoDB storage support (^2.0)",
+        "ext-mongodb": "Only to import a MongoDB site into MySQL, MariaDB or SQLite (php bin/console idno:import:mongo)"
     },
     "funding": [
         {
@@ -124,6 +125,7 @@
         "test:down": ["Composer\\Config::disableProcessTimeout", "Tests/rig/down.sh"],
         "console": "php -d error_reporting=22527 bin/console",
         "test:unit": ["Composer\\Config::disableProcessTimeout", "php -d error_reporting=22527 vendor/bin/phpunit -c phpunit.unit.xml"],
-        "test": ["Composer\\Config::disableProcessTimeout", "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"]
+        "test": ["Composer\\Config::disableProcessTimeout", "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"],
+        "test:mongo-import": ["Composer\\Config::disableProcessTimeout", "Tests/rig/mongo-import.sh"]
     }
 }
