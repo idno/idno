@@ -31,7 +31,7 @@ final class FatalErrorPage
         register_shutdown_function(
             function () {
                 $error = error_get_last();
-                if ($error["type"] == E_ERROR) {
+                if (is_array($error) && $error["type"] == E_ERROR) {
 
                     try {
                         ob_clean();

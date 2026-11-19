@@ -224,7 +224,10 @@ Idno/
                                SettingsRecordStore, a RecordStore decorator that serves the collection
                                `config` (the site's configuration, ONE document) from the key/value table
                                `idno_settings` and every other collection from the store it decorates
-                               (the container's RecordStore is one, over a JsonRecordStore)
+                               (the container's RecordStore is one, over a JsonRecordStore);
+                               Files/ holds the file store: FileStore (uploads on a Flysystem
+                               filesystem, in the 1.x layout), StoredFile, FileStoreException and
+                               FilesystemFactory (the filesystem from the boot configuration)
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -559,7 +562,7 @@ other new code may.
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
-  `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
+  `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
   enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
@@ -1681,6 +1684,30 @@ afterwards calls `SchemaCatalog::forget()`.
   in memory or on SQLite). A field with a declared index (#[IndexedField], below) matches scalar
   values only (no hook: pinned by
   `IndexedFieldsContract::testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed`).
+
+#### The file store
+
+`Idno\Storage\Files\FileStore` keeps uploaded files on a Flysystem filesystem (`league/flysystem`;
+the S3 adapter is `league/flysystem-async-aws-s3`; `league/flysystem-memory` is a dev dependency for
+tests). It is built with new (the `Files/` directory is excluded from the container scan), with a
+`FilesystemOperator` and the base directory name or a closure that returns it, asked at each call.
+
+- Layout, unchanged since 1.x: a file with id `<id>` is `<directory>/<id[0]>/<id[1]>/<id[2]>/<id[3]>/<id>.file`
+  (the bytes) with `<same>/<id>.data` beside it (the metadata, `json_encode($metadata)`, no flags).
+  `FileStore::path($id)` is the `.file` path. A file exists when its `.file` does; a missing or
+  undecodable `.data` is metadata `[]`.
+- An id is 32 hex digits (a local file) or 24 (a GridFS file). It is validated before any path is built
+  from it: `find()`, `has()`, `updateMetadata()` and `delete()` treat anything else as no file,
+  `storeAs()` and `path()` throw `\InvalidArgumentException`, `readStream()` throws `FileStoreException`.
+  `store()` makes a new id, `bin2hex(random_bytes(16))`. Files are streamed in and out, never read whole.
+- `updateMetadata()` merges with `array_merge`, returns false when the file is not there and true,
+  writing nothing, when the merge changes nothing. Failures of the filesystem are thrown as
+  `FileStoreException` (previous: Flysystem's).
+- `FilesystemFactory::fromConfig(BootConfig::all())`: an `uploadpath` of `s3://<bucket>/<prefix>/` is the S3
+  adapter (`aws_key`, `aws_secret`, `aws_region`; no credentials means the SDK's default chain), any
+  other non-empty path the local adapter rooted there (files 0644, directories 0755), none throws a
+  `\LogicException`. Tests give it an `S3Client` on a Symfony `MockHttpClient`, never the network.
+- Tests: `Tests/Unit/Storage/Files/`.
 
 #### The settings store
 

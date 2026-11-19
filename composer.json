@@ -62,7 +62,9 @@
         "symfony/runtime": "^8.0",
         "symfony/monolog-bundle": "^4.1",
         "doctrine/doctrine-bundle": "^3.4",
-        "doctrine/migrations": "^3.9"
+        "doctrine/migrations": "^3.9",
+        "league/flysystem": "^3",
+        "league/flysystem-async-aws-s3": "^3"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,
@@ -92,7 +94,8 @@
         "ext-pdo_sqlite": "*",
         "mapkyca/mapkyca-known-docker": "^1.0",
         "squizlabs/php_codesniffer": "4.*",
-        "phpunit/phpunit": "^9.6"
+        "phpunit/phpunit": "^9.6",
+        "league/flysystem-memory": "^3"
     },
     "extra": {
         "unused": [
