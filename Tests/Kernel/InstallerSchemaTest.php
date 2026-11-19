@@ -26,7 +26,7 @@ final class InstallerSchemaTest extends TestCase
     {
         $config = Idno::container()->get(BootConfig::class)->all();
         if (ConnectionParameters::driverFamily($config) !== 'mysql') {
-            $this->markTestSkipped('The installers install MySQL sites: this needs the rig\'s MySQL or MariaDB server.');
+            $this->markTestSkipped('This checks the installers\' MySQL path: it needs the rig\'s MySQL or MariaDB server.');
         }
         $this->connection = PrivateDatabase::mysql('installer', migrate: false);
     }
@@ -50,6 +50,15 @@ final class InstallerSchemaTest extends TestCase
             {
                 return $this->installSchema($host, $dbname, $user, $pass);
             }
+
+            /**
+             * @param array<string, mixed> $input
+             * @return array<string, string>
+             */
+            public function params(string $database, array $input): array
+            {
+                return $this->databaseParams($database, $input);
+            }
         };
     }
 
@@ -70,5 +79,36 @@ final class InstallerSchemaTest extends TestCase
 
         $this->expectException(\PDOException::class);
         self::installer()->check($host, 'idno_no_such_database_' . bin2hex(random_bytes(4)), $config->dbuser, $config->dbpass);
+    }
+
+    public function testTheMysqlParamsAreTodays(): void
+    {
+        self::assertNotNull($this->connection);
+        $config = Idno::site()->config();
+        $host = $config->dbhost . (empty($config->dbport) ? '' : ';port=' . $config->dbport);
+        $name = (string) $this->connection->getDatabase();
+
+        // The five values the web installer has always written for MySQL, whatever the type was called.
+        foreach (['mysql', 'MySQL', 'mariadb', ''] as $type) {
+            $this->assertSame(
+                ['database' => 'MySQL', 'dbname' => $name, 'dbuser' => (string) $config->dbuser, 'dbpass' => (string) $config->dbpass, 'dbhost' => $host],
+                self::installer()->params($type, ['name' => $name, 'user' => $config->dbuser, 'pass' => $config->dbpass, 'host' => $host]),
+            );
+        }
+        $this->assertSame([], (new SchemaCatalog($this->connection))->tables(), 'no table was created');
+    }
+
+    public function testAMysqlDatabaseItCannotConnectToIsRefusedWithTheMessageToShow(): void
+    {
+        $config = Idno::site()->config();
+        $host = $config->dbhost . (empty($config->dbport) ? '' : ';port=' . $config->dbport);
+
+        try {
+            self::installer()->params('mysql', ['name' => 'idno_no_such_database_' . bin2hex(random_bytes(4)), 'user' => $config->dbuser, 'pass' => $config->dbpass, 'host' => $host]);
+            $this->fail('A database that does not exist was accepted.');
+        } catch (\Idno\Exceptions\ConfigurationException $e) {
+            $this->assertStringContainsString('We couldn\'t connect to your database', $e->getMessage());
+            $this->assertInstanceOf(\PDOException::class, $e->getPrevious());
+        }
     }
 }

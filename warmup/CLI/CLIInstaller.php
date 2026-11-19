@@ -15,7 +15,8 @@ class CLIInstaller extends \Idno\Core\Installer
     private $config = [];
     private $expected_manifest = [
         'site_title' => '"Site title"',
-        'database' => '"Database type, usually \'MySQL\'"',
+        'database' => '"Database type: \'mysql\' (MySQL or MariaDB) or \'sqlite\'"',
+        'sqlite_path' => '"For SQLite, the database file (blank for data/idno.sqlite); not used for MySQL"',
         'mysql_name' => '"Database name"',
         'mysql_user' => '"Database username"',
         'mysql_pass' => '"Database password"',
@@ -65,6 +66,14 @@ class CLIInstaller extends \Idno\Core\Installer
             }
         }
 
+        if (Idno\Core\Installer::databaseModuleAvailable()) {
+            foreach (Idno\Core\Installer::databaseModules() as $extension) {
+                $output->writeln("\t\t$extension extension is " . (extension_loaded($extension) ? 'installed.' : 'not installed (only one database extension is needed).'));
+            }
+        } else {
+            throw new \Exception('None of the database extensions ' . implode(' and ', Idno\Core\Installer::databaseModules()) . ' is installed: Idno needs at least one.');
+        }
+
         $output->writeln(" ");
     }
 
@@ -104,16 +113,26 @@ class CLIInstaller extends \Idno\Core\Installer
                         }
                     }
 
-                    echo $this->buildConfig(
-                        [
+                    // Nothing is connected to or created here: the settings are only written out.
+                    if (self::databaseType((string) ($this->config['database'] ?? '')) == 'sqlite') {
+                        $database = [
+                        'database' => 'sqlite',
+                        'dbname' => $this->sqlitePath((string) ($this->config['sqlite_path'] ?? '')),
+                        'dbpass' => '',
+                        'dbuser' => '',
+                        'dbhost' => '',
+                        ];
+                    } else {
+                        $database = [
+                        'database' => 'MySQL',
                         'dbname' => $this->config['mysql_name'],
                         'dbpass' => $this->config['mysql_pass'],
                         'dbuser' => $this->config['mysql_user'],
                         'dbhost' => $this->config['mysql_host'],
-                        'uploadpath' => $this->config['upload_path'],
-                        'database' => $this->config['database'],
-                        ]
-                    );
+                        ];
+                    }
+
+                    echo $this->buildConfig(array_merge($database, ['uploadpath' => $this->config['upload_path']]));
 
                     return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
@@ -197,31 +216,40 @@ class CLIInstaller extends \Idno\Core\Installer
                     }
 
                     if (empty($this->config['database'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the database type: ', 'MySQL');
+                        $question = new Symfony\Component\Console\Question\Question('Please enter the database type (mysql or sqlite): ', 'mysql');
 
                         $this->config['database'] = $helper->ask($input, $output, $question);
                     }
+                    $database = self::databaseType((string) $this->config['database']);
 
-                    if (empty($this->config['mysql_name'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the name of the database: ', 'known');
+                    if ($database == 'sqlite') {
+                        if (empty($this->config['sqlite_path'])) {
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the path of the database file: ', $this->defaultSqlitePath());
 
-                        $this->config['mysql_name'] = $helper->ask($input, $output, $question);
-                    }
-                    if (empty($this->config['mysql_user'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the username: ');
+                            $this->config['sqlite_path'] = $helper->ask($input, $output, $question);
+                        }
+                    } else {
+                        if (empty($this->config['mysql_name'])) {
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the name of the database: ', 'known');
 
-                        $this->config['mysql_user'] = $helper->ask($input, $output, $question);
-                    }
-                    if (empty($this->config['mysql_pass'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the database password: ');
-                        $question->setHidden(true);
+                            $this->config['mysql_name'] = $helper->ask($input, $output, $question);
+                        }
+                        if (empty($this->config['mysql_user'])) {
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the username: ');
 
-                        $this->config['mysql_pass'] = $helper->ask($input, $output, $question);
-                    }
-                    if (empty($this->config['mysql_host'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the database hostname: ', 'localhost');
+                            $this->config['mysql_user'] = $helper->ask($input, $output, $question);
+                        }
+                        if (empty($this->config['mysql_pass'])) {
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the database password: ');
+                            $question->setHidden(true);
 
-                        $this->config['mysql_host'] = $helper->ask($input, $output, $question);
+                            $this->config['mysql_pass'] = $helper->ask($input, $output, $question);
+                        }
+                        if (empty($this->config['mysql_host'])) {
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the database hostname: ', 'localhost');
+
+                            $this->config['mysql_host'] = $helper->ask($input, $output, $question);
+                        }
                     }
                     if (empty($this->config['upload_path'])) {
                         $question = new Symfony\Component\Console\Question\Question('Please enter the upload path: ', $this->root_path . '/Uploads/');
@@ -237,26 +265,21 @@ class CLIInstaller extends \Idno\Core\Installer
                         $this->checkUploadDirectory($this->config['upload_path']);
                     }
 
-                    $this->installSchema(
-                        $this->config['mysql_host'],
-                        $this->config['mysql_name'],
-                        $this->config['mysql_user'],
-                        $this->config['mysql_pass'],
-                        $this->config['database']
+                    // Check the database: MySQL is connected to, an SQLite file is created (see Installer::databaseParams())
+                    $db_params = $this->databaseParams(
+                        $database,
+                        [
+                        'path' => $this->config['sqlite_path'] ?? '',
+                        'name' => $this->config['mysql_name'] ?? '',
+                        'user' => $this->config['mysql_user'] ?? '',
+                        'pass' => $this->config['mysql_pass'] ?? '',
+                        'host' => $this->config['mysql_host'] ?? '',
+                        ]
                     );
 
                     $this->writeApacheConfig();
 
-                    $ini_file = $this->buildConfig(
-                        [
-                        'dbname' => $this->config['mysql_name'],
-                        'dbpass' => $this->config['mysql_pass'],
-                        'dbuser' => $this->config['mysql_user'],
-                        'dbhost' => $this->config['mysql_host'],
-                        'uploadpath' => $this->config['upload_path'],
-                        'database' => $this->config['database'],
-                        ]
-                    );
+                    $ini_file = $this->buildConfig(array_merge($db_params, ['uploadpath' => $this->config['upload_path']]));
 
                     $this->writeConfig($ini_file, $config_name);
 

@@ -310,6 +310,33 @@ services, `Idno::site()` or `Idno::container()`:
   It writes `configuration/config.ini` only; per-domain config files are no longer read, so
   `install <name>` refuses any other name.
 
+Both installers set up MySQL, MariaDB or SQLite, through ONE method of their shared base,
+`Idno\Core\Installer::databaseParams(string $database, array $input)`: it checks the chosen
+database and returns the values `buildConfig()` fills `warmup/webserver-configs/config.ini.template`
+with, or throws `Idno\Exceptions\ConfigurationException` with the message to show (the web installer
+escapes it). `$database` is read by `Installer::databaseType()`: `sqlite`, `SQLite` and `sqlite3`
+(with spaces around them) are SQLite, anything else is MySQL or MariaDB. For MySQL the input is
+`name`, `user`, `pass` and `host`, the check is a connection (`installSchema()`), and the value written
+is `MySQL`. For SQLite the input is `path`: empty is `<project>/data/idno.sqlite`, a relative path is
+under the project directory (as the site reads it), the file's directory is created (0755) when
+missing, an empty file is created when there is none, both must be writable, and the file is opened
+through DBAL with `SqliteConnectionSetup` (which refuses SQLite below 3.38), so an existing file that
+is not an SQLite database is refused and left as it is (an empty file is a valid new database); a path
+with a single quote or a control character is refused (it cannot be written in the configuration
+file). The value written is exactly `sqlite` (`Sqlite3` in a configuration means MySQL: see
+`ConnectionParameters::driverFamily()`) and `dbname` is the absolute path; `dbuser`, `dbpass` and
+`dbhost` are empty. Neither installer loads SQL: the tables are created by the upgrade, as for MySQL.
+`Installer::requiredModules()` no longer lists `pdo_mysql`: `Installer::databaseModules()` is
+`pdo_mysql` and `pdo_sqlite`, and the requirements page and `check-requirements` need at least one
+(`Installer::databaseModuleAvailable()`). The web installer's settings page has the choice as two
+radio buttons in one `fieldset` (MySQL or MariaDB by default) and an SQLite path field; the CLI asks
+`Please enter the database type (mysql or sqlite): `, and for SQLite the path in place of the
+database's name, user, password and host (manifest keys `database` and `sqlite_path`; `makeconfig`
+writes the SQLite settings without creating the file). `Tests/Unit/Install/InstallerDatabaseTest`
+pins the SQLite side in the unit tier (a test subclass whose root is a temporary directory),
+`Tests/Kernel/InstallerSchemaTest` the MySQL side (skips on SQLite). `ext-pdo_mysql` is a Composer `suggest`, not a
+`require`, as is `ext-pdo_sqlite`.
+
 ### Request lifecycle
 
 1. `index.php` checks the PHP version, registers the fatal-error page
@@ -644,9 +671,10 @@ other new code may.
   a supported production database for a small site**: one server, a local disk, sessions as PHP files
   (see the `db()` bullet), search without a full-text index, ASCII-only case folding (below), backups
   with `.backup` or a copy of the file while no writer is active. It is NOT supported on a network
-  filesystem (NFS, SMB) or with several web servers on one file. The installers do not create SQLite
-  sites yet (a site is configured by hand: `database = sqlite`, `dbname = data/idno.sqlite`); the test
-  rig's SQLite mode is an SQLite site too (see "Build & Test"). Where the file lives: `dbname` is the
+  filesystem (NFS, SMB) or with several web servers on one file. Both installers can set up an
+  SQLite site (see "Entry points"), and so can a configuration written by hand (`database =
+  sqlite`, `dbname = data/idno.sqlite`); the test rig's SQLite mode is an SQLite site too (see
+  "Build & Test"). Where the file lives: `dbname` is the
   file's path; one that is not `:memory:` and not absolute (no leading `/`, no Windows drive) is under
   the project directory (`ConnectionParameters::fromLegacyConfig($config, $server, $projectDir)`: every
   caller passes it, the connection factory the kernel's `kernel.project_dir`; with null a relative path
@@ -1032,7 +1060,7 @@ other new code may.
   `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
 - **SQLite** — the same stores with `SqliteDialect`; `database = sqlite` (with `dbname` the file's
   path) gives `db()` the same adapter. A supported production database for a small site on one server
-  with a local disk (the default test rig runs on it; the installers do not create SQLite sites yet).
+  with a local disk (the default test rig runs on it; both installers can set up an SQLite site).
   See the SQLite bullet under "Kernel and services".
 - The schema is created by the upgrade (see "The schema gate and the upgrade" below): the first
   page load of a new installation, or of a site whose files were replaced, shows the upgrade page,

@@ -11,7 +11,7 @@ Idno _requires_ the following server components:
 + SQLite (3.38 or above, through PHP's `pdo_sqlite`) works for a small site on a single server with a
   local disk: the database is one file in the `data/` directory, the PHP sessions are files, and search
   has no full-text index. It does not work on a network filesystem or with several web servers. The
-  installers do not set up SQLite sites yet; see [the installation instructions](instructions.md).
+  Both installers can set up an SQLite site; see [the installation instructions](instructions.md).
 
 Idno can either be installed at the root of a domain or subdomain, or in a subdirectory.
 

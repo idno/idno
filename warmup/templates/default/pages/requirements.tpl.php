@@ -121,6 +121,33 @@
                     <?php
             }
 
+                // Idno runs on MySQL, MariaDB or SQLite: one of their PHP modules is enough.
+                $database_modules = Idno\Core\Installer::databaseModules();
+            if (!Idno\Core\Installer::databaseModuleAvailable()) {
+                $ok = false;
+            }
+            foreach($database_modules as $extension) {
+                if (extension_loaded($extension)) {
+                    $class = 'success';
+                    $text = 'This extension is installed.';
+                } else {
+                    $class = Idno\Core\Installer::databaseModuleAvailable() ? 'warning' : 'failure';
+                    $text = Idno\Core\Installer::databaseModuleAvailable()
+                        ? 'This extension is not installed, which is fine: the other database extension is.'
+                        : 'This extension is not installed. Idno needs at least one of ' . implode(' and ', $database_modules) . '.';
+                }
+                ?>
+                <div class="component <?php echo $class?>">
+
+                    <h3><?php echo htmlspecialchars($extension) ?> for PHP</h3>
+                    <p>
+                        <?php echo htmlspecialchars($text) ?>
+                    </p>
+
+                    </div>
+                    <?php
+            }
+
             ?>
 
         </div>

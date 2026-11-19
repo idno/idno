@@ -1,6 +1,6 @@
 # Command Line Installer
 
-Idno allows you to install Idno via the command line, this can be handy for scripted installs, using non-MySQL database backends, or when installing over a terminal connection to a remote server.
+Idno allows you to install Idno via the command line, this can be handy for scripted installs, setting up a MySQL, MariaDB or SQLite site, or when installing over a terminal connection to a remote server.
 
 # The Basics
 
@@ -11,6 +11,8 @@ To install a brand new Idno using an interactive install simply run
 ```
 ./CLIInstaller install
 ```
+
+The installer asks for the database type (`mysql` or `sqlite`). For SQLite it then asks for the path of the database file (the default is `data/idno.sqlite`) in place of the database's name, user, password and host. In a manifest, set `database = "sqlite"` and, optionally, `sqlite_path`.
 
 # The Manifest
 

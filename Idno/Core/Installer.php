@@ -213,6 +213,148 @@ namespace Idno\Core {
         }
 
         /**
+         * The kind of database a person chose: `sqlite` for "sqlite", "SQLite" or "sqlite3" (with
+         * spaces around it), `mysql` for anything else (MySQL and MariaDB).
+         */
+        protected static function databaseType(string $database): string
+        {
+            return in_array(strtolower(trim($database)), ['sqlite', 'sqlite3'], true) ? 'sqlite' : 'mysql';
+        }
+
+        /**
+         * Whether a PHP module is loaded. Overridden by tests.
+         */
+        protected function moduleLoaded(string $module): bool
+        {
+            return extension_loaded($module);
+        }
+
+        /**
+         * Where an SQLite site's database file is when no path is given.
+         */
+        protected function defaultSqlitePath(): string
+        {
+            return $this->root_path . '/data/idno.sqlite';
+        }
+
+        /**
+         * The absolute path of an SQLite database file: the default for no path, a relative path
+         * under the project directory (as the site reads it), an absolute one as it is. A path that
+         * cannot be written in the single quotes of a configuration file is refused.
+         *
+         * @throws \Idno\Exceptions\ConfigurationException
+         */
+        protected function sqlitePath(string $path): string
+        {
+            $path = trim($path);
+            if ($path === '') {
+                return $this->defaultSqlitePath();
+            }
+            if (preg_match('/[\'\x00-\x1f\x7f]/', $path) === 1) {
+                throw new \Idno\Exceptions\ConfigurationException('The path of the database file cannot contain a single quote or a control character.');
+            }
+            if (str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('#^[A-Za-z]:#', $path) === 1) {
+                return $path;
+            }
+
+            return $this->root_path . '/' . $path;
+        }
+
+        /**
+         * Check the chosen database and return the values `buildConfig()` takes for it. It loads no
+         * SQL: the schema (the tables and their indexes) is created by the upgrade, on the site's
+         * first page load in a browser or by the command `php bin/console idno:upgrade`.
+         *
+         * For MySQL and MariaDB the input is `name`, `user`, `pass` and `host`, and the database is
+         * connected to. For SQLite it is `path` (the default is data/idno.sqlite under the project;
+         * a relative one is under the project too): the directory and an empty file are created when
+         * missing, both must be writable, and the file must open as an SQLite database (an existing
+         * file that does not is refused and left as it is). The value written for SQLite is exactly
+         * `sqlite`: `Sqlite3` in a configuration means MySQL.
+         *
+         * @param  string               $database `mysql` or `sqlite` (see databaseType())
+         * @param  array<string, mixed> $input
+         * @return array<string, string> database, dbname, dbuser, dbpass and dbhost
+         * @throws \Idno\Exceptions\ConfigurationException with the message to show
+         */
+        protected function databaseParams(string $database, array $input): array
+        {
+            if (self::databaseType($database) === 'sqlite') {
+                return $this->sqliteParams((string) ($input['path'] ?? ''));
+            }
+
+            $name = (string) ($input['name'] ?? '');
+            $user = (string) ($input['user'] ?? '');
+            $pass = (string) ($input['pass'] ?? '');
+            $host = (string) ($input['host'] ?? '');
+            try {
+                $this->installSchema($host, $name, $user, $pass);
+            } catch (\PDOException $e) {
+                throw new \Idno\Exceptions\ConfigurationException('We couldn\'t connect to your database. Please check your settings and try again. Here\'s the error we got: ' . $e->getMessage(), 0, $e);
+            }
+
+            return [
+                'database' => 'MySQL',
+                'dbname' => $name,
+                'dbuser' => $user,
+                'dbpass' => $pass,
+                'dbhost' => $host,
+            ];
+        }
+
+        /**
+         * @return array<string, string>
+         * @throws \Idno\Exceptions\ConfigurationException
+         */
+        private function sqliteParams(string $input): array
+        {
+            if (!$this->moduleLoaded('pdo_sqlite')) {
+                throw new \Idno\Exceptions\ConfigurationException('SQLite needs the pdo_sqlite extension for PHP, which is not installed.');
+            }
+
+            $path = $this->sqlitePath($input);
+            $directory = dirname($path);
+            if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+                throw new \Idno\Exceptions\ConfigurationException('We couldn\'t create the directory ' . $directory . ' for the database file - please check permissions and try again.');
+            }
+            if (!is_writable($directory)) {
+                throw new \Idno\Exceptions\ConfigurationException('We can\'t write data to ' . $directory . ' - SQLite keeps its database and its journal files there. Please check permissions and try again.');
+            }
+            if (is_dir($path)) {
+                throw new \Idno\Exceptions\ConfigurationException($path . ' is a directory, not a database file.');
+            }
+            if (file_exists($path)) {
+                if (!is_readable($path) || !is_writable($path)) {
+                    throw new \Idno\Exceptions\ConfigurationException('We can\'t read and write ' . $path . ' - please check permissions and try again.');
+                }
+            } elseif (@file_put_contents($path, '') === false) {
+                throw new \Idno\Exceptions\ConfigurationException('We couldn\'t create the database file ' . $path . ' - please check permissions and try again.');
+            }
+
+            // Open it as the site will (SqliteConnectionSetup refuses SQLite below 3.38).
+            $connection = null;
+            try {
+                $connection = \Doctrine\DBAL\DriverManager::getConnection(
+                    ['driver' => 'pdo_sqlite', 'path' => $path],
+                    (new \Doctrine\DBAL\Configuration())->setMiddlewares([new \Idno\Storage\Platform\SqliteConnectionSetup()])
+                );
+                $connection->executeQuery('select count(*) from sqlite_master')->fetchOne();
+            } catch (\Throwable $e) {
+                throw new \Idno\Exceptions\ConfigurationException('We couldn\'t open ' . $path . ' as an SQLite database. Here\'s the error we got: ' . $e->getMessage(), 0, $e);
+            } finally {
+                $connection?->close();
+            }
+
+            return [
+                'database' => 'sqlite',
+                'dbname' => $path,
+                'dbuser' => '',
+                'dbpass' => '',
+                'dbhost' => '',
+            ];
+        }
+
+        /**
          * Check that the database can be connected to. It loads no SQL: the schema (the tables and
          * their indexes) is created by the upgrade, on the site's first page load in a browser or by
          * the command `php bin/console idno:upgrade`.
@@ -293,7 +435,34 @@ namespace Idno\Core {
         }
 
         /**
-         * Return the required modules
+         * The PHP modules for the databases Idno can use: at least one of them is required.
+         *
+         * @return string[]
+         */
+        public static function databaseModules(): array
+        {
+            return ['pdo_mysql', 'pdo_sqlite'];
+        }
+
+        /**
+         * Whether at least one of the databaseModules() is loaded.
+         *
+         * @param callable|null $loaded Takes a module name, says whether it is loaded (extension_loaded() by default)
+         */
+        public static function databaseModuleAvailable(?callable $loaded = null): bool
+        {
+            $loaded ??= 'extension_loaded';
+            foreach (self::databaseModules() as $module) {
+                if ($loaded($module)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * Return the required modules (not the database ones: see databaseModules())
          */
         public static function requiredModules()
         {
@@ -306,7 +475,6 @@ namespace Idno\Core {
                 'libxml',
                 'mbstring',
                 'pdo',
-                'pdo_mysql',
                 'reflection',
                 'session',
                 'simplexml',

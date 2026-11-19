@@ -63,6 +63,9 @@ class WebInstaller extends \Idno\Core\Installer
         $mysql_host  = \Idno\Core\Input::getInput('mysql_host');
         $mysql_pass  = \Idno\Core\Input::getInput('mysql_pass');
         $mysql_name  = \Idno\Core\Input::getInput('mysql_name');
+        $submitted   = \Idno\Core\Input::getInput('database') !== null;
+        $database    = self::databaseType((string) \Idno\Core\Input::getInput('database', 'mysql'));
+        $sqlite_path = trim((string) \Idno\Core\Input::getInput('sqlite_path', ''));
         $upload_path = \Idno\Core\Input::getInput('upload_path', dirname(dirname(__FILE__)) . '/Uploads/');
 
         //        if (!WebInstaller::installer()->rewriteWorking()) {
@@ -74,12 +77,23 @@ class WebInstaller extends \Idno\Core\Installer
         //            $ok = false;
         //        }
 
-        if (!empty($mysql_name) && !empty($mysql_host)) {
+        $db_params = [];
+        if ($database == 'sqlite') {
+            $db_ready = $submitted;
+            $db_input = ['path' => $sqlite_path];
+        } else {
+            $db_ready = !empty($mysql_name) && !empty($mysql_host);
+            $db_input = ['name' => $mysql_name, 'user' => $mysql_user, 'pass' => $mysql_pass, 'host' => $mysql_host];
+            if ($submitted && !$db_ready) {
+                $messages .= '<p>Please give us the name of your MySQL database and the name of the server it is on.</p>';
+                $ok = false;
+            }
+        }
+        if ($db_ready) {
             try {
-                $this->installSchema($mysql_host, $mysql_name, $mysql_user, $mysql_pass);
-            } catch (Exception $e) {
-                $messages .= '<p>We couldn\'t connect to your database. Please check your settings and try again. Here\'s the error we got:</p>';
-                $messages .= '<blockquote><p>' . $e->getMessage() . '</p></blockquote>';
+                $db_params = $this->databaseParams($database, $db_input);
+            } catch (\Exception $e) {
+                $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
                 $ok = false;
             }
         }
@@ -104,7 +118,7 @@ class WebInstaller extends \Idno\Core\Installer
             }
         }
 
-        if ($ok && !empty($upload_path) && !empty($mysql_name) && !empty($mysql_host)) {
+        if ($ok && !empty($upload_path) && !empty($db_params)) {
 
             try {
                 $this->writeApacheConfig();
@@ -116,13 +130,7 @@ class WebInstaller extends \Idno\Core\Installer
             try {
 
                 $ini_file = $this->buildConfig(
-                    [
-                    'dbname' => $mysql_name,
-                    'dbpass' => $mysql_pass,
-                    'dbuser' => $mysql_user,
-                    'dbhost' => $mysql_host,
-                    'uploadpath' => $upload_path,
-                    ]
+                    array_merge($db_params, ['uploadpath' => $upload_path])
                 );
 
                 $this->writeConfig($ini_file);
@@ -163,6 +171,8 @@ class WebInstaller extends \Idno\Core\Installer
                 'mysql_host' => $mysql_host,
                 'mysql_pass' => $mysql_pass,
                 'mysql_name' => $mysql_name,
+                'database' => $database,
+                'sqlite_path' => $sqlite_path !== '' ? $sqlite_path : $this->defaultSqlitePath(),
                 'upload_path' => $upload_path,
 
                 'messages' => $messages,

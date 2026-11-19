@@ -9,6 +9,8 @@
     $mysql_host  = $vars['mysql_host'];
     $mysql_pass  = $vars['mysql_pass'];
     $mysql_name  = $vars['mysql_name'];
+    $database    = ($vars['database'] ?? 'mysql') == 'sqlite' ? 'sqlite' : 'mysql';
+    $sqlite_path = $vars['sqlite_path'] ?? '';
     $upload_path = $vars['upload_path'];
 
 ?>
@@ -79,47 +81,85 @@
         </div>
         <div class="settings-group">
             <h3>
-                2. Your MySQL settings
+                2. Your database
             </h3>
 
-            <p class="control-label">
-                Idno needs a single MySQL database, with a MySQL user that can connect to it. We recommend that this
-                is a user you have created just for Idno, rather than one you share with other applications.
-                <br><br>
-                You should create your database before entering the details here. If you're using a shared host,
-                you may have an option called "MySQL Database Wizard" that will speed you through the process.
-            </p>
+            <fieldset class="control-label">
+                <legend>Which database should Idno use?</legend>
 
-            <p>
-                <label class="control-label">
-                    MySQL database name<br>
-                    <input type="text" name="mysql_name" placeholder="" value="<?php echo htmlspecialchars($mysql_name ?? '') ?>"
-                           class="profile-input" required>
-                </label>
-            </p>
+                <p>
+                    <label for="database_mysql">
+                        <input type="radio" name="database" value="mysql" id="database_mysql"
+                               <?php echo $database == 'mysql' ? 'checked' : '' ?>>
+                        MySQL or MariaDB: a database server, best for a busy site
+                    </label>
+                </p>
+                <p>
+                    <label for="database_sqlite">
+                        <input type="radio" name="database" value="sqlite" id="database_sqlite"
+                               <?php echo $database == 'sqlite' ? 'checked' : '' ?>>
+                        SQLite: one file on this server, no database server needed, best for a small site
+                    </label>
+                </p>
+            </fieldset>
 
-            <p>
-                <label class="control-label">
-                    MySQL username<br>
-                    <input type="text" name="mysql_user" placeholder="" value="<?php echo htmlspecialchars($mysql_user ?? '') ?>"
-                           class="profile-input" required>
-                </label>
-            </p>
+            <div id="mysql-settings">
+                <p class="control-label">
+                    Idno needs a single MySQL or MariaDB database, with a user that can connect to it. We recommend
+                    that this is a user you have created just for Idno, rather than one you share with other
+                    applications.
+                    <br><br>
+                    You should create your database before entering the details here. If you're using a shared host,
+                    you may have an option called "MySQL Database Wizard" that will speed you through the process.
+                </p>
 
-            <p>
-                <label class="control-label">
-                    MySQL password<br>
-                    <input type="password" name="mysql_pass" placeholder="" value="" class="profile-input" required>
-                </label>
-            </p>
+                <p>
+                    <label class="control-label">
+                        MySQL database name<br>
+                        <input type="text" name="mysql_name" placeholder="" value="<?php echo htmlspecialchars($mysql_name ?? '') ?>"
+                               class="profile-input" data-needed="mysql">
+                    </label>
+                </p>
 
-            <p>
-                <label class="control-label">
-                    MySQL server name<br>
-                    <input type="text" name="mysql_host" placeholder="<?php echo htmlspecialchars($mysql_host ?? '') ?>"
-                           value="localhost" class="profile-input" required>
-                </label>
-            </p>
+                <p>
+                    <label class="control-label">
+                        MySQL username<br>
+                        <input type="text" name="mysql_user" placeholder="" value="<?php echo htmlspecialchars($mysql_user ?? '') ?>"
+                               class="profile-input" data-needed="mysql">
+                    </label>
+                </p>
+
+                <p>
+                    <label class="control-label">
+                        MySQL password<br>
+                        <input type="password" name="mysql_pass" placeholder="" value="" class="profile-input" data-needed="mysql">
+                    </label>
+                </p>
+
+                <p>
+                    <label class="control-label">
+                        MySQL server name<br>
+                        <input type="text" name="mysql_host" placeholder="<?php echo htmlspecialchars($mysql_host ?? '') ?>"
+                               value="localhost" class="profile-input" data-needed="mysql">
+                    </label>
+                </p>
+            </div>
+
+            <div id="sqlite-settings">
+                <p class="control-label">
+                    SQLite keeps your whole site in one file, so it needs no database server. It suits a small site
+                    on one server with a local disk. The web server must be able to write to the folder the file is in:
+                    SQLite keeps its journal files beside it. Idno creates the file, and the folder if it is missing.
+                </p>
+
+                <p>
+                    <label class="control-label" for="sqlite_path">
+                        The full path of the database file<br>
+                        <input type="text" name="sqlite_path" id="sqlite_path" placeholder=""
+                               value="<?php echo htmlspecialchars($sqlite_path) ?>" class="profile-input" data-needed="sqlite">
+                    </label>
+                </p>
+            </div>
         </div>
         <div class="settings-group">
             <h3>
@@ -145,6 +185,21 @@
         </div>
     </form>
     <script>
+        // Show the settings of the chosen database, and require only those.
+        function chooseDatabase() {
+            var sqlite = document.getElementById('database_sqlite').checked;
+            var groups = {mysql: document.getElementById('mysql-settings'), sqlite: document.getElementById('sqlite-settings')};
+            groups.mysql.style.display = sqlite ? 'none' : 'block';
+            groups.sqlite.style.display = sqlite ? 'block' : 'none';
+            var fields = document.querySelectorAll('[data-needed]');
+            for (var i = 0; i < fields.length; i++) {
+                fields[i].required = fields[i].getAttribute('data-needed') === (sqlite ? 'sqlite' : 'mysql');
+            }
+        }
+        document.getElementById('database_mysql').addEventListener('change', chooseDatabase);
+        document.getElementById('database_sqlite').addEventListener('change', chooseDatabase);
+        chooseDatabase();
+
         var request = new XMLHttpRequest();  
         request.open('GET', '../js/canary.js', true);
         request.onreadystatechange = function(){

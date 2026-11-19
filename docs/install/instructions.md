@@ -28,9 +28,13 @@ If you want to run the (almost) latest and greatest code, but aren't able to tra
 
 ### Use the automatic installer
 
-If you're using a MySQL (or MariaDB) back-end, you can get started by pointing your browser at your Idno site address. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below, or use the CLI installer.
+You can get started by pointing your browser at your Idno site address: the web installer sets up a site on MySQL, MariaDB or SQLite. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below. The CLI installer (see [here](cliinstaller.md)) sets up the same three databases from a terminal.
 
-The installers write your configuration file; they do not create Idno's tables. On MySQL and MariaDB the database is set up the first time the site is loaded in a browser: a page saying "Idno is setting up its database" creates the tables in a few seconds, then continues to your site. If you have a shell, `php bin/console idno:upgrade`, run from your Idno directory, does the same.
+The installers write your configuration file; they do not create Idno's tables. The database is set up the first time the site is loaded in a browser: a page saying "Idno is setting up its database" creates the tables in a few seconds, then continues to your site. If you have a shell, `php bin/console idno:upgrade`, run from your Idno directory, does the same.
+
+#### Installing to SQLite
+
+On the installer's settings page choose "SQLite" and give the full path of the database file (the default is `data/idno.sqlite` in your Idno directory). Idno creates the file, and its folder if it is missing; the web server must be able to write to that folder. The CLI installer asks `Please enter the database type (mysql or sqlite):`; answer `sqlite`, then give the path. A file that already exists and is not an SQLite database is refused and left as it is. See "If you're using SQLite" below for what to know before you choose it.
 
 ### Use environment variables
 
@@ -60,7 +64,7 @@ Additionally, you will need to create the database referred to in this configura
 
 ### If you're using SQLite
 
-SQLite keeps the whole database in one file, so a small site needs no database server. It suits a site on a single server with a local disk (SQLite 3.38 or later, with PHP's `pdo_sqlite`). The installers do not set up SQLite sites yet: write the configuration file yourself.
+SQLite keeps the whole database in one file, so a small site needs no database server. It suits a site on a single server with a local disk (SQLite 3.38 or later, with PHP's `pdo_sqlite`).  Both installers can set up an SQLite site; or write the configuration file yourself.
 
 Put the database file in the `data/` directory of your Idno installation (the web server must be able to write to it: SQLite keeps its journal files beside the database file), and name it in your configuration file:
 
