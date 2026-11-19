@@ -265,7 +265,7 @@ final class DatabaseConnectionTest extends TestCase
 
     public function testConnectionFailuresAreNotNoResults(): void
     {
-        $params = ConnectionParameters::fromLegacyConfig(\Idno\Core\Idno::container()->get(BootConfig::class)->all(), []);
+        $params = ConnectionParameters::fromLegacyConfig(\Idno\Core\Idno::container()->get(BootConfig::class)->all(), [], \Idno\Core\Idno::container()->getParameter('kernel.project_dir'));
         $params['dbname'] = 'known_unittest_no_such_database_' . bin2hex(random_bytes(4));
         $store = PrivateDatabase::recordStore(DriverManager::getConnection($params));
 

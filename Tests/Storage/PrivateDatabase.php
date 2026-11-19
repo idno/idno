@@ -120,7 +120,7 @@ final class PrivateDatabase
         if (ConnectionParameters::driverFamily($config) !== 'mysql') {
             Assert::markTestSkipped('The site\'s database is not MySQL or MariaDB, so there is no MySQL server to make a private database on.');
         }
-        $params = ConnectionParameters::fromLegacyConfig($config, $_SERVER);
+        $params = ConnectionParameters::fromLegacyConfig($config, $_SERVER, \Idno\Core\Idno::container()->getParameter('kernel.project_dir'));
         $name = self::siteDatabase($params) . '_' . $purpose;
 
         $server = $params;
@@ -183,7 +183,7 @@ final class PrivateDatabase
         if ($connection->getDatabasePlatform() instanceof AbstractMySQLPlatform) {
             $name = (string) $connection->getDatabase();
             $config = \Idno\Core\Idno::container()->get(BootConfig::class)->all();
-            $site = self::siteDatabase(ConnectionParameters::fromLegacyConfig($config, $_SERVER));
+            $site = self::siteDatabase(ConnectionParameters::fromLegacyConfig($config, $_SERVER, \Idno\Core\Idno::container()->getParameter('kernel.project_dir')));
             if ($name === $site || !str_starts_with($name, $site . '_')) {
                 throw new \LogicException('Not a private database: ' . $name);
             }
