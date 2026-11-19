@@ -8,6 +8,7 @@ use Idno\Config\SiteSettings;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyBootstrap;
+use Idno\Legacy\LegacyFileStoreFactory;
 use Idno\Legacy\LegacyRecordDefaults;
 use Idno\Legacy\LegacyRecordStoreFactory;
 use Idno\Legacy\LegacyServiceFactory;
@@ -61,7 +62,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // SchemaStatus is an enum, ServerVersion and UpgradePage static helpers, LegacyTableReferenced
         // an exception.
         'Upgrade' => ['ConfigCopier.php', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
-        'Legacy' => ['FatalErrorPage.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -93,6 +94,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             service_closure(RecordStore::class),
             service_closure(EntityRepository::class),
             service_closure(\Psr\Log\LoggerInterface::class),
+            service_closure(\Idno\Storage\Files\FileStore::class),
         ])
         ->autowire(false)
         ->autoconfigure(false);
@@ -201,6 +203,23 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Storage\Platform\Dialect::class)
         ->factory([service(\Idno\Storage\DialectFactory::class), 'create']);
     $services->set(\Idno\Storage\IndexedFields::class)->public();
+
+    // The file store: uploads on a Flysystem filesystem (a local directory, or S3 for an `s3://`
+    // upload path), in the layout every site has used. Both are built at runtime, when first fetched,
+    // by LegacyFileStoreFactory (FilesystemFactory::fromConfig() of the boot configuration, and a
+    // FileStore that asks the legacy configuration for the site's base directory at each call), so
+    // nothing from the configuration is compiled in; like the storage services, they need the legacy
+    // application. Public because legacy code fetches them with Idno::container()->get(). The legacy
+    // filesystem service (Idno::site()->filesystem()) is an adapter over the FileStore, built by
+    // LegacyServiceFactory::filesystem() from a closure that fetches it at first use.
+    $services->set(LegacyFileStoreFactory::class)->args([service(BootConfig::class)]);
+    $services->set(\League\Flysystem\FilesystemOperator::class)
+        ->factory([service(LegacyFileStoreFactory::class), 'filesystem'])
+        ->public();
+    $services->set(\Idno\Storage\Files\FileStore::class)
+        ->factory([service(LegacyFileStoreFactory::class), 'store'])
+        ->args([service(\League\Flysystem\FilesystemOperator::class)])
+        ->public();
 
     // The copy of a 1.x database into the new schema. It runs while the legacy application is NOT
     // booted, so it cannot have the site's logger (Psr\Log\LoggerInterface is the legacy

@@ -10,7 +10,7 @@ namespace Idno\Core {
         function init()
         {
             $upload_dir = Idno::site()->config()->getUploadPath();
-            if (empty($upload_dir)) {
+            if (empty($upload_dir) || str_starts_with($upload_dir, 's3://')) {
                 $upload_dir = \Idno\Core\Idno::site()->config()->getTempDir();
             }
 
@@ -67,7 +67,7 @@ namespace Idno\Core {
                 $config = \HTMLPurifier_Config::createDefault();
 
                 $upload_dir = Idno::site()->config()->getUploadPath();
-                if (empty($upload_dir)) {
+                if (empty($upload_dir) || str_starts_with($upload_dir, 's3://')) {
                     $upload_dir = \Idno\Core\Idno::site()->config()->getTempDir();
                 }
 

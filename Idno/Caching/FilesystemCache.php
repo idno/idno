@@ -20,7 +20,8 @@ namespace Idno\Caching {
             }
 
             $pathbase = \Idno\Core\Idno::site()->config()->cachepath;
-            if (empty($pathbase)) {
+            if (empty($pathbase) && !str_starts_with((string) \Idno\Core\Idno::site()->config()->uploadpath, 's3://')) {
+                // An s3:// upload path is not a directory this cache can write to
                 $pathbase = \Idno\Core\Idno::site()->config()->uploadpath;
             }
             if (empty($pathbase)) {

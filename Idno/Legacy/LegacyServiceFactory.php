@@ -32,12 +32,14 @@ final class LegacyServiceFactory
      * @param (\Closure(): \Idno\Storage\RecordStore)|null          $recordStore
      * @param (\Closure(): \Idno\Storage\EntityRepository)|null     $repository
      * @param (\Closure(): \Psr\Log\LoggerInterface)|null           $logger     the site's logger (Idno\Core\Logging)
+     * @param (\Closure(): \Idno\Storage\Files\FileStore)|null      $fileStore  the FileStore service, which the filesystem() service serves
      */
     public function __construct(
         private readonly ?\Closure $connection = null,
         private readonly ?\Closure $recordStore = null,
         private readonly ?\Closure $repository = null,
         private readonly ?\Closure $logger = null,
+        private readonly ?\Closure $fileStore = null,
     )
     {
     }
@@ -110,6 +112,13 @@ final class LegacyServiceFactory
         );
     }
 
+    /**
+     * The legacy filesystem. A MongoDB site keeps `db()->getFilesystem()` (GridFS) when no `filesystem`
+     * is set. Otherwise an empty or `local` setting with an `uploadpath` is a FlysystemFileSystem over
+     * the FileStore (a local directory, or S3 for an `s3://` upload path); any other value names a
+     * filesystem class, which falls back to the FlysystemFileSystem when it cannot be built; with no
+     * `uploadpath` there is none (null).
+     */
     public function filesystem(): ?\Idno\Files\FileSystem
     {
         $site   = Idno::site();
@@ -117,22 +126,39 @@ final class LegacyServiceFactory
 
         switch ($config->filesystem) {
             case 'local':
-                return new \Idno\Files\LocalFileSystem();
+                return $this->flysystemFilesystem($config);
             default:
-                $filesystem = $site->filesystem();
-
-                if (empty($filesystem)) {
+                if (empty($config->filesystem)) {
                     if ($fs = $site->db()->getFilesystem()) {
-                        $filesystem = $fs;
+                        return $fs;
                     }
+
+                    return $this->flysystemFilesystem($config);
                 }
 
-                if (!empty($config->filesystem)) {
-                    $filesystem = $site->componentFactory($config->filesystem, "Idno\\Files\\FileSystem", "Idno\\Files\\", "Idno\\Files\\LocalFileSystem");
-                }
-
-                return $filesystem;
+                return $site->componentFactory($config->filesystem, "Idno\\Files\\FileSystem", "Idno\\Files\\", $this->flysystemFilesystem($config));
         }
+    }
+
+    /**
+     * A FlysystemFileSystem over the FileStore, or null with no upload path or no file store to serve it.
+     */
+    private function flysystemFilesystem(\Idno\Core\Config $config): ?FlysystemFileSystem
+    {
+        $uploadPath = (string) $config->uploadpath;
+        if (trim($uploadPath, ' /') === '' || $this->fileStore === null) {
+            return null;
+        }
+        $logger = $this->logger;
+        if ($logger === null) {
+            return null;
+        }
+
+        return new FlysystemFileSystem(
+            $this->fileStore,
+            $logger,
+            str_starts_with(trim($uploadPath), 's3://') ? '' : rtrim(trim($uploadPath), '/') . '/'
+        );
     }
 
     public function logging(\Psr\Log\LoggerInterface $logger): \Idno\Core\Logging

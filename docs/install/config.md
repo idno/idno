@@ -40,11 +40,13 @@ credentials instead of dbuser, dbpass and dbname.
 Your database user.
 
 **filesystem**<br>
-The file system to use. This is most commonly "local", for local storage. Other plugins may allow for other options.
-If you are using MongoDB, you can leave this option blank to use GridFS storage.
+Deprecated. Leave it blank or set it to "local": files are stored in the `uploadpath`. Other plugins may still
+supply a file system class, named here. If you are using MongoDB, you can leave this option blank to use GridFS storage.
 
 **uploadpath**<br>
-The full path used by Idno to upload files. This path must be writeable by the web server.
+The full path used by Idno to upload files. This path must be writeable by the web server. A path of the form
+`s3://<bucket>/<prefix>/` stores files in Amazon S3 (set `aws_region`, and `aws_key` and `aws_secret` unless the server
+has credentials of its own); no plugin is needed.
 
 **smtp_host, smtp_port, smtp_username, smtp_secure, from_email**<br>
 Configuration for SMTP server.  Without these set (here or in the UI)

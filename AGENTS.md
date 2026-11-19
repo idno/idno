@@ -562,7 +562,7 @@ other new code may.
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
-  `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `RepositoryDataConcierge.php`
+  `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `FlysystemFile.php`, `FlysystemFileSystem.php`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
   enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
@@ -1708,6 +1708,40 @@ tests). It is built with new (the `Files/` directory is excluded from the contai
   other non-empty path the local adapter rooted there (files 0644, directories 0755), none throws a
   `\LogicException`. Tests give it an `S3Client` on a Symfony `MockHttpClient`, never the network.
 - Tests: `Tests/Unit/Storage/Files/`.
+
+The container's services and the legacy filesystem:
+
+- `League\Flysystem\FilesystemOperator` and `Idno\Storage\Files\FileStore` are public container
+  services built at runtime, when first fetched, by `Idno\Legacy\LegacyFileStoreFactory`
+  (`FilesystemFactory::fromConfig()` of the `BootConfig`; a `FileStore` whose base directory is a
+  closure returning `Idno::site()->config()->getFileBaseDirName()`, asked at each call, so the
+  `file_path_host` setting and the `file/path/host` event apply). Like the storage services they need
+  the legacy application; with no `uploadpath` fetching them throws a `\LogicException`.
+- `Idno::site()->filesystem()` is `Idno\Legacy\FlysystemFileSystem` (and its files
+  `Idno\Legacy\FlysystemFile`), built by `LegacyServiceFactory::filesystem()` from closures that fetch
+  the `FileStore` and the logger at first use (the filesystem is built before the logger, the session
+  and the language exist; keep it so). An empty or `local` `filesystem` setting with an `uploadpath`
+  gives it, whether the path is a directory or `s3://<bucket>/<prefix>/`; any other value is a class
+  named through `componentFactory()`, falling back to it. A MongoDB site with no `filesystem` setting
+  keeps `db()->getFilesystem()` (GridFS). No `uploadpath` and nothing else: null. The `filesystem`
+  setting is deprecated: S3 needs no plugin, just an `s3://` upload path. The legacy API never threw:
+  the shim logs a `FileStoreException` and returns false (`findOne()` false; a failed `storeFile()` or
+  `storeContent()` also adds the two session messages the old local filesystem added).
+  `FlysystemFile::$internal_filename` is the upload root joined with `FileStore::path()` on a local
+  directory and `''` on S3. `Idno\Files\LocalFileSystem`, `LocalFile` and `CDNStorable` are gone;
+  `Idno\Files\FileSystem` and `File` remain the bases.
+- The file page (`Idno\Pages\File\View`) positions a stream for a range request with
+  `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3).
+  `FilesystemCache`, the Purifier cache and the Twig cache never use an `s3://` upload path as a
+  directory: they use the temporary directory instead.
+- Deliberate differences from the old local filesystem: deleting a file removes its `.data` file too;
+  an SQL site with an `uploadpath` and no `filesystem` setting stores files locally (it had no
+  filesystem); `file_path_host` and the `file/path/host` event work for new uploads (the old code made
+  the directories under the site's host and wrote under the configured name); a file id that is not 24
+  or 32 hex digits is not found, whatever is on disk.
+- Tests: `Tests/Kernel/LegacyFileSystemTest` (a temporary upload directory of its own),
+  `Tests/Characterisation/FileServingTest` (the file page over HTTP, range quirks pinned),
+  `Tests/Core/FilesystemTest`.
 
 #### The settings store
 

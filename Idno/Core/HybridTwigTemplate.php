@@ -29,7 +29,12 @@ namespace Idno\Core {
         {
 
             // Create cache
-            $cache = \Idno\Core\Idno::site()->config()->getUploadPath() . 'twig/';
+            $upload = \Idno\Core\Idno::site()->config()->getUploadPath();
+            if (str_starts_with((string) $upload, 's3://')) {
+                // Not a directory: files on S3 are served by the file store
+                $upload = \Idno\Core\Idno::site()->config()->getTempDir();
+            }
+            $cache = $upload . 'twig/';
             @mkdir($cache);
 
             // Set up twig environment

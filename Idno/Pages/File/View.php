@@ -12,6 +12,29 @@ namespace Idno\Pages\File {
     class View extends \Idno\Common\Page
     {
 
+        /**
+         * Position a stream at a byte offset. A stream that cannot seek (one read over HTTP, from S3,
+         * say) is read and discarded up to the offset instead.
+         *
+         * @param resource $stream
+         * @param int      $offset
+         */
+        public static function seekTo($stream, $offset)
+        {
+            if ($offset <= 0 || @fseek($stream, $offset) === 0) {
+                return;
+            }
+            // fseek() failed: the stream is still where it was (the start, for a stream just opened)
+            $skipped = (int) ftell($stream);
+            while ($skipped < $offset && !feof($stream)) {
+                $chunk = fread($stream, min(8192, $offset - $skipped));
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $skipped += strlen($chunk);
+            }
+        }
+
         // Handle GET requests to the entity
 
         function getContent()
@@ -137,7 +160,7 @@ namespace Idno\Pages\File {
                 \Idno\Core\Idno::site()->logging()->debug("Content-Range: bytes $c_start-$c_end/$size");
 
                 if ($stream = $object->getResource()) {
-                    @fseek($stream, $c_start);
+                    self::seekTo($stream, $c_start);
                     $buffer = "";
                     while ( strlen($buffer)< $c_end-$c_start) {
                         $buffer .= fread($stream, $c_end-strlen($buffer));

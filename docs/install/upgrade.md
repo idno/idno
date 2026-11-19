@@ -395,6 +395,17 @@ The classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` have been removed. Cod
 * Legacy plugin code keeps using `Idno::site()->db()`, which on a MySQL, MariaDB or SQLite site serves the same public methods with the same parameters and defaults (except `build_where_from_array()`, which is gone). `getClient()` still returns a `PDO` on the site's one database connection: a `Pdo\Mysql` (PHP's MySQL subclass of `PDO`) or, on SQLite, a `Pdo\Sqlite`, not a plain `PDO`. `checkAndUpgradeSchema()` does nothing: the schema belongs to the migrations.
 * To tell whether a site is on SQL, do not check the class of `db()`: use `Idno\Storage\ConnectionParameters::driverFamily(['database' => Idno::site()->config()->database])`, which returns `mysql`, `sqlite`, `mongo` or `other`.
 
+### Uploaded files
+
+Uploads are stored by `Idno\Storage\Files\FileStore` on a Flysystem filesystem, in the layout every site has used (`<uploadpath>/<host>/a/b/c/d/<id>.file` and `<id>.data`), so no file needs moving. `Idno::site()->filesystem()` is now `Idno\Legacy\FlysystemFileSystem`, with the same methods (`findOne()`, `storeFile()`, `storeContent()`, `updateMetadata()`) and failure values; its files are `Idno\Legacy\FlysystemFile`. The classes `Idno\Files\LocalFileSystem`, `Idno\Files\LocalFile` and `Idno\Files\CDNStorable` are removed: code that extended or created them should use `Idno::site()->filesystem()`, or take `Idno\Storage\Files\FileStore` as a constructor argument in new code. `Idno\Files\FileSystem` and `Idno\Files\File` remain as base classes. On a file, `internal_filename` is the absolute path of the file only on a local upload directory; with an `s3://` upload path it is empty, so use `getResource()`, `getBytes()`, `passThroughBytes()` or `write($path)` instead of reading the path. S3 needs no plugin: set `uploadpath` to `s3://<bucket>/<prefix>/`. The `filesystem` setting is deprecated.
+
+Differences from the old local filesystem:
+
+* **Deleting a file removes its metadata (`.data`) file too.** The old code left it behind.
+* **A site with an `uploadpath` and no `filesystem` setting stores files locally.** An SQL site used to have no filesystem and its uploads failed.
+* **`file_path_host` and the `file/path/host` event work for new uploads.** The old code made the directories under the site's host and wrote under the configured name, so the write failed when they differed.
+* **A file id that is not 24 or 32 hex digits is not found**, whatever is on disk under that name.
+
 ### Entity type aliases
 
 The `type` column holds a short, permanent alias for each entity class (`status`, `article`, `user`),
