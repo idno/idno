@@ -5,8 +5,8 @@
     #RewriteBase /
 
     RewriteRule ^\.git(|hub)/ - [F]
-    # Never serve the cache, kernel configuration, command-line scripts, tests or docs
-    RewriteRule ^(var|config|bin|Tests|docs|warmup/CLI)(/|$) - [F,NC]
+    # Never serve the cache, kernel configuration, command-line scripts, tests, docs or the data directory
+    RewriteRule ^(var|config|bin|Tests|docs|data|warmup/CLI)(/|$) - [F,NC]
     RewriteRule ^(idno|known)\.php$ - [F,NC]
 
     RewriteCond %{HTTP:Authorization} ^(.+)$
@@ -49,6 +49,12 @@
   Require all denied
 </Files>
 <Files  ~ "\.known">
+  Require all denied
+</Files>
+<Files ~ "\.(sqlite|sqlite-wal|sqlite-shm)$">
+  Require all denied
+</Files>
+<Files ~ "\.upgrade\.lock$">
   Require all denied
 </Files>
 <Files  ~ "\.ini$">

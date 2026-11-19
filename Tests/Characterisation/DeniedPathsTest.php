@@ -38,6 +38,49 @@ namespace Tests\Characterisation {
                 }
             }
         }
+
+        /**
+         * A database file, its write-ahead log and shared memory, the upgrade's lock file and the
+         * `data/` directory are never served, whether or not the file exists.
+         */
+        public function testSqliteFilesAndTheDataDirectoryAreRefused(): void
+        {
+            foreach (['data/idno.sqlite', 'data/', 'data/readme.txt', 'DATA/idno.sqlite', 'Uploads/x.sqlite-wal', 'x.sqlite-shm', 'anything.upgrade.lock', 'idno.sqlite'] as $path) {
+                $r = $this->site()->request('GET', $path);
+
+                $this->assertSame(403, $r->status, $path);
+            }
+        }
+
+        /**
+         * The web server configurations the project ships (read, not run) refuse the same paths:
+         * `data/` among the denied directories and the four file suffixes.
+         */
+        public function testEveryShippedConfigurationRefusesTheDataDirectoryAndSqliteFiles(): void
+        {
+            $root = dirname(__DIR__, 2);
+            $rules = [
+                '.htaccess' => ['/\|data\|/', '/<Files[^>]*"[^"]*sqlite[^"]*"/', '/<Files[^>]*"[^"]*upgrade[^"]*lock[^"]*"/'],
+                'warmup/webserver-configs/htaccess.dist' => ['/\|data\|/', '/<Files[^>]*"[^"]*sqlite[^"]*"/', '/<Files[^>]*"[^"]*upgrade[^"]*lock[^"]*"/'],
+                'warmup/webserver-configs/htaccess-2.4.dist' => ['/\|data\|/', '/<Files[^>]*"[^"]*sqlite[^"]*"/', '/<Files[^>]*"[^"]*upgrade[^"]*lock[^"]*"/'],
+                'warmup/webserver-configs/nginx.conf' => ['/location ~\* \^\/\(\(var\|config\|bin\|tests\|docs\|data\|/', '/location \^~ \/data\//', '/location ~\* [^\n]*sqlite[^\n]*sqlite-wal[^\n]*sqlite-shm/', '/location ~\* [^\n]*lock/'],
+                'docker/caddy/Caddyfile' => ['/@denied path_regexp [^\n]*\|data\|/', '/@denied_files path_regexp [^\n]*sqlite[^\n]*sqlite-wal[^\n]*sqlite-shm[^\n]*upgrade[^\n]*lock/'],
+            ];
+            foreach ($rules as $file => $patterns) {
+                $text = (string) file_get_contents($root . '/' . $file);
+                foreach ($patterns as $pattern) {
+                    $this->assertMatchesRegularExpression($pattern, $text, $file . ' must match ' . $pattern);
+                }
+            }
+            $this->assertSame("Require all denied\n", (string) file_get_contents($root . '/data/.htaccess'), 'the data directory denies everything itself');
+
+            // Both routers, run on a path each would otherwise serve or hand to the front controller.
+            foreach (['Tests/rig/router.php', 'Tests/build/router.php'] as $router) {
+                $text = (string) file_get_contents($root . '/' . $router);
+                $this->assertMatchesRegularExpression('/\|data\|/', $text, $router);
+                $this->assertMatchesRegularExpression('/sqlite-wal/', $text, $router);
+            }
+        }
     }
 
 }

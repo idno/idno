@@ -17,8 +17,9 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $file = realpath($root . rawurldecode($path));
 
 // Mirror the deny rules in .htaccess and warmup/webserver-configs: never serve these
-// directories or the command-line scripts (case-insensitive, as on a case-insensitive filesystem).
-if (preg_match('#^/((var|config|bin|tests|docs|warmup/cli)(/|$)|(idno|known)\.php$)#i', '/' . ltrim(rawurldecode($path), '/'))) {
+// directories, the command-line scripts or a database file (case-insensitive, as on a case-insensitive filesystem).
+if (preg_match('#^/((var|config|bin|tests|docs|data|warmup/cli)(/|$)|(idno|known)\.php$)#i', '/' . ltrim(rawurldecode($path), '/'))
+    || preg_match('#\.(sqlite|sqlite-wal|sqlite-shm|upgrade\.lock)$#i', rawurldecode($path))) {
     http_response_code(403);
     return true;
 }

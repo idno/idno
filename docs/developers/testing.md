@@ -52,7 +52,7 @@ The tests of the upgrade from Idno 1.x build a 1.x database on a private MySQL o
 
 `composer test:unit` runs `Tests/Unit/` alone (`phpunit.unit.xml`), with nothing but PHP and the extensions `composer.json` requires: no rig, no database server, no configuration. It includes the record storage contract against the in-memory store and against SQLite in memory.
 
-SQLite is supported for tests and development now; it is to become a supported production database in a later release. One limit to know about while it runs your rig: PHP sessions on SQLite are not locked (two simultaneous requests of one session can overwrite each other's session data). The database file uses built-in collations and functions only, so the `sqlite3` command line can read it.
+SQLite is also a supported database for small production sites (see `docs/install/instructions.md`). One thing to know about your rig: on SQLite, PHP sessions are files (SQLite cannot lock a session row), where on MySQL and MariaDB they are rows of `idno_sessions`. The database file uses built-in collations and functions only, so the `sqlite3` command line can read it.
 
 Starting one mode while the other is running stops the other first, which deletes its database. `composer test:down` stops whichever mode is running, and is safe to run when nothing is. It deletes the per-checkout temporary directory (and, in MySQL mode, the container) and leaves `configuration/config.ini` in place. If the container cannot be stopped (Docker is not running), it says so and cleans up the rest anyway. A `composer test:up:mysql` that fails because Docker is not running leaves nothing behind that stops a plain `composer test:up` from working.
 

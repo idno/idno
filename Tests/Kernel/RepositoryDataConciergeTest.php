@@ -134,6 +134,17 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
     }
 
+    /**
+     * Skips a test that needs the site's database to be SQLite (the rig's default mode), saying why.
+     */
+    private function requireSqlite(string $why): void
+    {
+        $config = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
+        if (ConnectionParameters::driverFamily($config) !== 'sqlite') {
+            $this->markTestSkipped('Needs an SQLite site: ' . $why);
+        }
+    }
+
     protected function tearDown(): void
     {
         $db = Idno::site()->db();
@@ -996,8 +1007,37 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     // ------------------------------------------------ sessions
 
+    /**
+     * SQLite cannot lock a session row (PdoSessionHandler refuses advisory locks there, and an
+     * unlocked handler lets parallel requests of one session overwrite each other), so an SQLite
+     * site's handleSession() installs nothing: Idno\Core\Session falls back to PHP's file sessions,
+     * which PHP locks. sessionHandler() refuses to build one.
+     */
+    public function testAnSqliteSiteInstallsNoSessionHandler(): void
+    {
+        $this->requireSqlite('MySQL and MariaDB sites keep their sessions in the database.');
+        $adapter = Idno::site()->db();
+        $this->assertInstanceOf(RepositoryDataConcierge::class, $adapter);
+
+        $this->assertNull($adapter->handleSession());
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('SQLite');
+        $adapter->sessionHandler();
+    }
+
+    public function testAnSqliteSitesSessionsAreFilesInAFreshProcess(): void
+    {
+        $this->requireSqlite('MySQL and MariaDB sites keep their sessions in the database.');
+        $result = $this->bootWithSessionSettings([], bin2hex(random_bytes(16)));
+
+        $this->assertSame('files', $result['save_handler']);
+        $this->assertFalse($result['row'], 'nothing is written to the `idno_sessions` table');
+    }
+
+
     public function testSessionRowIsWrittenThroughTheSharedConnection(): void
     {
+        $this->requireMysql('an SQLite site\'s sessions are files, not rows (testAnSqliteSiteInstallsNoSessionHandler).');
         $response = $this->get('');
         $this->assertSame(200, $response['status']);
         $sessionId = $response['cookies'][Idno::site()->config()->sessionname] ?? null;
@@ -1022,6 +1062,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      */
     public function testASessionRowInTheOldBackendsFormatIsReadByTheAdapter(): void
     {
+        $this->requireMysql('an SQLite site\'s sessions are files, which no old backend wrote rows for.');
         $user = $this->user();
         $this->assertSame(403, $this->get('account/settings/')['status'], 'anonymous visitors have no account settings');
 
@@ -1053,7 +1094,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     {
         $mysql = ConnectionParameters::driverFamily(Idno::container()->get(\Idno\Config\BootConfig::class)->all()) === 'mysql';
         $uuid = $this->user()->getUUID();
-        $database = ['save_handler' => 'user', 'shared_lock' => $mysql ? true : null];
+        // An SQLite site's sessions are files whatever these settings say: its db() installs no handler.
+        $database = $mysql ? ['save_handler' => 'user', 'shared_lock' => true] : ['save_handler' => 'files', 'shared_lock' => null];
         $files = ['save_handler' => 'files', 'shared_lock' => null];
         $cases = [
             'the old backend, sessions_database off' => [['IDNO_SESSIONS_DATABASE' => '0', 'IDNO_SESSIONS_STORAGE' => 'Idno\\Data\\MySQL'], $database],
@@ -1113,7 +1155,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * A visitor who logs in through the login form stays logged in on the following requests: the
-     * session the adapter's handler wrote is read back (on MySQL and on SQLite, where it is not locked).
+     * session the adapter's handler wrote is read back (a database row on MySQL and MariaDB, a file on SQLite).
      */
     public function testALoginSessionSurvivesAcrossRequests(): void
     {
@@ -1147,9 +1189,11 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
                 $this->assertSame(200, $page['status'], 'request ' . $request . ' after logging in is logged in');
                 $this->assertStringContainsString($user->getHandle(), $page['body']);
             }
-            $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
-            $statement->execute([$cookies[$name]]);
-            $this->assertStringContainsString('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '"', (string) $statement->fetchColumn());
+            if (ConnectionParameters::driverFamily(Idno::container()->get(\Idno\Config\BootConfig::class)->all()) === 'mysql') {
+                $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
+                $statement->execute([$cookies[$name]]);
+                $this->assertStringContainsString('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '"', (string) $statement->fetchColumn());
+            }
         } finally {
             foreach (array_filter($sessions) as $sessionId) {
                 $this->deleteSession($sessionId);
@@ -1229,7 +1273,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * The adapter over an SQLite database file of its own with the schema migrations run: records,
-     * entities, counts, deletion, the session handler, the versions and maintenance.
+     * entities, counts, deletion, no session handler, the versions and maintenance.
      */
     public function testTheAdapterWorksOnSqlite(): void
     {
@@ -1278,17 +1322,14 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertFalse($adapter->getRecord($statusId));
         $this->assertSame(0, $adapter->countObjects(Status::class));
 
-        // Sessions: the handler handleSession() installs, on the same PDO
-        $handler = $adapter->sessionHandler();
-        $sessionId = bin2hex(random_bytes(16));
-        $this->assertTrue($handler->open('', 'idno'));
-        $this->assertSame('', $handler->read($sessionId));
-        $this->assertTrue($handler->write($sessionId, 'user_uuid|s:4:"abcd";'));
-        $this->assertTrue($handler->close());
-        $this->assertTrue($handler->open('', 'idno'));
-        $this->assertSame('user_uuid|s:4:"abcd";', $handler->read($sessionId));
-        $this->assertTrue($handler->close());
-        $this->assertSame(1, (int) $connection->fetchOne('select count(*) from idno_sessions where session_id = ?', [$sessionId]));
+        // Sessions: SQLite cannot lock them, so the adapter installs no handler (they are files)
+        $this->assertNull($adapter->handleSession());
+        try {
+            $adapter->sessionHandler();
+            $this->fail('An SQLite adapter builds no session handler.');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('SQLite', $e->getMessage());
+        }
 
         // Maintenance: optimize() runs SQLite's `pragma optimize` and returns false, as before; export works.
         $this->captureLog();

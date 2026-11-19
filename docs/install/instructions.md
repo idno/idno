@@ -60,14 +60,24 @@ Additionally, you will need to create the database referred to in this configura
 
 ### If you're using SQLite
 
-> **Warning: SQLite is for tests and development only in this release.** The installers do not set up SQLite sites, and Idno's PHP sessions on SQLite are not locked (two requests of one session at once can overwrite each other's session data). Use MySQL or MariaDB for a real site. Note that `database = "Sqlite3"`, which older instructions gave, does not mean SQLite: Idno connects to MySQL with it.
+SQLite keeps the whole database in one file, so a small site needs no database server. It suits a site on a single server with a local disk (SQLite 3.38 or later, with PHP's `pdo_sqlite`). The installers do not set up SQLite sites yet: write the configuration file yourself.
 
-For development, a configuration file can name an SQLite database file (SQLite 3.38 or later, with PHP's `pdo_sqlite`):
+Put the database file in the `data/` directory of your Idno installation (the web server must be able to write to it: SQLite keeps its journal files beside the database file), and name it in your configuration file:
 
     database = "sqlite"
-    dbname = "/path/to/idno.sqlite"
+    dbname = "data/idno.sqlite"
 
-The directory must be writable by the web server. Idno creates its tables the first time the site is loaded (or with `php bin/console idno:upgrade`). Never put the file on a network filesystem (NFS, SMB).
+A relative `dbname` is relative to the Idno directory; an absolute one (`/var/lib/idno/idno.sqlite`) is used as it is. The same can be given as a database URL, in the `IDNO_DATABASE_URL` environment variable: `sqlite:///data/idno.sqlite` (three slashes: relative to the Idno directory) or `sqlite:////var/lib/idno/idno.sqlite` (four: absolute). Idno's web server configurations refuse to serve the `data/` directory, and any file ending in `.sqlite`, `.sqlite-wal`, `.sqlite-shm` or `.upgrade.lock`, wherever it is; if you put the file elsewhere, keep it outside your document root or refuse those names yourself. Idno creates its tables the first time the site is loaded (or with `php bin/console idno:upgrade`).
+
+What to know before you choose SQLite:
+
+* **One server, a local disk.** SQLite's write-ahead log needs shared memory between the processes that use the file, so never put the database on a network filesystem (NFS, SMB), and do not run several web servers against one file.
+* **Sessions are files.** SQLite cannot lock a session, so an SQLite site keeps its PHP sessions in PHP's session files (as with `sessions_database` off), not in the database. Anyone logged in to a site that moves from MySQL to SQLite logs in again.
+* **Search has no full-text index.** A search term of more than five bytes matches any of its words inside longer words, and boolean operators (`+word -other`) are plain characters.
+* **Case and accents.** Only the case of the letters A to Z is ignored when text is compared: `ÉTÉ` does not find `été`, `café` does not find `cafe`.
+* **Backups.** Use `sqlite3 data/idno.sqlite ".backup backup.sqlite"`, or copy the file together with its `-wal` and `-shm` files while no request is writing.
+
+Note that `database = "Sqlite3"`, which older instructions gave, does not mean SQLite: Idno connects to MySQL with it.
 
 ### Set the filesystem
 

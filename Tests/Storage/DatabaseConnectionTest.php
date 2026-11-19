@@ -155,7 +155,7 @@ final class DatabaseConnectionTest extends TestCase
     {
         $container = $this->bootIsolatedKernel()->getContainer();
         $boot = $container->get(BootConfig::class);
-        $expected = ConnectionParameters::fromLegacyConfig($boot->all(), []);
+        $expected = ConnectionParameters::fromLegacyConfig($boot->all(), [], $container->getParameter('kernel.project_dir'));
 
         $params = $container->get('database_connection')->getParams();
         foreach ($expected as $key => $value) {

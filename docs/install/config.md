@@ -29,6 +29,9 @@ The database host. This is most commonly "localhost".
 **dbname**<br>
 The database name. This is whatever you have configured your database server to use - for example, "known".
 
+On SQLite, `database = 'sqlite'` and `dbname` is the database file: a path relative to the Idno directory
+(`data/idno.sqlite`) or an absolute one, or `:memory:`.
+
 **dbpass**<br>
 Your database password. Depending on your server configuration, this may not be required.
 

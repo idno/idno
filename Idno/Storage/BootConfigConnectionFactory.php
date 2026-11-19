@@ -36,6 +36,7 @@ final class BootConfigConnectionFactory
         private readonly ConnectionFactory $inner,
         private readonly BootConfig $bootConfig,
         private readonly array $server,
+        private readonly string $projectDir,
     )
     {
     }
@@ -48,7 +49,7 @@ final class BootConfigConnectionFactory
      */
     public function createConnection(array $params, ?Configuration $config = null, array $mappingTypes = []): Connection
     {
-        $legacy = ConnectionParameters::fromLegacyConfig($this->bootConfig->all(), array_filter($this->server, static fn (mixed $value): bool => $value !== null));
+        $legacy = ConnectionParameters::fromLegacyConfig($this->bootConfig->all(), array_filter($this->server, static fn (mixed $value): bool => $value !== null), $this->projectDir);
         foreach (ConnectionParameters::IDENTITY_KEYS as $key) {
             unset($params[$key]);
         }

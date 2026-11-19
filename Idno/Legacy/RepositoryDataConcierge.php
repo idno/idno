@@ -31,8 +31,8 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
  *  - optimize(), exportRecords() and the connection check of reconnectIfNeeded() go to
  *    LegacySqlMaintenance;
  *  - getClient() is the native PDO of the shared DBAL connection (`database_connection`, which the
- *    record store uses too), and the PHP session handler runs on that PDO, on the table
- *    `idno_sessions`: one database connection.
+ *    record store uses too), and on MySQL and MariaDB the PHP session handler runs on that PDO, on
+ *    the table `idno_sessions`: one database connection (an SQLite site's sessions are files).
  *
  * Construction connects, at the point of boot where the legacy backend connected (Idno::init()
  * fetches db() before anything else that needs the database), and a connection failure ends the
@@ -191,21 +191,34 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
-     * Handle the session in the database: the same handler and options as the legacy backend, on
-     * the shared connection's PDO. SQLite has no advisory locks (PdoSessionHandler refuses them), so
-     * an SQLite site's sessions are not locked.
+     * Handle the session in the database on MySQL and MariaDB: the same handler and options as the
+     * legacy backend, on the shared connection's PDO, with an advisory lock per session. SQLite has no
+     * advisory locks (PdoSessionHandler refuses them) and an unlocked handler lets parallel requests of
+     * one session overwrite each other, so on SQLite this installs nothing and returns null:
+     * Idno\Core\Session goes on to its `sessions_storage` step and then to PHP's file sessions, which
+     * PHP locks.
      */
     function handleSession()
     {
+        if ($this->family === 'sqlite') {
+            return null;
+        }
         session_set_save_handler($this->sessionHandler(), true);
     }
 
     /**
      * The session handler handleSession() installs: Symfony's PdoSessionHandler on the
-     * `idno_sessions` table, with the legacy backend's options, on the shared connection's PDO.
+     * `idno_sessions` table, with the legacy backend's options and an advisory lock per session, on
+     * the shared connection's PDO.
+     *
+     * @throws \LogicException on an SQLite site, whose sessions are files (see handleSession())
      */
     public function sessionHandler(): PdoSessionHandler
     {
+        if ($this->family === 'sqlite') {
+            throw new \LogicException('An SQLite site has no database session handler: SQLite cannot lock a session, so its sessions are PHP files.');
+        }
+
         return new PdoSessionHandler(
             $this->getClient(),
             [
@@ -214,7 +227,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
                 'db_data_col' => 'session_value',
                 'db_time_col' => 'session_time',
                 'db_lifetime_col' => 'session_lifetime',
-                'lock_mode' => $this->family === 'sqlite' ? PdoSessionHandler::LOCK_NONE : PdoSessionHandler::LOCK_ADVISORY,
+                'lock_mode' => PdoSessionHandler::LOCK_ADVISORY,
             ]
         );
     }

@@ -250,6 +250,8 @@ config/                        Kernel configuration: bundles.php, services.php, 
 var/                           The compiled container (var/cache/); must be writable by the web server
                                (or set IDNO_CACHE_DIR). config/, bin/, var/ and Tests/ each hold a
                                deny-all .htaccess; none of them may be served (see Code Style)
+data/                          Where an SQLite site's database file lives (data/idno.sqlite): only its
+                               deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
@@ -638,11 +640,28 @@ other new code may.
 - SQLite (`Idno\Storage\Platform\SqliteDialect`, SQLite 3.38 or later with the JSON functions,
   through `pdo_sqlite`; the connection setup refuses an older library, or one built without
   `json_valid()`, with a `\LogicException` naming the version required and the one found): the same
-  stores, held to the same contracts with the hook values of `JsonSqliteRecordStoreTest`. **In this
-  release SQLite is for tests and development only** (it is to become a supported production
-  database in a later release): no site is installed on it (the installers do not create SQLite
-  sites; the test rig's SQLite mode is the one SQLite site, see "Build & Test"), and an SQLite site's
-  PHP sessions are not locked (see the `db()` bullet). Every SQLite connection the storage uses MUST
+  stores, held to the same contracts with the hook values of `JsonSqliteRecordStoreTest`. **SQLite is
+  a supported production database for a small site**: one server, a local disk, sessions as PHP files
+  (see the `db()` bullet), search without a full-text index, ASCII-only case folding (below), backups
+  with `.backup` or a copy of the file while no writer is active. It is NOT supported on a network
+  filesystem (NFS, SMB) or with several web servers on one file. The installers do not create SQLite
+  sites yet (a site is configured by hand: `database = sqlite`, `dbname = data/idno.sqlite`); the test
+  rig's SQLite mode is an SQLite site too (see "Build & Test"). Where the file lives: `dbname` is the
+  file's path; one that is not `:memory:` and not absolute (no leading `/`, no Windows drive) is under
+  the project directory (`ConnectionParameters::fromLegacyConfig($config, $server, $projectDir)`: every
+  caller passes it, the connection factory the kernel's `kernel.project_dir`; with null a relative path
+  is left as written), and the `data/` directory (tracked only for its `.htaccess` and `readme.txt`;
+  the rest is gitignored) is where a site's file belongs. The database URL (`IDNO_DATABASE_URL`,
+  `KNOWN_DATABASE_URL`) is read by `ConnectionParameters::fromUrl()`, the one place: `sqlite` gives
+  `database = sqlite` and `dbname` the URL's path less ONE leading slash (`sqlite:///data/idno.sqlite`
+  is `data/idno.sqlite`, relative to the project; `sqlite:////var/lib/idno.sqlite` is
+  `/var/lib/idno.sqlite`; `sqlite:///:memory:` is `:memory:`); every other scheme gives `database` the
+  scheme and `dbname` the path's last segment, with `dbuser`, `dbpass`, `dbhost` and `dbport`. The
+  upgrade's lock file is `<database file>.upgrade.lock`. Neither `data/` nor a file ending `.sqlite`,
+  `.sqlite-wal`, `.sqlite-shm` or `.upgrade.lock` may be served: `.htaccess`,
+  `warmup/webserver-configs/htaccess.dist`, `htaccess-2.4.dist` and `nginx.conf`,
+  `docker/caddy/Caddyfile` and both routers refuse them, `data/.htaccess` denies all, and
+  `Tests/Characterisation/DeniedPathsTest` pins every one. Every SQLite connection the storage uses MUST
   have `SqliteConnectionSetup` among its DBAL middlewares (the `database_connection` service of an
   SQLite site has it; a connection you build yourself needs
   `(new Configuration())->setMiddlewares([new SqliteConnectionSetup()])`, as
@@ -711,12 +730,18 @@ other new code may.
   database) and the connection check of `reconnectIfNeeded()` are in
   `Idno\Legacy\LegacySqlMaintenance`, all on the shared connection. `getClient()` is the native PDO
   of the `database_connection` service (asked of the connection on each call, never a kept copy: a
-  `Pdo\Mysql` on MySQL, a `Pdo\Sqlite` on SQLite), and `handleSession()` installs the same
-  `PdoSessionHandler` with the same options on that PDO, on the table `idno_sessions` (advisory locks
-  on MySQL; NONE on SQLite, which PdoSessionHandler refuses advisory locks on: parallel requests of
-  one session race, so SQLite sessions are unsafe beyond tests and development, like SQLite itself in
-  this release), so a request opens ONE database connection. The old backend's `session` table is
-  not read: users log in again after the upgrade.
+  `Pdo\Mysql` on MySQL, a `Pdo\Sqlite` on SQLite), and on MySQL and MariaDB `handleSession()` installs the same
+  `PdoSessionHandler` with the same options on that PDO, on the table `idno_sessions` (an advisory
+  lock per session), so a request opens ONE database connection. On SQLite it installs NOTHING and
+  `sessionHandler()` throws a `\LogicException`: PdoSessionHandler refuses advisory locks there, and an
+  unlocked handler lets parallel requests of one session overwrite each other, so an SQLite site's
+  sessions are PHP files, which PHP locks (`Idno\Core\Session` falls back to them, whatever
+  `sessions_database` and `sessions_storage` say; `idno_sessions` is unused on SQLite). The old
+  backend's `session` table is not read: users log in again after the upgrade (on SQLite, once more,
+  when a development site's sessions moved from rows to files). `/_test/session`
+  (`Tests/Fixtures/SessionProbeController`, test environment only) answers `{"module": ...}`:
+  `files` on SQLite, `user` on MySQL and MariaDB, pinned by `KernelRoutingTest` and
+  `RepositoryDataConciergeTest::testAnSqliteSiteInstallsNoSessionHandler`.
   `handleSession()` returns null, as the old backend's did, so `Idno\Core\Session` goes on to its
   `sessions_storage` step even when `sessions_database` (on by default) installed the handler.
   The old SQL backend classes (`Idno\Data\MySQL`, `Idno\Data\AbstractSQL`) have been removed.
@@ -1006,9 +1031,9 @@ other new code may.
   under "Kernel and services"). The hand-written SQL backend that preceded it has been removed;
   `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
 - **SQLite** — the same stores with `SqliteDialect`; `database = sqlite` (with `dbname` the file's
-  path) gives `db()` the same adapter. For tests and development in this release (the default test
-  rig runs on it; the installers do not create SQLite sites); it is to become a supported production
-  database in a later release. See the SQLite bullet under "Kernel and services".
+  path) gives `db()` the same adapter. A supported production database for a small site on one server
+  with a local disk (the default test rig runs on it; the installers do not create SQLite sites yet).
+  See the SQLite bullet under "Kernel and services".
 - The schema is created by the upgrade (see "The schema gate and the upgrade" below): the first
   page load of a new installation, or of a site whose files were replaced, shows the upgrade page,
   whose steps create the tables (and copy a 1.x database); `php bin/console idno:upgrade` does the

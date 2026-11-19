@@ -74,6 +74,61 @@ final class ConnectionParametersTest extends TestCase
         );
     }
 
+    public function testARelativeSqlitePathIsUnderTheProjectDirectory(): void
+    {
+        $this->assertSame(
+            ['driver' => 'pdo_sqlite', 'path' => '/srv/idno/data/idno.sqlite'],
+            ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => 'data/idno.sqlite'], [], '/srv/idno'),
+        );
+        $this->assertSame(
+            '/srv/idno/data/idno.sqlite',
+            ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => 'data/idno.sqlite'], [], '/srv/idno/')['path'],
+            'a trailing slash on the project directory makes no double slash',
+        );
+        $this->assertSame(
+            'data/idno.sqlite',
+            ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => 'data/idno.sqlite'], [])['path'],
+            'with no project directory a relative path is left as it is',
+        );
+    }
+
+    public function testAnAbsoluteSqlitePathAndMemoryAreKept(): void
+    {
+        foreach (['/var/lib/idno.sqlite', 'C:\\idno\\site.sqlite', 'C:/idno/site.sqlite', 'c:idno.sqlite'] as $path) {
+            $this->assertSame(
+                $path,
+                ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => $path], [], '/srv/idno')['path'],
+                $path,
+            );
+        }
+        $this->assertSame(
+            ['driver' => 'pdo_sqlite', 'memory' => true],
+            ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => ':memory:'], [], '/srv/idno'),
+        );
+    }
+
+    public function testADatabaseUrlOnSqlite(): void
+    {
+        $sqlite = ['database' => 'sqlite', 'dbname' => '', 'dbuser' => null, 'dbpass' => null, 'dbhost' => null, 'dbport' => null];
+        $this->assertSame(array_replace($sqlite, ['dbname' => 'data/idno.sqlite']), ConnectionParameters::fromUrl('sqlite:///data/idno.sqlite'));
+        $this->assertSame(array_replace($sqlite, ['dbname' => '/var/lib/idno.sqlite']), ConnectionParameters::fromUrl('sqlite:////var/lib/idno.sqlite'));
+        $this->assertSame(array_replace($sqlite, ['dbname' => ':memory:']), ConnectionParameters::fromUrl('sqlite:///:memory:'));
+        $this->assertSame(array_replace($sqlite, ['dbname' => 'data/idno.sqlite']), ConnectionParameters::fromUrl('SQLITE:///data/idno.sqlite'), 'the scheme ignores case');
+    }
+
+    public function testADatabaseUrlOnMysqlIsReadAsItAlwaysWas(): void
+    {
+        $this->assertSame(
+            ['database' => 'mysql', 'dbname' => 'db', 'dbuser' => 'u', 'dbpass' => 'p', 'dbhost' => 'h', 'dbport' => 3307],
+            ConnectionParameters::fromUrl('mysql://u:p@h:3307/db'),
+        );
+        $this->assertSame(
+            ['database' => 'mysql', 'dbname' => 'db', 'dbuser' => null, 'dbpass' => null, 'dbhost' => 'h', 'dbport' => null],
+            ConnectionParameters::fromUrl('mysql://h/some/path/db'),
+            'the database name is the last segment of the path',
+        );
+    }
+
     public function testMongo(): void
     {
         foreach (['mongo', 'mongodb', 'MongoDB'] as $name) {

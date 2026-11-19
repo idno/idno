@@ -36,23 +36,30 @@ final class ConnectionParameters
      * @param array<string, mixed> $config the boot configuration (BootConfig::all())
      * @param array<string, mixed> $server the RDS_* variables (RDS_HOSTNAME, RDS_USERNAME, RDS_PASSWORD,
      *                                     RDS_PORT, RDS_DB_NAME), read only for `beanstalk-mysql`
+     * @param string|null $projectDir the project directory: an SQLite `dbname` that is neither `:memory:`
+     *                                nor absolute (a leading `/` or a Windows drive) is a path under it;
+     *                                with null a relative path is left as it is
      *
      * @return array<string, mixed>
      *
      * @throws \LogicException when the configured database is not an SQL database (MongoDB, or a
      *                          loadable backend class supplied by a plugin; see driverFamily())
      */
-    public static function fromLegacyConfig(array $config, array $server): array
+    public static function fromLegacyConfig(array $config, array $server, ?string $projectDir = null): array
     {
         $config += self::LEGACY_DEFAULTS;
         $family = self::driverFamily($config);
 
         if ($family === 'sqlite') {
             $path = (string) ($config['dbname'] ?? '');
+            if ($path === ':memory:') {
+                return ['driver' => 'pdo_sqlite', 'memory' => true];
+            }
+            if ($projectDir !== null && $projectDir !== '' && $path !== '' && !self::isAbsolutePath($path)) {
+                $path = rtrim($projectDir, '/\\') . '/' . $path;
+            }
 
-            return $path === ':memory:'
-                ? ['driver' => 'pdo_sqlite', 'memory' => true]
-                : ['driver' => 'pdo_sqlite', 'path' => $path];
+            return ['driver' => 'pdo_sqlite', 'path' => $path];
         }
         if ($family !== 'mysql') {
             throw new \LogicException(sprintf(
@@ -90,6 +97,44 @@ final class ConnectionParameters
                 \Pdo\Mysql::ATTR_LOCAL_INFILE => 1,
                 \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             ],
+        ];
+    }
+
+    /**
+     * A database URL (`IDNO_DATABASE_URL`) → the legacy settings it sets: `database`, `dbname`, `dbuser`,
+     * `dbpass`, `dbhost` and `dbport` (null for one the URL does not carry). The one place that reads it.
+     *
+     * Every scheme but `sqlite` is read as it always was: the scheme is `database`, the last segment
+     * of the path is `dbname`. For `sqlite`, as in Doctrine, the file is the URL's path less ONE leading
+     * slash: `sqlite:///data/idno.sqlite` is `data/idno.sqlite` (relative to the project directory, see
+     * fromLegacyConfig()), `sqlite:////var/lib/idno.sqlite` is `/var/lib/idno.sqlite` and
+     * `sqlite:///:memory:` is `:memory:`.
+     *
+     * @return array{database: ?string, dbname: string, dbuser: ?string, dbpass: ?string, dbhost: ?string, dbport: ?int}
+     */
+    public static function fromUrl(string $url): array
+    {
+        if (preg_match('#^sqlite://([^?\#]*)#i', $url, $matches) === 1) {
+            return [
+                'database' => 'sqlite',
+                'dbname' => str_starts_with($matches[1], '/') ? substr($matches[1], 1) : $matches[1],
+                'dbuser' => null,
+                'dbpass' => null,
+                'dbhost' => null,
+                'dbport' => null,
+            ];
+        }
+
+        $parsed = parse_url($url);
+        $parsed = is_array($parsed) ? $parsed : [];
+
+        return [
+            'database' => $parsed['scheme'] ?? null,
+            'dbname' => basename($parsed['path'] ?? ''),
+            'dbuser' => $parsed['user'] ?? null,
+            'dbpass' => $parsed['pass'] ?? null,
+            'dbhost' => $parsed['host'] ?? null,
+            'dbport' => $parsed['port'] ?? null,
         ];
     }
 
@@ -166,6 +211,12 @@ final class ConnectionParameters
         $database = $config['database'] ?? '';
 
         return is_scalar($database) ? trim(strtolower((string) $database)) : '';
+    }
+
+    /** A leading `/` or a Windows drive (`C:\`, `C:/`, `C:`). */
+    private static function isAbsolutePath(string $path): bool
+    {
+        return str_starts_with($path, '/') || preg_match('#^[A-Za-z]:#', $path) === 1;
     }
 
     private static function text(mixed $value): ?string

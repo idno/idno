@@ -104,6 +104,39 @@ final class LegacyConfigLoaderTest extends TestCase
         $this->assertSame(3307, $config->get('dbport'));
     }
 
+    public function testAMysqlUrlIsReadAsBefore(): void
+    {
+        $config = $this->load($this->project(), [], ['KNOWN_DATABASE_URL' => 'mysql://u:p@h:3307/some/db']);
+        $this->assertSame('mysql', $config->get('database'));
+        $this->assertSame('db', $config->get('dbname'));
+        $this->assertSame('u', $config->get('dbuser'));
+        $this->assertSame('p', $config->get('dbpass'));
+        $this->assertSame('h', $config->get('dbhost'));
+        $this->assertSame(3307, $config->get('dbport'));
+    }
+
+    public function testASqliteUrlWithThreeSlashesIsRelative(): void
+    {
+        $config = $this->load($this->project(), [], ['IDNO_DATABASE_URL' => 'sqlite:///data/idno.sqlite']);
+        $this->assertSame('sqlite', $config->get('database'));
+        $this->assertSame('data/idno.sqlite', $config->get('dbname'));
+        $this->assertNull($config->get('dbhost'));
+    }
+
+    public function testASqliteUrlWithFourSlashesIsAbsolute(): void
+    {
+        $config = $this->load($this->project(), [], ['IDNO_DATABASE_URL' => 'sqlite:////var/lib/idno.sqlite']);
+        $this->assertSame('sqlite', $config->get('database'));
+        $this->assertSame('/var/lib/idno.sqlite', $config->get('dbname'));
+    }
+
+    public function testASqliteMemoryUrl(): void
+    {
+        $config = $this->load($this->project(), [], ['IDNO_DATABASE_URL' => 'sqlite:///:memory:']);
+        $this->assertSame('sqlite', $config->get('database'));
+        $this->assertSame(':memory:', $config->get('dbname'));
+    }
+
     public function testS3EnvMapsToUploadPath(): void
     {
         $config = $this->load($this->project(), [], [

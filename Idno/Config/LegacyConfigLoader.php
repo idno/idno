@@ -92,13 +92,7 @@ final class LegacyConfigLoader
     {
         $dbUrl = $env['IDNO_DATABASE_URL'] ?? $env['KNOWN_DATABASE_URL'] ?? null;
         if ($dbUrl) {
-            $parsed = parse_url((string) $dbUrl);
-            $config['database'] = $parsed['scheme'] ?? null;
-            $config['dbname']   = basename($parsed['path'] ?? '');
-            $config['dbuser']   = $parsed['user'] ?? null;
-            $config['dbpass']   = $parsed['pass'] ?? null;
-            $config['dbhost']   = $parsed['host'] ?? null;
-            $config['dbport']   = $parsed['port'] ?? null;
+            $config = array_replace($config, \Idno\Storage\ConnectionParameters::fromUrl((string) $dbUrl));
         }
 
         $cloudcube = array_key_exists('CLOUDCUBE_URL', $env);

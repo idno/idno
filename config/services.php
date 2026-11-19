@@ -159,6 +159,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
                 'RDS_PORT' => '%env(default::RDS_PORT)%',
                 'RDS_DB_NAME' => '%env(default::RDS_DB_NAME)%',
             ],
+            // A relative SQLite database path is under the project directory (which is already
+            // part of the compiled container; no configuration value is).
+            '%kernel.project_dir%',
         ])
         ->autowire(false)
         ->autoconfigure(false);

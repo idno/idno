@@ -8,8 +8,12 @@
 	# Never serve or run the cache, kernel configuration, command-line scripts, tests, docs,
 	# site configuration, uploads or git metadata (the same rules as .htaccess; see
 	# docs/install/upgrade.md). Case-insensitive.
-	@denied path_regexp denied (?i)^/((var|config|bin|tests|docs|warmup/cli|configuration|uploads|\.git|\.github)(/|$)|(idno|known)\.php$)
+	@denied path_regexp denied (?i)^/((var|config|bin|tests|docs|data|warmup/cli|configuration|uploads|\.git|\.github)(/|$)|(idno|known)\.php$)
 	respond @denied 403
+
+	# A database file, its write-ahead log and shared memory, and the upgrade's lock file, wherever they are.
+	@denied_files path_regexp denied_files (?i)\.(sqlite|sqlite-wal|sqlite-shm|upgrade\.lock)$
+	respond @denied_files 403
 
         # Rewrites
         rewrite /js/canary.js /js/known.min.js
