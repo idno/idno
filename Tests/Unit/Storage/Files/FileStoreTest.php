@@ -11,6 +11,7 @@ use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\InMemory\InMemoryFilesystemAdapter;
 use League\Flysystem\Local\LocalFilesystemAdapter;
+use League\Flysystem\UnableToReadFile;
 use PHPUnit\Framework\TestCase;
 
 final class FileStoreTest extends TestCase
@@ -81,8 +82,43 @@ final class FileStoreTest extends TestCase
 
     public function testPathRejectsAnInvalidId(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        (new FileStore($this->memory(), 'd'))->path('../x');
+        foreach (['../x', self::LEGACY_ID . "\n"] as $bad) {
+            try {
+                (new FileStore($this->memory(), 'd'))->path($bad);
+                $this->fail('path accepted ' . $bad);
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testAFailedDataReadIsNotEmptyMetadata(): void
+    {
+        $inner = $this->memory();
+        $store = new FileStore($inner, 'd');
+        $store->storeAs(self::LEGACY_ID, $this->stream('bytes'), ['filename' => 'a.txt']);
+
+        $failing = $this->createMock(FilesystemOperator::class);
+        $failing->method('fileExists')->willReturnCallback(fn (string $p) => $inner->fileExists($p));
+        $failing->method('fileSize')->willReturnCallback(fn (string $p) => $inner->fileSize($p));
+        $failing->method('read')->willThrowException(UnableToReadFile::fromLocation('x'));
+        $failing->expects($this->never())->method('write');
+        $failing->expects($this->never())->method('writeStream');
+        $flaky = new FileStore($failing, 'd');
+
+        try {
+            $flaky->find(self::LEGACY_ID);
+            $this->fail('find swallowed the failure');
+        } catch (FileStoreException $e) {
+            $this->assertInstanceOf(UnableToReadFile::class, $e->getPrevious());
+        }
+        try {
+            $flaky->updateMetadata(self::LEGACY_ID, ['b' => 1]);
+            $this->fail('updateMetadata swallowed the failure');
+        } catch (FileStoreException) {
+            $this->addToAssertionCount(1);
+        }
+        $this->assertSame(['filename' => 'a.txt'], $store->find(self::LEGACY_ID)->metadata);
     }
 
     public function testAFileWrittenByOneXIsFound(): void
@@ -127,7 +163,7 @@ final class FileStoreTest extends TestCase
             $fs->expects($this->never())->method($m);
         }
         $store = new FileStore($fs, 'd');
-        foreach (['../../etc/passwd', 'abc', str_repeat('g', 32), '', self::LEGACY_ID . '0'] as $bad) {
+        foreach (['../../etc/passwd', 'abc', str_repeat('g', 32), '', self::LEGACY_ID . '0', self::LEGACY_ID . "\n", '5f1e2d3c4b5a69788796a5b4' . "\n"] as $bad) {
             $this->assertNull($store->find($bad));
             $this->assertFalse($store->has($bad));
             $this->assertFalse($store->updateMetadata($bad, ['a' => 1]));

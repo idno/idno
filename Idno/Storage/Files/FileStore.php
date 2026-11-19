@@ -18,7 +18,7 @@ use League\Flysystem\FilesystemOperator;
  */
 final class FileStore
 {
-    private const ID_PATTERN = '/^[a-f0-9]{24}(?:[a-f0-9]{8})?$/i';
+    private const ID_PATTERN = '/^[a-f0-9]{24}(?:[a-f0-9]{8})?\z/i';
 
     private readonly \Closure|string $directory;
 
@@ -209,10 +209,14 @@ final class FileStore
      */
     private function readMetadata(string $path): array
     {
+        $dataPath = $this->dataPath($path);
         try {
-            $decoded = json_decode($this->filesystem->read($this->dataPath($path)), true);
-        } catch (FilesystemException) {
-            return [];
+            if (!$this->filesystem->fileExists($dataPath)) {
+                return [];
+            }
+            $decoded = json_decode($this->filesystem->read($dataPath), true);
+        } catch (FilesystemException $e) {
+            throw new FileStoreException('The file metadata could not be read.', 0, $e);
         }
 
         return is_array($decoded) ? $decoded : [];

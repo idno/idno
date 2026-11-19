@@ -1695,8 +1695,8 @@ tests). It is built with new (the `Files/` directory is excluded from the contai
 - Layout, unchanged since 1.x: a file with id `<id>` is `<directory>/<id[0]>/<id[1]>/<id[2]>/<id[3]>/<id>.file`
   (the bytes) with `<same>/<id>.data` beside it (the metadata, `json_encode($metadata)`, no flags).
   `FileStore::path($id)` is the `.file` path. A file exists when its `.file` does; a missing or
-  undecodable `.data` is metadata `[]`.
-- An id is 32 hex digits (a local file) or 24 (a GridFS file). It is validated before any path is built
+  undecodable `.data` is metadata `[]`; any other failure to read it is thrown, never read as `[]`.
+- An id is exactly 32 hex digits (a local file) or exactly 24 (a GridFS file), nothing after them (`/^[a-f0-9]{24}(?:[a-f0-9]{8})?\z/i`: a trailing newline is not an id). It is validated before any path is built
   from it: `find()`, `has()`, `updateMetadata()` and `delete()` treat anything else as no file,
   `storeAs()` and `path()` throw `\InvalidArgumentException`, `readStream()` throws `FileStoreException`.
   `store()` makes a new id, `bin2hex(random_bytes(16))`. Files are streamed in and out, never read whole.
@@ -1704,7 +1704,7 @@ tests). It is built with new (the `Files/` directory is excluded from the contai
   writing nothing, when the merge changes nothing. Failures of the filesystem are thrown as
   `FileStoreException` (previous: Flysystem's).
 - `FilesystemFactory::fromConfig(BootConfig::all())`: an `uploadpath` of `s3://<bucket>/<prefix>/` is the S3
-  adapter (`aws_key`, `aws_secret`, `aws_region`; no credentials means the SDK's default chain), any
+  adapter (`FilesystemFactory::s3Options()` maps `aws_region`, `aws_key`, `aws_secret` to the client's options; no credentials means the SDK's default chain), any
   other non-empty path the local adapter rooted there (files 0644, directories 0755), none throws a
   `\LogicException`. Tests give it an `S3Client` on a Symfony `MockHttpClient`, never the network.
 - Tests: `Tests/Unit/Storage/Files/`.

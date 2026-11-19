@@ -136,4 +136,38 @@ final class FilesystemFactoryTest extends TestCase
         $this->expectException(\LogicException::class);
         FilesystemFactory::fromConfig(['uploadpath' => '/']);
     }
+
+    public function testTheS3VariablesMapToTheClientOptions(): void
+    {
+        $config = $this->configFor([
+            'IDNO_AWS_S3_BUCKET'            => 'b',
+            'IDNO_AWS_S3_REGION'            => 'eu-west-1',
+            'IDNO_AWS_S3_ACCESS_KEY_ID'     => 'key',
+            'IDNO_AWS_S3_SECRET_ACCESS_KEY' => 'secret',
+        ]);
+        $this->assertSame(
+            ['region' => 'eu-west-1', 'accessKeyId' => 'key', 'accessKeySecret' => 'secret'],
+            FilesystemFactory::s3Options($config)
+        );
+    }
+
+    public function testCloudcubeMapsToTheClientOptions(): void
+    {
+        $config = $this->configFor([
+            'CLOUDCUBE_URL'               => 'https://cloud-cube-eu.s3.amazonaws.com/abc',
+            'CLOUDCUBE_ACCESS_KEY_ID'     => 'ck',
+            'CLOUDCUBE_SECRET_ACCESS_KEY' => 'cs',
+        ]);
+        $this->assertSame(
+            ['region' => 'eu-west-1', 'accessKeyId' => 'ck', 'accessKeySecret' => 'cs'],
+            FilesystemFactory::s3Options($config)
+        );
+    }
+
+    public function testNoCredentialsInTheConfigLeavesTheSdkDefaultChain(): void
+    {
+        $config = $this->configFor(['IDNO_AWS_S3_BUCKET' => 'b', 'IDNO_AWS_S3_REGION' => 'eu-west-1']);
+        $this->assertSame(['region' => 'eu-west-1'], FilesystemFactory::s3Options($config));
+        $this->assertSame([], FilesystemFactory::s3Options(['aws_key' => 'k']));
+    }
 }

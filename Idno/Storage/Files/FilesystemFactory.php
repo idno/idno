@@ -69,20 +69,31 @@ final class FilesystemFactory
     }
 
     /**
+     * The AsyncAws S3 configuration the legacy configuration gives: the region and, when the
+     * configuration holds both, the access key (with none, the SDK's default credential chain applies).
+     *
      * @param array<string, mixed> $config
+     * @return array<string, string>
      */
-    private static function s3Client(array $config): S3Client
+    public static function s3Options(array $config): array
     {
         $options = [];
         if (!empty($config['aws_region'])) {
             $options['region'] = (string) $config['aws_region'];
         }
-        // With no credentials in the configuration the SDK's default chain applies.
         if (!empty($config['aws_key']) && !empty($config['aws_secret'])) {
             $options['accessKeyId']     = (string) $config['aws_key'];
             $options['accessKeySecret'] = (string) $config['aws_secret'];
         }
 
-        return new S3Client($options);
+        return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private static function s3Client(array $config): S3Client
+    {
+        return new S3Client(self::s3Options($config));
     }
 }
