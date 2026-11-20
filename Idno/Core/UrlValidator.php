@@ -5,8 +5,10 @@ namespace Idno\Core;
 /**
  * Validates URLs to prevent Server-Side Request Forgery (SSRF).
  *
- * Call isSafeUrl() before fetching any URL that was supplied by a remote
- * party (webmention sources, ActivityPub actors, Micropub media URLs, etc).
+ * A URL that was supplied by a remote party (webmention sources, ActivityPub
+ * actors, Micropub media URLs, etc) must pass isSafeUrl() before it is fetched,
+ * and so must every URL it redirects to: fetch it with Webservice::safeSend(),
+ * which does both.
  */
 class UrlValidator
 {
@@ -15,19 +17,34 @@ class UrlValidator
      * Blocks non-HTTP schemes, embedded credentials, and any host that is,
      * or resolves to, a loopback, private, link-local or reserved address.
      *
+     * This checks one URL. A redirect from it can lead anywhere, so fetch the URL
+     * with \Idno\Core\Webservice::safeSend(), which checks every hop.
+     *
      * @param mixed $url The URL to validate
      * @return bool True if the URL is safe to fetch
      */
     public static function isSafeUrl($url): bool
     {
+        return !empty(self::safeAddresses($url));
+    }
+
+    /**
+     * The IP addresses that the host of a URL resolves to, if the URL is safe for
+     * server-side fetching (see isSafeUrl()).
+     *
+     * @param mixed $url The URL to validate
+     * @return string[] The addresses, or an empty array if the URL is not safe to fetch
+     */
+    public static function safeAddresses($url): array
+    {
         if (!is_string($url) || $url === '') {
-            return false;
+            return [];
         }
 
         // Must be a valid URL
         if (!filter_var($url, FILTER_VALIDATE_URL)) {
             self::reject('Invalid URL', $url);
-            return false;
+            return [];
         }
 
         $parts = parse_url($url);
@@ -36,35 +53,35 @@ class UrlValidator
         $scheme = strtolower($parts['scheme'] ?? '');
         if (!in_array($scheme, ['http', 'https'], true)) {
             self::reject('Non-HTTP scheme', $url);
-            return false;
+            return [];
         }
 
         // Must have a host, and must not smuggle credentials
         $host = $parts['host'] ?? '';
         if ($host === '') {
             self::reject('Missing host', $url);
-            return false;
+            return [];
         }
         if (isset($parts['user']) || isset($parts['pass'])) {
             self::reject('Embedded credentials', $url);
-            return false;
+            return [];
         }
 
         $ips = self::resolveHost($host);
         if (empty($ips)) {
             self::reject('Unresolvable host', $url);
-            return false;
+            return [];
         }
 
         // Every address the host resolves to must be public
         foreach ($ips as $ip) {
             if (!self::isPublicIp($ip)) {
                 self::reject('Private/reserved IP (' . $ip . ')', $url);
-                return false;
+                return [];
             }
         }
 
-        return true;
+        return $ips;
     }
 
     /**

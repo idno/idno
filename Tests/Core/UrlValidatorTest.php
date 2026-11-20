@@ -50,6 +50,20 @@ namespace Tests\Core {
             $this->assertTrue(UrlValidator::isSafeUrl('https://[2606:2800:220:1:248:1893:25c8:1946]/'));
         }
 
+        public function testSafeAddressesAreTheAddressesOfTheHost()
+        {
+            $this->assertSame(['93.184.216.34'], UrlValidator::safeAddresses('https://93.184.216.34:8443/path'));
+            $this->assertSame(['2606:2800:220:1:248:1893:25c8:1946'], UrlValidator::safeAddresses('https://[2606:2800:220:1:248:1893:25c8:1946]/'));
+        }
+
+        /**
+         * @dataProvider unsafeUrlProvider
+         */
+        public function testUnsafeUrlsHaveNoSafeAddresses($url)
+        {
+            $this->assertSame([], UrlValidator::safeAddresses($url));
+        }
+
         public function testIsPublicIp()
         {
             $this->assertTrue(UrlValidator::isPublicIp('93.184.216.34'));

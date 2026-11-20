@@ -16,6 +16,12 @@ Some tests require a connection to your local Idno instance, so if this is anyth
 
 Before running the unit test, set this by running ```export KNOWN_DOMAIN='MY.KNOWN.DOMAIN'```
 
+## Testing code that fetches URLs
+
+Tests must not make requests to the public internet. A test of code that fetches a URL should extend `Tests\OutboundHttpTestCase`, which starts a small web server on 127.0.0.1 for the test class (`Tests\LocalHttpServer`; the pages it serves are listed in `Tests/Core/fixtures/http_server.php`).
+
+Idno refuses to fetch addresses on the server itself on behalf of a remote party, so a test that needs a "public" site calls `$this->useLocalServerAsProxy()` and uses addresses in `203.0.113.0/24`, a range reserved for documentation. Every request Idno makes is then answered by the local server, and `static::$server->requests()` lists what it was asked for. `Tests/Core/WebserviceTest.php` shows how.
+
 # Code style testing
 
 Idno includes a PHP Codesniffer ruleset.

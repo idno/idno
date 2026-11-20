@@ -77,7 +77,8 @@ namespace Idno\Pages\Webmentions {
                     }
                     if ($webmention_ok) {
                         \Idno\Core\Idno::site()->logging()->debug("webmention is ok with target page " . get_class($page));
-                        if ($source_response = \Idno\Core\Webservice::get($source)) {
+                        // safeSend() also checks every address the source redirects to
+                        if ($source_response = \Idno\Core\Webservice::safeSend('get', $source)) {
                             if (substr_count($source_response['content'], $target) || $source_response['response'] == 410) {
                                 $source_mf2 = \Idno\Core\Webmention::parseContent($source_response['content'], $source);
                                 // Set source and target information as input variables

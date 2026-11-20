@@ -53,7 +53,8 @@ class RemoteActor
                 $headers = array_merge($signedHeaders, $headers);
             }
 
-            $response = Webservice::get($actorUri, null, $headers);
+            // safeSend() also checks every address the actor URI redirects to
+            $response = Webservice::safeSend('get', $actorUri, null, $headers);
 
             if (empty($response['content']) || $response['response'] < 200 || $response['response'] >= 300) {
                 \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Failed to fetch actor ' . $actorUri . ' (HTTP ' . ($response['response'] ?? 'unknown') . ')');

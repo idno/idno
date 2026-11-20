@@ -611,6 +611,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
          */
         private function uploadFromUrl($type, $url)
         {
+            $success = false;
             $_url = $url;
             foreach ($_url as $url) {
                 // SSRF protection: validate URL before fetching
@@ -650,13 +651,12 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
                         break;
                 }
 
-                $tmpname  = tempnam(sys_get_temp_dir(), 'indiepub_');
-                $fp       = fopen($url, 'rb');
-                if ($fp) {
-                    $success = file_put_contents($tmpname, $fp);
-                    fclose($fp);
-                } else {
-                    $success = false;
+                // safeSend() also checks every address the URL redirects to
+                $response = \Idno\Core\Webservice::safeSend('get', $url);
+                $success  = false;
+                if ($response['response'] >= 200 && $response['response'] < 300 && empty($response['error'])) {
+                    $tmpname = tempnam(sys_get_temp_dir(), 'indiepub_');
+                    $success = file_put_contents($tmpname, $response['content']);
                 }
                 if ($success) {
 
