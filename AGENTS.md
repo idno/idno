@@ -1108,7 +1108,10 @@ other new code may.
     `content`, `effective_url` the URL that was being requested and the failure's message in `error`;
     one error line is logged (`Webservice request failed: <scheme>://<host><path>: <message>`: no query,
     no credentials, control characters replaced, each part at most 200 bytes, never a header or a body).
-    `error` is empty exactly when a response was received and its body was complete.
+    `error` is empty when a response was received and kept whole; a response refused or cut for its size has its
+    status AND a non-empty `error`. The log line holds a fixed reason or the exception's class, never its message
+    (which can quote the address), and the URL as scheme, host and path (`[unparseable address]` if it has none).
+    No caller in the repository reads `$result['error']`.
   - Redirects are followed BY THE ADAPTER, one request per hop, each sent with `max_redirects` 0, so
     that `header` holds the header block of every hop in order, `effective_url` is the last URL, and the
     remote client checks every hop's address. Five are followed; a sixth is the failed result with the

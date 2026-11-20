@@ -519,7 +519,8 @@ is enabled and by `idno:upgrade`; plugins cannot ship migrations.
 * **Time limits.** A request that receives nothing for 10 seconds, or lasts 60 seconds, fails with a non-empty `error`.
 * **A larger response is cut at the limit.** `webservice_max_download` (default 10 MB) was only checked against a declared `Content-Length`; a response with none is now cut at the limit, with a non-empty `error`. A response that declares a length over the limit is refused as before.
 * **Remote-party URLs.** A fetch through `safeSend()` or the `$remoteClient` service fails when any hop resolves to a private or reserved address.
-* **`error` holds Symfony's message, not curl's**, and is empty exactly when a response was received. `send()` never throws for a transport failure.
+* **`error` holds Symfony's message, not curl's.** It is empty when a response was received and kept whole; it is not empty when no response arrived, or when one was refused or cut for its size (`response` is then its status). `send()` never throws for a transport failure.
+* **Addresses the old client tolerated are errors.** An address with no scheme (`example.com/page`), a scheme other than http or https, a backslash, or a leading space gives an error result (`response` 0) instead of a request. Pass a full URL, or run the address through `Webservice::sanitizeURL()` first.
 * **Headers given by name are sent.** `['Content-Type' => 'application/json']` used to be silently dropped (only `'Name: value'` lines reached curl); it is sent now, for every verb (the PuSH hub ping passes its Content-Type this way). A line with no colon is not sent.
 * **After more than five redirects**, `file_get_contents_ex()` returns the failed result and `file_get_contents()` returns `false`; neither throws (they used to raise a PHP warning, an exception on a site with `pedantic_mode`).
 * **No Referer on redirects**, and `Authorization` and `Cookie` headers are not sent to a different host on a redirect.

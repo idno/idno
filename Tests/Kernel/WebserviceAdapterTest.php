@@ -319,6 +319,49 @@ final class WebserviceAdapterTest extends IdnoTestCase
         }
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function addressesCarryingSecrets(): iterable
+    {
+        yield 'no scheme, token in the query' => ['example.com/x?token=secret-token-value'];
+        yield 'ftp with userinfo' => ['ftp://user:secret-pass@host.example.invalid/x?token=secret-token-value'];
+        yield 'https with userinfo failing in transport' => ['https://user:secret-pass@host.example.invalid/x?token=secret-token-value'];
+        yield 'a backslash and a leading space' => [' https:\\\\user:secret-pass@host.example.invalid\\x?token=secret-token-value'];
+    }
+
+    /**
+     * @dataProvider addressesCarryingSecrets
+     */
+    public function testNoLogLineHoldsTextTakenFromAnAddressOrAnExceptionMessage(string $address): void
+    {
+        $quoting = new TransportException('Could not connect to "' . $address . '".');
+        foreach (['send', 'safeSend'] as $method) {
+            Webservice::useClient($this->client([$quoting]), $this->client([$quoting]));
+
+            $result = Webservice::$method('get', $address);
+
+            $this->assertSame(0, $result['response']);
+            $this->assertNotSame('', $result['error']);
+        }
+
+        $log = $this->log();
+        $this->assertStringContainsString('Webservice request failed', $log);
+        $this->assertStringNotContainsString('secret', $log);
+        $this->assertStringNotContainsString('token=', $log);
+    }
+
+    public function testAnAddressTheOldClientToleratedIsAnErrorResultNotAnException(): void
+    {
+        Webservice::useClient(null);
+
+        foreach (['example.com/page', 'ftp://example.com/file', ' https://example.com/'] as $address) {
+            $result = Webservice::get($address);
+            $this->assertSame(0, $result['response'], $address);
+            $this->assertNotSame('', $result['error'], $address);
+        }
+    }
+
     public function testAFailureIsLoggedOnceWithControlCharactersReplacedAndBounded(): void
     {
         $path = '/a' . str_repeat('b', 400);

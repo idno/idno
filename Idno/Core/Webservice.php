@@ -164,7 +164,7 @@ namespace Idno\Core {
             // Check HSTS - if so, rewrite the endpoint to use HTTPS
             if (static::isHSTS($endpoint)) {
                 $endpoint = str_replace('http://', 'https://', $endpoint);
-                \Idno\Core\Idno::site()->logging()->debug("HSTS Found, so endpoint call is now going to $endpoint");
+                \Idno\Core\Idno::site()->logging()->debug("HSTS Found, so endpoint call is now going to " . self::loggableUrl($endpoint));
             }
 
             $sizeLimit = self::DEFAULT_MAX_DOWNLOAD;
@@ -220,7 +220,7 @@ namespace Idno\Core {
                     }
                 } catch (\Throwable $e) {
                     $message = "The request could not be built: " . $e->getMessage();
-                    self::logFailure($endpoint, $message);
+                    self::logFailure($endpoint, get_class($e));
                     self::$lastRequest  = '';
                     self::$lastResponse = '';
 
@@ -313,7 +313,7 @@ namespace Idno\Core {
                 }
             } catch (ExceptionInterface | \InvalidArgumentException $e) {
                 $error = $e->getMessage() !== '' ? $e->getMessage() : get_class($e);
-                self::logFailure($url, $error);
+                self::logFailure($url, get_class($e));
                 self::$lastResponse = '';
 
                 return self::failure(0, $url, $error);
@@ -469,27 +469,28 @@ namespace Idno\Core {
         }
 
         /**
-         * One error line for a failed request: the URL as scheme, host and path only (never a query
-         * or credentials), the message with any URL in it reduced the same way, control characters
-         * replaced, each at most 200 bytes. Never a header or a body.
+         * One error line for a failed request: a fixed reason (or the class of the exception, never its
+         * message, which can quote the address with its query and credentials) and the URL as scheme,
+         * host and path only. Never a header or a body.
          */
-        private static function logFailure(string $url, string $message): void
+        private static function logFailure(string $url, string $reason): void
         {
-            $message = preg_replace_callback('#https?://[^\s"\'<>]+#i', static fn(array $m): string => self::loggableUrl($m[0]), $message);
-            $message = substr((string)preg_replace('/[\x00-\x1F\x7F]/', '?', (string)$message), 0, 200);
-
-            \Idno\Core\Idno::site()->logging()->error('Webservice request failed: ' . self::loggableUrl($url) . ': ' . $message);
+            \Idno\Core\Idno::site()->logging()->error('Webservice request failed: ' . $reason . ': ' . self::loggableUrl($url));
         }
 
+        /**
+         * The URL reduced to scheme, host and path (no port, query, fragment or credentials), control
+         * characters replaced, at most 200 bytes; '[unparseable address]' when it has no scheme and host.
+         */
         private static function loggableUrl(string $url): string
         {
-            $parts = parse_url($url);
-            if (!is_array($parts) || empty($parts['host'])) {
-                return '[unreadable URL]';
+            $parts = parse_url(trim($url));
+            if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+                return '[unparseable address]';
             }
-            $text = ($parts['scheme'] ?? 'http') . '://' . $parts['host'] . ($parts['path'] ?? '');
+            $text = $parts['scheme'] . '://' . $parts['host'] . ($parts['path'] ?? '');
 
-            return substr((string)preg_replace('/[\x00-\x1F\x7F]/', '?', $text), 0, 200);
+            return substr((string)preg_replace('/[^\x21-\x7E]/', '?', $text), 0, 200);
         }
 
         /**
@@ -852,7 +853,7 @@ namespace Idno\Core {
             }
 
             $status = null;
-            \Idno\Core\Idno::site()->logging()->debug("Valid HSTS found, no need to store", $headers);
+            \Idno\Core\Idno::site()->logging()->debug("Checking " . count($headers) . " response header lines for HSTS");
             // Parse out
             if (!empty($headers)) {
                 foreach ($headers as $line) {
