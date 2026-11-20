@@ -204,6 +204,16 @@ namespace Idno\Core {
                 throw new \Idno\Exceptions\ConfigurationException('Configuration template could not be loaded.');
             }
 
+            // A value is written inside single quotes: refuse what could end the value or start another
+            // line (quotes, line breaks and other control characters, a trailing backslash), whatever
+            // the caller checked, so that no value can add or change a setting.
+            foreach ($params as $name => $value) {
+                $value = (string) $value;
+                if (preg_match('/[\'"\x00-\x1f\x7f]/', $value) === 1 || str_ends_with($value, '\\')) {
+                    throw new \Idno\Exceptions\ConfigurationException('The installer cannot write the value of the setting ' . $name . ' to the configuration file: it contains a quote, a line break or another control character, or ends in a backslash. Put that value in configuration/config.ini by hand.');
+                }
+            }
+
             // Build config output
             foreach ($params as $name => $value) {
                 $template = str_replace("%{$name}%", $value, $template);
@@ -297,8 +307,8 @@ namespace Idno\Core {
             if (in_array('..', $segments, true)) {
                 throw new \Idno\Exceptions\ConfigurationException('The path of the database file cannot contain "..".');
             }
-            if (preg_match('/^[A-Za-z0-9._-]+\.sqlite\z/i', (string) end($segments)) !== 1) {
-                throw new \Idno\Exceptions\ConfigurationException('The name of the database file must end in .sqlite and hold only letters, digits, dots, underscores and dashes (for example idno.sqlite): web servers are set up never to serve or run a file with that name.');
+            if (!\Idno\Storage\ConnectionParameters::isSqliteFileName($path)) {
+                throw new \Idno\Exceptions\ConfigurationException('The name of the database file must end in .sqlite (in lower case) and hold only letters, digits, dots, underscores and dashes (for example idno.sqlite): web servers are set up never to serve or run a file with that name.');
             }
             if (str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('#^[A-Za-z]:#', $path) === 1) {
                 return $path;

@@ -279,7 +279,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->cacheDir = sys_get_temp_dir() . '/idno-test-cache-' . bin2hex(random_bytes(6));
         $this->setServer('IDNO_CACHE_DIR', $this->cacheDir);
         $this->setServer('IDNO_DATABASE', $database);
-        $this->setServer('IDNO_DBNAME', $database === 'sqlite' ? $this->cacheDir . '/site.db' : null);
+        $this->setServer('IDNO_DBNAME', $database === 'sqlite' ? $this->cacheDir . '/site.sqlite' : null);
         $this->kernel = new Kernel('test', true, bootLegacy: false);
         $this->kernel->boot();
         $container = $this->kernel->getContainer();
@@ -290,7 +290,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
             $this->assertFalse($container->initialized($id), $id . ' was built while the kernel booted');
         }
         $this->assertFalse($container->initialized('database_connection'));
-        $this->assertFileDoesNotExist($this->cacheDir . '/site.db');
+        $this->assertFileDoesNotExist($this->cacheDir . '/site.sqlite');
     }
 
     /**
@@ -305,7 +305,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->cacheDir = sys_get_temp_dir() . '/idno-test-cache-' . bin2hex(random_bytes(6));
         $this->setServer('IDNO_CACHE_DIR', $this->cacheDir);
         $this->setServer('IDNO_DATABASE', $database);
-        $this->setServer('IDNO_DBNAME', $database === 'sqlite' ? $this->cacheDir . '/site.db' : null);
+        $this->setServer('IDNO_DBNAME', $database === 'sqlite' ? $this->cacheDir . '/site.sqlite' : null);
         $this->kernel = new Kernel('test', true, bootLegacy: false);
         $this->kernel->boot();
         $container = $this->kernel->getContainer();
@@ -322,7 +322,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
         $this->assertInstanceOf($dialects[$database], self::property($indexes, 'dialect'));
         $this->assertSame($container->get('database_connection'), self::property($indexes, 'connection'));
         $this->assertFalse($container->get('database_connection')->isConnected(), 'building it does not connect');
-        $this->assertFileDoesNotExist($this->cacheDir . '/site.db');
+        $this->assertFileDoesNotExist($this->cacheDir . '/site.sqlite');
     }
 
     public function testTheDialectFactoryRefusesADatabaseThatIsNotSql(): void

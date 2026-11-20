@@ -27,6 +27,27 @@ final class ConnectionParameters
     private const LEGACY_BACKEND_NAMESPACE = 'Idno\\Data\\';
     private const LEGACY_SQL_BACKEND = 'Idno\\Data\\MySQL';
 
+    /**
+     * The name of an SQLite database file: letters, digits, dots, underscores and dashes, ending in
+     * the lower-case suffix `.sqlite`. That suffix is the one every shipped web-server configuration
+     * refuses to serve and PHP never executes (the Apache rules match it case-sensitively), so a
+     * database file can be neither fetched nor run through the site. The installers and
+     * fromLegacyConfig() share this rule.
+     */
+    public const SQLITE_FILE_NAME = '/^[A-Za-z0-9._-]+\.sqlite\z/';
+
+    /**
+     * Whether the last segment (after a slash or a backslash) of an SQLite database path is a name
+     * the site may create a database under (SQLITE_FILE_NAME).
+     */
+    public static function isSqliteFileName(string $path): bool
+    {
+        // A Windows drive (`c:idno.sqlite`) is not part of the name.
+        $segments = preg_split('#[/\\\\]#', (string) preg_replace('#^[A-Za-z]:#', '', $path)) ?: [];
+
+        return preg_match(self::SQLITE_FILE_NAME, (string) end($segments)) === 1;
+    }
+
     /** The DBAL parameters that identify the database; fromLegacyConfig() sets every one it needs. */
     public const IDENTITY_KEYS = ['driver', 'driverClass', 'url', 'host', 'port', 'unix_socket', 'dbname', 'user', 'password', 'charset', 'path', 'memory', 'driverOptions'];
 
@@ -42,7 +63,8 @@ final class ConnectionParameters
      *
      * @return array<string, mixed>
      *
-     * @throws \LogicException when the configured database is not an SQL database (a site configured for
+     * @throws \LogicException when an SQLite `dbname` (other than `:memory:` and empty) is not a file name
+     *                          ending in `.sqlite` (isSqliteFileName()), or when the configured database is not an SQL database (a site configured for
      *                          MongoDB, or a loadable backend class supplied by a plugin; see driverFamily())
      */
     public static function fromLegacyConfig(array $config, array $server, ?string $projectDir = null): array
@@ -54,6 +76,9 @@ final class ConnectionParameters
             $path = (string) ($config['dbname'] ?? '');
             if ($path === ':memory:') {
                 return ['driver' => 'pdo_sqlite', 'memory' => true];
+            }
+            if ($path !== '' && !self::isSqliteFileName($path)) {
+                throw new \LogicException('The SQLite database file named by the setting dbname must have a name that ends in .sqlite (letters, digits, dots, underscores and dashes before it), so that web servers never serve or run it. Rename the file and change dbname in config.ini.');
             }
             if ($projectDir !== null && $projectDir !== '' && $path !== '' && !self::isAbsolutePath($path)) {
                 $path = rtrim($projectDir, '/\\') . '/' . $path;

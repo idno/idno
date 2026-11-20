@@ -164,6 +164,8 @@ final class InstallerDatabaseTest extends TestCase
             'an absolute php file' => ['/var/www/html/shell.php'],
             'no suffix' => ['data/idno'],
             'another suffix' => ['data/idno.db'],
+            'the suffix in another case' => ['data/idno.SQLite'],
+            'the suffix in upper case' => ['data/IDNO.SQLITE'],
             'a php name that ends in sqlite after a dot only' => ['data/idno.sqlite.php'],
             'only the suffix' => ['data/.sqlite'],
             'a directory' => ['data/'],
@@ -213,10 +215,85 @@ final class InstallerDatabaseTest extends TestCase
         }
     }
 
-    public function testASqliteSuffixInAnyCaseAndDotsAndDashesAreAccepted(): void
+    public function testALowerCaseSuffixAndDotsDashesAndCapitalsInTheNameAreAccepted(): void
     {
-        foreach (['data/My-Site_1.v2.SQLite', 'a.b.sqlite'] as $path) {
+        foreach (['data/My-Site_1.v2.sqlite', 'a.b.sqlite'] as $path) {
             self::assertSame($this->root . '/' . $path, $this->installer()->params('sqlite', ['path' => $path])['dbname']);
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function hostileValues(): array
+    {
+        $values = [
+            "pw'\ndatabase = 'sqlite'\ndbname = '/var/www/html/shell.php",
+            "'", '"', "a'b", "a\nb", "a\r\nb", "x\0y", 'a\\', '${foo}', 'a;b', 'a#b', 'a=b', '[section]', 'on', 'null',
+            "a'\n[x]\ny='z", 'a\\b', "tab\there", "a\x7fb", 'yes', 'none', 'a b', '~!@%^&*()', '{x}', 'a|b', '', "a\x1fb", "a\\\nb",
+        ];
+        $sets = [];
+        foreach ($values as $i => $value) {
+            $sets[$i . ' ' . addcslashes($value, "\0..\37\177")] = [$value];
+        }
+
+        return $sets;
+    }
+
+    /**
+     * The property that matters: whatever value a parameter holds, the configuration file built from it
+     * either is refused (naming the setting) or reads back, as the site reads it (`parse_ini_file()` with
+     * sections), with exactly that value for that key and the expected values for every other key, and no
+     * key added.
+     *
+     * @dataProvider hostileValues
+     */
+    public function testAHostileValueNeverChangesAnotherSettingOfTheConfiguration(string $hostile): void
+    {
+        $installer = $this->installer();
+        $base = ['database' => 'MySQL', 'dbname' => 'known', 'dbuser' => 'user', 'dbpass' => 'secret', 'dbhost' => 'localhost', 'filesystem' => 'local', 'uploadpath' => '/srv/uploads/'];
+        $generated = ['build', 'version', 'datetime'];
+        foreach (array_keys($base) as $key) {
+            try {
+                $text = $installer->config([$key => $hostile] + $base);
+            } catch (ConfigurationException $e) {
+                self::assertStringContainsString($key, $e->getMessage());
+                if ($hostile !== '' && preg_match('/[\x00-\x1f\x7f]/', $hostile) !== 1) {
+                    self::assertStringNotContainsString($hostile, $e->getMessage());
+                }
+                continue;
+            }
+            $read = parse_ini_string($text, true);
+            self::assertIsArray($read, $key);
+            $expected = [$key => $hostile] + $base;
+            self::assertSame([], array_diff(array_keys($read), array_keys($base), $generated), 'a key was added for ' . $key);
+            foreach ($expected as $name => $value) {
+                self::assertArrayHasKey($name, $read, $key);
+                self::assertSame($value, $read[$name], $key . ' / ' . $name);
+            }
+        }
+    }
+
+    public function testValuesThatAreHarmlessInSingleQuotesAreAccepted(): void
+    {
+        $installer = $this->installer();
+        foreach (['a;b', 'a#b', 'a=b', '[section]', '${foo}', 'on', 'null', 'a b', 'p@ss/w:rd%', 'a\\b'] as $value) {
+            $config = parse_ini_string($installer->config(['dbpass' => $value, 'database' => 'MySQL', 'dbname' => 'k', 'dbuser' => 'u', 'dbhost' => 'h', 'uploadpath' => '/u/']), true);
+            self::assertIsArray($config);
+            self::assertSame($value, $config['dbpass'], $value);
+        }
+    }
+
+    public function testTheReviewersPayloadIsRefusedAndNamesTheSettingNotTheValue(): void
+    {
+        $payload = "pw'\ndatabase = 'sqlite'\ndbname = '/var/www/html/shell.php";
+        try {
+            $this->installer()->config(['dbpass' => $payload, 'database' => 'MySQL', 'dbname' => 'k', 'dbuser' => 'u', 'dbhost' => 'h', 'uploadpath' => '/u/']);
+            self::fail('The payload was written into a configuration file.');
+        } catch (ConfigurationException $e) {
+            self::assertStringContainsString('dbpass', $e->getMessage());
+            self::assertStringNotContainsString('shell.php', $e->getMessage());
+            self::assertStringContainsString('config.ini', $e->getMessage());
         }
     }
 

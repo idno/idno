@@ -323,8 +323,9 @@ needed. Your MongoDB database is only read: nothing in it is changed. The MongoD
    under the directory named after your site (its `file_path_host`, or its host less `www.`); give
    another with `--file-host`. The import never prints the database password.
 
-   For an SQLite target, end the file's name in `.sqlite` (the web server configurations refuse to
-   serve that suffix). The import runs as you, so the database file, its directory and the files SQLite
+   For an SQLite target, the file's name must end in `.sqlite`, in lower case (the web server
+   configurations refuse to serve that suffix; the import refuses any other name before it connects,
+   and so does the site itself). The import runs as you, so the database file, its directory and the files SQLite
    and the upgrade create beside it (`-wal`, `-shm` and `.upgrade.lock`) are yours, and the web server
    cannot write to them: give them to the web server's user (or make them writable for it), for
    example `chown -R www-data data/`, and run `idno:upgrade` and other console commands on the site as

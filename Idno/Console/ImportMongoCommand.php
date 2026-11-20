@@ -315,6 +315,9 @@ final class ImportMongoCommand extends Command
             if ($settings['dbname'] === '' || $settings['dbname'] === ':memory:') {
                 return 'An SQLite target names its database file: sqlite:///relative/path or sqlite:////absolute/path.';
             }
+            if (!ConnectionParameters::isSqliteFileName($settings['dbname'])) {
+                return 'The SQLite database file\'s name must end in .sqlite (in lower case; letters, digits, dots, underscores and dashes before it), for example sqlite:///data/idno.sqlite: web servers are set up never to serve or run a file with that name.';
+            }
 
             return ['database' => 'sqlite', 'dbname' => $settings['dbname'], 'dbhost' => null, 'dbport' => null, 'dbuser' => null, 'dbpass' => null];
         }

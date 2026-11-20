@@ -92,6 +92,53 @@ final class ConnectionParametersTest extends TestCase
         );
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unusableSqliteNames(): array
+    {
+        return [
+            'php' => ['/tmp/shell.php'],
+            'relative php' => ['shell.php'],
+            'db' => ['/tmp/idno.db'],
+            'a php name after the suffix' => ['/tmp/x.sqlite.php'],
+            'no extension' => ['/tmp/idno'],
+            'upper case suffix' => ['/tmp/idno.SQLite'],
+            'windows php' => ['C:\\site\\shell.php'],
+            'a directory' => ['/tmp/data/'],
+        ];
+    }
+
+    /**
+     * @dataProvider unusableSqliteNames
+     */
+    public function testAnSqliteDatabaseUnderAnExecutableOrServableNameIsRefused(string $path): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('.sqlite');
+        ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => $path], [], '/srv/idno');
+    }
+
+    public function testBuildingTheConnectionForAnExecutableNameThrowsAndCreatesNothing(): void
+    {
+        $path = sys_get_temp_dir() . '/idno-shell-' . bin2hex(random_bytes(6)) . '.php';
+        try {
+            \Idno\Storage\ConnectionFactory::forConfig(['database' => 'sqlite', 'dbname' => $path], [], '/srv/idno');
+            $this->fail('A connection was built for ' . $path);
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('dbname', $e->getMessage());
+        }
+        $this->assertFileDoesNotExist($path);
+    }
+
+    public function testAnSqliteNameEndingInSqliteAndMemoryAreAccepted(): void
+    {
+        foreach (['/tmp/idno.sqlite', 'data/My-Site_1.v2.sqlite', 'C:\\idno\\site.sqlite'] as $path) {
+            $this->assertArrayHasKey('path', ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => $path], [], '/srv/idno'), $path);
+        }
+        $this->assertSame(['driver' => 'pdo_sqlite', 'memory' => true], ConnectionParameters::fromLegacyConfig(['database' => 'sqlite', 'dbname' => ':memory:'], []));
+    }
+
     public function testAnAbsoluteSqlitePathAndMemoryAreKept(): void
     {
         foreach (['/var/lib/idno.sqlite', 'C:\\idno\\site.sqlite', 'C:/idno/site.sqlite', 'c:idno.sqlite'] as $path) {

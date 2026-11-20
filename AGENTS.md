@@ -339,8 +339,15 @@ under the project directory (as the site reads it). `Installer::sqlitePath()` (a
 calls) checks the path WITHOUT touching the disk and refuses with a `ConfigurationException`, saying
 why, a path with a single quote or a control character (it cannot be written in the configuration
 file), a segment `..` (either slash), and a file name that does not match
-`/^[A-Za-z0-9._-]+\.sqlite\z/i`: `.sqlite` is the suffix every shipped web-server configuration refuses
-to serve and PHP never executes, so a database file can neither be fetched nor run through the site
+`ConnectionParameters::SQLITE_FILE_NAME` (`/^[A-Za-z0-9._-]+\.sqlite\z/`, lower case only: the Apache
+rules match case-sensitively): `.sqlite` is the suffix every shipped web-server configuration refuses
+to serve and PHP never executes; `ConnectionParameters::fromLegacyConfig()` applies the same rule to an SQLite `dbname` (other than
+`:memory:`) and throws a `\LogicException` naming the setting, so no configuration, however written,
+can make the site create its database under an executable name; the import command refuses such a target
+before connecting. `Installer::buildConfig()` (every installer) refuses a value containing a quote, a
+control character or ending in a backslash, with a `ConfigurationException` naming the setting, because
+values are written inside single quotes and such a value could add or change another setting (pinned by
+the property test in `InstallerDatabaseTest`), so a database file can neither be fetched nor run through the site
 (directory names may hold anything else, spaces included). `sqliteParams()` then checks what it can
 without creating anything (not a directory, the existing directory and file writable) and creates the
 directory (0755) and an empty file last; the file is opened through DBAL with `SqliteConnectionSetup`
