@@ -305,7 +305,7 @@ needed. Your MongoDB database is only read: nothing in it is changed.
    create tables in it. For SQLite, choose where the database file will be (not on a network
    filesystem); the file must not exist yet, or be empty. The import refuses a database that holds
    any table at all.
-3. **Keep `config.ini` as it is**: the import reads the MongoDB settings from it (`dbstring`,
+3. **Keep `config.ini` as it is** until the import has finished: the import reads the MongoDB settings from it (`dbstring`,
    `dbname`, `dbuser`, `dbpass`, `dbauthsrc`), and the upload directory (`uploadpath`). Give other
    ones with `--source-uri`, `--source-db` and `--upload-path`.
 4. **Run the import**:
@@ -321,17 +321,23 @@ needed. Your MongoDB database is only read: nothing in it is changed.
    `--target=sqlite:////var/lib/idno/idno.sqlite` (absolute). The files go into the upload directory,
    under the directory named after your site (its `file_path_host`, or its host less `www.`); give
    another with `--file-host`. The import never prints the database password.
-5. **Put the printed lines in `config.ini`**, in place of the MongoDB settings: `database`, `dbname`,
+5. **Only once the command has finished with "The import is complete." (exit status 0), put the
+   printed lines in `config.ini`**, in place of the MongoDB settings: `database`, `dbname`,
    `dbhost`, `dbuser`, `dbpass` (where it prints `<the password you gave>`, write the password),
    `filesystem = "local"` and `uploadpath`.
 6. **Run `php bin/console idno:upgrade`**, then start the site again. Users log in again (sessions are
    not carried over).
 
 What it carries over: the records of `entities`, `reader` and `site`, the site's configuration (the
-`config` document the site loaded; any older one is not used), and every GridFS file, with its
+`config` document your site loaded, as MongoDB itself answers the query the site made; any other
+`config` document is not used, and if the one the site loaded cannot be the settings the import stops
+and says why), and every GridFS file, with its
 metadata, under its own id, so every link to a file keeps working. Each file's size, and its bytes,
 are checked once copied. Other collections are listed at the end and not copied: Idno 2 does not read
 them (sessions, for example).
+
+Records read as any record the site saves itself does: a record that had no `siteid` reads
+`siteid: null`, and an empty `owner` (the MongoDB backend returned `false` for a user's) reads `''`.
 
 **Rejects.** A record that cannot be kept is not copied, and the import goes on: a record without a
 `uuid` or `_id`, one holding a value with no place in the new database (binary data, a regular
@@ -342,9 +348,15 @@ one created first is kept), or an older configuration. Each is a row of the tabl
 JSON, in `contents`) and why (`reason`); the import prints each one and how many there were.
 
 **If the import stops** (it says why: a database it cannot reach, a target that is not empty, a file
-whose bytes do not check, ...), nothing is lost: MongoDB is unchanged. The new database is left
-unfinished (the site would not open on it): delete it, make a new, empty one, and run the import
-again. Files already copied into the upload directory are checked and kept, not copied again.
+whose bytes do not check, ...), nothing is lost: MongoDB is unchanged, and the import never asks you
+to change it. If a GridFS file is broken (a chunk missing or stored twice), back the MongoDB database
+up (`mongodump`) before you remove or repair that file. The new database is then incomplete, and the
+import says so: **never point a site at it**. The import holds the last schema step back until
+everything is in, so `idno:upgrade --status` shows a migration pending, but that does not keep a site
+closed: a site whose `config.ini` named an incomplete database would show its upgrade page, finish
+that step itself and open with part of your content. Drop the incomplete database, make a new, empty
+one, and run the import again. Files already copied into the upload directory are checked and kept,
+not copied again; a file that did not copy correctly is not left there.
 
 ## Other changes in 2.0
 

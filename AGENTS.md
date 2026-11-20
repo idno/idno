@@ -1832,9 +1832,10 @@ whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/
   anything is written (an unreachable MongoDB stops it there); (2) every migration but the newest
   (`SchemaMigrator::migrate(exceptLast: true)`), then the core declared indexes
   (`IndexedFields::reconcileDirectory()` of `Idno/`); (3) `entities`, `reader`, `site`, each in `_id`
-  order, in transactions of 200: keys unescaped (`MongoDocument::unescapeKeys()`: `%2E` → `.`, `%24`
-  → `$`, `%25` → `%`, once each, in that order; a key that changes moves after the others, as the old
-  backend's `unsanitizeFields()` left it; two keys becoming one is a reject), a non-empty `_id` and
+  order, in transactions of 200: keys unescaped exactly as the old backend's `unsanitizeFields()` read them
+  (`MongoDocument::unescapeKeys()`: sequential replacements, `%25` → `%` first, then `%24` → `$`, then
+  `%2E` → `.`, so `a%252Eb` reads `a.b`; a key that changes moves after the others, as
+  `unsanitizeFields()` left it; two keys becoming one is a reject), a non-empty `_id` and
   uuid required, saved through a `JsonRecordStore` with `ImportRecordDefaults` (fills in nothing:
   asking it for an id or a uuid is a `\LogicException`; `siteid` null), `AttributeTypeMap` and the
   site's quote normaliser (`Idno\Core\Language::uncurlQuotes()`, called on an instance made without
@@ -1848,28 +1849,42 @@ whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/
   (found before the save, so a record is never replaced; of two, the smaller `_id` is kept), a record
   `RecordIndex` cannot index or the store refuses (too deep for the server's JSON functions, an
   `access` over 255 characters, ...). Each reject is logged (warning) and reported; (4) `config`: at most
-  1000 documents; the one `Mongo::getAnyRecord()` loaded (greatest `created` in MongoDB's order of
-  types, missing lowest; among equals, which MongoDB leaves undefined, the greatest `_id`) whose keys
-  `SettingsRecordStore::rowsOf()` accepts becomes `idno_settings` (written as `rowsOf()` lays it out,
-  no defaults; read back through a `SettingsRecordStore`); the others are rejects `superseded
-  configuration` or `cannot be the settings: ...`; (5) files in `_id` order: `FileStore::storeAs()`
+  1000 documents; the one the backend loaded, as MongoDB answers the backend's own query
+  (`MongoSource::loadedConfigurationId()`: `ExtMongoSource` runs `getAnyRecord('config')`'s
+  `find({}, sort created -1, limit 1)`), becomes `idno_settings` (written as
+  `SettingsRecordStore::rowsOf()` lays it out, no defaults; read back through a `SettingsRecordStore`);
+  every other one is the reject `superseded configuration`; when that one cannot be the settings (no
+  plain form, `rowsOf()` refuses it) the import STOPS saying why, never falling back to another; (5) files in `_id` order: `FileStore::storeAs()`
   under the file's own id, streamed through `ChunkStream` (one piece in memory), then checked: the bytes
   read equal the recorded length, the stored size, the md5 when GridFS recorded one, the SHA-256 of
-  the stored bytes against the bytes read, the metadata; a file there already with the same length,
+  the stored bytes against the bytes read, the metadata (a file that fails is deleted from the store
+  before the import stops); a file there already with the same length,
   metadata and bytes (md5, or SHA-256 against the source) is skipped; one with the same length and
   other bytes and no md5 stops the import (its source stream is spent); (6) counts: every collection's
   rows and rejects in the target must equal what was imported and rejected, and what was read must
   equal the source's count when the collection was begun (a site still writing stops it); (7) LAST the
-  newest migration, so a site pointed at the target stays closed until everything is in. Other
-  collections are returned as `notImported` (names only). Any failure leaves the newest migration
-  pending: import again into a new, empty database.
-- `ExtMongoSource`: `ObjectId` → its 24 hex digits, `UTCDateTime` → epoch seconds (int, rounded down),
+  newest migration. Holding it back makes the target not "current" for the importer's own completion
+  check and for `idno:upgrade --status`; it does NOT keep a site closed: a site whose config.ini named
+  an unfinished or failed target would run that migration from its upgrade page and open on partial
+  data. The protection is that config.ini names MongoDB until the command has exited 0; after a failure
+  that touched the target (`MongoImporter::touchedTarget()`) the command prints on stderr, after the
+  error, `ImportMongoCommand::INCOMPLETE` (the target is incomplete, must not be used, drop it and start
+  again on a new, empty database). Other collections are returned as `notImported` (names only).
+- `ExtMongoSource` reads documents and files a page at a time (constructor `$pageSize`, default 100:
+  `_id` greater than the last read, sorted, limited, each page read whole), never through one
+  long-lived cursor (it would idle on the server past its cursor timeout while a page is imported);
+  documents whose `_id` is not an ObjectId come first, paged by skip. No message tells the user to
+  change MongoDB (their only copy): a broken GridFS file (`ExtMongoSource::problem()`) says what is
+  wrong, that nothing in MongoDB was changed, and to back it up (`mongodump`) before removing or
+  repairing the file.
+  `ObjectId` → its 24 hex digits, `UTCDateTime` → epoch seconds (int, rounded down),
   `Int64` → int; any other BSON object makes the document a reject (`document` null, `reason`). A
   file's metadata is `MongoDocument::fileMetadata()` (what `MongoDBFileSystem::findOne()` put in
   `$file->metadata`: keys unescaped, the `metadata` sub-document but `_id`, then every top-level field
   but `_id`/`metadata` over it, `filename` reduced to its base name; a `UTCDateTime` as its string);
-  its stream yields the chunks in order of `n`, one fetched at a time (`batchSize` 1); a missing chunk
-  throws from the read. A file whose `_id` is not an ObjectId, or whose metadata holds another BSON
+  its stream yields the chunks in order of `n` (whatever order they are stored in), one fetched at a
+  time (`batchSize` 1); a missing or duplicated chunk throws from the read (a missing last chunk shows
+  as short bytes). A file whose `_id` is not an ObjectId, or whose metadata holds another BSON
   type, stops the import (the site could never serve it).
 - The command: refuses (exit 1, before connecting) without the extension, a target, a source (the
   site's `dbstring`/`dbname`/`dbuser`/`dbpass`/`dbauthsrc` when its database is MongoDB, else
@@ -1896,13 +1911,21 @@ whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/
   (`Tests/Import/fixtures/mongo-site.ndjson`, every document as canonical Extended JSON, and
   `expected.php`, what the backend returned, both written by `fixtures/capture.php`) loaded into a
   private MongoDB database, the command run in a subprocess configured for MongoDB, the records and
-  files compared, the imported site served (`php -S`, after `idno:upgrade`). It needs the extension and
+  files compared, the imported site served (`php -S`, after `idno:upgrade`); on top of the fixture it
+  adds with the driver documents holding a Binary, a Decimal128 and a Regex (rejects), dates before and
+  after 1970, an Int64, `{"0":..,"1":..}` and `{}`, files with chunks out of order and of length 0, and
+  per case a file with a missing middle chunk, a duplicated chunk or a missing last chunk (each stops
+  the command, leaves nothing of the file, and the target pending); it also checks pages of two and the
+  configuration MongoDB's own query names. It needs the extension and
   `IDNO_TEST_MONGO_URL` (skips without the variable, fails with it and no extension).
   `composer test:mongo-import` (`Tests/rig/mongo-import.sh`) runs it in Docker: a `mongo:6` container
-  with a throwaway password (on 127.0.0.1:27018) and a PHP 8.4 image with the extension
-  (`Tests/rig/mongo-import.Dockerfile`) built around a COPY of the checkout (never the checkout itself:
-  the rig it starts writes the copy's `configuration/config.ini`), on the SQLite rig; it removes the
-  containers, their volumes and the network whatever happens. `mongo-import.sh capture` recaptures the
+  with a throwaway password (no port published on the host: the containers share a network of their
+  own) and a PHP 8.4 image with the extension (`Tests/rig/mongo-import.Dockerfile`) built around a COPY
+  of the checkout (never the checkout itself, and without `.git`, `vendor/`, `.env` or the whole
+  `configuration/` directory, so no local configuration or secret is baked into the kept image: the rig
+  it starts writes the copy's own `configuration/config.ini`), on the SQLite rig; it removes the
+  containers, their volumes and the network whatever happens (also when interrupted), and the previous
+  image when a build replaces it. `mongo-import.sh capture` recaptures the
   fixture. Until the old MongoDB backend is removed, the container's copy (and the CI job
   `mongo-import`) also install `mongodb/mongodb`, for the backend that a process configured for MongoDB
   boots; the import itself never needs it.

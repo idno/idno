@@ -235,6 +235,56 @@ abstract class MongoImporterContract extends TestCase
         $this->assertSame([MongoImporter::SUPERSEDED, MongoImporter::SUPERSEDED], array_column($rejects, 'reason'));
     }
 
+    public function testTheConfigurationTheSourceNamesWinsWhateverItsId(): void
+    {
+        foreach ([self::id(15), self::id(16)] as $named) {
+            $this->dropTarget($this->connection);
+            $this->connection = $this->target();
+            $source = (new ArrayMongoSource())
+                ->add('config', ['_id' => self::id(15), 'title' => 'Fifteen', 'created' => 100])
+                ->add('config', ['_id' => self::id(16), 'title' => 'Sixteen', 'created' => 200])
+                ->loadConfiguration($named);
+
+            $result = $this->import($source);
+
+            $this->assertSame(['source' => 2, 'imported' => 1, 'rejected' => 1], $result['collections']['config']);
+            $this->assertSame($named, PrivateDatabase::recordStore($this->connection)->findLatest('config')['_id'] ?? null);
+            $this->assertSame([MongoImporter::SUPERSEDED], array_column($this->rejects(), 'reason'));
+            $this->assertNotContains($named, array_column($this->rejects(), 'legacy_id'));
+        }
+    }
+
+    /**
+     * @return array<string, array{0: \Closure(ArrayMongoSource): ArrayMongoSource, 1: string}>
+     */
+    public static function unusableConfigurations(): array
+    {
+        return [
+            'a key the settings table refuses' => [static fn (ArrayMongoSource $source): ArrayMongoSource => $source->add('config', ['_id' => self::id(17), 'title ' => 'ends in a space']), 'cannot end in a space'],
+            'no plain form' => [static fn (ArrayMongoSource $source): ArrayMongoSource => $source->addUnreadable('config', self::id(17), 'a value of type MongoDB\\BSON\\Binary cannot be imported', '{}'), 'MongoDB\\BSON\\Binary'],
+        ];
+    }
+
+    /**
+     * @dataProvider unusableConfigurations
+     *
+     * @param \Closure(ArrayMongoSource): ArrayMongoSource $add
+     */
+    public function testAConfigurationTheSiteRanWithThatCannotBeTheSettingsStopsTheImport(\Closure $add, string $why): void
+    {
+        $source = $add((new ArrayMongoSource())->add('config', ['_id' => self::id(18), 'title' => 'A usable but superseded one']))->loadConfiguration(self::id(17));
+
+        try {
+            $this->import($source);
+            $this->fail('Another configuration was taken in its place.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString(self::id(17), $e->getMessage());
+            $this->assertStringContainsString($why, $e->getMessage());
+        }
+        $this->assertSame([self::newestMigration()], (new SchemaMigrator($this->connection))->pending(), 'nothing is marked complete');
+        $this->assertSame(0, $this->rows('idno_settings'));
+    }
+
     public function testFilesAreStoredUnderTheirOwnIdsWithTheirMetadata(): void
     {
         $id = self::id(30);
@@ -315,6 +365,7 @@ abstract class MongoImporterContract extends TestCase
             $this->assertStringContainsString(self::id(33), $e->getMessage());
             $this->assertStringContainsString($message, $e->getMessage());
         }
+        $this->assertNull($this->files->find(self::id(33)), 'nothing of a file that did not copy correctly is left');
         $this->assertNotSame([], (new SchemaMigrator($this->connection))->pending(), 'a stopped import leaves the newest migration pending');
     }
 

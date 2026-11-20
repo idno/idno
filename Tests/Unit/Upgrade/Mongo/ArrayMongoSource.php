@@ -13,7 +13,8 @@ use Idno\Upgrade\Mongo\MongoSource;
  * Extended JSON. A file is given as its fs.files document (plain values) and its bytes, or a closure
  * that opens its stream; its metadata is what the site's GridFS filesystem made of it
  * (MongoDocument::fileMetadata()). With $failBeforeLastFile, files() throws instead of giving the last
- * file (a source failing at the very end).
+ * file (a source failing at the very end). loadConfiguration() says which `config` document the
+ * site loaded (MongoDB's answer, for ExtMongoSource).
  */
 final class ArrayMongoSource implements MongoSource
 {
@@ -26,8 +27,40 @@ final class ArrayMongoSource implements MongoSource
     /** @var array<string, int> counts that differ from the documents (a source written to meanwhile) */
     private array $counts = [];
 
+    private ?string $loadedConfiguration = null;
+
+    private bool $loadedConfigurationSet = false;
+
     public function __construct(private readonly bool $failBeforeLastFile = false)
     {
+    }
+
+    /**
+     * Which `config` document the site loaded (by default the one with the greatest numeric `created`,
+     * then the first in `_id` order: a stand-in for MongoDB's own answer).
+     */
+    public function loadConfiguration(?string $id): self
+    {
+        $this->loadedConfiguration = $id;
+        $this->loadedConfigurationSet = true;
+
+        return $this;
+    }
+
+    public function loadedConfigurationId(): ?string
+    {
+        if ($this->loadedConfigurationSet) {
+            return $this->loadedConfiguration;
+        }
+        $chosen = null;
+        foreach ($this->documents('config') as $item) {
+            $created = is_numeric($item['document']['created'] ?? null) ? (float) $item['document']['created'] : -INF;
+            if ($chosen === null || $created > $chosen[1]) {
+                $chosen = [$item['id'], $created];
+            }
+        }
+
+        return $chosen[0] ?? null;
     }
 
     /**

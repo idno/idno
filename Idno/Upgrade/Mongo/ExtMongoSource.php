@@ -22,14 +22,23 @@ use MongoDB\Driver\Query;
  *    expression, a decimal, a timestamp, ...) makes the document a reject, `reason` `a value of type
  *    <class> cannot be imported`. `json` is the document's canonical Extended JSON, exact whatever it
  *    holds.
+ *  - Documents and files are read a page at a time (`$pageSize`, by `_id` range: `_id` greater than
+ *    the last one read, sorted by `_id`, limited), never through one long-lived cursor, which would sit
+ *    idle on the server while a page is imported and could pass its idle-cursor timeout. Documents
+ *    whose `_id` is not an ObjectId (Idno never makes one) come first, in `_id` order, paged by skip;
+ *    then the ObjectIds, in `_id` order.
  *  - A file's metadata is what Idno\Files\MongoDBFileSystem::findOne() put in `$file->metadata`
  *    (MongoDocument::fileMetadata()), a UTCDateTime as its string (epoch milliseconds) at any depth,
  *    ObjectIds and 64-bit integers converted as in documents. A file the site
  *    could never have served stops the import with a \RuntimeException naming it: an `_id` that is not
  *    an ObjectId, a length that is not a whole number, a value of another type in its metadata.
- *  - A file's stream yields the `data` of its `fs.chunks` in order of `n`, fetched one at a time
- *    (batches of one chunk, so one chunk is in memory); a chunk missing from the sequence, or one
- *    whose data is not binary, throws a \RuntimeException from the read.
+ *  - A file's stream yields the `data` of its `fs.chunks` in order of `n` (whatever order they are
+ *    stored in), fetched one at a time (batches of one chunk, so one chunk is in memory); a chunk
+ *    missing from the sequence, a chunk stored twice, or one whose data is not binary, throws a
+ *    \RuntimeException from the read. (A missing LAST chunk only makes the bytes short: the importer
+ *    checks the length.)
+ *  - No message tells anyone to change MongoDB: it is the site's only copy (see problem()).
+ *  - loadedConfigurationId() runs the query Idno\Data\Mongo::getAnyRecord('config') ran.
  *
  * Built with new (or connect()) by the import command: not a container service.
  */
@@ -37,11 +46,33 @@ final class ExtMongoSource implements MongoSource
 {
     private const TO_ARRAYS = ['root' => 'array', 'document' => 'array', 'array' => 'array'];
 
+    /** The documents (or files) read at a time. */
+    public const PAGE_SIZE = 100;
+
+    /** Every _id that is not an ObjectId. */
+    private const NOT_OBJECT_IDS = ['_id' => ['$not' => ['$type' => 'objectId']]];
+
     public function __construct(
         private readonly Manager $manager,
         private readonly string $database,
+        private readonly int $pageSize = self::PAGE_SIZE,
     )
     {
+        if ($pageSize < 1) {
+            throw new \InvalidArgumentException('A page holds at least one document.');
+        }
+    }
+
+    /**
+     * Why a GridFS file stops the import, said so that nobody deletes their only copy in a hurry.
+     */
+    public static function problem(string $id, string $what): string
+    {
+        return sprintf(
+            'The GridFS file %s %s. Nothing in MongoDB was changed. Back the MongoDB database up (mongodump) before you remove or repair that file, then run the import again on a new, empty database.',
+            $id,
+            $what,
+        );
     }
 
     /**
@@ -78,12 +109,7 @@ final class ExtMongoSource implements MongoSource
 
     public function documents(string $collection): iterable
     {
-        $cursor = $this->manager->executeQuery($this->database . '.' . $collection, new Query([], ['sort' => ['_id' => 1]]));
-        $cursor->setTypeMap(['root' => 'bson']);
-        foreach ($cursor as $raw) {
-            if (!$raw instanceof Document) {
-                throw new \RuntimeException('The MongoDB driver did not return a BSON document.');
-            }
+        foreach ($this->pages($collection) as $raw) {
             $reason = null;
             $document = self::plain($raw->toPHP(self::TO_ARRAYS), $reason, false);
             yield [
@@ -95,6 +121,24 @@ final class ExtMongoSource implements MongoSource
         }
     }
 
+    /**
+     * The `_id` of the configuration the MongoDB backend loaded: Idno\Data\Mongo::getAnyRecord('config')
+     * was findOne([], ['sort' => ['created' => -1]]) on `config`, the same query as this one (no filter,
+     * that sort, one document), so MongoDB itself chooses, ties included, as it chose for the site.
+     */
+    public function loadedConfigurationId(): ?string
+    {
+        $cursor = $this->manager->executeQuery($this->database . '.config', new Query([], ['sort' => ['created' => -1], 'limit' => 1]));
+        $cursor->setTypeMap(['root' => 'bson']);
+        foreach ($cursor as $raw) {
+            if ($raw instanceof Document) {
+                return self::idText($raw->has('_id') ? $raw->get('_id') : null);
+            }
+        }
+
+        return null;
+    }
+
     public function fileCount(): int
     {
         return $this->count('fs.files');
@@ -102,32 +146,27 @@ final class ExtMongoSource implements MongoSource
 
     public function files(): iterable
     {
-        $cursor = $this->manager->executeQuery($this->database . '.fs.files', new Query([], ['sort' => ['_id' => 1]]));
-        $cursor->setTypeMap(['root' => 'bson']);
-        foreach ($cursor as $raw) {
-            if (!$raw instanceof Document) {
-                throw new \RuntimeException('The MongoDB driver did not return a BSON document.');
-            }
+        foreach ($this->pages('fs.files') as $raw) {
             $objectId = $raw->has('_id') ? $raw->get('_id') : null;
             if (!$objectId instanceof ObjectId) {
-                throw new \RuntimeException(sprintf('The GridFS file %s has an _id that is not an ObjectId, so the site could never serve it: remove it from fs.files (and its chunks) and import again.', $raw->toCanonicalExtendedJSON()));
+                throw new \RuntimeException(self::problem($raw->toCanonicalExtendedJSON(), 'has an _id that is not an ObjectId, so the site could never serve it'));
             }
             $id = (string) $objectId;
             $data = $raw->toPHP(self::TO_ARRAYS);
             $length = $data['length'] ?? null;
             $length = $length instanceof Int64 ? (int) (string) $length : $length;
             if (!is_int($length) && !(is_float($length) && floor($length) === $length)) {
-                throw new \RuntimeException(sprintf('The GridFS file %s has no whole-number length.', $id));
+                throw new \RuntimeException(self::problem($id, 'has no whole-number length'));
             }
             $reason = null;
             $plain = self::plain($data, $reason, true);
             if ($reason !== null) {
-                throw new \RuntimeException(sprintf('The GridFS file %s cannot be imported: %s in its metadata.', $id, $reason));
+                throw new \RuntimeException(self::problem($id, 'cannot be imported: ' . $reason . ' in its metadata'));
             }
             try {
                 $metadata = MongoDocument::fileMetadata($plain);
             } catch (\UnexpectedValueException $e) {
-                throw new \RuntimeException(sprintf('The GridFS file %s cannot be imported: %s in its metadata.', $id, $e->getMessage()), 0, $e);
+                throw new \RuntimeException(self::problem($id, 'cannot be imported: ' . $e->getMessage() . ' in its metadata'), 0, $e);
             }
             $md5 = $data['md5'] ?? null;
 
@@ -139,6 +178,54 @@ final class ExtMongoSource implements MongoSource
                 'stream' => ChunkStream::open($this->chunks($objectId, $id)),
             ];
         }
+    }
+
+    /**
+     * Every document of a collection, in `_id` order, a page at a time (see the class comment).
+     *
+     * @return \Generator<int, Document>
+     */
+    private function pages(string $collection): \Generator
+    {
+        $skip = 0;
+        do {
+            $page = $this->page($collection, self::NOT_OBJECT_IDS, $skip);
+            yield from $page;
+            $skip += count($page);
+        } while (count($page) === $this->pageSize);
+
+        $filter = ['_id' => ['$gte' => new ObjectId('000000000000000000000000')]];
+        do {
+            $page = $this->page($collection, $filter, 0);
+            yield from $page;
+            $last = end($page);
+            if ($last instanceof Document) {
+                $filter = ['_id' => ['$gt' => $last->get('_id')]];
+            }
+        } while (count($page) === $this->pageSize);
+    }
+
+    /**
+     * One page: at most $pageSize documents, read whole, so no cursor stays open on the server.
+     *
+     * @param array<string, mixed> $filter
+     *
+     * @return list<Document>
+     */
+    private function page(string $collection, array $filter, int $skip): array
+    {
+        $options = ['sort' => ['_id' => 1], 'limit' => $this->pageSize] + ($skip > 0 ? ['skip' => $skip] : []);
+        $cursor = $this->manager->executeQuery($this->database . '.' . $collection, new Query($filter, $options));
+        $cursor->setTypeMap(['root' => 'bson']);
+        $page = [];
+        foreach ($cursor as $raw) {
+            if (!$raw instanceof Document) {
+                throw new \RuntimeException('The MongoDB driver did not return a BSON document.');
+            }
+            $page[] = $raw;
+        }
+
+        return $page;
     }
 
     /**
@@ -158,11 +245,15 @@ final class ExtMongoSource implements MongoSource
             $n = $chunk['n'] ?? null;
             $n = $n instanceof Int64 ? (int) (string) $n : $n;
             if ($n !== $expected) {
-                throw new \RuntimeException(sprintf('The GridFS file %s is missing its chunk %d.', $id, $expected));
+                throw new \RuntimeException(self::problem($id, sprintf(
+                    'has the chunk %s where the chunk %d belongs (a chunk is missing or stored twice)',
+                    is_int($n) ? (string) $n : get_debug_type($n),
+                    $expected,
+                )));
             }
             $data = $chunk['data'] ?? null;
             if (!$data instanceof Binary) {
-                throw new \RuntimeException(sprintf('The chunk %d of the GridFS file %s holds no binary data.', $expected, $id));
+                throw new \RuntimeException(self::problem($id, sprintf('has a chunk %d that holds no binary data', $expected)));
             }
             ++$expected;
             yield $data->getData();

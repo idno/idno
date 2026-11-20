@@ -7,9 +7,11 @@ namespace Idno\Upgrade\Mongo;
 /**
  * What the MongoDB backend did to a document's field names, undone. It stored a `.` as `%2E`, a `$`
  * as `%24` and a `%` as `%25` in every key (MongoDB refused both characters in field names); here
- * every key at every depth gets `%2E` → `.`, `%24` → `$`, then `%25` → `%`, each replaced once, in
- * that order, so a literal percent sign is restored once (`a%252Eb` is `a%2Eb`). A key that changes
- * moves after the keys that do not, as the backend's unsanitizeFields() moved it.
+ * every key at every depth is read exactly as the backend's unsanitizeFields() read it, so the site
+ * sees the field names it always saw: the replacements are made one after the other, `%25` → `%`
+ * first, then `%24` → `$`, then `%2E` → `.` (str_replace() with arrays), so a `%25` followed by `2E`
+ * or `24` becomes a dot or a dollar sign (`a%252Eb` is `a.b`, `%2524` is `$`). A key that changes
+ * moves after the keys that do not, as unsanitizeFields() moved it.
  *
  * fileMetadata() is what Idno\Files\MongoDBFileSystem::findOne() made of a GridFS file's document.
  *
@@ -17,7 +19,8 @@ namespace Idno\Upgrade\Mongo;
  */
 final class MongoDocument
 {
-    private const ESCAPES = ['%2E' => '.', '%24' => '$', '%25' => '%'];
+    /** In the order Idno\Data\Mongo::unsanitizeFields() applied them (its $ESCAPE_SEQUENCES' values, in order). */
+    private const ESCAPES = ['%25' => '%', '%24' => '$', '%2E' => '.'];
 
     /**
      * @param array<array-key, mixed> $document

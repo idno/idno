@@ -35,12 +35,12 @@ use Psr\Log\LoggerInterface;
  *     collation) or uuid another imported record holds, one the store refuses: a row of
  *     `idno_upgrade_rejects` with its Extended JSON and why. Of two records with one uuid, the one
  *     with the smaller `_id` is kept;
- *  4. `config`: the document the MongoDB backend loaded (Idno\Data\Mongo::getAnyRecord(): the greatest
- *     `created`, in MongoDB's order of types, a missing `created` lowest; among equals, which MongoDB
- *     leaves undefined, the greatest `_id`) whose keys the settings table can hold becomes the settings
- *     (`idno_settings`, written as SettingsRecordStore::rowsOf() lays it out, no defaults, read back
- *     through a SettingsRecordStore); every other `config` document is a reject, `superseded
- *     configuration`, or why it could not be the settings;
+ *  4. `config`: the document the MongoDB backend loaded, as MongoDB itself answers the backend's own
+ *     query (MongoSource::loadedConfigurationId()), becomes the settings (`idno_settings`, written as
+ *     SettingsRecordStore::rowsOf() lays it out, no defaults, read back through a
+ *     SettingsRecordStore); every other `config` document is the reject `superseded configuration`.
+ *     When that document cannot be the settings (no plain form, keys the settings table refuses), the
+ *     import STOPS saying why: another document is never taken in its place;
  *  5. the GridFS files, in `_id` order: each stored under its own id (FileStore::storeAs()) with its
  *     metadata, streamed, and verified: its size, the SHA-256 of the stored bytes against the bytes
  *     read, and the md5 GridFS recorded, when it did. A file already in the store with the same
@@ -48,15 +48,19 @@ use Psr\Log\LoggerInterface;
  *  6. the counts: every collection's rows and rejects in the target must be what was imported and
  *     rejected, and what was read must be what the source counted when the import began (a site still
  *     writing to MongoDB makes them differ);
- *  7. LAST, the newest migration, so that a site pointed at the target stays closed (a migration is
- *     pending) until everything is in.
+ *  7. LAST, the newest migration. Until it is recorded the target is not "current": the importer's
+ *     own completion check and `idno:upgrade --status` say a migration is pending. That does NOT keep a
+ *     site closed: a site whose config.ini named an unfinished or failed target would show its upgrade
+ *     page, whose steps run the pending migration, and open on partial data. The protection is that
+ *     config.ini names MongoDB until the command has exited 0 (touchedTarget() tells the command to
+ *     say so after a failure).
  *
  * Every other collection is named in the result (`notImported`) and not imported. A \RuntimeException
  * (its message is for the console) stops the import at the first problem it cannot count: a target
  * that is not empty, a read-back that differs, a file whose size or bytes differ, counts that do not
  * add up; any other failure (the database, the source, the filesystem) is thrown as it is. A stopped
- * import leaves the target unusable (its newest migration is not recorded): import again into a new,
- * empty database. Each reject is logged (a warning on the logger) and reported.
+ * import leaves the target incomplete (its newest migration not recorded): it must never be used; drop
+ * it and import again into a new, empty database. Each reject is logged (a warning on the logger) and reported.
  *
  * It runs while the legacy application is NOT booted: it uses nothing of it. Built with new by the
  * import command: not a container service.
@@ -88,6 +92,8 @@ final class MongoImporter
     private ?array $settings = null;
 
     private ?Dialect $dialect = null;
+
+    private bool $touched = false;
 
     public function __construct(
         private readonly MongoSource $source,
@@ -122,6 +128,11 @@ final class MongoImporter
         $all = $this->source->collections();
 
         $migrator = new SchemaMigrator($this->target);
+        $this->touched = true;
+        // The newest migration is held back until everything is in (step 7): the target stays "not
+        // current" for the completion check below and for `idno:upgrade --status`. It does not keep a
+        // site closed (its upgrade page would run the migration): nothing may point a site at the
+        // target before the command has exited 0.
         $migrator->migrate(exceptLast: true);
         $catalog->forget();
         $indexes = new IndexedFields($this->target, $dialect, $catalog);
@@ -161,6 +172,15 @@ final class MongoImporter
             'files' => $files,
             'notImported' => array_values(array_diff($all, self::COLLECTIONS, [self::CONFIG], self::GRIDFS)),
         ];
+    }
+
+    /**
+     * Whether the run has written to the target (created any table): after a failure, the target is
+     * then incomplete and must be dropped.
+     */
+    public function touchedTarget(): bool
+    {
+        return $this->touched;
     }
 
     /**
@@ -298,35 +318,39 @@ final class MongoImporter
     private function importConfig(Dialect $dialect, JsonRecordStore $store, \Closure $report): array
     {
         $counted = $this->source->count(self::CONFIG);
-        // Every document read first (a site has one): the choice needs them all.
-        $candidates = [];
+        // MongoDB's own answer to the backend's query: the document the site ran with.
+        $loaded = $this->source->loadedConfigurationId();
+        $chosen = null;
         $rejects = [];
         $read = 0;
         foreach ($this->source->documents(self::CONFIG) as $item) {
             if (++$read > self::MAX_CONFIGS) {
-                throw new \RuntimeException(sprintf('The config collection holds more than %d documents: a site keeps its configuration in one. Remove the stale ones and import again into a new, empty database.', self::MAX_CONFIGS));
+                throw new \RuntimeException(sprintf('The config collection holds more than %d documents: a site keeps its configuration in one. Nothing in MongoDB was changed; back it up (mongodump) before removing the stale ones, then import again into a new, empty database.', self::MAX_CONFIGS));
             }
-            if ($item['document'] === null) {
-                $rejects[] = [$item, $item['reason'] ?? 'the document cannot be read'];
+            if ($loaded === null || $item['id'] !== $loaded) {
+                $rejects[] = [$item, self::SUPERSEDED];
                 continue;
             }
             try {
+                if ($item['document'] === null) {
+                    throw new \InvalidArgumentException($item['reason'] ?? 'the document cannot be read');
+                }
                 $document = MongoDocument::unescapeKeys($item['document']);
                 SettingsRecordStore::rowsOf($document);
             } catch (\UnexpectedValueException | \InvalidArgumentException $e) {
-                $rejects[] = [$item, 'cannot be the settings: ' . $e->getMessage()];
-                continue;
+                throw new \RuntimeException(sprintf(
+                    'The configuration the site ran with (the config document %s) cannot be the settings: %s. The import stopped: no other configuration is taken in its place. Nothing in MongoDB was changed.',
+                    self::text($item['id']),
+                    $e->getMessage(),
+                ), 0, $e);
             }
-            $candidates[] = [$item, $document];
+            $chosen = [$item, $document];
         }
         if ($read !== $counted) {
             throw new \RuntimeException(sprintf('The config collection held %d documents when the import began and %d were read: stop every process of the site and import again into a new, empty database.', $counted, $read));
         }
-        usort($candidates, static fn (array $a, array $b): int => self::loadOrder($b[1], $a[1]));
-
-        $chosen = array_shift($candidates);
-        foreach ($candidates as [$item]) {
-            $rejects[] = [$item, self::SUPERSEDED];
+        if ($loaded !== null && $chosen === null) {
+            throw new \RuntimeException(sprintf('MongoDB names the config document %s as the configuration, but it was not read: stop every process of the site and import again into a new, empty database.', self::text($loaded)));
         }
 
         $this->target->beginTransaction();
@@ -418,7 +442,7 @@ final class MongoImporter
     {
         $id = $file['id'];
         if (preg_match('/^[a-f0-9]{24}(?:[a-f0-9]{8})?\z/i', $id) !== 1) {
-            throw new \RuntimeException(sprintf('The GridFS file %s has an id that is no file id, so the site could never serve it: remove it from GridFS and import again into a new, empty database.', self::text($id)));
+            throw new \RuntimeException(ExtMongoSource::problem(self::text($id), 'has an id that is no file id, so the site could never serve it'));
         }
         $existing = $this->files->find($id);
         if ($existing !== null && $existing->size === $file['length']) {
@@ -478,7 +502,10 @@ final class MongoImporter
             default => null,
         };
         if ($problem !== null) {
-            throw new \RuntimeException(sprintf('The file %s did not copy correctly (%s): the import stopped.', $id, $problem));
+            // Nothing of a file that did not copy correctly is left in the upload directory.
+            $this->files->delete($id);
+
+            throw new \RuntimeException(sprintf('The file %s did not copy correctly (%s): the import stopped. Nothing in MongoDB was changed.', $id, $problem));
         }
 
         return true;
@@ -567,41 +594,6 @@ final class MongoImporter
         $line = sprintf('Rejected the %s document %s: %s', $collection, self::text($item['id']), $reason);
         $this->logger->warning($line);
         $report($line);
-    }
-
-    /**
-     * Which of two configuration documents MongoDB's getAnyRecord() (sort by `created`, descending)
-     * puts first: > 0 when $a comes after $b in ascending order.
-     *
-     * @param array<array-key, mixed> $a
-     * @param array<array-key, mixed> $b
-     */
-    private static function loadOrder(array $a, array $b): int
-    {
-        $first = $a['created'] ?? null;
-        $second = $b['created'] ?? null;
-        $order = self::typeRank($first) <=> self::typeRank($second);
-        if ($order === 0) {
-            $order = is_string($first) && is_string($second) ? strcmp($first, $second) : $first <=> $second;
-        }
-
-        return $order !== 0 ? $order : strcmp((string) ($a['_id'] ?? ''), (string) ($b['_id'] ?? ''));
-    }
-
-    /**
-     * MongoDB's order of BSON types, for the values a converted document holds (a date is an int by then).
-     */
-    private static function typeRank(mixed $value): int
-    {
-        return match (true) {
-            $value === null => 1,
-            is_int($value), is_float($value) => 2,
-            is_string($value) => 3,
-            is_array($value) && array_is_list($value) => 5,
-            is_array($value) => 4,
-            is_bool($value) => 6,
-            default => 0,
-        };
     }
 
     /**

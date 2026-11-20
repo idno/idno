@@ -59,6 +59,26 @@ final class MongoImportEndToEndTest extends TestCase
     /** @var array{records: array<string, array<string, array<string, mixed>>>, config: array<string, mixed>, files: array<string, array{metadata: array<string, mixed>, length: int, md5: string}>} */
     private array $expected = [];
 
+    /**
+     * Documents added to the captured site by the test (with the driver, in setUp()), for what the
+     * fixture holds none of: the BSON types the import converts or refuses. Each is canonical Extended
+     * JSON, which is also what a reject's contents must be, byte for byte.
+     */
+    private const REJECTED_DOCUMENTS = [
+        'MongoDB\\BSON\\Binary' => '{ "_id" : { "$oid" : "7a00000000000000000000a1" }, "uuid" : "http://capture.example/bson/binary", "blob" : { "$binary" : { "base64" : "AAE=", "subType" : "00" } } }',
+        'MongoDB\\BSON\\Decimal128' => '{ "_id" : { "$oid" : "7a00000000000000000000a2" }, "uuid" : "http://capture.example/bson/decimal", "price" : { "$numberDecimal" : "1.5" } }',
+        'MongoDB\\BSON\\Regex' => '{ "_id" : { "$oid" : "7a00000000000000000000a3" }, "uuid" : "http://capture.example/bson/regex", "pattern" : { "$regularExpression" : { "pattern" : "^a", "options" : "i" } } }',
+    ];
+
+    /** The converted values: dates (one before 1970), a 64-bit integer, an object with the keys "0" and "1", an empty object. */
+    private const VALUES_DOCUMENT = '{ "_id" : { "$oid" : "7a00000000000000000000a4" }, "uuid" : "http://capture.example/bson/values", "when" : { "$date" : { "$numberLong" : "1700000000999" } }, "before" : { "$date" : { "$numberLong" : "-1500" } }, "big" : { "$numberLong" : "9007199254740993" }, "numbered" : { "0" : "zero", "1" : "one" }, "empty" : { } }';
+
+    /** A file whose chunks are stored out of the order of `n`, and an empty file. */
+    private const GOOD_FILES = [
+        '7a00000000000000000000b1' => ['length' => 6, 'chunks' => [2 => 'ef', 0 => 'ab', 1 => 'cd'], 'bytes' => 'abcdef', 'filename' => 'abc.txt'],
+        '7a00000000000000000000b2' => ['length' => 0, 'chunks' => [], 'bytes' => '', 'filename' => 'empty.txt'],
+    ];
+
     protected function setUp(): void
     {
         $url = getenv('IDNO_TEST_MONGO_URL');
@@ -71,6 +91,14 @@ final class MongoImportEndToEndTest extends TestCase
         $this->manager = new \MongoDB\Driver\Manager($url);
         $this->load(__DIR__ . '/fixtures/mongo-site.ndjson');
         $this->expected = require __DIR__ . '/fixtures/expected.php';
+        $documents = new \MongoDB\Driver\BulkWrite();
+        foreach ([...array_values(self::REJECTED_DOCUMENTS), self::VALUES_DOCUMENT] as $json) {
+            $documents->insert(\MongoDB\BSON\Document::fromJSON($json));
+        }
+        $this->manager->executeBulkWrite($this->mongoDatabase . '.entities', $documents);
+        foreach (self::GOOD_FILES as $id => $file) {
+            $this->addFile($id, $file['length'], $file['chunks'], $file['filename']);
+        }
 
         $this->directory = sys_get_temp_dir() . '/idno-mongo-e2e-' . bin2hex(random_bytes(6));
         mkdir($this->directory . '/uploads', 0700, true);
@@ -114,7 +142,8 @@ final class MongoImportEndToEndTest extends TestCase
                 $this->assertSame(self::asSaved(self::plain($record)), $store->findById($collection, (string) $id), $collection . ' ' . $id);
                 ++$count;
             }
-            $this->assertSame(count($records), (int) $this->target->fetchOne('select count(*) from idno_' . $collection));
+            // The values document the test added is the one more entity.
+            $this->assertSame(count($records) + ($collection === 'entities' ? 1 : 0), (int) $this->target->fetchOne('select count(*) from idno_' . $collection));
         }
         $this->assertGreaterThanOrEqual(8, $count, 'the fixture\'s records were all compared');
         $this->assertSame(
@@ -122,11 +151,59 @@ final class MongoImportEndToEndTest extends TestCase
             $store->findLatest('config'),
             'the settings are the configuration the old backend loaded',
         );
-        $this->assertSame(0, (int) $this->target->fetchOne('select count(*) from idno_upgrade_rejects'));
+        $this->assertSame(count(self::REJECTED_DOCUMENTS), (int) $this->target->fetchOne('select count(*) from idno_upgrade_rejects'), 'only the documents the test added with unsupported types');
 
         $status = $store->findByUuid('entities', $this->recordWith('body', 'Hello from MongoDB, the status of the import fixture')['uuid']);
         $this->assertSame('a field name with a dot and a dollar sign', $status['odd.field$name'] ?? null);
         $this->assertSame('status', $this->target->fetchOne('select type from idno_entities where uuid = ?', [$status['uuid']]));
+    }
+
+    public function testBsonValuesAreConvertedOrTheDocumentIsARejectNamingTheType(): void
+    {
+        $this->importSite();
+
+        $this->assertSame([
+            '_id' => '7a00000000000000000000a4',
+            'uuid' => 'http://capture.example/bson/values',
+            // A UTCDateTime is its epoch seconds, rounded DOWN: -1500 ms (before 1970) is -2, not -1.
+            'when' => 1700000000,
+            'before' => -2,
+            'big' => 9007199254740993,
+            // What the old backend's unsanitizeFields() gave: it cast the BSONDocument to an array, so
+            // the keys "0" and "1" became the integer keys 0 and 1 (a list), and {} became [].
+            'numbered' => [0 => 'zero', 1 => 'one'],
+            'empty' => [],
+            'siteid' => null,
+            'owner' => '',
+        ], PrivateDatabase::recordStore($this->target)->findById('entities', '7a00000000000000000000a4'));
+
+        $rejects = $this->target->fetchAllAssociative('select collection, legacy_id, reason, contents from idno_upgrade_rejects order by legacy_id');
+        $expected = [];
+        foreach (self::REJECTED_DOCUMENTS as $type => $json) {
+            $expected[] = [
+                'collection' => 'entities',
+                'legacy_id' => (string) json_decode($json, true)['_id']['$oid'],
+                'reason' => 'a value of type ' . $type . ' cannot be imported',
+                'contents' => $json,
+            ];
+        }
+        $this->assertSame($expected, array_map(static fn (array $row): array => array_map('strval', $row), $rejects));
+    }
+
+    public function testTheSettingsAreTheConfigurationTheOldQueryReturns(): void
+    {
+        $bulk = new \MongoDB\Driver\BulkWrite();
+        $bulk->insert(\MongoDB\BSON\Document::fromJSON('{ "_id" : { "$oid" : "000000010000000000000001" }, "title" : "An older-looking configuration" }'));
+        $bulk->insert(\MongoDB\BSON\Document::fromJSON('{ "_id" : { "$oid" : "ffffffff0000000000000001" }, "title" : "A newer-looking configuration" }'));
+        $this->manager?->executeBulkWrite($this->mongoDatabase . '.config', $bulk);
+        // The query of Idno\Data\Mongo::getAnyRecord('config'): findOne([], ['sort' => ['created' => -1]]).
+        $loaded = $this->manager?->executeQuery($this->mongoDatabase . '.config', new \MongoDB\Driver\Query([], ['sort' => ['created' => -1], 'limit' => 1]))->toArray()[0] ?? null;
+        $this->assertNotNull($loaded);
+
+        $this->importSite();
+
+        $this->assertSame((string) $loaded->_id, PrivateDatabase::recordStore($this->target)->findLatest('config')['_id'] ?? null);
+        $this->assertSame(['superseded configuration', 'superseded configuration'], array_map('strval', $this->target->fetchFirstColumn("select reason from idno_upgrade_rejects where collection = 'config'")));
     }
 
     public function testEveryFileHasItsBytesAndMetadata(): void
@@ -142,6 +219,83 @@ final class MongoImportEndToEndTest extends TestCase
             $this->assertSame($file['length'], $stored->size);
             $this->assertSame($file['md5'], md5((string) stream_get_contents($files->readStream((string) $id))));
         }
+        foreach (self::GOOD_FILES as $id => $file) {
+            $stored = $files->find($id);
+            $this->assertNotNull($stored, $id);
+            $this->assertSame(['mime_type' => 'text/plain', 'length' => $file['length'], 'chunkSize' => 2, 'uploadDate' => '1700000000123', 'filename' => $file['filename']], $stored->metadata);
+            $this->assertSame($file['bytes'], stream_get_contents($files->readStream($id)), 'the chunks are read in order of n');
+        }
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: array<int, string>, 3: string}>
+     */
+    public static function brokenFiles(): array
+    {
+        return [
+            'a missing middle chunk' => ['7a00000000000000000000e1', 6, [0 => 'ab', 2 => 'ef'], 'where the chunk 1 belongs'],
+            'a chunk stored twice' => ['7a00000000000000000000e2', 6, [0 => 'ab', 1 => 'cd', -1 => 'cd', 2 => 'ef'], 'where the chunk 2 belongs'],
+            'a missing last chunk' => ['7a00000000000000000000e3', 6, [0 => 'ab', 1 => 'cd'], '4 bytes were read from GridFS, which records 6'],
+        ];
+    }
+
+    /**
+     * Each case on its own fresh target (setUp() makes one per test).
+     *
+     * @dataProvider brokenFiles
+     *
+     * @param array<int, string> $chunks n => data (a negative key: the chunk before it, stored again)
+     */
+    public function testABrokenGridFsFileStopsTheImportAndLeavesNothingOfIt(string $id, int $length, array $chunks, string $why): void
+    {
+        $this->addFile($id, $length, $chunks, 'broken.txt');
+
+        [$code, $stdout, $stderr] = $this->import();
+
+        $this->assertSame(1, $code, $stdout . $stderr);
+        $this->assertStringContainsString($id, $stderr);
+        $this->assertStringContainsString($why, $stderr);
+        $this->assertStringContainsString('Nothing in MongoDB was changed', $stderr);
+        $this->assertStringNotContainsString('remove it from', $stderr);
+        $error = strpos($stderr, 'The import stopped: ');
+        $incomplete = strpos($stderr, \Idno\Console\ImportMongoCommand::INCOMPLETE);
+        $this->assertNotFalse($error, $stderr);
+        $this->assertNotFalse($incomplete, 'the target is said to be incomplete: ' . $stderr);
+        $this->assertGreaterThan($error, $incomplete, 'after the error');
+        $files = new FileStore(FilesystemFactory::fromConfig(['uploadpath' => $this->directory . '/uploads/']), self::FILE_HOST);
+        $this->assertNull($files->find($id), 'nothing of that file is in the store');
+        $this->assertFalse($files->has($id));
+        $this->assertSame([self::newestMigration()], (new \Idno\Storage\SchemaMigrator($this->target))->pending(), 'the target is not marked complete');
+    }
+
+    public function testPagesOfTwoReadEveryDocumentAndFileOnceInIdOrder(): void
+    {
+        $source = new \Idno\Upgrade\Mongo\ExtMongoSource($this->manager, $this->mongoDatabase, 2);
+        foreach (['entities', 'config', 'site'] as $collection) {
+            $all = array_map(
+                static fn (object $document): string => (string) $document->_id,
+                $this->manager->executeQuery($this->mongoDatabase . '.' . $collection, new \MongoDB\Driver\Query([], ['sort' => ['_id' => 1], 'projection' => ['_id' => 1]]))->toArray(),
+            );
+            $read = array_column(iterator_to_array($source->documents($collection), false), 'id');
+            $this->assertSame($all, $read, $collection);
+        }
+        $fileIds = [];
+        foreach ($source->files() as $file) {
+            $fileIds[] = $file['id'];
+            fclose($file['stream']);
+        }
+        $sorted = array_merge(array_keys($this->expected['files']), array_keys(self::GOOD_FILES));
+        sort($sorted);
+        $this->assertSame($sorted, $fileIds);
+
+        // The whole import on pages of two: every document and file once.
+        $files = new FileStore(FilesystemFactory::fromConfig(['uploadpath' => $this->directory . '/uploads/']), self::FILE_HOST);
+        $result = (new \Idno\Upgrade\Mongo\MongoImporter($source, $this->target, $files, new \Psr\Log\NullLogger()))->run(static function (string $line): void {
+        });
+        $entities = $source->count('entities');
+        $this->assertSame(['source' => $entities, 'imported' => $entities - count(self::REJECTED_DOCUMENTS), 'rejected' => count(self::REJECTED_DOCUMENTS)], $result['collections']['entities']);
+        $this->assertSame($entities - count(self::REJECTED_DOCUMENTS), (int) $this->target->fetchOne('select count(*) from idno_entities'));
+        $this->assertSame(['source' => 4, 'copied' => 4, 'skipped' => 0, 'bytes' => 98 + 31 + 6], $result['files']);
     }
 
     public function testTheImportedSiteIsServed(): void
@@ -180,13 +334,15 @@ final class MongoImportEndToEndTest extends TestCase
     {
         $this->importSite();
         $before = (int) $this->target->fetchOne('select count(*) from idno_entities');
+        $rejects = (int) $this->target->fetchOne('select count(*) from idno_upgrade_rejects');
 
         [$code, $stdout, $stderr] = $this->import();
 
         $this->assertSame(1, $code, $stdout . $stderr);
         $this->assertStringContainsString('new, empty database', $stderr);
         $this->assertSame($before, (int) $this->target->fetchOne('select count(*) from idno_entities'));
-        $this->assertSame(0, (int) $this->target->fetchOne('select count(*) from idno_upgrade_rejects'));
+        $this->assertSame($rejects, (int) $this->target->fetchOne('select count(*) from idno_upgrade_rejects'));
+        $this->assertStringContainsString('Nothing was written to the new database', $stderr);
     }
 
     public function testTheCommandNeverPrintsThePassword(): void
@@ -282,6 +438,49 @@ final class MongoImportEndToEndTest extends TestCase
         $this->targetEnvironment = ['IDNO_DATABASE' => 'sqlite', 'IDNO_DBNAME' => $path];
         $this->target = PrivateDatabase::sqliteFile($path, migrate: false);
         $this->assertSame([], (new SchemaCatalog($this->target))->tables());
+    }
+
+    /**
+     * Adds a GridFS file with the driver: its fs.files document and its chunks, stored in the order
+     * given (chunk _ids rising in that order), each as `n` => data; a negative key stores the chunk
+     * before it again (a chunk stored twice).
+     *
+     * @param array<int, string> $chunks
+     */
+    private function addFile(string $id, int $length, array $chunks, string $filename): void
+    {
+        $file = new \MongoDB\Driver\BulkWrite();
+        $file->insert([
+            '_id' => new \MongoDB\BSON\ObjectId($id),
+            'length' => $length,
+            'chunkSize' => 2,
+            'uploadDate' => new \MongoDB\BSON\UTCDateTime(1700000000123),
+            'filename' => $filename,
+            'metadata' => ['mime_type' => 'text/plain'],
+        ]);
+        $this->manager?->executeBulkWrite($this->mongoDatabase . '.fs.files', $file);
+        if ($chunks === []) {
+            return;
+        }
+        $writes = new \MongoDB\Driver\BulkWrite(['ordered' => true]);
+        $previous = 0;
+        foreach ($chunks as $n => $data) {
+            $n = $n < 0 ? $previous : $n;
+            $writes->insert(['files_id' => new \MongoDB\BSON\ObjectId($id), 'n' => $n, 'data' => new \MongoDB\BSON\Binary($data, \MongoDB\BSON\Binary::TYPE_GENERIC)]);
+            $previous = $n;
+        }
+        $this->manager?->executeBulkWrite($this->mongoDatabase . '.fs.chunks', $writes);
+    }
+
+    private static function newestMigration(): string
+    {
+        $versions = array_map(
+            static fn (string $file): string => substr(basename($file, '.php'), strlen('Version')),
+            glob(dirname(__DIR__, 2) . '/Idno/Storage/Migrations/Version*.php') ?: [],
+        );
+        sort($versions);
+
+        return (string) end($versions);
     }
 
     /**

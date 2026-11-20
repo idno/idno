@@ -13,6 +13,7 @@ namespace Idno\Upgrade\Mongo;
  *    digits, a date as epoch seconds, a 64-bit integer as an int), its keys still escaped as the
  *    MongoDB backend stored them (see MongoDocument), or null when a value has no such form, with the
  *    `reason`; `json` the document's canonical Extended JSON, kept as a reject's contents.
+ *  - loadedConfigurationId(): which `config` document the site ran with, as MongoDB itself answers it.
  *  - files(): every GridFS file (`fs.files`), in `_id` order: its id, length, md5 (null when GridFS
  *    stored none), the metadata the site's MongoDBFileSystem gave it, and a stream of its bytes (the
  *    chunks in order of `n`, one in memory at a time; the caller closes it).
@@ -38,6 +39,13 @@ interface MongoSource
      * @return iterable<array{id: string, document: ?array, reason: ?string, json: string}> ordered by _id
      */
     public function documents(string $collection): iterable;
+
+    /**
+     * The `_id` (as documents() gives it) of the `config` document the MongoDB backend loaded as the
+     * site's configuration (Idno\Data\Mongo::getAnyRecord('config'): the first by `created`,
+     * descending, as MongoDB orders them), or null when there is none.
+     */
+    public function loadedConfigurationId(): ?string;
 
     /**
      * The number of GridFS files (`fs.files` documents).

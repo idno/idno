@@ -43,7 +43,9 @@ use Symfony\Component\Console\Question\Question;
  *    `www.` as Config::pathHost() removes it. With none, the import stops before the first file.
  *
  * Nothing is done (exit 1) without the mongodb extension, a target, a source or an upload path, before
- * anything connects. It exits 0 only when every document was imported or is a reject and every file
+ * anything connects. When a run stops after it has written to the target, it says on stderr, after the
+ * error, that the target is incomplete and must not be used, and to drop it and start again on a new,
+ * empty database (INCOMPLETE). It exits 0 only when every document was imported or is a reject and every file
  * was copied (or was there) and verified; then it prints the counts, the collections not imported and
  * the lines to put in config.ini, and says to run idno:upgrade. The target's password is never
  * printed, and is replaced in anything logged: a failure to connect is a fixed line and the
@@ -55,6 +57,9 @@ use Symfony\Component\Console\Question\Question;
 #[AsCommand('idno:import:mongo', 'Imports a MongoDB site into a new, empty MySQL, MariaDB or SQLite database and its GridFS files into the upload directory')]
 final class ImportMongoCommand extends Command
 {
+    /** Said on stderr when a run that wrote to the target stops. */
+    public const INCOMPLETE = 'The new database is incomplete and must not be used: never point a site at it (its upgrade page would finish the schema and open the site on partial data). Drop it, make a new, empty database, and run the import again.';
+
     /** The target URL's environment variable. */
     public const TARGET_VARIABLE = 'IMPORT_TARGET_URL';
 
@@ -164,9 +169,9 @@ final class ImportMongoCommand extends Command
         }
 
         $connection = null;
+        $importer = null;
         try {
             $connection = ConnectionFactory::forConfig($target, [], $this->projectDir);
-            $importer = null;
             $directory = null;
             $files = new FileStore(
                 FilesystemFactory::fromConfig(['uploadpath' => $uploadPath] + $config),
@@ -181,7 +186,8 @@ final class ImportMongoCommand extends Command
             });
         } catch (ConnectionException $e) {
             $this->logger->error('The MongoDB import could not connect to the target database: ' . $this->redact(get_class($e) . ': ' . $e->getMessage()));
-            $errors->writeln('The import could not connect to the new database (' . get_class($e) . '). Check the target URL; the detail is in the error log. Nothing was imported.');
+            $errors->writeln('The import could not connect to the new database (' . get_class($e) . '). Check the target URL; the detail is in the error log.');
+            $this->incomplete($importer, $errors);
 
             return Command::FAILURE;
         } catch (\Throwable $e) {
@@ -191,7 +197,7 @@ final class ImportMongoCommand extends Command
             if (!$e instanceof \RuntimeException || $e instanceof \MongoDB\Driver\Exception\Exception) {
                 $errors->writeln('(' . get_class($e) . ')', OutputInterface::OUTPUT_PLAIN);
             }
-            $errors->writeln('Import again into a new, empty database once the problem is solved.');
+            $this->incomplete($importer, $errors);
 
             return Command::FAILURE;
         } finally {
@@ -201,6 +207,19 @@ final class ImportMongoCommand extends Command
         $this->printSummary($result, $target, $uploadPath, $fileHost, $output);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * After a failure: what to do with the target. Once the run has written to it, it is incomplete,
+     * and a site pointed at it would finish its schema from the upgrade page and open on partial data.
+     */
+    private function incomplete(?MongoImporter $importer, OutputInterface $errors): void
+    {
+        if ($importer?->touchedTarget()) {
+            $errors->writeln(self::INCOMPLETE);
+        } else {
+            $errors->writeln('Nothing was written to the new database. Run the import again once the problem is solved.');
+        }
     }
 
     /**

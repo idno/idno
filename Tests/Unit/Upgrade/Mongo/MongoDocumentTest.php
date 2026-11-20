@@ -18,7 +18,7 @@ final class MongoDocumentTest extends TestCase
         $this->assertSame(
             [
                 'a.b' => 1,
-                'c$d' => ['list' => [['j%2Ek' => 'x']], 'e.f' => ['g$h.i' => true]],
+                'c$d' => ['list' => [['j.k' => 'x']], 'e.f' => ['g$h.i' => true]],
                 'per%cent' => null,
             ],
             MongoDocument::unescapeKeys([
@@ -37,10 +37,16 @@ final class MongoDocumentTest extends TestCase
         );
     }
 
-    public function testALiteralPercentIsRestoredOnce(): void
+    /**
+     * Idno\Data\Mongo::unsanitizeFields() replaced `%25`, then `%24`, then `%2E`, one after the other:
+     * a `%25` followed by `2E` or `24` reads as a dot or a dollar sign, as the site has always read it.
+     */
+    public function testReplacementsAreSequentialAsTheBackendMadeThem(): void
     {
-        $this->assertSame(['a%2Eb' => 'x'], MongoDocument::unescapeKeys(['a%252Eb' => 'x']));
-        $this->assertSame(['%24' => 'y'], MongoDocument::unescapeKeys(['%2524' => 'y']));
+        $this->assertSame(['a.b' => 'x'], MongoDocument::unescapeKeys(['a%252Eb' => 'x']));
+        $this->assertSame(['$' => 'y'], MongoDocument::unescapeKeys(['%2524' => 'y']));
+        // An ordinary round trip: the backend's escaping of `a.b$c%d` (`%` first) read back.
+        $this->assertSame(['a.b$c%d' => 'z'], MongoDocument::unescapeKeys(['a%2Eb%24c%25d' => 'z']));
     }
 
     public function testValuesAreNotTouched(): void

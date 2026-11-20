@@ -5,13 +5,15 @@
 #   mongo-import.sh capture    recaptures Tests/Import/fixtures/mongo-site.ndjson and expected.php
 #                              from the old MongoDB backend (Tests/Import/fixtures/capture.php)
 #
-# Everything runs in Docker: a mongo:6 container (published on 127.0.0.1:27018) and a PHP 8.4
-# container with the mongodb extension, built from Tests/rig/mongo-import.Dockerfile around a COPY of
-# this checkout (without .git, vendor/, var/cache, configuration/config.ini and SQLite database
-# files), never the checkout itself: the test rig started inside the container (composer test:up, on
-# SQLite) writes the copy's configuration/config.ini, not this checkout's. Both containers share a
-# network of their own. Whatever the outcome, the containers (with their volumes) and the network
-# this script started are removed; the image (idno-mongo-import:local) is kept as a build cache.
+# Everything runs in Docker: a mongo:6 container (no port published on the host: the two containers
+# share a network of their own) and a PHP 8.4 container with the mongodb extension, built from
+# Tests/rig/mongo-import.Dockerfile around a COPY of this checkout, never the checkout itself: the test
+# rig started inside the container (composer test:up, on SQLite) writes the copy's own
+# configuration/config.ini. The copy leaves out .git, vendor/, var/cache, the whole configuration/
+# directory, .env and SQLite database files, so no local configuration or secret is ever baked into
+# the image. Whatever the outcome, the containers (with their volumes) and the network this script
+# started are removed. The image (idno-mongo-import:local) is kept as a build cache; when a build
+# replaces it, the previous image is removed, so no dangling image is left behind.
 #
 # The container also installs the mongodb/mongodb library into its copy (never into this checkout's
 # composer.json): the capture uses the old backend, which needs it, and until the old backend is
@@ -30,7 +32,6 @@ esac
 
 IMAGE=idno-mongo-import:local
 MONGO_IMAGE=mongo:6
-MONGO_PORT=27018
 NAME="idno-mongo-import-$$-$RANDOM"
 NETWORK="$NAME"
 MONGO="$NAME-mongo"
@@ -61,22 +62,24 @@ if ! docker info >/dev/null 2>&1; then
     echo "Docker is not running: the MongoDB import's tests need it." >&2
     exit 1
 fi
-if (exec 3<>"/dev/tcp/127.0.0.1/$MONGO_PORT") 2>/dev/null; then
-    echo "Something already listens on 127.0.0.1:$MONGO_PORT: stop it, or it is a MongoDB this script did not start." >&2
-    exit 1
-fi
 
 echo "Copying the checkout..."
 mkdir -p "$STAGE/app" "$STAGE/out"
 tar -C "$ROOT" \
-    --exclude=./.git --exclude=./vendor --exclude=./var/cache --exclude=./configuration/config.ini \
+    --exclude=./.git --exclude=./vendor --exclude=./var/cache --exclude=./configuration --exclude=./.env \
     --exclude='./data/*.sqlite*' --exclude=./Tests/rig/.mode --exclude=./Tests/rig/.server.pid \
     --exclude=./Tests/rig/.server.log --exclude=./node_modules --exclude=./Themes/Twenty26/node_modules \
     --exclude=./.superpowers --exclude=./.claude \
     -cf - . | tar -C "$STAGE/app" -xf -
 
 echo "Building $IMAGE..."
+PREVIOUS="$(docker image inspect -f '{{.Id}}' "$IMAGE" 2>/dev/null || true)"
 docker build --quiet -t "$IMAGE" -f "$RIG_DIR/mongo-import.Dockerfile" "$STAGE" >/dev/null
+CURRENT="$(docker image inspect -f '{{.Id}}' "$IMAGE")"
+if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$CURRENT" ]; then
+    # The image this build replaced (now untagged); its layers shared with the new one are kept.
+    docker image rm "$PREVIOUS" >/dev/null 2>&1 || true
+fi
 
 # A container, waited for in the background so that a signal reaches the trap at once.
 run() {
@@ -85,7 +88,7 @@ run() {
 }
 
 docker network create "$NETWORK" >/dev/null
-docker run -d --name "$MONGO" --network "$NETWORK" --network-alias mongo -p "127.0.0.1:$MONGO_PORT:27017" \
+docker run -d --name "$MONGO" --network "$NETWORK" --network-alias mongo \
     -e MONGO_INITDB_ROOT_USERNAME=root -e MONGO_INITDB_ROOT_PASSWORD="$MONGO_PASSWORD" "$MONGO_IMAGE" >/dev/null
 echo "Waiting for MongoDB..."
 for _ in $(seq 1 60); do
