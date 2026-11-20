@@ -617,6 +617,24 @@ namespace Idno\Core {
         }
 
         /**
+         * Exactly file_get_contents(), for a URL a remote party supplied or a member typed: the request
+         * goes through the client that refuses private networks on every redirect (see safeSend()).
+         *
+         * @param  string $url
+         * @return string|false The body, or false when the request failed or was refused
+         */
+        public static function safeFileGetContents($url)
+        {
+            $result = self::safeSend('get', $url);
+
+            if (!empty($result) && ($result['error'] == "")) {
+                return $result['content'];
+            }
+
+            return false;
+        }
+
+        /**
          * Identical to Webservice::file_get_contents(), except that this function returns the full context - headers and all.
          * Redirects are followed by send(); a request that fails (too many redirects included) is its
          * failed result, never an exception.

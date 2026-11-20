@@ -73,7 +73,7 @@ namespace Idno\Entities {
                 return false;
             }
 
-            $contents = \Idno\Core\Webservice::file_get_contents($url);
+            $contents = \Idno\Core\Webservice::safeFileGetContents($url);
             if (!empty($contents)) {
 
                 // Extract OpenGraph/Facebook/Twitter stuff

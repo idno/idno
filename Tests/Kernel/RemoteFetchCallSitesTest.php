@@ -149,4 +149,19 @@ final class RemoteFetchCallSitesTest extends IdnoTestCase
         $this->assertFalse(\IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia('https://media.example/missing.jpg'));
         $this->assertOnlyTheRemoteClientWasUsed();
     }
+
+    public function testAnUnfurledUrlIsFetchedThroughTheRemoteClient(): void
+    {
+        $this->useClients(fn() => new MockResponse(
+            '<html><head><meta property="og:title" content="A page"></head><body></body></html>',
+            ['http_code' => 200]
+        ));
+
+        // A literal public address: the first check resolves the host, and a literal needs no lookup.
+        $unfurled = new \Idno\Entities\UnfurledUrl();
+        $this->assertTrue($unfurled->unfurl('http://93.184.216.34/page'));
+
+        $this->assertSame(['GET http://93.184.216.34/page'], $this->remoteSeen);
+        $this->assertOnlyTheRemoteClientWasUsed();
+    }
 }

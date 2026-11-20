@@ -40,7 +40,7 @@ namespace IdnoPlugins\Bridgy\Pages {
             }
 
             $bridgy_url = $user->bridgy[$service]['user'];
-            if (!empty($bridgy_url) and $resp = \Idno\Core\Webservice::get($bridgy_url)) {
+            if (!empty($bridgy_url) and $resp = \Idno\Core\Webservice::safeSend('get', $bridgy_url)) {
                 $parsed = (new \Mf2\Parser($resp['content'], $bridgy_url))->parse();
                 $status = 'disabled';
                 if (!empty($parsed['items'])) {

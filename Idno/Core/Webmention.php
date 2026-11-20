@@ -94,7 +94,7 @@ namespace Idno\Core {
             $inreplyto = (array) $inreplyto;
 
             if (!$response) {
-                $response = \Idno\Core\Webservice::get($url);
+                $response = \Idno\Core\Webservice::safeSend('get', $url);
             }
 
             if ($response && $response['response'] >= 200 && $response['response'] < 300) {

@@ -91,8 +91,8 @@ namespace Idno\Core {
                                 $following->pubsub_hub = $hubs[0];
                                 $following->save();
 
-                                $return = Webservice::post(
-                                    $following->pubsub_hub, array(
+                                $return = Webservice::safeSend(
+                                    'post', $following->pubsub_hub, array(
                                     'hub.callback' => Idno::site()->config()->url . 'pubsub/callback/' . $user->getID() . '/' . $following->getID(), // Callback, unique to each subscriber
                                     'hub.mode'     => 'subscribe',
                                     'hub.verify'   => 'async', // Backwards compatibility with v0.3 hubs
@@ -134,8 +134,8 @@ namespace Idno\Core {
                         $user->pubsub_pending   = serialize($pending);
                         $user->save();
 
-                        $return = Webservice::post(
-                            $following->pubsub_hub, array(
+                        $return = Webservice::safeSend(
+                            'post', $following->pubsub_hub, array(
                             'hub.callback' => Idno::site()->config()->url . 'pubsub/callback/' . $user->getID() . '/' . $following->getID(), // Callback, unique to each subscriber
                             'hub.mode'     => 'unsubscribe',
                             'hub.verify'   => 'async', // Backwards compatibility with v0.3 hubs
@@ -170,7 +170,7 @@ namespace Idno\Core {
 
             // Get page, if necessary
             if (empty($page)) {
-                $page = Webservice::file_get_contents($url);
+                $page = Webservice::safeFileGetContents($url);
             }
 
             // Find the feed in page
@@ -186,7 +186,7 @@ namespace Idno\Core {
 
             if ($feed) {
 
-                $page = Webservice::file_get_contents($feed);
+                $page = Webservice::safeFileGetContents($feed);
 
                 // We may be looking on a feed
                 if (preg_match_all('/<atom:link href=["\']{1}([^"]+)["\']{1} rel=["\']{1}hub["\']{1}[\s]*\/?>/i', $page, $match)) {
@@ -215,7 +215,7 @@ namespace Idno\Core {
             $feed = null;
 
             if (!$data) {
-                $data = Webservice::file_get_contents($url);
+                $data = Webservice::safeFileGetContents($url);
             }
 
             // search for all 'RSS Feed' declarations
@@ -257,7 +257,7 @@ namespace Idno\Core {
 
             // Find self
             if ($feed) {
-                $data = Webservice::file_get_contents($feed);
+                $data = Webservice::safeFileGetContents($feed);
 
                 if (preg_match('/<atom:link[^>]+href="([^"]+)"[^>]*rel="self"[^>]*>/i', $data, $match)) {
                     $self = $match[1];

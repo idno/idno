@@ -143,7 +143,7 @@ namespace Idno\Core {
                 return false;
             }
 
-            if ($result = Webservice::get($url)) {
+            if ($result = Webservice::safeSend('get', $url)) {
                 return $this->parseFeed($result['content'], $url);
             }
 
@@ -166,7 +166,7 @@ namespace Idno\Core {
                 return false;
             }
 
-            if ($result = Webservice::get($url)) {
+            if ($result = Webservice::safeSend('get', $url)) {
 
                 $feed = array();
 

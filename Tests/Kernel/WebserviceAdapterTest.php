@@ -587,4 +587,53 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertSame('second', Webservice::get('https://example.invalid/')['content']);
         $this->assertInstanceOf(HttpClientInterface::class, \Idno\Core\Idno::container()->get('idno.http_client'));
     }
+
+    public function testSafeFileGetContentsReadsThroughTheRemoteClientOnly(): void
+    {
+        $site = $this->client([new MockResponse('site', ['http_code' => 200])]);
+        $remote = $this->client([new MockResponse('remote body', ['http_code' => 200])]);
+
+        Webservice::useClient($site, $remote);
+        $body = Webservice::safeFileGetContents('https://example.invalid/page');
+
+        $this->assertSame('remote body', $body);
+        $this->assertCount(1, $this->seen);
+        $this->assertSame('GET', $this->seen[0][0]);
+        $this->assertSame('https://example.invalid/page', $this->seen[0][1]);
+    }
+
+    public function testSafeFileGetContentsDoesNotTouchTheSiteClient(): void
+    {
+        $siteSeen = [];
+        $site = new MockHttpClient(function (string $method, string $url) use (&$siteSeen): MockResponse {
+            $siteSeen[] = $url;
+
+            return new MockResponse('site', ['http_code' => 200]);
+        });
+        $remote = $this->client([new MockResponse('remote', ['http_code' => 200])]);
+
+        Webservice::useClient($site, $remote);
+        $this->assertSame('remote', Webservice::safeFileGetContents('https://example.invalid/'));
+        $this->assertSame([], $siteSeen);
+    }
+
+    public function testSafeFileGetContentsIsFalseOnATransportFailure(): void
+    {
+        $remote = $this->client([new TransportException('Could not resolve host')]);
+
+        Webservice::useClient($this->client([]), $remote);
+
+        $this->assertFalse(Webservice::safeFileGetContents('https://example.invalid/'));
+    }
+
+    public function testSafeFileGetContentsIsFalseForARefusedAddress(): void
+    {
+        $inner = $this->client([new MockResponse('secret', ['http_code' => 200])]);
+        $remote = new \Symfony\Component\HttpClient\NoPrivateNetworkHttpClient($inner);
+
+        Webservice::useClient($this->client([]), $remote);
+
+        $this->assertFalse(Webservice::safeFileGetContents('http://127.0.0.1/private'));
+        $this->assertSame([], $this->seen, 'nothing was sent');
+    }
 }

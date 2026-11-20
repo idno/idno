@@ -1098,7 +1098,8 @@ other new code may.
   `Tests/Characterisation/WebserviceWireTest` and `OutboundFlowsTest`. What it does:
   - Every public static method keeps its name, parameters and defaults, and `send()` and its wrappers
     return `['header', 'content', 'response', 'effective_url', 'error']`. `safeSend($verb, $endpoint,
-    $params = null, ?array $headers = null)` is `send()` on `idno.http_client.remote`. The clients are
+    $params = null, ?array $headers = null)` is `send()` on `idno.http_client.remote`, and `safeFileGetContents($url)` is `file_get_contents()` on
+    it (the body, or false). The clients are
     fetched from the container at each call, never kept; `Webservice::useClient($client, $remote = null)`
     replaces them (a test's) and `useClient(null)` restores the container's. `webservice_exec()` and
     the cookie jar (the `cookie_jar` setting) are gone. `WebserviceFile::getCurlParameters()` still
@@ -2494,23 +2495,37 @@ the CLI installer no longer writes one.
 - Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - HTML sanitization via HTMLPurifier
-- SSRF protection: fetch every URL supplied by a remote party (a webmention's source, the
-  endpoints a webmention target advertises, ActivityPub actor and key documents and follower
-  inboxes, Micropub media URLs) with `Webservice::safeSend()` (new code: the injected
-  `$remoteClient`), which refuses a host that resolves to a loopback, private, link-local or
-  reserved address on the first request and on every redirect hop. `isSafeUrl($url)` alone does
-  not cover redirects: it checks the first URL only. Calls to `\Idno\Core\UrlValidator::isSafeUrl()`
-  stay before those fetches, to refuse early with a log line of their own. The fetches are
-  `Idno\Pages\Webmentions\Endpoint::fetchSource()`, `Idno\Core\MentionClient` (discovery and the
-  POST to the endpoint), `Idno\Core\Webmention::getIconFromURL()`,
-  `IdnoPlugins\ActivityPub\RemoteActor::fetchDocument()` (actor and key documents),
-  `IdnoPlugins\ActivityPub\Delivery::deliver()` and
-  `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`; the first, the fourth and the last
-  are separate methods so that a test can call them on mock clients, because `isSafeUrl()` refuses
-  the test rig's own address before they are reached (`Tests/Kernel/RemoteFetchCallSitesTest`; the
-  flows the rig can drive are in `Tests/Characterisation/RemoteFetchTest`). A URL that the site's
-  admin configured (the PuSH hub, a webhook) or that a logged-in user typed goes through
-  `Webservice::send()` and the site client.
+- SSRF protection: the plain client (`Webservice::send()` and its wrappers, the `idno.http_client`
+  service) is for the site's own URLs and for services the site's ADMIN configured (the PuSH hub, a
+  webhook, an API endpoint). Every other URL goes through `Webservice::safeSend()` or
+  `Webservice::safeFileGetContents()` (new code: the injected `$remoteClient`), which refuse a host
+  that resolves to a loopback, private, link-local or reserved address on the first request and on
+  every redirect hop. That covers a URL a remote party supplied (a webmention's source, the endpoints
+  a webmention target advertises, ActivityPub actor and key documents and follower inboxes, Micropub
+  media URLs, the hubs and feeds a followed site advertises), a URL taken from content a remote
+  server returned, and a URL a logged-in MEMBER typed (a feed to subscribe to, a shared or bookmarked
+  URL, a Bridgy page): on a multi-user site a member is not the admin, and a page can redirect
+  anywhere. `isSafeUrl($url)` alone does not cover redirects: it checks the first URL only. Calls to
+  `\Idno\Core\UrlValidator::isSafeUrl()` stay before those fetches, to refuse early with a log line of
+  their own; `Idno\Entities\UnfurledUrl::unfurl()` also keeps its own `gethostbyname()` check of the
+  first URL (it refuses a host that resolves to a private or reserved address before any request
+  is made; it does not see redirects, which the remote client now does). The fetches are
+  `Idno\Pages\Webmentions\Endpoint::fetchSource()`, `Idno\Core\MentionClient`,
+  `Idno\Core\Webmention` (`getIconFromURL()`, `addSyndicatedReplyTargets()`), `Idno\Core\Reader`,
+  `Idno\Entities\Reader\Feed::retrieveItems()`, `Idno\Core\PubSubHubbub` (feed and topic fetches and
+  the subscribe and unsubscribe requests to a hub a feed advertised; its publish ping to the hub of
+  the site's own `hub` setting stays on the site client), `Idno\Pages\Entity\Share`, the following
+  bookmarklet, `UnfurledUrl::unfurl()`, `IdnoPlugins\Like\Like::getTitleFromURL()`,
+  `IdnoPlugins\Bridgy\Pages\Check`, `IdnoPlugins\ActivityPub\RemoteActor::fetchDocument()` (actor
+  and key documents), `IdnoPlugins\ActivityPub\Delivery::deliver()` and
+  `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`. The webmention source, actor and
+  media fetches are separate methods so that a test can call them on mock clients, because
+  `isSafeUrl()` refuses the test rig's own address before they are reached
+  (`Tests/Kernel/RemoteFetchCallSitesTest`; the flows the rig can drive are in
+  `Tests/Characterisation/RemoteFetchTest`). Deliberate difference: a member can no longer
+  subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost.
+  Not yet moved: `IdnoPlugins/StandardSiteSync/ATProtoClient.php` (raw curl) and the import of an
+  attachment URL from an admin's export (`File::getFileDataFromAttachment()`, admin supplied).
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra

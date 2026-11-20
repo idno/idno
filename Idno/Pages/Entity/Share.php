@@ -36,7 +36,7 @@ namespace Idno\Pages\Entity {
 
                 // Probe to see if this is something we can MF2 parse, before we do
                 $headers = [];
-                if ($head = \Idno\Core\Webservice::head($url)) {
+                if ($head = \Idno\Core\Webservice::safeSend('head', $url)) {
                     $headers = http_parse_headers($head['header']);
                 }
 
@@ -48,7 +48,7 @@ namespace Idno\Pages\Entity {
                 // Only MF2 Parse supported types
                 if (isset($headers['Content-Type']) && preg_match('/text\/(html|plain)+/', $headers['Content-Type'])) {
 
-                    if ($response = \Idno\Core\Webservice::get($url)) {
+                    if ($response = \Idno\Core\Webservice::safeSend('get', $url)) {
                         if ($mf2 = \Idno\Core\Webmention::parseContent($response['content'])) {
                             if (!empty($mf2['items'])) {
                                 foreach ($mf2['items'] as $item) {

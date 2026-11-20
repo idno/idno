@@ -81,7 +81,7 @@ namespace Idno\Entities\Reader {
          */
         function retrieveItems()
         {
-            if ($content = Webservice::get($this->getFeedURL())) {
+            if ($content = Webservice::safeSend('get', $this->getFeedURL())) {
                 return \Idno\Core\Idno::site()->reader()->parseFeed($content['content'], $this->getFeedURL());
             }
 
