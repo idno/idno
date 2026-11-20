@@ -22,7 +22,7 @@ use Tests\Storage\PrivateDatabase;
  * runs with the legacy application booted, as every command does. Each case runs the real console
  * in a subprocess, on a private database chosen with IDNO_DBNAME (on MySQL or MariaDB the empty
  * database `<dbname>_upgrade_command` on the rig's server, on SQLite an empty file in a temporary
- * directory of the test's own), never the rig site's database. Skipped on a MongoDB site.
+ * directory of the test's own), never the rig site's database. Skipped on a site whose database is not SQL.
  */
 final class UpgradeCommandTest extends TestCase
 {

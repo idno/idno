@@ -11,7 +11,9 @@ use Idno\Core\Version;
 use Idno\Upgrade\SchemaGate;
 use Symfony\Bundle\FrameworkBundle\Console\Application as FrameworkApplication;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\HelpCommand;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -26,14 +28,18 @@ require_once __DIR__ . '/functions.php';
  * #[AsCommand], autowired), plus the legacy commands: every Idno\Common\ConsolePlugin found
  * in ConsolePlugins/ and IdnoPlugins/, and the built-in "version" command. The legacy commands
  * are left out when the kernel has not booted the legacy application: while the schema gate is
- * closed (the database needs creating or upgrading), when every command but idno:upgrade first
- * prints SchemaGate::CLOSED_MESSAGE on stderr.
+ * closed (the database needs creating or upgrading, or the site is configured for MongoDB), when
+ * every command but idno:upgrade and idno:import:mongo first prints SchemaGate::closedMessage() on
+ * stderr.
  *
  * This class takes the kernel, so it is not a container service (see config/services.php).
  */
 final class Application extends FrameworkApplication
 {
     private bool $legacyCommandsRegistered = false;
+
+    /** The commands that run, and say nothing about it, while the gate is closed: they are the way out of it. */
+    private const RUN_WITH_THE_GATE_CLOSED = ['idno:upgrade', 'idno:import:mongo'];
 
     private bool $gateClosedSaid = false;
 
@@ -75,17 +81,43 @@ final class Application extends FrameworkApplication
     }
 
     /**
-     * While the schema gate is closed, says so on stderr before any command but idno:upgrade runs
-     * (that command is the way to open it), and before the error for a command that is not there
-     * (the legacy ones are not, while the gate is closed).
+     * While the schema gate is closed, says so on stderr before any command but idno:upgrade and
+     * idno:import:mongo runs (those are the way out of it), and before the error for a command that
+     * is not there (the legacy ones are not, while the gate is closed).
      */
     protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
     {
-        if ($command->getName() !== 'idno:upgrade') {
+        if (!$this->runsWithTheGateClosed($command, $input)) {
             $this->sayTheGateIsClosed($output);
         }
 
         return parent::doRunCommand($command, $input, $output);
+    }
+
+    /**
+     * Whether the command is one of those that run with the gate closed. The help of such a command
+     * (`<command> --help`, `help <command>`) counts: the help command stands in for it.
+     */
+    private function runsWithTheGateClosed(Command $command, InputInterface $input): bool
+    {
+        if (in_array($command->getName(), self::RUN_WITH_THE_GATE_CLOSED, true)) {
+            return true;
+        }
+        if (!$command instanceof HelpCommand || !$input instanceof ArgvInput) {
+            return false;
+        }
+        foreach ($input->getRawTokens() as $token) {
+            if ($token === '' || $token[0] === '-' || $token === 'help') {
+                continue;
+            }
+            try {
+                return in_array($this->find($token)->getName(), self::RUN_WITH_THE_GATE_CLOSED, true);
+            } catch (CommandNotFoundException) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     public function doRun(InputInterface $input, OutputInterface $output): int
@@ -106,7 +138,12 @@ final class Application extends FrameworkApplication
             return;
         }
         $this->gateClosedSaid = true;
-        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln(SchemaGate::CLOSED_MESSAGE, OutputInterface::OUTPUT_PLAIN);
+        ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln($this->gateClosedMessage($kernel), OutputInterface::OUTPUT_PLAIN);
+    }
+
+    private function gateClosedMessage(\Idno\Kernel $kernel): string
+    {
+        return $kernel->getContainer()->get(SchemaGate::class)->closedMessage();
     }
 
     /**

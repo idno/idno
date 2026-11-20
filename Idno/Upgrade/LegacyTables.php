@@ -39,7 +39,7 @@ use Idno\Storage\SchemaCatalog;
  * and drop() again finishes, except when a table outside the fourteen has a foreign key into a
  * legacy table (LegacyTableReferenced): that must be dealt with first.
  *
- * On a site whose database is not SQL (MongoDB) there is never anything: nothing is fetched (no
+ * On a site whose database is not SQL (MongoDB, or a plugin's backend class) there is never anything: nothing is fetched (no
  * connection, no catalog), every list is empty, drop() returns 0. Each closure returns the service
  * it names, fetched only when needed.
  */

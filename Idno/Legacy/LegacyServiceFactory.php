@@ -65,9 +65,6 @@ final class LegacyServiceFactory
         $config = $site->config();
 
         switch (trim(strtolower($config->database))) {
-            case 'mongo':
-            case 'mongodb':
-                return new \Idno\Data\Mongo();
             case 'beanstalk-mysql': // A special instance of MYSQL designed for use with Amazon Elastic Beanstalk
                 $config->dbhost = $_SERVER['RDS_HOSTNAME'];
                 $config->dbuser = $_SERVER['RDS_USERNAME'];
@@ -87,6 +84,11 @@ final class LegacyServiceFactory
         $family = \Idno\Storage\ConnectionParameters::driverFamily(['database' => $config->database]);
         if ($family === 'mysql' || $family === 'sqlite') {
             return $this->repositoryDataConcierge($family, $config);
+        }
+        if ($family === 'mongo') {
+            // The schema gate keeps the legacy application from booting on such a site; this is only
+            // reached by code that builds the service anyway.
+            throw new \LogicException(\Idno\Upgrade\PublicMessage::mongoRetired()->text);
         }
 
         return $site->componentFactory($config->database, "Idno\\Core\\DataConcierge", "Idno\\Data\\");
@@ -113,8 +115,8 @@ final class LegacyServiceFactory
     }
 
     /**
-     * The legacy filesystem. A MongoDB site keeps `db()->getFilesystem()` (GridFS) when no `filesystem`
-     * is set. Otherwise an empty or `local` setting with an `uploadpath` is a FlysystemFileSystem over
+     * The legacy filesystem. With no `filesystem` setting a database backend class that supplies its
+     * own (`db()->getFilesystem()`) is used. Otherwise an empty or `local` setting with an `uploadpath` is a FlysystemFileSystem over
      * the FileStore (a local directory, or S3 for an `s3://` upload path); any other value names a
      * filesystem class, which falls back to the FlysystemFileSystem when it cannot be built; with no
      * `uploadpath` there is none (null).

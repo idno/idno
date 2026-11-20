@@ -12,6 +12,7 @@ use Idno\Core\Idno;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Platform\SqliteConnectionSetup;
 use Idno\Storage\SchemaMigrator;
+use Idno\Upgrade\PublicMessage;
 use Idno\Upgrade\SchemaGate;
 use PHPUnit\Framework\TestCase;
 use Tests\Storage\PrivateDatabase;
@@ -21,8 +22,9 @@ use Tests\Storage\PrivateDatabase;
  * Tests/Kernel/boot_schema_gate.php) and bin/console, each in a subprocess on a private database
  * chosen with IDNO_DBNAME (on MySQL or MariaDB `<dbname>_schema_gate` on the rig's server, on
  * SQLite a file in a temporary directory of the test's own), never the rig site's database. The
- * gate is closed on the empty database and open once the migrations have run. Skipped on a MongoDB
- * site (no schema, no gate).
+ * gate is closed on the empty database and open once the migrations have run. Skipped on a site
+ * whose database is not SQL. A site configured for MongoDB is held closed whatever the private
+ * database holds (IDNO_DATABASE in the subprocess).
  */
 final class SchemaGateBootTest extends TestCase
 {
@@ -135,6 +137,47 @@ final class SchemaGateBootTest extends TestCase
         $this->assertMatchesRegularExpression('/^\s+service-event-queue\s/m', $stdout);
     }
 
+    /**
+     * A site configured for MongoDB is held closed, whatever its database holds, with the message
+     * that names the import command; nothing connects to the private database.
+     */
+    public function testStartRefusesAMongoSiteWithTheMessageThatNamesTheImportCommand(): void
+    {
+        [$exit, $stdout, $stderr] = $this->scriptWith(['IDNO_DATABASE' => 'mongodb'], 'Tests/Kernel/boot_schema_gate.php');
+
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame('', $stdout);
+        $this->assertSame(PublicMessage::mongoRetired()->text . "\n", $stderr);
+        $this->assertSame([], $this->tables(), 'nothing was created');
+    }
+
+    public function testTheConsoleSaysItOnceAndStillRunsTheImportCommandAndTheUpgradeStatus(): void
+    {
+        $mongo = ['IDNO_DATABASE' => 'mongo'];
+        $message = PublicMessage::mongoRetired()->text . "\n";
+
+        [$exit, $stdout, $stderr] = $this->scriptWith($mongo, 'bin/console', 'list');
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame($message, $stderr, 'once');
+        $this->assertStringContainsString('idno:import:mongo', $stdout);
+        $this->assertDoesNotMatchRegularExpression('/^\s+version\s/m', $stdout);
+
+        [$exit, $stdout, $stderr] = $this->scriptWith($mongo, 'bin/console', 'idno:import:mongo', '--help');
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame('', $stderr, 'the import command runs with the gate closed, without the line');
+        $this->assertStringContainsString('idno:import:mongo', $stdout);
+
+        [$exit, $stdout, $stderr] = $this->scriptWith($mongo, 'bin/console', 'idno:upgrade', '--status');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringStartsWith('Schema status: ', $stdout);
+        $this->assertSame($message, $stderr);
+
+        [$exit, $stdout, $stderr] = $this->scriptWith($mongo, 'bin/console', 'idno:upgrade');
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame($message, $stderr);
+        $this->assertSame([], $this->tables(), 'nothing was created');
+    }
+
     private function db(): Connection
     {
         self::assertNotNull($this->connection);
@@ -158,6 +201,18 @@ final class SchemaGateBootTest extends TestCase
      */
     private function script(string $script, string ...$arguments): array
     {
+        return $this->scriptWith([], $script, ...$arguments);
+    }
+
+    /**
+     * Like script(), with more environment variables.
+     *
+     * @param array<string, string> $environment
+     *
+     * @return array{0: int, 1: string, 2: string} the exit code, stdout and stderr
+     */
+    private function scriptWith(array $environment, string $script, string ...$arguments): array
+    {
         $root = dirname(__DIR__, 2);
         $process = proc_open(
             [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/' . $script, ...$arguments],
@@ -173,7 +228,7 @@ final class SchemaGateBootTest extends TestCase
                 // Any outbound request goes to a closed local port.
                 'IDNO_PROXY_STRING' => '127.0.0.1:9',
                 'PATH' => (string) getenv('PATH'),
-            ],
+            ] + $environment,
         );
         $this->assertIsResource($process);
         $stdout = (string) stream_get_contents($pipes[1]);

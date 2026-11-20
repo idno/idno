@@ -89,8 +89,6 @@ final class SapiGuardTest extends TestCase
             'idno.php' => ['idno.php'],
             'known.php' => ['known.php'],
             '_bootstrap.php' => ['Tests/_bootstrap.php'],
-            // Beside the import's fixtures, which are not scripts (expected.php only returns an array).
-            'Tests/Import/fixtures/capture.php' => ['Tests/Import/fixtures/capture.php'],
         ];
         foreach (self::scripts()['cli'] as $script) {
             $scripts[$script] = [$script];

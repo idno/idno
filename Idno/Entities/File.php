@@ -315,7 +315,7 @@ namespace Idno\Entities {
          * Retrieve a file by ID
          *
          * @param string $id
-         * @return \Idno\Common\Entity|\MongoGridFSFile|null
+         * @return \Idno\Common\Entity|null
          */
         static function getByID($id)
         {
@@ -365,7 +365,7 @@ namespace Idno\Entities {
          * can't be retrieved.
          *
          * @param  $url
-         * @return \Idno\Common\Entity|\MongoGridFSFile|null
+         * @return \Idno\Common\Entity|null
          */
         static function getByURL($url)
         {

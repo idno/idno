@@ -2,9 +2,8 @@
 
     /**
      * Data management class.
-     * By default, we're using MongoDB. Of course, you're free to extend this,
-     * implement the functions, and set Idno\Core\Idno->$db to be its
-     * replacement.
+     * The legacy database interface. Idno\Legacy\RepositoryDataConcierge serves it on the storage
+     * layer; a backend class a plugin supplies may extend this and implement the functions.
      *
      * @package    idno
      * @subpackage core
@@ -34,7 +33,7 @@ namespace Idno\Core {
         /**
          * Returns an instance of the database client reference variable
          *
-         * @return \Mongo
+         * @return mixed The backend's native client
          */
         function getClient()
         {
@@ -205,7 +204,7 @@ namespace Idno\Core {
          * Process the ID appropriately
          *
          * @param  $id
-         * @return \MongoId
+         * @return mixed The backend's own form of the id
          */
         abstract function processID($id);
 
@@ -256,7 +255,7 @@ namespace Idno\Core {
          * Retrieves a set of records from the database with given parameters, in
          * reverse chronological order
          *
-         * @param  array  $parameters Query parameters in MongoDB format
+         * @param  array  $parameters Query parameters in the legacy search-array format
          * @param  int    $limit      Maximum number of records to return
          * @param  int    $offset     Number of records to skip
          * @param  string $collection The collection to interrogate (default: 'entities')

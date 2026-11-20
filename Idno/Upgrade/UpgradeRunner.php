@@ -17,7 +17,7 @@ use Psr\Log\LoggerInterface;
  * A step, in this order:
  *
  *  1. The status (SchemaState, read afresh). UnsupportedServer, LegacyTooOld, RenamedWithoutRecord,
- *     OneXBesideCompletedUpgrade and Unreachable stop here (nothing is written; status `unsupported`,
+ *     OneXBesideCompletedUpgrade, MongoRetired and Unreachable stop here (nothing is written; status `unsupported`,
  *     `too_old` or `error`, with PublicMessage::forStatus()); Current and
  *     NotApplicable are `current`: a step does nothing for either. run() differs for Current: its
  *     first step that gets the lock re-checks the CORE declared indexes of a current database. Once
@@ -299,7 +299,7 @@ final class UpgradeRunner
             SchemaStatus::Current, SchemaStatus::NotApplicable => self::result('current'),
             SchemaStatus::UnsupportedServer => self::result('unsupported', null, $message),
             SchemaStatus::LegacyTooOld => self::result('too_old', null, $message),
-            SchemaStatus::RenamedWithoutRecord, SchemaStatus::OneXBesideCompletedUpgrade, SchemaStatus::Unreachable => self::result('error', null, $message),
+            SchemaStatus::RenamedWithoutRecord, SchemaStatus::OneXBesideCompletedUpgrade, SchemaStatus::MongoRetired, SchemaStatus::Unreachable => self::result('error', null, $message),
             SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy => null,
         };
     }

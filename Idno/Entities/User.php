@@ -1064,7 +1064,7 @@ namespace Idno\Entities {
          * Save form input
          *
          * @param  \Idno\Common\Page $page
-         * @return bool|\Idno\Common\false|\Idno\Common\true|\Idno\Core\false|\Idno\Core\MongoID|null
+         * @return bool|string|null
          */
         function saveDataFromInput()
         {

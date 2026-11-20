@@ -536,9 +536,9 @@ final class RigScriptsTest extends TestCase
         $rig = parse_ini_file(self::rigDir() . '/config.sqlite.ini')['alwaysplugins'] ?? null;
         $this->assertNotEmpty($rig);
         $this->assertSame($rig, parse_ini_file(self::rigDir() . '/config.ini')['alwaysplugins'] ?? null);
-        // The configurations CI copies to configuration/config.ini (.github/workflows/tests.yml).
-        foreach (['config_mysql.ini', 'config_default.ini'] as $ci) {
-            $this->assertSame($rig, parse_ini_file(dirname(__DIR__) . '/build/' . $ci)['alwaysplugins'] ?? null, $ci);
-        }
+        // The configuration CI copies to configuration/config.ini (.github/workflows/tests.yml): one,
+        // for MySQL and MariaDB (there is no MongoDB job any more).
+        $this->assertSame($rig, parse_ini_file(dirname(__DIR__) . '/build/config_mysql.ini')['alwaysplugins'] ?? null, 'config_mysql.ini');
+        $this->assertSame(['config_mysql.ini'], array_map('basename', glob(dirname(__DIR__) . '/build/config_*.ini') ?: []), 'the only CI configuration');
     }
 }

@@ -70,9 +70,7 @@ namespace Idno\Pages\File {
             session_write_close();  // Close the session early
             //header("Pragma: public");
             // Determine uploaded timestamp
-            if ($object instanceof \MongoGridFSFile) {
-                $upload_ts = $object->file['uploadDate']->sec;
-            } else if (!empty($object->updated)) {
+            if (!empty($object->updated)) {
                 $upload_ts = $object->updated;
             } else if (!empty($object->created)) {
                 $upload_ts = $object->created;

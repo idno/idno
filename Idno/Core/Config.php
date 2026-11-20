@@ -14,8 +14,7 @@ namespace Idno\Core {
 
         public $config = array(
             'database'               => 'mysql',
-            'dbstring'               => 'mongodb://localhost:27017',
-            'dbname'                 => 'idno', // Default MongoDB database
+            'dbname'                 => 'idno', // Default database name
             'sessionname'            => 'idno', // Default session name
             'boolean_search'         => true, // Should search be boolean?
             'open_registration'      => true, // Can anyone register for this system?
@@ -227,7 +226,7 @@ namespace Idno\Core {
             unset($array['bypass_fulltext_search']);
             unset($array['filter_shell']);
 
-            /* $array['_id'] = 'config'; // Hardcode configuration ID */ // MP: Removed as not compatible with Mongo. If hard coded IDs are absolutely necessary, another way needs to be found.
+            /* $array['_id'] = 'config'; // Hardcode configuration ID */ // MP: Removed as it is not compatible with every backend. If hard coded IDs are absolutely necessary, another way needs to be found.
 
             if (\Idno\Core\Idno::site()->db()->saveRecord('config', $array)) {
                 $this->init();

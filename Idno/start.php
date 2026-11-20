@@ -41,7 +41,7 @@ try {
     exit; // Load the installer
 }
 if (!$kernel->legacyBooted()) {
-    file_put_contents('php://stderr', \Idno\Upgrade\SchemaGate::CLOSED_MESSAGE . "\n");
+    file_put_contents('php://stderr', $kernel->getContainer()->get(\Idno\Upgrade\SchemaGate::class)->closedMessage() . "\n");
     http_response_code(503);
     exit(1);
 }

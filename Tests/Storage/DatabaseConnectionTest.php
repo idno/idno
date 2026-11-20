@@ -173,8 +173,8 @@ final class DatabaseConnectionTest extends TestCase
 
     /**
      * The kernel boots with `bootLegacy: false`: this proves that the container compiles and the
-     * kernel boots on a non-SQL site without touching the connection, not a full legacy boot on a
-     * MongoDB site (which needs a MongoDB server).
+     * kernel boots on a non-SQL site (a MongoDB one included) without touching the connection, not a
+     * full legacy boot on one.
      *
      * @dataProvider nonSqlDatabases
      */

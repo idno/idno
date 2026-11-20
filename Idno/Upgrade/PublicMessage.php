@@ -36,6 +36,7 @@ final class PublicMessage
             SchemaStatus::LegacyTooOld => self::tooOld(),
             SchemaStatus::RenamedWithoutRecord => self::renamedWithoutRecord(),
             SchemaStatus::OneXBesideCompletedUpgrade => self::oneXBesideCompletedUpgrade(),
+            SchemaStatus::MongoRetired => self::mongoRetired(),
             SchemaStatus::Unreachable => self::unreachable(),
             SchemaStatus::Empty, SchemaStatus::PendingMigrations, SchemaStatus::Legacy, SchemaStatus::Current, SchemaStatus::NotApplicable => null,
         };
@@ -60,6 +61,14 @@ final class PublicMessage
     public static function renamedWithoutRecord(): self
     {
         return new self('The tables of an Idno 1.x site exist under their renamed names (legacy_entities, legacy_entities_metadata, legacy_entities_search, ...) but no upgrade is on record. Nothing was changed. To upgrade that site, rename them back to their 1.x names (without the legacy_ prefix); to set up a new site instead, remove them.');
+    }
+
+    /**
+     * SchemaStatus::MongoRetired: the site's configuration names MongoDB.
+     */
+    public static function mongoRetired(): self
+    {
+        return new self('This site is configured for MongoDB, which Idno no longer runs on. Move its data to MySQL, MariaDB or SQLite with php bin/console idno:import:mongo: see the upgrade notes.');
     }
 
     /**

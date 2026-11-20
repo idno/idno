@@ -21,7 +21,8 @@ Config.ini files use the [INI file format](https://en.wikipedia.org/wiki/INI_fil
 The following directives are most commonly used to configure Idno.
 
 **database**<br>
-The database engine used by Idno. eg, "MongoDB" or "MySQL".
+The database engine used by Idno. "MySQL" (which also means MariaDB) or "sqlite". "MongoDB" is no longer supported: a site configured for it
+does not start, and `php bin/console idno:import:mongo` moves its data to MySQL, MariaDB or SQLite.
 
 **dbhost**<br>
 The database host. This is most commonly "localhost".
@@ -36,15 +37,15 @@ On SQLite, `database = 'sqlite'` and `dbname` is the database file: a path relat
 Your database password. Depending on your server configuration, this may not be required.
 
 **dbstring**<br>
-A database connection string. If you're using MongoDB in particular, you can use this to supply authentication
-credentials instead of dbuser, dbpass and dbname.
+The MongoDB connection string of a site that is being moved off MongoDB (`php bin/console idno:import:mongo`
+reads it). Nothing else uses it.
 
 **dbuser**<br>
 Your database user.
 
 **filesystem**<br>
 Deprecated. Leave it blank or set it to "local": files are stored in the `uploadpath`. Other plugins may still
-supply a file system class, named here. If you are using MongoDB, you can leave this option blank to use GridFS storage.
+supply a file system class, named here.
 
 **uploadpath**<br>
 The full path used by Idno to upload files. This path must be writeable by the web server. A path of the form

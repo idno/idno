@@ -26,9 +26,9 @@ final class SchemaStateTest extends TestCase
 
     // ------------------------------------------------------------------ one test per status
 
-    public function testAMongoSiteFetchesNothing(): void
+    public function testAMongoSiteIsRetiredAndNothingIsFetched(): void
     {
-        foreach (['mongo', 'MongoDB', 'mongodb'] as $database) {
+        foreach (['mongo', 'MongoDB', ' mongodb '] as $database) {
             $state = new SchemaState(
                 new BootConfig(['database' => $database], false),
                 self::forbidden('connection'),
@@ -37,11 +37,12 @@ final class SchemaStateTest extends TestCase
                 self::forbidden('copier'),
             );
 
-            self::assertSame(SchemaStatus::NotApplicable, $state->status(), $database);
+            self::assertSame(SchemaStatus::MongoRetired, $state->status(), $database);
+            self::assertTrue($state->status()->closesTheGate());
         }
     }
 
-    public function testAnotherBackendClassIsNotApplicable(): void
+    public function testABackendClassIsStillNotApplicable(): void
     {
         $state = new SchemaState(
             new BootConfig(['database' => \Tests\Unit\Storage\PluginBackendFixture::class], false),

@@ -127,9 +127,9 @@ final class UpgradeControllerTest extends TestCase
         self::assertSame(\Idno\Upgrade\PublicMessage::unreachable()->text, $data['message']);
     }
 
-    public function testANonSqlSiteIsCurrentAndNothingIsBuilt(): void
+    public function testASiteOnABackendClassIsCurrentAndNothingIsBuilt(): void
     {
-        $controller = $this->controller(open: true, runner: static fn () => throw new \LogicException('not built'), state: 'mongo');
+        $controller = $this->controller(open: true, runner: static fn () => throw new \LogicException('not built'), state: 'backend');
 
         $response = $controller->step(Request::create('/_upgrade/step', 'POST'));
 
@@ -172,7 +172,7 @@ final class UpgradeControllerTest extends TestCase
     private function controller(bool $open, ?\Closure $runner = null, ?array $result = null, string $state = 'sqlite'): UpgradeController
     {
         $gate = new SchemaGate(new SchemaState(
-            new BootConfig(['database' => $state === 'mongo' ? 'mongodb' : 'sqlite'], false),
+            new BootConfig(['database' => $state === 'backend' ? \Tests\Unit\Storage\PluginBackendFixture::class : 'sqlite'], false),
             static fn (): object => new class ($state === 'unreachable') {
                 public function __construct(private readonly bool $down)
                 {

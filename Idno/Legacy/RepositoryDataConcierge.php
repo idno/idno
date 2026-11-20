@@ -393,7 +393,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      * reverse chronological order
      *
      * @param  array  $fields     Ignored, as by the legacy SQL backend
-     * @param  array  $parameters Query parameters in MongoDB format
+     * @param  array  $parameters Query parameters in the legacy search-array format
      * @param  int    $limit      Maximum number of records to return
      * @param  int    $offset     Number of records to skip
      * @param  string $collection The collection to interrogate (default: 'entities')

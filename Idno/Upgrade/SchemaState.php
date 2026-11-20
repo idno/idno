@@ -13,8 +13,10 @@ use Idno\Storage\SchemaMigrator;
 /**
  * Works out what the site's database is (SchemaStatus), each time status() is called. In order:
  *
- *  1. NotApplicable when ConnectionParameters::driverFamily() is neither `mysql` nor `sqlite`:
- *     nothing is fetched (no connection, catalog, migrator or copier).
+ *  1. MongoRetired when ConnectionParameters::driverFamily() is `mongo` (the site is configured for
+ *     MongoDB, which Idno no longer runs on); NotApplicable when it is neither that nor `mysql` nor
+ *     `sqlite` (a backend class a plugin supplies): nothing is fetched either way (no connection,
+ *     catalog, migrator or copier).
  *  2. Unreachable when CONNECTING fails: Connection::getServerVersion() (which connects and reads
  *     the version the driver reports, without a statement) throws and the connection is not
  *     connected. Any other failure there is thrown: the gate never opens on a database it could not
@@ -73,6 +75,9 @@ final class SchemaState
     {
         $this->refusal = null;
         $family = ConnectionParameters::driverFamily($this->config->all());
+        if ($family === 'mongo') {
+            return SchemaStatus::MongoRetired;
+        }
         if ($family !== 'mysql' && $family !== 'sqlite') {
             return SchemaStatus::NotApplicable;
         }

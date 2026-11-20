@@ -49,7 +49,7 @@ final class LegacyFixture
         }
         $config = \Idno\Core\Idno::container()->get(\Idno\Config\BootConfig::class)->all();
         if (\Idno\Storage\ConnectionParameters::driverFamily($config) !== 'mysql') {
-            Assert::markTestSkipped('No 1.x site runs on SQLite (or MongoDB): the copy of a 1.x database is tested on a MySQL or MariaDB rig only.');
+            Assert::markTestSkipped('No 1.x site runs on SQLite: the copy of a 1.x database is tested on a MySQL or MariaDB rig only.');
         }
         $connection = PrivateDatabase::mysql($purpose, false);
         try {

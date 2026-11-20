@@ -7,8 +7,12 @@ namespace Idno\Upgrade;
 /**
  * What the site's database is, as far as its schema goes (SchemaState::status()).
  *
- *  - NotApplicable: the site's database is not SQL (MongoDB, or another backend class): there is
- *    no schema to check, and nothing was asked of any database.
+ *  - NotApplicable: the site's database is a backend class a plugin supplies (not SQL, not MongoDB):
+ *    there is no schema to check, and nothing was asked of any database.
+ *  - MongoRetired: the site is configured for MongoDB (`database` is `mongo` or `mongodb`), which
+ *    Idno no longer runs on. Nothing was asked of any database; the gate stays closed, and
+ *    `php bin/console idno:import:mongo` (which runs with the gate closed) moves the data to MySQL,
+ *    MariaDB or SQLite.
  *  - Unreachable: connecting failed. The legacy application boots as before and shows its own
  *    database error page.
  *  - UnsupportedServer: a MySQL server older than 8.0 or a MariaDB server older than 10.6.
@@ -32,13 +36,14 @@ namespace Idno\Upgrade;
  * case that does not say fails to compile its match, and SchemaStatusTest pins every case):
  *
  *  - closesTheGate(): the legacy application does not boot. Closed for Empty, PendingMigrations,
- *    Legacy, LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade and UnsupportedServer;
- *    open for Current, Unreachable and NotApplicable.
+ *    Legacy, LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade, MongoRetired and
+ *    UnsupportedServer; open for Current, Unreachable and NotApplicable.
  *  - advancesBySteps(): the upgrade moves on by steps (the page has its script and form, the runner
  *    works): Empty, PendingMigrations and Legacy.
  *  - refusesTheUpgrade(): nothing is done until a person acts outside Idno (the page has no script
  *    and no form, `Idno cannot start: <why>` in plain text, `idno:upgrade` and its `--status` exit
- *    1): UnsupportedServer, LegacyTooOld, RenamedWithoutRecord and OneXBesideCompletedUpgrade.
+ *    1): UnsupportedServer, LegacyTooOld, RenamedWithoutRecord, OneXBesideCompletedUpgrade and
+ *    MongoRetired.
  *  - the public message a status carries: PublicMessage::forStatus().
  */
 enum SchemaStatus: string
@@ -53,6 +58,7 @@ enum SchemaStatus: string
     case LegacyTooOld = 'legacy too old';
     case RenamedWithoutRecord = 'renamed 1.x tables without an upgrade on record';
     case OneXBesideCompletedUpgrade = '1.x tables beside a completed upgrade';
+    case MongoRetired = 'mongodb retired';
 
     /**
      * Whether the legacy application must not boot on a database in this state.
@@ -60,7 +66,7 @@ enum SchemaStatus: string
     public function closesTheGate(): bool
     {
         return match ($this) {
-            self::Empty, self::PendingMigrations, self::Legacy, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::UnsupportedServer => true,
+            self::Empty, self::PendingMigrations, self::Legacy, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::MongoRetired, self::UnsupportedServer => true,
             self::Current, self::Unreachable, self::NotApplicable => false,
         };
     }
@@ -73,7 +79,7 @@ enum SchemaStatus: string
     {
         return match ($this) {
             self::Empty, self::PendingMigrations, self::Legacy => true,
-            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::Current, self::Unreachable, self::NotApplicable => false,
+            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::MongoRetired, self::Current, self::Unreachable, self::NotApplicable => false,
         };
     }
 
@@ -84,7 +90,7 @@ enum SchemaStatus: string
     public function refusesTheUpgrade(): bool
     {
         return match ($this) {
-            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade => true,
+            self::UnsupportedServer, self::LegacyTooOld, self::RenamedWithoutRecord, self::OneXBesideCompletedUpgrade, self::MongoRetired => true,
             self::Empty, self::PendingMigrations, self::Legacy, self::Current, self::Unreachable, self::NotApplicable => false,
         };
     }

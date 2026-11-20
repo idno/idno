@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * The upgrade's services in the rig's container: the copier logs on the Monolog channel `upgrade`
  * (not through the legacy logger). Skipped on a site whose
- * database is not SQL (MongoDB), where the copier has no dialect.
+ * database is not SQL (a plugin's backend class), where the copier has no dialect.
  */
 final class UpgradeServicesTest extends TestCase
 {

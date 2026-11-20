@@ -181,8 +181,8 @@ final class PluginIndexedFieldsTest extends TestCase
     {
         self::withContainer(
             [
-                BootConfig::class => static fn (): BootConfig => new BootConfig(['database' => 'mongodb'], false),
-                IndexedFields::class => static fn () => throw new \RuntimeException('IndexedFields was fetched on a MongoDB site'),
+                BootConfig::class => static fn (): BootConfig => new BootConfig(['database' => \Tests\Unit\Storage\PluginBackendFixture::class], false),
+                IndexedFields::class => static fn () => throw new \RuntimeException('IndexedFields was fetched on a site whose database is not SQL'),
             ],
             static fn () => self::reconcile('Fixtures', dirname(__DIR__) . '/Storage/Fixtures/IndexedFields'),
         );

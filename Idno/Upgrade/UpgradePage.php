@@ -127,6 +127,8 @@ final class UpgradePage
             SchemaStatus::LegacyTooOld => self::heading('This site\'s database is too old to upgrade') . $refused,
             SchemaStatus::RenamedWithoutRecord => self::heading('This site\'s old tables need attention') . $refused,
             SchemaStatus::OneXBesideCompletedUpgrade => self::heading('This database holds two copies of the site') . $refused,
+            SchemaStatus::MongoRetired => self::heading('This site\'s database is MongoDB, which Idno no longer runs on') . $refused
+                . self::paragraph('The site\'s data is not changed. The site\'s owner can move it to MySQL, MariaDB or SQLite by running php bin/console idno:import:mongo on the server.'),
             SchemaStatus::UnsupportedServer => self::heading('This database server is too old for Idno')
                 . $refused
                 . self::paragraph('Upgrade the database server, or move the database to one that is new enough, then load this page again. Nothing has been changed.'),

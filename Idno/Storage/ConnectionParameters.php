@@ -42,8 +42,8 @@ final class ConnectionParameters
      *
      * @return array<string, mixed>
      *
-     * @throws \LogicException when the configured database is not an SQL database (MongoDB, or a
-     *                          loadable backend class supplied by a plugin; see driverFamily())
+     * @throws \LogicException when the configured database is not an SQL database (a site configured for
+     *                          MongoDB, or a loadable backend class supplied by a plugin; see driverFamily())
      */
     public static function fromLegacyConfig(array $config, array $server, ?string $projectDir = null): array
     {

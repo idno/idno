@@ -82,7 +82,7 @@ namespace Idno\Pages\Admin {
 
         /**
          * Creates the indexes that the plugin's entity classes declare (#[IndexedField]). A site
-         * whose database is not SQL (MongoDB) has none and is skipped. Any failure (a missing or
+         * whose database is not SQL (a backend class a plugin supplies) has none and is skipped. Any failure (a missing or
          * broken service included) is logged and shown, and never stops the plugin from being enabled.
          *
          * @param string      $plugin

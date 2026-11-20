@@ -44,7 +44,7 @@ final class BootConfigConnectionFactory
      * @param array<string, mixed>  $params       the parameters DoctrineBundle compiled from config/packages/doctrine.php
      * @param array<string, string> $mappingTypes
      *
-     * @throws \LogicException when the site's database is not an SQL database (MongoDB, or a loadable plugin backend class: ConnectionParameters::driverFamily())
+     * @throws \LogicException when the site's database is not an SQL database (a site configured for MongoDB, or a loadable plugin backend class: ConnectionParameters::driverFamily())
      */
     public function createConnection(array $params, ?Configuration $config = null, array $mappingTypes = []): Connection
     {

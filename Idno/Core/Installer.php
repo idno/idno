@@ -214,10 +214,19 @@ namespace Idno\Core {
 
         /**
          * The kind of database a person chose: `sqlite` for "sqlite", "SQLite" or "sqlite3" (with
-         * spaces around it), `mysql` for anything else (MySQL and MariaDB).
+         * spaces around it), `mysql` for anything else (MySQL and MariaDB), except MongoDB.
+         *
+         * @throws \Idno\Exceptions\ConfigurationException for "mongo" or "mongodb" (any case, with spaces
+         *                                                  around it): Idno no longer runs on MongoDB,
+         *                                                  and a MySQL configuration is never written
+         *                                                  in its place
          */
         protected static function databaseType(string $database): string
         {
+            if (in_array(strtolower(trim($database)), ['mongo', 'mongodb'], true)) {
+                throw new \Idno\Exceptions\ConfigurationException('MongoDB is no longer supported. Choose MySQL (or MariaDB) or SQLite. To move an existing MongoDB site, see the upgrade notes: php bin/console idno:import:mongo copies its data into MySQL, MariaDB or SQLite.');
+            }
+
             return in_array(strtolower(trim($database)), ['sqlite', 'sqlite3'], true) ? 'sqlite' : 'mysql';
         }
 
@@ -272,7 +281,7 @@ namespace Idno\Core {
          * file that does not is refused and left as it is). The value written for SQLite is exactly
          * `sqlite`: `Sqlite3` in a configuration means MySQL.
          *
-         * @param  string               $database `mysql` or `sqlite` (see databaseType())
+         * @param  string               $database `mysql` or `sqlite` (see databaseType(), which refuses MongoDB)
          * @param  array<string, mixed> $input
          * @return array<string, string> database, dbname, dbuser, dbpass and dbhost
          * @throws \Idno\Exceptions\ConfigurationException with the message to show
@@ -378,11 +387,6 @@ namespace Idno\Core {
 
             $dbname = preg_replace("/[^a-zA-Z0-9\_\.]/", "", $dbname); // Sanitise $dbname
             $schema = preg_replace("/[^a-zA-Z0-9\_\.]/", "", strtolower($schema)); // Sanitise $schema
-
-            // Skip the check for mongo, which has no schema
-            if ($schema == 'mongo' || $schema == 'mongodb') {
-                return true;
-            }
 
             // Crufty hack to alias schemas if they're different from class. TODO: do this nicer
             $dbscheme = "";

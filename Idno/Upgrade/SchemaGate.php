@@ -28,6 +28,16 @@ final class SchemaGate
         return $this->status ??= $this->state->status();
     }
 
+    /**
+     * What an entry point that cannot serve the upgrade page says on stderr while the gate is closed:
+     * the message that names `idno:import:mongo` for a site configured for MongoDB, otherwise
+     * CLOSED_MESSAGE.
+     */
+    public function closedMessage(): string
+    {
+        return $this->status() === SchemaStatus::MongoRetired ? PublicMessage::mongoRetired()->text : self::CLOSED_MESSAGE;
+    }
+
     public function closed(): bool
     {
         return $this->status()->closesTheGate();

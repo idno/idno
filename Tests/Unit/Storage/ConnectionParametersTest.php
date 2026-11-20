@@ -161,7 +161,7 @@ final class ConnectionParametersTest extends TestCase
      */
     public function testALoadableBackendClassIsOther(): void
     {
-        foreach ([PluginBackendFixture::class => PluginBackendFixture::class, 'Idno\\Data\\Mongo' => 'Idno\\Data\\Mongo'] as $database => $class) {
+        foreach ([PluginBackendFixture::class => PluginBackendFixture::class] as $database => $class) {
             $this->assertSame('other', ConnectionParameters::driverFamily(['database' => $database]), $database);
             $this->assertSame($class, ConnectionParameters::backendClass(['database' => $database]), $database);
         }

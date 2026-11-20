@@ -64,7 +64,15 @@ class WebInstaller extends \Idno\Core\Installer
         $mysql_pass  = \Idno\Core\Input::getInput('mysql_pass');
         $mysql_name  = \Idno\Core\Input::getInput('mysql_name');
         $submitted   = \Idno\Core\Input::getInput('database') !== null;
-        $database    = self::databaseType((string) \Idno\Core\Input::getInput('database', 'mysql'));
+        $refused     = false;
+        try {
+            $database = self::databaseType((string) \Idno\Core\Input::getInput('database', 'mysql'));
+        } catch (\Idno\Exceptions\ConfigurationException $e) {
+            $database = 'mysql';
+            $refused = true;
+            $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
+            $ok = false;
+        }
         $sqlite_path = trim((string) \Idno\Core\Input::getInput('sqlite_path', ''));
         $upload_path = \Idno\Core\Input::getInput('upload_path', dirname(dirname(__FILE__)) . '/Uploads/');
 
@@ -82,9 +90,9 @@ class WebInstaller extends \Idno\Core\Installer
             $db_ready = $submitted;
             $db_input = ['path' => $sqlite_path];
         } else {
-            $db_ready = !empty($mysql_name) && !empty($mysql_host);
+            $db_ready = !$refused && !empty($mysql_name) && !empty($mysql_host);
             $db_input = ['name' => $mysql_name, 'user' => $mysql_user, 'pass' => $mysql_pass, 'host' => $mysql_host];
-            if ($submitted && !$db_ready) {
+            if ($submitted && !$db_ready && !$refused) {
                 $messages .= '<p>Please give us the name of your MySQL database and the name of the server it is on.</p>';
                 $ok = false;
             }

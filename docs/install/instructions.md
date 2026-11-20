@@ -28,7 +28,7 @@ If you want to run the (almost) latest and greatest code, but aren't able to tra
 
 ### Use the automatic installer
 
-You can get started by pointing your browser at your Idno site address: the web installer sets up a site on MySQL, MariaDB or SQLite. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below. The CLI installer (see [here](cliinstaller.md)) sets up the same three databases from a terminal.
+You can get started by pointing your browser at your Idno site address: the web installer sets up a site on MySQL, MariaDB or SQLite. MongoDB is no longer supported (see [Upgrading](upgrade.md) to move a MongoDB site). The CLI installer (see [here](cliinstaller.md)) sets up the same three databases from a terminal.
 
 The installers write your configuration file; they do not create Idno's tables. The database is set up the first time the site is loaded in a browser: a page saying "Idno is setting up its database" creates the tables in a few seconds, then continues to your site. If you have a shell, `php bin/console idno:upgrade`, run from your Idno directory, does the same.
 
@@ -85,7 +85,7 @@ Note that `database = "Sqlite3"`, which older instructions gave, does not mean S
 
 ### Set the filesystem
 
-If you’re using MongoDB, you don’t have to do anything, and all uploaded files will be stored in MongoDB itself. However, you can also store files on your server’s local hard drive. Additionally, plugins can provide alternative filesystems like Amazon S3.
+Uploaded files are stored on your server’s local hard drive, in the upload directory below. Plugins can provide alternative filesystems like Amazon S3.
 
 #### Store files on your server’s hard drive
 
@@ -100,40 +100,7 @@ Then, add the following to your config.ini file:
 
 Of course, replace the path with the path to your data folder.
 
-If you're using MySQL or SQLite, you must specify an upload directory if you want to store files, images or profile pictures.
-
-### If you’re using MongoDB
-
-** MongoDB support is deprecated, we recommend using one of the other DB Backends (MySQL is recommended) **
-
-If your MongoDB installation accepts connections from localhost, and you're happy for your Idno MongoDB database to be called Idno, you can simply create a file called ```config.ini``` in the root of your installation containing:
-
-    database = "MongoDB"
-
-If you’d like to use an alternative [MongoDB connection string](http://docs.mongodb.org/manual/reference/connection-string/), you can add that to ```config.ini``` like this:
-
-    dbstring  = "Your MongoDB connection string"
-    dbname    = "Your preferred Idno database name (default=known)"
-
-You can also include a subset of these items, for example to just change the database name.
-
-By default, MongoDB will accept unauthenticated connections from localhost. If you've locked down your MongoDB to require authentication, you can set a username, password, and [authentication source](https://docs.mongodb.org/manual/core/security-users/#user-authentication-database):
-
-    dbuser    = "Your MongoDB user"
-    dbpass    = "Your MongoDB user's password"
-    dbauthsrc = "The database where this user is defined"
-
-When using authentication, your MongoDB user will need to be granted the ["readWrite"](https://docs.mongodb.org/manual/reference/built-in-roles/#readWrite) role on both the Idno database and a database called `idnosession` where session information is stored. For example to create a user called "knownuser" in the "admin" database, you might run these commands on the Mongo command line:
-
-    use admin
-    db.createUser({user:"knownuser", pwd:"p@ssword", roles: [
-      {role: "readWrite", db: "known"},
-      {role: "readWrite", db: "idnosession"}
-    ]})
-
-#### Upgrading from old mongo driver
-
-If you're upgrading from an older release (0.9.2 and below) you will need to install the new [PHP mongodb driver](https://secure.php.net/manual/en/set.mongodb.php).
+You must specify an upload directory if you want to store files, images or profile pictures.
 
 ### Load Idno
 

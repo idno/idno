@@ -27,7 +27,7 @@ use Idno\Storage\TypeMap;
  * read from the legacy config each time a search condition is built (as the legacy backend read
  * them per query).
  *
- * Any other database (MongoDB, or a loadable backend class supplied by a plugin: see
+ * Any other database (a loadable backend class supplied by a plugin, or a site still configured for MongoDB, which the schema gate holds closed: see
  * ConnectionParameters::driverFamily(), which also makes a `database` name that is no loadable class
  * MySQL) has no record store: create() throws a \LogicException, without touching the connection or
  * the catalog. It needs the legacy application, so it must not be called before the legacy

@@ -163,6 +163,34 @@ final class UpgradeGateListenerTest extends TestCase
         self::assertStringContainsString('1.6.4', (string) $response->getContent());
     }
 
+    /**
+     * A site configured for MongoDB: a plain-text refusal that names the import command, or a page
+     * with no script and no form; Retry-After and no-store as for every closed gate.
+     */
+    public function testAMongoSiteIsToldWhatToDo(): void
+    {
+        $never = static fn () => throw new \LogicException('nothing may be fetched');
+        $gate = new SchemaGate(new SchemaState(new BootConfig(['database' => 'mongodb'], false), $never, $never, $never, $never));
+        $message = \Idno\Upgrade\PublicMessage::mongoRetired()->text;
+
+        $text = $this->handle(Request::create('/inbox', 'POST'), $gate);
+        self::assertNotNull($text);
+        self::assertSame(503, $text->getStatusCode());
+        self::assertSame('text/plain; charset=UTF-8', $text->headers->get('Content-Type'));
+        self::assertSame('Idno cannot start: ' . $message . "\n", $text->getContent());
+        self::assertSame('30', $text->headers->get('Retry-After'));
+        self::assertStringContainsString('no-store', (string) $text->headers->get('Cache-Control'));
+
+        $page = $this->handle(Request::create('/', 'GET', server: ['HTTP_ACCEPT' => 'text/html']), $gate);
+        self::assertNotNull($page);
+        self::assertSame(503, $page->getStatusCode());
+        self::assertSame('30', $page->headers->get('Retry-After'));
+        self::assertStringContainsString('no-store', (string) $page->headers->get('Cache-Control'));
+        self::assertStringContainsString('idno:import:mongo', (string) $page->getContent());
+        self::assertStringNotContainsString('<script', (string) $page->getContent());
+        self::assertStringNotContainsString('<form', (string) $page->getContent());
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private function handle(Request $request, ?SchemaGate $gate = null, bool $ask = true): ?Response

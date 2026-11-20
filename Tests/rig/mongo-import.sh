@@ -2,8 +2,6 @@
 # Runs the MongoDB import's tests against a real MongoDB server (composer test:mongo-import).
 #
 #   mongo-import.sh            the end-to-end test, Tests/Import (MongoImportEndToEndTest)
-#   mongo-import.sh capture    recaptures Tests/Import/fixtures/mongo-site.ndjson and expected.php
-#                              from the old MongoDB backend (Tests/Import/fixtures/capture.php)
 #
 # Everything runs in Docker: a mongo:6 container (no port published on the host: the two containers
 # share a network of their own) and a PHP 8.4 container with the mongodb extension, built from
@@ -15,20 +13,16 @@
 # started are removed. The image (idno-mongo-import:local) is kept as a build cache; when a build
 # replaces it, the previous image is removed, so no dangling image is left behind.
 #
-# The container also installs the mongodb/mongodb library into its copy (never into this checkout's
-# composer.json): the capture uses the old backend, which needs it, and until the old backend is
-# removed a process configured for MongoDB (the import command's subprocess in the test) boots it.
-# Once the old backend is gone, the library step below can go too; the import command itself needs
-# the extension only.
+# The container has the mongodb extension and nothing else of MongoDB's: the import command needs
+# the extension only (no mongodb/mongodb library is installed).
 set -euo pipefail
 
 RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$RIG_DIR/../.." && pwd -P)"
-MODE="${1:-test}"
-case "$MODE" in
-    test|capture) ;;
-    *) echo "Usage: $0 [test|capture]" >&2; exit 2 ;;
-esac
+if [ "$#" -ne 0 ]; then
+    echo "Usage: $0" >&2
+    exit 2
+fi
 
 IMAGE=idno-mongo-import:local
 MONGO_IMAGE=mongo:6
@@ -99,23 +93,7 @@ for _ in $(seq 1 60); do
 done
 docker exec "$MONGO" mongosh --quiet -u root -p "$MONGO_PASSWORD" --eval 'db.runCommand({ping: 1}).ok' >/dev/null
 
-# The library for the old backend, in the container's copy only (see above).
-LIBRARY='composer require mongodb/mongodb --no-interaction --no-progress --quiet -W'
-
-if [ "$MODE" = capture ]; then
-    run --rm --name "$PHP_CONTAINER" --network "$NETWORK" -v "$STAGE/out:/out" "$IMAGE" bash -euc "
-        $LIBRARY
-        mkdir -p configuration
-        cp Tests/build/config_default.ini configuration/config.ini
-        php -d error_reporting=22527 Tests/Import/fixtures/capture.php '$MONGO_URL' /out
-    "
-    cp "$STAGE/out/mongo-site.ndjson" "$STAGE/out/expected.php" "$ROOT/Tests/Import/fixtures/"
-    echo "Captured Tests/Import/fixtures/mongo-site.ndjson and expected.php."
-    exit 0
-fi
-
 run --rm --name "$PHP_CONTAINER" --network "$NETWORK" -e IDNO_TEST_MONGO_URL="$MONGO_URL" "$IMAGE" bash -euc "
-    $LIBRARY
     composer test:up
     status=0
     composer test -- Tests/Import || status=\$?

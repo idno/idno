@@ -191,12 +191,31 @@ final class UpgradeRunnerTest extends TestCase
     public function testANonSqlSiteIsNotTheRunnersBusiness(): void
     {
         $forbidden = static fn () => throw new \LogicException('nothing is fetched');
-        $state = new SchemaState(new BootConfig(['database' => 'mongodb'], false), $forbidden, $forbidden, $forbidden, $forbidden);
+        $state = new SchemaState(new BootConfig(['database' => \Tests\Unit\Storage\PluginBackendFixture::class], false), $forbidden, $forbidden, $forbidden, $forbidden);
 
         $result = $this->runner($state)->step(microtime(true) + 5);
 
         self::assertSame('current', $result['status']);
         self::assertSame([], (new SchemaCatalog($this->db()))->tables());
+    }
+
+    /**
+     * A site configured for MongoDB: the step and the run answer `error` with the message that names
+     * the import command, before any lock, migration or copy, and nothing is fetched.
+     */
+    public function testAMongoSiteIsRetiredAndNothingIsDone(): void
+    {
+        $forbidden = static fn () => throw new \LogicException('nothing is fetched');
+        $state = new SchemaState(new BootConfig(['database' => 'mongodb'], false), $forbidden, $forbidden, $forbidden, $forbidden);
+
+        $result = $this->runner($state)->step(microtime(true) + 5);
+
+        self::assertSame('error', $result['status']);
+        self::assertSame(PublicMessage::mongoRetired()->text, $result['message']);
+        self::assertFalse($result['locked']);
+        self::assertSame('error', $this->runner($state)->run(static function (string $line): void {
+        })['status']);
+        self::assertSame([], (new SchemaCatalog($this->db()))->tables(), 'nothing was created');
     }
 
     /**

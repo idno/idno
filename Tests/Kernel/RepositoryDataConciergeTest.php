@@ -649,7 +649,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
      * (Idno\Data\MySQL, which componentFactory() built or fell back to) is gone: every MySQL name,
      * the old backend's own class name (no class now: the fallback, MySQL), a name that is no class,
      * and a loadable plugin backend class, each booted in a fresh process. (MongoDB names: see
-     * testMongoConfigStillSelectsTheMongoBackend, which needs no MongoDB server.)
+     * testMongoConfigHasNoBackend.)
      */
     public function testLegacyDriverNamesStillResolve(): void
     {
@@ -801,7 +801,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * A deliberate difference: a query the old backend sent to MySQL as invalid SQL (here the MongoDB list form of
+     * A deliberate difference: a query the old backend sent to MySQL as invalid SQL (here the list form of
      * $or) matches nothing; countRecords() gives 0 where the old backend gave false.
      */
     public function testAQueryTheOldBackendFailedCountsZero(): void
@@ -875,16 +875,19 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $empty->close();
     }
 
-    public function testMongoConfigStillSelectsTheMongoBackend(): void
+    public function testMongoConfigHasNoBackend(): void
     {
         foreach (['mongo', 'MongoDB', ' mongodb '] as $database) {
             $this->assertSame('mongo', ConnectionParameters::driverFamily(['database' => $database]), $database);
             $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
         }
-        // LegacyServiceFactory::db() returns `new \Idno\Data\Mongo()` for these names before anything
-        // else (the case is unchanged from before the adapter replaced the old backend).
+        // The backend class is gone, and LegacyServiceFactory::db() refuses these names (the schema
+        // gate keeps the legacy application from booting on such a site, so this is a last defence).
+        $this->assertFileDoesNotExist(dirname(__DIR__, 2) . '/Idno/Data/Mongo.php');
+        $this->assertFalse(class_exists('Idno\\Data\\Mongo'));
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/Idno/Legacy/LegacyServiceFactory.php');
-        $this->assertMatchesRegularExpression("/switch \\(trim\\(strtolower\\(\\\$config->database\\)\\)\\) \\{\\s*case 'mongo':\\s*case 'mongodb':\\s*return new \\\\Idno\\\\Data\\\\Mongo\\(\\);/", $source);
+        $this->assertStringContainsString("if (\$family === 'mongo') {", $source);
+        $this->assertStringContainsString('mongoRetired()', $source);
     }
 
     public function testAnUnknownBackendNameIsMysqlAndALoadableClassIsBuiltAsBefore(): void

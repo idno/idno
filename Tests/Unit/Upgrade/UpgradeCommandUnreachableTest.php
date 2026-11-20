@@ -95,6 +95,6 @@ final class UpgradeCommandUnreachableTest extends TestCase
             throw new \LogicException('Not asked.');
         };
 
-        return new UpgradeCommand($runner, $state, $migrator, $copier, new LegacyTables($config, static fn (): Connection => $connection, $never, $never, $never));
+        return new UpgradeCommand(static fn (): UpgradeRunner => $runner, $state, static fn (): SchemaMigrator => $migrator, static fn (): LegacyDataCopier => $copier, new LegacyTables($config, static fn (): Connection => $connection, $never, $never, $never));
     }
 }

@@ -645,7 +645,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['$or' => ['slug' => 'a', 'colour' => 'blue']], [$a, $blue]);
         $this->assertMatches(['$or' => ['slug' => 'nope', 'colour' => 'nope']], []);
 
-        // The MongoDB list-of-conditions form is not understood: it compiles to
+        // The list-of-conditions form is not understood: it compiles to
         // invalid SQL, the error is logged, and find() answers with an empty list
         // (not a match-everything). count() fails; the new implementations deliberately
         // match nothing and count 0.

@@ -7,7 +7,9 @@ Idno _requires_ the following server components:
 + PHP 8.4 or above.
 + A database: MySQL 8.0 or above, or MariaDB 10.6 or above. We recommend MySQL or MariaDB. Idno refuses
   to start on an older MySQL or MariaDB server, with a page that says so.
-+ MongoDB is still supported, as before, but deprecated: use MySQL or MariaDB for a new site.
++ MongoDB is no longer supported. A site that was configured for it does not start: it shows a page that
+  says so. Move its data to MySQL, MariaDB or SQLite with `php bin/console idno:import:mongo` (see
+  [Upgrading](upgrade.md)).
 + SQLite (3.38 or above, through PHP's `pdo_sqlite`) works for a small site on a single server with a
   local disk: the database is one file in the `data/` directory, the PHP sessions are files, and search
   has no full-text index. It does not work on a network filesystem or with several web servers. The
@@ -50,7 +52,7 @@ Additionally, Idno requires the following PHP components:
 + libxml
 + mbstring
 + openssl
-+ pdo, and pdo_mysql (for MySQL or MariaDB) or pdo_sqlite (for SQLite); mongodb for a MongoDB site
++ pdo, and pdo_mysql (for MySQL or MariaDB) or pdo_sqlite (for SQLite)
 + reflection
 + session
 + simplexml

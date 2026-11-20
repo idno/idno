@@ -21,7 +21,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * The schema migrations on the rig's MySQL server (MySQL or MariaDB), in a private database of
  * their own (never the rig site's): the baseline's tables, columns and collations, and the schema
- * catalog's single statement. Skipped on an SQLite or MongoDB site.
+ * catalog's single statement. Skipped on an SQLite site.
  */
 final class SchemaMigratorMySqlTest extends TestCase
 {

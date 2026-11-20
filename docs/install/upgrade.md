@@ -4,10 +4,11 @@ Upgrading Idno is designed to be simple: back up, replace the files, and load yo
 tells you what to expect, in the order you need it. The first part is for site owners; the last
 part is for developers of plugins and themes.
 
-If your site runs on **MongoDB**, the database part of this page does not apply to you: a MongoDB
-site upgrades exactly as before (replace the files, load the site). Read "Before you start" and
-"Other changes in 2.0". To move a MongoDB site to MySQL, MariaDB or SQLite, see "Moving a MongoDB
-site".
+If your site runs on **MongoDB**, it cannot start on this version: Idno 2.0 no longer runs on
+MongoDB. The site shows a page that says so (and every command but `idno:import:mongo` and
+`idno:upgrade` prints the same line; `idno:upgrade` exits with an error), and nothing is changed. Move
+its data to MySQL, MariaDB or SQLite first, as "Moving a MongoDB site" describes, then follow the rest
+of this page for the new database.
 
 ## Before you start
 
@@ -376,8 +377,7 @@ installation directory, you may need to perform the following additional steps:
 Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-on-ones-own-server) for this point.
 
 !!! warning "MongoDB Users"
-    * Previous releases of Idno (<0.9.5) used a now deprecated mongo driver. If you are running your site on Mongo, you will first need to make sure that you have installed the new [PHP MongoDB driver](https://secure.php.net/manual/en/set.mongodb.php).
-    * Additionally, the 0.9.9 release changed the default database engine, so you'll need to specify ```database = 'mongo'``` in your config.ini
+    Idno 2.0 does not run on MongoDB: see "Moving a MongoDB site" above. A site whose `config.ini` still says `database = 'mongo'` (or `mongodb`) is held closed, and the installers refuse it.
 
 !!! warning "var/ must be writable by the web server"
     Idno 2.0 keeps its compiled cache in `var/cache/`, so the web server's user must be able to write to `var/` (or set the `IDNO_CACHE_DIR` environment variable to a directory it can write to). If it cannot, Idno uses a private directory under the system's temporary directory instead, which works but is rebuilt whenever that directory is cleared; if no location is usable, the site shows an error asking you to set `IDNO_CACHE_DIR`. Nothing else is written under `var/`: Idno's log messages still go to PHP's error log, as before.
@@ -394,14 +394,14 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 
     * the retired theme directories `Themes/Black`, `Themes/Cherwell`, `Themes/ElkinsPark`, `Themes/Fauvists`, `Themes/Green`, `Themes/Kandinsky`, `Themes/MarketStreet` and `Themes/Solo`. Idno never loads a retired theme (a site set to one gets Idno 2026), but leftover directories still appear in the admin theme list until you delete them;
     * `Idno/Core/Hub.php` and the `Idno/Pages/Hub/` directory;
-    * `Idno/Data/MySQL.php` and `Idno/Data/AbstractSQL.php` (keep `Idno/Data/Mongo.php`);
+    * `Idno/Data/MySQL.php`, `Idno/Data/AbstractSQL.php` and `Idno/Data/Mongo.php`, and `Idno/Files/MongoDBFileSystem.php` and `Idno/Files/MongoDBFile.php` (a database class of your own in `Idno/Data/` still works);
     * the directory `warmup/schemas/` (the installers no longer load SQL files: the database is set up by the upgrade page or `idno:upgrade`);
     * any `hosts/` directory (it is no longer read).
 
 ### Settings that changed
 
 * **MySQL sites:** every `database` setting that worked before still works (`MySQL`, `mysql`, `beanstalk-mysql`, and any other value that is not a database class, which has always meant MySQL), and a `sessions_storage = Idno\Data\MySQL` setting keeps your sessions in the database (now its `idno_sessions` table). Sessions are not carried over: users log in again after the upgrade.
-* **MongoDB sites are not affected** by the new storage (they move to it in a later release), with one exception: a MongoDB site whose `sessions_storage` setting is `Idno\Data\MySQL` (sessions kept in a MySQL database next to MongoDB) now keeps its sessions in files, because that class no longer exists. Every user is logged out once at the upgrade and must log in again; remove the setting.
+* **MongoDB sites do not start.** MongoDB is no longer a database Idno runs on; move the site with `php bin/console idno:import:mongo` (see "Moving a MongoDB site"). The upload directory then holds the files GridFS kept, and the site's users log in again (sessions are not carried over).
 
 ### Removed in 2.0
 
@@ -412,6 +412,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 * Scripts that started Idno themselves with `new Idno\Core\Idno()` must `require` `Idno/start.php` instead, which boots Idno (the Symfony kernel and the legacy application) and returns. While the database needs an upgrade, `Idno/start.php` prints one line saying so and exits with status 1. Command-line tools should be console commands (`bin/console`; `idno.php` and `known.php` are aliases).
 * The `IDNO_KERNEL_SECRET` environment variable is replaced by `APP_SECRET` (not used by anything yet).
 * The hand-written SQL backend classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` (see "For developers" below).
+* The MongoDB backend (`Idno\Data\Mongo`) and its GridFS file system (`Idno\Files\MongoDBFileSystem`, `MongoDBFile`). A site configured for MongoDB does not start; `php bin/console idno:import:mongo` moves it to MySQL, MariaDB or SQLite (see "Moving a MongoDB site"). The `mongodb/mongodb` library is no longer used; the import needs only the PHP extension `mongodb`.
 * The 1.x database tables (`entities`, `entities_metadata`, `entities_search`, `reader`, `site`, `config` and their `_metadata`/`_search` tables, `versions`, `session`) are no longer read or written. The upgrade copies them into the new tables and renames them `legacy_<name>`.
 
 ## For developers
@@ -460,7 +461,7 @@ entity finders (`Entity::getOne()`, `getFromX()`, ...); new code takes `Idno\Sto
 The classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` have been removed. Code that extended them, created them (`new \Idno\Data\MySQL()`), or checked for them (`instanceof \Idno\Data\MySQL` or `AbstractSQL`, `class_exists()`) must change:
 
 * Legacy plugin code keeps using `Idno::site()->db()`, which on a MySQL, MariaDB or SQLite site serves the same public methods with the same parameters and defaults (except `build_where_from_array()`, which is gone). `getClient()` still returns a `PDO` on the site's one database connection: a `Pdo\Mysql` (PHP's MySQL subclass of `PDO`) or, on SQLite, a `Pdo\Sqlite`, not a plain `PDO`. `checkAndUpgradeSchema()` does nothing: the schema belongs to the migrations.
-* To tell whether a site is on SQL, do not check the class of `db()`: use `Idno\Storage\ConnectionParameters::driverFamily(['database' => Idno::site()->config()->database])`, which returns `mysql`, `sqlite`, `mongo` or `other`.
+* To tell whether a site is on SQL, do not check the class of `db()`: use `Idno\Storage\ConnectionParameters::driverFamily(['database' => Idno::site()->config()->database])`, which returns `mysql`, `sqlite`, `mongo` (a site configured for MongoDB, which the schema gate keeps closed) or `other` (a backend class a plugin supplies).
 
 ### Uploaded files
 

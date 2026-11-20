@@ -58,7 +58,7 @@ use Idno\Storage\Criterion\Search;
  *  - A Search anywhere but directly under the top level (inside an AnyOf or a nested AllOf) makes
  *    the whole query match nothing: MySQL joins the search table only for a top-level `$search`
  *    and fails the query otherwise.
- *  - An AnyOf with no children matches nothing (the MongoDB list form of `$or`); an AllOf with
+ *  - An AnyOf with no children matches nothing (the list form of `$or`); an AllOf with
  *    none matches everything. An In or NotIn with no values (which the legacy parser never
  *    produces) is the mathematical one: In matches nothing, NotIn every record that has the field.
  *  - Search: a term of more than 5 bytes is split on whitespace and matches a record whose
@@ -80,8 +80,8 @@ use Idno\Storage\Criterion\Search;
  * As JsonRecordStore, and unlike the old MySQL backend (since removed): an array in tags, title,
  * description or handle contributes `Array` to the search text and an array body nothing (the old
  * backend raised); values are compared whole, records with an equal `created` are ordered by _id,
- * nested arrays and objects are not queryable, and field names are matched exactly; the MongoDB
- * list form of `$or` counts 0 (the old backend failed the count); there are no limits on the range
+ * nested arrays and objects are not queryable, and field names are matched exactly; the list
+ * form of `$or` counts 0 (the old backend failed the count); there are no limits on the range
  * of `created` or on the length of a field name.
  */
 final class InMemoryRecordStore implements RecordStore

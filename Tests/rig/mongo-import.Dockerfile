@@ -1,5 +1,4 @@
-# The image Tests/rig/mongo-import.sh runs the MongoDB import's end-to-end test in (and captures its
-# fixture in): PHP 8.4 on the command line with the extensions composer.json requires, pdo_sqlite (in
+# The image Tests/rig/mongo-import.sh runs the MongoDB import's end-to-end test in: PHP 8.4 on the command line with the extensions composer.json requires, pdo_sqlite (in
 # the base image), pdo_mysql, and the mongodb extension, which the import needs and which a
 # developer's own PHP usually lacks. The build context is a copy of the checkout the script makes
 # (never the checkout itself), so nothing done in the container reaches the developer's files.

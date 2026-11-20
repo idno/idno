@@ -32,8 +32,8 @@ namespace Tests {
                 $this->assertTrue(extension_loaded($extension));
             }
 
-            echo "Checking available DB (mysql, mongodb, sqlite, pgsql)\n";
-            $this->assertTrue(extension_loaded('pdo_mysql') || extension_loaded('mongodb') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'));
+            echo "Checking available DB (mysql, sqlite, pgsql)\n";
+            $this->assertTrue(extension_loaded('pdo_mysql') || extension_loaded('pdo_sqlite') || extension_loaded('pdo_pgsql'));
         }
 
         /**

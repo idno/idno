@@ -195,7 +195,6 @@ final class InstallerDatabaseTest extends TestCase
             'MySQL' => ['MySQL', 'mysql'],
             'mariadb' => ['mariadb', 'mysql'],
             'empty' => ['', 'mysql'],
-            'mongo' => ['mongo', 'mysql'],
             'nonsense' => ['sqlite; drop table', 'mysql'],
         ];
     }
@@ -217,8 +216,40 @@ final class InstallerDatabaseTest extends TestCase
 
     public function testAnythingElseIsMysql(): void
     {
-        foreach (['postgres', 'mongo', 'Oracle', ''] as $typed) {
+        foreach (['postgres', 'Oracle', ''] as $typed) {
             self::assertSame('mysql', InstallerUnderTest::type($typed));
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function mongoNames(): array
+    {
+        return ['mongo' => ['mongo'], 'mongodb' => ['mongodb'], 'MongoDB' => ['MongoDB'], 'padded' => ['  MONGO ']];
+    }
+
+    /**
+     * MongoDB is no longer a database Idno runs on: both installers refuse it with a message that
+     * says so and names the choices, instead of writing a MySQL configuration.
+     *
+     * @dataProvider mongoNames
+     */
+    public function testMongoIsRefusedWithAClearMessage(string $typed): void
+    {
+        foreach ([
+            static fn () => InstallerUnderTest::type($typed),
+            fn () => $this->installer()->params($typed, ['name' => 'known', 'user' => 'u', 'pass' => 'p', 'host' => 'localhost']),
+        ] as $attempt) {
+            try {
+                $attempt();
+                self::fail('MongoDB was accepted');
+            } catch (\Idno\Exceptions\ConfigurationException $e) {
+                self::assertStringContainsString('MongoDB is no longer supported', $e->getMessage());
+                self::assertStringContainsString('MySQL', $e->getMessage());
+                self::assertStringContainsString('SQLite', $e->getMessage());
+                self::assertStringContainsString('idno:import:mongo', $e->getMessage());
+            }
         }
     }
 

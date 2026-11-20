@@ -119,7 +119,7 @@ namespace Idno\Core {
                             foreach ($attachments as $key => $attachment) {
                                 if ($data = File::getFileDataFromAttachment($attachment)) {
                                     $filename = "" . $attachment['_id'];
-                                    $id = "" . $attachment['_id']; // Ensure MongoIDs are cast to string (see #978)
+                                    $id = "" . $attachment['_id']; // Ensure ids are cast to string (see #978)
                                     if ($ext = pathinfo($attachment['url'], PATHINFO_EXTENSION)) {
                                         $filename .= '.' . $ext;
                                     }

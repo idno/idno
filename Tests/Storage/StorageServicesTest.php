@@ -221,7 +221,7 @@ final class StorageServicesTest extends \Tests\IdnoTestCase
     public function testTheFactoryGivesAMysqlSiteTheMysqlDialect(): void
     {
         // A MySQL connection of its own that is never opened (DBAL connects at the first query), so
-        // the test runs on any site's database, MongoDB included (whose container has no connection).
+        // the test runs on any site's database.
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql', 'host' => '127.0.0.1', 'dbname' => 'never_connected']);
         $factory = new LegacyRecordStoreFactory(static fn (): Connection => $connection, static fn (): SchemaCatalog => new SchemaCatalog($connection), new BootConfig(['database' => 'beanstalk-mysql'], false), new LegacyRecordDefaults(), new IdentityTypeMap());
 

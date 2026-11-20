@@ -767,7 +767,7 @@ class ATProtoClient
     public function entityToRkey(\Idno\Common\Entity $entity): string
     {
         $id = $entity->getID();
-        // The MongoDB ObjectID is already alphanumeric, just use it directly
+        // The entity ID is already alphanumeric, just use it directly
         return (string) $id;
     }
 

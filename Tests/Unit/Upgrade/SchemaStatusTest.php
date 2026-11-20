@@ -33,6 +33,7 @@ final class SchemaStatusTest extends TestCase
             SchemaStatus::LegacyTooOld->name => ['closed' => true, 'steps' => false, 'refused' => true, 'message' => PublicMessage::tooOld()->text],
             SchemaStatus::RenamedWithoutRecord->name => ['closed' => true, 'steps' => false, 'refused' => true, 'message' => PublicMessage::renamedWithoutRecord()->text],
             SchemaStatus::OneXBesideCompletedUpgrade->name => ['closed' => true, 'steps' => false, 'refused' => true, 'message' => PublicMessage::oneXBesideCompletedUpgrade()->text],
+            SchemaStatus::MongoRetired->name => ['closed' => true, 'steps' => false, 'refused' => true, 'message' => PublicMessage::mongoRetired()->text],
         ];
     }
 
@@ -51,6 +52,14 @@ final class SchemaStatusTest extends TestCase
                 self::assertTrue($status->closesTheGate(), $status->name . ': only a closed gate has an upgrade to advance or refuse');
             }
         }
+    }
+
+    public function testTheMongoMessageNamesTheImportCommand(): void
+    {
+        self::assertSame(
+            'This site is configured for MongoDB, which Idno no longer runs on. Move its data to MySQL, MariaDB or SQLite with php bin/console idno:import:mongo: see the upgrade notes.',
+            PublicMessage::mongoRetired()->text,
+        );
     }
 
     public function testTheServerRefusalNamesWhatWasFound(): void

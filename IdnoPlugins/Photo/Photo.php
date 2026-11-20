@@ -168,7 +168,7 @@ namespace IdnoPlugins\Photo {
                             try {
                                 if (function_exists('exif_read_data')) {
                                     if ($exif = exif_read_data($_file['tmp_name'])) {
-                                        $this->exif = base64_encode(serialize($exif)); // Yes, this is rough, but exif contains binary data that cannot be saved in mongo
+                                        $this->exif = base64_encode(serialize($exif)); // Yes, this is rough, but exif contains binary data that cannot be saved as JSON
                                     }
                                 }
                             } catch (\Exception $e) {

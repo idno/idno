@@ -15,7 +15,7 @@ use Tests\Storage\PrivateDatabase;
 
 /**
  * `idno:import:mongo` end to end, against a real MongoDB server: the site captured from the old
- * MongoDB backend (fixtures/mongo-site.ndjson, by fixtures/capture.php) is loaded into a private
+ * MongoDB backend before it was removed (fixtures/mongo-site.ndjson) is loaded into a private
  * MongoDB database, and the command runs in a subprocess configured for MongoDB as that site was
  * (IDNO_DATABASE=mongo, its dbstring and dbname) against a private target (an SQLite file on an
  * SQLite rig, a private database of the rig's server on a MySQL or MariaDB rig) and a temporary

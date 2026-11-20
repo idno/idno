@@ -115,7 +115,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     temporary directory. Use it for anything that touches the SQL dialect, search (MySQL's full-text
     index), the schema migrations on MySQL or MySQL's refusals and error codes: the tests bound to
     those skip on SQLite and say why. Run the whole suite on MySQL (and on MariaDB, below) before
-    merging such a change (CI runs SQLite, MySQL, MariaDB and MongoDB).
+    merging such a change (CI runs SQLite, MySQL and MariaDB).
     `IDNO_RIG_MYSQL_IMAGE` selects the Docker image (default `mysql:8.0`; e.g. `mariadb:10.6`, whose
     image honours the `MYSQL_*` variables; the healthcheck uses `mysqladmin` or `mariadb-admin`,
     whichever the image has). The image the database was started from
@@ -165,19 +165,19 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
   (`composer test:up`, then `composer test`; no service containers, no Docker); and the MySQL,
-  MariaDB 10.6 and MongoDB jobs, which do not use the rig: they copy `Tests/build/config_mysql.ini`
-  (or `config_default.ini` for MongoDB) to `configuration/config.ini`, on MySQL and MariaDB create
-  the schema with `php bin/console idno:upgrade` on the fresh, empty database, serve the site at
+  MariaDB 10.6 jobs, which do not use the rig: they copy `Tests/build/config_mysql.ini` to
+  `configuration/config.ini`, create the schema with `php bin/console idno:upgrade` on the fresh, empty database, serve the site at
   `http://localhost/` with `php -S localhost:80` and `Tests/build/router.php`, and run bare
-  `vendor/bin/phpunit`. Tests must not assume a
+  `vendor/bin/phpunit`; and, on PHP 8.4 only, the `mongo-import` job (a `mongo:6` service and the
+  SQLite rig: `composer test -- Tests/Import` with `IDNO_TEST_MONGO_URL`, the one test that needs a
+  MongoDB server). Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
   from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
-  `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_*.ini` in step
-  (`Tests/Kernel/RigScriptsTest` checks the rig's two and the two CI copies, `config_mysql.ini` and
-  `config_default.ini`). Every test that
-  touches the database runs on MySQL and SQLite and either supports MongoDB or skips on it, saying
-  why (the storage-bound classes key their skips on `ConnectionParameters::driverFamily()`).
+  `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_mysql.ini` in step
+  (`Tests/Kernel/RigScriptsTest` checks the rig's two and the CI copy, and that it is the only
+  `Tests/build/config_*.ini`). Every test that touches the database runs on MySQL and SQLite (the
+  storage-bound classes key their skips on `ConnectionParameters::driverFamily()`).
 
 ## Architecture
 
@@ -199,9 +199,6 @@ Idno/
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
-  Data/                        The legacy MongoDB backend, Mongo.php (a MongoDB site's db()); on an SQL site
-                               db() is Idno\Legacy\RepositoryDataConcierge (the old SQL backend that was here
-                               has been removed, see the db() bullet)
   Storage/                     The storage interface (modern style): the RecordStore interface; the query
                                model (Criteria and Criterion/*, value objects parsed from the legacy search
                                arrays); RecordIndex (the query values, search text and columns a store
@@ -272,8 +269,8 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                (no per-host directories)
 Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel), storage (Tests/Storage,
                                with the contracts in Tests/Storage/Contract), upgrade (Tests/Upgrade, on
-                               private 1.x databases), the MongoDB import (Tests/Import, with its captured
-                               fixture and the importer's contract) and black-box characterisation tests;
+                               private 1.x databases), the MongoDB import (Tests/Import, with its fixture captured
+                               from the removed MongoDB backend and the importer's contract) and black-box characterisation tests;
                                Tests/Fixtures holds test-only controllers, a command, a service and DBAL
                                middlewares;
                                Tests/rig/ is the local test rig (and mongo-import.sh with its Dockerfile,
@@ -293,17 +290,21 @@ anything else, or unset, is false), both read from `$_SERVER`.
   the same redirect to `./warmup/` as `index.php` and exits. While the schema gate is closed
   (see "The schema gate and the upgrade") it prints one line on stderr (`Idno's database needs
   an upgrade: load the site in a browser or run php bin/console idno:upgrade`,
-  `SchemaGate::CLOSED_MESSAGE`), sets status 503 and exits 1 (pinned by
-  `Tests/Kernel/SchemaGateBootTest`, through `Tests/Kernel/boot_schema_gate.php`).
+  `SchemaGate::CLOSED_MESSAGE`), sets status 503 and exits 1; for a site configured for MongoDB
+  the line is `PublicMessage::mongoRetired()` instead (`SchemaGate::closedMessage()` chooses, for
+  this entry point and the console). Pinned by `Tests/Kernel/SchemaGateBootTest`, through
+  `Tests/Kernel/boot_schema_gate.php`.
 - **`bin/console`** (CLI): first refuses to run under any SAPI but `cli` or `phpdbg` (a web
   server that executes it gets a 404 with an empty body). It then defines `IDNO_CONSOLE` (before the kernel boots, because it makes
   `LegacyBootstrap` skip the web-only boot steps), boots the kernel (as every entry point
   does, whatever the command), and runs `Idno\Console\Application`, a subclass of
   FrameworkBundle's console application. While the schema gate is closed the kernel does not
   boot the legacy application: the legacy console plugins and the `version` command are not
-  registered, and every command but `idno:upgrade` first prints `SchemaGate::CLOSED_MESSAGE` on
-  stderr (also before the "not defined" error for a legacy command); Symfony's own commands
-  and `idno:upgrade` run (pinned by `Tests/Kernel/SchemaGateBootTest`). On a
+  registered, and every command but `idno:upgrade` and `idno:import:mongo` (the ways out of a closed
+  gate; their help too) first prints `SchemaGate::closedMessage()` on stderr (`CLOSED_MESSAGE`, or
+  the MongoDB message for a site configured for MongoDB; also before the "not defined" error for a
+  legacy command); Symfony's own commands, `idno:upgrade` and `idno:import:mongo` run (pinned by
+  `Tests/Kernel/SchemaGateBootTest`). On a
   site with no configuration it prints one line to stderr and exits 1, before anything connects
   (pinned by `Tests/Kernel/UpgradeCommandNotInstalledTest`); on any other
   exception while booting it prints `Idno could not start: <exception class>: <message>`
@@ -325,7 +326,12 @@ Both installers set up MySQL, MariaDB or SQLite, through ONE method of their sha
 database and returns the values `buildConfig()` fills `warmup/webserver-configs/config.ini.template`
 with, or throws `Idno\Exceptions\ConfigurationException` with the message to show (the web installer
 escapes it). `$database` is read by `Installer::databaseType()`: `sqlite`, `SQLite` and `sqlite3`
-(with spaces around them) are SQLite, anything else is MySQL or MariaDB. For MySQL the input is
+(with spaces around them) are SQLite, `mongo` and `mongodb` (any case, with spaces around them) are
+REFUSED (a `ConfigurationException`: MongoDB is no longer supported, the choices are MySQL or SQLite,
+and `idno:import:mongo` moves a MongoDB site; it is thrown by `databaseType()` itself, so by
+`databaseParams()` and by both installers before anything is written; the web installer shows it on its
+settings page, the CLI installer lets it end the command with the message), anything else is MySQL or
+MariaDB. For MySQL the input is
 `name`, `user`, `pass` and `host`, the check is a connection (`installSchema()`), and the value written
 is `MySQL`. For SQLite the input is `path`: empty is `<project>/data/idno.sqlite`, a relative path is
 under the project directory (as the site reads it), the file's directory is created (0755) when
@@ -517,14 +523,18 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   counts, stored error and its detail, and changes nothing. It exits 1, with the public message on
   stderr (`PublicMessage::forStatus()`), for the statuses that refuse the upgrade
   (`SchemaStatus::refusesTheUpgrade()`: an unsupported database server, a 1.x database too old to
-  upgrade, renamed 1.x tables with no upgrade on record, the 1.x tables beside a completed upgrade)
-  and for an unreachable database (exit 0 for every other status). It runs whether or not the legacy application booted
+  upgrade, renamed 1.x tables with no upgrade on record, the 1.x tables beside a completed upgrade,
+  a site configured for MongoDB) and for an unreachable database (exit 0 for every other status). It runs whether or not the legacy application booted
   (with the gate closed it does not), so it takes no logger and nothing from the legacy application.
   It reports the migrations THIS run executed (`SchemaMigrator::migrate()` returns them), never one
   another process ran meanwhile; while another process holds the `UpgradeLock` it says so once and
   waits half a second between attempts, for at most 60 seconds. On a site with no configuration it prints the one "not installed" line
-  and exits 1 before anything connects. On a site whose database is not SQL it fails (building the
-  runner fetches the connection, which throws) and exits 1. The rig and CI run it before the first
+  and exits 1 before anything connects. On a site configured for MongoDB every form of the command
+  but `--status` (a run, `--drop-legacy`) prints `PublicMessage::mongoRetired()` on stderr and exits 1
+  before fetching anything (the command takes the runner, the migrator and the copier as service
+  closures, because building them fetches a connection that site has none of); `--status` prints
+  `Schema status: mongodb retired` and the message and exits 1. On a site whose database is a backend
+  class a plugin supplies it fails (building the runner fetches the connection, which throws) and exits 1. The rig and CI run it before the first
   request (when it fails, `up.sh` says so on stderr and exits non-zero without starting the web
   server). Pinned by `Tests/Kernel/UpgradeCommandTest` (subprocesses on a private empty database)
   and `Tests/Upgrade/UpgradeEndToEndTest` (a 1.x database). `--drop-legacy` (with `--yes`) deletes
@@ -644,13 +654,14 @@ other new code may.
   `Idno::componentFactory()` reads it (a full class name, or a class in `Idno\Data\`, extending
   `Idno\Core\DataConcierge`; `ConnectionParameters::backendClass()`), and otherwise `mysql`, because
   `componentFactory()` fell back to the old MySQL backend for a name it could not load.
-  `LegacyServiceFactory::db()` decides three names itself, in its own `switch`, before it asks
-  `driverFamily()`: `mongo`/`mongodb` (case-insensitive, trimmed) build `Idno\Data\Mongo`, and
-  `beanstalk-mysql` copies the `RDS_*` server variables into the legacy config and builds the adapter
-  on MySQL; every other value goes to `driverFamily()` (`mysql`/`sqlite`: the adapter; `other`: the
-  class, through `componentFactory()`). Both agree on those three names (`mongo`, and `mysql` for
-  `beanstalk-mysql`, whose `RDS_*` mapping `ConnectionParameters::fromLegacyConfig()` repeats for the
-  connection). Keep them in step if you change either. On a MongoDB or
+  `LegacyServiceFactory::db()` decides `beanstalk-mysql` itself, in its own `switch`, before it asks
+  `driverFamily()`: it copies the `RDS_*` server variables into the legacy config and builds the
+  adapter on MySQL (`ConnectionParameters::fromLegacyConfig()` repeats that `RDS_*` mapping for the
+  connection: keep them in step if you change either); every other value goes to `driverFamily()`
+  (`mysql`/`sqlite`: the adapter; `other`: the class, through `componentFactory()`; `mongo`: a
+  `\LogicException` with the MongoDB message, which only code that builds the service although the
+  schema gate is closed can reach). `mongo` stays a family so that nothing connects for such a site
+  and the gate can say what to do (`SchemaStatus::MongoRetired`). On a MongoDB or
   `other` site the container compiles and the kernel boots as before, but fetching the
   service throws a `\LogicException`: nothing but the schema gate may fetch the connection while
   the kernel boots (no `kernel.request` listener, no service built at boot; the gate's
@@ -749,12 +760,13 @@ other new code may.
   with no session object it is anonymous with read groups `['PUBLIC']`) and
   `Idno\Storage\EntityRepository` (autowired from those two and the logger). Like the logger, they
   need the legacy application: do not fetch them in a `bootLegacy: false` kernel or while the kernel
-  boots (nothing does; the container compiles and the kernel boots on every database, MongoDB
-  included). On an SQL site `Idno::site()->db()`, and so every legacy `Entity::get*()` finder, uses
+  boots (nothing does; the container compiles and the kernel boots on every database, a
+  MongoDB one included). On an SQL site `Idno::site()->db()`, and so every legacy `Entity::get*()` finder, uses
   them (next bullet).
 - The `db()` service (`Idno::site()->db()`, `Idno\Core\DataConcierge`), built by
-  `LegacyServiceFactory::db()`: on a MongoDB site `Idno\Data\Mongo`, exactly as before; on a site whose
-  `database` names a loadable backend class, that class (`componentFactory()`, as before); on a MySQL
+  `LegacyServiceFactory::db()`: on a site whose
+  `database` names a loadable backend class (a class a plugin supplies, in `Idno\Data\` or fully
+  qualified), that class (`componentFactory()`, as before); on a MySQL
   (`mysql`, `beanstalk-mysql`, or a name that is no loadable class) or SQLite site
   `Idno\Legacy\RepositoryDataConcierge`, the adapter that serves the public API of the old SQL backend
   (since removed: same method names, parameters, defaults, return and failure values, as
@@ -799,9 +811,7 @@ other new code may.
   adapter's `handleSession()` instead, so the same `idno_sessions` table and handler are used on the
   shared connection, with `sessions_database` on or off (pinned in
   `RepositoryDataConciergeTest::testASessionsStorageSettingNamingTheOldBackendKeepsDatabaseSessions`).
-  On a MongoDB site that setting now does nothing: such a site (sessions in a MySQL database next
-  to MongoDB) falls back to file sessions, so its users are logged out once at the upgrade
-  (`docs/install/upgrade.md` says so). Any other `sessions_storage` value behaves as before.
+  Any other `sessions_storage` value behaves as before.
   `database` values naming the old class (`Idno\Data\MySQL`) or any other name that is no class
   mean MySQL, as they always did. The facts to keep:
   - Construction order: `Idno::init()` fetches `db()` early, before the logger, the session and the
@@ -1051,7 +1061,7 @@ other new code may.
 ### Key design patterns
 
 - **Entity system**: All content inherits from `Idno\Common\Entity` (→ `BaseObject`).
-  Entities are stored as documents (MongoDB) or as JSON text, one row each, in `idno_<collection>`
+  Entities are stored as JSON text, one row each, in `idno_<collection>`
   (MySQL, MariaDB, SQLite; see "Database"). Key
   methods: `save()`, `delete()`, `getByUUID()`, `getActivityStreamsObjectType()`,
   `getFormattedContent()`.
@@ -1072,8 +1082,13 @@ other new code may.
 
 ### Database
 
-- **MongoDB** (`Idno\Data\Mongo`) — original backend, stores entities as native documents; a site is
-  moved off it with `idno:import:mongo` (see "Importing a MongoDB site")
+- **MongoDB** is no longer a database Idno runs on (the backend, `Idno\Data\Mongo`, and its GridFS file
+  system were removed). A site whose `database` is `mongo` or `mongodb` is held closed by the schema
+  gate (`SchemaStatus::MongoRetired`) with a message that names `php bin/console idno:import:mongo`,
+  which moves it to MySQL, MariaDB or SQLite (see "Importing a MongoDB site"). Both installers refuse
+  `mongo` and `mongodb` (`Installer::databaseType()` throws a `ConfigurationException` saying MongoDB
+  is no longer supported and the choices are MySQL or SQLite); any other unknown value still means
+  MySQL. A `database` value naming a backend class a plugin supplies (`other`) boots as before.
 - **MySQL 8.0 and MariaDB 10.6** (or later) — store each document as JSON text in the tables of the
   schema migrations (below), through `Idno\Storage\JsonRecordStore` and `SettingsRecordStore` on the
   DBAL connection; `db()` is `Idno\Legacy\RepositoryDataConcierge` over them (see the `db()` bullet
@@ -1201,7 +1216,7 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
   `mysql($purpose)` creates `<site dbname>_<purpose>` on the rig's MySQL or
   MariaDB server (dropping a leftover first; the site's dbname must match `^[A-Za-z0-9_]+$`) and
   returns a new connection to it (never the site's), dropping it again if the migrations fail, and
-  skipping the test on an SQLite or MongoDB site; `drop()` removes either (call it in `tearDown()`;
+  skipping the test on an SQLite site; `drop()` removes either (call it in `tearDown()`;
   it refuses to drop the site's own database). `recordStore($connection)` builds the store the site
   builds on such a database, `dialect($connection)` the dialect of its platform. A test never writes
   to the rig site's tables directly. `Tests/Unit/Storage/SchemaMigratorTest` (SQLite) and
@@ -1220,8 +1235,10 @@ name in `config/services.php`).
 
 - `SchemaState::status()` (computed afresh at each call; the closures it is built with fetch the
   connection, the `SchemaCatalog`, the `SchemaMigrator` and the `LegacyDataCopier` only when needed),
-  a `SchemaStatus`, in this order: `NotApplicable` when `ConnectionParameters::driverFamily()` is
-  neither `mysql` nor `sqlite` (MongoDB, a backend class: nothing is fetched, nothing connects);
+  a `SchemaStatus`, in this order: `MongoRetired` when `ConnectionParameters::driverFamily()` is
+  `mongo` (the `database` setting is `mongo` or `mongodb`: Idno no longer runs on MongoDB);
+  `NotApplicable` when it is neither that nor `mysql` nor `sqlite` (a backend class a plugin
+  supplies); nothing is fetched and nothing connects for either;
   `Unreachable` when CONNECTING fails (`Connection::getServerVersion()`, which connects and reads
   the version the driver reports, without a statement, throws while the connection is not
   connected; a failure after connecting is thrown, never `Unreachable`); `UnsupportedServer` on MySQL below 8.0 or
@@ -1283,13 +1300,13 @@ name in `config/services.php`).
   `SchemaStateTest::testAStaleTableListIsReadAgainBeforeTellingTheOwnerToRemoveTables`).
 - What each status means is decided in ONE place, by exhaustive `match`es (no `default`): on
   `SchemaStatus`, `closesTheGate()` (closed for `Empty`, `PendingMigrations`, `Legacy`,
-  `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade` and `UnsupportedServer`; open
-  for `Current`, `Unreachable` and `NotApplicable`), `advancesBySteps()` (`Empty`,
+  `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade`, `MongoRetired` and
+  `UnsupportedServer`; open for `Current`, `Unreachable` and `NotApplicable`), `advancesBySteps()` (`Empty`,
   `PendingMigrations`, `Legacy`: the page has its script and form, the runner works) and
   `refusesTheUpgrade()` (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`,
-  `OneXBesideCompletedUpgrade`: nothing is done until a person acts; no script and no form, the
+  `OneXBesideCompletedUpgrade`, `MongoRetired`: nothing is done until a person acts; no script and no form, the
   plain text `Idno cannot start: <why>`, `idno:upgrade` and `--status` exit 1); and the public
-  message of a status is `PublicMessage::forStatus($status, $serverRefusal)` (the four refused states
+  message of a status is `PublicMessage::forStatus($status, $serverRefusal)` (the five refused states
   and `Unreachable`; none for the others). The page, the plain text, the runner and the command all
   use them; a new status must be decided there, and `Tests/Unit/Upgrade/SchemaStatusTest` lists every
   case, so adding one without deciding it fails.
@@ -1312,8 +1329,8 @@ name in `config/services.php`).
   `Accept` includes `text/html`: the upgrade page, status 503, a `Content-Security-Policy` with a
   per-response nonce that allows only the page's own inline script and style, its requests to its
   own origin and its form's post; everything else: 503 `text/plain`, `Idno is upgrading its
-  database.`, or for `LegacyTooOld`, `UnsupportedServer`, `RenamedWithoutRecord` and
-  `OneXBesideCompletedUpgrade` `Idno cannot start: <why>`; both with
+  database.`, or for `LegacyTooOld`, `UnsupportedServer`, `RenamedWithoutRecord`,
+  `OneXBesideCompletedUpgrade` and `MongoRetired` `Idno cannot start: <why>`; both with
   `Retry-After: 30` and `Cache-Control: no-store`; a `HEAD` gets the headers only), except a request
   the router will match to the step route: `UpgradePage::isStepRequest()`, a POST both as sent
   (`getRealMethod()`) and as Symfony reads it (`getMethod()`, which honours `X-HTTP-Method-Override`),
@@ -1351,8 +1368,8 @@ name in `config/services.php`).
   answers in a row have carried it; never more than one request a second. The script's constants and
   messages are pinned by `UpgradePageTest::testTheScriptsLimitsAndMessages`; its behaviour in a
   browser is not run by the test suite. A `<noscript>` form posts `?html=1`. `LegacyTooOld`,
-  `UnsupportedServer`, `RenamedWithoutRecord` and `OneXBesideCompletedUpgrade` have no script and no
-  form. Everything from the database or the request is
+  `UnsupportedServer`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade` and `MongoRetired` have no
+  script and no form (the MongoDB page names `php bin/console idno:import:mongo`). Everything from the database or the request is
   escaped (HTML in the markup, JSON with HTML characters escaped in the script, `textContent` only).
   The 1.6.4 sentence is `PublicMessage::tooOld()` everywhere; the progress wording is
   `UpgradeProgress::countText()`/`line()` (`entities: 1500 of 12000 copied, 3 not carried over`) in the
@@ -1383,7 +1400,8 @@ name in `config/services.php`).
   indexes), never silently "no plugins".
 - `UpgradeRunner::step($deadline)` (a public service, built when first fetched; the web step): the
   status (`UnsupportedServer`, `LegacyTooOld`, `RenamedWithoutRecord`, `OneXBesideCompletedUpgrade`,
-  `Unreachable` stop at once: `unsupported`, `too_old`, `error`, `error`, `error`, with
+  `MongoRetired`, `Unreachable` stop at once: `unsupported`, `too_old`, `error`, `error`, `error`,
+  `error`, with
   `PublicMessage::forStatus()`; `Current` and `NotApplicable` are `current`, nothing done, no lock;
   one exhaustive `match`, `answer()`, used before and after the work); the `UpgradeLock`
   without waiting (not got: `working` with `locked`, nothing done; the copy's progress when it can be
@@ -1431,7 +1449,7 @@ name in `config/services.php`).
   MongoDB case, `SchemaStatusTest` (every status decided), `UpgradeRunnerTest` on SQLite files,
   `UpgradeGateListenerTest`, `UpgradeControllerTest`, `UpgradePageTest`,
   `UpgradeCommandUnreachableTest`), `Tests/Unit/Storage/ConnectFailureIsFinalTest`, `Tests/Kernel/SchemaGateBootTest`
-  (`Idno/start.php` and the console, closed and open, in subprocesses) and
+  (`Idno/start.php` and the console, closed, open and for a MongoDB site, in subprocesses) and
   `Tests/Upgrade/UpgradeEndToEndTest`: `php -S` on a free port (never 8089) in a subprocess with
   `PHP_CLI_SERVER_WORKERS=2`, through a router of the test's own that passes `IDNO_DBNAME`, `IDNO_URL`,
   `IDNO_PROXY_STRING`, `IDNO_DATABASE`, `IDNO_DBHOST` and `IDNO_DBPORT` into `$_SERVER` and runs
@@ -1660,7 +1678,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   `templates/default/admin/menu.tpl.php`, `Themes/Twenty26/templates/modern/admin/menu.tpl.php`) is
   `LegacyTables::showInMenu()`: false without a statement unless a logged-in admin is viewing (the
   admin shell also draws the menu on the 403 page of an `/admin` URL); else `worthShowing()`, once
-  per request. On an SQLite or MongoDB site the route exists, the entry never appears, and the page
+  per request. On an SQLite site (or one whose database is not SQL) the route exists, the entry never appears, and the page
   shows the empty state.
 - `idno:upgrade --drop-legacy` (no migration, no copy, no index: only this): the 1.x `entities`
   tables back beside the completed upgrade → the gate's message on stderr, exit 1 (with or without
@@ -1671,7 +1689,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   failure: stderr, exit 1). `--yes` without `--drop-legacy`, or `--drop-legacy` with `--status`, does
   nothing and exits 1.
 - Tests: `Tests/Upgrade/LegacyTablesTest` (a completed `LegacyFixture` upgrade, MySQL and MariaDB;
-  skips on SQLite), `Tests/Unit/Upgrade/LegacyTablesTest` (MongoDB: nothing fetched; SQLite: empty,
+  skips on SQLite), `Tests/Unit/Upgrade/LegacyTablesTest` (a site whose database is not SQL: nothing fetched; SQLite: empty,
   statement costs, the drop rules), `Tests/Characterisation/AdminLegacyTablesTest` (the rig site: who
   gets the page, its empty state, no menu entry, POSTs without a token or the confirmation; it logs in
   over HTTP), `UpgradeEndToEndTest::testTheAdminReviewsAndDeletesTheLegacyTables` (an upgraded site
@@ -1796,8 +1814,8 @@ The container's services and the legacy filesystem:
   the `FileStore` and the logger at first use (the filesystem is built before the logger, the session
   and the language exist; keep it so). An empty or `local` `filesystem` setting with an `uploadpath`
   gives it, whether the path is a directory or `s3://<bucket>/<prefix>/`; any other value is a class
-  named through `componentFactory()`, falling back to it. A MongoDB site with no `filesystem` setting
-  keeps `db()->getFilesystem()` (GridFS). No `uploadpath` and nothing else: null. The `filesystem`
+  named through `componentFactory()`, falling back to it. With no `filesystem` setting a database backend class
+  that supplies its own (`db()->getFilesystem()`) keeps it. No `uploadpath` and nothing else: null. The `filesystem`
   setting is deprecated: S3 needs no plugin, just an `s3://` upload path. The legacy API never threw:
   the shim logs a `FileStoreException` and returns false (`findOne()` false; a failed `storeFile()` or
   `storeContent()` also adds the two session messages the old local filesystem added).
@@ -1823,8 +1841,11 @@ The container's services and the legacy filesystem:
 from a MongoDB database (`MongoSource`) into a NEW, EMPTY SQL database, and copies the GridFS files
 into a `FileStore`. It reads MongoDB with the `mongodb` extension ALONE (`ExtMongoSource` on
 `MongoDB\Driver\Manager`): nothing of it may use the `mongodb/mongodb` library (`MongoDB\Client`,
-`MongoDB\Collection`, `MongoDB\GridFS`), which a site moving off MongoDB need not have. It runs
-whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built with new
+`MongoDB\Collection`, `MongoDB\GridFS`), which a site moving off MongoDB need not have (the library is not a dependency of Idno at all). A
+site configured for MongoDB never boots the legacy application (the schema gate holds it closed:
+`SchemaStatus::MongoRetired`), and this command is how it leaves MongoDB: it runs with the gate closed,
+without the line the console prints for other commands, as `idno:upgrade` does. It runs whether or
+not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built with new
 (excluded from the container scan).
 
 - The importer, in order: (1) the target must hold no table at all (`SchemaCatalog::tables()` is
@@ -1907,9 +1928,11 @@ whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/
   MiB file imported under `memory_limit=32M` in a subprocess, `import_large_file.php`, on the local
   Flysystem adapter), `Tests/Unit/Storage/ConnectionFactoryTest`, `Tests/Import/MongoImporterMySqlTest`
   (the same contract on a private MySQL or MariaDB database; skips on SQLite) and
-  `Tests/Import/MongoImportEndToEndTest`: the site captured from the old backend
-  (`Tests/Import/fixtures/mongo-site.ndjson`, every document as canonical Extended JSON, and
-  `expected.php`, what the backend returned, both written by `fixtures/capture.php`) loaded into a
+  `Tests/Import/MongoImportEndToEndTest`: the site captured from the 1.x MongoDB backend before it was
+  removed (`Tests/Import/fixtures/mongo-site.ndjson`, every document as canonical Extended JSON, and
+  `expected.php`, what the backend returned; they cannot be regenerated, because the backend and the
+  script that captured them are gone: edit them by hand, or add documents with the driver in the
+  test, as it does) loaded into a
   private MongoDB database, the command run in a subprocess configured for MongoDB, the records and
   files compared, the imported site served (`php -S`, after `idno:upgrade`); on top of the fixture it
   adds with the driver documents holding a Binary, a Decimal128 and a Regex (rejects), dates before and
@@ -1925,10 +1948,9 @@ whether or not the legacy application booted. Everything in `Idno/Upgrade/Mongo/
   `configuration/` directory, so no local configuration or secret is baked into the kept image: the rig
   it starts writes the copy's own `configuration/config.ini`), on the SQLite rig; it removes the
   containers, their volumes and the network whatever happens (also when interrupted), and the previous
-  image when a build replaces it. `mongo-import.sh capture` recaptures the
-  fixture. Until the old MongoDB backend is removed, the container's copy (and the CI job
-  `mongo-import`) also install `mongodb/mongodb`, for the backend that a process configured for MongoDB
-  boots; the import itself never needs it.
+  image when a build replaces it. The container (and the CI job `mongo-import`) have the `mongodb`
+  extension and no `mongodb/mongodb` library: the import's subprocess, configured for MongoDB, boots
+  the kernel with the gate closed and needs the extension only.
 
 #### The settings store
 

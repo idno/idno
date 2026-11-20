@@ -46,7 +46,7 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: >-
             curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
-            session, simplexml, openssl, gettext, mongodb
+            session, simplexml, openssl, gettext
           tools: composer
 
       - name: Install dependencies
@@ -78,7 +78,7 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: >-
             curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
-            session, simplexml, openssl, gettext, mongodb
+            session, simplexml, openssl, gettext
           tools: composer
 
       - name: Install dependencies
@@ -133,12 +133,6 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      # Until the old MongoDB backend is removed, a process configured for MongoDB (the import command's
-      # subprocess in the test) boots it, and it needs the library. The import itself needs the
-      # extension only; remove this step with the backend.
-      - name: Install the MongoDB library (for the old backend only)
-        run: composer require mongodb/mongodb --no-interaction
-
       - name: Start the test rig (SQLite)
         run: composer test:up
 
@@ -156,14 +150,13 @@ jobs:
         run: composer test:down
 
   phpunit:
-    name: PHPUnit (PHP ${{ matrix.php }} / ${{ matrix.db }})
+    name: PHPUnit (PHP ${{ matrix.php }} / mysql)
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
         php: ['8.4', '8.5']
-        db: [mysql, mongo]
 
     services:
       mysql:
@@ -179,11 +172,6 @@ jobs:
           --health-timeout=5s
           --health-retries=5
 
-      mongo:
-        image: mongo:6
-        ports:
-          - 27017:27017
-
     steps:
       - uses: actions/checkout@v4
 
@@ -193,21 +181,16 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: >-
             curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
-            session, simplexml, openssl, gettext, mongodb
+            session, simplexml, openssl, gettext
           tools: composer
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
-      - name: Install MongoDB library
-        if: matrix.db == 'mongo'
-        run: composer require mongodb/mongodb --no-interaction
-
       - name: Install system packages
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
       - name: Configure MySQL database
-        if: matrix.db == 'mysql'
         run: |
           mysql -h 127.0.0.1 -uroot -e "GRANT ALL ON known_unittest.* TO 'root'@'%';"
           cp Tests/build/config_mysql.ini configuration/config.ini
@@ -215,13 +198,7 @@ jobs:
           sed -i "s/dbhost = 'localhost'/dbhost = '127.0.0.1'/" configuration/config.ini
 
       - name: Create the schema
-        if: matrix.db == 'mysql'
         run: APP_ENV=test APP_DEBUG=1 php bin/console idno:upgrade
-
-      - name: Configure MongoDB
-        if: matrix.db == 'mongo'
-        run: |
-          cp Tests/build/config_default.ini configuration/config.ini
 
       - name: Start web server
         run: |
@@ -295,7 +272,7 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: >-
             curl, dom, gd, json, libxml, mbstring, pdo, pdo_mysql, pdo_sqlite,
-            session, simplexml, openssl, gettext, mongodb
+            session, simplexml, openssl, gettext
           tools: composer
 
       - name: Install dependencies

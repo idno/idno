@@ -14,7 +14,7 @@ use Idno\Storage\Platform\SqliteDialect;
  * database as the boot configuration names it (ConnectionParameters::driverFamily()): MySqlDialect
  * for MySQL and MariaDB, SqliteDialect for SQLite. Building it does not connect.
  *
- * Any other database (MongoDB, a backend class of a plugin) has no dialect: create() throws a
+ * Any other database (a backend class of a plugin; a MongoDB site never gets this far) has no dialect: create() throws a
  * \LogicException. So does fetching the connection on such a site, which happens first when a
  * service that takes both (IndexedFields) is built.
  */

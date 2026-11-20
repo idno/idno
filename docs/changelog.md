@@ -2,6 +2,12 @@
 
 Starting with version 0.6.4, this is a list of changes in the self-hosted, open source version of Idno.
 
+2.0 (not yet released)
+----------------------
+
+* MongoDB is no longer supported as a database. A site configured for it does not start and says so; `php bin/console idno:import:mongo` moves its records and GridFS files to MySQL, MariaDB or SQLite
+* Both installers refuse MongoDB instead of writing a MySQL configuration
+
 0.9.9
 -----
 May 15, 2017

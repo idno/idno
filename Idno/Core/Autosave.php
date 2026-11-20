@@ -92,7 +92,7 @@ namespace Idno\Core {
          * Clears the autosave cache for a particular context
          *
          * @param  $context
-         * @return bool|false|MongoID|null
+         * @return bool|false|string|null
          */
         function clearContext($context)
         {

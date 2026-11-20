@@ -19,6 +19,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 
 /**
  * `idno:upgrade`: creates or upgrades the database, in one run (UpgradeRunner::run()): the pending
@@ -34,7 +35,8 @@ use Symfony\Component\Console\Output\OutputInterface;
  * shown). With --status it prints the schema's status, the pending migrations and the copy's
  * progress, with the stored error and its detail, and changes nothing; for a state the upgrade
  * refuses (an unsupported server, a 1.x database too old, renamed 1.x tables with no upgrade on
- * record) it prints the public message instead and exits 1.
+ * record, a site configured for MongoDB) it prints the public message instead and exits 1; on a
+ * MongoDB site the other forms print it and exit 1 too, and change nothing.
  *
  * With --drop-legacy it deletes the legacy tables a completed upgrade left (the 1.x tables renamed
  * `legacy_<name>`, LegacyTables::drop()) and nothing else: no migration, no index, no copy. Without
@@ -48,11 +50,23 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand('idno:upgrade', 'Creates or upgrades the database: runs the pending migrations, creates the declared field indexes and copies a 1.x database')]
 final class UpgradeCommand extends Command
 {
+    /**
+     * The runner, the migrator and the copier are fetched when a command needs them: building them
+     * fetches the database connection, which a site configured for MongoDB has none of (the command
+     * must still say why it does nothing there).
+     *
+     * @param \Closure(): UpgradeRunner     $runner
+     * @param \Closure(): SchemaMigrator    $migrator
+     * @param \Closure(): LegacyDataCopier  $copier
+     */
     public function __construct(
-        private readonly UpgradeRunner $runner,
+        #[AutowireServiceClosure(UpgradeRunner::class)]
+        private readonly \Closure $runner,
         private readonly SchemaState $state,
-        private readonly SchemaMigrator $migrator,
-        private readonly LegacyDataCopier $copier,
+        #[AutowireServiceClosure(SchemaMigrator::class)]
+        private readonly \Closure $migrator,
+        #[AutowireServiceClosure(LegacyDataCopier::class)]
+        private readonly \Closure $copier,
         private readonly LegacyTables $legacyTables,
     )
     {
@@ -74,6 +88,12 @@ final class UpgradeCommand extends Command
 
             return Command::FAILURE;
         }
+        if (!$input->getOption('status') && $this->state->status() === SchemaStatus::MongoRetired) {
+            // Nothing to create, copy or delete: the site's configuration names MongoDB.
+            $errors->writeln(PublicMessage::mongoRetired()->text, OutputInterface::OUTPUT_PLAIN);
+
+            return Command::FAILURE;
+        }
         if ($input->getOption('drop-legacy')) {
             if ($input->getOption('status')) {
                 $errors->writeln('Use --status or --drop-legacy, not both: nothing was done.');
@@ -88,7 +108,7 @@ final class UpgradeCommand extends Command
         }
 
         $printed = 0;
-        $result = $this->runner->run(static function (string $line) use ($output, &$printed): void {
+        $result = ($this->runner)()->run(static function (string $line) use ($output, &$printed): void {
             $output->writeln($line, OutputInterface::OUTPUT_PLAIN);
             ++$printed;
         });
@@ -128,7 +148,7 @@ final class UpgradeCommand extends Command
         if ($status === SchemaStatus::NotApplicable) {
             return Command::SUCCESS;
         }
-        $pending = $this->migrator->pending();
+        $pending = ($this->migrator)()->pending();
         if ($pending === []) {
             $output->writeln('No migration is pending.');
         }
@@ -136,7 +156,7 @@ final class UpgradeCommand extends Command
             $output->writeln('Pending migration: ' . $version);
         }
         if ($status === SchemaStatus::Legacy) {
-            $this->printProgress($this->copier->progress(), $output);
+            $this->printProgress(($this->copier)()->progress(), $output);
         }
 
         return Command::SUCCESS;

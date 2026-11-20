@@ -37,7 +37,7 @@ use PHPUnit\Framework\Assert;
  *    server (the rig's), dropped first if a previous run left it, on a NEW connection (not the
  *    site's); with $migrate false it is left empty. Needs the booted application (its boot
  *    configuration) and so the rig; skips the test, saying why, when the site's database is not
- *    MySQL (an SQLite rig, MongoDB).
+ *    MySQL (an SQLite rig).
  *
  * If the migrations fail, mysql() drops the database it made before rethrowing. drop() removes
  * what either made: call it in tearDown().
