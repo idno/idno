@@ -377,7 +377,7 @@ installation directory, you may need to perform the following additional steps:
 Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-on-ones-own-server) for this point.
 
 !!! warning "MongoDB Users"
-    Idno 2.0 does not run on MongoDB: see "Moving a MongoDB site" above. A site whose `config.ini` still says `database = 'mongo'` (or `mongodb`) is held closed, and the installers refuse it.
+    Idno 2.0 does not run on MongoDB: see "Moving a MongoDB site" above. A site whose `config.ini` still says `database = 'mongo'` (or `mongodb`, or the old class name `Idno\Data\Mongo`) is held closed, and the installers refuse it.
 
 !!! warning "var/ must be writable by the web server"
     Idno 2.0 keeps its compiled cache in `var/cache/`, so the web server's user must be able to write to `var/` (or set the `IDNO_CACHE_DIR` environment variable to a directory it can write to). If it cannot, Idno uses a private directory under the system's temporary directory instead, which works but is rebuilt whenever that directory is cleared; if no location is usable, the site shows an error asking you to set `IDNO_CACHE_DIR`. Nothing else is written under `var/`: Idno's log messages still go to PHP's error log, as before.

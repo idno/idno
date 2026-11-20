@@ -110,6 +110,31 @@ final class UpgradeControllerTest extends TestCase
     }
 
     /**
+     * A site configured for MongoDB: `error` with the message (as `message` and `error`), the HTTP
+     * status of any other error, no-store, the runner never built and nothing logged; `?html=1` is the
+     * usual redirect.
+     */
+    public function testAMongoSiteAnswersErrorWithoutBuildingTheRunner(): void
+    {
+        $controller = $this->controller(open: false, runner: static fn () => throw new \LogicException('not built'), state: 'mongo');
+
+        $response = $controller->step(Request::create('/_upgrade/step', 'POST'));
+
+        self::assertSame(500, $response->getStatusCode());
+        self::assertStringContainsString('no-store', (string) $response->headers->get('Cache-Control'));
+        $data = json_decode((string) $response->getContent(), true);
+        self::assertSame('error', $data['status']);
+        self::assertSame(\Idno\Upgrade\PublicMessage::mongoRetired()->text, $data['message']);
+        self::assertSame(\Idno\Upgrade\PublicMessage::mongoRetired()->text, $data['error']);
+        self::assertSame([], $this->logged);
+
+        $html = $controller->step(Request::create('/_upgrade/step?html=1', 'POST'));
+        self::assertSame(303, $html->getStatusCode());
+        self::assertSame('/', $html->headers->get('Location'));
+        self::assertSame([], $this->logged);
+    }
+
+    /**
      * While the database is unreachable the step never says `current`: 503, `working`, Retry-After,
      * and the runner is not built.
      */
@@ -166,13 +191,22 @@ final class UpgradeControllerTest extends TestCase
 
     // ------------------------------------------------------------------ helpers
 
+    private static function databaseOf(string $state): string
+    {
+        return match ($state) {
+            'backend' => \Tests\Unit\Storage\PluginBackendFixture::class,
+            'mongo' => 'mongodb',
+            default => 'sqlite',
+        };
+    }
+
     /**
      * @param array<string, mixed>|null $result what the fake runner's step() returns
      */
     private function controller(bool $open, ?\Closure $runner = null, ?array $result = null, string $state = 'sqlite'): UpgradeController
     {
         $gate = new SchemaGate(new SchemaState(
-            new BootConfig(['database' => $state === 'backend' ? \Tests\Unit\Storage\PluginBackendFixture::class : 'sqlite'], false),
+            new BootConfig(['database' => self::databaseOf($state)], false),
             static fn (): object => new class ($state === 'unreachable') {
                 public function __construct(private readonly bool $down)
                 {

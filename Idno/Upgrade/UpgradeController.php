@@ -42,6 +42,9 @@ use Symfony\Component\Routing\Attribute\Route;
  * message, a record's uuid) is never in the response; it is logged on the `upgrade` channel and
  * shown by `idno:upgrade`. An exception the runner did not handle is such an error too.
  *
+ * On a site configured for MongoDB (SchemaStatus::MongoRetired) it answers `error` with
+ * PublicMessage::mongoRetired() as `message` and `error`, without building the runner or logging.
+ *
  * While the database is unreachable (the gate is open, but Idno\Kernel does not boot the legacy
  * application for a step) it answers 503 with status `working` and PublicMessage::unreachable(),
  * `Retry-After: 30`: the page keeps retrying with its back-off. It never reports `current` then.
@@ -72,6 +75,11 @@ final class UpgradeController
         $unreachable = $this->gate->status() === SchemaStatus::Unreachable;
         if ($unreachable) {
             $result = ['status' => 'working', 'progress' => null, 'message' => PublicMessage::unreachable()->text];
+        } elseif ($this->gate->status() === SchemaStatus::MongoRetired) {
+            // Nothing to step on a site configured for MongoDB, and no runner to build (it would
+            // fetch a database connection that site has none of): say why, log nothing.
+            $text = PublicMessage::mongoRetired()->text;
+            $result = ['status' => 'error', 'progress' => null, 'message' => $text, 'error' => $text];
         } elseif (!$this->gate->closed()) {
             $result = ['status' => 'current', 'progress' => null, 'message' => null];
         } else {
@@ -93,7 +101,7 @@ final class UpgradeController
                     'message' => $result['message'],
                     'phase' => $progress?->phase,
                     'collections' => (object) ($progress?->collections ?? []),
-                    'error' => $progress?->error,
+                    'error' => $progress?->error ?? ($result['error'] ?? null),
                 ],
                 match (true) {
                     $unreachable => Response::HTTP_SERVICE_UNAVAILABLE,

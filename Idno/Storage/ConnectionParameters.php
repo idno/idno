@@ -144,7 +144,9 @@ final class ConnectionParameters
      * DBAL connection (BootConfigConnectionFactory) and the record store (LegacyRecordStoreFactory).
      *
      *  - 'mysql', 'beanstalk-mysql' (case-insensitive, trimmed) → 'mysql'; 'sqlite' → 'sqlite';
-     *    'mongo', 'mongodb' → 'mongo';
+     *    'mongo', 'mongodb' → 'mongo', and so is the removed backend's own class name,
+     *    `Idno\Data\Mongo` (any case, leading backslash optional, as PHP matched it): a site that
+     *    names it must get the MongoDB message, not a MySQL fallback;
      *  - any other value is a backend class name, as the legacy Idno::componentFactory() reads it:
      *    when backendClass() finds a loadable backend class of that name, 'other' (the class is
      *    built as before, and has no DBAL connection or record store);
@@ -158,14 +160,14 @@ final class ConnectionParameters
         return match (self::name($config + self::LEGACY_DEFAULTS)) {
             'mysql', 'beanstalk-mysql' => 'mysql',
             'sqlite' => 'sqlite',
-            'mongo', 'mongodb' => 'mongo',
+            'mongo', 'mongodb', 'idno\\data\\mongo', '\\idno\\data\\mongo' => 'mongo',
             default => self::backendClass($config) === null ? 'mysql' : 'other',
         };
     }
 
     /**
      * The backend class the legacy Idno::componentFactory() would build for the `database` value,
-     * or null when there is none (or when the value is one of the names driverFamily() knows): such a
+     * or null when there is none (or when the value is one of the names driverFamily() knows, the removed Idno\Data\Mongo class's name included): such a
      * site is on MySQL. componentFactory() takes the value untrimmed and with its case: first as a
      * full class name that extends the backend base class, then as a class in the backend namespace
      * that does. The old SQL backend, Idno\Data\MySQL (since removed), counts as no class: a
@@ -180,7 +182,7 @@ final class ConnectionParameters
     public static function backendClass(array $config): ?string
     {
         $database = ($config + self::LEGACY_DEFAULTS)['database'] ?? null;
-        if (!is_scalar($database) || in_array(self::name(['database' => $database]), ['mysql', 'beanstalk-mysql', 'sqlite', 'mongo', 'mongodb'], true)) {
+        if (!is_scalar($database) || in_array(self::name(['database' => $database]), ['mysql', 'beanstalk-mysql', 'sqlite', 'mongo', 'mongodb', 'idno\\data\\mongo', '\\idno\\data\\mongo'], true)) {
             return null;
         }
         $database = (string) $database;

@@ -649,7 +649,7 @@ other new code may.
   fetches it and connects it during `Idno::init()`, see the `db()` bullet below). What the
   `database` setting means is decided by `ConnectionParameters::driverFamily()`, which the
   connection factory and `LegacyRecordStoreFactory` use for every value:
-  `mysql`/`beanstalk-mysql` → `mysql`, `sqlite` → `sqlite`, `mongo`/`mongodb` → `mongo`; any other
+  `mysql`/`beanstalk-mysql` → `mysql`, `sqlite` → `sqlite`, `mongo`/`mongodb` and the removed backend's class name `Idno\Data\Mongo` (any case, leading backslash optional) → `mongo`; any other
   value is `other` when it names a loadable backend class the way the legacy
   `Idno::componentFactory()` reads it (a full class name, or a class in `Idno\Data\`, extending
   `Idno\Core\DataConcierge`; `ConnectionParameters::backendClass()`), and otherwise `mysql`, because
@@ -1083,7 +1083,7 @@ other new code may.
 ### Database
 
 - **MongoDB** is no longer a database Idno runs on (the backend, `Idno\Data\Mongo`, and its GridFS file
-  system were removed). A site whose `database` is `mongo` or `mongodb` is held closed by the schema
+  system were removed). A site whose `database` is `mongo`, `mongodb` or `Idno\Data\Mongo` is held closed by the schema
   gate (`SchemaStatus::MongoRetired`) with a message that names `php bin/console idno:import:mongo`,
   which moves it to MySQL, MariaDB or SQLite (see "Importing a MongoDB site"). Both installers refuse
   `mongo` and `mongodb` (`Installer::databaseType()` throws a `ConfigurationException` saying MongoDB
@@ -1236,7 +1236,7 @@ name in `config/services.php`).
 - `SchemaState::status()` (computed afresh at each call; the closures it is built with fetch the
   connection, the `SchemaCatalog`, the `SchemaMigrator` and the `LegacyDataCopier` only when needed),
   a `SchemaStatus`, in this order: `MongoRetired` when `ConnectionParameters::driverFamily()` is
-  `mongo` (the `database` setting is `mongo` or `mongodb`: Idno no longer runs on MongoDB);
+  `mongo` (the `database` setting is `mongo`, `mongodb` or the class name `Idno\Data\Mongo`: Idno no longer runs on MongoDB);
   `NotApplicable` when it is neither that nor `mysql` nor `sqlite` (a backend class a plugin
   supplies); nothing is fetched and nothing connects for either;
   `Unreachable` when CONNECTING fails (`Connection::getServerVersion()`, which connects and reads

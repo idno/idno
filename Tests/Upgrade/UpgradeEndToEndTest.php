@@ -927,6 +927,33 @@ final class UpgradeEndToEndTest extends TestCase
         $this->assertSame(array_fill_keys(array_keys($states), self::HOMEPAGE_STATEMENTS), $counts, implode("\n", $statements ?? []));
     }
 
+    /**
+     * A site configured for MongoDB, over HTTP: the page and the plain text name the import command,
+     * and a POST to the step answers `error` with the same message, without logging anything on the
+     * `upgrade` channel (the runner is never built: it would fetch a connection the site has none of).
+     */
+    public function testAMongoSiteIsToldWhatToDoAndTheStepLogsNothing(): void
+    {
+        $this->emptyDatabase();
+        $this->extraEnvironment = ['IDNO_DATABASE' => 'mongodb'];
+        $this->startServer();
+        $message = \Idno\Upgrade\PublicMessage::mongoRetired()->text;
+
+        $page = $this->request('GET', '/', ['Accept: text/html']);
+        $this->assertSame(503, $page['status']);
+        $this->assertStringContainsString('idno:import:mongo', $page['body']);
+        $this->assertStringNotContainsString('<script', $page['body']);
+
+        $answer = $this->request('POST', '/_upgrade/step', ['Accept: application/json']);
+        $this->assertSame(500, $answer['status'], $answer['body']);
+        $data = json_decode($answer['body'], true);
+        $this->assertSame('error', $data['status'] ?? null, $answer['body']);
+        $this->assertSame($message, $data['message'] ?? null);
+        $this->assertSame($message, $data['error'] ?? null);
+        $this->assertStringNotContainsString('upgrade.', $this->log(), 'nothing is logged on the upgrade channel');
+        $this->assertStringNotContainsString('LogicException', $this->log());
+    }
+
     public function testAnEmptyDatabaseIsSetUpByTheFirstStep(): void
     {
         $this->emptyDatabase();

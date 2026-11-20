@@ -28,7 +28,7 @@ final class SchemaStateTest extends TestCase
 
     public function testAMongoSiteIsRetiredAndNothingIsFetched(): void
     {
-        foreach (['mongo', 'MongoDB', ' mongodb '] as $database) {
+        foreach (['mongo', 'MongoDB', ' mongodb ', 'Idno\\Data\\Mongo', '\\Idno\\Data\\Mongo', 'idno\\data\\mongo'] as $database) {
             $state = new SchemaState(
                 new BootConfig(['database' => $database], false),
                 self::forbidden('connection'),

@@ -131,8 +131,9 @@ final class ConnectionParametersTest extends TestCase
 
     public function testMongo(): void
     {
-        foreach (['mongo', 'mongodb', 'MongoDB'] as $name) {
+        foreach (['mongo', 'mongodb', 'MongoDB', 'Idno\\Data\\Mongo', '\\Idno\\Data\\Mongo', 'idno\\data\\mongo', ' IDNO\\DATA\\MONGO '] as $name) {
             $this->assertSame('mongo', ConnectionParameters::driverFamily(['database' => $name]), $name);
+            $this->assertNull(ConnectionParameters::backendClass(['database' => $name]), $name);
             try {
                 ConnectionParameters::fromLegacyConfig(['database' => $name], []);
                 $this->fail('No DBAL parameters for ' . $name);
