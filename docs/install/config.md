@@ -70,6 +70,12 @@ Enable debugging output.
 
 ## Other config.ini directives
 
+**disable_ssl_verify**<br>
+Idno verifies the TLS certificate of every HTTPS site it contacts (to send and receive webmentions, to federate over
+ActivityPub, to read feeds, and so on), and refuses to talk to a site whose certificate is self-signed, expired or
+issued for another host name. Set `disable_ssl_verify = true` to turn this check off. Only do so on a development
+or test installation: without the check, anyone who can intercept the server's traffic can impersonate other sites.
+
 **alwaysplugins[]**<br>
 Use this to force plugins to always be loaded. Plugins that are listed here will never appear in the plugins directory
 in Site Configuration, and there will be no visible way to switch them off.

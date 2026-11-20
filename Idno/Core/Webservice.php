@@ -247,7 +247,6 @@ namespace Idno\Core {
                 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $mr > 0);
                 curl_setopt($ch, CURLOPT_MAXREDIRS, $mr);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
             } else {
 

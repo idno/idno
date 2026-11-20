@@ -239,6 +239,9 @@ Each content plugin has an `Entry.php` entity class that defines
   fetch of a URL supplied by a remote party (webmention sources, ActivityPub actors,
   Micropub media URLs). It rejects non-HTTP schemes and hosts that resolve to
   loopback, private, link-local or reserved addresses.
+- TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
+  the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or
+  `CURLOPT_SSL_VERIFYHOST` anywhere else.
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
