@@ -15,5 +15,8 @@ return static function (ContainerConfigurator $container): void {
         'session' => ['enabled' => false],
         'php_errors' => ['log' => false, 'throw' => false],
         'router' => ['utf8' => true],
+        // The site's HTTP clients are Idno's own (config/services.php: idno.http_client and
+        // idno.http_client.remote); FrameworkBundle must not register a second http_client.
+        'http_client' => ['enabled' => false],
     ]);
 };

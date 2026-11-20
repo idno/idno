@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Idno\Config\BootConfig;
 use Idno\Config\LegacyConfigLoader;
 use Idno\Config\SiteSettings;
+use Idno\Http\Client\HttpClientFactory;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Legacy\LegacyAccessContext;
 use Idno\Legacy\LegacyBootstrap;
@@ -19,6 +20,7 @@ use Idno\Storage\EntityRepository;
 use Idno\Storage\RecordStore;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service_closure;
@@ -40,8 +42,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // A compiler pass, registered by Idno\Kernel::build().
         'Kernel' => ['DoctrineTrimPass.php'],
         'Config' => ['BootConfig.php'],
-        // Static methods only, used by index.php before the container exists.
-        'Http' => ['FrontController.php'],
+        // FrontController: static methods only, used by index.php before the container exists. Client/: the
+        // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
+        'Http' => ['Client', 'FrontController.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -288,6 +291,27 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Console\ImportMongoCommand::class)
         ->arg('$logger', service('monolog.logger.upgrade'))
         ->arg('$projectDir', '%kernel.project_dir%');
+
+    // The site's HTTP clients, built at runtime, when first fetched, from the boot configuration
+    // (proxy_string, proxy_type and disable_ssl_verify, which are never read from the stored
+    // settings): no configuration value is compiled into the container. idno.http_client is the one
+    // autowired as HttpClientInterface; idno.http_client.remote is for URLs a remote party supplied
+    // (it refuses loopback, private, link-local and reserved addresses on every request and redirect)
+    // and is autowired as the argument $remoteClient. Neither needs the legacy application.
+    $services->set('idno.http_client', HttpClientInterface::class)
+        ->factory([HttpClientFactory::class, 'fromBootConfig'])
+        ->args([service(BootConfig::class)])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->set('idno.http_client.remote', HttpClientInterface::class)
+        ->factory([HttpClientFactory::class, 'createRemote'])
+        ->args([service('idno.http_client')])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->alias(HttpClientInterface::class, 'idno.http_client')->public();
+    $services->alias(HttpClientInterface::class . ' $remoteClient', 'idno.http_client.remote')->public();
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

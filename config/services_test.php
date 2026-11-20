@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+use Idno\Config\BootConfig;
+use Idno\Http\Client\HttpClientFactory;
 use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Tests\Fixtures\LocalOnlyHttpClient;
 use Tests\Fixtures\LoggerConsumer;
 use Tests\Fixtures\ProbeCommand;
+
+use function Symfony\Component\DependencyInjection\Loader\Configurator\inline_service;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 /**
  * Test-environment only (the kernel loads config/services_<env>.php for the active
@@ -49,6 +56,34 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()
         ->get(\Idno\Upgrade\UpgradeController::class)
         ->arg('$stepSeconds', '%env(float:IDNO_TEST_UPGRADE_STEP_SECONDS)%');
+
+    // The site's HTTP clients cannot reach the network in tests: each is wrapped in LocalOnlyHttpClient,
+    // which sends only to the site's own origin (the boot configuration's url) and to the host:port
+    // pairs IDNO_TEST_HTTP_ALLOW lists, and marks each request with X-Idno-Test-Client. The wrapped
+    // clients are the production ones (idno.http_client.inner is idno.http_client's definition of
+    // config/services.php); the remote client's private-network refusal exempts the site's own origin
+    // here and nowhere else. The ids and the autowiring aliases are those of config/services.php.
+    $container->services()
+        ->set('idno.http_client.inner', HttpClientInterface::class)
+        ->factory([HttpClientFactory::class, 'fromBootConfig'])
+        ->args([service(BootConfig::class)])
+        ->autowire(false)->autoconfigure(false);
+    $container->services()
+        ->set('idno.http_client', HttpClientInterface::class)
+        ->factory([LocalOnlyHttpClient::class, 'forSite'])
+        ->args([service('idno.http_client.inner'), service(BootConfig::class)])
+        ->autowire(false)->autoconfigure(false)->public();
+    $container->services()
+        ->set('idno.http_client.remote', HttpClientInterface::class)
+        ->factory([LocalOnlyHttpClient::class, 'forRemote'])
+        ->args([
+            inline_service(HttpClientInterface::class)
+                ->factory([HttpClientFactory::class, 'createRemote'])
+                ->args([service('idno.http_client.inner')]),
+            service('idno.http_client.inner'),
+            service(BootConfig::class),
+        ])
+        ->autowire(false)->autoconfigure(false)->public();
 
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();

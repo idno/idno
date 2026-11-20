@@ -60,7 +60,8 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
-- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`) for `composer test`;
+- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; it sets `memory_limit` to 256M, because the
+  whole suite runs in one process and peaked at 124 MB of PHP's default 128 MB on MySQL) for `composer test`;
   `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
   for `composer test:unit`
 - Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's
@@ -197,7 +198,8 @@ idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
   Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass
-  Http/                        FrontController (what index.php runs)
+  Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
+                               BoundedBody: the site's HTTP clients, see "Kernel and services")
   Console/                     Idno\Console\Application, the CLI application (see Entry points)
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
   Legacy/                      Shims between the kernel and the legacy application (see below)
@@ -1049,6 +1051,46 @@ other new code may.
   fetches them in its original order, so `Idno::site()->db()` and
   `$container->get(\Idno\Core\DataConcierge::class)` are the same object.
 - New code should have services injected rather than calling `Idno::site()`.
+- The site's HTTP clients (`symfony/http-client`; FrameworkBundle's own `http_client` is switched off in
+  `config/packages/framework.php`, so there is exactly one set). Two public services, built at runtime
+  when first fetched, from the boot configuration through `Idno\Http\Client\HttpClientFactory`, so
+  no configuration value is compiled into the container (pinned by
+  `Tests/Kernel/HttpClientServicesTest`); neither needs the legacy application:
+  - `idno.http_client`, autowired as `Symfony\Contracts\HttpClient\HttpClientInterface`: for every
+    request to a URL the site chose itself (the site's own configuration, a fixed API).
+  - `idno.http_client.remote`, autowired as an argument named `$remoteClient` of that type: for every
+    request to a URL a REMOTE PARTY supplied (a webmention source, an ActivityPub actor or inbox, a
+    Micropub media URL, a feed or page a user typed). It is the site client in `NoPrivateNetworkHttpClient`,
+    which refuses a host that resolves to a loopback, private, link-local or reserved address, on the
+    first request and on every redirect hop (a `TransportException`). Do not use the site client for
+    such a URL, and do not add a second SSRF check by hand around it.
+  - Both send `User-Agent: Idno https://idno.co`, fail after `HttpClientFactory::IDLE_TIMEOUT` (10 s)
+    without receiving anything or `MAX_DURATION` (60 s) in all, follow at most `MAX_REDIRECTS` (5), and
+    verify certificates unless the boot configuration's `disable_ssl_verify` is set. `proxy_string`,
+    `proxy_type` and `disable_ssl_verify` are read from the BOOT configuration only (`Idno\Core\Config`
+    drops them from the stored settings): a `proxy_string` without a scheme gets one from `proxy_type`
+    (`socks4://`, `socks5://`, `socks5h://` for `socks5-hostname`, else `http://`). The transport is
+    curl when the extension is loaded (`HttpClient::create()`). `HttpClientFactory::options()` is the
+    pure mapping, unit-tested with arrays.
+  - `Idno\Http\Client\BoundedBody::read($client, $response, $limit)` streams a body and cuts it at
+    `$limit` bytes, cancelling the response once the limit is passed, whether or not the server declared
+    a length; never more than one chunk beyond the limit is in memory.
+  - In the test environment (`config/services_test.php`) both clients are wrapped in
+    `Tests\Fixtures\LocalOnlyHttpClient`: a request goes out only to the site's own origin (host and
+    port of the boot configuration's `url`, compared without the scheme; `localhost` and `127.0.0.1` are
+    different hosts) or to a `host:port` listed in the environment variable `IDNO_TEST_HTTP_ALLOW`
+    (comma-separated, read from the process's `$_SERVER` at each request, so it reaches the PHPUnit process and
+    the subprocess servers a test starts, not the rig's web server); any other host throws a
+    `TransportException` `No network in tests: <host>` (the host alone). So no test makes a real
+    outbound request, and a test that needs another origin lists it. The wrapper adds
+    `X-Idno-Test-Client: site` or `remote` to each request, and follows redirects itself (the inner client is sent `max_redirects` 0), checking every hop, so a redirect from an allowed origin to any other host is refused, so `/_test/echo` or a sink shows which client
+    sent it. Only in the test wiring, the remote client's private-network refusal exempts the site's own
+    origin (the rig's routes, on a loopback address, stand in for remote servers); an origin that only
+    `IDNO_TEST_HTTP_ALLOW` lists still meets the refusal. The site's origin is the boot configuration's
+    `url` in every process: the rig's web server and the PHPUnit process (`config.ini`: `http://127.0.0.1:8089/`),
+    CI's servers and tests (`http://localhost/`), the console (the same `config.ini`), and a subprocess
+    server a test starts on another port (its `IDNO_URL`). Neither the wrapper nor the exemption exists
+    outside the test container: both are in `Tests/` and wired only in `config/services_test.php`.
 - The compiled container lives in `<cache base>/<env>/<build>-<key>` (cache base:
   `IDNO_CACHE_DIR`, else `var/cache`, else a private per-project temp dir; build number from
   `version.idno`). The key (`Kernel::getCacheDir()`) hashes the code fingerprint together with
