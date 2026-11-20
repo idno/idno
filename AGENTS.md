@@ -347,7 +347,7 @@ can make the site create its database under an executable name; the import comma
 before connecting. `Installer::buildConfig()` (every installer) refuses a value containing a quote, a
 control character or ending in a backslash, with a `ConfigurationException` naming the setting, because
 values are written inside single quotes and such a value could add or change another setting (pinned by
-the property test in `InstallerDatabaseTest`), so a database file can neither be fetched nor run through the site
+the property test in `InstallerDatabaseTest`) and fills the template in ONE pass, so every value is written exactly as given. Both installers call `Installer::assertWritableConfigValues()` with the values they will write BEFORE they create or write anything (the SQLite file, `.htaccess`, the configuration), so a refused value leaves nothing behind; the web installer builds the file's text before it writes anything and shows the refusal on the settings page. A database file can neither be fetched nor run through the site
 (directory names may hold anything else, spaces included). `sqliteParams()` then checks what it can
 without creating anything (not a directory, the existing directory and file writable) and creates the
 directory (0755) and an empty file last; the file is opened through DBAL with `SqliteConnectionSetup`

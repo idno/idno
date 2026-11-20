@@ -81,36 +81,46 @@ class WebInstaller extends \Idno\Core\Installer
 
         if ($ok && !empty($upload_path) && !empty($db_params)) {
 
+            // The file's text is built first: a value that cannot be written is refused before anything
+            // (.htaccess included) is written.
+            $ini_file = '';
             try {
-                $this->writeApacheConfig();
-            } catch (\Exception $e) {
-                $ok = false;
-                $messages .= '<p>' . $e->getMessage() . '</p>';
-            }
-
-            try {
-
                 $ini_file = $this->buildConfig(
                     array_merge($db_params, ['uploadpath' => $upload_path])
                 );
-
-                $this->writeConfig($ini_file);
-
-            } catch (\Exception $ex) {
+            } catch (\Idno\Exceptions\ConfigurationException $e) {
                 $ok = false;
+                $messages .= '<p>' . htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>';
+            }
 
-                $template->__(
-                    [
-                    'title' => 'Save configuration file',
-                    'body' => $template->__(
+            if ($ok) {
+                try {
+                    $this->writeApacheConfig();
+                } catch (\Exception $e) {
+                    $ok = false;
+                    $messages .= '<p>' . $e->getMessage() . '</p>';
+                }
+
+                try {
+
+                    $this->writeConfig($ini_file);
+
+                } catch (\Exception $ex) {
+                    $ok = false;
+
+                    $template->__(
                         [
-                        'ini_file' => $ini_file,
+                        'title' => 'Save configuration file',
+                        'body' => $template->__(
+                            [
+                            'ini_file' => $ini_file,
+
+                            ]
+                        )->draw('pages/write-config'),
 
                         ]
-                    )->draw('pages/write-config'),
-
-                    ]
-                )->drawPage();
+                    )->drawPage();
+                }
             }
         }
 

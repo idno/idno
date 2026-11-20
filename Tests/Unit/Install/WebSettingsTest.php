@@ -178,4 +178,33 @@ final class WebSettingsTest extends TestCase
         self::assertStringContainsString('MongoDB is no longer supported', $result['messages']);
         self::assertFileDoesNotExist($this->root . '/data');
     }
+
+    public function testAMysqlPasswordWithAQuoteIsRefusedBeforeAnythingIsDone(): void
+    {
+        $secret = "pa'ss-word-1234";
+        $result = (new InstallerUnderTest($this->root))->settings('POST', [
+            'database' => 'mysql', 'upload_path' => $this->root . '/Uploads/', 'mysql_name' => 'known', 'mysql_user' => 'u',
+            'mysql_host' => 'invalid.invalid', 'mysql_pass' => $secret,
+        ]);
+
+        self::assertFalse($result['ok']);
+        self::assertStringContainsString('dbpass', (string) $result['messages']);
+        self::assertStringNotContainsString($secret, (string) $result['messages']);
+        self::assertSame([], $result['dbParams'], 'the database was not checked');
+        self::assertSame(['Uploads', 'warmup'], array_values(array_diff(scandir($this->root) ?: [], ['.', '..'])), 'nothing was created');
+    }
+
+    public function testAnSqliteInstallWithAnUploadPathThatCannotBeWrittenIsRefusedBeforeTheDatabaseIsCreated(): void
+    {
+        $upload = $this->root . "/Up'loads";
+        mkdir($upload, 0755);
+        $result = (new InstallerUnderTest($this->root))->settings('POST', $this->sqliteRequest(['upload_path' => $upload . '/']));
+
+        self::assertFalse($result['ok']);
+        self::assertStringContainsString('uploadpath', (string) $result['messages']);
+        self::assertStringNotContainsString("Up'loads", (string) $result['messages']);
+        self::assertSame([], $result['dbParams']);
+        self::assertDirectoryDoesNotExist($this->root . '/data');
+        self::assertFileDoesNotExist($this->root . '/data/idno.sqlite');
+    }
 }

@@ -204,22 +204,36 @@ namespace Idno\Core {
                 throw new \Idno\Exceptions\ConfigurationException('Configuration template could not be loaded.');
             }
 
-            // A value is written inside single quotes: refuse what could end the value or start another
-            // line (quotes, line breaks and other control characters, a trailing backslash), whatever
-            // the caller checked, so that no value can add or change a setting.
+            $this->assertWritableConfigValues($params);
+
+            // Build config output in ONE pass, so that a value which names a placeholder is written as given
+            $replacements = [];
+            foreach ($params as $name => $value) {
+                $replacements["%{$name}%"] = (string) $value;
+            }
+
+            return strtr($template, $replacements);
+        }
+
+        /**
+         * Refuse a configuration value that cannot be written safely, before anything is created or
+         * written. A value is written inside single quotes: this refuses what could end the value or
+         * start another line (quotes, line breaks and other control characters, a trailing
+         * backslash), whatever the caller checked, so that no value can add or change a setting.
+         * buildConfig() applies it to every value it writes; an installer calls it first with the
+         * values it is about to pass, so that a refusal leaves no file behind.
+         *
+         * @param  array<string, mixed> $params Name => value, as for buildConfig()
+         * @throws \Idno\Exceptions\ConfigurationException naming the setting, never the value
+         */
+        public function assertWritableConfigValues(array $params): void
+        {
             foreach ($params as $name => $value) {
                 $value = (string) $value;
                 if (preg_match('/[\'"\x00-\x1f\x7f]/', $value) === 1 || str_ends_with($value, '\\')) {
                     throw new \Idno\Exceptions\ConfigurationException('The installer cannot write the value of the setting ' . $name . ' to the configuration file: it contains a quote, a line break or another control character, or ends in a backslash. Put that value in configuration/config.ini by hand.');
                 }
             }
-
-            // Build config output
-            foreach ($params as $name => $value) {
-                $template = str_replace("%{$name}%", $value, $template);
-            }
-
-            return $template;
         }
 
         /**
@@ -308,7 +322,7 @@ namespace Idno\Core {
                 throw new \Idno\Exceptions\ConfigurationException('The path of the database file cannot contain "..".');
             }
             if (!\Idno\Storage\ConnectionParameters::isSqliteFileName($path)) {
-                throw new \Idno\Exceptions\ConfigurationException('The name of the database file must end in .sqlite (in lower case) and hold only letters, digits, dots, underscores and dashes (for example idno.sqlite): web servers are set up never to serve or run a file with that name.');
+                throw new \Idno\Exceptions\ConfigurationException('The name of the database file must end in lower case .sqlite exactly (not .SQLite or .Sqlite) and hold only letters, digits, dots, underscores and dashes (for example idno.sqlite): web servers are set up never to serve or run a file with that name.');
             }
             if (str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('#^[A-Za-z]:#', $path) === 1) {
                 return $path;
@@ -496,6 +510,11 @@ namespace Idno\Core {
             $db_params = [];
             if ($db_ready && $upload_path !== '' && $ok) {
                 try {
+                    // What will be written is checked first: databaseParams() may create the SQLite file.
+                    $written = $database == 'sqlite'
+                        ? ['dbname' => $sqlite_path, 'uploadpath' => $upload_path]
+                        : ['dbname' => $values['mysql_name'], 'dbuser' => $values['mysql_user'], 'dbpass' => $values['mysql_pass'], 'dbhost' => $values['mysql_host'], 'uploadpath' => $upload_path];
+                    $this->assertWritableConfigValues($written);
                     $db_params = $this->databaseParams($database, $db_input);
                 } catch (\Exception $e) {
                     $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';

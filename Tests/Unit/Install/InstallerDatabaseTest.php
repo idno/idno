@@ -208,6 +208,12 @@ final class InstallerDatabaseTest extends TestCase
             self::assertStringContainsString('.sqlite', $e->getMessage());
         }
         try {
+            $this->installer()->params('sqlite', ['path' => 'data/idno.SQLite']);
+            self::fail('Accepted .SQLite');
+        } catch (ConfigurationException $e) {
+            self::assertStringContainsString('lower case .sqlite exactly', $e->getMessage());
+        }
+        try {
             $this->installer()->params('sqlite', ['path' => 'data/../idno.sqlite']);
             self::fail('Accepted ..');
         } catch (ConfigurationException $e) {
@@ -231,6 +237,7 @@ final class InstallerDatabaseTest extends TestCase
             "pw'\ndatabase = 'sqlite'\ndbname = '/var/www/html/shell.php",
             "'", '"', "a'b", "a\nb", "a\r\nb", "x\0y", 'a\\', '${foo}', 'a;b', 'a#b', 'a=b', '[section]', 'on', 'null',
             "a'\n[x]\ny='z", 'a\\b', "tab\there", "a\x7fb", 'yes', 'none', 'a b', '~!@%^&*()', '{x}', 'a|b', '', "a\x1fb", "a\\\nb",
+            '%dbpass%', '%uploadpath%', '%database%', '%dbhost%%dbhost%', '\\%dbpass%',
         ];
         $sets = [];
         foreach ($values as $i => $value) {
@@ -271,6 +278,30 @@ final class InstallerDatabaseTest extends TestCase
                 self::assertArrayHasKey($name, $read, $key);
                 self::assertSame($value, $read[$name], $key . ' / ' . $name);
             }
+        }
+    }
+
+    public function testAValueThatNamesAPlaceholderIsWrittenAsGiven(): void
+    {
+        $text = $this->installer()->config(['database' => 'MySQL', 'dbname' => '%dbpass%', 'dbuser' => 'u', 'dbpass' => 'secret', 'dbhost' => '%dbhost%%dbhost%', 'uploadpath' => '/u/']);
+        $read = parse_ini_string($text, true);
+
+        self::assertIsArray($read);
+        self::assertSame('%dbpass%', $read['dbname']);
+        self::assertSame('secret', $read['dbpass']);
+        self::assertSame('%dbhost%%dbhost%', $read['dbhost']);
+    }
+
+    public function testTheValuesCanBeCheckedWithoutBuildingTheFile(): void
+    {
+        $installer = $this->installer();
+        $installer->assertWritableConfigValues(['dbpass' => 'fine', 'uploadpath' => '/u/']);
+        try {
+            $installer->assertWritableConfigValues(['dbpass' => "it's"]);
+            self::fail('A quote was accepted.');
+        } catch (ConfigurationException $e) {
+            self::assertStringContainsString('dbpass', $e->getMessage());
+            self::assertStringNotContainsString("it's", $e->getMessage());
         }
     }
 

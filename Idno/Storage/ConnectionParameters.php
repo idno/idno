@@ -78,7 +78,7 @@ final class ConnectionParameters
                 return ['driver' => 'pdo_sqlite', 'memory' => true];
             }
             if ($path !== '' && !self::isSqliteFileName($path)) {
-                throw new \LogicException('The SQLite database file named by the setting dbname must have a name that ends in .sqlite (letters, digits, dots, underscores and dashes before it), so that web servers never serve or run it. Rename the file and change dbname in config.ini.');
+                throw new \LogicException('The SQLite database file named by the setting dbname must have a name that ends in lower case .sqlite exactly (not .SQLite or .Sqlite; letters, digits, dots, underscores and dashes before it), so that web servers never serve or run it. Rename the file and change dbname in config.ini.');
             }
             if ($projectDir !== null && $projectDir !== '' && $path !== '' && !self::isAbsolutePath($path)) {
                 $path = rtrim($projectDir, '/\\') . '/' . $path;

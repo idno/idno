@@ -58,6 +58,20 @@ final class CliInstallerTest extends TestCase
         self::assertStringContainsString('/data/site.sqlite', $output);
     }
 
+    public function testMakeconfigRefusesAValueItCannotWriteAndCreatesNothing(): void
+    {
+        file_put_contents($this->manifest, "database = mysql\nmysql_name = known\nmysql_user = u\nmysql_pass = \"it's\"\nmysql_host = localhost\nupload_path = \"/tmp/uploads/\"\n");
+        $command = escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 ' . escapeshellarg(dirname(__DIR__, 3) . '/warmup/CLI/CLIInstaller.php')
+            . ' makeconfig ' . escapeshellarg($this->manifest) . ' 2>&1';
+        exec($command, $lines, $status);
+        $output = implode("\n", $lines);
+
+        self::assertNotSame(0, $status, $output);
+        self::assertStringContainsString('dbpass', $output);
+        self::assertStringNotContainsString("it's", $output);
+        self::assertStringNotContainsString('dbname =', $output);
+    }
+
     public function testTheOwnershipNotesNameTheFilesTheDirectoryAndTheWebServersUser(): void
     {
         $text = implode("\n", Installer::sqliteOwnershipNotes('/srv/idno/data/idno.sqlite'));

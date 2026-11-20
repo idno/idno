@@ -132,7 +132,16 @@ class CLIInstaller extends \Idno\Core\Installer
                         ];
                     }
 
-                    echo $this->buildConfig(array_merge($database, ['uploadpath' => $this->config['upload_path']]));
+                    $values = array_merge($database, ['uploadpath' => $this->config['upload_path']]);
+                    try {
+                        $this->assertWritableConfigValues($values);
+                    } catch (\Idno\Exceptions\ConfigurationException $e) {
+                        $output->writeln($e->getMessage());
+
+                        return \Symfony\Component\Console\Command\Command::FAILURE;
+                    }
+
+                    echo $this->buildConfig($values);
 
                     return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }
@@ -263,6 +272,20 @@ class CLIInstaller extends \Idno\Core\Installer
                     // Check upload path
                     if (!empty($this->config['upload_path'])) {
                         $this->checkUploadDirectory($this->config['upload_path']);
+                    }
+
+                    // What will be written is checked before anything is created or written: a value the
+                    // configuration file cannot hold stops the command here (see Installer::assertWritableConfigValues()).
+                    try {
+                        $this->assertWritableConfigValues(
+                            $database == 'sqlite'
+                            ? ['dbname' => $this->sqlitePath((string) ($this->config['sqlite_path'] ?? '')), 'uploadpath' => $this->config['upload_path']]
+                            : ['dbname' => $this->config['mysql_name'] ?? '', 'dbuser' => $this->config['mysql_user'] ?? '', 'dbpass' => $this->config['mysql_pass'] ?? '', 'dbhost' => $this->config['mysql_host'] ?? '', 'uploadpath' => $this->config['upload_path']]
+                        );
+                    } catch (\Idno\Exceptions\ConfigurationException $e) {
+                        $output->writeln($e->getMessage());
+
+                        return \Symfony\Component\Console\Command\Command::FAILURE;
                     }
 
                     // Check the database: MySQL is connected to, an SQLite file is created (see Installer::databaseParams())
