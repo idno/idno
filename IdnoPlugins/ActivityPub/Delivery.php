@@ -47,7 +47,7 @@ class Delivery
         }
 
         try {
-            $response = Webservice::post($inboxUrl, $body, $headers);
+            $response = Webservice::safeSend('post', $inboxUrl, $body, $headers);
 
             $httpCode = $response['response'] ?? 0;
 

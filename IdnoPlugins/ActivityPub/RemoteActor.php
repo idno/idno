@@ -53,7 +53,7 @@ class RemoteActor
                 $headers = array_merge($signedHeaders, $headers);
             }
 
-            $response = Webservice::get($actorUri, null, $headers);
+            $response = self::fetchDocument($actorUri, $headers);
 
             if (empty($response['content']) || $response['response'] < 200 || $response['response'] >= 300) {
                 \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Failed to fetch actor ' . $actorUri . ' (HTTP ' . ($response['response'] ?? 'unknown') . ')');
@@ -109,6 +109,19 @@ class RemoteActor
             \Idno\Core\Idno::site()->logging()->error('ActivityPub: Exception fetching actor ' . $actorUri . ': ' . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * Fetch a remote actor document, or the document that holds a key. The URL came from a remote
+     * party, so the request is made by the client that refuses private networks on every redirect.
+     *
+     * @param string   $url     The document's URL
+     * @param string[] $headers Request headers, as 'Name: value' lines
+     * @return array The Webservice result
+     */
+    public static function fetchDocument(string $url, array $headers): array
+    {
+        return Webservice::safeSend('get', $url, null, $headers);
     }
 
     /**

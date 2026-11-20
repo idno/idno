@@ -564,6 +564,23 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
          * @param string $type "photo", "audio" or "video"
          * @param string $url  File URL
          */
+        /**
+         * Download a media file from a URL the Micropub client gave. The request is made by the
+         * client that refuses private networks on every redirect.
+         *
+         * @param  string $url File URL
+         * @return string|false The file's bytes, or false when the request failed or was not answered with a success
+         */
+        public static function fetchMedia($url)
+        {
+            $response = \Idno\Core\Webservice::safeSend('get', $url);
+            if ($response['response'] < 200 || $response['response'] >= 300 || $response['error'] !== '') {
+                return false;
+            }
+
+            return $response['content'];
+        }
+
         private function uploadFromUrl($type, $url)
         {
             $_url = $url;
@@ -606,13 +623,8 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
                 }
 
                 $tmpname  = tempnam(sys_get_temp_dir(), 'indiepub_');
-                $fp       = fopen($url, 'rb');
-                if ($fp) {
-                    $success = file_put_contents($tmpname, $fp);
-                    fclose($fp);
-                } else {
-                    $success = false;
-                }
+                $bytes    = self::fetchMedia($url);
+                $success  = $bytes === false ? false : file_put_contents($tmpname, $bytes);
                 if ($success) {
 
                     // If we haven't got a valid mime, try using magicbyte detection

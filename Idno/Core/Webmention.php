@@ -311,7 +311,7 @@ namespace Idno\Core {
          */
         static function getIconFromURL($url)
         {
-            if ($content = Webservice::get($url)) {
+            if ($content = Webservice::safeSend('get', $url)) {
                 return self::getIconFromWebsiteContent($content['content'], $url);
             }
 

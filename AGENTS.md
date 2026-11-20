@@ -2494,10 +2494,23 @@ the CLI installer no longer writes one.
 - Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - HTML sanitization via HTMLPurifier
-- SSRF protection: call `\Idno\Core\UrlValidator::isSafeUrl($url)` before any server-side
-  fetch of a URL supplied by a remote party (webmention sources, ActivityPub actors,
-  Micropub media URLs). It rejects non-HTTP schemes and hosts that resolve to
-  loopback, private, link-local or reserved addresses.
+- SSRF protection: fetch every URL supplied by a remote party (a webmention's source, the
+  endpoints a webmention target advertises, ActivityPub actor and key documents and follower
+  inboxes, Micropub media URLs) with `Webservice::safeSend()` (new code: the injected
+  `$remoteClient`), which refuses a host that resolves to a loopback, private, link-local or
+  reserved address on the first request and on every redirect hop. `isSafeUrl($url)` alone does
+  not cover redirects: it checks the first URL only. Calls to `\Idno\Core\UrlValidator::isSafeUrl()`
+  stay before those fetches, to refuse early with a log line of their own. The fetches are
+  `Idno\Pages\Webmentions\Endpoint::fetchSource()`, `Idno\Core\MentionClient` (discovery and the
+  POST to the endpoint), `Idno\Core\Webmention::getIconFromURL()`,
+  `IdnoPlugins\ActivityPub\RemoteActor::fetchDocument()` (actor and key documents),
+  `IdnoPlugins\ActivityPub\Delivery::deliver()` and
+  `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`; the first, the fourth and the last
+  are separate methods so that a test can call them on mock clients, because `isSafeUrl()` refuses
+  the test rig's own address before they are reached (`Tests/Kernel/RemoteFetchCallSitesTest`; the
+  flows the rig can drive are in `Tests/Characterisation/RemoteFetchTest`). A URL that the site's
+  admin configured (the PuSH hub, a webhook) or that a logged-in user typed goes through
+  `Webservice::send()` and the site client.
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra

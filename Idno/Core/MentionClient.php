@@ -17,7 +17,7 @@ namespace Idno\Core {
 
         protected static function _post($url, $body, $headers = array())
         {
-            $response = Webservice::post($url, $body, $headers);
+            $response = Webservice::safeSend('post', $url, $body, $headers);
             return [
                 'code'    => $response['response'],
                 'headers' => self::_parse_headers(isset($response['header']) ? $response['header'] : ''),
@@ -27,7 +27,7 @@ namespace Idno\Core {
 
         protected static function _head($url, $headers = array())
         {
-            $response = Webservice::head($url, null, $headers);
+            $response = Webservice::safeSend('head', $url, null, $headers);
             return [
                 'code'    => $response['response'],
                 'headers' => self::_parse_headers(isset($response['header']) ? $response['header'] : ''),
@@ -37,7 +37,7 @@ namespace Idno\Core {
 
         protected static function _get($url, $headers = array())
         {
-            $response = Webservice::get($url, null, $headers);
+            $response = Webservice::safeSend('get', $url, null, $headers);
             return [
                 'code'    => $response['response'],
                 'headers' => self::_parse_headers(isset($response['header']) ? $response['header'] : ''),

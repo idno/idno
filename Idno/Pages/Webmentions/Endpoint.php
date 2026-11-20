@@ -77,7 +77,7 @@ namespace Idno\Pages\Webmentions {
                     }
                     if ($webmention_ok) {
                         \Idno\Core\Idno::site()->logging()->debug("webmention is ok with target page " . get_class($page));
-                        if ($source_response = \Idno\Core\Webservice::get($source)) {
+                        if ($source_response = self::fetchSource($source)) {
                             if (substr_count($source_response['content'], $target) || $source_response['response'] == 410) {
                                 $source_mf2 = \Idno\Core\Webmention::parseContent($source_response['content'], $source);
                                 // Set source and target information as input variables
@@ -115,6 +115,18 @@ namespace Idno\Pages\Webmentions {
                 $error_text = 'Not all the required webmention variables were set.';
             }
             echo json_encode(array('error' => $error, 'error_text' => $error_text));
+        }
+
+        /**
+         * Fetch a webmention's source. The URL came from the sender, so the request is made by the
+         * client that refuses private networks on every redirect.
+         *
+         * @param  string $source The source URL
+         * @return array The Webservice result
+         */
+        public static function fetchSource($source)
+        {
+            return \Idno\Core\Webservice::safeSend('get', $source);
         }
 
     }
