@@ -104,7 +104,11 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
 - The rig has two modes, with the same web server (`php -S` on 127.0.0.1:8089, `Tests/rig/router.php`,
   `APP_ENV=test`, `APP_DEBUG=1`), the same `pedantic_mode` and the same plugins; only the database
   settings differ (`Tests/rig/config.sqlite.ini` and `Tests/rig/config.ini`, pinned by
-  `Tests/Kernel/RigScriptsTest`):
+  `Tests/Kernel/RigScriptsTest`). The web server runs four workers (`PHP_CLI_SERVER_WORKERS=4` in
+  `up.sh`, as CI's servers run eight): the site makes requests to itself while it serves another (a
+  webmention to a page of its own, an outbound request answered by a `/_test/` route), which would
+  wait for ever with one worker. The workers are children of the server and outlive it, so `down.sh`
+  stops them before it stops the server (`RigScriptsTest` pins the count and that they stop):
   - **SQLite** (`composer test:up`, the default): no Docker, nothing but PHP. The database file
     (`site.sqlite`, with its `-wal`/`-shm` files) and the upload directory (`uploads/`) are in
     `<sys_get_temp_dir()>/idno-test-rig-<first 12 hex digits of the SHA-256 of the checkout's real
@@ -491,6 +495,23 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
   example, pinned by `Tests/Characterisation/KernelRoutingTest`; `ThrowingController`
   (`/_test/throw`) throws, for `Tests/Kernel/KernelExceptionTest`.
+  The routes the outbound-HTTP tests use (`Tests/Characterisation/WebserviceWireTest`,
+  `OutboundFlowsTest`, `TestRoutesTest`), each answering any method with `Cache-Control: no-store`:
+  `/_test/echo` (JSON: `method`, `query`, `headers` with lower-case names, `content_type`, `body` as
+  base64, `fields`, `files` with `field`, `name`, `type`, `size`, `sha256`; the description is
+  `RequestDescription`); `/_test/redirect/{status}?to=<path>` (301, 302, 303, 307 or 308, to this
+  site's own URL plus `to`, default `/_test/echo`; a `to` that does not start with `/_test/`, or holds
+  a space or control character, is answered 400); `/_test/slow?seconds=N` (sleeps at most 30);
+  `/_test/stream?bytes=N` (chunked, no `Content-Length`) and `/_test/sized?bytes=N` (the same body with
+  a `Content-Length`), at most 20 MB; `/_test/sink/{name}` (appends the request, in `/_test/echo`'s
+  shape, to a file of its own and answers 202) and `/_test/sink/{name}/log` (the recorded requests as
+  a JSON list, then the file is emptied), with `name` matching `[a-z0-9-]{1,40}`; and
+  `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint). The
+  sink's files are in `<sys_get_temp_dir()>/idno-test-sink-<first 12 hex digits of the SHA-256 of the
+  checkout's real path>/`, made on demand (CI's servers do not use the rig, so the rig's directory
+  may not exist), and are written under `LOCK_EX` because the web server has several workers. A test
+  takes the site's URL from the configuration (`$this->site()->baseUrl()`), never a fixed address,
+  and asserts named headers only, never the complete set a request carried.
 
 ### Console commands
 

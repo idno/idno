@@ -64,7 +64,8 @@ final class RigScriptsTest extends TestCase
         if (is_file($pidFile)) {
             $pid = (int) file_get_contents($pidFile);
             if ($pid > 0 && str_contains((string) shell_exec('ps -p ' . $pid . ' -o command='), $this->root)) {
-                exec('kill ' . $pid);
+                // Its workers (children) outlive it and hold the port.
+                exec('pkill -P ' . $pid . ' 2>/dev/null; kill ' . $pid);
             }
         }
         $stateDir = $this->stateDir();
@@ -455,6 +456,46 @@ final class RigScriptsTest extends TestCase
         $this->assertSame(0, $code, $output);
         $this->assertSame('idno:upgrade APP_ENV=test APP_DEBUG=1 error_reporting=22527 server=no', $this->consoleRuns()[2]);
         $this->assertStringNotContainsString('exec', $this->dockerLog(), 'no SQL is loaded into the container');
+    }
+
+    /**
+     * The rig's web server runs four workers (PHP_CLI_SERVER_WORKERS=4): the site makes requests to
+     * itself while it serves another (a webmention to a page of its own, a test route answering an
+     * outbound request), which would wait for ever with one worker. Pinned in the script and in the
+     * running server, which forks one child per worker.
+     */
+    public function testTheWebServerRunsFourWorkers(): void
+    {
+        $this->assertStringContainsString(
+            'PHP_CLI_SERVER_WORKERS=4 nohup php',
+            (string) file_get_contents(self::rigDir() . '/up.sh'),
+            'up.sh starts the web server with four workers'
+        );
+
+        [$code, $output] = $this->runScript('up.sh');
+        $this->assertSame(0, $code, $output);
+        $pid = trim((string) file_get_contents($this->root . '/Tests/rig/.server.pid'));
+        $this->assertMatchesRegularExpression('/^\d+$/', $pid);
+
+        $children = [];
+        for ($attempt = 0; $attempt < 20; ++$attempt) {
+            exec('pgrep -P ' . escapeshellarg($pid) . ' 2>/dev/null', $children);
+            if ($children !== []) {
+                break;
+            }
+            usleep(100000);
+        }
+        $this->assertCount(4, $children, 'the web server forked four workers');
+
+        // down.sh stops the workers too: they outlive their parent and would hold the port.
+        [$code, $output] = $this->runScript('down.sh');
+        $this->assertSame(0, $code, $output);
+        $alive = $children;
+        for ($attempt = 0; $attempt < 20 && $alive !== []; ++$attempt) {
+            usleep(100000);
+            $alive = array_values(array_filter($children, static fn (string $child): bool => posix_kill((int) $child, 0)));
+        }
+        $this->assertSame([], $alive, 'down.sh stopped the workers');
     }
 
     /**

@@ -15,6 +15,9 @@ MODE="$(rig_mode)"
 if [ -f "$PID_FILE" ]; then
     SERVER_PID="$(rig_server_pid)"
     if [ -n "$SERVER_PID" ]; then
+        # The server runs several workers (PHP_CLI_SERVER_WORKERS, see up.sh), which are its children
+        # and outlive it, holding the port: stop them first.
+        pkill -P "$SERVER_PID" 2>/dev/null || true
         kill "$SERVER_PID" 2>/dev/null || true
     else
         echo "Tests/rig/.server.pid does not name this rig's web server (pid $(cat "$PID_FILE")); not signalling it."

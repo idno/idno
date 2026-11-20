@@ -82,12 +82,15 @@ else
     # pedantic_mode on, any reported deprecation (e.g. dynamic properties) is thrown as an exception.
     # APP_ENV/APP_DEBUG run the kernel in test/debug mode, so a changed service definition
     # is picked up without clearing the compiled container by hand.
+    # PHP_CLI_SERVER_WORKERS: four workers, because the site makes requests to itself (a webmention
+    # to a page of its own, an outbound request answered by a /_test/ route) while it serves another;
+    # with one worker those would wait for ever. CI's servers run eight.
     rm -f "$PID_FILE"
     if nc -z "$HOST" "$PORT" 2>/dev/null; then
         echo "Port $PORT on $HOST is already in use by another process; not starting the web server." >&2
         exit 1
     fi
-    APP_ENV=test APP_DEBUG=1 nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
+    APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=4 nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
     echo $! > "$PID_FILE"
     started=0
     for _ in $(seq 1 30); do
