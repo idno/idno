@@ -115,9 +115,9 @@ final class OutboundFlowsTest extends CharacterisationTestCase
 
     /**
      * The hub is a stored setting (the admin's "PuSH hub"; the rig's configuration file does not pin
-     * it): published content pings it with one form-encoded POST naming the site's feeds. Quirk: the
-     * ping passes its Content-Type as an associative header, which is not sent, so the body goes out
-     * with curl's default for a POST of a string.
+     * it): published content pings it with one form-encoded POST naming the site's feeds. The ping
+     * passes its Content-Type as an associative header; that header used to be dropped and the body
+     * went out with curl's default for a POST of a string. It is now sent, and is the same value.
      */
     public function testPublishingPingsTheConfiguredHub(): void
     {

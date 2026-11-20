@@ -9,21 +9,59 @@
 
 namespace Idno\Core {
 
+    use Idno\Http\Client\BoundedBody;
+    use Idno\Http\Client\HttpClientFactory;
+    use Symfony\Component\Mime\Part\DataPart;
+    use Symfony\Component\Mime\Part\Multipart\FormDataPart;
+    use Symfony\Contracts\HttpClient\Exception\ExceptionInterface;
+    use Symfony\Contracts\HttpClient\HttpClientInterface;
+    use Symfony\Contracts\HttpClient\ResponseInterface;
+
+    /**
+     * The legacy static HTTP client. It sends its requests through the site's Symfony HttpClient
+     * services (`idno.http_client`; `idno.http_client.remote` for safeSend()), fetched from the
+     * container at each call, and keeps the old API and result array. New code injects
+     * HttpClientInterface instead of calling it.
+     */
     class Webservice extends \Idno\Common\Component
     {
 
         public static $lastRequest = '';
         public static $lastResponse = '';
 
+        /** The redirects followed for one request; a further one is a failure. */
+        const MAX_REDIRECTS = HttpClientFactory::MAX_REDIRECTS;
+
+        /** The default for `webservice_max_download`: 10 MB. */
+        const DEFAULT_MAX_DOWNLOAD = 10 * 1024 * 1024;
+
+        /** Headers whose value never reaches getLastRequest(). */
+        const SECRET_HEADERS = ['authorization', 'proxy-authorization', 'cookie', 'signature'];
+
+        private static ?HttpClientInterface $client = null;
+        private static ?HttpClientInterface $remoteClient = null;
+
+        /**
+         * Replace the HTTP clients (a test's, for instance); null restores the container's.
+         *
+         * @param HttpClientInterface|null $client The client send() uses
+         * @param HttpClientInterface|null $remote The client safeSend() uses
+         */
+        public static function useClient(?HttpClientInterface $client, ?HttpClientInterface $remote = null): void
+        {
+            self::$client       = $client;
+            self::$remoteClient = $client === null ? null : $remote;
+        }
+
         /**
          * Send a web services POST request to a specified URI endpoint
          *
          * @param  string $endpoint The URI to send the POST request to
          * @param  mixed  $params   Optionally, an array of parameters to send (keys are the parameter names), or the raw body text (depending on Content-Type)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function post($endpoint, $params = null, array $headers = null)
+        static function post($endpoint, $params = null, ?array $headers = null)
         {
             return self::send('post', $endpoint, $params, $headers);
         }
@@ -34,73 +72,93 @@ namespace Idno\Core {
          * @param  string $verb     The verb to send the request with; one of POST, GET, DELETE, PUT
          * @param  string $endpoint The URI to send the request to
          * @param  mixed  $params   Optionally, an array of parameters to send (keys are the parameter names), or the raw body text (depending on Content-Type)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function send($verb, $endpoint, $params = null, array $headers = null)
+        static function send($verb, $endpoint, $params = null, ?array $headers = null)
         {
+            return self::dispatch(false, $verb, $endpoint, $params, $headers);
+        }
 
-            $curl_handle = curl_init();
-            // prevent curl from interpreting values starting with '@' as a filename.
-            if (defined('CURLOPT_SAFE_UPLOAD')) {
-                curl_setopt($curl_handle, CURLOPT_SAFE_UPLOAD, true);
-            }
+        /**
+         * Exactly send(), for a URL a remote party supplied (a webmention source, an actor, a feed):
+         * it uses the client that refuses every request, and every redirect, whose host resolves to a
+         * loopback, private, link-local or reserved address.
+         *
+         * @param  string $verb     The verb to send the request with; one of POST, GET, DELETE, PUT
+         * @param  string $endpoint The URI to send the request to
+         * @param  mixed  $params   Optionally, an array of parameters to send, or the raw body text
+         * @param  array  $headers  Optionally, an array of headers to send with the request
+         * @return array
+         */
+        public static function safeSend($verb, $endpoint, $params = null, ?array $headers = null): array
+        {
+            return self::dispatch(true, $verb, $endpoint, $params, $headers);
+        }
 
-            switch (strtolower($verb)) {
+        /**
+         * The result of a request that failed or was refused: nothing arrived to give back.
+         *
+         * @return array{header: string, content: string, response: int, effective_url: string, error: string}
+         */
+        private static function failure(int $status, string $url, string $error): array
+        {
+            return [
+                'header'        => '',
+                'content'       => '',
+                'response'      => $status,
+                'effective_url' => $url,
+                'error'         => $error,
+            ];
+        }
+
+        /**
+         * Make the request, following redirects one request at a time, and return the result array.
+         * It never throws for a transport failure: that is a result with response 0 and the failure's
+         * message in `error`.
+         */
+        private static function dispatch(bool $remote, $verb, $endpoint, $params, ?array $headers): array
+        {
+            $kind     = strtolower((string)$verb);
+            $endpoint = (string)$endpoint;
+
+            // What goes in the query, and what in the body.
+            $method  = 'GET';
+            $payload = null;
+            $hasBody = false;
+            switch ($kind) {
                 case 'post':
-
-                    // Check for WebserviceFile and convert to CURL Parameters
-                    if (!empty($params) && is_array($params)) {
-                        foreach ($params as $k => $v) {
-
-                            if ($v instanceof \Idno\Core\WebserviceFile) {
-
-                                try {
-                                    $params[$k] = $v->getCurlParameters();
-                                } catch (\Exception $ex) {
-                                    \Idno\Core\Idno::site()->logging()->error("Error sending $verb to $endpoint", ['error' => $ex]);
-                                }
-                            }
-                        }
-                    }
-
-                    curl_setopt($curl_handle, CURLOPT_POST, 1);
-                    curl_setopt($curl_handle, CURLOPT_POSTFIELDS, $params);
-                    curl_setopt($curl_handle, CURLOPT_HTTPHEADER, array("Content-type: multipart/form-data"));
-                    $headers[] = 'Expect:';
+                    $method  = 'POST';
+                    $hasBody = true;
                     break;
                 case 'put':
-                    curl_setopt($curl_handle, CURLOPT_CUSTOMREQUEST, 'PUT'); // Override request type
-                    curl_setopt($curl_handle, CURLOPT_POSTFIELDS, $params);
-                    curl_setopt($curl_handle, CURLOPT_HTTPHEADER, array("Content-type: multipart/form-data"));
+                    $method  = 'PUT';
+                    $hasBody = true;
                     break;
-
                 case 'delete':
-                    curl_setopt($curl_handle, CURLOPT_CUSTOMREQUEST, 'DELETE'); // Override request type
-                    curl_setopt($curl_handle, CURLOPT_POSTFIELDS, $params);
-                    curl_setopt($curl_handle, CURLOPT_HTTPHEADER, array("Content-type: multipart/form-data"));
-                case 'head':
-                    if ($verb == 'head') {
-                        curl_setopt($curl_handle, CURLOPT_NOBODY, true);
-                    }
-                case 'get':
-                default:
-                    $req = "";
-                    if ($params && is_array($params)) {
-                        $req = http_build_query($params);
-                    }
-                    if ($params && !is_array($params)) {
-                        $req = $params;
-                    }
-
-                    if (!empty($req)) {
-                        if (strpos($endpoint, '?') !== false) {
-                            $endpoint .= '&' . $req;
-                        } else {
-                            $endpoint .= '?' . $req;
-                        }
-                    }
+                    $method = 'DELETE';
                     break;
+                case 'head':
+                    $method = 'HEAD';
+                    break;
+            }
+            if ($hasBody) {
+                $payload = $params;
+            } else {
+                $req = '';
+                if ($params && is_array($params)) {
+                    $req = http_build_query($params);
+                }
+                if ($params && !is_array($params)) {
+                    $req = (string)$params;
+                }
+                if (!empty($req)) {
+                    $endpoint .= (strpos($endpoint, '?') !== false ? '&' : '?') . $req;
+                }
+                if ($method === 'DELETE') {
+                    $payload = $params; // The parameters are also the body
+                    $hasBody = true;
+                }
             }
 
             // Check HSTS - if so, rewrite the endpoint to use HTTPS
@@ -109,78 +167,9 @@ namespace Idno\Core {
                 \Idno\Core\Idno::site()->logging()->debug("HSTS Found, so endpoint call is now going to $endpoint");
             }
 
-            curl_setopt($curl_handle, CURLOPT_URL, $endpoint);
-            curl_setopt($curl_handle, CURLOPT_CONNECTTIMEOUT, 5);
-            curl_setopt($curl_handle, CURLOPT_AUTOREFERER, true);
-            curl_setopt($curl_handle, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($curl_handle, CURLOPT_USERAGENT, "Idno https://idno.co");
-            curl_setopt($curl_handle, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($curl_handle, CURLINFO_HEADER_OUT, 1);
-            curl_setopt($curl_handle, CURLOPT_HEADER, 1);
-            curl_setopt($curl_handle, CURLOPT_NOPROGRESS, 0);
-
-            // Allow unsafe ssl verify
-            if (!empty(\Idno\Core\Idno::site()->config()->disable_ssl_verify)) {
-                curl_setopt($curl_handle, CURLOPT_SSL_VERIFYPEER, 0);
-                curl_setopt($curl_handle, CURLOPT_SSL_VERIFYHOST, 0);
-            } else {
-                curl_setopt($curl_handle, CURLOPT_SSL_VERIFYPEER, 1);
-                curl_setopt($curl_handle, CURLOPT_SSL_VERIFYHOST, 2);
-            }
-
-            // If we're calling this function as a logged in user, then we need to store cookies in a cookiejar
-            if ($user = \Idno\Core\Idno::site()->session()->currentUser()) {
-                // Save cookie to user specific cookie jar, using some level of obfuscation
-                curl_setopt($curl_handle, CURLOPT_COOKIEJAR, \Idno\Core\Idno::site()->config()->cookie_jar . md5($user->getUUID() . \Idno\Core\Idno::site()->config()->site_secret));
-            }
-
-            // Set a maximum file size for downloads (ht: https://www.reddit.com/r/PHP/comments/641uud/is_there_any_easy_way_to_limit_curl_via_php_so_it/)
-            $sizeLimit = 1024 * 1024 * 10; // Default 10 MB
+            $sizeLimit = self::DEFAULT_MAX_DOWNLOAD;
             if (!empty(\Idno\Core\Idno::site()->config()->webservice_max_download)) {
-                $sizeLimit = \Idno\Core\Idno::site()->config()->webservice_max_download;
-            }
-
-            curl_setopt(
-                $curl_handle, CURLOPT_PROGRESSFUNCTION, function ($curl_handle, $totalBytes, $receivedBytes) use ($sizeLimit) {
-                    if ($totalBytes > $sizeLimit) {
-                        return 1; // return non-zero value to abort transfer
-                    }
-                }
-            );
-
-            // Proxy connection string provided
-            if (!empty(\Idno\Core\Idno::site()->config()->proxy_string)) {
-                curl_setopt($curl_handle, CURLOPT_PROXY, \Idno\Core\Idno::site()->config()->proxy_string);
-
-                // If proxy type not specified by command string (as some settings can't be), allow for proxy type to be passed.
-                if (!empty(\Idno\Core\Idno::site()->config()->proxy_type)) {
-                    $type = 0;
-                    switch (\Idno\Core\Idno::site()->config()->proxy_type) {
-
-                        case 'socks4':
-                        case 'CURLPROXY_SOCKS4':
-                            $type = CURLPROXY_SOCKS4;
-                            break;
-
-                        case 'socks5':
-                        case 'CURLPROXY_SOCKS5':
-                            $type = CURLPROXY_SOCKS5;
-                            break;
-
-                        case 'socks5-hostname':
-                        case 'CURLPROXY_SOCKS5_HOSTNAME':
-                            $type = 7;
-                            break; // Use proxy to resolve DNS, but this isn't defined in current versions of curl
-
-                        case 'http':
-                        case 'CURLPROXY_HTTP' :
-                        default :
-                            $type = CURLPROXY_HTTP;
-                            break;
-                    }
-
-                    curl_setopt($curl_handle, CURLOPT_PROXYTYPE, $type);
-                }
+                $sizeLimit = (int)\Idno\Core\Idno::site()->config()->webservice_max_download;
             }
 
             // Allow plugins and other services to extend headers, allowing for plugable authentication methods on calls
@@ -191,77 +180,383 @@ namespace Idno\Core {
                 }
                 $headers = array_merge($headers, $new_headers);
             }
+            $noHeaders = empty($headers);
 
-            if (!empty($headers) && is_array($headers)) {
-                curl_setopt($curl_handle, CURLOPT_HTTPHEADER, $headers);
+            // The headers as lines; a Content-Type among them is the caller's own.
+            $lines       = [];
+            $callerType  = null;
+            foreach (self::headerPairs($headers) as [$name, $value]) {
+                if (strtolower($name) === 'content-type') {
+                    $callerType = $value;
+                } else {
+                    $lines[] = $name . ': ' . $value;
+                }
             }
 
-            $buffer      = self::webservice_exec($curl_handle);
-            $http_status = curl_getinfo($curl_handle, CURLINFO_HTTP_CODE);
+            // The body, and the Content-Type that goes with it. With none of its own, a POST is
+            // form-encoded; a PUT or DELETE claims a bare multipart/form-data when the request had no
+            // headers at all, and is form-encoded otherwise.
+            $body = null;
+            $sentType = $callerType;
+            $keptType = $callerType;
+            if ($hasBody) {
+                if ($callerType === null && $method !== 'POST' && $noHeaders) {
+                    $callerType = $keptType = 'multipart/form-data';
+                }
+                $fallbackType = $callerType ?? 'application/x-www-form-urlencoded';
+                try {
+                    if (is_array($payload) && !empty($payload)) {
+                        $form     = new FormDataPart(self::formFields($payload));
+                        $body     = $form->bodyToString();
+                        $boundary = $form->getPreparedHeaders()->get('Content-Type')->getBodyAsString();
+                        // A multipart Content-Type of the caller's gets the body's boundary; any other is theirs.
+                        $sentType = ($callerType === null || stripos($callerType, 'multipart/') === 0) ? $boundary : $callerType;
+                    } else {
+                        if (is_array($payload)) {
+                            $payload = null;
+                        }
+                        $body     = ($payload === null || $payload === false) ? null : (string)$payload;
+                        $sentType = $fallbackType;
+                    }
+                } catch (\Throwable $e) {
+                    $message = "The request could not be built: " . $e->getMessage();
+                    self::logFailure($endpoint, $message);
+                    self::$lastRequest  = '';
+                    self::$lastResponse = '';
 
-            // Get HTTP Header / body
-            $header_size = curl_getinfo($curl_handle, CURLINFO_HEADER_SIZE);
-            $header      = substr($buffer, 0, $header_size);
-            $content     = substr($buffer, $header_size);
+                    return self::failure(0, $endpoint, $message);
+                }
+            }
 
-            if ($error = curl_error($curl_handle)) {
-                \Idno\Core\Idno::site()->logging()->error('error send Webservice request', ['error' => $error]);
+            $url       = $endpoint;
+            $redirects = 0;
+            $blocks    = [];
+            try {
+                $client = self::client($remote);
+                while (true) {
+                    $requestLines = $lines;
+                    if ($sentType !== null) {
+                        $requestLines[] = 'Content-Type: ' . $sentType;
+                    }
+                    $options = ['max_redirects' => 0, 'headers' => $requestLines];
+                    if ($body !== null) {
+                        $options['body'] = $body;
+                    }
+
+                    self::$lastRequest = self::describeRequest($method, $url, $requestLines, $body);
+                    $response          = $client->request($method, $url, $options);
+                    $status            = $response->getStatusCode();
+                    $responseHeaders   = $response->getHeaders(false);
+
+                    $declared = $responseHeaders['content-length'][0] ?? null;
+                    if ($declared !== null && ctype_digit(trim($declared)) && (int)$declared > $sizeLimit) {
+                        $response->cancel();
+                        $error = "The response is larger than the download limit of $sizeLimit bytes (webservice_max_download).";
+                        self::logFailure($url, $error);
+                        self::$lastResponse = '';
+
+                        return self::failure($status, $url, $error);
+                    }
+
+                    $blocks[] = self::headerBlock($response, $status);
+
+                    $location = in_array($status, [301, 302, 303, 307, 308], true) ? ($responseHeaders['location'][0] ?? '') : '';
+                    if ($location === '') {
+                        break;
+                    }
+
+                    $response->cancel();
+                    if ($redirects >= self::MAX_REDIRECTS) {
+                        $error = 'Maximum (' . self::MAX_REDIRECTS . ') redirects followed.';
+                        self::logFailure($url, $error);
+                        self::$lastResponse = '';
+
+                        return self::failure($status, $url, $error);
+                    }
+                    ++$redirects;
+
+                    $next = self::resolveRedirect($url, $location);
+                    if (!preg_match('#^https?://#i', $next)) {
+                        $error = 'The redirect leads to a URL that is not http or https.';
+                        self::logFailure($url, $error);
+                        self::$lastResponse = '';
+
+                        return self::failure($status, $url, $error);
+                    }
+
+                    // What the next request sends: 301, 302 and 303 turn a POST into a GET and send
+                    // no body (a PUT or DELETE keeps its method and the caller's own Content-Type);
+                    // 307 and 308 send the same again.
+                    if ($status !== 307 && $status !== 308) {
+                        if ($method === 'POST') {
+                            $method = 'GET';
+                        }
+                        $body     = null;
+                        $sentType = $keptType;
+                    }
+                    if (self::origin($next) !== self::origin($url)) {
+                        $lines = array_values(array_filter($lines, static function (string $line): bool {
+                            return !in_array(strtolower(trim(explode(':', $line, 2)[0])), ['authorization', 'cookie'], true);
+                        }));
+                    }
+                    $url = $next;
+                }
+
+                $content = '';
+                $cut     = false;
+                if ($method !== 'HEAD') {
+                    $content = BoundedBody::read($client, $response, $sizeLimit + 1);
+                    if (strlen($content) > $sizeLimit) {
+                        $content = substr($content, 0, $sizeLimit);
+                        $cut     = true;
+                    }
+                }
+            } catch (ExceptionInterface | \InvalidArgumentException $e) {
+                $error = $e->getMessage() !== '' ? $e->getMessage() : get_class($e);
+                self::logFailure($url, $error);
+                self::$lastResponse = '';
+
+                return self::failure(0, $url, $error);
+            }
+
+            $header = implode('', $blocks);
+            $error  = '';
+            if ($cut) {
+                $error = "The response was cut off at the download limit of $sizeLimit bytes (webservice_max_download).";
+                self::logFailure($url, $error);
             }
 
             // See if we have a HSTS header and store
             static::checkForHSTSHeader($endpoint, $header);
 
-            self::$lastRequest  = curl_getinfo($curl_handle, CURLINFO_HEADER_OUT);
             self::$lastResponse = $content;
 
-            $effective_url = curl_getinfo($curl_handle, CURLINFO_EFFECTIVE_URL);
-
-            curl_close($curl_handle);
-
             return [
-                'header' => $header,
-                'content' => $content,
-                'response' => $http_status,
-                'effective_url' => $effective_url,
-                'error' => $error,
+                'header'        => $header,
+                'content'       => $content,
+                'response'      => $status,
+                'effective_url' => $url,
+                'error'         => $error,
             ];
         }
 
         /**
-         * Wrapper for curl_exec
-         *
-         * @param  $ch
-         * @param  null $maxredirect
-         * @return bool|mixed
+         * The HTTP client for a request: the replacement given to useClient(), else the container's,
+         * fetched now (never kept: the container may rebuild it).
          */
-        static function webservice_exec($ch, &$maxredirect = null)
+        private static function client(bool $remote): HttpClientInterface
         {
+            if ($remote) {
+                return self::$remoteClient ?? \Idno\Core\Idno::container()->get('idno.http_client.remote');
+            }
 
-            $mr           = $maxredirect === null ? 5 : intval($maxredirect);
-            $open_basedir = ini_get('open_basedir');
+            return self::$client ?? \Idno\Core\Idno::container()->get('idno.http_client');
+        }
 
-            if (empty($open_basedir)
-                && !filter_var(ini_get('safe_mode'), FILTER_VALIDATE_BOOLEAN)
-            ) {
+        /**
+         * The caller's headers as [name, value] pairs, in order. A string key is a header name
+         * ('Content-Type' => 'x'); an integer key is a full line ('Name: value'). A line with no colon,
+         * and a header with no value ('Expect:', which curl used to read as "remove this header"), are
+         * not sent.
+         *
+         * @return list<array{string, string}>
+         */
+        private static function headerPairs($headers): array
+        {
+            $pairs = [];
+            if (empty($headers) || !is_array($headers)) {
+                return $pairs;
+            }
+            foreach ($headers as $key => $value) {
+                if (is_int($key)) {
+                    if (!is_string($value) || strpos($value, ':') === false) {
+                        continue;
+                    }
+                    [$name, $value] = explode(':', $value, 2);
+                    $values         = [$value];
+                } else {
+                    $name   = (string)$key;
+                    $values = is_array($value) ? $value : [$value];
+                }
+                $name = trim($name);
+                foreach ($values as $one) {
+                    if (!is_scalar($one) && !($one instanceof \Stringable)) {
+                        continue;
+                    }
+                    $one = trim((string)$one);
+                    if ($name !== '' && $one !== '') {
+                        $pairs[] = [$name, $one];
+                    }
+                }
+            }
 
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $mr > 0);
-                curl_setopt($ch, CURLOPT_MAXREDIRS, $mr);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            return $pairs;
+        }
 
+        /**
+         * The fields of a multipart body: text for a scalar, a part for a WebserviceFile, nested
+         * arrays kept (name[key]).
+         *
+         * @return array<array-key, mixed>
+         */
+        private static function formFields(array $params): array
+        {
+            $fields = [];
+            foreach ($params as $key => $value) {
+                if ($value instanceof \Idno\Core\WebserviceFile) {
+                    $fields[$key] = $value->getDataPart();
+                } elseif ($value instanceof DataPart) {
+                    $fields[$key] = $value;
+                } elseif (is_array($value)) {
+                    $fields[$key] = self::formFields($value);
+                } elseif (is_bool($value)) {
+                    $fields[$key] = $value ? '1' : '';
+                } elseif ($value === null || is_scalar($value) || $value instanceof \Stringable) {
+                    $fields[$key] = (string)$value;
+                }
+            }
+
+            return $fields;
+        }
+
+        /**
+         * The status line and headers of a response, as it sent them, ending with a blank line.
+         */
+        private static function headerBlock(ResponseInterface $response, int $status): string
+        {
+            $raw   = array_map(static fn($line): string => rtrim((string)$line, "\r\n"), (array)$response->getInfo('response_headers'));
+            $start = null;
+            foreach ($raw as $index => $line) {
+                if (preg_match('#^HTTP/\d#', $line)) {
+                    $start = $index;
+                }
+            }
+            if ($start !== null) {
+                $lines = array_slice($raw, $start);
             } else {
-
-                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-
+                $reason = \Symfony\Component\HttpFoundation\Response::$statusTexts[$status] ?? '';
+                $lines  = array_merge([rtrim("HTTP/1.1 $status $reason")], $raw);
             }
 
-            try {
-                return curl_exec($ch);
-            } catch (\Exception $e) {
-                \Idno\Core\Idno::site()->logging()->error('error sending Webservice request', ['error' => $e]);
+            return implode("\r\n", $lines) . "\r\n\r\n";
+        }
 
-                return false;
+        /**
+         * The request line and headers Idno sent, rebuilt for getLastRequest(). The value of a
+         * credential header is never in it.
+         *
+         * @param list<string> $lines
+         */
+        private static function describeRequest(string $method, string $url, array $lines, ?string $body): string
+        {
+            $parts  = parse_url($url) ?: [];
+            $target = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+            $host   = ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+            $text = "$method $target HTTP/1.1\r\nHost: $host\r\nUser-Agent: " . HttpClientFactory::USER_AGENT . "\r\n";
+            foreach ($lines as $line) {
+                [$name, $value] = array_map('trim', explode(':', $line, 2)) + [1 => ''];
+                if (strtolower($name) === 'user-agent') {
+                    $text = preg_replace('/User-Agent: [^\r]*\r\n/', '', $text, 1);
+                }
+                $text .= $name . ': ' . (in_array(strtolower($name), self::SECRET_HEADERS, true) ? '[redacted]' : $value) . "\r\n";
             }
+            if ($body !== null) {
+                $text .= 'Content-Length: ' . strlen($body) . "\r\n";
+            }
+
+            return $text . "\r\n";
+        }
+
+        /**
+         * One error line for a failed request: the URL as scheme, host and path only (never a query
+         * or credentials), the message with any URL in it reduced the same way, control characters
+         * replaced, each at most 200 bytes. Never a header or a body.
+         */
+        private static function logFailure(string $url, string $message): void
+        {
+            $message = preg_replace_callback('#https?://[^\s"\'<>]+#i', static fn(array $m): string => self::loggableUrl($m[0]), $message);
+            $message = substr((string)preg_replace('/[\x00-\x1F\x7F]/', '?', (string)$message), 0, 200);
+
+            \Idno\Core\Idno::site()->logging()->error('Webservice request failed: ' . self::loggableUrl($url) . ': ' . $message);
+        }
+
+        private static function loggableUrl(string $url): string
+        {
+            $parts = parse_url($url);
+            if (!is_array($parts) || empty($parts['host'])) {
+                return '[unreadable URL]';
+            }
+            $text = ($parts['scheme'] ?? 'http') . '://' . $parts['host'] . ($parts['path'] ?? '');
+
+            return substr((string)preg_replace('/[\x00-\x1F\x7F]/', '?', $text), 0, 200);
+        }
+
+        /**
+         * "scheme://host:port" of a URL, lower case, the port by default for the scheme.
+         */
+        private static function origin(string $url): string
+        {
+            $parts  = parse_url($url) ?: [];
+            $scheme = strtolower($parts['scheme'] ?? '');
+
+            return $scheme . '://' . strtolower($parts['host'] ?? '') . ':' . ($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
+        }
+
+        /**
+         * The URL a Location header points to, from the URL that answered with it.
+         */
+        private static function resolveRedirect(string $base, string $location): string
+        {
+            $location = trim($location);
+            if (($hash = strpos($location, '#')) !== false) {
+                $location = substr($location, 0, $hash);
+            }
+            if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $location)) {
+                return $location;
+            }
+
+            $parts     = parse_url($base) ?: [];
+            $scheme    = $parts['scheme'] ?? 'http';
+            $authority = ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '');
+            if (strpos($location, '//') === 0) {
+                return $scheme . ':' . $location;
+            }
+
+            $basePath = $parts['path'] ?? '/';
+            $query    = '';
+            if (($mark = strpos($location, '?')) !== false) {
+                $query    = substr($location, $mark);
+                $location = substr($location, 0, $mark);
+            } elseif ($location === '') {
+                $query = isset($parts['query']) ? '?' . $parts['query'] : '';
+            }
+
+            if ($location === '') {
+                $path = $basePath;
+            } elseif ($location[0] === '/') {
+                $path = $location;
+            } else {
+                $path = substr($basePath, 0, (int)strrpos($basePath, '/') + 1) . $location;
+            }
+
+            $segments = [];
+            foreach (explode('/', $path) as $segment) {
+                if ($segment === '..') {
+                    if (count($segments) > 1) {
+                        array_pop($segments);
+                    }
+                } elseif ($segment !== '.') {
+                    $segments[] = $segment;
+                }
+            }
+            $last = basename($path);
+            $path = implode('/', $segments);
+            if ($last === '.' || $last === '..') {
+                $path .= '/';
+            }
+
+            return $scheme . '://' . $authority . ($path === '' ? '/' : $path) . $query;
         }
 
         /**
@@ -269,10 +564,10 @@ namespace Idno\Core {
          *
          * @param  string $endpoint The URI to send the HEAD request to
          * @param  array  $params   Optionally, an array of parameters to send (keys are the parameter names)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function head($endpoint, array $params = null, array $headers = null)
+        static function head($endpoint, ?array $params = null, ?array $headers = null)
         {
             return self::send('head', $endpoint, $params, $headers);
         }
@@ -282,10 +577,10 @@ namespace Idno\Core {
          *
          * @param  string $endpoint The URI to send the PUT request to
          * @param  mixed  $params   Optionally, an array of parameters to send (keys are the parameter names), or the raw body text (depending on Content-Type)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function put($endpoint, $params = null, array $headers = null)
+        static function put($endpoint, $params = null, ?array $headers = null)
         {
             return self::send('put', $endpoint, $params, $headers);
         }
@@ -295,10 +590,10 @@ namespace Idno\Core {
          *
          * @param  string $endpoint The URI to send the DELETE request to
          * @param  array  $params   Optionally, an array of parameters to send (keys are the parameter names)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function delete($endpoint, array $params = null, array $headers = null)
+        static function delete($endpoint, ?array $params = null, ?array $headers = null)
         {
             return self::send('delete', $endpoint, $params, $headers);
         }
@@ -322,29 +617,14 @@ namespace Idno\Core {
 
         /**
          * Identical to Webservice::file_get_contents(), except that this function returns the full context - headers and all.
+         * Redirects are followed by send(); a request that fails (too many redirects included) is its
+         * failed result, never an exception.
          *
          * @param type $url
          */
         static function file_get_contents_ex($url)
         {
-            $result = self::get($url);
-
-            // Checking for redirects (HTTP codes 301 and 302)
-            $redirect_count = 0;
-            while (($result['response'] == 302) || ($result['response'] == 301)) {
-                $redirect_count += 1;
-                if ($redirect_count >= 3) {
-                    // We have followed 3 redirections already…
-                    // This may be a redirect loop so we'd better drop it already.
-                    return false;
-                }
-                // The redirection URL is the "location" field of the header
-                $headers = http_parse_headers($result['header']);
-                $headers = array_change_key_case($headers, CASE_LOWER); // Ensure standardised header array keys
-                $result  = self::get($headers["location"]);
-            }
-
-            return $result;
+            return self::get($url);
         }
 
         /**
@@ -352,10 +632,10 @@ namespace Idno\Core {
          *
          * @param  string $endpoint The URI to send the GET request to
          * @param  array  $params   Optionally, an array of parameters to send (keys are the parameter names)
-         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $headers  Optionally, an array of headers to send with the request: 'Name: value' lines, or Name => value
          * @return array
          */
-        static function get($endpoint, array $params = null, array $headers = null)
+        static function get($endpoint, ?array $params = null, ?array $headers = null)
         {
             return self::send('get', $endpoint, $params, $headers);
         }
@@ -395,7 +675,9 @@ namespace Idno\Core {
         }
 
         /**
-         * Retrieves the last HTTP request sent by the service client
+         * Retrieves the last HTTP request sent by the service client: the request line and the headers
+         * Idno sent, rebuilt (not a byte-exact copy of the wire). The value of an Authorization,
+         * Proxy-Authorization, Cookie or Signature header is replaced by [redacted].
          *
          * @return string
          */

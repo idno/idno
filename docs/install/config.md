@@ -114,6 +114,22 @@ will not show up in the plugin list.
     prerequisiteplugins[] = 'FrameworkPlugin'
     prerequisiteplugins[] = 'AnotherLibraryPlugin'
 
+**proxy_string**, **proxy_type**, **disable_ssl_verify**<br>
+How the site's outgoing requests (webmentions, feeds, ActivityPub delivery and so on) are made. They are read from
+`config.ini` or the environment only, never from the settings saved in the database. `proxy_string` is a proxy
+(`host:port`, or a full URL such as `socks5://host:1080`); when it has no scheme, `proxy_type` (`http`, `socks4`,
+`socks5` or `socks5-hostname`) gives it one. Certificates are always verified unless `disable_ssl_verify` is set to
+a non-empty value: do that only when you must.
+
+    proxy_string = 'proxy.example.com:3128'
+    proxy_type = 'http'
+
+**webservice_max_download**<br>
+The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
+larger length is refused, and one with no declared length is cut at this size.
+
+    webservice_max_download = 20971520
+
 **sessionname**<br>
 The internal identifier used to store the user session.
 

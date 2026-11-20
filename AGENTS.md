@@ -1091,6 +1091,55 @@ other new code may.
     CI's servers and tests (`http://localhost/`), the console (the same `config.ini`), and a subprocess
     server a test starts on another port (its `IDNO_URL`). Neither the wrapper nor the exemption exists
     outside the test container: both are in `Tests/` and wired only in `config/services_test.php`.
+- `Idno\Core\Webservice` (the legacy static client, ~40 call sites) sends its requests through those
+  clients; no `curl_*` call is left in it. New code injects `HttpClientInterface` (`$remoteClient` for a
+  URL a remote party supplied) instead of calling it. Pinned by `Tests/Kernel/WebserviceAdapterTest`
+  (a `MockHttpClient` given through `Webservice::useClient()`) and, against the real routes,
+  `Tests/Characterisation/WebserviceWireTest` and `OutboundFlowsTest`. What it does:
+  - Every public static method keeps its name, parameters and defaults, and `send()` and its wrappers
+    return `['header', 'content', 'response', 'effective_url', 'error']`. `safeSend($verb, $endpoint,
+    $params = null, ?array $headers = null)` is `send()` on `idno.http_client.remote`. The clients are
+    fetched from the container at each call, never kept; `Webservice::useClient($client, $remote = null)`
+    replaces them (a test's) and `useClient(null)` restores the container's. `webservice_exec()` and
+    the cookie jar (the `cookie_jar` setting) are gone. `WebserviceFile::getCurlParameters()` still
+    returns a `CURLFile`; `getDataPart()` is what the adapter uses.
+  - `send()` never throws for a transport failure (a refused connection, a timeout, a certificate that
+    does not verify, a host the remote client refuses): the result has `response` 0, empty `header` and
+    `content`, `effective_url` the URL that was being requested and the failure's message in `error`;
+    one error line is logged (`Webservice request failed: <scheme>://<host><path>: <message>`: no query,
+    no credentials, control characters replaced, each part at most 200 bytes, never a header or a body).
+    `error` is empty exactly when a response was received and its body was complete.
+  - Redirects are followed BY THE ADAPTER, one request per hop, each sent with `max_redirects` 0, so
+    that `header` holds the header block of every hop in order, `effective_url` is the last URL, and the
+    remote client checks every hop's address. Five are followed; a sixth is the failed result with the
+    sixth response's status and URL, a non-empty `error` and empty `header` and `content`. On 301, 302
+    and 303 a POST becomes a GET with no body and no Content-Type of its own, and a PUT or DELETE keeps
+    its method and the caller's Content-Type but sends no body; on 307 and 308 the same method, body and
+    Content-Type are sent again. `Authorization` and `Cookie` headers are not sent to another origin.
+    No Referer is sent on a redirect. `file_get_contents_ex()` is `get()`; after too many redirects it
+    returns the failed result and `file_get_contents()` returns false (neither throws).
+  - Size limit: `webservice_max_download` (default 10 MB, read from the legacy config at call time). A
+    response that DECLARES a `Content-Length` over it is refused without reading the body (`response` is
+    its status, `error` non-empty, `header` and `content` empty, also for HEAD); a body with no declared
+    length is read through `BoundedBody` and cut at the limit, with `error` non-empty and the cut `content`.
+    Time limits and certificate verification come from the client, not per request.
+  - Headers: a string key is a header name (`['Content-Type' => 'x']` is sent as `Content-Type: x`; it
+    used to be dropped), an integer key is a full `Name: value` line, a line with no colon, and a header
+    with an empty value (`Expect:`), are not sent. The `webservice:headers` event is asked as before and
+    its headers merged after the caller's. A caller's Content-Type is used for every verb. With none of
+    its own: POST is `application/x-www-form-urlencoded` for a string; PUT and DELETE claim a bare
+    `multipart/form-data` when the request had no headers at all, else form-encoded; an array body is
+    `multipart/form-data` with a boundary (`symfony/mime`'s `FormDataPart`; a `WebserviceFile` is a
+    `DataPart`; nested arrays are `a[b]` fields). `put()` of an array sends only that body, `delete()`
+    of an array sends the parameters in the query AND as a multipart body, `get()` and `head()` put them
+    in the query. A body is built in memory (an upload is as large in memory as the file).
+  - `getLastRequest()` is the request line and headers Idno sent for the last request, rebuilt (not curl's
+    byte-exact copy), with the values of `Authorization`, `Proxy-Authorization`, `Cookie` and `Signature`
+    replaced by `[redacted]`; `getLastResponse()` is the last body.
+  - In the test environment the PHPUnit process and the rig's web server cannot reach a foreign host
+    through `Webservice` (the clients are wrapped in `LocalOnlyHttpClient`): the default hub ping to
+    `withknown.superfeedr.com` after a publish is refused inside the site and logged. A test that needs
+    another origin lists it in `IDNO_TEST_HTTP_ALLOW`.
 - The compiled container lives in `<cache base>/<env>/<build>-<key>` (cache base:
   `IDNO_CACHE_DIR`, else `var/cache`, else a private per-project temp dir; build number from
   `version.idno`). The key (`Kernel::getCacheDir()`) hashes the code fingerprint together with

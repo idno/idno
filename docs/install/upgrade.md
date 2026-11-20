@@ -415,6 +415,8 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 * **MySQL sites:** every `database` setting that worked before still works (`MySQL`, `mysql`, `beanstalk-mysql`, and any other value that is not a database class, which has always meant MySQL), and a `sessions_storage = Idno\Data\MySQL` setting keeps your sessions in the database (now its `idno_sessions` table). Sessions are not carried over: users log in again after the upgrade.
 * **MongoDB sites do not start.** MongoDB is no longer a database Idno runs on; move the site with `php bin/console idno:import:mongo` (see "Moving a MongoDB site"). The upload directory then holds the files GridFS kept, and the site's users log in again (sessions are not carried over).
 
+* **Outbound requests are made by Symfony's HTTP client.** `Idno\Core\Webservice` (used for webmentions, feeds, ActivityPub delivery, syndication and so on) no longer calls curl directly. What you will notice: a remote server whose certificate does not verify is no longer talked to (`error` says why; set `disable_ssl_verify` in `config.ini` or the environment only if you must); a request that receives nothing for 10 seconds, or lasts 60 seconds, fails; the `proxy_string` and `proxy_type` settings still work and are read from `config.ini` or the environment only. No cookie jar file is written any more, and the `cookie_jar` setting does nothing.
+
 ### Removed in 2.0
 
 * Known hub integration removed; the `idno_hub` and `known_hub` settings are ignored.
@@ -508,6 +510,22 @@ A new indexed field on a core class (under `Idno/`) ships with a new, empty sche
 in `Idno/Storage/Migrations/` with its own version and no SQL): that pending migration is what makes
 every existing site create the index when it upgrades. A plugin's indexes are created when the plugin
 is enabled and by `idno:upgrade`; plugins cannot ship migrations.
+
+### Outbound requests: `Webservice`
+
+`Idno\Core\Webservice` keeps every public static method, its parameters and its result array (`header`, `content`, `response`, `effective_url`, `error`), and the `webservice:headers` event still fires. In new code, inject `Symfony\Contracts\HttpClient\HttpClientInterface` instead (a URL that a remote party supplied, such as a webmention source or an ActivityPub actor, goes through the client injected as `$remoteClient`, or `Webservice::safeSend()`, which refuse loopback, private, link-local and reserved addresses on the request and on every redirect). What differs from 1.x:
+
+* **A certificate that does not verify is an error.** Verification used to be switched off whenever redirects could be followed. `error` says why; `disable_ssl_verify` still turns verification off.
+* **Time limits.** A request that receives nothing for 10 seconds, or lasts 60 seconds, fails with a non-empty `error`.
+* **A larger response is cut at the limit.** `webservice_max_download` (default 10 MB) was only checked against a declared `Content-Length`; a response with none is now cut at the limit, with a non-empty `error`. A response that declares a length over the limit is refused as before.
+* **Remote-party URLs.** A fetch through `safeSend()` or the `$remoteClient` service fails when any hop resolves to a private or reserved address.
+* **`error` holds Symfony's message, not curl's**, and is empty exactly when a response was received. `send()` never throws for a transport failure.
+* **Headers given by name are sent.** `['Content-Type' => 'application/json']` used to be silently dropped (only `'Name: value'` lines reached curl); it is sent now, for every verb (the PuSH hub ping passes its Content-Type this way). A line with no colon is not sent.
+* **After more than five redirects**, `file_get_contents_ex()` returns the failed result and `file_get_contents()` returns `false`; neither throws (they used to raise a PHP warning, an exception on a site with `pedantic_mode`).
+* **No Referer on redirects**, and `Authorization` and `Cookie` headers are not sent to a different host on a redirect.
+* **No cookie jar.** The `cookie_jar` setting is gone and nothing is written to the temporary directory.
+* **`getLastRequest()`** returns the request line and the headers Idno sent, rebuilt, not curl's byte-exact copy, with the values of `Authorization`, `Proxy-Authorization`, `Cookie` and `Signature` replaced by `[redacted]`.
+* **`webservice_exec()` is removed** (it took a curl handle; nothing in Idno called it).
 
 ### What behaves differently
 

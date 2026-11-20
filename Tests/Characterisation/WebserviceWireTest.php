@@ -155,17 +155,22 @@ final class WebserviceWireTest extends CharacterisationTestCase
     }
 
     /**
-     * Quirk: the headers are lines ('Name: value'). An associative array, as the docblock describes
-     * ('keys are the header names') and as the hub ping passes its Content-Type, sends nothing:
-     * the value alone is not a header line.
+     * Changed deliberately: this used to pin that a header given by name (`['X-Idno-Test' => 'x']`, as
+     * the docblock describes and as the hub ping passes its Content-Type) was silently NOT sent, because
+     * only full 'Name: value' lines reached curl. Such an entry is now sent, for every verb. A line is
+     * sent as before, and a line with no colon is not sent.
      */
-    public function testAnAssociativeHeaderArrayIsNotSent(): void
+    public function testAnAssociativeHeaderArrayIsSent(): void
     {
         $echoed = $this->echoed(Webservice::get($this->url('/_test/echo'), null, ['X-Idno-Test' => 'assoc']));
-        $this->assertNull($this->header($echoed, 'X-Idno-Test'));
+        $this->assertSame('assoc', $this->header($echoed, 'X-Idno-Test'));
 
         $echoed = $this->echoed(Webservice::post($this->url('/_test/echo'), 'a=1', ['Content-Type' => 'application/json']));
-        $this->assertSame('application/x-www-form-urlencoded', $echoed['content_type']);
+        $this->assertSame('application/json', $echoed['content_type']);
+        $this->assertSame('a=1', $this->bodyOf($echoed));
+
+        $echoed = $this->echoed(Webservice::get($this->url('/_test/echo'), null, ['X-Idno-Line: line', 'not a header line']));
+        $this->assertSame('line', $this->header($echoed, 'X-Idno-Line'));
     }
 
     public function testPostOfAWebserviceFileUploadsIt(): void
@@ -440,11 +445,10 @@ final class WebserviceWireTest extends CharacterisationTestCase
     }
 
     /**
-     * Webservice::get() has followed up to five redirects by the time file_get_contents_ex() looks at
-     * the result, so its own loop (three more redirects at most) only runs for a result that is still a
-     * 301 or 302: after a sixth redirect. Quirk: it then reads the Location from a header string that
-     * is empty and fails with a PHP warning (an ErrorException on a site with pedantic_mode, as the
-     * test rig and CI have).
+     * Changed deliberately: after a sixth redirect this used to throw (a PHP warning for a Location
+     * read from an empty header string, an ErrorException on a site with pedantic_mode, as the test
+     * rig and CI have). The request is now a failed result, as for any request that cannot be
+     * completed: file_get_contents_ex() returns it, with an error, and file_get_contents() gives false.
      */
     public function testFileGetContentsExReturnsWhatGetFollowedAndFailsAfterASixthRedirect(): void
     {
@@ -456,9 +460,12 @@ final class WebserviceWireTest extends CharacterisationTestCase
         $this->assertSame(200, $result['response']);
         $this->assertSame($this->url('/_test/echo'), $result['effective_url']);
 
-        $this->expectException(\ErrorException::class);
-        $this->expectExceptionMessage('location');
-        Webservice::file_get_contents_ex($this->url($this->chain(6)));
+        $result = Webservice::file_get_contents_ex($this->url($this->chain(6)));
+        $this->assertSame(302, $result['response']);
+        $this->assertNotSame('', $result['error']);
+        $this->assertSame('', $result['content']);
+
+        $this->assertFalse(Webservice::file_get_contents($this->url($this->chain(6))));
     }
 
     /**

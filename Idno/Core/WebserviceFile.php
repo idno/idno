@@ -39,6 +39,17 @@ namespace Idno\Core {
         }
 
         /**
+         * The file as a part of a multipart body, for the HTTP client.
+         *
+         * @return \Symfony\Component\Mime\Part\DataPart
+         * @throws \InvalidArgumentException when the file cannot be read
+         */
+        function getDataPart(): \Symfony\Component\Mime\Part\DataPart
+        {
+            return \Symfony\Component\Mime\Part\DataPart::fromPath($this->file, $this->name ?: null, $this->mime ?: null);
+        }
+
+        /**
          * Converts an "@" formatted file string into a WebserviceFile
          *
          * @param  type $fileuploadstring
