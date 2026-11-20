@@ -16,7 +16,7 @@ class CLIInstaller extends \Idno\Core\Installer
     private $expected_manifest = [
         'site_title' => '"Site title"',
         'database' => '"Database type: \'mysql\' (MySQL or MariaDB) or \'sqlite\'"',
-        'sqlite_path' => '"For SQLite, the database file (blank for data/idno.sqlite); not used for MySQL"',
+        'sqlite_path' => '"For SQLite, the database file, whose name must end in .sqlite (blank for data/idno.sqlite); not used for MySQL"',
         'mysql_name' => '"Database name"',
         'mysql_user' => '"Database username"',
         'mysql_pass' => '"Database password"',
@@ -224,7 +224,7 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     if ($database == 'sqlite') {
                         if (empty($this->config['sqlite_path'])) {
-                            $question = new Symfony\Component\Console\Question\Question('Please enter the path of the database file: ', $this->defaultSqlitePath());
+                            $question = new Symfony\Component\Console\Question\Question('Please enter the path of the database file (its name must end in .sqlite): ', $this->defaultSqlitePath());
 
                             $this->config['sqlite_path'] = $helper->ask($input, $output, $question);
                         }
@@ -286,6 +286,13 @@ class CLIInstaller extends \Idno\Core\Installer
                     $output->writeln("Your site's configuration is written. Its database is set up when the site is first loaded in a browser, or by running, from " . $this->root_path . ":");
                     $output->writeln("    php bin/console idno:upgrade");
                     $output->writeln("Then visit your site to create your first user!");
+
+                    if ($database == 'sqlite') {
+                        $output->writeln("");
+                        foreach (self::sqliteOwnershipNotes($db_params['dbname']) as $line) {
+                            $output->writeln($line);
+                        }
+                    }
 
                     return \Symfony\Component\Console\Command\Command::SUCCESS;
                 }

@@ -170,7 +170,8 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `http://localhost/` with `php -S localhost:80` and `Tests/build/router.php`, and run bare
   `vendor/bin/phpunit`; and, on PHP 8.4 only, the `mongo-import` job (a `mongo:6` service and the
   SQLite rig: `composer test -- Tests/Import` with `IDNO_TEST_MONGO_URL`, the one test that needs a
-  MongoDB server). Tests must not assume a
+  MongoDB server; then the same on a `mysql:8.0` service, set up as the MySQL job is, each run checked
+  with `Tests/rig/mongo-import-check.php` that the end-to-end test ran). Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
   from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
@@ -334,22 +335,42 @@ settings page, the CLI installer lets it end the command with the message), anyt
 MariaDB. For MySQL the input is
 `name`, `user`, `pass` and `host`, the check is a connection (`installSchema()`), and the value written
 is `MySQL`. For SQLite the input is `path`: empty is `<project>/data/idno.sqlite`, a relative path is
-under the project directory (as the site reads it), the file's directory is created (0755) when
-missing, an empty file is created when there is none, both must be writable, and the file is opened
-through DBAL with `SqliteConnectionSetup` (which refuses SQLite below 3.38), so an existing file that
-is not an SQLite database is refused and left as it is (an empty file is a valid new database); a path
-with a single quote or a control character is refused (it cannot be written in the configuration
-file). The value written is exactly `sqlite` (`Sqlite3` in a configuration means MySQL: see
+under the project directory (as the site reads it). `Installer::sqlitePath()` (also what `makeconfig`
+calls) checks the path WITHOUT touching the disk and refuses with a `ConfigurationException`, saying
+why, a path with a single quote or a control character (it cannot be written in the configuration
+file), a segment `..` (either slash), and a file name that does not match
+`/^[A-Za-z0-9._-]+\.sqlite\z/i`: `.sqlite` is the suffix every shipped web-server configuration refuses
+to serve and PHP never executes, so a database file can neither be fetched nor run through the site
+(directory names may hold anything else, spaces included). `sqliteParams()` then checks what it can
+without creating anything (not a directory, the existing directory and file writable) and creates the
+directory (0755) and an empty file last; the file is opened through DBAL with `SqliteConnectionSetup`
+(which refuses SQLite below 3.38), so an existing file that is not an SQLite database is refused and
+left as it is (an empty file is a valid new database). The value written is exactly `sqlite` (`Sqlite3` in a configuration means MySQL: see
 `ConnectionParameters::driverFamily()`) and `dbname` is the absolute path; `dbuser`, `dbpass` and
 `dbhost` are empty. Neither installer loads SQL: the tables are created by the upgrade, as for MySQL.
 `Installer::requiredModules()` no longer lists `pdo_mysql`: `Installer::databaseModules()` is
 `pdo_mysql` and `pdo_sqlite`, and the requirements page and `check-requirements` need at least one
 (`Installer::databaseModuleAvailable()`). The web installer's settings page has the choice as two
-radio buttons in one `fieldset` (MySQL or MariaDB by default) and an SQLite path field; the CLI asks
+radio buttons in one `fieldset` (MySQL or MariaDB by default) and NO SQLite path: the installer of a
+site that is not set up is reachable by anyone, so the web installer's SQLite database is always
+`<project>/data/idno.sqlite` (the page says where, escaped, and that another place needs the CLI
+installer or a hand-written `config.ini`; a `sqlite_path` in the request is ignored). What the
+settings page decides is `Installer::checkWebSettings($method, $request)` (no output, no exit; the
+page, `WebInstaller::pageSettings()`, only draws): nothing is checked against the database, and no file
+or directory is created, unless the method is POST and the upload path has passed its own check (a
+failed submission leaves nothing behind); a value that is not a string (`upload_path[]=x`) is empty;
+an empty upload path says "You need to specify an upload path." for either database. Do not add a
+disk path the visitor chooses to the web installer. The CLI asks
 `Please enter the database type (mysql or sqlite): `, and for SQLite the path in place of the
 database's name, user, password and host (manifest keys `database` and `sqlite_path`; `makeconfig`
-writes the SQLite settings without creating the file). `Tests/Unit/Install/InstallerDatabaseTest`
+writes the SQLite settings without creating the file). The installers change no file's mode: an SQLite
+site set up from the command line has files owned by that user, which the web server cannot write, so
+the CLI installer (and the import command, for an SQLite target) prints
+`Installer::sqliteOwnershipNotes()`: the file, its directory and the files SQLite and the upgrade
+create beside it (`-wal`, `-shm`, `.upgrade.lock`) must be owned by or writable for the web server's
+user (`chown -R www-data data/`), and console commands on the site run as that user. `Tests/Unit/Install/InstallerDatabaseTest`
 pins the SQLite side in the unit tier (a test subclass whose root is a temporary directory),
+`WebSettingsTest` the web installer's decision, `CliInstallerTest` `makeconfig` and the ownership notes,
 `Tests/Kernel/InstallerSchemaTest` the MySQL side (skips on SQLite). `ext-pdo_mysql` is a Composer `suggest`, not a
 `require`, as is `ext-pdo_sqlite`.
 
@@ -1797,8 +1818,9 @@ tests). It is built with new (the `Files/` directory is excluded from the contai
   `FileStoreException` (previous: Flysystem's).
 - `FilesystemFactory::fromConfig(BootConfig::all())`: an `uploadpath` of `s3://<bucket>/<prefix>/` is the S3
   adapter (`FilesystemFactory::s3Options()` maps `aws_region`, `aws_key`, `aws_secret` to the client's options; no credentials means the SDK's default chain), any
-  other non-empty path the local adapter rooted there (files 0644, directories 0755), none throws a
-  `\LogicException`. Tests give it an `S3Client` on a Symfony `MockHttpClient`, never the network.
+  other non-empty path the local adapter rooted there (files 0644, directories 0755; the root is
+  created when something is first written, not when the adapter is built, so a root that cannot be
+  made fails that write and never building the service), none throws a `\LogicException`. Tests give it an `S3Client` on a Symfony `MockHttpClient`, never the network.
 - Tests: `Tests/Unit/Storage/Files/`.
 
 The container's services and the legacy filesystem:
@@ -1817,13 +1839,17 @@ The container's services and the legacy filesystem:
   named through `componentFactory()`, falling back to it. With no `filesystem` setting a database backend class
   that supplies its own (`db()->getFilesystem()`) keeps it. No `uploadpath` and nothing else: null. The `filesystem`
   setting is deprecated: S3 needs no plugin, just an `s3://` upload path. The legacy API never threw:
-  the shim logs a `FileStoreException` and returns false (`findOne()` false; a failed `storeFile()` or
-  `storeContent()` also adds the two session messages the old local filesystem added).
+  the shim logs what the store can throw (a `FileStoreException`, Flysystem's `FilesystemException`, the
+  factory's `\LogicException`) with a fixed message and returns false (`findOne()` false; a failed
+  `storeFile()` or `storeContent()` also adds the two session messages the old local filesystem
+  added): no failure of the store becomes the 500 page, whose message can hold a server path.
   `FlysystemFile::$internal_filename` is the upload root joined with `FileStore::path()` on a local
   directory and `''` on S3. `Idno\Files\LocalFileSystem`, `LocalFile` and `CDNStorable` are gone;
   `Idno\Files\FileSystem` and `File` remain the bases.
 - The file page (`Idno\Pages\File\View`) positions a stream for a range request with
-  `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3).
+  `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3), and
+  reads the range with `View::readRange()`, which stops at the end of the stream or on an empty or
+  failed read (a stream shorter than the stored size never makes the page wait).
   `FilesystemCache`, the Purifier cache and the Twig cache never use an `s3://` upload path as a
   directory: they use the temporary directory instead.
 - Deliberate differences from the old local filesystem: deleting a file removes its `.data` file too;
@@ -1890,7 +1916,14 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   data. The protection is that config.ini names MongoDB until the command has exited 0; after a failure
   that touched the target (`MongoImporter::touchedTarget()`) the command prints on stderr, after the
   error, `ImportMongoCommand::INCOMPLETE` (the target is incomplete, must not be used, drop it and start
-  again on a new, empty database). Other collections are returned as `notImported` (names only).
+  again on a new, empty database). The import never cleans up a failed run: whoever runs it drops the
+  target by hand (the database, or the SQLite file with its `-wal` and `-shm` files). Other collections are returned as `notImported` (names only).
+- `ExtMongoSource::count()` (and `fileCount()`, `fs.files`) is exact: an `aggregate` with `$count`,
+  which reads the documents, not the `count` command without a query, which answers from collection
+  metadata that is wrong after an unclean shutdown of the server (the importer's check that "a site is
+  still writing" would then stop every run). The source server must be MongoDB 3.6 or later (what the
+  `mongodb` extension talks to); an older server's data is dumped and restored into a newer `mongod`
+  first.
 - `ExtMongoSource` reads documents and files a page at a time (constructor `$pageSize`, default 100:
   `_id` greater than the last read, sorted, limited, each page read whole), never through one
   long-lived cursor (it would idle on the server past its cursor timeout while a page is imported);
@@ -1917,12 +1950,16 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   imported configuration's `file_path_host`; else the host of the boot `url`, else of the imported
   `url`, with `www.` removed as `Config::pathHost()` removes it; with none, a `\RuntimeException` at the
   first file (no file written). Passwords (the target's, and the source's from the configuration or
-  the URI) are never printed: a connection failure is a fixed line and the exception's class; every
-  other message is printed and logged (`upgrade` channel) with each password replaced. On success it
+  the URI) are never printed: a failure to connect to the target is a fixed line and the exception's
+  class; so is any failure to parse the source's URI or to connect to or read from MongoDB (any
+  `MongoDB\Driver\Exception\Exception`: the driver quotes the whole URI in some messages), with the
+  detail on the `upgrade` log only, passwords replaced; every other message is printed and logged
+  with each password replaced. The source's passwords come from `ImportMongoCommand::uriPasswords()`,
+  a pattern on the user-info part (`parse_url()` fails on malformed URIs), raw and percent-decoded. On success it
   prints the counts, the collections not imported, the `config.ini` lines (`database`, `dbname`,
   `dbhost`, `dbport` when given, `dbuser`, `dbpass = "<the password you gave>"`, `filesystem = "local"`,
   `uploadpath`, and `file_path_host` when `--file-host` was given) and `Now run php bin/console
-  idno:upgrade`; exit 0.
+  idno:upgrade`; exit 0. For an SQLite target it then prints `Installer::sqliteOwnershipNotes()`.
 - Tests: `Tests/Unit/Upgrade/Mongo/` (`MongoDocumentTest`; `MongoImporterTest`, the importer's contract
   `Tests/Import/Contract/MongoImporterContract` on an SQLite file with an `ArrayMongoSource`, plus a 64
   MiB file imported under `memory_limit=32M` in a subprocess, `import_large_file.php`, on the local
@@ -1946,7 +1983,15 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   own) and a PHP 8.4 image with the extension (`Tests/rig/mongo-import.Dockerfile`) built around a COPY
   of the checkout (never the checkout itself, and without `.git`, `vendor/`, `.env` or the whole
   `configuration/` directory, so no local configuration or secret is baked into the kept image: the rig
-  it starts writes the copy's own `configuration/config.ini`), on the SQLite rig; it removes the
+  it starts writes the copy's own `configuration/config.ini`), and runs `Tests/Import` TWICE inside the
+  PHP container (`Tests/rig/mongo-import-container.sh`): on the SQLite rig, then against a `mysql:8.0`
+  container on the same network, set up as CI's MySQL job sets its database up (the container has no
+  Docker, so the rig's MySQL mode cannot be used): `Tests/build/config_mysql.ini` as
+  `configuration/config.ini` (user root, host the container's name), `idno:upgrade`, `php -S
+  localhost:80` with `Tests/build/router.php`, bare PHPUnit (deprecations excluded); the test's target
+  is then a private database of that server. Each run must RUN `MongoImportEndToEndTest`
+  (`Tests/rig/mongo-import-check.php` reads PHPUnit's JUnit log and fails on a skip), so BSON-derived
+  values reach MySQL's JSON functions too. It removes the
   containers, their volumes and the network whatever happens (also when interrupted), and the previous
   image when a build replaces it. The container (and the CI job `mongo-import`) have the `mongodb`
   extension and no `mongodb/mongodb` library: the import's subprocess, configured for MongoDB, boots

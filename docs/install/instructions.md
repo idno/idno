@@ -34,7 +34,7 @@ The installers write your configuration file; they do not create Idno's tables. 
 
 #### Installing to SQLite
 
-On the installer's settings page choose "SQLite" and give the full path of the database file (the default is `data/idno.sqlite` in your Idno directory). Idno creates the file, and its folder if it is missing; the web server must be able to write to that folder. The CLI installer asks `Please enter the database type (mysql or sqlite):`; answer `sqlite`, then give the path. A file that already exists and is not an SQLite database is refused and left as it is. See "If you're using SQLite" below for what to know before you choose it.
+On the web installer's settings page choose "SQLite". The database is always the file `data/idno.sqlite` in your Idno directory: the page takes no path, because the installer of a site that is not set up yet can be reached by anyone, and a person who could choose where it writes a file could choose a place the web server runs code from. Idno creates the file, and the `data/` folder if it is missing; the web server must be able to write to that folder. To keep the database somewhere else, use the CLI installer (see [here](cliinstaller.md)): it asks `Please enter the database type (mysql or sqlite):`, and for `sqlite` the path of the file; or write the configuration file yourself (below). Either way, the name of the file must end in `.sqlite` and hold only letters, digits, dots, underscores and dashes (`idno.sqlite`, `my-site.v2.sqlite`), and its path cannot contain `..`: every web server configuration Idno ships refuses to serve a file with that suffix and PHP never runs one, so a database file cannot be fetched or executed through the site. A file that already exists and is not an SQLite database is refused and left as it is. Nothing is created unless the whole form is valid. See "If you're using SQLite" below for what to know before you choose it.
 
 ### Use environment variables
 
@@ -66,7 +66,7 @@ Additionally, you will need to create the database referred to in this configura
 
 SQLite keeps the whole database in one file, so a small site needs no database server. It suits a site on a single server with a local disk (SQLite 3.38 or later, with PHP's `pdo_sqlite`).  Both installers can set up an SQLite site; or write the configuration file yourself.
 
-Put the database file in the `data/` directory of your Idno installation (the web server must be able to write to it: SQLite keeps its journal files beside the database file), and name it in your configuration file:
+Put the database file in the `data/` directory of your Idno installation (the web server must be able to write to it: SQLite keeps its journal files beside the database file), and name it in your configuration file. Its name must end in `.sqlite`:
 
     database = "sqlite"
     dbname = "data/idno.sqlite"
@@ -79,13 +79,14 @@ What to know before you choose SQLite:
 * **Sessions are files.** SQLite cannot lock a session, so an SQLite site keeps its PHP sessions in PHP's session files (as with `sessions_database` off), not in the database. Anyone logged in to a site that moves from MySQL to SQLite logs in again.
 * **Search has no full-text index.** A search term of more than five bytes matches any of its words inside longer words, and boolean operators (`+word -other`) are plain characters.
 * **Case and accents.** Only the case of the letters A to Z is ignored when text is compared: `ÉTÉ` does not find `été`, `café` does not find `cafe`.
+* **Who owns the files.** If you set the site up from a terminal (the CLI installer, `php bin/console idno:upgrade`, `php bin/console idno:import:mongo --target=sqlite:///...`), the database file, its directory and the files SQLite and the upgrade create beside it (`-wal`, `-shm` and `.upgrade.lock`) belong to you, and the web server cannot write to them ("attempt to write a readonly database"). Idno changes no file's permissions: give them to the web server's user (or make them writable for it), for example `chown -R www-data data/`, and run console commands on the site, and cron or queue workers, as that user (`sudo -u www-data php bin/console ...`).
 * **Backups.** Use `sqlite3 data/idno.sqlite ".backup backup.sqlite"`, or copy the file together with its `-wal` and `-shm` files while no request is writing.
 
 Note that `database = "Sqlite3"`, which older instructions gave, does not mean SQLite: Idno connects to MySQL with it.
 
 ### Set the filesystem
 
-Uploaded files are stored on your server’s local hard drive, in the upload directory below. Plugins can provide alternative filesystems like Amazon S3.
+Uploaded files are stored on your server’s local hard drive, in the upload directory below, or in Amazon S3: set `uploadpath` to `s3://<bucket>/<prefix>/` (with `aws_region`, and `aws_key` and `aws_secret` unless the server has credentials of its own); no plugin is needed. A third-party plugin's own `filesystem` class named in the configuration still works, but the setting is deprecated.
 
 #### Store files on your server’s hard drive
 

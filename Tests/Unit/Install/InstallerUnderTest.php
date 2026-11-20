@@ -39,6 +39,20 @@ final class InstallerUnderTest extends Installer
         return $this->buildConfig($params);
     }
 
+    /**
+     * @param array<string, mixed> $request
+     * @return array<string, mixed>
+     */
+    public function settings(string $method, array $request): array
+    {
+        return $this->checkWebSettings($method, $request);
+    }
+
+    public function path(string $path): string
+    {
+        return $this->sqlitePath($path);
+    }
+
     public function defaultSqlitePath(): string
     {
         return parent::defaultSqlitePath();

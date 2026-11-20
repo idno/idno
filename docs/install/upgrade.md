@@ -298,7 +298,7 @@ Once the `legacy_` tables are deleted, the upgrade can only be undone from your 
 `php bin/console idno:import:mongo` copies a MongoDB site (its records and the files it keeps in
 GridFS) into a new MySQL, MariaDB or SQLite database and the upload directory. It reads MongoDB with
 the PHP extension `mongodb` alone (`pecl install mongodb`); the `mongodb/mongodb` library is not
-needed. Your MongoDB database is only read: nothing in it is changed.
+needed. Your MongoDB database is only read: nothing in it is changed. The MongoDB server must be version 3.6 or later: that is the oldest the `mongodb` extension talks to. To move the data of an older server, dump it (`mongodump`) and restore it (`mongorestore`) into a newer `mongod` first, and run the import against that one.
 
 1. **Stop every process of the site** (the web server's PHP, the queue and cron services): the import
    must see a database nobody writes to. If it finds the counts changed while it ran, it stops.
@@ -322,10 +322,19 @@ needed. Your MongoDB database is only read: nothing in it is changed.
    `--target=sqlite:////var/lib/idno/idno.sqlite` (absolute). The files go into the upload directory,
    under the directory named after your site (its `file_path_host`, or its host less `www.`); give
    another with `--file-host`. The import never prints the database password.
+
+   For an SQLite target, end the file's name in `.sqlite` (the web server configurations refuse to
+   serve that suffix). The import runs as you, so the database file, its directory and the files SQLite
+   and the upgrade create beside it (`-wal`, `-shm` and `.upgrade.lock`) are yours, and the web server
+   cannot write to them: give them to the web server's user (or make them writable for it), for
+   example `chown -R www-data data/`, and run `idno:upgrade` and other console commands on the site as
+   that user. The import prints the same reminder when it finishes.
 5. **Only once the command has finished with "The import is complete." (exit status 0), put the
    printed lines in `config.ini`**, in place of the MongoDB settings: `database`, `dbname`,
    `dbhost`, `dbuser`, `dbpass` (where it prints `<the password you gave>`, write the password),
-   `filesystem = "local"` and `uploadpath`.
+   `filesystem = "local"`, `uploadpath` and, only when you gave `--file-host`, `file_path_host`
+   (without it, the directory of the files is the one your site's configuration already names, which
+   stays in `config.ini` or in the imported settings).
 6. **Run `php bin/console idno:upgrade`**, then start the site again. Users log in again (sessions are
    not carried over).
 
@@ -355,7 +364,9 @@ up (`mongodump`) before you remove or repair that file. The new database is then
 import says so: **never point a site at it**. The import holds the last schema step back until
 everything is in, so `idno:upgrade --status` shows a migration pending, but that does not keep a site
 closed: a site whose `config.ini` named an incomplete database would show its upgrade page, finish
-that step itself and open with part of your content. Drop the incomplete database, make a new, empty
+that step itself and open with part of your content. **The import does not clean up after itself:** a
+failed import leaves its target as it was when it stopped, and you must drop it by hand (the database
+of a MySQL or MariaDB target, the file and its `-wal` and `-shm` files for SQLite), make a new, empty
 one, and run the import again. Files already copied into the upload directory are checked and kept,
 not copied again; a file that did not copy correctly is not left there.
 

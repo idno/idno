@@ -7,12 +7,16 @@ namespace Idno\Legacy;
 use Idno\Core\Idno;
 use Idno\Storage\Files\FileStore;
 use Idno\Storage\Files\FileStoreException;
+use League\Flysystem\FilesystemException;
 
 /**
  * The legacy Idno\Files\FileSystem API (`Idno::site()->filesystem()`) served by a FileStore: the
  * same ids, the same layout in the upload directory, and the legacy failure values. The legacy API
  * never threw, so a FileStoreException is logged and becomes false; a failed store also adds the
- * session messages the old local filesystem added.
+ * session messages the old local filesystem added. So that no failure of the store reaches a visitor
+ * as the 500 page (whose message can hold a server path), what is caught is everything the store can
+ * throw: its own exception, Flysystem's (an upload directory that does not exist and cannot be
+ * created, say) and the factory's \LogicException (no upload path).
  *
  * Everything it needs is a closure fetched at first use: the filesystem is built while the legacy
  * services are, before the logger, the session and the language exist.
@@ -58,7 +62,7 @@ final class FlysystemFileSystem extends \Idno\Files\FileSystem
             $internal = $this->uploadRoot === '' ? '' : rtrim($this->uploadRoot, ' /') . '/' . $store->path($id);
 
             return new FlysystemFile($store, $stored, $internal, $this->logger);
-        } catch (FileStoreException $e) {
+        } catch (FileStoreException | FilesystemException | \LogicException $e) {
             ($this->logger)()->error('Could not find a file', ['error' => $e]);
 
             return false;
@@ -76,7 +80,7 @@ final class FlysystemFileSystem extends \Idno\Files\FileSystem
     {
         try {
             return ($this->store)()->updateMetadata((string) $id, $metadata);
-        } catch (FileStoreException $e) {
+        } catch (FileStoreException | FilesystemException | \LogicException $e) {
             ($this->logger)()->error('Could not update a file\'s metadata', ['error' => $e]);
 
             return false;
@@ -104,7 +108,7 @@ final class FlysystemFileSystem extends \Idno\Files\FileSystem
         }
         try {
             return ($this->store)()->store($stream, (array) $metadata);
-        } catch (FileStoreException $e) {
+        } catch (FileStoreException | FilesystemException | \LogicException $e) {
             $this->storeFailed($e);
 
             return false;
@@ -135,7 +139,7 @@ final class FlysystemFileSystem extends \Idno\Files\FileSystem
             rewind($stream);
 
             return ($this->store)()->store($stream, (array) $metadata);
-        } catch (FileStoreException $e) {
+        } catch (FileStoreException | FilesystemException | \LogicException $e) {
             $this->storeFailed($e);
 
             return false;
@@ -144,7 +148,7 @@ final class FlysystemFileSystem extends \Idno\Files\FileSystem
         }
     }
 
-    private function storeFailed(FileStoreException $e): void
+    private function storeFailed(\Throwable $e): void
     {
         ($this->logger)()->error('Exception while uploading file', ['error' => $e]);
 

@@ -45,7 +45,8 @@ Your database user.
 
 **filesystem**<br>
 Deprecated. Leave it blank or set it to "local": files are stored in the `uploadpath`. Other plugins may still
-supply a file system class, named here.
+supply a file system class, named here. With `filesystem = local` and no `uploadpath` there is no file storage at all:
+uploads fail until an `uploadpath` is set.
 
 **uploadpath**<br>
 The full path used by Idno to upload files. This path must be writeable by the web server. A path of the form

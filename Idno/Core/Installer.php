@@ -247,9 +247,40 @@ namespace Idno\Core {
         }
 
         /**
+         * What to tell a person who has set up an SQLite site from the command line: the files are
+         * owned by the user who ran the command, and the web server (and any cron or queue worker)
+         * must be able to write to them too. The installers change no file mode.
+         *
+         * @param  string $path The database file
+         * @return string[] Lines of text
+         */
+        public static function sqliteOwnershipNotes(string $path): array
+        {
+            $directory = dirname($path);
+
+            return [
+                'The SQLite database ' . $path . ' and its directory ' . $directory . ' are owned by the user who ran this command.',
+                'SQLite and the upgrade also create files beside the database (-wal, -shm and .upgrade.lock), and the web server needs to write to the database, its directory and those files.',
+                'So they must be owned by (or writable for) the web server\'s user. For example:',
+                '    chown -R www-data ' . $directory,
+                'Run later console commands on this site (php bin/console ...) as that user too, or the files they create will not be writable by the web server.',
+            ];
+        }
+
+        /**
          * The absolute path of an SQLite database file: the default for no path, a relative path
-         * under the project directory (as the site reads it), an absolute one as it is. A path that
-         * cannot be written in the single quotes of a configuration file is refused.
+         * under the project directory (as the site reads it), an absolute one as it is. Nothing is
+         * created or touched here: the path is only checked, so that a refused one leaves nothing
+         * behind. A path is refused when
+         *
+         * - it cannot be written in the single quotes of a configuration file;
+         * - one of its segments is `..`;
+         * - its file name is not letters, digits, dots, underscores and dashes ending in `.sqlite`.
+         *
+         * The suffix is the one every shipped web server configuration refuses to serve and PHP never
+         * executes: the installer of an uninstalled site is reachable by anyone, and a database file
+         * named `shell.php` in the document root would be a way to run code. (Spaces in the names of
+         * directories are fine.)
          *
          * @throws \Idno\Exceptions\ConfigurationException
          */
@@ -261,6 +292,13 @@ namespace Idno\Core {
             }
             if (preg_match('/[\'\x00-\x1f\x7f]/', $path) === 1) {
                 throw new \Idno\Exceptions\ConfigurationException('The path of the database file cannot contain a single quote or a control character.');
+            }
+            $segments = preg_split('#[/\\\\]#', $path) ?: [];
+            if (in_array('..', $segments, true)) {
+                throw new \Idno\Exceptions\ConfigurationException('The path of the database file cannot contain "..".');
+            }
+            if (preg_match('/^[A-Za-z0-9._-]+\.sqlite\z/i', (string) end($segments)) !== 1) {
+                throw new \Idno\Exceptions\ConfigurationException('The name of the database file must end in .sqlite and hold only letters, digits, dots, underscores and dashes (for example idno.sqlite): web servers are set up never to serve or run a file with that name.');
             }
             if (str_starts_with($path, '/') || str_starts_with($path, '\\') || preg_match('#^[A-Za-z]:#', $path) === 1) {
                 return $path;
@@ -321,22 +359,27 @@ namespace Idno\Core {
                 throw new \Idno\Exceptions\ConfigurationException('SQLite needs the pdo_sqlite extension for PHP, which is not installed.');
             }
 
+            // Everything that can be checked without touching the disk first (the path above, the
+            // directory, the file); the directory and the file are created last.
             $path = $this->sqlitePath($input);
             $directory = dirname($path);
+            if (is_dir($path)) {
+                throw new \Idno\Exceptions\ConfigurationException($path . ' is a directory, not a database file.');
+            }
+            if (is_dir($directory) && !is_writable($directory)) {
+                throw new \Idno\Exceptions\ConfigurationException('We can\'t write data to ' . $directory . ' - SQLite keeps its database and its journal files there. Please check permissions and try again.');
+            }
+            if (file_exists($path) && (!is_readable($path) || !is_writable($path))) {
+                throw new \Idno\Exceptions\ConfigurationException('We can\'t read and write ' . $path . ' - please check permissions and try again.');
+            }
+
             if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
                 throw new \Idno\Exceptions\ConfigurationException('We couldn\'t create the directory ' . $directory . ' for the database file - please check permissions and try again.');
             }
             if (!is_writable($directory)) {
                 throw new \Idno\Exceptions\ConfigurationException('We can\'t write data to ' . $directory . ' - SQLite keeps its database and its journal files there. Please check permissions and try again.');
             }
-            if (is_dir($path)) {
-                throw new \Idno\Exceptions\ConfigurationException($path . ' is a directory, not a database file.');
-            }
-            if (file_exists($path)) {
-                if (!is_readable($path) || !is_writable($path)) {
-                    throw new \Idno\Exceptions\ConfigurationException('We can\'t read and write ' . $path . ' - please check permissions and try again.');
-                }
-            } elseif (@file_put_contents($path, '') === false) {
+            if (!file_exists($path) && @file_put_contents($path, '') === false) {
                 throw new \Idno\Exceptions\ConfigurationException('We couldn\'t create the database file ' . $path . ' - please check permissions and try again.');
             }
 
@@ -360,6 +403,105 @@ namespace Idno\Core {
                 'dbuser' => '',
                 'dbpass' => '',
                 'dbhost' => '',
+            ];
+        }
+
+        /**
+         * What the web installer's settings page decides from a request, with nothing printed and no
+         * exit, so that it can be tested. The installer of an uninstalled site is reachable by anyone,
+         * so:
+         *
+         * - the web installer takes no path for an SQLite database: it is always the default,
+         *   `data/idno.sqlite` under the project (any `sqlite_path` in the request is ignored);
+         * - the database is checked, and an SQLite file or its directory created, only for a POST
+         *   (`$method`) and only after the upload path has passed its own check: a refused
+         *   submission leaves no file and no directory behind;
+         * - a value that is not a string (`upload_path[]=x`) counts as empty.
+         *
+         * @param  string               $method  The request's method
+         * @param  array<string, mixed> $request The request's values (`$_REQUEST`)
+         * @return array{submitted: bool, ok: bool, messages: string, database: string, dbParams: array<string, string>, uploadPath: string, sqlitePath: string, values: array{site_title: string, mysql_user: string, mysql_host: string, mysql_pass: string, mysql_name: string}}
+         *         `messages` is HTML; `uploadPath` is the real path with a trailing slash, or '' when
+         *         there is none; `dbParams` is empty until the database has been checked
+         */
+        protected function checkWebSettings(string $method, array $request): array
+        {
+            $text = static fn (string $name, string $default = ''): string => isset($request[$name]) && is_string($request[$name]) ? $request[$name] : $default;
+
+            $values = [
+                'site_title' => $text('site_title'),
+                'mysql_user' => $text('mysql_user'),
+                'mysql_host' => $text('mysql_host'),
+                'mysql_pass' => $text('mysql_pass'),
+                'mysql_name' => $text('mysql_name'),
+            ];
+            $submitted = strtoupper($method) === 'POST' && isset($request['database']);
+            $ok = true;
+            $messages = '';
+            $refused = false;
+            try {
+                $database = self::databaseType($text('database', 'mysql'));
+            } catch (\Idno\Exceptions\ConfigurationException $e) {
+                $database = 'mysql';
+                $refused = true;
+                $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
+                $ok = false;
+            }
+
+            // The upload path is checked before the database, which may create a file.
+            $upload_path = trim(array_key_exists('upload_path', $request) ? $text('upload_path') : $this->root_path . '/Uploads/');
+            $upload_path = $upload_path === '' ? false : realpath($upload_path);
+            if (!empty($upload_path)) {
+                if (substr($upload_path, -1) != '/' && substr($upload_path, -1) != '\\') {
+                    $upload_path .= '/';
+                }
+                try {
+                    $this->checkUploadDirectory($upload_path);
+                } catch (\Exception $e) {
+                    $ok = false;
+                    $messages .= '<p>' . $e->getMessage() . '</p>';
+                }
+            } else {
+                $upload_path = '';
+                $ok = false;
+                if ($submitted) {
+                    $messages .= '<p>You need to specify an upload path.</p>';
+                }
+            }
+
+            $sqlite_path = $this->defaultSqlitePath();
+            $db_ready = false;
+            $db_input = [];
+            if ($database == 'sqlite') {
+                $db_ready = $submitted && !$refused;
+                $db_input = ['path' => ''];
+            } else {
+                $db_ready = $submitted && !$refused && $values['mysql_name'] !== '' && $values['mysql_host'] !== '';
+                $db_input = ['name' => $values['mysql_name'], 'user' => $values['mysql_user'], 'pass' => $values['mysql_pass'], 'host' => $values['mysql_host']];
+                if ($submitted && !$db_ready && !$refused) {
+                    $messages .= '<p>Please give us the name of your MySQL database and the name of the server it is on.</p>';
+                    $ok = false;
+                }
+            }
+            $db_params = [];
+            if ($db_ready && $upload_path !== '' && $ok) {
+                try {
+                    $db_params = $this->databaseParams($database, $db_input);
+                } catch (\Exception $e) {
+                    $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
+                    $ok = false;
+                }
+            }
+
+            return [
+                'submitted' => $submitted,
+                'ok' => $ok,
+                'messages' => $messages,
+                'database' => $database,
+                'dbParams' => $db_params,
+                'uploadPath' => $upload_path,
+                'sqlitePath' => $sqlite_path,
+                'values' => $values,
             ];
         }
 

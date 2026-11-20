@@ -6,6 +6,7 @@ namespace Idno\Console;
 
 use Doctrine\DBAL\Exception\ConnectionException;
 use Idno\Config\BootConfig;
+use Idno\Core\Installer;
 use Idno\Storage\ConnectionFactory;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Files\FilesystemFactory;
@@ -45,7 +46,7 @@ use Symfony\Component\Console\Question\Question;
  * Nothing is done (exit 1) without the mongodb extension, a target, a source or an upload path, before
  * anything connects. When a run stops after it has written to the target, it says on stderr, after the
  * error, that the target is incomplete and must not be used, and to drop it and start again on a new,
- * empty database (INCOMPLETE). It exits 0 only when every document was imported or is a reject and every file
+ * empty database (INCOMPLETE). The command never cleans up a failed run: the target is dropped by hand. It exits 0 only when every document was imported or is a reject and every file
  * was copied (or was there) and verified; then it prints the counts, the collections not imported and
  * the lines to put in config.ini, and says to run idno:upgrade. The target's password is never
  * printed, and is replaced in anything logged: a failure to connect is a fixed line and the
@@ -147,7 +148,9 @@ final class ImportMongoCommand extends Command
             return Command::FAILURE;
         }
         $this->keepSecret($credentials[1]);
-        $this->keepSecret(self::uriPassword($uri));
+        foreach (self::uriPasswords($uri) as $password) {
+            $this->keepSecret($password);
+        }
 
         // The upload directory and the files' directory under it.
         $uploadPath = $input->getOption('upload-path');
@@ -179,7 +182,11 @@ final class ImportMongoCommand extends Command
                     return $directory ??= $this->fileDirectory($fileHost, $config, $importer?->settings());
                 },
             );
-            $source = ExtMongoSource::connect($uri, $database, ...$credentials);
+            try {
+                $source = ExtMongoSource::connect($uri, $database, ...$credentials);
+            } catch (\Throwable $e) {
+                return $this->sourceFailed($e, $importer, $errors);
+            }
             $importer = new MongoImporter($source, $connection, $files, $this->logger);
             $result = $importer->run(static function (string $line) use ($output): void {
                 $output->writeln($line, OutputInterface::OUTPUT_PLAIN);
@@ -190,11 +197,13 @@ final class ImportMongoCommand extends Command
             $this->incomplete($importer, $errors);
 
             return Command::FAILURE;
+        } catch (\MongoDB\Driver\Exception\Exception $e) {
+            return $this->sourceFailed($e, $importer, $errors);
         } catch (\Throwable $e) {
             $message = $this->redact($e->getMessage());
             $this->logger->error('The MongoDB import stopped: ' . get_class($e) . ': ' . $message);
             $errors->writeln('The import stopped: ' . $message, OutputInterface::OUTPUT_PLAIN);
-            if (!$e instanceof \RuntimeException || $e instanceof \MongoDB\Driver\Exception\Exception) {
+            if (!$e instanceof \RuntimeException) {
                 $errors->writeln('(' . get_class($e) . ')', OutputInterface::OUTPUT_PLAIN);
             }
             $this->incomplete($importer, $errors);
@@ -207,6 +216,21 @@ final class ImportMongoCommand extends Command
         $this->printSummary($result, $target, $uploadPath, $fileHost, $output);
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * A failure to parse the source's URI, to connect to MongoDB or to read from it: a fixed line and
+     * the exception's class. The exception's message is not printed: the driver quotes the whole URI
+     * in some of them, password included, so the detail goes to the log only, with every form of the
+     * passwords replaced.
+     */
+    private function sourceFailed(\Throwable $e, ?MongoImporter $importer, OutputInterface $errors): int
+    {
+        $this->logger->error('The MongoDB import could not use the source: ' . $this->redact(get_class($e) . ': ' . $e->getMessage()));
+        $errors->writeln('The import could not read the MongoDB source (' . get_class($e) . '). Check the source URI, the user and password and the database; the detail is in the error log.');
+        $this->incomplete($importer, $errors);
+
+        return Command::FAILURE;
     }
 
     /**
@@ -261,10 +285,18 @@ final class ImportMongoCommand extends Command
             $lines[] = 'file_path_host = "' . $fileHost . '"';
         }
         foreach ($lines as $line) {
-            $output->writeln('  ' . $line, OutputInterface::OUTPUT_PLAIN);
+            // Raw: the placeholder <the password you gave> is not a formatting tag, and plain output would strip it.
+            $output->writeln('  ' . $line, OutputInterface::OUTPUT_RAW);
         }
         $output->writeln('');
         $output->writeln('Now run php bin/console idno:upgrade');
+        if ($target['database'] === 'sqlite') {
+            $path = str_starts_with($target['dbname'], '/') ? $target['dbname'] : $this->projectDir . '/' . $target['dbname'];
+            $output->writeln('');
+            foreach (Installer::sqliteOwnershipNotes($path) as $line) {
+                $output->writeln($line, OutputInterface::OUTPUT_PLAIN);
+            }
+        }
     }
 
     /**
@@ -346,11 +378,32 @@ final class ImportMongoCommand extends Command
         return preg_match('/^[A-Za-z0-9._-]{1,255}\z/', $name) === 1 && $name !== '.' && $name !== '..';
     }
 
-    private static function uriPassword(string $uri): ?string
+    /**
+     * The passwords in the user-info part of a MongoDB URI, as they are written and percent-decoded.
+     * It does not use parse_url(), which fails on a URI with several hosts
+     * (`mongodb://user:password@h1:27017,h2:27017/db`) and on a malformed one, exactly the URIs whose
+     * password the driver may then quote in its error message. The user-info ends at the first `@`
+     * before a `/`; a second reading, to the last `@`, covers a password that holds a raw `@`. A
+     * password is what follows the first `:` of the user-info.
+     *
+     * @return list<string>
+     */
+    public static function uriPasswords(string $uri): array
     {
-        $password = parse_url($uri, PHP_URL_PASS);
+        $passwords = [];
+        foreach (['#^mongodb(?:\+srv)?://([^@/]*)@#i', '#^mongodb(?:\+srv)?://(.*)@#is'] as $pattern) {
+            if (preg_match($pattern, $uri, $match) !== 1 || !str_contains($match[1], ':')) {
+                continue;
+            }
+            $password = substr($match[1], (int) strpos($match[1], ':') + 1);
+            foreach ([$password, rawurldecode($password)] as $form) {
+                if ($form !== '' && !in_array($form, $passwords, true)) {
+                    $passwords[] = $form;
+                }
+            }
+        }
 
-        return is_string($password) ? rawurldecode($password) : null;
+        return $passwords;
     }
 
     private static function text(mixed $value): ?string

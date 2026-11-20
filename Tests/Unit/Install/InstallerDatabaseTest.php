@@ -77,7 +77,7 @@ final class InstallerDatabaseTest extends TestCase
 
     public function testAPathWithSpacesIsInstalled(): void
     {
-        $path = $this->root . '/my data/idno site.sqlite';
+        $path = $this->root . '/my data/idno-site.sqlite';
         $params = $this->installer()->params('sqlite', ['path' => $path]);
 
         self::assertSame($path, $params['dbname']);
@@ -151,6 +151,73 @@ final class InstallerDatabaseTest extends TestCase
             }
         }
         self::assertDirectoryDoesNotExist($this->root . '/data');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function refusedSqlitePaths(): array
+    {
+        return [
+            'a php file' => ['shell.php'],
+            'a php file in a directory' => ['public/shell.php'],
+            'an absolute php file' => ['/var/www/html/shell.php'],
+            'no suffix' => ['data/idno'],
+            'another suffix' => ['data/idno.db'],
+            'a php name that ends in sqlite after a dot only' => ['data/idno.sqlite.php'],
+            'only the suffix' => ['data/.sqlite'],
+            'a directory' => ['data/'],
+            'a space in the file name' => ['data/my site.sqlite'],
+            'dot dot first' => ['../idno.sqlite'],
+            'dot dot inside' => ['data/../../idno.sqlite'],
+            'absolute dot dot' => ['/tmp/a/../idno.sqlite'],
+            'backslash dot dot' => ['data\\..\\idno.sqlite'],
+            'a backslash php file' => ['C:\\site\\shell.php'],
+        ];
+    }
+
+    /**
+     * Only a file whose name ends in .sqlite is a database: every shipped web server configuration
+     * refuses to serve that suffix, and PHP never executes it. The path is checked before anything is
+     * created, so a refused one leaves nothing behind.
+     *
+     * @dataProvider refusedSqlitePaths
+     */
+    public function testAPathThatCouldBeServedOrEscapeItsDirectoryIsRefusedAndNothingIsCreated(string $path): void
+    {
+        try {
+            $this->installer()->params('sqlite', ['path' => $path]);
+            self::fail('Accepted ' . $path);
+        } catch (ConfigurationException $e) {
+            self::assertNotSame('', $e->getMessage());
+        }
+        self::assertSame([$this->root . '/warmup'], glob($this->root . '/*', GLOB_ONLYDIR) ?: [], 'no directory was created');
+        self::assertFileDoesNotExist($this->root . '/shell.php');
+        self::assertFileDoesNotExist($this->root . '/idno.sqlite');
+        self::assertFileDoesNotExist($this->root . '/data/idno.sqlite');
+    }
+
+    public function testTheRefusalSaysWhy(): void
+    {
+        try {
+            $this->installer()->params('sqlite', ['path' => 'shell.php']);
+            self::fail('Accepted shell.php');
+        } catch (ConfigurationException $e) {
+            self::assertStringContainsString('.sqlite', $e->getMessage());
+        }
+        try {
+            $this->installer()->params('sqlite', ['path' => 'data/../idno.sqlite']);
+            self::fail('Accepted ..');
+        } catch (ConfigurationException $e) {
+            self::assertStringContainsString('..', $e->getMessage());
+        }
+    }
+
+    public function testASqliteSuffixInAnyCaseAndDotsAndDashesAreAccepted(): void
+    {
+        foreach (['data/My-Site_1.v2.SQLite', 'a.b.sqlite'] as $path) {
+            self::assertSame($this->root . '/' . $path, $this->installer()->params('sqlite', ['path' => $path])['dbname']);
+        }
     }
 
     public function testSqliteWithoutThePdoModuleIsRefused(): void

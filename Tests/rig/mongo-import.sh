@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Runs the MongoDB import's tests against a real MongoDB server (composer test:mongo-import).
 #
-#   mongo-import.sh            the end-to-end test, Tests/Import (MongoImportEndToEndTest)
+#   mongo-import.sh            the end-to-end test, Tests/Import (MongoImportEndToEndTest), twice:
+#                              the import into an SQLite database and into a MySQL one
 #
-# Everything runs in Docker: a mongo:6 container (no port published on the host: the two containers
-# share a network of their own) and a PHP 8.4 container with the mongodb extension, built from
-# Tests/rig/mongo-import.Dockerfile around a COPY of this checkout, never the checkout itself: the test
-# rig started inside the container (composer test:up, on SQLite) writes the copy's own
-# configuration/config.ini. The copy leaves out .git, vendor/, var/cache, the whole configuration/
+# Everything runs in Docker: a mongo:6 container and a mysql:8.0 container (no port published on the
+# host: the three containers share a network of their own) and a PHP 8.4 container with the mongodb
+# extension, built from Tests/rig/mongo-import.Dockerfile around a COPY of this checkout, never the
+# checkout itself. The PHP container runs Tests/rig/mongo-import-container.sh: first on the test rig
+# in its SQLite mode (composer test:up), then on the MySQL server set up as CI's MySQL job sets its
+# database up (the container has no Docker, so the rig's MySQL mode cannot be used). Both write the
+# copy's own configuration/config.ini. A run in which the end-to-end test was skipped fails. The copy leaves out .git, vendor/, var/cache, the whole configuration/
 # directory, .env and SQLite database files, so no local configuration or secret is ever baked into
 # the image. Whatever the outcome, the containers (with their volumes) and the network this script
 # started are removed. The image (idno-mongo-import:local) is kept as a build cache; when a build
@@ -29,6 +32,7 @@ MONGO_IMAGE=mongo:6
 NAME="idno-mongo-import-$$-$RANDOM"
 NETWORK="$NAME"
 MONGO="$NAME-mongo"
+MYSQL="$NAME-mysql"
 PHP_CONTAINER="$NAME-php"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/idno-mongo-import.XXXXXX")"
 # The MongoDB server requires a password (a throwaway one), so that the tests can check that the
@@ -41,7 +45,7 @@ MONGO_URL="mongodb://root:$MONGO_PASSWORD@mongo:27017/?authSource=admin"
 # included (the containers run in the background, below, so that a signal is handled at once).
 cleanup() {
     local status=$?
-    docker rm -f -v "$PHP_CONTAINER" "$MONGO" >/dev/null 2>&1 || true
+    docker rm -f -v "$PHP_CONTAINER" "$MONGO" "$MYSQL" >/dev/null 2>&1 || true
     docker network rm "$NETWORK" >/dev/null 2>&1 || true
     if [ -n "$(docker ps -aq --filter "name=^$NAME-")" ] || [ -n "$(docker network ls -q --filter "name=^$NETWORK\$")" ]; then
         echo "Warning: could not remove everything named $NAME (docker ps -a, docker network ls)." >&2
@@ -93,10 +97,19 @@ for _ in $(seq 1 60); do
 done
 docker exec "$MONGO" mongosh --quiet -u root -p "$MONGO_PASSWORD" --eval 'db.runCommand({ping: 1}).ok' >/dev/null
 
-run --rm --name "$PHP_CONTAINER" --network "$NETWORK" -e IDNO_TEST_MONGO_URL="$MONGO_URL" "$IMAGE" bash -euc "
-    composer test:up
-    status=0
-    composer test -- Tests/Import || status=\$?
-    composer test:down >/dev/null || true
-    exit \$status
-"
+# The MySQL server of the second run: no password (as CI's service), the database CI's job names. The
+# test makes its own databases beside it with the root user, which may create them.
+docker run -d --name "$MYSQL" --network "$NETWORK" --network-alias mysql \
+    -e MYSQL_ALLOW_EMPTY_PASSWORD=yes -e MYSQL_DATABASE=known_unittest mysql:8.0 >/dev/null
+echo "Waiting for MySQL..."
+for _ in $(seq 1 90); do
+    # Over TCP: while the image initialises it runs a server that listens on its socket only.
+    if docker exec "$MYSQL" mysqladmin ping -h 127.0.0.1 --silent >/dev/null 2>&1; then
+        break
+    fi
+    sleep 1
+done
+docker exec "$MYSQL" mysqladmin ping -h 127.0.0.1 --silent >/dev/null
+
+run --rm --name "$PHP_CONTAINER" --network "$NETWORK" -e IDNO_TEST_MONGO_URL="$MONGO_URL" -e MYSQL_HOST=mysql \
+    "$IMAGE" bash Tests/rig/mongo-import-container.sh

@@ -375,6 +375,73 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $_SESSION['messages'] = [];
     }
 
+    /**
+     * A filesystem whose store is built when first used, as the container's is, and whose logger records
+     * what it is told.
+     *
+     * @param \Closure(): FileStore $store
+     */
+    private function filesystemOver(\Closure $store, ?object &$logger = null): FlysystemFileSystem
+    {
+        $logger = new class () extends AbstractLogger {
+            /** @var list<string> */
+            public array $errors = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->errors[] = $level . ': ' . $message;
+            }
+        };
+        $recorder = $logger;
+
+        return new FlysystemFileSystem($store, static fn () => $recorder, '');
+    }
+
+    public function testAnUploadRootThatCannotBeCreatedIsAFailureAndNeverAnException(): void
+    {
+        // A path under a regular file: the directory cannot exist and cannot be made.
+        $file = $this->uploads . '/a-regular-file';
+        file_put_contents($file, 'x');
+        $root       = $file . '/uploads/';
+        $filesystem = $this->filesystemOver(static fn (): FileStore => new FileStore(FilesystemFactory::fromConfig(['uploadpath' => $root]), 'example.test'), $logger);
+        $_SESSION['messages'] = [];
+
+        $this->assertFalse($filesystem->findOne(str_repeat('a', 32)));
+        $this->assertFalse($filesystem->updateMetadata(str_repeat('a', 32), ['x' => 'y']));
+        $this->assertSame([], $_SESSION['messages'], 'looking for a file says nothing to the visitor');
+
+        $this->assertFalse($filesystem->storeContent('some bytes', ['filename' => 'f.txt']));
+        $this->assertContains(Idno::site()->language()->_('Something went wrong saving your file.'), array_column($_SESSION['messages'], 'message'));
+        $_SESSION['messages'] = [];
+
+        $source = $this->uploads . '/source.txt';
+        file_put_contents($source, 'content');
+        $this->assertFalse($filesystem->storeFile($source, ['filename' => 'f.txt']));
+        $this->assertContains(Idno::site()->language()->_('Something went wrong saving your file.'), array_column($_SESSION['messages'], 'message'));
+        $_SESSION['messages'] = [];
+
+        $this->assertNotSame([], $logger->errors);
+        foreach ($logger->errors as $line) {
+            $this->assertStringNotContainsString($file, $line, 'a server path is not part of the fixed message');
+        }
+        $this->assertFileDoesNotExist($root);
+    }
+
+    public function testAStoreThatCannotBeBuiltIsAFailureAndNeverAnException(): void
+    {
+        $filesystem = $this->filesystemOver(static function (): FileStore {
+            throw new \LogicException('No upload path is configured.');
+        }, $logger);
+        $_SESSION['messages'] = [];
+
+        $this->assertFalse($filesystem->findOne(str_repeat('b', 32)));
+        $this->assertFalse($filesystem->updateMetadata(str_repeat('b', 32), []));
+        $this->assertFalse($filesystem->storeContent('some bytes', ['filename' => 'f.txt']));
+        $this->assertContains(Idno::site()->language()->_('Something went wrong saving your file.'), array_column($_SESSION['messages'], 'message'));
+        $_SESSION['messages'] = [];
+        $this->assertNotSame([], $logger->errors);
+    }
+
     // ------------------------------------------------ the file page and the caches
 
     public function testARangeIsServedFromAStreamThatCannotSeek(): void
@@ -409,6 +476,33 @@ final class LegacyFileSystemTest extends IdnoTestCase
         View::seekTo($stream, 4);
 
         $this->assertSame('456', fread($stream, 3));
+        fclose($stream);
+    }
+
+    public function testARangeReadKeepsTheBytesTheFilePageHasAlwaysRead(): void
+    {
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, '0123456789');
+        rewind($stream);
+        View::seekTo($stream, 2);
+
+        // As the file page has always read it: $end bytes from where the stream is (the response is cut to
+        // the Content-Length it announces, which Tests/Characterisation/FileServingTest pins).
+        $this->assertSame('23456', View::readRange($stream, 2, 5));
+        fclose($stream);
+    }
+
+    public function testARangeReadStopsWhenTheStreamEndsEarly(): void
+    {
+        // A stream shorter than the stored size says: the read must end, not wait for bytes that never come.
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, '0123456789');
+        rewind($stream);
+        View::seekTo($stream, 4);
+
+        $started = microtime(true);
+        $this->assertSame('456789', View::readRange($stream, 4, 2000));
+        $this->assertLessThan(5.0, microtime(true) - $started);
         fclose($stream);
     }
 

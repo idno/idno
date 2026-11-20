@@ -100,11 +100,26 @@ final class ExtMongoSource implements MongoSource
         return $names;
     }
 
+    /**
+     * The number of documents in a collection, exact. The `count` command without a query answers from
+     * the collection's stored metadata, which can be wrong after an unclean shutdown of the server (or
+     * on a sharded cluster with orphaned documents); the importer compares this number with what it
+     * reads, and a wrong one would stop every run with a claim that the database is still being written
+     * to. An aggregation with `$count` reads the documents themselves, so it counts the ones a read
+     * returns. (It costs a scan of the collection, once per collection and run.)
+     */
     public function count(string $collection): int
     {
-        $result = $this->manager->executeCommand($this->database, new Command(['count' => $collection]))->toArray()[0] ?? null;
+        $cursor = $this->manager->executeCommand($this->database, new Command([
+            'aggregate' => $collection,
+            'pipeline' => [['$count' => 'n']],
+            'cursor' => new \stdClass(),
+        ]));
+        foreach ($cursor as $result) {
+            return (int) (string) ($result->n ?? 0);
+        }
 
-        return (int) ($result->n ?? 0);
+        return 0;
     }
 
     public function documents(string $collection): iterable

@@ -9,7 +9,8 @@ namespace Idno\Upgrade;
  *
  *  - NotApplicable: the site's database is a backend class a plugin supplies (not SQL, not MongoDB):
  *    there is no schema to check, and nothing was asked of any database.
- *  - MongoRetired: the site is configured for MongoDB (`database` is `mongo` or `mongodb`), which
+ *  - MongoRetired: the site is configured for MongoDB (`database` is `mongo` or `mongodb`, in any
+ *    case, or the old class name `Idno\Data\Mongo`, with or without a leading backslash), which
  *    Idno no longer runs on. Nothing was asked of any database; the gate stays closed, and
  *    `php bin/console idno:import:mongo` (which runs with the gate closed) moves the data to MySQL,
  *    MariaDB or SQLite.

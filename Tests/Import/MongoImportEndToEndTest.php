@@ -278,7 +278,9 @@ final class MongoImportEndToEndTest extends TestCase
             );
             $read = array_column(iterator_to_array($source->documents($collection), false), 'id');
             $this->assertSame($all, $read, $collection);
+            $this->assertSame(count($all), $source->count($collection), 'the count is of the documents, not of metadata');
         }
+        $this->assertSame(0, $source->count('a_collection_that_does_not_exist'));
         $fileIds = [];
         foreach ($source->files() as $file) {
             $fileIds[] = $file['id'];
@@ -287,6 +289,7 @@ final class MongoImportEndToEndTest extends TestCase
         $sorted = array_merge(array_keys($this->expected['files']), array_keys(self::GOOD_FILES));
         sort($sorted);
         $this->assertSame($sorted, $fileIds);
+        $this->assertSame(count($fileIds), $source->fileCount());
 
         // The whole import on pages of two: every document and file once.
         $files = new FileStore(FilesystemFactory::fromConfig(['uploadpath' => $this->directory . '/uploads/']), self::FILE_HOST);
@@ -368,6 +371,57 @@ final class MongoImportEndToEndTest extends TestCase
             }
         }
         $this->assertNotFalse(parse_url($this->mongoUrl, PHP_URL_PASS), 'the MongoDB server of the test has a password, so a password is there to leak');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function unusableSourceUris(): array
+    {
+        return [
+            'several hosts that do not answer' => ['mongodb://importer:%s@127.0.0.1:1,127.0.0.1:2/db?serverSelectionTimeoutMS=300&connectTimeoutMS=300'],
+            'a malformed port' => ['mongodb://importer:%s@127.0.0.1:notaport/db'],
+            'a malformed seed list' => ['mongodb://importer:%s@127.0.0.1:1,,127.0.0.2:x/db'],
+        ];
+    }
+
+    /**
+     * The driver quotes the whole URI in some of its messages ("Failed to parse MongoDB URI: ..."): a
+     * source that cannot be used is a fixed line and the exception's class, and neither the output nor
+     * the log holds the password, in any of its forms.
+     *
+     * @dataProvider unusableSourceUris
+     */
+    public function testASourceUriThatCannotBeUsedNeverPrintsItsPassword(string $template): void
+    {
+        $password = 'S0urce/Secret:p@ss' . bin2hex(random_bytes(4));
+        $uri = sprintf($template, rawurlencode($password));
+
+        [$code, $stdout, $stderr] = $this->import(['IDNO_DBSTRING' => $uri]);
+
+        $this->assertSame(1, $code, $stdout . $stderr);
+        $this->assertStringContainsString('could not read the MongoDB source', $stderr);
+        $this->assertStringContainsString('Nothing was written to the new database', $stderr);
+        self::assertNoSecret($password, $stdout . $stderr);
+        self::assertNoSecret(rawurlencode($password), $stdout . $stderr);
+    }
+
+    /**
+     * Nothing changes the owner of the files an SQLite site is made of, so the summary says whose they
+     * must be: the web server's, with an example.
+     */
+    public function testTheSummaryOfAnSqliteTargetSaysWhoMustOwnItsFiles(): void
+    {
+        [$code, $stdout, $stderr] = $this->import();
+
+        $this->assertSame(0, $code, $stdout . $stderr);
+        if (str_starts_with($this->targetUrl, 'sqlite:')) {
+            $this->assertStringContainsString('chown -R www-data ' . $this->directory, $stdout);
+            $this->assertStringContainsString('.upgrade.lock', $stdout);
+            $this->assertStringContainsString('as that user', $stdout);
+        } else {
+            $this->assertStringNotContainsString('chown', $stdout);
+        }
     }
 
     // ------------------------------------------------------------------ helpers

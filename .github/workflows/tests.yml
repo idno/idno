@@ -102,10 +102,12 @@ jobs:
         run: composer test:down
 
   mongo-import:
-    # The MongoDB import (idno:import:mongo) end to end, against a real MongoDB: Tests/Import only, on
-    # the SQLite rig (the import's target is an SQLite file there). A developer runs the same test with
+    # The MongoDB import (idno:import:mongo) end to end, against a real MongoDB: Tests/Import only, run
+    # twice, once into an SQLite target (the SQLite rig) and once into a MySQL one (a mysql:8.0 service,
+    # set up as the MySQL job below sets its database up). A developer runs the same two with
     # composer test:mongo-import (Tests/rig/mongo-import.sh, in Docker). The MongoDB server requires a
-    # password, so that the test can check that the import never prints one.
+    # password, so that the test can check that the import never prints one. Each run must RUN the
+    # end-to-end test: Tests/rig/mongo-import-check.php fails the step when it was skipped.
     name: MongoDB import (PHP 8.4)
     runs-on: ubuntu-latest
 
@@ -117,6 +119,18 @@ jobs:
           MONGO_INITDB_ROOT_PASSWORD: import-ci-password
         ports:
           - 27017:27017
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: known_unittest
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       - uses: actions/checkout@v4
@@ -136,18 +150,60 @@ jobs:
       - name: Start the test rig (SQLite)
         run: composer test:up
 
-      - name: Run the import's tests
+      - name: Run the import's tests (SQLite target)
         env:
           IDNO_TEST_MONGO_URL: mongodb://root:import-ci-password@127.0.0.1:27017/?authSource=admin
-        run: composer test -- Tests/Import
+        run: composer test -- Tests/Import --log-junit "$RUNNER_TEMP/import-sqlite.xml"
 
-      - name: Show web server log on failure
-        if: failure()
-        run: tail -n 200 Tests/rig/.server.log 2>/dev/null || true
+      - name: Check that the end-to-end test ran (SQLite target)
+        run: php Tests/rig/mongo-import-check.php "$RUNNER_TEMP/import-sqlite.xml" SQLite
 
       - name: Stop the test rig
         if: always()
         run: composer test:down
+
+      - name: Configure MySQL database
+        run: |
+          mysql -h 127.0.0.1 -uroot -e "GRANT ALL ON *.* TO 'root'@'%';"
+          cp Tests/build/config_mysql.ini configuration/config.ini
+          sed -i "s/dbuser = 'travis'/dbuser = 'root'/" configuration/config.ini
+          sed -i "s/dbhost = 'localhost'/dbhost = '127.0.0.1'/" configuration/config.ini
+
+      - name: Create the schema
+        run: APP_ENV=test APP_DEBUG=1 php bin/console idno:upgrade
+
+      - name: Start web server
+        run: |
+          # As in the MySQL job: the site at http://localhost/, PHP's built-in web server.
+          sudo systemctl stop apache2 2>/dev/null || true
+          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
+            "${{ github.workspace }}/Tests/build/router.php" \
+            > "${{ github.workspace }}/php-server.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost/; then
+              echo "Web server is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Web server did not start"
+          cat "${{ github.workspace }}/php-server.log"
+          exit 1
+
+      - name: Run the import's tests (MySQL target)
+        env:
+          IDNO_TEST_MONGO_URL: mongodb://root:import-ci-password@127.0.0.1:27017/?authSource=admin
+        run: vendor/bin/phpunit Tests/Import --log-junit "$RUNNER_TEMP/import-mysql.xml"
+
+      - name: Check that the end-to-end test ran (MySQL target)
+        run: php Tests/rig/mongo-import-check.php "$RUNNER_TEMP/import-mysql.xml" MySQL
+
+      - name: Show web server logs on failure
+        if: failure()
+        run: |
+          tail -n 200 Tests/rig/.server.log 2>/dev/null || true
+          tail -n 200 "${{ github.workspace }}/php-server.log" 2>/dev/null || true
 
   phpunit:
     name: PHPUnit (PHP ${{ matrix.php }} / mysql)

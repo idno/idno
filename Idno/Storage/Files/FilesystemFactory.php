@@ -47,7 +47,10 @@ final class FilesystemFactory
             'dir'  => ['public' => 0755, 'private' => 0700],
         ], Visibility::PUBLIC);
 
-        return new Filesystem(new LocalFilesystemAdapter(rtrim(trim($uploadPath), '/'), $visibility));
+        // The upload directory is created when something is first written to it, not when the adapter is
+        // built: a root that cannot be made is then a failure of that write (a FilesystemException the
+        // callers handle), never an exception from building the service.
+        return new Filesystem(new LocalFilesystemAdapter(rtrim(trim($uploadPath), '/'), $visibility, lazyRootCreation: true));
     }
 
     /**

@@ -35,6 +35,31 @@ namespace Idno\Pages\File {
             }
         }
 
+        /**
+         * Read the bytes of a range from a stream positioned at its start (seekTo()): up to $end bytes, as the
+         * range response has always read them (its Content-Length cuts the output to the range), and fewer
+         * when the stream ends first, or a read returns nothing or fails: it never waits for bytes that do
+         * not come.
+         *
+         * @param  resource $stream
+         * @param  int      $start
+         * @param  int      $end
+         * @return string
+         */
+        public static function readRange($stream, $start, $end)
+        {
+            $buffer = '';
+            while (strlen($buffer) < $end - $start) {
+                $chunk = fread($stream, $end - strlen($buffer));
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                $buffer .= $chunk;
+            }
+
+            return $buffer;
+        }
+
         // Handle GET requests to the entity
 
         function getContent()
@@ -159,13 +184,9 @@ namespace Idno\Pages\File {
 
                 if ($stream = $object->getResource()) {
                     self::seekTo($stream, $c_start);
-                    $buffer = "";
-                    while ( strlen($buffer)< $c_end-$c_start) {
-                        $buffer .= fread($stream, $c_end-strlen($buffer));
-                    }
                     //$data =  fread($stream, $c_end-$c_start);
 
-                    echo $buffer;
+                    echo self::readRange($stream, $c_start, $c_end);
                 } else {
                     \Idno\Core\Idno::site()->logging()->error('Could not open stream.');
                 }

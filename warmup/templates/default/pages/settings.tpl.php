@@ -152,12 +152,12 @@
                     SQLite keeps its journal files beside it. Idno creates the file, and the folder if it is missing.
                 </p>
 
-                <p>
-                    <label class="control-label" for="sqlite_path">
-                        The full path of the database file<br>
-                        <input type="text" name="sqlite_path" id="sqlite_path" placeholder=""
-                               value="<?php echo htmlspecialchars($sqlite_path) ?>" class="profile-input" data-needed="sqlite">
-                    </label>
+                <p class="control-label">
+                    The database will be the file <code><?php echo htmlspecialchars($sqlite_path) ?></code>.
+                    To keep it somewhere else, install from the command line (<code>php warmup/CLI/CLIInstaller.php install</code>)
+                    or write <code>configuration/config.ini</code> by hand: this page cannot choose another place,
+                    because anyone who can load it before the site is set up could otherwise choose where a file
+                    is written.
                 </p>
             </div>
         </div>

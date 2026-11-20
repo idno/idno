@@ -55,26 +55,20 @@ class WebInstaller extends \Idno\Core\Installer
     protected function pageSettings()
     {
         $template = $this->template;
-        $ok = true;
-        $messages = '';
 
-        $site_title  = \Idno\Core\Input::getInput('site_title');
-        $mysql_user  = \Idno\Core\Input::getInput('mysql_user');
-        $mysql_host  = \Idno\Core\Input::getInput('mysql_host');
-        $mysql_pass  = \Idno\Core\Input::getInput('mysql_pass');
-        $mysql_name  = \Idno\Core\Input::getInput('mysql_name');
-        $submitted   = \Idno\Core\Input::getInput('database') !== null;
-        $refused     = false;
-        try {
-            $database = self::databaseType((string) \Idno\Core\Input::getInput('database', 'mysql'));
-        } catch (\Idno\Exceptions\ConfigurationException $e) {
-            $database = 'mysql';
-            $refused = true;
-            $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
-            $ok = false;
-        }
-        $sqlite_path = trim((string) \Idno\Core\Input::getInput('sqlite_path', ''));
-        $upload_path = \Idno\Core\Input::getInput('upload_path', dirname(dirname(__FILE__)) . '/Uploads/');
+        // What the request asks for is decided in Installer::checkWebSettings(), which creates
+        // nothing for a request that is not a POST and takes no path for an SQLite database.
+        $settings = $this->checkWebSettings($_SERVER['REQUEST_METHOD'] ?? '', $_REQUEST);
+        $ok          = $settings['ok'];
+        $messages    = $settings['messages'];
+        $database    = $settings['database'];
+        $db_params   = $settings['dbParams'];
+        $upload_path = $settings['uploadPath'];
+        $site_title  = $settings['values']['site_title'];
+        $mysql_user  = $settings['values']['mysql_user'];
+        $mysql_host  = $settings['values']['mysql_host'];
+        $mysql_pass  = $settings['values']['mysql_pass'];
+        $mysql_name  = $settings['values']['mysql_name'];
 
         //        if (!WebInstaller::installer()->rewriteWorking()) {
         //            $messages .= '<p>Rewriting appears to be disabled. Usually this means "AllowOverride None" is set in apache2.conf ';
@@ -84,47 +78,6 @@ class WebInstaller extends \Idno\Core\Installer
         //            $messages .= '<p>If you think this is an error, you can continue, but you might have problems later on.</p>';
         //            $ok = false;
         //        }
-
-        $db_params = [];
-        if ($database == 'sqlite') {
-            $db_ready = $submitted;
-            $db_input = ['path' => $sqlite_path];
-        } else {
-            $db_ready = !$refused && !empty($mysql_name) && !empty($mysql_host);
-            $db_input = ['name' => $mysql_name, 'user' => $mysql_user, 'pass' => $mysql_pass, 'host' => $mysql_host];
-            if ($submitted && !$db_ready && !$refused) {
-                $messages .= '<p>Please give us the name of your MySQL database and the name of the server it is on.</p>';
-                $ok = false;
-            }
-        }
-        if ($db_ready) {
-            try {
-                $db_params = $this->databaseParams($database, $db_input);
-            } catch (\Exception $e) {
-                $messages .= '<p>' . htmlspecialchars($e->getMessage()) . '</p>';
-                $ok = false;
-            }
-        }
-
-        $upload_path = realpath($upload_path);
-        if (!empty($upload_path)) {
-            if (substr($upload_path, -1) != '/' && substr($upload_path, -1) != '\\') {
-                $upload_path .= '/';
-            }
-
-            try {
-                $this->checkUploadDirectory($upload_path);
-            } catch (\Exception $e) {
-                $ok = false;
-                $messages .= '<p>' . $e->getMessage() . '</p>';
-            }
-
-        } else {
-            $ok = false;
-            if (!empty($mysql_user)) {
-                $messages .= '<p>You need to specify an upload path.</p>';
-            }
-        }
 
         if ($ok && !empty($upload_path) && !empty($db_params)) {
 
@@ -180,7 +133,7 @@ class WebInstaller extends \Idno\Core\Installer
                 'mysql_pass' => $mysql_pass,
                 'mysql_name' => $mysql_name,
                 'database' => $database,
-                'sqlite_path' => $sqlite_path !== '' ? $sqlite_path : $this->defaultSqlitePath(),
+                'sqlite_path' => $settings['sqlitePath'],
                 'upload_path' => $upload_path,
 
                 'messages' => $messages,
