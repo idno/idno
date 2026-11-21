@@ -134,16 +134,24 @@ webmentions to their own posts, feeds, sharing and hub discovery that way, list 
 addresses or CIDR ranges, IPv4 or IPv6, as a list in `config.ini`, or comma-separated in the environment variable
 `IDNO_HTTP_ALLOW_PRIVATE`. The single entry `*` turns the refusal off altogether: use it only when every member of the
 site is trusted, because it lets a remote party or a member steer the server at its own network. An entry that is not an
-address, a range or `*` is an error when the first such request is made. Like `proxy_string`, it is read from
+address, a range (with a prefix length of 1 or more) or `*` is an error when the first such request is made. Like `proxy_string`, it is read from
 `config.ini` or the environment only, never from the settings saved in the database.
 
     http_allow_private[] = '192.168.1.0/24'
     http_allow_private[] = 'fd00::/8'
 
-Behind a proxy (`proxy_string`), the proxy's own address is not refused as the address Idno connected to, so a site behind a proxy needs no
-entry (a request aimed at the proxy's own address is still refused). The address a request is aimed at is still checked before it is sent, where the server can resolve the host. If
-the proxy does the name resolution, that check is best effort: enforce egress rules at the proxy, and set
-`http_allow_private = *` if the server cannot resolve external names at all.
+A proxy is recognised whether it comes from `proxy_string` or, when that is empty, from the standard proxy
+environment variables (`http_proxy`, `https_proxy`, `all_proxy`, and `HTTP_PROXY` on the command line only, which
+is how containers are usually configured): in either case its own address is not refused as the address Idno
+connected to, so a site behind a proxy needs no entry (a request aimed at the proxy's own address is still refused).
+The address a request is aimed at is checked before it is sent, wherever the server can resolve the host. How far
+that protects depends on who resolves the name. Behind an HTTP proxy or a `socks5h` proxy, the proxy resolves the
+target's name for the real connection, so the server's own lookup is only a pre-check: the protection against a name
+that resolves differently for the proxy (DNS rebinding) does not apply, and anything the proxy can reach, including
+services on the proxy host's own loopback, can be reached through a hostname. Enforce egress rules at the proxy. With
+a `socks5` proxy (names resolved by the server) or no proxy, the address checked is the address connected to.
+A prefix length of 0 (`0.0.0.0/0`, `::/0`) is refused as an invalid entry: `*` is the way to switch the check off.
+Set `http_allow_private = *` if the server cannot resolve external names at all.
 
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a

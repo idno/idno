@@ -175,10 +175,12 @@ final class HttpClientFactoryTest extends TestCase
     /**
      * @param array<string, mixed> $config
      * @param array<string, mixed> $info what the mock reports about the connection
+     * @param array<string, mixed> $options the request's options
+     * @param array<string, mixed> $environment the proxy environment variables the client is built with (never the real ones)
      *
      * @return array{string, int} what the request did: 'sent' or 'refused: <message>', and how many requests the mock got
      */
-    private static function attempt(array $config, string $url, array $info = [], array $options = []): array
+    private static function attempt(array $config, string $url, array $info = [], array $options = [], array $environment = []): array
     {
         $made = 0;
         $mock = new MockHttpClient(static function () use (&$made, $info): MockResponse {
@@ -187,7 +189,7 @@ final class HttpClientFactoryTest extends TestCase
             return new MockResponse('ok', $info);
         });
         try {
-            HttpClientFactory::createRemote($mock, $config, static fn (string $host): array => [])->request('GET', $url, $options)->getContent();
+            HttpClientFactory::createRemote($mock, $config, static fn (string $host): array => [], $environment)->request('GET', $url, $options)->getContent();
 
             return ['sent', $made];
         } catch (TransportException $e) {
@@ -234,11 +236,105 @@ final class HttpClientFactoryTest extends TestCase
         $this->assertSame(0, self::attempt($config, 'http://[::1]/', ['primary_ip' => '::1'])[1]);
     }
 
+    /**
+     * @return iterable<string, array{array<string, string>}>
+     */
+    public static function environmentsWithAProxyAt10005(): iterable
+    {
+        yield 'https_proxy' => [['https_proxy' => 'http://10.0.0.5:3128']];
+        yield 'HTTPS_PROXY' => [['HTTPS_PROXY' => 'http://10.0.0.5:3128']];
+        yield 'http_proxy' => [['http_proxy' => 'http://10.0.0.5:3128']];
+        yield 'all_proxy' => [['all_proxy' => 'http://10.0.0.5:3128']];
+        yield 'ALL_PROXY' => [['ALL_PROXY' => 'http://10.0.0.5:3128']];
+        yield 'HTTP_PROXY on the command line' => [['HTTP_PROXY' => 'http://10.0.0.5:3128']];
+        yield 'no scheme' => [['https_proxy' => '10.0.0.5:3128']];
+        yield 'credentials' => [['https_proxy' => 'http://user:p%40ss@10.0.0.5:3128']];
+        yield 'a socks scheme' => [['all_proxy' => 'socks5h://10.0.0.5:1080']];
+    }
+
+    /**
+     * @dataProvider environmentsWithAProxyAt10005
+     *
+     * @param array<string, string> $environment
+     */
+    public function testAProxyFromTheEnvironmentIsAllowedAndTargetsAtItAreRefused(array $environment): void
+    {
+        $this->assertSame(['sent', 1], self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.5'], [], $environment));
+        $this->assertSame(0, self::attempt([], 'http://10.0.0.5:3128/', ['primary_ip' => '10.0.0.5'], [], $environment)[1]);
+        $this->assertSame(0, self::attempt([], 'http://127.0.0.1/', ['primary_ip' => '10.0.0.5'], [], $environment)[1]);
+    }
+
+    public function testAProxyFromTheEnvironmentMasksOnlyItsOwnAddress(): void
+    {
+        $this->assertStringContainsString('IP "10.0.0.6" is blocked', self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.6'], [], ['https_proxy' => 'http://10.0.0.5:3128'])[0]);
+    }
+
+    public function testBothTheHttpAndTheHttpsProxyAreMasked(): void
+    {
+        $environment = ['http_proxy' => 'http://10.0.0.5:3128', 'https_proxy' => 'http://10.0.0.6:3128'];
+
+        $this->assertSame(['sent', 1], self::attempt([], 'http://93.184.216.34/', ['primary_ip' => '10.0.0.5'], [], $environment));
+        $this->assertSame(['sent', 1], self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.6'], [], $environment));
+    }
+
+    public function testTheEnvironmentIsReadAsTheVendorClientReadsIt(): void
+    {
+        $address = static fn (array $environment, bool $cli): array => HttpClientFactory::proxyAddressesFromEnvironment($environment, $cli, static fn (string $host): array => []);
+
+        // The http proxy: http_proxy, then HTTP_PROXY (the command line only), then all_proxy, then ALL_PROXY.
+        $this->assertSame(['10.0.0.1'], $address(['http_proxy' => 'http://10.0.0.1:1', 'HTTP_PROXY' => 'http://10.0.0.2:1', 'all_proxy' => 'http://10.0.0.3:1'], true));
+        $this->assertSame(['10.0.0.2'], $address(['HTTP_PROXY' => 'http://10.0.0.2:1', 'all_proxy' => 'http://10.0.0.3:1'], true));
+        $this->assertSame(['10.0.0.3'], $address(['HTTP_PROXY' => 'http://10.0.0.2:1', 'all_proxy' => 'http://10.0.0.3:1'], false), 'HTTP_PROXY is ignored outside the command line');
+        $this->assertSame(['10.0.0.4'], $address(['ALL_PROXY' => 'http://10.0.0.4:1'], false));
+        // The https proxy: https_proxy, then HTTPS_PROXY, then the http one; and both are masked.
+        $this->assertEqualsCanonicalizing(['10.0.0.1', '10.0.0.7'], $address(['http_proxy' => 'http://10.0.0.1:1', 'https_proxy' => 'http://10.0.0.7:1', 'HTTPS_PROXY' => 'http://10.0.0.8:1'], true));
+        $this->assertEqualsCanonicalizing(['10.0.0.1', '10.0.0.8'], $address(['http_proxy' => 'http://10.0.0.1:1', 'HTTPS_PROXY' => 'http://10.0.0.8:1'], true));
+        // A variable that is set but empty is the proxy, as the vendor code reads it: it hides the later ones and adds nothing.
+        $this->assertSame([], $address(['http_proxy' => '', 'all_proxy' => 'http://10.0.0.3:1'], true));
+    }
+
+    public function testAnEmptyOrMalformedProxyVariableAddsNothing(): void
+    {
+        $address = static fn (array $environment): array => HttpClientFactory::proxyAddressesFromEnvironment($environment, true, static fn (string $host): array => []);
+
+        $this->assertSame([], $address([]));
+        $this->assertSame([], $address(['https_proxy' => '', 'http_proxy' => '']));
+        $this->assertSame([], $address(['https_proxy' => 'http://', 'http_proxy' => ':::']));
+        $this->assertSame([], $address(['https_proxy' => 'http://unresolvable.test:3128']));
+        $this->assertSame([], $address(['https_proxy' => ['not', 'a', 'string'], 'http_proxy' => 5]));
+        $this->assertStringContainsString('IP "10.0.0.5" is blocked', self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.5'], [], ['https_proxy' => 'http://'])[0]);
+    }
+
+    public function testAProxyHostNameInTheEnvironmentIsResolvedWithTheGivenResolver(): void
+    {
+        $addresses = HttpClientFactory::proxyAddressesFromEnvironment(['https_proxy' => 'http://proxy.example:3128'], true, static fn (string $host): array => $host === 'proxy.example' ? ['10.1.2.3', '10.1.2.4'] : []);
+
+        $this->assertEqualsCanonicalizing(['10.1.2.3', '10.1.2.4'], $addresses);
+    }
+
+    public function testTheProxyStringWinsAndTheEnvironmentIsNotConsulted(): void
+    {
+        $environment = ['https_proxy' => 'http://10.0.0.6:3128'];
+
+        $this->assertSame(['sent', 1], self::attempt(['proxy_string' => '10.0.0.5:3128'], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.5'], [], $environment));
+        $this->assertStringContainsString('IP "10.0.0.6" is blocked', self::attempt(['proxy_string' => '10.0.0.5:3128'], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.6'], [], $environment)[0]);
+    }
+
+    public function testNoProxyNeedsNoHandling(): void
+    {
+        // A host in no_proxy connects directly and reports its own address: the check applies as for any request.
+        $environment = ['https_proxy' => 'http://10.0.0.5:3128', 'no_proxy' => 'intranet.test'];
+
+        $this->assertStringContainsString('IP "10.0.0.9" is blocked', self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.9'], [], $environment)[0]);
+    }
+
     public function testBehindAProxyAHostTheServerCannotResolveIsRefused(): void
     {
-        [$result, $made] = self::attempt(['proxy_string' => '10.0.0.5:3128'], 'http://nowhere.invalid/', ['primary_ip' => '10.0.0.5']);
+        // The `resolve` option is read by the private-network client before it looks the name up, so
+        // naming the host as its own "address" gives a host that resolves to nothing, with no DNS query.
+        [$result, $made] = self::attempt(['proxy_string' => '10.0.0.5:3128'], 'http://nowhere.test/', ['primary_ip' => '10.0.0.5'], ['resolve' => ['nowhere.test' => 'nowhere.test']]);
 
-        $this->assertStringStartsWith('refused: Host "nowhere.invalid" is blocked', $result);
+        $this->assertStringStartsWith('refused: Host "nowhere.test" is blocked', $result);
         $this->assertSame(0, $made);
     }
 
@@ -334,6 +430,9 @@ final class HttpClientFactoryTest extends TestCase
         yield 'a prefix that is no number' => [['10.0.0.0/x'], '10.0.0.0/x'];
         yield 'a bad address' => [['10.0.0/8'], '10.0.0/8'];
         yield 'one bad entry among good ones' => ['192.168.1.0/24, nope', 'nope'];
+        yield 'a zero prefix' => [['0.0.0.0/0'], '0.0.0.0/0'];
+        yield 'an IPv6 zero prefix' => [['::/0'], '::/0'];
+        yield 'a zero prefix with leading zeros' => [['10.0.0.0/00'], '10.0.0.0/00'];
         yield 'a number' => [[5], '5'];
         yield 'neither a list nor a string' => [5, 'int'];
     }
@@ -349,6 +448,13 @@ final class HttpClientFactoryTest extends TestCase
         HttpClientFactory::createRemote(new MockHttpClient(new MockResponse('')), ['http_allow_private' => $value]);
     }
 
+    public function testAZeroPrefixIsRefusedAndTheMessageNamesTheStar(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('use "*"');
+        HttpClientFactory::createRemote(new MockHttpClient(new MockResponse('')), ['http_allow_private' => ['0.0.0.0/0']]);
+    }
+
     public function testNothingConfiguredAllowsNothing(): void
     {
         foreach ([[], ['http_allow_private' => []], ['http_allow_private' => ''], ['http_allow_private' => null]] as $config) {
@@ -356,7 +462,7 @@ final class HttpClientFactoryTest extends TestCase
         }
     }
 
-    public function testEachRemoteClientResolvesAHostAfresh(): void
+    public function testTwoCallsBuildTwoSeparateDecorators(): void
     {
         $mock = new MockHttpClient(new MockResponse('ok'));
 

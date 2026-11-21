@@ -144,6 +144,34 @@ final class TestRoutesTest extends CharacterisationTestCase
         $this->assertSame(30, $limit);
     }
 
+    public function testGzipDecodesToTheBytesAskedForAndIsCappedAndRefusesBadInput(): void
+    {
+        $gzip = $this->site()->request('GET', '_test/gzip?bytes=1000');
+        $this->assertSame('gzip', $gzip->header('Content-Encoding'));
+        $this->assertSame((string) strlen($gzip->body), $gzip->header('Content-Length'));
+        $this->assertSame(str_repeat("\0", 1000), gzdecode($gzip->body));
+
+        $limit = (new \ReflectionClassConstant(\Tests\Fixtures\SlowController::class, 'MAX_GZIP_BYTES'))->getValue();
+        $this->assertSame(50 * 1024 * 1024, $limit);
+
+        // More than the cap is the cap: the compressed bodies match, and the size is read, never decoded.
+        $capped = $this->site()->request('GET', '_test/gzip?bytes=' . ($limit * 10));
+        $uncapped = $this->site()->request('GET', '_test/gzip?bytes=' . $limit);
+        $this->assertSame($uncapped->header('Content-Length'), $capped->header('Content-Length'));
+
+        // A negative number is none; a value that is no number, or an array, is a 400 (Symfony's own refusal), never a body.
+        $this->assertSame('', gzdecode($this->site()->request('GET', '_test/gzip?bytes=-5')->body));
+        $this->assertSame('', gzdecode($this->site()->request('GET', '_test/gzip?bytes=0')->body));
+        foreach (['abc', 'x1', '', '1.5'] as $value) {
+            $response = $this->site()->request('GET', '_test/gzip?bytes=' . $value);
+            $this->assertSame(400, $response->status, 'bytes=' . $value);
+            $this->assertNull($response->header('Content-Encoding'), 'bytes=' . $value);
+        }
+        $array = $this->site()->request('GET', '_test/gzip?bytes[]=5');
+        $this->assertSame(400, $array->status);
+        $this->assertNull($array->header('Content-Encoding'));
+    }
+
     public function testPageAdvertisesTheSinkOfTheSameNameAsItsWebmentionEndpoint(): void
     {
         $response = $this->site()->request('GET', '_test/page/some-name');

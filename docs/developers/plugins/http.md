@@ -102,9 +102,15 @@ remote client may connect to, or `*`, which turns the refusal off (the remote cl
 when every member is trusted). A plugin does nothing about it: it asks for the remote client as before, and the site's
 setting applies. The setting is read from the boot configuration only.
 
-Behind a proxy (`proxy_string`) the proxy's own address is allowed automatically, and the address a request is aimed at is
-still checked where the server can resolve it. Where the proxy does the name resolution the check is best effort: enforce
-egress rules at the proxy, and use `*` if the server cannot resolve external names at all.
+A proxy, from `proxy_string` or (when that is empty) from the standard proxy environment variables (`http_proxy`,
+`https_proxy`, `all_proxy`, and `HTTP_PROXY` on the command line only), has its own address allowed automatically. The
+address a request is aimed at is checked before it is sent, wherever the server can resolve it. Behind an HTTP proxy or
+a `socks5h` proxy the PROXY resolves the target's name for the real connection, so that lookup is only a pre-check: the
+protection against a name that resolves differently for the proxy (DNS rebinding) does not apply, and anything the
+proxy can reach, including services on the proxy host's own loopback, can be reached through a hostname. Enforce egress
+rules at the proxy. With a `socks5` proxy (names resolved by the server) or no proxy, the address checked is the
+address connected to. A prefix length of 0 (`0.0.0.0/0`, `::/0`) is refused as an invalid entry: `*` is the way to
+switch the check off, and use it if the server cannot resolve external names at all.
 
 The remote client is built afresh each time the container is asked for it (it keeps a DNS cache for as long as it lives),
 so fetch it for each use, as `Webservice` does.

@@ -1079,18 +1079,35 @@ other new code may.
     `NoPrivateNetworkHttpClient`'s own allow-list argument (an address that is private is let through
     when it is in the list; a public one never needs it). An entry that is not an IP address, a CIDR
     range or `*` makes the factory throw a `\LogicException` naming the setting and the entry when
-    the service is fetched (a mistyped list never silently allows or refuses). With `proxy_string` set,
-    the proxy's own addresses (its host if an IP address, else what it resolves to when the client is
-    built; nothing when it does not resolve) are not refused as the address the client connected to:
+    the service is fetched (a mistyped list never silently allows or refuses); a prefix length of 0
+    (`0.0.0.0/0`, `::/0`, each of which opens every private address of its family) is refused the same way,
+    the message saying to use `*`, which is the one way to switch the refusal off. A proxy is recognised
+    from `proxy_string` or, when that is empty, from the environment variables the HTTP client itself reads
+    when it is given no `proxy` option (Symfony's `HttpClientTrait::getProxyUrl()`: the http proxy is
+    `http_proxy`, else `HTTP_PROXY` on the CLI only, else `all_proxy`, else `ALL_PROXY`; the https proxy is
+    `https_proxy`, else `HTTPS_PROXY`, else the http one; a variable that is set but empty is the proxy and
+    hides the later ones; curl itself reads none, the client always sets `CURLOPT_PROXY`), both schemes,
+    since the remote client fetches both (`HttpClientFactory::proxyAddressesFromEnvironment()` is pure, on
+    an array; `createRemote()` takes the environment as its fourth argument, `$_SERVER` when null, so tests
+    pass arrays; `no_proxy` needs no handling: an exempt host connects directly and reports its own
+    address). Idno still passes a `proxy` option only when `proxy_string` is set, and `proxy_string` wins:
+    the environment is then not consulted. The proxy's own addresses (its host if an IP address, else what
+    it resolves to when the client is built; nothing when it does not resolve or cannot be read) are not
+    refused as the address the client connected to:
     curl's connection is to the proxy, whose address the refusal's after-connect check (`primary_ip`)
     would otherwise block, so every remote request of a site behind a proxy would fail. That is done
     by `Idno\Http\Client\ProxyAddressMask`, a decorator under the refusal that hides a reported
     `primary_ip` equal to a proxy address, and NOT by the allow-list, which would also let a target at
     the proxy's address through (a proxy on `127.0.0.1` would admit `http://127.0.0.1/`). The TARGET's
     addresses are still checked before each request where the server can resolve them (a hostname the
-    server cannot resolve is refused: where the proxy does all the name resolution the check is best
-    effort, so enforce egress rules at the proxy, and use `*` if the server cannot resolve external
-    names at all). `createRemote($client, $config)` takes the boot configuration's values (as
+    server cannot resolve is refused). Behind an HTTP proxy or a `socks5h` proxy the PROXY resolves the
+    target's name for the real connection, so the server's own lookup is only a pre-check: the protection
+    against a name that resolves differently for the proxy (DNS rebinding) does not apply there, and
+    anything the proxy can reach, including services on the proxy host's own loopback, can be reached
+    through a hostname; enforce egress rules at the proxy, and use `*` if the server cannot resolve
+    external names at all. With a `socks5` proxy (names resolved by the server) or no proxy, the address
+    checked is the address connected to. The unit tier never resolves a name: a test that makes a request
+    to a hostname through the real private-network client gives it a `resolve` option. `createRemote($client, $config)` takes the boot configuration's values (as
     `create()` does; `remoteFromBootConfig()` is the container's factory); `options()` stays pure and
     ignores the setting.
   - Both send `User-Agent: Idno https://idno.co` and `Accept-Encoding: identity` (no compression: the
