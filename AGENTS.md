@@ -268,6 +268,13 @@ Each content plugin has an `Entry.php` entity class that defines
   exception message is plain text: HTML in it is displayed, not rendered. The message is
   still shown to visitors, so don't put anything in one that they shouldn't see.
   `Tests/Core/ErrorPageTest.php` checks this.
+- Error responses in JSON: for the `json` and `jsonp` template types, `Page::exception()`
+  answers with the page shell (`templates/json/shell.tpl.php`,
+  `templates/jsonp/shell.tpl.php`), which adds an `exception` object to the response. It
+  holds the exception's `message` only. Its `class`, `file` and `line` describe the server:
+  `Page::exception()` logs them, and the shells add them to the response only when `debug`
+  is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
+  `Tests/Core/fixtures/exception_response.php` in its own PHP process.
 - Content Security Policy headers via template system
 - Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
   that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The

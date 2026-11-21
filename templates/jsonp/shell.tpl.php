@@ -20,6 +20,10 @@ if (!empty($vars['exception'])) {
         'file' => $vars['exception']->getFile(),
         'line' => $vars['exception']->getLine()
     ];
+    // Visitors get the message only: the class, the file and the line describe the server
+    if (empty(\Idno\Core\Idno::site()->config()->debug)) {
+        unset($e['class'], $e['file'], $e['line']);
+    }
     $vars['exception'] = $e;
 }
 
