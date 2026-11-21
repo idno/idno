@@ -47,7 +47,9 @@ class Delivery
         }
 
         try {
-            $response = Webservice::post($inboxUrl, $body, $headers);
+            // The inbox URL comes from the remote actor's profile: safeSend() refuses it, and
+            // anything it redirects to, if it is on this machine or its private network
+            $response = Webservice::safeSend('post', $inboxUrl, $body, $headers);
 
             $httpCode = $response['response'] ?? 0;
 

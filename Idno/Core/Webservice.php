@@ -16,6 +16,11 @@ namespace Idno\Core {
         public static $lastResponse = '';
 
         /**
+         * How many redirects a request follows before it gives up
+         */
+        const MAX_REDIRECTS = 5;
+
+        /**
          * Send a web services POST request to a specified URI endpoint
          *
          * @param  string $endpoint The URI to send the POST request to
@@ -35,9 +40,13 @@ namespace Idno\Core {
          * @param  string $endpoint The URI to send the request to
          * @param  mixed  $params   Optionally, an array of parameters to send (keys are the parameter names), or the raw body text (depending on Content-Type)
          * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @param  array  $options  Optionally, any of:
+         *                          'follow_redirects' => false: don't follow redirects; 'redirect_url' in the result says where the response pointed
+         *                          'protocols' => a bitmask of CURLPROTO_* constants: the only protocols the request, and any redirect, may use
+         *                          'resolve' => a list of IP addresses: connect to these instead of looking up the endpoint's host name
          * @return array
          */
-        static function send($verb, $endpoint, $params = null, array $headers = null)
+        static function send($verb, $endpoint, $params = null, array $headers = null, array $options = [])
         {
 
             $curl_handle = curl_init();
@@ -119,6 +128,25 @@ namespace Idno\Core {
             curl_setopt($curl_handle, CURLOPT_HEADER, 1);
             curl_setopt($curl_handle, CURLOPT_NOPROGRESS, 0);
 
+            if (isset($options['protocols'])) {
+                curl_setopt($curl_handle, CURLOPT_PROTOCOLS, $options['protocols']);
+                curl_setopt($curl_handle, CURLOPT_REDIR_PROTOCOLS, $options['protocols']);
+            }
+
+            // Connect to the given addresses, whatever the host name resolves to by now (an IP address needs no lookup)
+            $host = trim((string) parse_url($endpoint, PHP_URL_HOST), '[]');
+            if (!empty($options['resolve']) && !filter_var($host, FILTER_VALIDATE_IP)) {
+                $port = parse_url($endpoint, PHP_URL_PORT);
+                if (!$port) {
+                    $port = (strtolower((string) parse_url($endpoint, PHP_URL_SCHEME)) == 'https') ? 443 : 80;
+                }
+                $addresses = [];
+                foreach ($options['resolve'] as $address) {
+                    $addresses[] = (strpos($address, ':') !== false) ? '[' . $address . ']' : $address;
+                }
+                curl_setopt($curl_handle, CURLOPT_RESOLVE, [$host . ':' . $port . ':' . implode(',', $addresses)]);
+            }
+
             // Allow unsafe ssl verify
             if (!empty(\Idno\Core\Idno::site()->config()->disable_ssl_verify)) {
                 curl_setopt($curl_handle, CURLOPT_SSL_VERIFYPEER, 0);
@@ -196,7 +224,8 @@ namespace Idno\Core {
                 curl_setopt($curl_handle, CURLOPT_HTTPHEADER, $headers);
             }
 
-            $buffer      = self::webservice_exec($curl_handle);
+            $maxredirect = (($options['follow_redirects'] ?? true) === false) ? 0 : null;
+            $buffer      = self::webservice_exec($curl_handle, $maxredirect);
             $http_status = curl_getinfo($curl_handle, CURLINFO_HTTP_CODE);
 
             // Get HTTP Header / body
@@ -215,6 +244,7 @@ namespace Idno\Core {
             self::$lastResponse = $content;
 
             $effective_url = curl_getinfo($curl_handle, CURLINFO_EFFECTIVE_URL);
+            $redirect_url  = curl_getinfo($curl_handle, CURLINFO_REDIRECT_URL);
 
             curl_close($curl_handle);
 
@@ -223,6 +253,98 @@ namespace Idno\Core {
                 'content' => $content,
                 'response' => $http_status,
                 'effective_url' => $effective_url,
+                'redirect_url' => $redirect_url,
+                'error' => $error,
+            ];
+        }
+
+        /**
+         * Send a web services request to a URL that was supplied by a remote party: a webmention
+         * source, an ActivityPub actor or inbox, a file to download, and so on.
+         *
+         * Works like send(), except that the URL must pass \Idno\Core\UrlValidator (HTTP or
+         * HTTPS, and a host that is not on this machine or its private network), and so must
+         * every URL the request is redirected to: redirects are followed here, one at a time,
+         * and each is checked before it is requested. The connection is made to the addresses
+         * that were checked.
+         *
+         * If a URL is refused, or there are more than MAX_REDIRECTS redirects, nothing more is
+         * requested and the result has 'response' => 0, empty 'content' and a message in 'error'.
+         *
+         * @param  string $verb     The verb to send the request with; one of POST, GET, DELETE, PUT, HEAD
+         * @param  string $endpoint The URI to send the request to
+         * @param  mixed  $params   Optionally, an array of parameters to send (keys are the parameter names), or the raw body text (depending on Content-Type)
+         * @param  array  $headers  Optionally, an array of headers to send with the request (keys are the header names)
+         * @return array
+         */
+        static function safeSend($verb, $endpoint, $params = null, ?array $headers = null)
+        {
+            $verb = strtolower($verb);
+
+            for ($redirects = 0; true; $redirects++) {
+
+                $addresses = static::resolveSafeUrl($endpoint);
+                if (empty($addresses)) {
+                    return self::refused($endpoint, 'The URL is not allowed');
+                }
+
+                $result = self::send(
+                    $verb, $endpoint, $params, $headers, [
+                        'follow_redirects' => false,
+                        'protocols' => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                        'resolve' => $addresses,
+                    ]
+                );
+
+                if (!in_array($result['response'], [301, 302, 303, 307, 308]) || empty($result['redirect_url'])) {
+                    return $result;
+                }
+                if ($redirects >= self::MAX_REDIRECTS) {
+                    return self::refused($endpoint, 'Too many redirects');
+                }
+
+                // Repeat the request at the new address the way curl does when it follows a redirect
+                // itself: a GET or HEAD stays as it is; anything else is sent again as it was after
+                // a 307 or 308, and a POST becomes a GET after a 301, 302 or 303.
+                $endpoint = $result['redirect_url'];
+                if ($verb == 'get' || $verb == 'head') {
+                    $params = null; // They were part of the first address
+                } else if ($result['response'] == 303 || ($verb == 'post' && $result['response'] < 303)) {
+                    $verb = 'get';
+                    $params = null;
+                }
+            }
+        }
+
+        /**
+         * The IP addresses to connect to for a URL that safeSend() is about to request, or an
+         * empty array if the URL must not be requested.
+         *
+         * @param  string $url
+         * @return string[]
+         */
+        protected static function resolveSafeUrl($url)
+        {
+            return \Idno\Core\UrlValidator::safeAddresses($url);
+        }
+
+        /**
+         * The result of a safeSend() request that was not made
+         *
+         * @param  string $endpoint
+         * @param  string $error
+         * @return array
+         */
+        private static function refused($endpoint, $error)
+        {
+            \Idno\Core\Idno::site()->logging()->warning('Webservice: ' . $error . ', not requesting ' . $endpoint);
+
+            return [
+                'header' => '',
+                'content' => '',
+                'response' => 0,
+                'effective_url' => $endpoint,
+                'redirect_url' => '',
                 'error' => $error,
             ];
         }
@@ -247,7 +369,6 @@ namespace Idno\Core {
                 curl_setopt($ch, CURLOPT_FOLLOWLOCATION, $mr > 0);
                 curl_setopt($ch, CURLOPT_MAXREDIRS, $mr);
                 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
             } else {
 

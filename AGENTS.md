@@ -235,10 +235,24 @@ Each content plugin has an `Entry.php` entity class that defines
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
 - HTML sanitization via HTMLPurifier
-- SSRF protection: call `\Idno\Core\UrlValidator::isSafeUrl($url)` before any server-side
-  fetch of a URL supplied by a remote party (webmention sources, ActivityPub actors,
-  Micropub media URLs). It rejects non-HTTP schemes and hosts that resolve to
-  loopback, private, link-local or reserved addresses.
+- SSRF protection: fetch a URL supplied by a remote party (webmention sources and
+  endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
+  `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with
+  `Webservice::get()` / `post()`, `file_get_contents()` or `fopen()`. `safeSend()` requests
+  the URL only if `\Idno\Core\UrlValidator::isSafeUrl($url)` accepts it (HTTP or HTTPS, and
+  no host that resolves to a loopback, private, link-local or reserved address). It follows
+  redirects itself, five at most, and checks each one the same way before requesting it,
+  and it connects to the addresses it checked. A request it refuses returns
+  `'response' => 0`, empty `'content'` and a message in `'error'`. `isSafeUrl()` on its own
+  is not enough: it checks one URL, and `Webservice::get()` and the other verbs follow
+  redirects from it to anywhere. Those are for URLs chosen by the site's admin or users.
+  One gap is known: when `proxy_string` is set, the proxy resolves host names, so it may
+  connect to an address other than the ones checked. `Tests/Core/WebserviceTest.php`
+  checks all this; tests of code that fetches URLs extend `Tests\OutboundHttpTestCase`,
+  which runs a local server so that nothing leaves the machine.
+- TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
+  the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or
+  `CURLOPT_SSL_VERIFYHOST` anywhere else.
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
