@@ -144,7 +144,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     the per-checkout temporary directory (and, in MySQL mode, the container), and leaves
     `configuration/config.ini` as it is. It always completes that cleanup: when the container cannot
     be stopped (Docker absent or not running) it prints a warning and carries on. It signals only
-    the rig's own `php -S` (the process in `Tests/rig/.server.pid` must be `php ... -S 127.0.0.1:<port>
+    the rig's own `php -S` and that server's worker processes (the process in `Tests/rig/.server.pid` must be `php ... -S 127.0.0.1:<port>
     ... Tests/rig/router.php`; any other process is left alone and the stale pid file removed). The
     mode is recorded in `Tests/rig/.mode` (gitignored) only once its database is up, so a
     `test:up:mysql` that fails (Docker not running) leaves nothing a plain `test:up` must stop.
@@ -505,7 +505,8 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   site's own URL plus `to`, default `/_test/echo`; a `to` that does not start with `/_test/`, or holds
   a space or control character, is answered 400); `/_test/slow?seconds=N` (sleeps at most 30);
   `/_test/stream?bytes=N` (chunked, no `Content-Length`) and `/_test/sized?bytes=N` (the same body with
-  a `Content-Length`), at most 20 MB; `/_test/sink/{name}` (appends the request, in `/_test/echo`'s
+  a `Content-Length`), at most 20 MB; `/_test/gzip?bytes=N` (`Content-Encoding: gzip`, the gzip of N zero
+  bytes, at most 50 MB decoded and a few dozen kilobytes on the wire); `/_test/sink/{name}` (appends the request, in `/_test/echo`'s
   shape, to a file of its own and answers 202) and `/_test/sink/{name}/log` (the recorded requests as
   a JSON list, then the file is emptied), with `name` matching `[a-z0-9-]{1,40}`; and
   `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint). The
@@ -1063,8 +1064,41 @@ other new code may.
     Micropub media URL, a feed or page a user typed). It is the site client in `NoPrivateNetworkHttpClient`,
     which refuses a host that resolves to a loopback, private, link-local or reserved address, on the
     first request and on every redirect hop (a `TransportException`). Do not use the site client for
-    such a URL, and do not add a second SSRF check by hand around it.
-  - Both send `User-Agent: Idno https://idno.co`, fail after `HttpClientFactory::IDLE_TIMEOUT` (10 s)
+    such a URL, and do not add a second SSRF check by hand around it. It is NOT a shared service: each
+    fetch builds a new one over the shared site client (in the test container too), because the
+    decorator keeps a DNS cache, and pins curl to the address it cached, for its whole life, which in a
+    queue worker would be until the worker restarts. Fetch it at each use (`Webservice` and
+    `ATProtoClient` do); do not keep it in a property.
+  - The boot-configuration setting `http_allow_private` (a list, `http_allow_private[] = "192.168.1.0/24"`
+    in `config.ini`, or one comma-separated string in `IDNO_HTTP_ALLOW_PRIVATE`; never read from the
+    stored settings: `Idno\Core\Config` drops it) names the IP addresses and CIDR ranges (IPv4 or IPv6)
+    the remote client may connect to although they are private, or is the single entry `*`, which
+    makes `HttpClientFactory::createRemote()` return the site client itself: nothing is refused. It is
+    the remedy for intranet, single-user, split-horizon-DNS and development installs that lose
+    webmentions to their own posts, feeds, sharing and hub discovery under the refusal. It is built on
+    `NoPrivateNetworkHttpClient`'s own allow-list argument (an address that is private is let through
+    when it is in the list; a public one never needs it). An entry that is not an IP address, a CIDR
+    range or `*` makes the factory throw a `\LogicException` naming the setting and the entry when
+    the service is fetched (a mistyped list never silently allows or refuses). With `proxy_string` set,
+    the proxy's own addresses (its host if an IP address, else what it resolves to when the client is
+    built; nothing when it does not resolve) are not refused as the address the client connected to:
+    curl's connection is to the proxy, whose address the refusal's after-connect check (`primary_ip`)
+    would otherwise block, so every remote request of a site behind a proxy would fail. That is done
+    by `Idno\Http\Client\ProxyAddressMask`, a decorator under the refusal that hides a reported
+    `primary_ip` equal to a proxy address, and NOT by the allow-list, which would also let a target at
+    the proxy's address through (a proxy on `127.0.0.1` would admit `http://127.0.0.1/`). The TARGET's
+    addresses are still checked before each request where the server can resolve them (a hostname the
+    server cannot resolve is refused: where the proxy does all the name resolution the check is best
+    effort, so enforce egress rules at the proxy, and use `*` if the server cannot resolve external
+    names at all). `createRemote($client, $config)` takes the boot configuration's values (as
+    `create()` does; `remoteFromBootConfig()` is the container's factory); `options()` stays pure and
+    ignores the setting.
+  - Both send `User-Agent: Idno https://idno.co` and `Accept-Encoding: identity` (no compression: the
+    client decodes a compressed body a chunk at a time, and a few kilobytes of gzip decode to megabytes in
+    one chunk, which `BoundedBody` cannot bound: measured at 17 MB of PHP memory for a 40 MB body with the
+    limit at 1 MB; naming an encoding also stops it decoding a body a server compresses anyway; pinned by
+    `Tests/Characterisation/WebserviceCompressionTest` on `/_test/gzip`; the old client asked for none
+    either), fail after `HttpClientFactory::IDLE_TIMEOUT` (10 s)
     without receiving anything or `MAX_DURATION` (60 s) in all, follow at most `MAX_REDIRECTS` (5), and
     verify certificates unless the boot configuration's `disable_ssl_verify` is set. `proxy_string`,
     `proxy_type` and `disable_ssl_verify` are read from the BOOT configuration only (`Idno\Core\Config`
@@ -1107,24 +1141,28 @@ other new code may.
   - `send()` never throws for a transport failure (a refused connection, a timeout, a certificate that
     does not verify, a host the remote client refuses): the result has `response` 0, empty `header` and
     `content`, `effective_url` the URL that was being requested and the failure's message in `error`;
-    one error line is logged (`Webservice request failed: <scheme>://<host><path>: <message>`: no query,
+    one error line is logged (`Webservice request failed: <reason>: <scheme>://<host><path>`: no query,
     no credentials, control characters replaced, each part at most 200 bytes, never a header or a body).
     `error` is empty when a response was received and kept whole; a response refused or cut for its size has its
     status AND a non-empty `error`. The log line holds a fixed reason or the exception's class, never its message
     (which can quote the address), and the URL as scheme, host and path (`[unparseable address]` if it has none).
-    No caller in the repository reads `$result['error']`.
+    `$result['error']` is read only as a flag (empty or not) in the repository, by
+    `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`, `file_get_contents()` and
+    `safeFileGetContents()`; it is never logged or shown.
   - Redirects are followed BY THE ADAPTER, one request per hop, each sent with `max_redirects` 0, so
     that `header` holds the header block of every hop in order, `effective_url` is the last URL, and the
     remote client checks every hop's address. Five are followed; a sixth is the failed result with the
     sixth response's status and URL, a non-empty `error` and empty `header` and `content`. On 301, 302
     and 303 a POST becomes a GET with no body and no Content-Type of its own, and a PUT or DELETE keeps
     its method and the caller's Content-Type but sends no body; on 307 and 308 the same method, body and
-    Content-Type are sent again. `Authorization` and `Cookie` headers are not sent to another origin.
+    Content-Type are sent again. `Authorization`, `Cookie`, `Signature`, `X-Idno-Service-Signature` and
+    `DPoP` headers are not sent to another origin.
     No Referer is sent on a redirect. `file_get_contents_ex()` is `get()`; after too many redirects it
     returns the failed result and `file_get_contents()` returns false (neither throws).
   - Size limit: `webservice_max_download` (default 10 MB, read from the legacy config at call time). A
     response that DECLARES a `Content-Length` over it is refused without reading the body (`response` is
-    its status, `error` non-empty, `header` and `content` empty, also for HEAD); a body with no declared
+    its status, `error` non-empty, `header` and `content` empty; a HEAD is never refused for its declared
+    length, which describes a body it does not send, so a large file can be probed); a body with no declared
     length is read through `BoundedBody` and cut at the limit, with `error` non-empty and the cut `content`.
     Time limits and certificate verification come from the client, not per request.
   - Headers: a string key is a header name (`['Content-Type' => 'x']` is sent as `Content-Type: x`; it
@@ -1159,8 +1197,9 @@ other new code may.
   3xx response, as it was under curl), and a response is read through `BoundedBody` up to 1 MiB and cut
   there (a cut document does not parse: the call fails as it does for any unparseable one). A GET that fails
   is `null` to the callers that tolerate it (identity and discovery methods throw a `\RuntimeException`);
-  `xrpcGet()` still ends in a `\TypeError` then, as the curl version did (a known defect, pinned by a test, not
-  fixed here because it would change `documentExists()`'s result). A POST that fails throws `\RuntimeException('HTTP
+  a request that fails in `authenticatedRequest()` (`xrpcGet()`) throws `\RuntimeException('HTTP GET failed:
+  <scheme>://<host><path>')`, so `documentExists()` is false on a transport failure (the curl version ended
+  in a `\TypeError` that no catch in the plugin handled). A POST that fails throws `\RuntimeException('HTTP
   POST failed: ...')`. Exception messages, which the plugin's pages and `Main.php` log and show, never hold a
   response body: an error document's `error_description`, `message` or `error` (control characters replaced,
   at most 200 bytes), else `HTTP <status>`; URLs in them are reduced to scheme, host and path. The class logs
@@ -2522,7 +2561,8 @@ the CLI installer no longer writes one.
 - HTML sanitization via HTMLPurifier
 - SSRF protection: the plain client (`Webservice::send()` and its wrappers, the `idno.http_client`
   service) is for the site's own URLs and for services the site's ADMIN configured (the PuSH hub, a
-  webhook, an API endpoint). Every other URL goes through `Webservice::safeSend()` or
+  webhook the admin configured in the site's `webhook_syndication` setting, an API endpoint; a webhook
+  from a member's own `webhook_syndication` list goes through `safeSend()`). Every other URL goes through `Webservice::safeSend()` or
   `Webservice::safeFileGetContents()` (new code: the injected `$remoteClient`), which refuse a host
   that resolves to a loopback, private, link-local or reserved address on the first request and on
   every redirect hop. That covers a URL a remote party supplied (a webmention's source, the endpoints

@@ -293,11 +293,14 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->arg('$projectDir', '%kernel.project_dir%');
 
     // The site's HTTP clients, built at runtime, when first fetched, from the boot configuration
-    // (proxy_string, proxy_type and disable_ssl_verify, which are never read from the stored
-    // settings): no configuration value is compiled into the container. idno.http_client is the one
-    // autowired as HttpClientInterface; idno.http_client.remote is for URLs a remote party supplied
-    // (it refuses loopback, private, link-local and reserved addresses on every request and redirect)
-    // and is autowired as the argument $remoteClient. Neither needs the legacy application.
+    // (proxy_string, proxy_type, disable_ssl_verify and http_allow_private, which are never read from
+    // the stored settings): no configuration value is compiled into the container. idno.http_client is
+    // the one autowired as HttpClientInterface; idno.http_client.remote is for URLs a remote party
+    // supplied (it refuses loopback, private, link-local and reserved addresses on every request and
+    // redirect, except those http_allow_private and the proxy allow) and is autowired as the argument
+    // $remoteClient. The remote client is not shared: each fetch builds one over the shared site client,
+    // so that its DNS cache lives no longer than its user (a queue worker fetches it for each use).
+    // Neither needs the legacy application.
     $services->set('idno.http_client', HttpClientInterface::class)
         ->factory([HttpClientFactory::class, 'fromBootConfig'])
         ->args([service(BootConfig::class)])
@@ -305,8 +308,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->public();
     $services->set('idno.http_client.remote', HttpClientInterface::class)
-        ->factory([HttpClientFactory::class, 'createRemote'])
-        ->args([service('idno.http_client')])
+        ->factory([HttpClientFactory::class, 'remoteFromBootConfig'])
+        ->args([service('idno.http_client'), service(BootConfig::class)])
+        ->share(false)
         ->autowire(false)
         ->autoconfigure(false)
         ->public();

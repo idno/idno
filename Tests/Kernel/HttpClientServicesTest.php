@@ -37,7 +37,7 @@ final class HttpClientServicesTest extends TestCase
 
     protected function tearDown(): void
     {
-        unset($_SERVER['IDNO_PROXY_STRING'], $_SERVER['IDNO_TEST_HTTP_ALLOW']);
+        unset($_SERVER['IDNO_PROXY_STRING'], $_SERVER['IDNO_TEST_HTTP_ALLOW'], $_SERVER['IDNO_HTTP_ALLOW_PRIVATE']);
         $this->own?->shutdown();
         $this->own = null;
         if ($this->ownCacheDir !== null) {
@@ -191,11 +191,16 @@ final class HttpClientServicesTest extends TestCase
     public function testNoConfigurationValueIsCompiledIntoTheContainer(): void
     {
         $_SERVER['IDNO_PROXY_STRING'] = 'proxy-sentinel.example:3128';
+        $_SERVER['IDNO_HTTP_ALLOW_PRIVATE'] = '10.9.8.0/24,allow-sentinel-not-an-address';
         $kernel = $this->boot();
         $container = $kernel->getContainer();
         $this->assertSame('proxy-sentinel.example:3128', $container->get(BootConfig::class)->get('proxy_string'));
         $container->get('idno.http_client');
-        $container->get('idno.http_client.remote');
+        try {
+            $container->get('idno.http_client.remote');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('http_allow_private', $e->getMessage(), 'the invalid entry is read at runtime');
+        }
 
         $compiled = 0;
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($kernel->getCacheDir(), \FilesystemIterator::SKIP_DOTS));
@@ -203,6 +208,8 @@ final class HttpClientServicesTest extends TestCase
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $compiled++;
                 $this->assertStringNotContainsString('proxy-sentinel.example', (string) file_get_contents($file->getPathname()));
+                $this->assertStringNotContainsString('10.9.8.0', (string) file_get_contents($file->getPathname()));
+                $this->assertStringNotContainsString('allow-sentinel', (string) file_get_contents($file->getPathname()));
             }
         }
         $this->assertGreaterThan(0, $compiled);
@@ -237,5 +244,64 @@ final class HttpClientServicesTest extends TestCase
         $this->expectException(TransportException::class);
         $this->expectExceptionMessageMatches('/blocked/');
         $remote->request('GET', $this->siteUrl() . '/_test/echo')->getStatusCode();
+    }
+
+    public function testEachFetchOfTheRemoteServiceIsANewClientOverTheSameSiteClient(): void
+    {
+        $container = $this->shared()->getContainer();
+
+        $first = $container->get('idno.http_client.remote');
+        $second = $container->get('idno.http_client.remote');
+
+        $this->assertNotSame($first, $second, 'a long-running worker must not keep one DNS cache for good');
+        $this->assertInstanceOf(LocalOnlyHttpClient::class, $first);
+        $this->assertSame(self::property($first, 'siteClient'), self::property($second, 'siteClient'), 'the shared site client');
+        $this->assertNotSame(self::property($first, 'client'), self::property($second, 'client'));
+        $this->assertSame(self::property($container->get('idno.http_client'), 'client'), self::property($first, 'siteClient'), 'the site client the site service wraps');
+    }
+
+    public function testProductionBuildsANewRemoteClientOnEachFetchOverTheSharedSiteClient(): void
+    {
+        $container = $this->boot('prod')->getContainer();
+
+        $first = $container->get('idno.http_client.remote');
+        $second = $container->get('idno.http_client.remote');
+
+        $this->assertNotSame($first, $second);
+        $this->assertInstanceOf(NoPrivateNetworkHttpClient::class, $first);
+        $this->assertSame($container->get('idno.http_client'), self::property($first, 'client'));
+        $this->assertSame(self::property($first, 'client'), self::property($second, 'client'));
+    }
+
+    public function testAStarInTheBootConfigurationMakesTheRemoteClientTheSiteClient(): void
+    {
+        $_SERVER['IDNO_HTTP_ALLOW_PRIVATE'] = '*';
+        $container = $this->boot('prod')->getContainer();
+
+        $this->assertSame($container->get('idno.http_client'), $container->get('idno.http_client.remote'));
+    }
+
+    public function testAnInvalidAllowListEntryIsAnErrorWhenTheRemoteClientIsFetched(): void
+    {
+        $_SERVER['IDNO_HTTP_ALLOW_PRIVATE'] = '192.168.1.0/24, intranet';
+        $container = $this->boot('prod')->getContainer();
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('http_allow_private');
+        $container->get('idno.http_client.remote');
+    }
+
+    public function testAnAllowedRangeIsHonouredByTheProductionRemoteClient(): void
+    {
+        $_SERVER['IDNO_HTTP_ALLOW_PRIVATE'] = '203.0.113.0/24';
+        $remote = $this->boot('prod')->getContainer()->get('idno.http_client.remote');
+
+        $this->assertInstanceOf(NoPrivateNetworkHttpClient::class, $remote);
+        $this->assertSame(['203.0.113.0/24'], self::property($remote, 'allowList'));
+    }
+
+    private static function property(object $object, string $name): mixed
+    {
+        return (new \ReflectionProperty($object, $name))->getValue($object);
     }
 }

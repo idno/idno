@@ -35,6 +35,10 @@ Code that Symfony builds (a controller or a service in `Idno/`) takes the client
     ) {
     }
 
+An injected `$remoteClient` is a new client for each object that receives it, and keeps a DNS cache for as long as that
+object lives: a service that lives for hours (a queue worker's) should ask the container for `idno.http_client.remote` at
+each use instead, as plugins do.
+
 Plugin classes are not built by the container, so a plugin fetches the client when it needs it, and does not keep it:
 
     $client = \Idno\Core\Idno::container()->get('idno.http_client.remote');
@@ -68,12 +72,15 @@ These apply to both clients and to `Webservice`:
 
 * a request fails when it **receives nothing for 10 seconds**, or lasts **60 seconds** in all (give a request a `timeout` or `max_duration` option
   only to make a limit shorter);
-* at most **five redirects** are followed; the next one is a failure. `Webservice` does not send `Authorization` and
-  `Cookie` headers to a different origin on a redirect, and sends no `Referer`;
-* `Webservice` keeps at most `webservice_max_download` bytes of a response, **10 MB** by default, and cuts a larger one
-  at the limit (with a non-empty `error`). A client you use directly has no size limit of its own: bound the body
+* at most **five redirects** are followed; the next one is a failure. `Webservice` does not send `Authorization`, `Cookie`, `Signature`,
+  `X-Idno-Service-Signature` and `DPoP` headers to a different origin on a redirect, and sends no `Referer`;
+* `Webservice` keeps at most `webservice_max_download` bytes of a response, **10 MB** by default. A response that
+  **declares** a length over the limit is refused, with empty content and a non-empty `error` (a HEAD is never refused
+  for its declared length); one that declares none is **cut** at the limit, with a non-empty `error` and the first bytes
+  as `content`. A client you use directly has no size limit of its own: bound the body
   yourself with `BoundedBody`;
-* every request sends `User-Agent: Idno https://idno.co` unless you give another.
+* every request sends `User-Agent: Idno https://idno.co` unless you give another, and `Accept-Encoding: identity`:
+  responses are not compressed, so a body small on the wire cannot decode to something far larger than the limit.
 
 ## Certificates and proxies
 
@@ -82,8 +89,25 @@ talked to, and the request fails. The site's owner can switch verification off w
 or the environment, which affects every request; a plugin should not offer its own switch.
 
 `proxy_string` and `proxy_type` in `config.ini` or the environment send every request through a proxy (see
-[the configuration reference](../../install/config.md)). These three settings are read from the boot configuration only,
+[the configuration reference](../../install/config.md)). These settings, and `http_allow_private` below, are read from the boot configuration only,
 never from the settings saved in the database, so they cannot be changed from the admin screens.
+
+## Private networks
+
+The remote client refuses private addresses. A site that really is on a private network (an intranet, a single-user
+install, a development machine, split-horizon DNS where the site's own name resolves to a private address) loses
+webmentions to its own posts, feeds, sharing and hub discovery that way. Its owner sets `http_allow_private` in
+`config.ini` or `IDNO_HTTP_ALLOW_PRIVATE` in the environment: a list of IP addresses and CIDR ranges (IPv4 or IPv6) the
+remote client may connect to, or `*`, which turns the refusal off (the remote client is then the site client; use it only
+when every member is trusted). A plugin does nothing about it: it asks for the remote client as before, and the site's
+setting applies. The setting is read from the boot configuration only.
+
+Behind a proxy (`proxy_string`) the proxy's own address is allowed automatically, and the address a request is aimed at is
+still checked where the server can resolve it. Where the proxy does the name resolution the check is best effort: enforce
+egress rules at the proxy, and use `*` if the server cannot resolve external names at all.
+
+The remote client is built afresh each time the container is asked for it (it keeps a DNS cache for as long as it lives),
+so fetch it for each use, as `Webservice` does.
 
 ## When a request fails
 
@@ -107,7 +131,7 @@ No test may make a request to a real server.
   (that `Authorization` starts with `DPoP `), never its value.
 * A test that needs a real server on the other end uses the site itself. In the test environment the site serves
   `/_test/` routes that stand in for remote servers: `/_test/echo` answers with what it received, `/_test/redirect/{status}`
-  redirects, `/_test/slow`, `/_test/stream` and `/_test/sized` give slow and large bodies, and `/_test/sink/{name}` records
+  redirects, `/_test/slow`, `/_test/stream`, `/_test/sized` and `/_test/gzip` give slow and large bodies, and `/_test/sink/{name}` records
   the requests it gets. See [Testing](../testing.md).
 * In the test environment both clients refuse every host but the site's own, with the message `No network in tests: <host>`.
   A test that needs another origin lists it in the `IDNO_TEST_HTTP_ALLOW` environment variable (`host:port`, comma separated).

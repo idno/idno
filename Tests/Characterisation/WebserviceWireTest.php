@@ -488,10 +488,14 @@ final class WebserviceWireTest extends CharacterisationTestCase
         $this->assertSame('', $result['header']);
         $this->assertSame('', $result['content']);
 
-        // The same for a HEAD request (which declares the length of the body it does not send)
-        // and a POST.
+        // The same for a POST. A HEAD request is no longer refused: it declares the length of a body
+        // it does not send. The old behaviour made large files impossible to probe (the share page's
+        // check of a media URL, webmention discovery), so a HEAD of one now returns its headers.
         $result = Webservice::head($this->url('/_test/sized?bytes=5000'));
-        $this->assertNotSame('', $result['error']);
+        $this->assertSame('', $result['error']);
+        $this->assertSame(200, $result['response']);
+        $this->assertNotSame('', $result['header']);
+        $this->assertSame('', $result['content']);
         $result = Webservice::post($this->url('/_test/sized?bytes=5000'), 'x');
         $this->assertNotSame('', $result['error']);
 

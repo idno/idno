@@ -125,6 +125,26 @@ seconds, and at most five redirects are followed. See [Making outbound HTTP requ
     proxy_string = 'proxy.example.com:3128'
     proxy_type = 'http'
 
+**http_allow_private**<br>
+Addresses that URLs supplied by remote parties and by members may reach although they are private. Idno refuses to
+fetch a URL that a remote party or a logged-in member supplied (a webmention's source, an ActivityPub actor, a feed, a
+shared page, a hub a feed advertises) when its host resolves to a loopback, private, link-local or reserved address, on
+the first request and on every redirect. Intranet, single-user, split-horizon-DNS and development installs, which lose
+webmentions to their own posts, feeds, sharing and hub discovery that way, list the addresses that are theirs: IP
+addresses or CIDR ranges, IPv4 or IPv6, as a list in `config.ini`, or comma-separated in the environment variable
+`IDNO_HTTP_ALLOW_PRIVATE`. The single entry `*` turns the refusal off altogether: use it only when every member of the
+site is trusted, because it lets a remote party or a member steer the server at its own network. An entry that is not an
+address, a range or `*` is an error when the first such request is made. Like `proxy_string`, it is read from
+`config.ini` or the environment only, never from the settings saved in the database.
+
+    http_allow_private[] = '192.168.1.0/24'
+    http_allow_private[] = 'fd00::/8'
+
+Behind a proxy (`proxy_string`), the proxy's own address is not refused as the address Idno connected to, so a site behind a proxy needs no
+entry (a request aimed at the proxy's own address is still refused). The address a request is aimed at is still checked before it is sent, where the server can resolve the host. If
+the proxy does the name resolution, that check is best effort: enforce egress rules at the proxy, and set
+`http_allow_private = *` if the server cannot resolve external names at all.
+
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
 larger length is refused, and one with no declared length is cut at this size. It is also the largest file the site

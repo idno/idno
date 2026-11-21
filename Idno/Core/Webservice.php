@@ -249,7 +249,7 @@ namespace Idno\Core {
                     $responseHeaders   = $response->getHeaders(false);
 
                     $declared = $responseHeaders['content-length'][0] ?? null;
-                    if ($declared !== null && ctype_digit(trim($declared)) && (int)$declared > $sizeLimit) {
+                    if ($method !== 'HEAD' && $declared !== null && ctype_digit(trim($declared)) && (int)$declared > $sizeLimit) {
                         $response->cancel();
                         $error = "The response is larger than the download limit of $sizeLimit bytes (webservice_max_download).";
                         self::logFailure($url, $error);
@@ -296,7 +296,7 @@ namespace Idno\Core {
                     }
                     if (self::origin($next) !== self::origin($url)) {
                         $lines = array_values(array_filter($lines, static function (string $line): bool {
-                            return !in_array(strtolower(trim(explode(':', $line, 2)[0])), ['authorization', 'cookie'], true);
+                            return !in_array(strtolower(trim(explode(':', $line, 2)[0])), ['authorization', 'cookie', 'signature', 'x-idno-service-signature', 'dpop'], true);
                         }));
                     }
                     $url = $next;

@@ -195,6 +195,19 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertSame('', $result['content']);
     }
 
+    public function testAHeadOfALargeFileIsNotRefusedForTheLengthItDeclares(): void
+    {
+        \Idno\Core\Idno::site()->config()->webservice_max_download = 1000;
+        Webservice::useClient($this->client([new MockResponse('', ['http_code' => 200, 'response_headers' => ['Content-Length: 5000000', 'Content-Type: video/mp4']])]));
+
+        $result = Webservice::head('https://example.invalid/big.mp4');
+
+        $this->assertSame(200, $result['response']);
+        $this->assertSame('', $result['error']);
+        $this->assertSame('video/mp4', http_parse_headers($result['header'])['Content-Type']);
+        $this->assertSame('', $result['content']);
+    }
+
     public function testAnUndeclaredLargeBodyFromTheRealRouteIsCutAtTheLimit(): void
     {
         \Idno\Core\Idno::site()->config()->webservice_max_download = 1000;
@@ -254,16 +267,55 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertStringContainsString('No network in tests', $result['error']);
     }
 
-    public function testSafeSendRefusesAPrivateAddressThroughTheContainersRemoteClient(): void
+    public function testSafeSendInTheTestContainerRefusesAnAddressThatIsNotTheSitesOwnBeforeAnyPrivateNetworkCheck(): void
     {
         Webservice::useClient(null);
 
-        // The remote client in the test environment lets only the site's own origin through (to its
-        // own client); a private address elsewhere never leaves the process.
+        // The test wrapper, outermost, lets only the site's own origin through: this shows that
+        // layer. The private-network refusal is shown by testAPrivateSecondHopIsRefusedByTheRemoteClient.
         $result = Webservice::safeSend('get', 'http://10.0.0.1/');
 
         $this->assertSame(0, $result['response']);
-        $this->assertNotSame('', $result['error']);
+        $this->assertStringContainsString('No network in tests: 10.0.0.1', $result['error']);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function privateTargets(): iterable
+    {
+        yield 'loopback' => ['http://127.0.0.1/'];
+        yield 'private' => ['http://10.0.0.5/'];
+        yield 'link-local' => ['http://169.254.169.254/'];
+        yield 'IPv6 loopback' => ['http://[::1]/'];
+    }
+
+    /**
+     * The adapter follows redirects itself, one request per hop, so the private-network client sees
+     * each hop as a request of its own and refuses the second one: the real remote client built by the
+     * factory, over a mock, with the site's client never used.
+     *
+     * @dataProvider privateTargets
+     */
+    public function testAPrivateSecondHopIsRefusedByTheRemoteClient(string $target): void
+    {
+        $remote = $this->client([new MockResponse('', ['http_code' => 302, 'response_headers' => ['Location: ' . $target]])]);
+        $siteSeen = 0;
+        $site = new MockHttpClient(static function () use (&$siteSeen): MockResponse {
+            $siteSeen++;
+
+            return new MockResponse('site');
+        });
+        Webservice::useClient($site, \Idno\Http\Client\HttpClientFactory::createRemote($remote));
+
+        $result = Webservice::safeSend('get', 'https://93.184.216.34/start');
+
+        $this->assertCount(1, $this->seen, 'only the first, public request reached the network client');
+        $this->assertSame('https://93.184.216.34/start', $this->seen[0][1]);
+        $this->assertSame(0, $siteSeen);
+        $this->assertSame(0, $result['response']);
+        $this->assertMatchesRegularExpression('/is blocked/', $result['error']);
+        $this->assertSame('', $result['content']);
     }
 
     public function testHstsRewritesHttpToHttpsForAKnownHost(): void
@@ -438,6 +490,27 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertSame('', $result['error']);
         $this->assertSame(3, substr_count($result['header'], 'HTTP/1.1 '));
         $this->assertStringContainsString("HTTP/1.1 301 Moved Permanently\r\nLocation: /two\r\n\r\n", $result['header']);
+    }
+
+    public function testSigningHeadersDoNotFollowARedirectToAnotherOrigin(): void
+    {
+        $headers = ['Authorization: Bearer T', 'cookie: a=b', 'Signature: keyId="k"', 'x-idno-service-signature: abc', 'DPoP: proof', 'Accept: text/html'];
+        Webservice::useClient($this->client([
+            new MockResponse('', ['http_code' => 302, 'response_headers' => ['Location: /same']]),
+            new MockResponse('', ['http_code' => 302, 'response_headers' => ['Location: https://other.example.invalid/away']]),
+            new MockResponse('done', ['http_code' => 200]),
+        ]));
+
+        Webservice::get('https://example.invalid/start', null, $headers);
+
+        $this->assertCount(3, $this->seen);
+        foreach (['Authorization', 'Cookie', 'Signature', 'X-Idno-Service-Signature', 'DPoP', 'Accept'] as $name) {
+            $this->assertNotNull($this->headerOf($this->seen[1][2], $name), $name . ' stays on a same-origin redirect');
+        }
+        foreach (['Authorization', 'Cookie', 'Signature', 'X-Idno-Service-Signature', 'DPoP'] as $name) {
+            $this->assertNull($this->headerOf($this->seen[2][2], $name), $name . ' does not follow a redirect to another origin');
+        }
+        $this->assertSame('text/html', $this->headerOf($this->seen[2][2], 'Accept'));
     }
 
     public function testASixthRedirectIsNotFollowed(): void

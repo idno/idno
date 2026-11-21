@@ -688,21 +688,42 @@ namespace IdnoPlugins\StandardSiteSync\Tests {
             $this->assertSame('pds-nonce', self::claims($this->header(1, 'dpop'))['nonce']);
         }
 
-        public function testXrpcGetOnATransportFailureIsATypeErrorAsItAlwaysWas()
+        public function testXrpcGetOnATransportFailureIsARuntimeException()
         {
-            // The GET helper returns null when the request fails, and authenticatedRequest() passes
-            // that to a function that takes an array: documentExists() does not catch it either.
+            // The old behaviour was a crash: the GET helper returned null when the request failed and
+            // authenticatedRequest() passed it to a function that takes an array, so a TypeError
+            // escaped every catch in the plugin. It is now a RuntimeException, as a failed POST is,
+            // and its message holds no query string.
             $this->respondWith([self::failure(), self::failure()]);
             $client = new ATProtoClient(self::session());
 
             try {
-                $client->xrpcGet('com.atproto.server.getSession');
+                $client->xrpcGet('com.atproto.repo.getRecord', ['repo' => 'did:plc:secret', 'rkey' => 'abc']);
                 $this->fail('An exception was expected.');
-            } catch (\TypeError $e) {
-                $this->assertTrue(true);
+            } catch (\RuntimeException $e) {
+                $this->assertStringStartsWith('HTTP GET failed: ', $e->getMessage());
+                $this->assertStringNotContainsString('secret', $e->getMessage());
+                $this->assertStringNotContainsString('?', $e->getMessage());
             }
-            $this->expectException(\TypeError::class);
-            $client->documentExists(self::entity());
+        }
+
+        public function testDocumentExistsIsFalseWhenTheServerCannotBeReached()
+        {
+            $this->respondWith([self::failure(), self::failure()]);
+
+            $this->assertFalse((new ATProtoClient(self::session()))->documentExists(self::entity()));
+        }
+
+        public function testAFailedRetryAfterANonceChallengeIsARuntimeExceptionToo()
+        {
+            $this->respondWith([
+                self::json(['error' => 'use_dpop_nonce'], 401, ['DPoP-Nonce: pds-nonce']),
+                self::failure(),
+            ]);
+
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('HTTP GET failed: ');
+            (new ATProtoClient(self::session()))->xrpcGet('com.atproto.server.getSession');
         }
 
         public function testXrpcGetThrowsTheErrorDocumentsMessage()

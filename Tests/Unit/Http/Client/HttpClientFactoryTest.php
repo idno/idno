@@ -22,6 +22,7 @@ final class HttpClientFactoryTest extends TestCase
         $this->assertTrue($options['verify_peer']);
         $this->assertTrue($options['verify_host']);
         $this->assertSame('Idno https://idno.co', $options['headers']['User-Agent']);
+        $this->assertSame('identity', $options['headers']['Accept-Encoding'], 'no compression: a body that is small on the wire is not decoded in one piece');
         $this->assertArrayNotHasKey('proxy', $options);
     }
 
@@ -169,5 +170,213 @@ final class HttpClientFactoryTest extends TestCase
 
         $this->assertSame('arrived', HttpClientFactory::createRemote($mock)->request('GET', 'https://93.184.216.34/')->getContent());
         $this->assertSame(['https://93.184.216.34/', 'https://93.184.216.35/next'], $requests);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $info what the mock reports about the connection
+     *
+     * @return array{string, int} what the request did: 'sent' or 'refused: <message>', and how many requests the mock got
+     */
+    private static function attempt(array $config, string $url, array $info = [], array $options = []): array
+    {
+        $made = 0;
+        $mock = new MockHttpClient(static function () use (&$made, $info): MockResponse {
+            $made++;
+
+            return new MockResponse('ok', $info);
+        });
+        try {
+            HttpClientFactory::createRemote($mock, $config, static fn (string $host): array => [])->request('GET', $url, $options)->getContent();
+
+            return ['sent', $made];
+        } catch (TransportException $e) {
+            return ['refused: ' . $e->getMessage(), $made];
+        }
+    }
+
+    public function testBehindAProxyTheProxysOwnAddressIsAllowedAndPublicTargetsAreFetched(): void
+    {
+        $config = ['proxy_string' => '10.0.0.5:3128'];
+
+        $this->assertSame(['sent', 1], self::attempt($config, 'https://93.184.216.34/', ['primary_ip' => '10.0.0.5']));
+    }
+
+    public function testBehindAProxyAPrivateTargetIsStillRefusedBeforeARequestIsMade(): void
+    {
+        $config = ['proxy_string' => '10.0.0.5:3128'];
+
+        foreach (['http://127.0.0.1/', 'http://10.0.0.9/', 'http://169.254.169.254/', 'http://[::1]/'] as $url) {
+            [$result, $made] = self::attempt($config, $url, ['primary_ip' => '10.0.0.5']);
+            $this->assertStringStartsWith('refused: ', $result, $url);
+            $this->assertSame(0, $made, $url);
+        }
+    }
+
+    public function testBehindAProxyOnLoopbackATargetAtTheProxysOwnAddressIsStillRefused(): void
+    {
+        $config = ['proxy_string' => '127.0.0.1:3128'];
+
+        $this->assertSame(['sent', 1], self::attempt($config, 'https://93.184.216.34/', ['primary_ip' => '127.0.0.1']));
+        foreach (['http://127.0.0.1/', 'http://localhost.test/'] as $url) {
+            [$result, $made] = self::attempt($config, $url, ['primary_ip' => '127.0.0.1'], ['resolve' => ['localhost.test' => '127.0.0.1']]);
+            $this->assertStringStartsWith('refused: ', $result, $url);
+            $this->assertSame(0, $made, $url);
+        }
+        $this->assertSame(0, self::attempt($config, 'http://10.0.0.9/', ['primary_ip' => '127.0.0.1'])[1]);
+    }
+
+    public function testBehindAnIpv6ProxyItsAddressIsAllowedInAnyWrittenForm(): void
+    {
+        $config = ['proxy_string' => '[::1]:3128'];
+
+        $this->assertSame(['sent', 1], self::attempt($config, 'https://93.184.216.34/', ['primary_ip' => '0:0:0:0:0:0:0:1']));
+        $this->assertSame(0, self::attempt($config, 'http://[::1]/', ['primary_ip' => '::1'])[1]);
+    }
+
+    public function testBehindAProxyAHostTheServerCannotResolveIsRefused(): void
+    {
+        [$result, $made] = self::attempt(['proxy_string' => '10.0.0.5:3128'], 'http://nowhere.invalid/', ['primary_ip' => '10.0.0.5']);
+
+        $this->assertStringStartsWith('refused: Host "nowhere.invalid" is blocked', $result);
+        $this->assertSame(0, $made);
+    }
+
+    public function testBehindAProxyAHostThatResolvesToAPrivateAddressIsRefused(): void
+    {
+        [$result, $made] = self::attempt(['proxy_string' => '10.0.0.5:3128'], 'http://internal.test/', ['primary_ip' => '10.0.0.5'], ['resolve' => ['internal.test' => '10.0.0.9']]);
+
+        $this->assertStringStartsWith('refused: ', $result);
+        $this->assertSame(0, $made);
+    }
+
+    public function testWithoutAProxyAConnectionToAPrivateAddressIsRefused(): void
+    {
+        [$result, $made] = self::attempt([], 'https://93.184.216.34/', ['primary_ip' => '10.0.0.5']);
+
+        $this->assertStringContainsString('IP "10.0.0.5" is blocked', $result);
+    }
+
+    public function testAProxyHostNameIsResolvedWhenTheClientIsBuiltAndItsAddressesAreAllowed(): void
+    {
+        $made = 0;
+        $mock = new MockHttpClient(static function () use (&$made): MockResponse {
+            $made++;
+
+            return new MockResponse('ok', ['primary_ip' => '10.1.2.3']);
+        });
+        $remote = HttpClientFactory::createRemote($mock, ['proxy_string' => 'user:pw@proxy.example:3128'], static fn (string $host): array => $host === 'proxy.example' ? ['10.1.2.3'] : []);
+
+        $this->assertSame('ok', $remote->request('GET', 'https://93.184.216.34/')->getContent());
+    }
+
+    public function testAProxyHostNameThatDoesNotResolveAddsNothing(): void
+    {
+        $mock = new MockHttpClient(new MockResponse('ok', ['primary_ip' => '10.1.2.3']));
+        $remote = HttpClientFactory::createRemote($mock, ['proxy_string' => 'proxy.example:3128'], static fn (string $host): array => []);
+
+        $this->expectException(TransportException::class);
+        $remote->request('GET', 'https://93.184.216.34/')->getContent();
+    }
+
+    public function testAllowedRangesLetPrivateAddressesThroughAndNothingElse(): void
+    {
+        $config = ['http_allow_private' => ['192.168.1.0/24']];
+
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://192.168.1.20/'));
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://intranet.test/', [], ['resolve' => ['intranet.test' => '192.168.1.77']]));
+        foreach (['http://192.168.2.20/', 'http://127.0.0.1/', 'http://10.0.0.9/'] as $url) {
+            $this->assertSame(0, self::attempt($config, $url)[1], $url);
+            $this->assertStringStartsWith('refused: ', self::attempt($config, $url)[0], $url);
+        }
+    }
+
+    public function testAnAllowedSingleAddressAndAnIpv6RangeAreHonoured(): void
+    {
+        $this->assertSame(['sent', 1], self::attempt(['http_allow_private' => ['10.0.0.9']], 'http://10.0.0.9/'));
+        $this->assertSame(0, self::attempt(['http_allow_private' => ['10.0.0.9']], 'http://10.0.0.10/')[1]);
+
+        $config = ['http_allow_private' => ['fd00::/8']];
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://[fd12:3456::1]/'));
+        $this->assertSame(0, self::attempt($config, 'http://[::1]/')[1]);
+        $this->assertSame(0, self::attempt($config, 'http://127.0.0.1/')[1]);
+    }
+
+    public function testTheSettingAsOneCommaSeparatedStringIsReadTheSame(): void
+    {
+        $config = ['http_allow_private' => ' 192.168.1.0/24 , fd00::/8,, 10.0.0.9 '];
+
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://192.168.1.20/'));
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://[fd12::1]/'));
+        $this->assertSame(['sent', 1], self::attempt($config, 'http://10.0.0.9/'));
+        $this->assertSame(0, self::attempt($config, 'http://192.168.2.20/')[1]);
+    }
+
+    public function testAStarReturnsTheSiteClientItselfAndRefusesNothing(): void
+    {
+        $mock = new MockHttpClient(new MockResponse('ok'));
+
+        $this->assertSame($mock, HttpClientFactory::createRemote($mock, ['http_allow_private' => ['*']]));
+        $this->assertSame($mock, HttpClientFactory::createRemote($mock, ['http_allow_private' => '*']));
+        $this->assertSame($mock, HttpClientFactory::createRemote($mock, ['http_allow_private' => '192.168.1.0/24, *']));
+        $this->assertSame('ok', HttpClientFactory::createRemote($mock, ['http_allow_private' => '*'])->request('GET', 'http://127.0.0.1/')->getContent());
+    }
+
+    /**
+     * @return iterable<string, array{mixed, string}>
+     */
+    public static function invalidEntries(): iterable
+    {
+        yield 'a word' => [['everything'], 'everything'];
+        yield 'a host name' => [['intranet.example'], 'intranet.example'];
+        yield 'a prefix too long' => [['10.0.0.0/33'], '10.0.0.0/33'];
+        yield 'an IPv6 prefix too long' => [['fd00::/129'], 'fd00::/129'];
+        yield 'a prefix that is no number' => [['10.0.0.0/x'], '10.0.0.0/x'];
+        yield 'a bad address' => [['10.0.0/8'], '10.0.0/8'];
+        yield 'one bad entry among good ones' => ['192.168.1.0/24, nope', 'nope'];
+        yield 'a number' => [[5], '5'];
+        yield 'neither a list nor a string' => [5, 'int'];
+    }
+
+    /**
+     * @dataProvider invalidEntries
+     */
+    public function testAnInvalidEntryIsRefusedByName(mixed $value, string $entry): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('http_allow_private');
+        $this->expectExceptionMessage($entry);
+        HttpClientFactory::createRemote(new MockHttpClient(new MockResponse('')), ['http_allow_private' => $value]);
+    }
+
+    public function testNothingConfiguredAllowsNothing(): void
+    {
+        foreach ([[], ['http_allow_private' => []], ['http_allow_private' => ''], ['http_allow_private' => null]] as $config) {
+            $this->assertSame(0, self::attempt($config, 'http://127.0.0.1/')[1]);
+        }
+    }
+
+    public function testEachRemoteClientResolvesAHostAfresh(): void
+    {
+        $mock = new MockHttpClient(new MockResponse('ok'));
+
+        $this->assertNotSame(HttpClientFactory::createRemote($mock), HttpClientFactory::createRemote($mock));
+    }
+
+    public function testTheRemoteClientIsBuiltFromTheBootConfiguration(): void
+    {
+        $mock = new MockHttpClient(new MockResponse('ok'));
+        $config = new \Idno\Config\BootConfig(['http_allow_private' => '*'], false);
+
+        $this->assertSame($mock, HttpClientFactory::remoteFromBootConfig($mock, $config));
+        $this->assertInstanceOf(\Symfony\Component\HttpClient\NoPrivateNetworkHttpClient::class, HttpClientFactory::remoteFromBootConfig($mock, new \Idno\Config\BootConfig([], false)));
+    }
+
+    public function testOptionsStayPure(): void
+    {
+        $this->assertSame(
+            HttpClientFactory::options(['proxy_string' => '10.0.0.5:3128']),
+            HttpClientFactory::options(['proxy_string' => '10.0.0.5:3128', 'http_allow_private' => ['*', 'junk']])
+        );
     }
 }

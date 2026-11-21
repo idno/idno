@@ -38,7 +38,10 @@ final class HttpClientFactory
         $verify = empty($config['disable_ssl_verify']);
 
         $options = [
-            'headers' => ['User-Agent' => self::USER_AGENT],
+            // No compression is asked for: the client decodes a compressed body a chunk at a time, and a
+            // chunk of a few kilobytes on the wire can decode to megabytes, which the size limit cannot
+            // bound. Naming an encoding also stops the client decoding a body a server compresses anyway.
+            'headers' => ['User-Agent' => self::USER_AGENT, 'Accept-Encoding' => 'identity'],
             'timeout' => self::IDLE_TIMEOUT,
             'max_duration' => self::MAX_DURATION,
             'max_redirects' => self::MAX_REDIRECTS,
@@ -76,12 +79,105 @@ final class HttpClientFactory
     }
 
     /**
-     * The client for a URL a remote party supplied: it refuses every request, and every redirect it
-     * follows, whose host resolves to a loopback, private, link-local or reserved address.
+     * The remote client, from the boot configuration (the container's factory).
      */
-    public static function createRemote(HttpClientInterface $client): HttpClientInterface
+    public static function remoteFromBootConfig(HttpClientInterface $client, BootConfig $config): HttpClientInterface
     {
-        return new NoPrivateNetworkHttpClient($client);
+        return self::createRemote($client, [
+            'proxy_string' => $config->get('proxy_string'),
+            'proxy_type' => $config->get('proxy_type'),
+            'http_allow_private' => $config->get('http_allow_private'),
+        ]);
+    }
+
+    /**
+     * The client for a URL a remote party supplied: it refuses every request, and every redirect it
+     * follows, whose host resolves to a loopback, private, link-local or reserved address, except the
+     * addresses `http_allow_private` lists (IP addresses and CIDR ranges, as a list or one
+     * comma-separated string). The single entry `*` returns the site's client itself: nothing is
+     * refused. When `proxy_string` is set, the proxy's own addresses (its host if that is an IP
+     * address, else what it resolves to now) are not refused as the address the client connected to,
+     * which is the proxy's and would otherwise fail every request; the target's addresses are still
+     * checked before each request, and a target at the proxy's own address is refused like any other.
+     * An invalid entry throws a \LogicException.
+     *
+     * Each call builds a client with a DNS cache of its own; a long-running process fetches the service
+     * afresh for each use.
+     *
+     * @param array<string, mixed>                $config  the boot configuration's values
+     * @param (\Closure(string): list<string>)|null $resolve addresses of a host name, for the proxy's (null: the system resolver)
+     */
+    public static function createRemote(HttpClientInterface $client, array $config = [], ?\Closure $resolve = null): HttpClientInterface
+    {
+        $allowed = self::allowedPrivate($config['http_allow_private'] ?? null);
+        if (in_array('*', $allowed, true)) {
+            return $client;
+        }
+
+        $proxyAddresses = [];
+        $proxy = self::options($config)['proxy'] ?? null;
+        if (is_string($proxy)) {
+            $host = parse_url($proxy, PHP_URL_HOST);
+            $host = is_string($host) ? trim($host, '[]') : '';
+            if ($host !== '') {
+                $proxyAddresses = filter_var($host, FILTER_VALIDATE_IP) !== false
+                    ? [$host]
+                    : array_values(($resolve ?? static fn (string $name): array => gethostbynamel($name) ?: [])($host));
+            }
+        }
+
+        return new NoPrivateNetworkHttpClient(
+            $proxyAddresses === [] ? $client : new ProxyAddressMask($client, $proxyAddresses),
+            null,
+            $allowed
+        );
+    }
+
+    /**
+     * The entries of `http_allow_private`: a list, or a comma-separated string. Each is an IP address,
+     * a CIDR range or `*`.
+     *
+     * @return list<string>
+     */
+    private static function allowedPrivate(mixed $value): array
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return [];
+        }
+        if (is_string($value)) {
+            $value = explode(',', $value);
+        }
+        if (!is_array($value)) {
+            throw new \LogicException('The setting http_allow_private must be a list of IP addresses and ranges, or "*": got ' . get_debug_type($value));
+        }
+
+        $entries = [];
+        foreach ($value as $entry) {
+            $text = is_string($entry) ? trim($entry) : (is_scalar($entry) ? (string) $entry : get_debug_type($entry));
+            if ($text === '' && is_string($entry)) {
+                continue;
+            }
+            if ($text !== '*' && !(is_string($entry) && self::isAddressOrRange($text))) {
+                throw new \LogicException('The setting http_allow_private holds "' . $text . '", which is not an IP address, a CIDR range or "*"');
+            }
+            $entries[] = $text;
+        }
+
+        return $entries;
+    }
+
+    private static function isAddressOrRange(string $entry): bool
+    {
+        $parts = explode('/', $entry);
+        if (count($parts) > 2) {
+            return false;
+        }
+        $v6 = str_contains($parts[0], ':');
+        if (filter_var($parts[0], FILTER_VALIDATE_IP, $v6 ? FILTER_FLAG_IPV6 : FILTER_FLAG_IPV4) === false) {
+            return false;
+        }
+
+        return count($parts) === 1 || (preg_match('/^[0-9]{1,3}$/', $parts[1]) === 1 && (int) $parts[1] <= ($v6 ? 128 : 32));
     }
 
     private static function proxyUrl(string $proxy, mixed $type): string

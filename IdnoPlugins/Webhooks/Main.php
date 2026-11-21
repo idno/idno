@@ -69,7 +69,14 @@ namespace IdnoPlugins\Webhooks {
                         $payload['text'] = $object->getTitle() . ' <' . $object->getURL() . '>';
                         $payload['title'] = $object->getTitle();
 
-                        Webservice::post($hook_url, json_encode($payload), ['Content-Type: application/json']);
+                        // A hook the admin configured is the site's to call; any other URL is one a member
+                        // typed, and goes through the client that refuses private networks.
+                        $site_hooks = array_column((array) \Idno\Core\Idno::site()->config()->webhook_syndication, 'url');
+                        if (in_array($hook_url, $site_hooks, true)) {
+                            Webservice::post($hook_url, json_encode($payload), ['Content-Type: application/json']);
+                        } else {
+                            Webservice::safeSend('post', $hook_url, json_encode($payload), ['Content-Type: application/json']);
+                        }
 
                     }
                 }

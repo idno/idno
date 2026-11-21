@@ -62,7 +62,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // pairs IDNO_TEST_HTTP_ALLOW lists, and marks each request with X-Idno-Test-Client. The wrapped
     // clients are the production ones (idno.http_client.inner is idno.http_client's definition of
     // config/services.php); the remote client's private-network refusal exempts the site's own origin
-    // here and nowhere else. The ids and the autowiring aliases are those of config/services.php.
+    // here and nowhere else; like the production service it is not shared (each fetch is a new one over
+    // the shared site client). The ids and the autowiring aliases are those of config/services.php.
     $container->services()
         ->set('idno.http_client.inner', HttpClientInterface::class)
         ->factory([HttpClientFactory::class, 'fromBootConfig'])
@@ -78,11 +79,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->factory([LocalOnlyHttpClient::class, 'forRemote'])
         ->args([
             inline_service(HttpClientInterface::class)
-                ->factory([HttpClientFactory::class, 'createRemote'])
-                ->args([service('idno.http_client.inner')]),
+                ->factory([HttpClientFactory::class, 'remoteFromBootConfig'])
+                ->args([service('idno.http_client.inner'), service(BootConfig::class)]),
             service('idno.http_client.inner'),
             service(BootConfig::class),
         ])
+        ->share(false)
         ->autowire(false)->autoconfigure(false)->public();
 
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.

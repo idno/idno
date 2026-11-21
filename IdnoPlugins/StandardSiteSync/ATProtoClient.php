@@ -620,7 +620,7 @@ class ATProtoClient
         if ($method === 'POST') {
             $response = self::httpPost($url, $body, $headers);
         } else {
-            $response = self::httpGet($url, $headers);
+            $response = self::httpGet($url, $headers) ?? throw self::getFailed($url);
         }
 
         // Handle DPoP nonce challenge
@@ -652,7 +652,7 @@ class ATProtoClient
             if ($method === 'POST') {
                 $response = self::httpPost($url, $body, $headers);
             } else {
-                $response = self::httpGet($url, $headers);
+                $response = self::httpGet($url, $headers) ?? throw self::getFailed($url);
             }
 
             $newNonce = self::extractDPoPNonce($response);
@@ -955,6 +955,14 @@ class ATProtoClient
         } catch (\Symfony\Contracts\HttpClient\Exception\ExceptionInterface $e) {
             return null;
         }
+    }
+
+    /**
+     * The exception for a GET that got no response (the address without its query string).
+     */
+    private static function getFailed(string $url): \RuntimeException
+    {
+        return new \RuntimeException('HTTP GET failed: ' . self::plainUrl($url));
     }
 
     /**
