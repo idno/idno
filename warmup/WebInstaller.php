@@ -35,21 +35,11 @@ class WebInstaller extends \Idno\Core\Installer
             $schema = 'http://';
         }
 
-        $curl_handle = curl_init();
-        curl_setopt($curl_handle, CURLOPT_URL, $schema . $host . $subdir . '/js/canary.js');
-        curl_setopt($curl_handle, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($curl_handle, CURLOPT_HEADER, 1);
+        // The site's own URL, freshly installed: a plain client that verifies certificates, does not
+        // follow a redirect and gives up after ten seconds.
+        $client = \Symfony\Component\HttpClient\HttpClient::create(['timeout' => 10, 'max_duration' => 10, 'max_redirects' => 0]);
 
-        $curl_result = curl_exec($curl_handle);
-        $curl_status = curl_getinfo($curl_handle, CURLINFO_HTTP_CODE);
-
-        if ($curl_status < 200 || $curl_status > 299) {
-            return false;
-        }
-
-        curl_close($curl_handle);
-
-        return true;
+        return $this->urlAnswers($client, $schema . $host . $subdir . '/js/canary.js');
     }
 
     protected function pageSettings()

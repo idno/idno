@@ -17,12 +17,36 @@ class ATProtoClient
     /** @var array Session data (tokens, DID, PDS URL, DPoP keys, nonces) */
     private $session;
 
+    /** @var \Symfony\Contracts\HttpClient\HttpClientInterface|null A client given to useClient() */
+    private static $client = null;
+
+    /** @var callable|null A TXT record lookup given to useTxtResolver() */
+    private static $txtResolver = null;
+
     /**
      * @param array $session Stored session data from the user entity
      */
     public function __construct(array $session = [])
     {
         $this->session = $session;
+    }
+
+    /**
+     * Replace the HTTP client every request of this class goes through (a test's, for instance);
+     * null restores the site's, fetched from the container at each request.
+     */
+    public static function useClient(?\Symfony\Contracts\HttpClient\HttpClientInterface $client): void
+    {
+        self::$client = $client;
+    }
+
+    /**
+     * Replace the DNS TXT lookup of resolveIdentity() (a test's, for instance); the callable takes a
+     * host name and returns what dns_get_record() returns for it. Null restores the real lookup.
+     */
+    public static function useTxtResolver(?callable $resolver): void
+    {
+        self::$txtResolver = $resolver;
     }
 
     /**
@@ -46,7 +70,9 @@ class ATProtoClient
     public static function resolveIdentity(string $handle): array
     {
         // Try DNS TXT _atproto.<handle>
-        $records = @dns_get_record('_atproto.' . $handle, DNS_TXT);
+        $records = self::$txtResolver !== null
+            ? (self::$txtResolver)('_atproto.' . $handle)
+            : @dns_get_record('_atproto.' . $handle, DNS_TXT);
         $did = null;
         if ($records) {
             foreach ($records as $r) {
@@ -66,7 +92,7 @@ class ATProtoClient
         }
 
         if (empty($did)) {
-            throw new \RuntimeException('Could not resolve handle to DID: ' . $handle);
+            throw new \RuntimeException('Could not resolve handle to DID: ' . self::plain($handle));
         }
 
         // Resolve DID document to find PDS
@@ -87,16 +113,16 @@ class ATProtoClient
             $domain = str_replace(':', '/', $domain);
             $resp = self::httpGet('https://' . $domain . '/.well-known/did.json');
         } else {
-            throw new \RuntimeException('Unsupported DID method: ' . $did);
+            throw new \RuntimeException('Unsupported DID method: ' . self::plain($did));
         }
 
         if (!$resp || $resp['status'] !== 200) {
-            throw new \RuntimeException('Failed to resolve DID document for: ' . $did);
+            throw new \RuntimeException('Failed to resolve DID document for: ' . self::plain($did));
         }
 
         $doc = json_decode($resp['body'], true);
         if (empty($doc['service'])) {
-            throw new \RuntimeException('No service entries in DID document for: ' . $did);
+            throw new \RuntimeException('No service entries in DID document for: ' . self::plain($did));
         }
 
         foreach ($doc['service'] as $svc) {
@@ -108,7 +134,7 @@ class ATProtoClient
             }
         }
 
-        throw new \RuntimeException('No PDS service endpoint found in DID document for: ' . $did);
+        throw new \RuntimeException('No PDS service endpoint found in DID document for: ' . self::plain($did));
     }
 
     /**
@@ -134,7 +160,7 @@ class ATProtoClient
 
         $resp = self::httpGet($authServerIssuer . '/.well-known/oauth-authorization-server');
         if (!$resp || $resp['status'] !== 200) {
-            throw new \RuntimeException('Failed to fetch authorization server metadata from: ' . $authServerIssuer);
+            throw new \RuntimeException('Failed to fetch authorization server metadata from: ' . self::plainUrl($authServerIssuer));
         }
 
         $metadata = json_decode($resp['body'], true);
@@ -329,7 +355,7 @@ class ATProtoClient
 
         if ($parResponse['status'] !== 201 && $parResponse['status'] !== 200) {
             $err = json_decode($parResponse['body'], true);
-            throw new \RuntimeException('PAR request failed: ' . ($err['error_description'] ?? $err['error'] ?? $parResponse['body']));
+            throw new \RuntimeException('PAR request failed: ' . self::errorText($err, ['error_description', 'error'], $parResponse['status']));
         }
 
         $parData = json_decode($parResponse['body'], true);
@@ -418,14 +444,14 @@ class ATProtoClient
 
         if ($response['status'] !== 200) {
             $err = json_decode($response['body'], true);
-            throw new \RuntimeException('Token exchange failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
+            throw new \RuntimeException('Token exchange failed: ' . self::errorText($err, ['error_description', 'error'], $response['status']));
         }
 
         $tokenData = json_decode($response['body'], true);
 
         // Verify the sub matches the expected DID
         if (($tokenData['sub'] ?? '') !== $pendingAuth['did']) {
-            throw new \RuntimeException('Token DID mismatch: expected ' . $pendingAuth['did'] . ', got ' . ($tokenData['sub'] ?? 'none'));
+            throw new \RuntimeException('Token DID mismatch: expected ' . self::plain($pendingAuth['did']) . ', got ' . (isset($tokenData['sub']) ? self::plain($tokenData['sub']) : 'none'));
         }
 
         return [
@@ -499,7 +525,7 @@ class ATProtoClient
 
         if ($response['status'] !== 200) {
             $err = json_decode($response['body'], true);
-            throw new \RuntimeException('Token refresh failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
+            throw new \RuntimeException('Token refresh failed: ' . self::errorText($err, ['error_description', 'error'], $response['status']));
         }
 
         $tokenData = json_decode($response['body'], true);
@@ -639,7 +665,7 @@ class ATProtoClient
             $err = json_decode($response['body'], true);
             throw new \RuntimeException(
                 'XRPC error (' . $response['status'] . '): ' .
-                ($err['message'] ?? $err['error'] ?? $response['body'])
+                self::errorText($err, ['message', 'error'], $response['status'])
             );
         }
 
@@ -842,8 +868,23 @@ class ATProtoClient
     }
 
     // ------------------------------------------------------------------
-    // HTTP helpers (raw curl to avoid Idno's multipart default)
+    // HTTP helpers
     // ------------------------------------------------------------------
+
+    /** The longest response body read, in bytes: these are small JSON documents. */
+    private const MAX_RESPONSE_BYTES = 1048576;
+
+    /** The longest time a request may last, in seconds (shorter than the client's own limit). */
+    private const MAX_DURATION = 30;
+
+    /**
+     * The HTTP client: the one given to useClient(), else the site's client for URLs a remote party
+     * supplies (it refuses private networks on every hop), fetched now and never kept.
+     */
+    private static function client(): \Symfony\Contracts\HttpClient\HttpClientInterface
+    {
+        return self::$client ?? \Idno\Core\Idno::container()->get('idno.http_client.remote');
+    }
 
     /**
      * Extract the DPoP-Nonce header from a response.
@@ -861,46 +902,59 @@ class ATProtoClient
     }
 
     /**
+     * Send one request and read its response. A GET follows up to five redirects; a POST follows
+     * none, so a redirected POST comes back as its 3xx response. The body is read up to
+     * MAX_RESPONSE_BYTES and cut there.
+     *
+     * @param  string[] $headers 'Name: value' lines
+     * @return array{status: int, body: string, headers: array}
+     * @throws \Symfony\Contracts\HttpClient\Exception\ExceptionInterface when the request fails
+     */
+    private static function send(string $method, string $url, array $headers, ?string $body): array
+    {
+        $options = [
+            'headers'       => ['User-Agent' => 'Known-StandardSiteSync/0.1'],
+            'max_duration'  => self::MAX_DURATION,
+            'max_redirects' => $method === 'GET' ? \Idno\Http\Client\HttpClientFactory::MAX_REDIRECTS : 0,
+        ];
+        foreach ($headers as $line) {
+            [$name, $value] = array_pad(explode(':', $line, 2), 2, '');
+            $options['headers'][trim($name)] = ltrim($value);
+        }
+        if ($body !== null) {
+            $options['body'] = $body;
+        }
+
+        $client = self::client();
+        $response = $client->request($method, $url, $options);
+        $status = $response->getStatusCode();
+
+        $responseHeaders = [];
+        foreach ($response->getHeaders(false) as $name => $values) {
+            foreach ($values as $value) {
+                $responseHeaders[] = $name . ': ' . $value;
+            }
+        }
+
+        return [
+            'status'  => $status,
+            'body'    => \Idno\Http\Client\BoundedBody::read($client, $response, self::MAX_RESPONSE_BYTES),
+            'headers' => $responseHeaders,
+        ];
+    }
+
+    /**
      * Perform an HTTP GET request.
      *
-     * @return array{status: int, body: string, headers: array}
+     * @return array{status: int, body: string, headers: array}|null null when the request fails
      */
     private static function httpGet(string $url, array $extraHeaders = []): ?array
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_MAXREDIRS, 5);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Known-StandardSiteSync/0.1');
-        curl_setopt($ch, CURLOPT_HEADER, true);
-
-        if (!empty($extraHeaders)) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $extraHeaders);
-        }
-
-        // Proxy support from Idno config
-        if (!empty(\Idno\Core\Idno::site()->config()->proxy_string)) {
-            curl_setopt($ch, CURLOPT_PROXY, \Idno\Core\Idno::site()->config()->proxy_string);
-        }
-
-        $response = curl_exec($ch);
-        if ($response === false) {
-            curl_close($ch);
+        try {
+            return self::send('GET', $url, $extraHeaders, null);
+        } catch (\Symfony\Contracts\HttpClient\Exception\ExceptionInterface $e) {
             return null;
         }
-
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $headerStr = substr($response, 0, $headerSize);
-        $body = substr($response, $headerSize);
-        curl_close($ch);
-
-        $headers = array_filter(explode("\r\n", $headerStr), function ($h) {
-            return strpos($h, ':') !== false;
-        });
-
-        return ['status' => $status, 'body' => $body, 'headers' => array_values($headers)];
     }
 
     /**
@@ -910,37 +964,62 @@ class ATProtoClient
      */
     private static function httpPost(string $url, string $body, array $headers = []): array
     {
-        $ch = curl_init($url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_USERAGENT, 'Known-StandardSiteSync/0.1');
-        curl_setopt($ch, CURLOPT_HEADER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-        // Proxy support
-        if (!empty(\Idno\Core\Idno::site()->config()->proxy_string)) {
-            curl_setopt($ch, CURLOPT_PROXY, \Idno\Core\Idno::site()->config()->proxy_string);
+        try {
+            return self::send('POST', $url, $headers, $body);
+        } catch (\Symfony\Contracts\HttpClient\Exception\ExceptionInterface $e) {
+            throw new \RuntimeException('HTTP POST failed: ' . self::redactUrls($e->getMessage()));
         }
+    }
 
-        $response = curl_exec($ch);
-        if ($response === false) {
-            $error = curl_error($ch);
-            curl_close($ch);
-            throw new \RuntimeException('HTTP POST failed: ' . $error);
+    // ------------------------------------------------------------------
+    // Text taken from a remote party, for exception messages (which the callers log and show)
+    // ------------------------------------------------------------------
+
+    /**
+     * A value from a remote party as plain text: control characters replaced, at most 200 bytes.
+     */
+    private static function plain($value): string
+    {
+        $text = is_scalar($value) ? (string) $value : '';
+        return substr((string) preg_replace('/[^\x20-\x7E\x80-\xFF]/', '?', $text), 0, 200);
+    }
+
+    /**
+     * The message of an error document (the first of $keys it has), else "HTTP <status>". Never the
+     * raw body, which can hold anything.
+     */
+    private static function errorText($document, array $keys, int $status): string
+    {
+        if (is_array($document)) {
+            foreach ($keys as $key) {
+                if (isset($document[$key]) && is_scalar($document[$key]) && $document[$key] !== '') {
+                    return self::plain($document[$key]);
+                }
+            }
         }
+        return 'HTTP ' . $status;
+    }
 
-        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $headerStr = substr($response, 0, $headerSize);
-        $bodyContent = substr($response, $headerSize);
-        curl_close($ch);
+    /**
+     * A URL reduced to scheme, host and path: no query, fragment, port or credentials.
+     */
+    private static function plainUrl($url): string
+    {
+        $parts = is_string($url) ? parse_url(trim($url)) : false;
+        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return '[unparseable address]';
+        }
+        return self::plain($parts['scheme'] . '://' . $parts['host'] . ($parts['path'] ?? ''));
+    }
 
-        $responseHeaders = array_filter(explode("\r\n", $headerStr), function ($h) {
-            return strpos($h, ':') !== false;
-        });
-
-        return ['status' => $status, 'body' => $bodyContent, 'headers' => array_values($responseHeaders)];
+    /**
+     * A transport failure's message with every URL in it reduced to scheme, host and path.
+     */
+    private static function redactUrls(string $message): string
+    {
+        $message = preg_replace_callback('#https?://[^\s"\']+#i', function ($m) {
+            return self::plainUrl($m[0]);
+        }, $message);
+        return self::plain($message);
     }
 }

@@ -119,14 +119,16 @@ How the site's outgoing requests (webmentions, feeds, ActivityPub delivery and s
 `config.ini` or the environment only, never from the settings saved in the database. `proxy_string` is a proxy
 (`host:port`, or a full URL such as `socks5://host:1080`); when it has no scheme, `proxy_type` (`http`, `socks4`,
 `socks5` or `socks5-hostname`) gives it one. Certificates are always verified unless `disable_ssl_verify` is set to
-a non-empty value: do that only when you must.
+a non-empty value: do that only when you must. A request fails when it receives nothing for 10 seconds, or lasts 60
+seconds, and at most five redirects are followed. See [Making outbound HTTP requests](../developers/plugins/http.md).
 
     proxy_string = 'proxy.example.com:3128'
     proxy_type = 'http'
 
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
-larger length is refused, and one with no declared length is cut at this size.
+larger length is refused, and one with no declared length is cut at this size. It is also the largest file the site
+downloads when a Micropub client gives it a URL.
 
     webservice_max_download = 20971520
 

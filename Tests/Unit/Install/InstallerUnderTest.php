@@ -39,6 +39,11 @@ final class InstallerUnderTest extends Installer
         return $this->buildConfig($params);
     }
 
+    public function answers(\Symfony\Contracts\HttpClient\HttpClientInterface $client, string $url): bool
+    {
+        return $this->urlAnswers($client, $url);
+    }
+
     /**
      * @param array<string, mixed> $request
      * @return array<string, mixed>

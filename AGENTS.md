@@ -1144,6 +1144,31 @@ other new code may.
     through `Webservice` (the clients are wrapped in `LocalOnlyHttpClient`): the default hub ping to
     `withknown.superfeedr.com` after a publish is refused inside the site and logged. A test that needs
     another origin lists it in `IDNO_TEST_HTTP_ALLOW`.
+- `IdnoPlugins\StandardSiteSync\ATProtoClient` (the AT Protocol OAuth and XRPC client; tests in
+  `IdnoPlugins/StandardSiteSync/Tests/ATProtoClientTest.php` on a `MockHttpClient`) uses the HTTP client
+  directly, not `Webservice`, because it needs exact control of methods, headers (DPoP proofs, `Authorization:
+  DPoP ...`), raw bodies and response headers (`DPoP-Nonce`). It uses `idno.http_client.remote` for every
+  request, fetched from the container at each request: the URLs it requests are `https://<handle>/.well-known/atproto-did`
+  (member input), `https://plc.directory/<did>` and `https://<did:web domain>/.well-known/did.json` (a DID from
+  DNS or from a remote document), `<pds>/.well-known/oauth-protected-resource` and `<pds>/xrpc/<method>`
+  (the PDS a DID document names), `<issuer>/.well-known/oauth-authorization-server` and the pushed
+  authorization request and token endpoints (from the metadata a remote server returned). Tests give it a
+  client with `ATProtoClient::useClient()` and a DNS TXT lookup with `useTxtResolver()`; the public methods
+  and the constructor are unchanged. Every request has a 30-second total limit (shorter than the client's
+  60), a GET follows `HttpClientFactory::MAX_REDIRECTS` redirects and a POST none (a redirected POST is its
+  3xx response, as it was under curl), and a response is read through `BoundedBody` up to 1 MiB and cut
+  there (a cut document does not parse: the call fails as it does for any unparseable one). A GET that fails
+  is `null` to the callers that tolerate it (identity and discovery methods throw a `\RuntimeException`);
+  `xrpcGet()` still ends in a `\TypeError` then, as the curl version did (a known defect, pinned by a test, not
+  fixed here because it would change `documentExists()`'s result). A POST that fails throws `\RuntimeException('HTTP
+  POST failed: ...')`. Exception messages, which the plugin's pages and `Main.php` log and show, never hold a
+  response body: an error document's `error_description`, `message` or `error` (control characters replaced,
+  at most 200 bytes), else `HTTP <status>`; URLs in them are reduced to scheme, host and path. The class logs
+  nothing itself.
+- The web installer's check that URL rewriting works (`WebInstaller::rewriteWorking()`) uses
+  `HttpClient::create()` (the installer runs without the container) with a 10-second timeout, no redirects
+  and certificate verification on, as the curl call did by default; `Idno\Core\Installer::urlAnswers()` decides
+  from a client (a 2xx status; a failed request is false; pinned by `Tests/Unit/Install/UrlAnswersTest`).
 - The compiled container lives in `<cache base>/<env>/<build>-<key>` (cache base:
   `IDNO_CACHE_DIR`, else `var/cache`, else a private per-project temp dir; build number from
   `version.idno`). The key (`Kernel::getCacheDir()`) hashes the code fingerprint together with
@@ -2526,8 +2551,10 @@ the CLI installer no longer writes one.
   subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost, and a
   site served from a loopback or private address (a development or intranet install) can no longer
   discover and subscribe to the hub of a profile or feed on that same address.
-  Not yet moved: `IdnoPlugins/StandardSiteSync/ATProtoClient.php` (raw curl) and the import of an
-  attachment URL from an admin's export (`File::getFileDataFromAttachment()`, admin supplied).
+  Also moved, to the remote client, because every URL it requests comes from a member's input or from
+  a document a remote server returned: `IdnoPlugins\StandardSiteSync\ATProtoClient` (below). Not
+  moved: the import of an attachment URL from an admin's export (`File::getFileDataFromAttachment()`,
+  admin supplied).
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra

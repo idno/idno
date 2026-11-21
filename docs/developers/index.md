@@ -14,6 +14,7 @@ we welcome contributions. See [the open source community](../community/index.md)
 
 * [Plugins](plugins/index.md)
 * [Indexed fields](plugins/indexed-fields.md)
+* [Outbound HTTP requests](plugins/http.md)
 * [Templating](templating/index.md)
 * [Themes](themes/index.md)
 * [API](plugins/api.md)

@@ -44,6 +44,20 @@ Use the MySQL rig for anything that touches the SQL dialect, search (MySQL's ful
 
 In the test environment the site also serves `/_test/` routes (the controllers in `Tests/Fixtures/`) that tests use as the far end of the site's own outbound requests: `/_test/echo` answers with what the request carried (method, query, headers, body, form fields and uploaded files), `/_test/redirect/{status}` redirects, `/_test/slow`, `/_test/stream` and `/_test/sized` give slow and large bodies, `/_test/sink/{name}` records every request it receives and `/_test/sink/{name}/log` returns and empties the record, and `/_test/page/{name}` is a page that advertises the sink as its webmention endpoint. `Tests/Characterisation/WebserviceWireTest` pins what `Idno\Core\Webservice` sends and returns, and `OutboundFlowsTest` what the site sends on its own (a webmention, a hub ping, a webhook). A test takes the site's URL from the configuration and asserts the headers it cares about by name, never the whole set. The routes check their input (a redirect only to `/_test/` paths, a sink name of plain characters, bounded sleeps and bodies), and `TestRoutesTest` pins that.
 
+## No network in tests
+
+No test may make a request to a real server. In the test environment (`APP_ENV=test`, the rig and PHPUnit) the site's
+HTTP clients refuse every host but the site's own origin, with `No network in tests: <host>`, so a forgotten request fails
+at once instead of reaching the internet. A test that needs another origin lists it in the `IDNO_TEST_HTTP_ALLOW`
+environment variable (`host:port`, comma separated). To stand in for a remote server, use the `/_test/` routes above, or
+pass a `Symfony\Component\HttpClient\MockHttpClient` to the code under test: `Webservice::useClient()` for
+`Idno\Core\Webservice`, a constructor argument for a service, or the setter a class offers
+(`IdnoPlugins\StandardSiteSync\ATProtoClient::useClient()`). A mock client records the method, URL, headers and body of each
+request, and a test asserts the headers it cares about by name; for a token or a signature it asserts the shape, never the
+value. A test must not look up DNS either: a class that does (`ATProtoClient` resolves `_atproto.<handle>` TXT records)
+offers a seam for that. Tests may keep their own curl clients where they must talk to the rig from outside the site (the
+characterisation suite). See [Making outbound HTTP requests](plugins/http.md).
+
 ## Private test databases
 
 A test never writes to the rig site's own tables. A test that needs a database of its own makes one with `Tests\Storage\PrivateDatabase`: `sqliteMemory()` (SQLite in memory) and `sqliteFile($path)` (a file in a temporary directory the test makes and removes) need nothing but PHP; `mysql($purpose)` creates the database `<site database>_<purpose>` on the rig's MySQL or MariaDB server, with the schema unless `migrate: false`, and skips the test on an SQLite rig. Drop it in `tearDown()` with `PrivateDatabase::drop()`, which refuses to drop the site's own database.

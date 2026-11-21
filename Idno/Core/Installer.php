@@ -582,6 +582,22 @@ namespace Idno\Core {
         }
 
         /**
+         * Whether a GET of $url answers with a status of 200 to 299. A redirect is not followed (it
+         * does not count), and a request that fails (no answer, a certificate that does not verify,
+         * a timeout) is false.
+         */
+        protected function urlAnswers(\Symfony\Contracts\HttpClient\HttpClientInterface $client, string $url): bool
+        {
+            try {
+                $status = $client->request('GET', $url)->getStatusCode();
+            } catch (\Symfony\Contracts\HttpClient\Exception\ExceptionInterface $e) {
+                return false;
+            }
+
+            return $status >= 200 && $status <= 299;
+        }
+
+        /**
          * Return whether mod rewrite is available
          */
         public static function rewriteAvailable()
