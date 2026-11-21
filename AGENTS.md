@@ -2614,7 +2614,9 @@ the CLI installer no longer writes one.
   `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`. The webmention source, actor and
   media fetches are separate methods so that a test can call them on mock clients, because
   `isSafeUrl()` refuses the test rig's own address before they are reached
-  (`Tests/Kernel/RemoteFetchCallSitesTest`; the flows the rig can drive are in
+  (`Tests/Kernel/RemoteFetchCallSitesTest`; the first check's early refusal of a loopback or
+  private address at the actor, link-preview and Micropub-media call sites is
+  `Tests/Kernel/RemoteFetchRefusalTest`; the flows the rig can drive are in
   `Tests/Characterisation/RemoteFetchTest`). Deliberate difference: a member can no longer
   subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost, and a
   site served from a loopback or private address (a development or intranet install) can no longer
@@ -2623,6 +2625,9 @@ the CLI installer no longer writes one.
   a document a remote server returned: `IdnoPlugins\StandardSiteSync\ATProtoClient` (below). Not
   moved: the import of an attachment URL from an admin's export (`File::getFileDataFromAttachment()`,
   admin supplied).
+- TLS: every HTTPS request `Webservice` makes verifies the certificate and host name, on both
+  clients, unless the boot configuration's `disable_ssl_verify` is set (see "Webservice" above). Do not
+  turn verification off anywhere else.
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
@@ -2638,6 +2643,13 @@ the CLI installer no longer writes one.
   exception message is plain text: HTML in it is displayed, not rendered. The message is
   still shown to visitors, so don't put anything in one that they shouldn't see.
   `Tests/Core/ErrorPageTest.php` checks this.
+- Error responses in JSON: for the `json` and `jsonp` template types, `Page::exception()`
+  answers with the page shell (`templates/json/shell.tpl.php`,
+  `templates/jsonp/shell.tpl.php`), which adds an `exception` object to the response. It
+  holds the exception's `message` only. Its `class`, `file` and `line` describe the server:
+  `Page::exception()` logs them, and the shells add them to the response only when `debug`
+  is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
+  `Tests/Core/fixtures/exception_response.php` in its own PHP process.
 - Content Security Policy headers via template system (and, on the upgrade page, a strict
   per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
 - Deleting a site's data from the web: only `/admin/legacytables`, a legacy page (admin gatekeeper,

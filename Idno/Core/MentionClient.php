@@ -15,6 +15,9 @@ namespace Idno\Core {
     class MentionClient extends \IndieWeb\MentionClient
     {
 
+        // The pages that are mentioned, and the endpoints they name, are chosen by other people,
+        // so every request goes through Webservice::safeSend().
+
         protected static function _post($url, $body, $headers = array())
         {
             $response = Webservice::safeSend('post', $url, $body, $headers);

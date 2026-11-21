@@ -583,6 +583,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
          */
         private function uploadFromUrl($type, $url)
         {
+            $success = false;
             $_url = $url;
             foreach ($_url as $url) {
                 // SSRF protection: validate URL before fetching

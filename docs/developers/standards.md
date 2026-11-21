@@ -74,6 +74,13 @@ switch ($var) {
 * Notice errors are errors, please develop your code with ```pedantic_mode = true;``` set in your config.ini
 * Unless there's a VERY good reason you can explain (and should explain) in comments, never use the '@' error suppression operator.
 
+## Fetching URLs
+
+* Use `\Idno\Core\Webservice` for outbound HTTP requests, so that the site's proxy and TLS settings apply. Don't call curl, `file_get_contents()` or `fopen()` on a URL directly.
+* If the URL was supplied by a remote party (for example a webmention source, an ActivityPub actor or inbox, or a file a Micropub client asks the site to download), fetch it with `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`. It refuses URLs that are not HTTP or HTTPS, and hosts on the server itself or its private network, and it applies the same check to every redirect, following five at most. A refused request returns empty `'content'` and a message in `'error'` (`'response'` is 0 for a refused address, and the last redirect's status when there are too many).
+* `Webservice::get()`, `post()` and the other verbs follow redirects without these checks. Only use them for URLs that the site's administrator or its users chose.
+* HTTPS certificates are verified. Don't turn verification off in code; a site that really needs to can set `disable_ssl_verify` in its config.ini.
+
 ## Comments
 
 We like comments, and when in doubt, you probably should write a comment! That doesn't mean writing a comment for every line, but 

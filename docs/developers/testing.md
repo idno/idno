@@ -94,6 +94,10 @@ The suite is split into three test suites in `phpunit.xml`: `Idno Basic Unit Tes
 
 You can also run the tests against your own Idno instance. In that case, set `IDNO_DOMAIN` (and `IDNO_PORT`) to point at it, for example ```export IDNO_DOMAIN='MY.IDNO.DOMAIN'```.
 
+## Testing code that fetches URLs
+
+Tests must not make requests to the public internet (see "No network in tests" above). A test of code that fetches a URL supplied by a remote party installs two mock clients with `Idno\Core\Webservice::useClient($siteClient, $remoteClient)`, built with Symfony's `MockHttpClient`, and asserts which of them received the request. Call `Webservice::useClient(null)` in `tearDown()`. The mock does not refuse private addresses, so a test can show that a call site sends its request through the remote client (the one that refuses private networks on every hop) and that its own first check (`UrlValidator::isSafeUrl()`) refuses an address on the server itself before any request is made. `Tests/Kernel/RemoteFetchCallSitesTest.php` and `Tests/Kernel/RemoteFetchRefusalTest.php` show how; what the remote client itself refuses is tested in `Tests/Kernel/WebserviceAdapterTest.php`.
+
 # Code style testing
 
 Idno includes a PHP Codesniffer ruleset.
