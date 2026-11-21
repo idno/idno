@@ -160,43 +160,62 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         $this->assertSame([], $this->sink($name), 'sent once');
     }
 
+    /**
+     * Run-as is pinned by an effect. The `linkpreview/fetch` listener reads the post with
+     * `Entity::getByID()`, which applies the session user's read access, and saves it, which needs the
+     * session user to be allowed to edit it. So on a PRIVATE post the preview is stored only when the
+     * event runs as the post's owner: the event queued by the owner's publish stores it; an event for
+     * another private post, queued with no user, finds nothing and stores nothing. (The unfurled page is
+     * seeded, because the real fetch refuses loopback addresses.) The stored context of each event, and
+     * that the dispatch logs who it ran as, are pinned too.
+     */
     public function testTheEventRunsAsTheUserWhoQueuedIt(): void
     {
         $cookie = $this->registerUser('alice');
-        $userUuid = $this->addFollower('alice', $this->baseUrl() . '_test/sink/' . $this->newSink('inbox'));
-        $this->publishStatus($cookie, 'Hello queue');
+        $userUuid = $this->runInSite('return \Idno\Entities\User::getByHandle("alice")->getUUID();');
+        $page = $this->baseUrl() . '_test/page/' . $this->newSink('lp');
+        $this->runInSite(
+            '$u = new \Idno\Entities\UnfurledUrl(); $u->source_url = ' . $this->literal($page) . '; $u->data = ["title" => "Seeded title"]; $u->setAccess("PUBLIC");'
+            . ' if (!$u->save(true)) { throw new \RuntimeException("not seeded"); } return true;'
+        );
 
-        // An event queued with no user logged in and none named: no user. One that names the user
-        // (as the ActivityPub plugin does for its deliveries, whatever the session): that user.
-        $this->assertIsString($this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "idno/queue/probe", [], null);'));
-        $this->assertIsString($this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "idno/queue/probe-named", [], ' . $this->literal($userUuid) . ');'));
+        // The owner publishes a private post with a link; another private post of theirs is stored
+        // with a preview event of its own that names no user.
+        $this->publishStatus($cookie, 'A private note about ' . $page, [], $userUuid);
+        $otherId = $this->runInSite(
+            '$s = new \IdnoPlugins\Status\Status(); $s->body = "Another private note"; $s->setOwner(\Idno\Entities\User::getByHandle("alice"));'
+            . ' $s->setAccess(' . $this->literal($userUuid) . '); $s->setPublishStatus("published"); if (!$s->save(true)) { throw new \RuntimeException("not saved"); } return $s->getID();'
+        );
+        $this->storeQueuedEvent('linkpreview/fetch', serialize(['entity_id' => $otherId, 'url' => $page]), null);
 
-        $stored = [];
+        $contexts = [];
+        $ownId = null;
         foreach ($this->queuedEvents() as $event) {
-            $stored[$event['event']] = $event['runAsContext'];
+            if ($event['event'] === 'linkpreview/fetch' && $event['data']['entity_id'] !== $otherId) {
+                $ownId = $event['data']['entity_id'];
+            }
+            $contexts[$event['event']][] = $event['runAsContext'];
         }
-        $this->assertSame([
-            'activitypub/deliver' => $userUuid,
-            'idno/queue/probe' => false,
-            'idno/queue/probe-named' => $userUuid,
-            'pubsubhubbub/ping' => $userUuid,
-            'webmention/sendall' => $userUuid,
-        ], $this->sorted($stored));
+        $this->assertNotNull($ownId, 'the owner\'s publish queued a link preview fetch');
+        $this->assertSame([$userUuid, null], $this->sortedContexts($contexts['linkpreview/fetch']), 'one queued as the owner, one with no user');
 
         $worker = $this->runWorkerOnce();
         $this->assertSame(0, $worker['exit'], $worker['output']);
 
-        // The dispatch logs who it ran each event as (the web server's log today).
+        $previews = $this->runInSite(
+            '\Idno\Core\Idno::site()->db()->setIgnoreAccess(true);'
+            . ' return [\Idno\Common\Entity::getByID(' . $this->literal($ownId) . ')->link_preview, \Idno\Common\Entity::getByID(' . $this->literal($otherId) . ')->link_preview];'
+        );
+        $this->assertSame(
+            [['url' => $page, 'title' => 'Seeded title', 'description' => '', 'image' => '', 'domain' => '127.0.0.1'], null],
+            $previews,
+            'the preview is stored for the private post when run as its owner, and not when run as no one'
+        );
+
+        // The dispatch also logs who it ran each event as (in the server's log today).
         $log = $this->serverLogContents() . $worker['output'];
-        foreach ([
-            'activitypub/deliver' => 'Alice',
-            'pubsubhubbub/ping' => 'Alice',
-            'webmention/sendall' => 'Alice',
-            'idno/queue/probe-named' => 'Alice',
-            'idno/queue/probe' => 'ANONYMOUS',
-        ] as $event => $who) {
-            $this->assertSame(1, preg_match('/Dispatching event [0-9a-f-]{36}: ' . preg_quote($event, '/') . ' as ' . $who . ' queued at /', $log), $event . ' ran as ' . $who);
-        }
+        $this->assertSame(1, preg_match('/Dispatching event [0-9a-f-]{36}: linkpreview\/fetch as Alice queued at /', $log));
+        $this->assertSame(1, preg_match('/Dispatching event [0-9a-f-]{36}: linkpreview\/fetch as ANONYMOUS queued at /', $log));
 
         // Every event was handled, none left pending, and a handled event is kept (marked complete,
         // with the time) until garbage collection removes it five minutes later.
@@ -207,6 +226,40 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         }
     }
 
+    /**
+     * An event queued with the user named explicitly (as the ActivityPub plugin queues its deliveries)
+     * or with none is stored as such: the context is the named user, else the session's, else none (`false`).
+     */
+    public function testTheStoredContextIsTheNamedUserElseTheSessionsElseNone(): void
+    {
+        $cookie = $this->registerUser('alice');
+        $userUuid = $this->addFollower('alice', $this->baseUrl() . '_test/sink/' . $this->newSink('inbox'));
+        $this->publishStatus($cookie, 'Hello queue');
+        $this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "idno/queue/probe", [], null);');
+        $this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "idno/queue/probe-named", [], ' . $this->literal($userUuid) . ');');
+
+        $stored = [];
+        foreach ($this->queuedEvents() as $event) {
+            $stored[$event['event']] = $event['runAsContext'];
+        }
+        ksort($stored);
+        $this->assertSame([
+            'activitypub/deliver' => $userUuid,
+            'idno/queue/probe' => false,
+            'idno/queue/probe-named' => $userUuid,
+            'pubsubhubbub/ping' => $userUuid,
+            'webmention/sendall' => $userUuid,
+        ], $stored);
+    }
+
+    /**
+     * The poison event below is a KNOWN DEFECT of today's queue, pinned only so that a change is
+     * noticed: an event whose listener throws an `\Error` (a TypeError, say) is never marked, so it
+     * stays pending and every later run of the worker dispatches it again, for ever. The new queue
+     * is expected to change this deliberately (a failed event is to be kept apart with its error);
+     * when it does, this test's expectations about that event change with it. What must keep holding
+     * is that the other events are delivered.
+     */
     public function testAFailingEventDoesNotStopTheOnesAfterIt(): void
     {
         $cookie = $this->registerUser('alice');
@@ -358,14 +411,14 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
     }
 
     /**
-     * @param array<string, mixed> $map
+     * @param list<mixed> $contexts
      *
-     * @return array<string, mixed>
+     * @return list<mixed> the string contexts first, in order, then null
      */
-    private function sorted(array $map): array
+    private function sortedContexts(array $contexts): array
     {
-        ksort($map);
+        usort($contexts, static fn ($a, $b): int => [$a === null, (string) $a] <=> [$b === null, (string) $b]);
 
-        return $map;
+        return $contexts;
     }
 }

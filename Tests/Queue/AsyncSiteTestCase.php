@@ -255,14 +255,14 @@ abstract class AsyncSiteTestCase extends TestCase
      *
      * @param array<string, string> $headers sent with the post
      */
-    protected function publishStatus(string $cookie, string $body, array $headers = []): string
+    protected function publishStatus(string $cookie, string $body, array $headers = [], string $access = 'PUBLIC'): string
     {
         // The form's page reads `body` without a default, which the rig's pedantic_mode makes an exception.
         $form = $this->site()->request('GET', 'status/edit?body=x', ['Cookie' => $cookie]);
         $this->assertSame(200, $form->status, $this->serverLog());
         $response = $this->site()->request('POST', 'status/edit/', ['Cookie' => $cookie] + $headers, $this->formToken($form->body, 'status/edit/') + [
             'body' => $body,
-            'access' => 'PUBLIC',
+            'access' => $access,
         ]);
         $this->assertSame(302, $response->status, substr($response->body, 0, 1000) . $this->serverLog());
         $location = (string) $response->header('Location');
@@ -406,10 +406,55 @@ abstract class AsyncSiteTestCase extends TestCase
             'APP_ENV' => 'test',
             'APP_DEBUG' => '1',
             'IDNO_DBNAME' => $this->dbname,
-            'IDNO_URL' => $this->url,
+            'IDNO_URL' => $this->configuredScheme() . substr($this->url, strlen('http')),
             'IDNO_EVENT_QUEUE' => 'AsynchronousQueue',
             'IDNO_TEST_HTTP_ALLOW' => $origin,
             'PATH' => (string) getenv('PATH'),
+        ];
+    }
+
+    /**
+     * The scheme of the site's configured URL (`url` in its boot configuration): `http` or `https`.
+     * The server itself always listens in plain http; a test class overrides this (read when the site
+     * starts) to configure an https URL for a site whose internal requests are plain.
+     */
+    protected function configuredScheme(): string
+    {
+        return 'http';
+    }
+
+    /**
+     * Registers a user, gives them a follower whose inbox is a fresh sink, publishes a status (with
+     * $publishHeaders on the post, as a reverse proxy would add them), runs the worker once and returns
+     * the URLs the delivered request carried: the post's permalink (the Location of the publish),
+     * the activity's `actor`, `object.id` (its UUID replaced by `<uuid>`), `object.url` and the signature's `keyId`.
+     *
+     * @param array<string, string> $publishHeaders
+     *
+     * @return array{permalink: string, actor: string, objectId: string, objectUrl: string, keyId: string}
+     */
+    protected function deliveredUrls(array $publishHeaders = []): array
+    {
+        $cookie = $this->registerUser('alice');
+        $sink = $this->newSink('inbox');
+        $this->addFollower('alice', $this->baseUrl() . '_test/sink/' . $sink);
+        $permalink = $this->publishStatus($cookie, 'Hello queue', $publishHeaders);
+        $worker = $this->runWorkerOnce();
+        $this->assertSame(0, $worker['exit'], $worker['output']);
+        $requests = $this->sink($sink);
+        $this->assertCount(1, $requests, 'one delivery' . $this->serverLog());
+        $this->assertSame(1, preg_match('/^keyId="([^"]+)",/', $requests[0]['headers']['signature'], $m));
+        $activity = json_decode((string) base64_decode($requests[0]['body'], true), true, 512, JSON_THROW_ON_ERROR);
+
+        $objectId = $activity['object']['id'];
+        $this->assertSame(1, preg_match('#/view/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$#', $objectId), $objectId);
+
+        return [
+            'permalink' => $permalink,
+            'actor' => $activity['actor'],
+            'objectId' => substr($objectId, 0, -36) . '<uuid>',
+            'objectUrl' => $activity['object']['url'],
+            'keyId' => $m[1],
         ];
     }
 
