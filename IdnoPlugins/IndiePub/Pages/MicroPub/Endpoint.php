@@ -556,15 +556,6 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
         }
 
         /**
-         * Micropub optionally allows uploading files from a
-         * URL. This method downloads the file at a URL to a
-         * temporary location and puts it in the php $_FILES
-         * array.
-         *
-         * @param string $type "photo", "audio" or "video"
-         * @param string $url  File URL
-         */
-        /**
          * Download a media file from a URL the Micropub client gave. The request is made by the
          * client that refuses private networks on every redirect.
          *
@@ -581,6 +572,15 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             return $response['content'];
         }
 
+        /**
+         * Micropub optionally allows uploading files from a
+         * URL. This method downloads the file at a URL to a
+         * temporary location and puts it in the php $_FILES
+         * array.
+         *
+         * @param string $type "photo", "audio" or "video"
+         * @param string $url  File URL
+         */
         private function uploadFromUrl($type, $url)
         {
             $_url = $url;
@@ -622,9 +622,17 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
                         break;
                 }
 
-                $tmpname  = tempnam(sys_get_temp_dir(), 'indiepub_');
-                $bytes    = self::fetchMedia($url);
-                $success  = $bytes === false ? false : file_put_contents($tmpname, $bytes);
+                // The file is made only once there are bytes to put in it, and removed again when they
+                // cannot be written, so that a failed download leaves nothing behind.
+                $success = false;
+                $bytes   = self::fetchMedia($url);
+                if ($bytes !== false) {
+                    $tmpname = tempnam(sys_get_temp_dir(), 'indiepub_');
+                    $success = file_put_contents($tmpname, $bytes);
+                    if (!$success) {
+                        @unlink($tmpname);
+                    }
+                }
                 if ($success) {
 
                     // If we haven't got a valid mime, try using magicbyte detection

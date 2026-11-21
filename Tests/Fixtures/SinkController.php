@@ -15,7 +15,8 @@ use Symfony\Component\Routing\Attribute\Route;
  * and answers 202; /_test/sink/{name}/log returns the recorded requests as a JSON list and empties
  * the file. The files are in a directory under the system temporary directory named after this
  * checkout's real path (a sibling of the test rig's, which CI's servers do not use), and are
- * written under an exclusive lock because the web server has several workers.
+ * written under an exclusive lock because the web server has several workers. With `?html=1` (exactly
+ * that value) the sink answers 200 with a small HTML page, for a caller that only reads an HTML answer.
  */
 final class SinkController
 {
@@ -26,6 +27,14 @@ final class SinkController
     {
         $line = json_encode(RequestDescription::of($request), JSON_THROW_ON_ERROR) . "\n";
         file_put_contents(self::file($name), $line, FILE_APPEND | LOCK_EX);
+
+        if (($request->query->all()['html'] ?? null) === '1') {
+            return new Response(
+                '<!doctype html><html><head><title>Sink</title></head><body><p class="h-entry">A sink.</p></body></html>',
+                200,
+                ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store']
+            );
+        }
 
         return new Response('', 202, ['Cache-Control' => 'no-store']);
     }

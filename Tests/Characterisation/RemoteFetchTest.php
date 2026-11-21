@@ -196,15 +196,15 @@ final class RemoteFetchTest extends CharacterisationTestCase
         return $this->site()->baseUrl() . '_test/sink/' . $name;
     }
 
-    public function testASharedUrlIsProbedThroughTheRemoteClient(): void
+    public function testASharedUrlIsProbedAndFetchedThroughTheRemoteClient(): void
     {
         $name = $this->sink('share');
         $cookie = $this->logIn($this->user());
 
-        $this->site()->request('GET', 'share/?share_url=' . urlencode($this->sinkUrl($name)), ['Cookie' => $cookie]);
+        $this->site()->request('GET', 'share/?share_url=' . urlencode($this->sinkUrl($name) . '?html=1'), ['Cookie' => $cookie]);
 
         $requests = $this->recorded($name);
-        $this->assertSame('HEAD', $requests[0]['method']);
+        $this->assertSame(['HEAD', 'GET'], array_column($requests, 'method'), 'the probe, then the page (only an HTML answer gets that far)');
         $this->assertAllRemote($requests);
     }
 
@@ -283,7 +283,7 @@ final class RemoteFetchTest extends CharacterisationTestCase
         $this->assertAllRemote($this->recorded($name));
     }
 
-    public function testPubSubHubbubFetchesFeedsThroughTheRemoteClient(): void
+    public function testPubSubHubbubFetchesPagesThroughTheRemoteClient(): void
     {
         $name = $this->sink('pubsub');
         $url = $this->sinkUrl($name);
@@ -296,5 +296,24 @@ final class RemoteFetchTest extends CharacterisationTestCase
         $requests = $this->recorded($name);
         $this->assertGreaterThanOrEqual(3, count($requests), 'discovery, the feed search and the self link each fetch the page');
         $this->assertAllRemote($requests);
+    }
+
+    /**
+     * The page advertises the sink as its feed, so the feed itself is fetched (and recorded) by
+     * hub discovery and by the search for the feed's self link: one request each.
+     */
+    public function testPubSubHubbubFetchesAFeedThroughTheRemoteClient(): void
+    {
+        $name = $this->sink('pubsubfeed');
+        $page = $this->site()->baseUrl() . '_test/page/' . $name . '?feed=1';
+        $hubbub = new \Idno\Core\PubSubHubbub();
+
+        foreach (['discoverHubs', 'findSelf'] as $method) {
+            (new \ReflectionMethod($hubbub, $method))->invoke($hubbub, $page);
+
+            $requests = $this->recorded($name);
+            $this->assertCount(1, $requests, $method . ' fetched the feed once');
+            $this->assertAllRemote($requests);
+        }
     }
 }

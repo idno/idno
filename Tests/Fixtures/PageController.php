@@ -10,7 +10,8 @@ use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Test-environment only (config/routes/test/fixtures.php): an HTML page that advertises the sink of
- * the same name as its webmention endpoint, for a test that publishes a post linking to it.
+ * the same name as its webmention endpoint, for a test that publishes a post linking to it. With
+ * `?feed=1` (exactly that value) it also advertises the same sink as its RSS feed.
  */
 final class PageController
 {
@@ -18,8 +19,11 @@ final class PageController
     public function __invoke(Request $request, string $name): Response
     {
         $endpoint = $request->getSchemeAndHttpHost() . '/_test/sink/' . $name;
+        $feed = ($request->query->all()['feed'] ?? null) === '1'
+            ? '<link rel="alternate" type="application/rss+xml" href="' . $endpoint . '">'
+            : '';
         $html = '<!doctype html><html><head><title>Test page</title>'
-            . '<link rel="webmention" href="' . $endpoint . '"></head>'
+            . '<link rel="webmention" href="' . $endpoint . '">' . $feed . '</head>'
             . '<body><p class="h-entry">A page that accepts webmentions.</p></body></html>';
 
         return new Response($html, 200, ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store']);

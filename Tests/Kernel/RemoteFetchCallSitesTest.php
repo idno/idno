@@ -164,4 +164,63 @@ final class RemoteFetchCallSitesTest extends IdnoTestCase
         $this->assertSame(['GET http://93.184.216.34/page'], $this->remoteSeen);
         $this->assertOnlyTheRemoteClientWasUsed();
     }
+
+    /**
+     * @return list<string> the temporary files Micropub makes for downloaded media
+     */
+    private function mediaTempFiles(): array
+    {
+        return glob(sys_get_temp_dir() . '/indiepub_*') ?: [];
+    }
+
+    /**
+     * Runs the Micropub download of $url into $_FILES and returns the result, restoring $_FILES.
+     */
+    private function uploadFromUrl(string $url): mixed
+    {
+        $endpoint = (new \ReflectionClass(\IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::class))->newInstanceWithoutConstructor();
+        $files = $_FILES;
+        try {
+            return (new \ReflectionMethod($endpoint, 'uploadFromUrl'))->invoke($endpoint, 'photo', [$url]);
+        } finally {
+            foreach ($_FILES['photo'] ?? [] as $file) {
+                @unlink($file['tmp_name']);
+            }
+            $_FILES = $files;
+        }
+    }
+
+    public function testAFailedMicropubDownloadLeavesNoTemporaryFile(): void
+    {
+        $before = $this->mediaTempFiles();
+
+        foreach ([404, 500] as $status) {
+            $this->useClients(fn() => new MockResponse('nope', ['http_code' => $status]));
+            $this->assertFalse($this->uploadFromUrl('http://93.184.216.34/a.jpg'), (string) $status);
+        }
+        $this->useClients(fn() => new MockResponse('', ['http_code' => 200]));
+        $this->assertEmpty($this->uploadFromUrl('http://93.184.216.34/empty.jpg'), 'an empty body');
+
+        $this->assertSame($before, $this->mediaTempFiles());
+    }
+
+    public function testASuccessfulMicropubDownloadMakesTheFileItReports(): void
+    {
+        $this->useClients(fn() => new MockResponse('IMAGEBYTES', ['http_code' => 200]));
+
+        $_FILES = [];
+        $endpoint = (new \ReflectionClass(\IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::class))->newInstanceWithoutConstructor();
+        try {
+            $this->assertNotFalse((new \ReflectionMethod($endpoint, 'uploadFromUrl'))->invoke($endpoint, 'photo', ['http://93.184.216.34/a.jpg']));
+            $this->assertCount(1, $_FILES['photo']);
+            $this->assertSame('IMAGEBYTES', file_get_contents($_FILES['photo'][0]['tmp_name']));
+            $this->assertSame('a.jpg', $_FILES['photo'][0]['name']);
+            $this->assertOnlyTheRemoteClientWasUsed();
+        } finally {
+            foreach ($_FILES['photo'] ?? [] as $file) {
+                @unlink($file['tmp_name']);
+            }
+            $_FILES = [];
+        }
+    }
 }

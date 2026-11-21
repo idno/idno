@@ -2523,7 +2523,9 @@ the CLI installer no longer writes one.
   `isSafeUrl()` refuses the test rig's own address before they are reached
   (`Tests/Kernel/RemoteFetchCallSitesTest`; the flows the rig can drive are in
   `Tests/Characterisation/RemoteFetchTest`). Deliberate difference: a member can no longer
-  subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost.
+  subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost, and a
+  site served from a loopback or private address (a development or intranet install) can no longer
+  discover and subscribe to the hub of a profile or feed on that same address.
   Not yet moved: `IdnoPlugins/StandardSiteSync/ATProtoClient.php` (raw curl) and the import of an
   attachment URL from an admin's export (`File::getFileDataFromAttachment()`, admin supplied).
 - File access control: `Entity::save()` records the entity's UUID on each of its stored

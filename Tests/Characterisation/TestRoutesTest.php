@@ -152,4 +152,27 @@ final class TestRoutesTest extends CharacterisationTestCase
         $this->assertStringContainsString('<link rel="webmention" href="' . $this->site()->baseUrl() . '_test/sink/some-name">', $response->body);
         $this->assertSame(404, $this->site()->request('GET', '_test/page/Bad_Name')->status);
     }
+
+    public function testPageAdvertisesTheSinkAsItsFeedOnlyForFeedOne(): void
+    {
+        $feed = '<link rel="alternate" type="application/rss+xml" href="' . $this->site()->baseUrl() . '_test/sink/some-name">';
+
+        $this->assertStringContainsString($feed, $this->site()->request('GET', '_test/page/some-name?feed=1')->body);
+        foreach (['', '?feed=0', '?feed=true', '?feed[]=1'] as $query) {
+            $this->assertStringNotContainsString('application/rss+xml', $this->site()->request('GET', '_test/page/some-name' . $query)->body, $query);
+        }
+    }
+
+    public function testSinkAnswersHtmlOnlyForHtmlOne(): void
+    {
+        $name = 'html-' . bin2hex(random_bytes(4));
+        $this->sinks[] = $name;
+
+        $plain = $this->site()->request('GET', '_test/sink/' . $name . '?html=0');
+        $this->assertSame(202, $plain->status);
+        $html = $this->site()->request('GET', '_test/sink/' . $name . '?html=1');
+        $this->assertSame(200, $html->status);
+        $this->assertStringContainsString('text/html', (string) $html->header('Content-Type'));
+        $this->assertCount(2, $this->site()->request('GET', '_test/sink/' . $name . '/log')->json(), 'both requests were recorded');
+    }
 }
