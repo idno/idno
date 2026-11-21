@@ -166,6 +166,17 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
     (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
     missing directory on SQLite); the characterisation suite runs in full on both.
+- A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
+  `Tests\Queue\AsyncSiteTestCase`: each test starts `php -S` (four workers, a free port, never 8089)
+  on a private database (a private database of the rig's MySQL or MariaDB server, or an SQLite file in
+  a temporary directory; the schema from `idno:upgrade`) with `IDNO_EVENT_QUEUE=AsynchronousQueue`, its
+  own `IDNO_URL` and `IDNO_TEST_HTTP_ALLOW` naming itself, and stops it and drops the database in
+  `tearDown()`. It gives `site()`, `registerUser()`/`publishStatus()` (over HTTP), `runWorkerOnce()`
+  (`bin/console service-event-queue --once`, same environment), `sink()` and `runInSite()` (PHP code with
+  the site booted, for entity writes only the classes can do). `Tests/Queue/QueuedDeliveryTest` and
+  `QueuedDeliveryBehindTlsTest` pin what queued events deliver today (the signed ActivityPub delivery,
+  webmentions, who an event runs as, failing events, the worker's output); they do not run in the unit
+  tier and skip on a MongoDB site.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
