@@ -2515,8 +2515,11 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `PhpTemplateEngine` (`TemplateEngine`): `include`s the file in a function bound to the `PhpTemplateContext` (`$this` and `$t`;
   `DefaultTemplate` is one, `withVars()` gives a copy with other variables; the file is bound with the scope `phpTemplateScope()` names, `Bonita\Templates`, so no private member of a subclass is reachable from a template and a variable may be named `slots`) with the variables extracted into its scope, inside an
   output buffer. Its own variables are visible to the file and pinned: `$path` (a template variable named `path` changes the file
-  included), `$vars`, `$k`, `$v`; a variable named `this` is an Error; an exception in a template propagates and leaves the
-  output buffer open (`TemplateContractTest::testAnExceptionInATemplateLeaksTheOutputBuffer`).
+  included), `$vars`, `$k`, `$v`; a variable named `this` is an Error; an exception in a template propagates after the
+  engine has ended the buffer(s) its render opened (what they held is discarded; buffers opened before the render are left
+  alone), so a draw nested any depth leaves the buffer level as it found it
+  (`TemplateContractTest::testAnExceptionInATemplateLeavesNoOutputBufferOpen`, `testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen`).
+  `Logging::oopsAlert()` still closes any buffer a failing template left open: that stays as a defence.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

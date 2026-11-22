@@ -384,6 +384,20 @@ switch ($case) {
         $result = ['set' => $template()->__(['slots' => 'mine'])->draw('privates'), 'unset' => $template()->draw('privates')];
         break;
 
+    case 'exception-in-a-nested-draw':
+        $register('core');
+        $t = $template();
+        $before = ob_get_level();
+        try {
+            $t->draw('nest1');
+            $result = ['thrown' => false];
+        } catch (\Throwable $e) {
+            $result = ['thrown' => [get_class($e), $e->getMessage()]];
+        }
+        $result['levelsLeaked'] = ob_get_level() - $before;
+        $result['drawsAfter'] = $t->draw('only-core');
+        break;
+
     case 'clone-of-the-template-object':
         $register('core');
         $t = $template();

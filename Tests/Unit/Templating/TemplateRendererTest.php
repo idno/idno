@@ -70,9 +70,6 @@ final class TemplateRendererTest extends TestCase
             $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
         }
         rmdir(dirname($this->core));
-        while (ob_get_level() > 1 && str_contains((string) ob_get_contents(), 'partial')) {
-            ob_end_clean();
-        }
     }
 
     /**
@@ -206,7 +203,7 @@ final class TemplateRendererTest extends TestCase
         $this->assertSame('a=unset t=' . get_class($this->context) . ' same=true|', $this->draw('vars'));
     }
 
-    public function testAnExceptionInATemplatePropagatesAndLeavesTheBufferOpen(): void
+    public function testAnExceptionInATemplatePropagatesAndLeavesNoBufferOpen(): void
     {
         $level = ob_get_level();
         try {
@@ -215,8 +212,18 @@ final class TemplateRendererTest extends TestCase
         } catch (\RuntimeException $e) {
             $this->assertSame('thrown', $e->getMessage());
         }
-        $this->assertSame($level + 1, ob_get_level());
-        $this->assertSame('partial', ob_get_clean());
+        $this->assertSame($level, ob_get_level(), 'the buffer the render opened is closed, and no other');
+    }
+
+    public function testABufferTheRenderDidNotOpenIsLeftAlone(): void
+    {
+        ob_start();
+        echo 'outer';
+        try {
+            $this->draw('throws');
+        } catch (\RuntimeException) {
+        }
+        $this->assertSame('outer', ob_get_clean());
     }
 
     public function testTheTraceHookIsCalledForEachFileLookedFor(): void

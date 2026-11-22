@@ -10,8 +10,9 @@ namespace Idno\Templating;
  *
  * The function's own variables are in scope of the file, as they always were: `$path` is the file's name (so a
  * template variable called `path` changes the file that is included), `$vars` the variables, `$k` and `$v` the last
- * variable; a variable called `this` is an Error. An exception in a template propagates and the output buffer
- * the render started is left open, holding what the template had printed.
+ * variable; a variable called `this` is an Error. An exception in a template propagates, after the output buffer
+ * the render started (and any the template left open) is ended and what it held discarded; a buffer opened before the
+ * render is left alone.
  */
 final class PhpTemplateEngine implements TemplateEngine
 {
@@ -29,6 +30,16 @@ final class PhpTemplateEngine implements TemplateEngine
         };
         $render = $render->bindTo($context, $context->phpTemplateScope());
 
-        return $render($template->path, $vars, $context);
+        $level = ob_get_level();
+        try {
+            return $render($template->path, $vars, $context);
+        } catch (\Throwable $e) {
+            // End the buffer this render opened (and any the template left open), discarding what it held, and no other
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+
+            throw $e;
+        }
     }
 }

@@ -309,14 +309,22 @@ final class TemplateContractTest extends TestCase
     }
 
     /**
-     * An exception thrown inside a template propagates, and the output buffer `draw()` started is NOT ended: a leak, pinned as
-     * it is (the buffer holds what the template had printed).
+     * An exception thrown inside a template propagates, and the output buffer the draw started is ended (what the template had
+     * printed is discarded): no buffer is left open, however deep the draw was.
      */
-    public function testAnExceptionInATemplateLeaksTheOutputBuffer(): void
+    public function testAnExceptionInATemplateLeavesNoOutputBufferOpen(): void
     {
         $this->assertSame(
-            ['thrown' => ['RuntimeException', 'thrown in a template'], 'levelsLeaked' => 1, 'leakedOutput' => ['partial'], 'drawsAfter' => 'core:default/only-core|'],
+            ['thrown' => ['RuntimeException', 'thrown in a template'], 'levelsLeaked' => 0, 'leakedOutput' => [], 'drawsAfter' => 'core:default/only-core|'],
             $this->runCase('exception-in-a-template')
+        );
+    }
+
+    public function testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen(): void
+    {
+        $this->assertSame(
+            ['thrown' => ['RuntimeException', 'thrown in a template'], 'levelsLeaked' => 0, 'drawsAfter' => 'core:default/only-core|'],
+            $this->runCase('exception-in-a-nested-draw')
         );
     }
 
