@@ -36,7 +36,7 @@ namespace IdnoPlugins\StaticPages {
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/staticpages/reorder/?', 'IdnoPlugins\StaticPages\Pages\Admin\ReorderCategory');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/staticpages/reorder/page/?', 'IdnoPlugins\StaticPages\Pages\Admin\ReorderPage');
 
-            \Idno\Core\Idno::site()->routes()->addRoute('/pages/([A-Za-z0-9\-\_\%]+)/?', 'IdnoPlugins\StaticPages\Pages\View');
+            \Idno\Core\Idno::site()->routes()->addRoute('/pages/([^/.]+)/?', 'IdnoPlugins\StaticPages\Pages\View');
 
             // This makes sure that the homepage is accessible even when it is overridden.
             \Idno\Core\Idno::site()->routes()->addRoute('/content/default/?', 'Idno\Pages\Homepage');
