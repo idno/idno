@@ -28,8 +28,11 @@ namespace Idno\Core {
                     $eventdata = $event->data();
                     if (!empty($eventdata['object'])) {
                         $content_type = $eventdata['object']->getActivityStreamsObjectType();
-                        if ($services = \Idno\Core\Idno::site()->syndication()->getServices($content_type)) {
-                            if ($selected_services = \Idno\Core\Idno::site()->currentPage()->getInput('syndication')) {
+                        // The services to syndicate to are chosen in the request for the current page.
+                        // Outside a page (a script, a cron job) there is none, so nothing is chosen.
+                        $page = \Idno\Core\Idno::site()->currentPage();
+                        if ($page && ($services = \Idno\Core\Idno::site()->syndication()->getServices($content_type))) {
+                            if ($selected_services = $page->getInput('syndication')) {
                                 if (!empty($selected_services) && is_array($selected_services)) {
                                     foreach ($selected_services as $selected_service) {
                                         $eventdata['syndication_account'] = false;
