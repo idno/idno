@@ -3,7 +3,6 @@
 * [Instructions](instructions.md)
 * [System requirements](requirements.md)
 * [Command line installer](cliinstaller.md)
-* [Instructions for common shared hosting providers](sharedhost.md)
 * [Moving from an idno.co hosted site to your own hosting](data_migration.md)
 
 # Upgrading Idno
