@@ -245,6 +245,14 @@ Each content plugin has an `Entry.php` entity class that defines
   must be safe to run twice. Only draft-cavage signatures are understood, not RFC 9421.
   `IdnoPlugins/ActivityPub/Tests/HTTPSignatureCoverageTest.php` checks this.
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
+- A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
+  overrides `post()` itself and authenticates the request another way. Never get the same
+  effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
+  credential (an API signature or an access token): the flag turns off the token check in
+  `Page::post()` for whichever page the request reaches, and the session of the visitor who
+  sent it is destroyed when the request ends. In particular, don't decide what a request is
+  for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
+  `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
@@ -286,7 +294,25 @@ Each content plugin has an `Entry.php` entity class that defines
   `Page::exception()` logs them, and the shells add them to the response only when `debug`
   is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
   `Tests/Core/fixtures/exception_response.php` in its own PHP process.
+- JSONP is readable by other sites: a page drawn with the `jsonp` template type
+  (`templates/jsonp/shell.tpl.php`) is a script that any site can load, and the browser may
+  send the session cookie with that request. Never put a secret in the template variables
+  of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
+  signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
+  `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
 - Content Security Policy headers via template system
+- IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
+  `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
+  build one from `rand()`, `mt_rand()`, `uniqid()` or the time. Authorization codes are
+  issued by `Auth::issueCode()` and redeemed by `Auth::verifyCode()`, which accepts a code
+  once and for `Auth::CODE_LIFETIME` (ten minutes, the most the IndieAuth specification
+  allows), and spends it even when the rest of the request is wrong. Access tokens are
+  issued by `Pages\IndieAuth\Token::issueToken()` and looked up by
+  `Token::findUserForToken()`. Both are stored as the keys of `indieauth_codes` and
+  `indieauth_tokens` on the user, in plain text, and are matched with `hash_equals()`
+  (`Auth::matchingKey()`). Tokens do not expire, and tokens issued by earlier versions
+  (32 hex characters) remain valid. PKCE is not implemented.
+  `IdnoPlugins/IndiePub/Tests/IndieAuthCodeAndTokenTest.php` checks this.
 - Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
   that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The
   page tells visitors only that there was a problem. The message, file, line, stack trace

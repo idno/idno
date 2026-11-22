@@ -28,25 +28,13 @@ class Add extends Page
 
         if (!$valid) return $this->forward(Idno::site()->config()->getDisplayURL().'account/indiepub/');
 
-        $indieauth_tokens = $user->indieauth_tokens;
-        if (empty($indieauth_tokens)) {
-            $indieauth_tokens = array();
-        }
-
         // Generate a new IndieAuth token
-        $token = md5(rand(0, 99999) . time() . $user->getID() . $client_id . rand(0, 999999));
-
-        $indieauth_tokens[$token] = array(
+        \IdnoPlugins\IndiePub\Pages\IndieAuth\Token::issueToken($user, array(
             'me'           => '',
             'redirect_uri' => $redirect_uri,
             'scope'        => 'create media',
             'client_id'    => $client_id,
-            'issued_at'    => time(),
-            'nonce'        => mt_rand(1000000, pow(2, 30))
-        );
-
-        $user->indieauth_tokens   = $indieauth_tokens;
-        $user->save();
+        ));
 
         \Idno\Core\Idno::site()->session()->refreshSessionUser($user);
 
