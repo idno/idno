@@ -828,7 +828,7 @@ namespace Idno\Core {
 
                 if ($status = $cache->load($domain)) {
 
-                    if ($status = unserialize($status)) {
+                    if (is_string($status) && ($status = unserialize($status, ['allowed_classes' => false])) && is_array($status)) {
 
                         \Idno\Core\Idno::site()->logging()->debug("$domain has previously had HSTS");
 
@@ -865,11 +865,6 @@ namespace Idno\Core {
                 $headers = explode("\n", $headers);
             }
 
-            if (static::isHSTS($url)) {
-                \Idno\Core\Idno::site()->logging()->debug("Valid HSTS found, no need to store");
-                return; // Valid HSTS already availible, no need to parse headers
-            }
-
             $status = null;
             \Idno\Core\Idno::site()->logging()->debug("Checking " . count($headers) . " response header lines for HSTS");
             // Parse out
@@ -902,17 +897,33 @@ namespace Idno\Core {
                 }
             }
 
-            // Cache status
-            if (!empty($status)) {
-
-                $cache = \Idno\Core\Idno::site()->cache();
-
-                if (!empty($cache)) {
-                    \Idno\Core\Idno::site()->logging()->debug("Caching result for " . parse_url($url, PHP_URL_HOST));
-
-                    $cache->store(parse_url($url, PHP_URL_HOST), serialize($status));
-                }
+            if (empty($status)) {
+                return;
             }
+
+            $host = parse_url($url, PHP_URL_HOST);
+            $cache = \Idno\Core\Idno::site()->cache();
+
+            if (empty($host) || empty($cache)) {
+                return;
+            }
+
+            // A max-age of 0 tells the client to forget the host (RFC 6797, 6.1.1)
+            if ($status['max-age'] <= 0) {
+                \Idno\Core\Idno::site()->logging()->debug("HSTS max-age is 0, forgetting $host");
+                $cache->delete($host);
+                return;
+            }
+
+            if (static::isHSTS($url)) {
+                \Idno\Core\Idno::site()->logging()->debug("Valid HSTS found, no need to store");
+                return; // Valid HSTS already availible, no need to store it again
+            }
+
+            \Idno\Core\Idno::site()->logging()->debug("Caching result for $host");
+
+            // The entry lives in the cache for its max-age (at most a year); isHSTS() also checks it when reading
+            $cache->store($host, serialize($status), min($status['max-age'], 31536000));
         }
     }
 

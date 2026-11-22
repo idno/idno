@@ -2386,6 +2386,43 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   admin test mail and `oopsAlert`: recipients, From, Reply-To, subject, the HTML part in the email shell, the
   text part and the link; and a password reset sent by the web server and read from `/_test/mail/log`).
 
+#### The cache
+
+Idno has ONE cache: `Psr\Cache\CacheItemPoolInterface` (aliased as `Symfony\Contracts\Cache\CacheInterface`), a public
+container service that replaces FrameworkBundle's aliases for those two interfaces (the framework's own pools stay
+under their ids, such as `cache.app`). It is built at runtime, when first fetched, by
+`LegacyServiceFactory::cachePool()` through `Idno\Cache\CachePoolFactory::create(array $bootConfig, string $cacheBase,
+string $host)` (a static helper in `Idno/Cache/`, which is neither scanned nor in `CodeFingerprint::SERVICE_DIRECTORIES`
+because nothing in it is compiled into the container): a `FilesystemAdapter` with namespace `md5($host)` in the first
+usable of the boot configuration's `cachepath`; `<cache base>/pool`; the system temporary directory
+(`CachePoolFactory::directory()` decides). The cache base is what `CacheDirResolver::fromEnvironment()` resolves
+(`IDNO_CACHE_DIR`, else `var/cache`, else the private temporary directory): the compiled container's base, WITHOUT the
+per-environment, per-build directory, so a deploy or a version change never empties the pool. A candidate inside the
+local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is compiled into the container. Two processes
+(web workers, the queue worker) share the pool (`FilesystemAdapter` is safe for that; pinned in
+`Tests/Unit/Cache/CachePoolFactoryTest`).
+
+- `Idno::site()->cache()` is `Idno\Caching\PersistentCache` (final, legacy-side API for third-party plugins; new code
+  injects the pool): `load($key)` (null on a miss), `store($key, $value, ?int $ttl = null)`, `delete($key)`,
+  `ArrayAccess` and magic properties, over the pool. Any string is a key: PSR-6 refuses `{}()/\@:` and has a length
+  limit, so a key that is not 1 to 64 of `[A-Za-z0-9_.-]` (or starts `_h_`) is replaced by `_h_` + its SHA-256. The
+  pool is a closure, fetched at first use: `cache()` runs in `Idno::init()`, before the logger, the session and the
+  language exist, and the order the legacy services are built in is pinned.
+- The old `Idno\Caching\FilesystemCache`, `APCuCache`, `ArrayCache`, `StaticArrayCache` and `EphemeralCache` and the
+  `cache` setting are gone. A site that still has a `cache` setting gets ONE warning, written the first time the
+  cache is used (the logger does not exist when the adapter is built), and the setting is ignored. Entries the old
+  `FilesystemCache` wrote under `uploadpath` are neither read nor deleted.
+- The only thing Idno keeps in the cache is per-host HSTS state (`Webservice::isHSTS()` and `checkForHSTSHeader()`),
+  keyed by the bare host name, the value `serialize(['stored_ts', 'max-age', 'includeSubDomains'])` as before. The
+  entry is stored with a pool TTL of its `max-age` (at most a year), and `isHSTS()` still compares `stored_ts + max-age`
+  on every read (an entry that outlives its max-age upgrades nothing). A header with `max-age=0` deletes the host's
+  entry (RFC 6797, 6.1.1; before, it stored an entry that was valid for the rest of the second it was stored in).
+  The headers of a response are parsed even when the host is already known, so that such a header can remove it; a
+  known host's valid entry is otherwise not rewritten.
+- Tests: `Tests/Unit/Cache/` (`CachePoolFactoryTest`, `PersistentCacheTest`, on a `MockClock` and temporary
+  directories), `Tests/Kernel/CacheAdapterTest` (the container's pool, the adapter, the ignored setting),
+  `Tests/API/HSTSTest`.
+
 #### The file store
 
 `Idno\Storage\Files\FileStore` keeps uploaded files on a Flysystem filesystem (`league/flysystem`;
@@ -2438,8 +2475,8 @@ The container's services and the legacy filesystem:
   `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3), and
   reads the range's bytes (both positions inclusive) with `View::readRange()`, which stops at the end of the stream or on an empty or
   failed read (a stream shorter than the stored size never makes the page wait).
-  `FilesystemCache`, the Purifier cache and the Twig cache never use an `s3://` upload path as a
-  directory: they use the temporary directory instead.
+  The cache pool (see "The cache"), the Purifier cache and the Twig cache never use an `s3://` upload path as a
+  directory: the Purifier and Twig caches use the temporary directory instead.
 - Deliberate differences from the old local filesystem: deleting a file removes its `.data` file too;
   an SQL site with an `uploadpath` and no `filesystem` setting stores files locally (it had no
   filesystem); `file_path_host` and the `file/path/host` event work for new uploads (the old code made

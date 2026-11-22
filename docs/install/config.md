@@ -56,6 +56,12 @@ The full path used by Idno to upload files. This path must be writeable by the w
 `s3://<bucket>/<prefix>/` stores files in Amazon S3 (set `aws_region`, and `aws_key` and `aws_secret` unless the server
 has credentials of its own); no plugin is needed.
 
+**cachepath**<br>
+Where Idno keeps its cache (today, what it remembers of the HTTPS-only hosts it has talked to). Optional: without it
+the cache is the `pool` directory beside the compiled cache (`var/cache/pool`, or under `IDNO_CACHE_DIR`), and, where that
+cannot be written, the system temporary directory. It is never under `uploadpath`. The directory may be emptied at any
+time. The old `cache` setting (a cache class name) is gone: it is ignored, with one warning in the log.
+
 **smtp_host, smtp_port, smtp_username, smtp_password, smtp_secure, from_email**<br>
 Configuration for the SMTP server.  Without these set (here or in the UI)
 it will be impossible to send password recovery emails: `from_email` is the address mail is sent from.

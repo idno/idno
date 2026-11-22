@@ -104,7 +104,7 @@ namespace Idno\Core {
                 }
             );
 
-            // Attempt to create a cache object, making use of support present on the system
+            // The cache is the old cache API over the site's one cache pool
             $this->cache = self::container()->get(\Idno\Caching\PersistentCache::class);
 
             // No URL is a critical error, default base fallback is now a warning (Refs #526)

@@ -34,6 +34,7 @@ final class LegacyServiceFactory
      * @param (\Closure(): \Psr\Log\LoggerInterface)|null           $logger     the site's logger (Idno\Core\Logging)
      * @param (\Closure(): \Idno\Storage\Files\FileStore)|null      $fileStore  the FileStore service, which the filesystem() service serves
      * @param (\Closure(): \Symfony\Component\Messenger\MessageBusInterface)|null $messageBus the bus queued events are sent on, which queue() sends them with
+     * @param (\Closure(): \Psr\Cache\CacheItemPoolInterface)|null $cachePool the cache pool, which cache() serves
      */
     public function __construct(
         private readonly ?\Closure $connection = null,
@@ -42,6 +43,7 @@ final class LegacyServiceFactory
         private readonly ?\Closure $logger = null,
         private readonly ?\Closure $fileStore = null,
         private readonly ?\Closure $messageBus = null,
+        private readonly ?\Closure $cachePool = null,
     )
     {
     }
@@ -243,15 +245,39 @@ final class LegacyServiceFactory
         return Idno::site()->componentFactory(Idno::site()->config()->statistics_collector, "Idno\\Stats\\StatisticsCollector", "Idno\\Stats\\", "Idno\\Stats\\DummyStatisticsCollector");
     }
 
-    public function cache(): ?\Idno\Caching\Cache
+    /**
+     * The site's one cache pool (Psr\Cache\CacheItemPoolInterface): a filesystem pool namespaced by
+     * the site's host, in the directory Idno\Cache\CachePoolFactory chooses. Fetched at first use
+     * of the cache, by which time the configuration exists.
+     */
+    public function cachePool(BootConfig $bootConfig, string $projectDir): \Psr\Cache\CacheItemPoolInterface
     {
-        // Attempt to create a cache object, making use of support present on the system
-        $cache_default = "Idno\\Caching\\FilesystemCache";
-        if (extension_loaded('apc') && ini_get('apc.enabled')) {
-            $cache_default = "Idno\\Caching\\APCuCache";
-        }
+        return \Idno\Cache\CachePoolFactory::create(
+            $bootConfig->all(),
+            \Idno\Kernel\CacheDirResolver::fromEnvironment($projectDir),
+            (string) Idno::site()->config()->host
+        );
+    }
 
-        return Idno::site()->componentFactory(Idno::site()->config()->cache, "Idno\\Caching\\Cache", "Idno\\Caching\\", $cache_default);
+    /**
+     * Idno::site()->cache(): the old cache API over the pool, which is fetched at first use (this
+     * runs in Idno::init(), before the logger exists). The removed `cache` setting, if a site still
+     * has one, is ignored with one warning, written when the cache is first used.
+     */
+    public function cache(): ?\Idno\Caching\PersistentCache
+    {
+        $pool = $this->cachePool ?? throw new \LogicException('The cache is built from the container\'s cache pool.');
+        $ignored = Idno::site()->config()->cache;
+        $warned = false;
+
+        return new \Idno\Caching\PersistentCache(static function () use ($pool, $ignored, &$warned): \Psr\Cache\CacheItemPoolInterface {
+            if (!$warned && is_string($ignored) && $ignored !== '') {
+                $warned = true;
+                Idno::site()->logging()->warning('The "cache" setting (' . substr(preg_replace('/[[:cntrl:]]/', '?', $ignored), 0, 100) . ') is ignored: Idno has one cache.');
+            }
+
+            return $pool();
+        });
     }
 
     public function plugins(): \Idno\Core\Plugins

@@ -108,9 +108,21 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             service_closure(\Psr\Log\LoggerInterface::class),
             service_closure(\Idno\Storage\Files\FileStore::class),
             service_closure('messenger.bus.default'),
+            service_closure(\Psr\Cache\CacheItemPoolInterface::class),
         ])
         ->autowire(false)
         ->autoconfigure(false);
+    // The site's one cache pool (a Symfony Cache filesystem pool, see Idno\Cache\CachePoolFactory), built
+    // at runtime from the boot configuration and the site's host, so no value is compiled in. It
+    // replaces the framework's own aliases for these two interfaces (the framework's pools stay under
+    // their own ids, such as cache.app); it needs the legacy application (for the host).
+    $services->set(\Psr\Cache\CacheItemPoolInterface::class)
+        ->factory([service(LegacyServiceFactory::class), 'cachePool'])
+        ->args([service(BootConfig::class), '%kernel.project_dir%'])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->alias(\Symfony\Contracts\Cache\CacheInterface::class, \Psr\Cache\CacheItemPoolInterface::class)->public();
     $legacyServices = [
         \Idno\Core\PageHandler::class => 'routes',
         \Idno\Core\EventDispatcher::class => 'events',

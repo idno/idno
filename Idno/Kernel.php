@@ -181,8 +181,6 @@ class Kernel extends BaseKernel
             return $this->baseDir;
         }
 
-        $override = $_SERVER['IDNO_CACHE_DIR'] ?? $_ENV['IDNO_CACHE_DIR'] ?? getenv('IDNO_CACHE_DIR');
-
-        return $this->baseDir = CacheDirResolver::resolve($this->getProjectDir(), is_string($override) ? $override : null);
+        return $this->baseDir = CacheDirResolver::fromEnvironment($this->getProjectDir());
     }
 }

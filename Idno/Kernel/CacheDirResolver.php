@@ -49,6 +49,19 @@ final class CacheDirResolver
         ));
     }
 
+    /**
+     * The cache base the kernel uses: resolve() with the override IDNO_CACHE_DIR names (read from
+     * $_SERVER, $_ENV and the process environment, in that order).
+     *
+     * @throws \RuntimeException when none of the locations is usable
+     */
+    public static function fromEnvironment(string $projectDir): string
+    {
+        $override = $_SERVER['IDNO_CACHE_DIR'] ?? $_ENV['IDNO_CACHE_DIR'] ?? getenv('IDNO_CACHE_DIR');
+
+        return self::resolve($projectDir, is_string($override) ? $override : null);
+    }
+
     private static function usable(string $dir): bool
     {
         if (!is_dir($dir)) {

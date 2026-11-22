@@ -514,15 +514,15 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $config->uploadpath = 's3://b/up/';
         $tmp                = rtrim($config->getTempDir(), '/\\');
 
-        // The persistent cache: its directory is under the temporary directory, and none called "s3:" is made.
+        // The cache pool: its directory is never the s3:// path, and none called "s3:" is made.
         $cwd = getcwd();
-        $cache = new \Idno\Caching\FilesystemCache();
+        $cache = Idno::site()->cache();
         $cache->store('idno-legacy-filesystem-test', 'value');
         $this->assertSame('value', $cache->load('idno-legacy-filesystem-test'));
         $cache->delete('idno-legacy-filesystem-test');
-        $this->assertDirectoryExists($tmp . '/' . md5($config->host));
         $this->assertDirectoryDoesNotExist($cwd . '/s3:');
         $this->assertDirectoryDoesNotExist($cwd . '/s3:/b/up');
+        $this->assertStringNotContainsString('s3:', \Idno\Cache\CachePoolFactory::directory(['uploadpath' => 's3://b/up/'], $tmp . '/pool-base'));
 
         // The HTMLPurifier cache directory.
         $purifier = new \Idno\Core\Purifier();
