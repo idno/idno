@@ -38,9 +38,13 @@ final class ImportTest extends PortabilityTestCase
     /** @var list<string> */
     private array $knownUuids = [];
 
+    private bool $libxmlInternalErrors = false;
+
     protected function setUp(): void
     {
         parent::setUp();
+        // The importer turns libxml's internal error handling on and leaves it on: put it back as it was.
+        $this->libxmlInternalErrors = libxml_use_internal_errors();
         $this->logOn($this->admin());
         RecordingStreamWrapper::install();
         $this->knownUuids = $this->postUuids();
@@ -48,6 +52,8 @@ final class ImportTest extends PortabilityTestCase
 
     protected function tearDown(): void
     {
+        libxml_clear_errors();
+        libxml_use_internal_errors($this->libxmlInternalErrors);
         RecordingStreamWrapper::restore();
         Webservice::useClient(null);
         // Whatever the test imported goes, with the files its bodies point at.
@@ -377,10 +383,67 @@ final class ImportTest extends PortabilityTestCase
         $this->assertStringContainsString('#roundtrip', $round->body);
     }
 
+    // ------------------------------------------------------------------ what an import must not announce
+
+    /**
+     * A follower of the importing user whose inbox is a sink of the site itself (the rig's queue is
+     * synchronous, so what ActivityPub delivers has been delivered when the import returns), and the
+     * requests the sink has recorded.
+     */
+    private function followerSink(): string
+    {
+        $name = 'portability-' . bin2hex(random_bytes(4));
+        $follower = new \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower();
+        $follower->user_uuid = $this->admin()->getUUID();
+        $follower->actor_uri = 'https://remote.example/users/bob';
+        $follower->actor_inbox = Idno::site()->config()->getURL() . '_test/sink/' . $name;
+        $this->assertNotFalse($follower->save(true));
+        $this->track($follower);
+
+        return $name;
+    }
+
+    /**
+     * @return list<array<string, mixed>> the requests the sink recorded; it is emptied
+     */
+    private function delivered(string $sink): array
+    {
+        $site = new \Tests\Characterisation\HttpSiteClient(Idno::site()->config()->getURL());
+        $response = $site->request('GET', '_test/sink/' . $sink . '/log');
+        $this->assertSame(200, $response->status);
+
+        return $response->json();
+    }
+
+    public function testTodayImportingAFileDeliversEveryPostToTheFollowersOfTheImportingUser(): void
+    {
+        // The page defines IDNO_NOMENTION, which stops webmentions only; the "saved" hook of the ActivityPub
+        // plugin federates each imported post as a new one. The next change must flip this to the test below.
+        $sink = $this->followerSink();
+
+        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+
+        $requests = $this->delivered($sink);
+        $types = array_map(static fn (array $request): ?string => json_decode((string) base64_decode((string) $request['body'], true), true)['type'] ?? null, $requests);
+        $this->assertGreaterThanOrEqual(2, count(array_keys($types, 'Create', true)), 'a Create for each of the two posts: ' . json_encode($types));
+    }
+
+    public function testImportingAFileDeliversNothingToTheFollowersOfTheImportingUser(): void
+    {
+        $this->markTestIncomplete('Entity::save() triggers "saved" for each imported post, and the ActivityPub hook (IdnoPlugins/ActivityPub/Main.php) delivers a Create to the follower inboxes: an imported post is history, not news');
+
+        $sink = $this->followerSink();
+
+        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+
+        $this->assertSame([], $this->delivered($sink));
+        $this->assertNotSame([], $this->importedPosts(), 'the posts were imported');
+    }
+
     // ------------------------------------------------------------------ what a bad file does
 
     /**
-     * @return array<string, array{string, string|null}>
+     * @return array<string, array{string, string}>
      */
     public static function documentsWithNoPost(): array
     {
@@ -391,8 +454,8 @@ final class ImportTest extends PortabilityTestCase
             $cases[$importer . ' with text that is not XML'] = [$importer, 'This is not an export file.'];
             $cases[$importer . ' with XML that holds no post'] = [$importer, $none];
         }
-        $cases['importWordPressXML with nothing (no file was uploaded)'] = ['importWordPressXML', null];
-        $cases['importBloggerXML with nothing (no file was uploaded)'] = ['importBloggerXML', null];
+        // A missing file is not here: an importer is never called without a readable file. The import page
+        // is what refuses a request with none (AdminImportWithoutPedanticModeTest, AdminPortabilityPagesTest).
 
         return $cases;
     }
@@ -400,7 +463,7 @@ final class ImportTest extends PortabilityTestCase
     /**
      * @dataProvider documentsWithNoPost
      */
-    public function testTodayAnImportThatCreatesNothingThrowsATypeError(string $importer, ?string $xml): void
+    public function testTodayAnImportThatCreatesNothingThrowsATypeError(string $importer, string $xml): void
     {
         // The importers are declared ": bool" and end without a return when nothing was imported
         // (Migration.php:296, 437, 447), so PHP throws a TypeError. It is an \Error, which the import
@@ -413,9 +476,9 @@ final class ImportTest extends PortabilityTestCase
     /**
      * @dataProvider documentsWithNoPost
      */
-    public function testAnImportThatCreatesNothingReturnsFalse(string $importer, ?string $xml): void
+    public function testAnImportThatCreatesNothingReturnsFalse(string $importer, string $xml): void
     {
-        $this->markTestIncomplete('Migration::importWordPressXML() and importFeedXML() are declared ": bool" and fall off their end when nothing was imported, which is a TypeError (Migration.php:296-365, 447-576); a null file is a TypeError at the call');
+        $this->markTestIncomplete('Migration::importWordPressXML() and importFeedXML() are declared ": bool" and fall off their end when nothing was imported, which is a TypeError (Migration.php:296-365, 447-576)');
 
         $this->assertFalse(Migration::$importer($xml));
         $this->assertSame([], $this->importedPosts());
@@ -542,13 +605,58 @@ final class ImportTest extends PortabilityTestCase
     {
         $this->markTestIncomplete('importImagesFromBodyHTML() copies the whole body of the image to disk with no size limit (Migration.php:402); webservice_max_download is not applied');
 
+        // The remote client serves a body over the limit. A request through it is cut at the limit, which is
+        // not an image, so nothing is stored; the address stays as it was.
         $limit = (int) (Idno::site()->config()->webservice_max_download ?: 10 * 1024 * 1024);
-        RecordingStreamWrapper::$size = $limit + 1024 * 1024;
+        $served = 0;
+        $client = new MockHttpClient(function () use ($limit, &$served): MockResponse {
+            $served++;
+
+            return new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true) . str_repeat("\0", $limit + 1024 * 1024));
+        });
+        Webservice::useClient($client, $client);
 
         $body = Migration::importImagesFromBodyHTML($this->bodyWithImages('https://a.wordpress.com/big.png'), 'wordpress.com');
 
+        $this->assertSame(1, $served, 'the client was asked');
         $this->assertSame([], $this->adopt($body));
+        $this->assertSame([], RecordingStreamWrapper::$opened, 'and nothing was opened as a PHP stream');
         $this->assertStringContainsString('src="https://a.wordpress.com/big.png"', $body);
+    }
+
+    public function testOnlyHttpAndHttpsOnTheDefaultPortsOfAnAllowedHostAreFetched(): void
+    {
+        $this->markTestIncomplete('Only the host and the extension of an image address are checked (Migration.php:377-393): an ftp:// address, or one on any port, is opened');
+
+        $client = new MockHttpClient(static fn (): MockResponse => new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true)));
+        Webservice::useClient($client, $client);
+        $refused = ['ftp://a.wordpress.com/a.png', 'https://a.wordpress.com:8443/b.png', 'http://a.wordpress.com:25/c.png', 'https://user:pass@a.wordpress.com/d.png'];
+        $fetched = ['http://a.wordpress.com:80/e.png', 'https://a.wordpress.com:443/f.png', 'http://a.wordpress.com/g.png'];
+
+        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages(...$refused, ...$fetched), 'wordpress.com');
+        $this->adopt($body);
+
+        foreach ($refused as $src) {
+            $this->assertStringContainsString('src="' . $src . '"', $body, $src);
+        }
+        foreach ($fetched as $src) {
+            $this->assertStringNotContainsString('src="' . $src . '"', $body, $src);
+        }
+        $this->assertSame([], RecordingStreamWrapper::$opened);
+    }
+
+    public function testAnImageAddressWrittenWithAnAmpersandEntityIsRewrittenToo(): void
+    {
+        $this->markTestIncomplete('importImagesFromBodyHTML() looks for the decoded address (Migration.php:422): an address written with &amp; in the HTML is fetched but never found in the body, so the post keeps pointing at the other site and the file is stored for nothing');
+
+        $client = new MockHttpClient(static fn (): MockResponse => new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true)));
+        Webservice::useClient($client, $client);
+
+        $body = Migration::importImagesFromBodyHTML('<p><img src="https://a.wordpress.com/p.png?w=640&amp;h=480" alt="x"></p>', 'wordpress.com');
+        $ids = $this->adopt($body);
+
+        $this->assertCount(1, $ids);
+        $this->assertStringNotContainsString('wordpress.com', $body);
     }
 
     private function wxr(string $items): string

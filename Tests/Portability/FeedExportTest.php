@@ -87,6 +87,7 @@ final class FeedExportTest extends PortabilityTestCase
 
         self::$pngBytes = (string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true);
         self::$fileId = $this->storeFile(self::$pngBytes, 'pool.png', 'image/png');
+        $this->keepFile(self::$fileId); // the posts live until the class ends, and so does their file
 
         $article = new Entry();
         $article->title = self::TITLE;

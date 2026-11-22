@@ -135,6 +135,14 @@ abstract class PortabilityTestCase extends IdnoTestCase
         $this->fileIds[] = $id;
     }
 
+    /**
+     * Stops tearDown() removing a stored file: for one a test class keeps for its whole run, and removes itself.
+     */
+    protected function keepFile(string $id): void
+    {
+        $this->fileIds = array_values(array_filter($this->fileIds, static fn (string $kept): bool => $kept !== $id));
+    }
+
     private function removePath(string $path): void
     {
         if (is_dir($path)) {

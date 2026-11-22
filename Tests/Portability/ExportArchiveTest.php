@@ -336,13 +336,13 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertStringNotContainsString((string) Idno::site()->config()->site_secret, $text);
     }
 
-    public function testTodayTheSqlDumpHoldsEveryUsersPasswordHashAndActivityPubPrivateKey(): void
+    public function testTheSqlDumpKeepsEveryUsersPasswordHashAndActivityPubPrivateKeySoTheSiteCanBeRestored(): void
     {
-        // exported_data.sql is the stored documents as they are: a user's document holds the hash of their
-        // password and, with the ActivityPub plugin, the private key that signs what they federate. The JSON
-        // of the user (json/<id>.json) holds neither. The next change must decide what an archive may carry;
-        // this pins what it carries. (An archive is also what a new host is set up from, and this dump is
-        // the one file that can restore the site's private posts.)
+        // exported_data.sql is the stored documents as they are: it is the one file that restores the
+        // site, its users and its ActivityPub identity (a user's password hash, the key pair that signs what
+        // they federate) and its private posts. The archive is therefore as sensitive as a database backup,
+        // and is served to administrators only (AdminPortabilityPagesTest). The JSON of the user
+        // (json/<id>.json) is the ActivityStreams view and holds neither.
         $admin = $this->admin();
         $hash = (string) $admin->password;
         $this->assertNotSame('', $hash);
@@ -356,18 +356,6 @@ final class ExportArchiveTest extends PortabilityTestCase
         $json = (string) file_get_contents($path . '/json/' . $admin->getID() . '.json');
         $this->assertStringNotContainsString(substr(json_encode($hash, JSON_THROW_ON_ERROR), 1, -1), $json);
         $this->assertStringNotContainsString('PRIVATE KEY', $json);
-    }
-
-    public function testTheSqlDumpHoldsNoPasswordHashOrPrivateKey(): void
-    {
-        $this->markTestIncomplete('Migration::exportToFolder() writes the stored documents of every user into exported_data.sql (Migration.php:189-198, through exportRecords()): their password hashes and ActivityPub private keys are in it');
-
-        $admin = $this->admin();
-        $path = $this->export();
-
-        $dump = $this->dumpedDocuments($path);
-        $this->assertStringNotContainsString(substr(json_encode((string) $admin->password, JSON_THROW_ON_ERROR), 1, -1), $dump);
-        $this->assertStringNotContainsString('PRIVATE KEY', $dump);
     }
 
     // ------------------------------------------------------------------ the archive

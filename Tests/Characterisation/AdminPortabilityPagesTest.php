@@ -331,9 +331,9 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
 
     public function testTodayTheIncludePrivatePostsBoxOfTheAccountExportSendsZero(): void
     {
-        // The box's value is "0" (templates/default/account/export.tpl.php): ticking it posts allposts=0,
-        // which the page reads as false, so a member can never include their private posts from the page.
-        // The next change must flip this to the test below.
+        // The box's value is "0" in the default theme's templates/default/account/export.tpl.php (the rig serves
+        // it; Twenty26's sends 1): ticking it posts allposts=0, which the page reads as false, so a member can
+        // never include their private posts from the page. The next change must flip this to the test below.
         $member = $this->user();
         $mineHidden = $this->privateArticle($member, 'Member export box: private', '<p>Mine, private</p>');
         $before = $this->temporaryDirectories();
@@ -351,7 +351,7 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
 
     public function testTheIncludePrivatePostsBoxOfTheAccountExportIncludesPrivatePostsWhenTicked(): void
     {
-        $this->markTestIncomplete('templates/default/account/export.tpl.php gives the allposts checkboxes value="0", and the page reads allposts as a boolean (Pages\Account\Export\RSS and WXR), so ticking the box includes nothing more');
+        $this->markTestIncomplete('templates/default/account/export.tpl.php (the default theme; Twenty26\'s sends 1) gives the allposts checkboxes value="0", and the page reads allposts as a boolean (Pages\Account\Export\RSS and WXR), so ticking the box includes nothing more');
 
         $page = $this->site()->request('GET', 'account/export/', ['Cookie' => $this->logIn($this->user())]);
 
