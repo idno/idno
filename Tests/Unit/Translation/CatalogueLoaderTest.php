@@ -110,6 +110,73 @@ final class CatalogueLoaderTest extends TestCase
         $this->assertSame([], $loader->load(self::FIXTURES . '/regional', 'test', 'de_DE'));
     }
 
+    public function testALanguageOrAnotherRegionFindsTheFirstRegionalCatalogue(): void
+    {
+        $loader = new CatalogueLoader();
+
+        $this->assertSame('Bonjour !', $loader->load(self::FIXTURES . '/po', 'test', 'fr')['Hello!'], 'fr finds fr_FR');
+        $this->assertSame('Bonjour !', $loader->load(self::FIXTURES . '/po', 'test', 'fr_CA')['Hello!'], 'fr_CA finds fr_FR');
+        $this->assertTrue($loader->has(self::FIXTURES . '/po', 'test', 'fr'));
+        $this->assertTrue($loader->has(self::FIXTURES . '/po', 'test', 'fr_CA'));
+        $this->assertSame([], $loader->load(self::FIXTURES . '/po', 'test', 'de'), 'de finds nothing');
+        $this->assertFalse($loader->has(self::FIXTURES . '/po', 'test', 'de'));
+    }
+
+    public function testTheLookupOrderIsTheExactLocaleThenTheLanguageThenTheFirstRegionSorted(): void
+    {
+        $directory = $this->copyOf('po'); // fr_FR
+        $write = static function (string $locale, string $text) use ($directory): void {
+            mkdir($directory . '/' . $locale . '/LC_MESSAGES', 0777, true);
+            file_put_contents($directory . '/' . $locale . '/LC_MESSAGES/test.po', "msgid \"Hello!\"\nmsgstr \"" . $text . "\"\n");
+        };
+        $write('fr_BE', 'belge');
+        $loader = new CatalogueLoader();
+
+        $this->assertSame('belge', $loader->load($directory, 'test', 'fr')['Hello!'], 'the first region in sorted order');
+        $this->assertSame('belge', $loader->load($directory, 'test', 'fr_CA')['Hello!']);
+        $this->assertSame('Bonjour !', $loader->load($directory, 'test', 'fr_FR')['Hello!'], 'the exact locale first');
+
+        $write('fr', 'neutre');
+        CatalogueLoader::forget();
+        $this->assertSame('neutre', $loader->load($directory, 'test', 'fr_CA')['Hello!'], 'then the language');
+        $this->assertSame('neutre', $loader->load($directory, 'test', 'fr')['Hello!']);
+
+        $write('fr_CA', 'canadien');
+        CatalogueLoader::forget();
+        $this->assertSame('canadien', $loader->load($directory, 'test', 'fr_CA')['Hello!'], 'the exact locale before the language');
+    }
+
+    public function testAHostileDirectoryNameIsIgnored(): void
+    {
+        $directory = $this->copyOf('po');
+        rename($directory . '/fr_FR', $directory . '/fr_FR.bak');
+        foreach (['fr_a b', 'fr_$(id)', "fr_x\ny", 'fr_', 'fr__FR', 'fr_ABCDEFGHIJ'] as $name) {
+            @mkdir($directory . '/' . $name . '/LC_MESSAGES', 0777, true);
+            @copy($directory . '/fr_FR.bak/LC_MESSAGES/test.po', $directory . '/' . $name . '/LC_MESSAGES/test.po');
+        }
+        $loader = new CatalogueLoader();
+
+        $this->assertSame([], $loader->load($directory, 'test', 'fr'));
+        $this->assertFalse($loader->has($directory, 'test', 'fr_CA'));
+    }
+
+    public function testAPluralEntryKeepsOnlyItsSingularTranslation(): void
+    {
+        $po = (new CatalogueLoader())->load(self::FIXTURES . '/plural', 'test', 'fr_FR');
+        $mo = (new CatalogueLoader())->load(self::FIXTURES . '/plural-mo', 'test', 'fr_FR');
+
+        foreach ([$po, $mo] as $strings) {
+            $this->assertSame('%d fichier', $strings['%d file']);
+            $this->assertArrayNotHasKey('%d file|%d files', $strings);
+            $this->assertArrayNotHasKey('%d files', $strings);
+            $this->assertArrayNotHasKey('Fuzzy one', $strings, 'a fuzzy entry is not a translation');
+            $this->assertSame('Ceci | cela', $strings['This | that'], 'a bar in an ordinary translation is kept');
+            $this->assertSame('Bonjour|Salut', $strings['Pipe|source'] ?? null, 'and a bar in an ordinary source string');
+        }
+        $this->assertSame('Ligne un et deux', $po['Multi line'], 'continuation lines are joined');
+        $this->assertSame("Dites \"salut\"\t", $po['Escapes']);
+    }
+
     public function testTheExactLocaleWinsOverItsLanguage(): void
     {
         $directory = $this->copyOf('regional');
@@ -143,6 +210,20 @@ final class CatalogueLoaderTest extends TestCase
         $this->assertStringNotContainsString($directory, $log[0][1], 'the message names the file, not the server path');
     }
 
+    public function testATruncatedOrLyingMoIsEmptyAndWarns(): void
+    {
+        $valid = (string) file_get_contents(self::FIXTURES . '/mo/fr_FR/LC_MESSAGES/test.mo');
+        $lying = substr_replace($valid, pack('V', 0xFFFFFF), 24 + 4, 4); // the first string's offset points past the end
+        foreach (['truncated' => substr($valid, 0, 40), 'tiny' => 'abc', 'lying offset' => $lying, 'a huge count' => substr_replace($valid, pack('V', 0x7FFFFFFF), 8, 4)] as $name => $bytes) {
+            [$loader, $log] = self::loader();
+            $directory = $this->copyOf('malformed');
+            file_put_contents($directory . '/fr_FR/LC_MESSAGES/test.mo', $bytes);
+
+            $this->assertSame([], $loader->load($directory, 'test', 'fr_FR'), $name);
+            $this->assertCount(1, $log, $name);
+        }
+    }
+
     public function testAMalformedPoDoesNotThrow(): void
     {
         $directory = $this->copyOf('po');
@@ -166,7 +247,7 @@ final class CatalogueLoaderTest extends TestCase
         copy($directory . '/fr_FR/LC_MESSAGES/test.po', $directory . '/escape/LC_MESSAGES/test.po');
 
         $loader = new CatalogueLoader();
-        foreach (['../escape', 'fr_FR/../escape', "fr_FR\0", 'fr_FR/', '', '.', '..', 'fr FR'] as $locale) {
+        foreach (['../escape', 'fr_FR/../escape', "fr_FR\0", "fr_FR\n", 'fr_FR/', '', '.', '..', 'fr FR'] as $locale) {
             $this->assertSame([], $loader->load($directory . '/fr_FR', 'test', $locale), json_encode($locale));
             $this->assertSame([], $loader->load($directory, 'test', $locale), json_encode($locale));
         }

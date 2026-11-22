@@ -66,8 +66,7 @@
         "symfony/mime": "^8.0",
         "symfony/messenger": "^8.0",
         "symfony/doctrine-messenger": "^8.0",
-        "symfony/mailer": "^8.0",
-        "symfony/translation": "^8.0"
+        "symfony/mailer": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,

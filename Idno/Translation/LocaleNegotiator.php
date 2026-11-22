@@ -13,7 +13,7 @@ namespace Idno\Translation;
 final class LocaleNegotiator
 {
     /** What a usable locale looks like. */
-    public const PATTERN = '/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/';
+    public const PATTERN = '/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*\\z/';
 
     /** No real locale is longer; a value over it is not one. */
     private const MAX_LENGTH = 35;
@@ -56,18 +56,29 @@ final class LocaleNegotiator
     }
 
     /**
-     * One locale value in the form a catalogue directory has: any `;q=` removed, `-` as `_`, the language
-     * lower-cased; $default when it is not a locale.
+     * One locale value in the form a catalogue directory has: an encoding (`.UTF-8`) or modifier (`@latin`)
+     * and any `;q=` removed, `-` as `_`, the language lower-cased, a two-letter region upper-cased
+     * (`fr-fr` is `fr_FR`) and a four-letter script title-cased (`zh-hant` is `zh_Hant`), any other subtag as
+     * given; $default when it is not a locale.
      */
     public static function normalise(string $value, string $default): string
     {
-        $value = trim(explode(';', $value, 2)[0]);
+        $value = trim(explode(';', $value, 2)[0], " \t");
+        $value = preg_replace('/[.@].*$/s', '', $value) ?? '';
         if ($value === '' || strlen($value) > self::MAX_LENGTH) {
             return $default;
         }
-        $value = str_replace('-', '_', $value);
-        $parts = explode('_', $value, 2);
-        $value = strtolower($parts[0]) . (isset($parts[1]) ? '_' . $parts[1] : '');
+        $parts = explode('_', str_replace('-', '_', $value));
+        foreach ($parts as $i => $part) {
+            if ($i === 0) {
+                $parts[$i] = strtolower($part);
+            } elseif (preg_match('/^[A-Za-z]{2}\z/', $part) === 1) {
+                $parts[$i] = strtoupper($part);
+            } elseif (preg_match('/^[A-Za-z]{4}\z/', $part) === 1) {
+                $parts[$i] = ucfirst(strtolower($part));
+            }
+        }
+        $value = implode('_', $parts);
 
         return preg_match(self::PATTERN, $value) === 1 ? $value : $default;
     }

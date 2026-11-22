@@ -133,8 +133,13 @@ final class LanguageAdapterTest extends TestCase
         $this->assertSame('Hello!', $language->_('Hello!'));
     }
 
+    /**
+     * Only a smoke check where fr_FR.UTF-8 is not installed (setlocale() would fail silently there): that no call
+     * is made is pinned by NoGettextTest::testTheTranslationCodeNeverChangesTheProcessLocaleOrEnvironment.
+     */
     public function testConstructingLanguageDoesNotChangeTheProcessLocale(): void
     {
+        setlocale(LC_ALL, 'C');
         $locale = setlocale(LC_ALL, '0');
         $lang = getenv('LANG');
         $language = getenv('LANGUAGE');
@@ -171,8 +176,15 @@ final class LanguageAdapterTest extends TestCase
     {
         $this->loggedOnWithLanguage('../../etc');
 
-        $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/', (new Language())->getLanguage());
-        $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/', (new Language('../../etc'))->getLanguage());
+        $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*\\z/', (new Language())->getLanguage());
+        $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*\\z/', (new Language('../../etc'))->getLanguage());
+    }
+
+    public function testAnExplicitLocaleIsNormalisedLikeAHeader(): void
+    {
+        $this->assertSame('fr_FR', (new Language('fr-fr'))->getLanguage());
+        $this->assertSame('en_US', (new Language('en_US.UTF-8'))->getLanguage());
+        $this->assertSame('Bonjour !', self::language('fr-fr')->get('Hello!'));
     }
 
     public function testTheBrowsersLanguageIsTheDefault(): void

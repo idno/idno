@@ -2458,7 +2458,7 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
 extension: `ext-gettext` is not required, no gettext function (`gettext`, `dgettext`, `ngettext`,
 `bindtextdomain`, `textdomain`, ...) is called anywhere, and `Language` calls neither `putenv()` nor
 `setlocale()`, so the process's locale is never changed (`Tests/Unit/Translation/NoGettextTest` finds a gettext
-call by tokens in `Idno/`, `IdnoPlugins/`, `ConsolePlugins/`, `Themes/` and `templates/`, and reports a bare `_()`, which is
+call by tokens (it does not see `call_user_func('gettext')` and the like, which a second check of string literals does, nor a `setlocale()` or `putenv()` call in the translation code, which a third forbids) in `Idno/`, `IdnoPlugins/`, `ConsolePlugins/`, `Themes/` and `templates/`, and reports a bare `_()`, which is
 PHP's alias of `gettext()`, as well; `Idno\Core\Language::_()` is a method and is not one). Nothing in the repository
 depended on the process locale: the one `strftime()` (IndiePub's account template) formats digits only. Code that
 needs a locale sets it itself.
@@ -2466,19 +2466,30 @@ needs a locale sets it itself.
 - `Idno\Translation\CatalogueLoader::load($directory, $domain, $locale)` (built with new; `Idno/Translation/` is NOT in
   `CodeFingerprint::SERVICE_DIRECTORIES` and `config/` references nothing in it: it is a helper of the legacy
   `Language`, so it is not a service; it depends on neither `Idno\Legacy` nor `Idno::site()`) reads
-  `<directory>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`, with `symfony/translation`'s `PoFileLoader` and
-  `MoFileLoader` into source string => translation. `fr_CA` falls back to `fr` when `fr_CA` has no file; a
-  missing directory or file is `[]`; an empty translation and the header are left out; plural forms are ignored (nothing calls a
-  plural lookup). A file that cannot be parsed never throws: `[]` and ONE warning that names the file as
-  `<locale>/LC_MESSAGES/<file>` (never the server's path). The locale (`LocaleNegotiator::PATTERN`) and the domain
-  (`[A-Za-z0-9_-]{1,64}`) are validated BEFORE a path is built from them. A catalogue is read the first time it is looked
+  `<directory>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`, into source string => translation, with two small readers of
+  its own (no extension and no library: `symfony/translation` is not a dependency). Which locale directory: the exact locale
+  (`fr_CA`), then the bare language (`fr`), then the FIRST directory of that catalogue named `<language>_*` in sorted order
+  that has the domain (`fr_FR`), so a visitor asking for `fr` or `fr_CA` gets `fr_FR` when that is all there is (a deliberate
+  improvement over gettext). Those directory names come from the catalogue's own directory, each is checked against
+  `LocaleNegotiator::PATTERN` before use, and the listing is made once per (directory, language) for the process;
+  `has()` and `load()` use the same lookup. A missing directory or file is `[]`; an empty translation, a fuzzy entry and the
+  header are left out. Plural forms are ignored: an entry with `msgid_plural` keeps its SINGULAR translation (`msgstr[0]`) under the
+  singular source string and nothing else (in a `.mo`, the first form of a plural). That is why the formats are read here:
+  Symfony's loaders join the plural forms into one `singular|plural` key and value, which cannot be told from an ordinary
+  string containing a bar. A file that cannot be read (bad magic, truncated, an offset past the end, over 16 MiB) never throws: `[]`
+  and ONE warning that names the file as `<locale>/LC_MESSAGES/<file>` (never the server's path). The locale and the domain
+  (`[A-Za-z0-9_-]{1,64}`) are validated (patterns end in `\z`, which `$` does not: `$` matches before a trailing newline)
+  BEFORE a path is built from them. A catalogue is read the first time it is looked
   up and kept for the process (a static array keyed by the file, its size and its modification time;
   `CatalogueLoader::forget()` for tests); `has()` only looks for the file. Parsing 2,000 strings takes about 2 ms, so there is no disk cache; do not add one without a
   measurement.
 - `Idno\Translation\LocaleNegotiator` (pure): `fromAcceptLanguage($header, $default = 'en_US')` takes the header up to
-  its first comma, removes `;q=`, turns `-` into `_` and lower-cases the language; `fromEnvironment($env, $default)` reads
+  its first comma (ignored when over 1000 bytes), removes `;q=`, an encoding (`.UTF-8`) and a modifier (`@latin`), turns `-` into
+  `_`, lower-cases the language, upper-cases a two-letter region (`fr-fr` is `fr_FR`), title-cases a four-letter script
+  (`zh-hant` is `zh_Hant`) and keeps any other subtag as given (`normalise()` is that rule for one value; an explicit locale
+  given to `Language` and the console's environment go through it too); `fromEnvironment($env, $default)` reads
   `LANGUAGE` (its first entry) then `LANG` without `.encoding` or `@modifier`. The result matches
-  `/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/` (at most 35 bytes) or is the default (`*`, `C`, `POSIX`, a header
+  `/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*\z/` (at most 35 bytes) or is the default (`*`, `C`, `POSIX`, a header
   with a line break or `../`, a 300-byte value). The locale comes from a request header, so this is what keeps it out of a path.
 - `Language::__construct($language = null)`: an explicit locale, else the logged-in user's `language` attribute (nothing
   in Idno sets it; the early `return` that left the object half built is gone), else the browser's (the console's, under
@@ -2486,18 +2497,18 @@ needs a locale sets it itself.
   `getTranslation()`, `register()`, `getLanguage()` and `detectBrowserLanguage()` keep their signatures; lookup is the same: registration order, the first translation
   whose string is non-empty and differs from the key, else the key. `register()` keeps a translation only if `canProvide()` is true for the locale.
 - `Idno\Core\GetTextTranslation($domain = 'idno', $path = '')` keeps its name for third-party plugins: `canProvide($locale)` is
-  true when `CatalogueLoader::has()` finds a catalogue for the locale (so an `en_US` request reads no file), and the
-  catalogue is read at the first `getString()`. The core registration (`Idno::init()`) is domain `idno`, path
+  true when `CatalogueLoader::has()` finds a catalogue for the locale (an `en_US` request reads a file only where
+  one exists for it, as `IdnoPlugins/Status/languages/en_US/` does), and the catalogue is read at the first `getString()`, once per process. The core registration (`Idno::init()`) is domain `idno`, path
   `<root>/languages/`, matching `build-lang core`, which writes `languages/source/idno.pot` (`build-lang` and `PotGenerator` are
   unchanged). Plugins register `new GetTextTranslation('<plugin>', __DIR__ . '/languages/')`. `ArrayKeyTranslation` subclasses work as before.
 - `Idno\Storage\QuoteNormaliser::normalise()` (static, pure, in `$excludes`) is what `Language::uncurlQuotes()` used to
   hold, byte for byte (the search text of every record goes through it); the record store factory and the MongoDB
   import call it directly.
-- `symfony/translation` is installed for its loaders only. FrameworkBundle would enable its own translator once the
-  package is there, so `config/packages/framework.php` switches `translator` off (pinned by `Tests/Kernel/TranslatorDisabledTest`).
+- `config/packages/framework.php` switches FrameworkBundle's `translator` off (it would be enabled by the package alone if
+  something installs `symfony/translation`; `Idno\Core\Language` is the site's translator), pinned by `Tests/Kernel/TranslatorDisabledTest`.
 - Tests: `Tests/Unit/Translation/` (`LocaleNegotiatorTest`, `CatalogueLoaderTest` with the fixtures in `fixtures/`, `NoGettextTest`),
   `Tests/Unit/Storage/QuoteNormaliserTest`, `Tests/Kernel/LanguageAdapterTest`, `Tests/Kernel/TranslatorDisabledTest`,
-  `Tests/Characterisation/TranslationTest` (an `Accept-Language: fr-FR` request draws IdnoPlugins/Event's French string) and `Tests/Core/LanguageTest`.
+  `Tests/Characterisation/TranslationTest` (`Accept-Language` `fr-FR`, `fr`, `fr-fr` and `fr-CA` draw IdnoPlugins/Event's French string) and `Tests/Core/LanguageTest`.
 
 #### The file store
 

@@ -15,7 +15,27 @@ final class LocaleNegotiatorTest extends TestCase
         $this->assertSame('de', LocaleNegotiator::fromAcceptLanguage('de'));
         $this->assertSame('de_DE', LocaleNegotiator::fromAcceptLanguage('de-DE;q=0.7'));
         $this->assertSame('zh_Hant_TW', LocaleNegotiator::fromAcceptLanguage('zh-Hant-TW, en'));
-        $this->assertSame('fr_FR', LocaleNegotiator::fromAcceptLanguage('FR-FR'), 'the language is lower-cased, the region is kept');
+        $this->assertSame('fr_FR', LocaleNegotiator::fromAcceptLanguage('FR-FR'));
+    }
+
+    public function testTheRegionAndScriptAreNormalised(): void
+    {
+        $this->assertSame('fr_FR', LocaleNegotiator::fromAcceptLanguage('fr-fr'), 'a two-letter region is upper-cased');
+        $this->assertSame('pt_BR', LocaleNegotiator::fromAcceptLanguage('PT-br,pt;q=0.8'));
+        $this->assertSame('zh_Hant', LocaleNegotiator::fromAcceptLanguage('zh-hant'), 'a four-letter script is title-cased');
+        $this->assertSame('zh_Hant_TW', LocaleNegotiator::fromAcceptLanguage('ZH-HANT-tw'));
+        $this->assertSame('es_419', LocaleNegotiator::fromAcceptLanguage('es-419'), 'any other subtag is kept as given');
+        $this->assertSame('en_US_posix', LocaleNegotiator::fromAcceptLanguage('en-US-posix'));
+    }
+
+    public function testAnExplicitLocaleAndTheEnvironmentGoThroughTheSameRule(): void
+    {
+        $this->assertSame('fr_FR', LocaleNegotiator::normalise('fr-fr', 'en_US'));
+        $this->assertSame('en_US', LocaleNegotiator::normalise('en_US.UTF-8', 'x'), 'an encoding is removed');
+        $this->assertSame('sr_RS', LocaleNegotiator::normalise('sr_RS@latin', 'x'), 'a modifier is removed');
+        $this->assertSame('x', LocaleNegotiator::normalise('../../etc', 'x'));
+        $this->assertSame('fr_FR', LocaleNegotiator::fromEnvironment(['LANG' => 'fr_fr.UTF-8'], 'en_US'));
+        $this->assertSame('zh_Hant', LocaleNegotiator::fromEnvironment(['LANGUAGE' => 'zh-hant:en'], 'en_US'));
     }
 
     /**
@@ -34,6 +54,7 @@ final class LocaleNegotiatorTest extends TestCase
         yield 'a very long locale' => ['en' . str_repeat('-US', 100)];
         yield 'a leading comma' => [',fr'];
         yield 'one letter' => ['f'];
+        yield 'a trailing newline' => ["fr_FR\n"];
     }
 
     /**
@@ -48,7 +69,7 @@ final class LocaleNegotiatorTest extends TestCase
     public function testTheResultAlwaysMatchesThePattern(): void
     {
         foreach (['fr-FR', 'x', 'abcd', 'en-', '-fr', 'en_US_POSIX', "fr\n", ' ', 'en us', 'zh-Hans-CN-x-private'] as $header) {
-            $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/', LocaleNegotiator::fromAcceptLanguage($header), json_encode($header));
+            $this->assertMatchesRegularExpression('/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*\\z/', LocaleNegotiator::fromAcceptLanguage($header), json_encode($header));
         }
     }
 

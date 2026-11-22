@@ -1,0 +1,27 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "%d file"
+msgid_plural "%d files"
+msgstr[0] "%d fichier"
+msgstr[1] "%d fichiers"
+
+msgid "This | that"
+msgstr "Ceci | cela"
+
+msgid "Pipe|source"
+msgstr "Bonjour|Salut"
+
+msgid "Multi line"
+msgstr ""
+"Ligne un "
+"et deux"
+
+msgid "Escapes"
+msgstr "Dites \"salut\"\t"
+
+#, fuzzy
+msgid "Fuzzy one"
+msgstr "Pas sûr"

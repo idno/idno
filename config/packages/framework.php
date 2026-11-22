@@ -22,7 +22,8 @@ return static function (ContainerConfigurator $container): void {
         // stored settings); FrameworkBundle must not register a mailer that needs a configured DSN.
         'mailer' => ['enabled' => false],
         // Idno\Core\Language is the site's translator (catalogues read by Idno\Translation\CatalogueLoader,
-        // which uses only symfony/translation's file loaders); the package alone would enable a second one.
+        // which reads .po and .mo files itself); if a package that brings symfony/translation is ever installed it would
+        // enable a second one.
         'translator' => ['enabled' => false],
     ]);
 };

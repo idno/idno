@@ -8,8 +8,8 @@ use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 
 /**
- * symfony/translation is installed for its catalogue loaders only. Idno\Core\Language is the site's
- * translator, so FrameworkBundle must not register a second one (it would be enabled by the package alone).
+ * Idno\Core\Language is the site's translator (it reads .po and .mo files itself), so FrameworkBundle must
+ * not register a second one: it would be enabled by the symfony/translation package alone, should something install it.
  */
 final class TranslatorDisabledTest extends TestCase
 {

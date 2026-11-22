@@ -25,6 +25,16 @@ namespace Tests\Characterisation {
             $this->assertStringContainsString('Evenements', $r->body);
         }
 
+        public function testALanguageOnlyOrALowerCaseOrAnotherRegionFindsTheFrenchCatalogue(): void
+        {
+            foreach (['fr', 'fr-fr', 'FR-FR', 'fr-CA', 'fr-CA,fr;q=0.9'] as $header) {
+                $r = $this->page($header);
+
+                $this->assertSame(200, $r->status, $header);
+                $this->assertStringContainsString('Evenements', $r->body, $header);
+            }
+        }
+
         public function testARequestWithoutTheHeaderDrawsTheEnglishOne(): void
         {
             $r = $this->page(null);
