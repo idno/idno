@@ -10,6 +10,7 @@ namespace Tests\Characterisation {
     class MicropubTest extends CharacterisationTestCase
     {
 
+        private const UNAUTHORIZED = "{\n    \"error\": \"unauthorized\",\n    \"error_description\": \"A valid access token is required\",\n    \"messages\": []\n}";
         private const FORBIDDEN = "{\n    \"error\": \"forbidden\",\n    \"error_description\": \"\",\n    \"messages\": []\n}";
 
         private function auth(): array
@@ -96,24 +97,30 @@ namespace Tests\Characterisation {
             $this->assertCreatedAndServed($r, $marker);
         }
 
-        public function testCreateWithoutTokenIsForbiddenAndCreatesNothing(): void
+        public function testCreateWithoutTokenIsUnauthorizedAndCreatesNothing(): void
         {
             $marker = $this->marker('micropub-anon');
             $r      = $this->site()->request('POST', 'micropub/endpoint', [], ['h' => 'entry', 'content' => $marker]);
 
-            $this->assertSame(403, $r->status);
-            $this->assertSame(self::FORBIDDEN, $r->body);
+            // A POST with no access token (or one that matches nobody) is "unauthorized", 401: the endpoint
+            // answers a POST only for an API request, and no longer asks the session. It used to be a
+            // "forbidden" 403 from the gatekeeper, which a logged-in browser's cookie could also pass.
+            $this->assertSame(401, $r->status);
+            $this->assertSame(self::UNAUTHORIZED, $r->body);
             $this->assertNull($r->header('Location'));
             $this->assertFalse($this->statusExists($marker));
         }
 
-        public function testCreateWithInvalidTokenIsForbiddenAndCreatesNothing(): void
+        public function testCreateWithInvalidTokenIsUnauthorizedAndCreatesNothing(): void
         {
             $marker = $this->marker('micropub-invalid');
             $r      = $this->site()->request('POST', 'micropub/endpoint', ['Authorization' => 'Bearer nope'], ['h' => 'entry', 'content' => $marker]);
 
-            $this->assertSame(403, $r->status);
-            $this->assertSame(self::FORBIDDEN, $r->body);
+            // A POST with no access token (or one that matches nobody) is "unauthorized", 401: the endpoint
+            // answers a POST only for an API request, and no longer asks the session. It used to be a
+            // "forbidden" 403 from the gatekeeper, which a logged-in browser's cookie could also pass.
+            $this->assertSame(401, $r->status);
+            $this->assertSame(self::UNAUTHORIZED, $r->body);
             $this->assertNull($r->header('Location'));
             $this->assertFalse($this->statusExists($marker));
         }

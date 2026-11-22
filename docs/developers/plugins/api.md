@@ -6,7 +6,7 @@ All pages that are accessible via the web interface are also API endpoints, so f
 POST request to ```/status/edit``` with the same form values as that submitted when submitting the form via your web browser, you will create a new 
 status update.
 
-As a plugin author, every [page](/developers/plugins/pages/) you create extending ```\Idno\Common\Page``` and exposing within your plugin will automatically be turned into an API endpoint. Be sure to read up on [how to accept variables](forms.md#accepting-input-from-html-forms-links-or-api-calls).
+As a plugin author, every [page](pages.md) you create extending ```\Idno\Common\Page``` and exposing within your plugin will automatically be turned into an API endpoint. Be sure to read up on [how to accept variables](forms.md#accepting-input-from-html-forms-links-or-api-calls).
 
 !!! note "Note"
     Many pages report some basic information about them by making GET requests, so for example, making a GET request to the same ```/status/edit``` endpoint will return, among other things, available syndication methods and the type of object being created.
@@ -28,8 +28,8 @@ curl -s \
      -X GET \
      -H "Content-Type: application/x-www-form-urlencoded" \
      -H "Accept: application/json" \
-     -H "X-KNOWN-USERNAME: *USERNAME*" \
-     -H "X-KNOWN-SIGNATURE: *SIGNATURE*" \
+     -H "X-IDNO-USERNAME: *USERNAME*" \
+     -H "X-IDNO-SIGNATURE: *SIGNATURE*" \
      --data-urlencode "body=this is some text" -G \
     http://yoursite.com/path/to/page
 ```
@@ -37,16 +37,19 @@ curl -s \
 ## Authenticated requests
 
 Almost all requests that you make will require some sort of access credentials, and so must be signed. 
-The default method for doing this is through HTTP header variables, however Idno also includes a built in [OAuth2 server](https://github.com/mapkyca/KnownOAuth2)).
+The default method for doing this is through HTTP header variables. The bundled IndiePub plugin also provides IndieAuth and a Micropub endpoint (```/micropub/endpoint```) for clients that use bearer tokens.
 
 The headers are:
 
-* X-KNOWN-USERNAME: the user's username.
-* X-KNOWN-SIGNATURE: a HMAC signature, computed with sha256, using the user's API key (available from your user account page under "Tools and Apps" - ```/account/settings/tools/```), and the URI you're requesting.
+* X-IDNO-USERNAME: the user's username (or email address).
+* X-IDNO-SIGNATURE: a HMAC signature, computed with sha256, using the user's API key (available from your user account page under "Tools and Apps" - ```/account/settings/tools/```), and the URI you're requesting.
+
+!!! note "Note"
+    The older ```X-KNOWN-USERNAME``` and ```X-KNOWN-SIGNATURE``` headers are still accepted if the ```X-IDNO-*``` headers are not sent.
 
 ### Computing the HMAC signature
 
-A signature is computed using the uri (path of the endpoint minus the domain and scheme), and using the user's API key, the result is then base64 encoded. Here's an example of how to do this in PHP:
+A signature is computed using the request URI (the path of the endpoint, plus the query string if there is one, minus the domain and scheme), and using the user's API key, the result is then base64 encoded. Here's an example of how to do this in PHP:
 
 ```
 $signature = base64_encode(
@@ -71,8 +74,8 @@ curl -s \
      -X POST \
      -H "Content-Type: application/x-www-form-urlencoded" \
      -H "Accept: application/json" \
-     -H "X-KNOWN-USERNAME: $USER" \
-     -H "X-KNOWN-SIGNATURE: $HMAC" \
+     -H "X-IDNO-USERNAME: $USER" \
+     -H "X-IDNO-SIGNATURE: $HMAC" \
      --data-urlencode "body=this is some text" \
     http://yoursite.com/status/edit
 ```
@@ -92,8 +95,8 @@ curl -s \
      -X POST \
      -H "Content-Type: application/x-www-form-urlencoded" \
      -H "Accept: application/json" \
-     -H "X-KNOWN-USERNAME: $USER" \
-     -H "X-KNOWN-SIGNATURE: $HMAC" \
+     -H "X-IDNO-USERNAME: $USER" \
+     -H "X-IDNO-SIGNATURE: $HMAC" \
      --data-urlencode "body=this is some text" \
      --data-urlencode "title=Entry title" \
     http://yoursite.com/entry/edit
@@ -116,8 +119,8 @@ curl -s \
      -X POST \
      -H "Content-Type: multipart/form-data" \
      -H "Accept: application/json" \
-     -H "X-KNOWN-USERNAME: $USER" \
-     -H "X-KNOWN-SIGNATURE: $HMAC" \
+     -H "X-IDNO-USERNAME: $USER" \
+     -H "X-IDNO-SIGNATURE: $HMAC" \
      -F "body=this is some text" \
      -F "title=Photo title" \
      -F "photo=@/path/to/photo.jpg;filename=photo.jpg;type=image/jpeg" \

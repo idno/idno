@@ -7,7 +7,7 @@ Idno is an open source application. That means that you have the following freed
 * The freedom to redistribute copies so you can help your neighbor.
 * The freedom to distribute copies of your modified versions to others. By doing this you can give the whole community a chance to benefit from your changes. Access to the source code is a precondition for this.
 
-There were originally defined by [Richard Stallman of the Free Software Foundation](https://www.gnu.org/philosophy/free-sw.html).
+These were originally defined by [Richard Stallman of the Free Software Foundation](https://www.gnu.org/philosophy/free-sw.html).
 
 ## Contributing to Idno
 
@@ -28,8 +28,8 @@ As such, we have an [anti-harassment policy](harassment.md) that covers all our 
 is required to make Idno thrive, so we're dedicated to making it as welcoming as possible.
 
 If you have any concerns about any activity in the community, you shouldn't hesitate to
-[get in touch with a member of the team](harassment.md##get-in-touch-with-the-core-team). We promise to deal with it
-sensitively and discretely.
+[get in touch with a member of the team](harassment.md#get-in-touch-with-the-core-team). We promise to deal with it
+sensitively and discreetly.
 
 ## License
 

@@ -10,7 +10,8 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
     "tailwindcss": "^4.0.0",
-    "vite": "^8.3.7"
+    "terser": "^5.51.4",
+    "vite": "^8.3.8"
   },
   "dependencies": {
     "@tiptap/core": "^3.34.0",
@@ -21,6 +22,6 @@
     "@tiptap/pm": "^3.34.0",
     "@tiptap/starter-kit": "^3.34.0",
     "alpinejs": "^3.17.5",
-    "lucide": "^1.71.0"
+    "lucide": "^1.74.0"
   }
 }

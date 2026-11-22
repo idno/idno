@@ -1178,6 +1178,11 @@ other new code may.
     CI's servers and tests (`http://localhost/`), the console (the same `config.ini`), and a subprocess
     server a test starts on another port (its `IDNO_URL`). Neither the wrapper nor the exemption exists
     outside the test container: both are in `Tests/` and wired only in `config/services_test.php`.
+  - A plugin's test that needs a remote server to answer (the ActivityPub inbox fetching a sender's actor
+    document for its key) installs mock clients with `Webservice::useClient()` and records what they were
+    sent: `IdnoPlugins/ActivityPub/Tests/ServesTestActor` is the trait the inbox signature tests use. Tests
+    that post to the rig itself from outside the site (a logged-in browser with a cookie file, a multipart
+    upload) may use PHP's curl functions directly, as `InboxRequestTest` and `MicropubEndpointAuthTest` do.
 - `Idno\Core\Webservice` (the legacy static client, ~40 call sites) sends its requests through those
   clients; no `curl_*` call is left in it. New code injects `HttpClientInterface` (`$remoteClient` for a
   URL a remote party supplied) instead of calling it. Pinned by `Tests/Kernel/WebserviceAdapterTest`
@@ -2431,7 +2436,7 @@ The container's services and the legacy filesystem:
   `Idno\Files\FileSystem` and `File` remain the bases.
 - The file page (`Idno\Pages\File\View`) positions a stream for a range request with
   `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3), and
-  reads the range with `View::readRange()`, which stops at the end of the stream or on an empty or
+  reads the range's bytes (both positions inclusive) with `View::readRange()`, which stops at the end of the stream or on an empty or
   failed read (a stream shorter than the stored size never makes the page wait).
   `FilesystemCache`, the Purifier cache and the Twig cache never use an `s3://` upload path as a
   directory: they use the temporary directory instead.
@@ -2441,7 +2446,7 @@ The container's services and the legacy filesystem:
   the directories under the site's host and wrote under the configured name); a file id that is not 24
   or 32 hex digits is not found, whatever is on disk.
 - Tests: `Tests/Kernel/LegacyFileSystemTest` (a temporary upload directory of its own),
-  `Tests/Characterisation/FileServingTest` (the file page over HTTP, range quirks pinned),
+  `Tests/Characterisation/FileServingTest` (the file page over HTTP, a range served with exactly its bytes),
   `Tests/Core/FilesystemTest`.
 
 #### Importing a MongoDB site
@@ -2951,11 +2956,39 @@ the CLI installer no longer writes one.
   publish status counts as published. Counts (`countObjects()`, `EntityRepository::count()`) do
   NOT apply this rule: drafts the user cannot see are counted.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
+- What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
+  unless its signature covers `(request-target)`, `host` and `date`, and, for any method
+  but GET and HEAD, `digest`. Each of those headers must be present; the `Digest` must be
+  the SHA-256 or SHA-512 of the body (RFC 3230: several digests and any letter case are
+  accepted); and the `Date` must be no more than twelve hours old (`MAX_AGE`) and no more
+  than an hour ahead (`MAX_CLOCK_SKEW`), the window Mastodon uses. Mastodon, GoToSocial,
+  Pleroma, Akkoma and Misskey sign all four on a delivery. Don't relax this: a signature
+  proves only the headers it lists, so without `digest` the body is unsigned. Deliveries
+  are not remembered, so one can be replayed while its `Date` is in the window; handlers
+  must be safe to run twice. Only draft-cavage signatures are understood, not RFC 9421.
+  `IdnoPlugins/ActivityPub/Tests/HTTPSignatureCoverageTest.php` checks this.
 - CSRF tokens on all form POSTs to legacy pages (inbox endpoints bypass via `post()` override).
   New-style controllers have no authentication or CSRF protection yet (see "Adding a route");
   the upgrade step `POST /_upgrade/step` changes state without either, under the conditions
   stated there (no input selects what it does, nothing while the schema gate is open, bounded and
   serialised work, `no-store`, a same-origin path redirect, encoded output)
+- Pages that override `post()`: `Page::post()` is what checks the form token, so a page
+  that overrides it has no CSRF protection of its own and must not act on a session
+  cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
+  answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
+  sets after an access token (`Authorization: Bearer` or the `access_token` field) has
+  matched, and core sets after a signed API request; otherwise it answers 401. The
+  IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
+  on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
+  over HTTP with a logged-in browser.
+- A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
+  overrides `post()` itself and authenticates the request another way. Never get the same
+  effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
+  credential (an API signature or an access token): the flag turns off the token check in
+  `Page::post()` for whichever page the request reaches, and the session of the visitor who
+  sent it is destroyed when the request ends. In particular, don't decide what a request is
+  for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
+  `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - HTML sanitization via HTMLPurifier
@@ -3022,6 +3055,41 @@ the CLI installer no longer writes one.
   `Page::exception()` logs them, and the shells add them to the response only when `debug`
   is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
   `Tests/Core/fixtures/exception_response.php` in its own PHP process.
+- JSONP is readable by other sites: a page drawn with the `jsonp` template type
+  (`templates/jsonp/shell.tpl.php`) is a script that any site can load, and the browser may
+  send the session cookie with that request. Never put a secret in the template variables
+  of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
+  signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
+  `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+- IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
+  `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
+  build one from `rand()`, `mt_rand()`, `uniqid()` or the time. Authorization codes are
+  issued by `Auth::issueCode()` and redeemed by `Auth::verifyCode()`, which accepts a code
+  once and for `Auth::CODE_LIFETIME` (ten minutes, the most the IndieAuth specification
+  allows), and spends it even when the rest of the request is wrong. Access tokens are
+  issued by `Pages\IndieAuth\Token::issueToken()` and looked up by
+  `Token::findUserForToken()`. Both are stored as the keys of `indieauth_codes` and
+  `indieauth_tokens` on the user, in plain text, and are matched with `hash_equals()`
+  (`Auth::matchingKey()`). Tokens do not expire, and tokens issued by earlier versions
+  (32 hex characters) remain valid.
+- IndieAuth PKCE and scope: a client may send `code_challenge` with
+  `code_challenge_method=S256` (`Auth::challengeError()` refuses `plain` and malformed
+  challenges). The challenge is stored with the code, and `Auth::verifyCode()` then
+  requires the matching `code_verifier`. A client that sends no challenge is still
+  accepted, but a `code_verifier` for a code issued without a challenge is refused. The
+  token endpoint issues no token for a code granted with an empty scope; such a code can
+  only be confirmed at the authorization endpoint. Scope is otherwise not enforced: the
+  Micropub endpoint does not read it.
+  `IdnoPlugins/IndiePub/Tests/IndieAuthCodeAndTokenTest.php` checks this.
+- A file served in parts: `Idno\Pages\File\View::parseRange()` reads a `Range` header
+  (one range of bytes: `first-last`, `first-` or `-suffix`, both positions inclusive; any
+  other header is ignored and the whole file is sent; a range with no byte in the file is
+  answered 416 with `Content-Range: bytes */<size>`), and the answer holds exactly the bytes
+  its `Content-Length` and `Content-Range` name (`View::seekTo()`, then `View::readRange()`).
+  `Tests/Pages/File/RangeRequestTest.php` and `Tests/Characterisation/FileServingTest` check this.
+- WebSub: `Pages\Pubsubhubbub\Callback` answers the hub's challenge, which comes from the
+  request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML.
+  `Tests/Pages/Pubsubhubbub/CallbackTest.php` checks this.
 - Content Security Policy headers via template system (and, on the upgrade page, a strict
   per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
 - Deleting a site's data from the web: only `/admin/legacytables`, a legacy page (admin gatekeeper,

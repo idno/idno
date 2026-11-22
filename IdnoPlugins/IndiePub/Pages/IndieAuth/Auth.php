@@ -22,6 +22,8 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $redirect_uri = $this->getInput('redirect_uri');
             $state        = $this->getInput('state');
             $scope        = $this->getInput('scope');
+            $code_challenge        = $this->getInput('code_challenge');
+            $code_challenge_method = $this->getInput('code_challenge_method');
 
             if (empty($me)) {
                  $this->setResponse(403);
@@ -53,6 +55,12 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                 }
             }
 
+            if ($problem = self::challengeError($code_challenge, $code_challenge_method)) {
+                $this->setResponse(400);
+                echo $problem;
+                exit;
+            }
+
             $me_prime = $user->getIndieAuthURL();
             $t        = \Idno\Core\site()->template();
             $t->body  = $t->__(array(
@@ -62,6 +70,8 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                 'scope'        => $scope,
                 'redirect_uri' => $redirect_uri,
                 'state'        => $state,
+                'code_challenge'        => $code_challenge,
+                'code_challenge_method' => $code_challenge_method,
             ))->draw('indiepub/auth');
              $t->title = empty($scope) ? 'Authenticate' : 'Authorize';
              return $t->drawPage();
@@ -76,7 +86,7 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
 
             $headers      = self::getallheaders();
 
-            $verified = Auth::verifyCode($code, $client_id, $redirect_uri);
+            $verified = Auth::verifyCode($code, $client_id, $redirect_uri, $this->getInput('code_verifier'));
             if ($verified['valid']) {
                 $this->setResponse(200);
                 header('Content-Type: application/json');
@@ -94,8 +104,149 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             ));
         }
 
+        /**
+         * How long an authorization code can be redeemed for, in seconds. The IndieAuth
+         * specification allows ten minutes at most.
+         */
+        const CODE_LIFETIME = 600;
+
+        /**
+         * A new authorization code or access token: 256 bits from the system's random
+         * source, as 64 hexadecimal characters.
+         *
+         * @return string
+         */
+        static function generateSecret()
+        {
+            return bin2hex(random_bytes(32));
+        }
+
+        /**
+         * Find the key of $secrets that equals $candidate, comparing in constant time.
+         * Tokens and codes are the keys of the arrays they are stored in.
+         *
+         * @param  mixed $secrets   the stored array, keyed by code or token
+         * @param  mixed $candidate the value sent by the client
+         * @return string|int|null the matching key, or null
+         */
+        static function matchingKey($secrets, $candidate)
+        {
+            if (!is_array($secrets) || !is_string($candidate) || $candidate === '') {
+                return null;
+            }
+            $match = null;
+            foreach ($secrets as $key => $data) {
+                // PHP turns an all-digit key into an integer, hence the cast
+                if (hash_equals((string) $key, $candidate)) {
+                    $match = $key;
+                }
+            }
+
+            return $match;
+        }
+
+        /**
+         * Compare two request values as strings, in constant time.
+         */
+        private static function sameString($known, $given)
+        {
+            if (!is_scalar($known) && $known !== null) {
+                return false;
+            }
+            if (!is_scalar($given) && $given !== null) {
+                return false;
+            }
+
+            return hash_equals((string) $known, (string) $given);
+        }
+
+        /**
+         * Check the PKCE parameters of an authorization request (RFC 7636). PKCE is optional,
+         * so no challenge and no method is fine. When a challenge is sent, the method must be
+         * S256 and the challenge the base64url form of a SHA-256 hash: 43 characters. The
+         * "plain" method is not accepted, because it protects nothing.
+         *
+         * @param  mixed $challenge the code_challenge parameter
+         * @param  mixed $method    the code_challenge_method parameter
+         * @return string|null what is wrong, or null
+         */
+        static function challengeError($challenge, $method)
+        {
+            $noChallenge = $challenge === null || $challenge === '';
+            $noMethod = $method === null || $method === '';
+            if ($noChallenge && $noMethod) {
+                return null;
+            }
+            if ($method !== 'S256') {
+                return 'code_challenge_method must be S256.';
+            }
+            if (!is_string($challenge) || !preg_match('/^[A-Za-z0-9_-]{43}$/', $challenge)) {
+                return 'code_challenge is not a valid S256 challenge.';
+            }
+
+            return null;
+        }
+
+        /**
+         * Whether a code_verifier is the one a code's challenge was made from.
+         */
+        private static function verifierMatchesChallenge($verifier, $challenge)
+        {
+            if (!is_string($verifier) || !preg_match('/^[A-Za-z0-9._~-]{43,128}$/', $verifier)) {
+                return false;
+            }
+            $expected = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+
+            return is_string($challenge) && hash_equals($challenge, $expected);
+        }
+
+        /**
+         * Whether a stored code is past its lifetime. A code with no issue time counts as expired.
+         */
+        private static function codeHasExpired($data)
+        {
+            if (!is_array($data) || empty($data['issued_at'])) {
+                return true;
+            }
+
+            return (time() - (int) $data['issued_at']) > self::CODE_LIFETIME;
+        }
+
+        /**
+         * Issue an authorization code to a user who has approved a client, and drop
+         * that user's expired codes.
+         *
+         * @param  \Idno\Entities\User $user
+         * @param  array               $data me, redirect_uri, scope, state, client_id, and code_challenge
+         *                                   with code_challenge_method when the client uses PKCE
+         * @return string the code
+         */
+        static function issueCode($user, array $data)
+        {
+            $indieauth_codes = $user->indieauth_codes;
+            if (empty($indieauth_codes) || !is_array($indieauth_codes)) {
+                $indieauth_codes = array();
+            }
+            foreach ($indieauth_codes as $old => $details) {
+                if (self::codeHasExpired($details)) {
+                    unset($indieauth_codes[$old]);
+                }
+            }
+
+            $code = self::generateSecret();
+            $data['issued_at'] = time();
+            $indieauth_codes[$code] = $data;
+            $user->indieauth_codes = $indieauth_codes;
+            $user->save(true);
+
+            return $code;
+        }
+
         static function findUserForCode($code)
         {
+            if (!is_string($code) || $code === '') {
+                return array();
+            }
             // TODO encode user id in the auth code? or otherwise do a reverse lookup
             // to avoid checking every user
             for ($offset = 0 ; ; $offset += 10) {
@@ -105,10 +256,11 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                 }
                 foreach ($users as $user) {
                     $indieauth_codes = $user->indieauth_codes;
-                    if (!empty($indieauth_codes) && isset($indieauth_codes[$code])) {
+                    $key = self::matchingKey($indieauth_codes, $code);
+                    if ($key !== null) {
                         return array(
                             'user' => $user,
-                            'data' => $indieauth_codes[$code],
+                            'data' => $indieauth_codes[$key],
                         );
                     }
                 }
@@ -118,20 +270,25 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
 
         static function removeUsedAndExpiredCodes($user, $code)
         {
-            if (!empty($user->indieauth_codes)) {
-                unset($user->indieauth_codes[$code]);
-                foreach ($user->indieauth_codes as $code => $data) {
-                    $elapsed = time() - $data['issued_at'];
-                    if ($elapsed > 10 * 60) {
-                        unset($user->indieauth_codes[$code]);
+            $indieauth_codes = $user->indieauth_codes;
+            if (!empty($indieauth_codes) && is_array($indieauth_codes)) {
+                $used = self::matchingKey($indieauth_codes, $code);
+                if ($used !== null) {
+                    unset($indieauth_codes[$used]);
+                }
+                foreach ($indieauth_codes as $other => $data) {
+                    if (self::codeHasExpired($data)) {
+                        unset($indieauth_codes[$other]);
                     }
                 }
-                $user->save();
+                $user->indieauth_codes = $indieauth_codes;
+                $user->save(true);
             }
         }
 
         // verify the code from login; note that this is called from the micropub client, so the session won't have any user data
-        static function verifyCode($code, $client_id, $redirect_uri)
+        // $code_verifier is the PKCE verifier, for a code that was issued with a code_challenge
+        static function verifyCode($code, $client_id, $redirect_uri, $code_verifier = null)
         {
             $found = Auth::findUserForCode($code);
             if (empty($found)) {
@@ -144,31 +301,30 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $user = $found['user'];
             $data = $found['data'];
 
-            // codes can only be used once
+            // codes can only be used once: this one is spent whether or not the rest of the request is right
             Auth::removeUsedAndExpiredCodes($user, $code);
 
-            $elapsed = time() - $data['issued_at'];
-            if ($elapsed > 10 * 60) {
+            if (self::codeHasExpired($data)) {
 
-                \Idno\Core\Idno::site()->logging()->error("Auth code (issued at ".date('r', $data['issued_at']).") has expired");
+                \Idno\Core\Idno::site()->logging()->error("Auth code has expired");
 
                 return array(
                     'valid'  => false,
                     'reason' => 'authentication code has expired',
                 );
             }
-            if ($redirect_uri != $data['redirect_uri']) {
+            if (!self::sameString($data['redirect_uri'] ?? '', $redirect_uri)) {
 
-                \Idno\Core\Idno::site()->logging()->error("Redirect url ($redirect_uri) does not match {$data['redirect_uri']}");
+                \Idno\Core\Idno::site()->logging()->error("Redirect url does not match the one the auth code was issued for");
 
                 return array(
                     'valid'  => false,
                     'reason' => 'redirect_uri does not match',
                 );
             }
-            if ($client_id != $data['client_id']) {
+            if (!self::sameString($data['client_id'] ?? '', $client_id)) {
 
-                \Idno\Core\Idno::site()->logging()->error("Client ID ($client_id) does not match {$data['client_id']}");
+                \Idno\Core\Idno::site()->logging()->error("Client ID does not match the one the auth code was issued for");
 
                 return array(
                     'valid'  => false,
@@ -176,11 +332,33 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                 );
             }
 
+            $challenge = $data['code_challenge'] ?? '';
+            if (!empty($challenge)) {
+                if (!self::verifierMatchesChallenge($code_verifier, $challenge)) {
+
+                    \Idno\Core\Idno::site()->logging()->error("Code verifier does not match the challenge the auth code was issued with");
+
+                    return array(
+                        'valid'  => false,
+                        'reason' => 'code_verifier does not match',
+                    );
+                }
+            } else if ($code_verifier !== null && $code_verifier !== '') {
+
+                // Nothing to check it against: the authorization request did not carry the challenge it should have
+                \Idno\Core\Idno::site()->logging()->error("Code verifier sent for an auth code that was issued without a challenge");
+
+                return array(
+                    'valid'  => false,
+                    'reason' => 'code_verifier sent, but the code was issued without a code_challenge',
+                );
+            }
+
             return array(
                 'valid'  => true,
                 'user'   => $user,
-                'me'     => $data['me'],
-                'scope'  => $data['scope'],
+                'me'     => $data['me'] ?? '',
+                'scope'  => $data['scope'] ?? '',
             );
         }
     }

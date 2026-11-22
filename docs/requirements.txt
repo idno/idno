@@ -1,0 +1,2 @@
+# Python packages that build the documentation (see mkdocs.yml and .readthedocs.yaml).
+mkdocs==1.6.1

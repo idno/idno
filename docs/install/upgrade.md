@@ -384,12 +384,12 @@ Upgrades normally need no cache clearing, because the compiled cache is keyed by
     If your server runs PHP's opcache with `opcache.validate_timestamps=0` (common in production, and set by the bundled Docker image), restart PHP (PHP-FPM, or your web server if it runs PHP) or reset opcache immediately after replacing the files. Until you do, PHP keeps running the old code, and a request in that window can build the new compiled cache from it. If the site reports a container error after a deploy, delete everything under `var/cache/` and restart PHP again.
 
 If you are upgrading from a significantly older version of Idno, or if a config.ini file no longer exists in your
-installation directory, you may need to perform the following additional steps:
+`configuration` directory (or your installation directory), Idno will send you to the web installer at `/warmup/`. You may need to perform the following additional steps:
 
-1. Click on the set up button
-2. Enter in your database name, user name, host name and password
+1. Click "Let's get started" and continue past the requirements check
+2. Enter in your site name, database name, user name, host name and password
 3. Update the path for the "Uploads" folder. (It may automatically default to the proper path name, but double check it.)
-4. Hit enter and you'll be taken to your site.
+4. Submit the form and you'll be taken to your site.
 
 Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-on-ones-own-server) for this point.
 

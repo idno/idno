@@ -123,12 +123,14 @@ Idno includes a PHP Codesniffer ruleset.
 
 ## Running style tests on your local machine
 
-The code style rules are defined in `phpcs.xml` in the project root. To run the style tests, from the Idno root directory simply run:
+The code style rules are defined in `phpcs.xml` in the project root. It checks the `Idno`, `IdnoPlugins` and `Tests` folders. To run the style tests, from the Idno root directory simply run:
 
 ```vendor/bin/phpcs```
+
+GitHub runs `vendor/bin/phpcs -n`, which reports errors only and ignores warnings.
 
 PHP Code Sniffer works with individual folders, also. For example, to test the core `Idno` engine folder, you can run:
 
 ```vendor/bin/phpcs Idno```
 
-Contents of the `external` and `vendor` folders are exempt from these rules and will not be tested.
+Contents of the `external` and `vendor` folders (relative to the project root) are exempt from these rules and will not be tested.

@@ -38,17 +38,19 @@ On the web installer's settings page choose "SQLite". The database is always the
 
 ### Use environment variables
 
-If you’re using Docker or other virtualized server environments, you will need to create a config.ini file at the root of your installation. However, all configuration items can be stored in environment variables starting with KNOWN_. For example, the following environment variables will allow you to set the database:
+If you’re using Docker or other virtualized server environments, you will need to create a config.ini file in the `configuration` directory of your installation. However, configuration items can also be stored in environment variables starting with IDNO_ (the older KNOWN_ prefix still works, and IDNO_ variables take precedence). The name of the variable is the name of the config.ini item in upper case. For example, the following environment variables will allow you to set the database:
 
-    KNOWN_DATABASE = "MySQL"
-    KNOWN_DBNAME = "KnownDBName"
-    KNOWN_DBUSER = "KnownDBUser"
-    KNOWN_DBPASS = "KnownDBPassword"
-    KNOWN_DBHOST = "your.database.server"
+    IDNO_DATABASE = "MySQL"
+    IDNO_DBNAME = "IdnoDBName"
+    IDNO_DBUSER = "IdnoDBUser"
+    IDNO_DBPASS = "IdnoDBPassword"
+    IDNO_DBHOST = "your.database.server"
+
+You can also set `IDNO_DATABASE_URL` (for example `mysql://user:password@host:3306/dbname`) to supply the database type, name, user, password, host and port in one variable, and `IDNO_UPLOAD_PATH` to set the upload directory.
 
 ### If you’re using MySQL
 
-Currently, MySQL users need to create a file called ```config.ini``` in you ```/configuration/``` directory. This should contain the following information:
+MySQL users need to create a file called ```config.ini``` in your ```/configuration/``` directory. This should contain the following information:
 
     database = "MySQL"
     dbname = "Your MySQL database name"
@@ -107,13 +109,13 @@ You must specify an upload directory if you want to store files, images or profi
 
 Launch Idno in a web browser.
 
-For now, the first user to register will be the site administrator. Later, the installation script will take care of this for you.
+The first user to register will be the site administrator.
 
 Register and log in.
 
 ### Administer Idno
 
-Once you've registered and logged in, click "Administration" in the menu bar. This will allow you to set some site configuration items, including the site name. You will also be able to enable some plugins from this screen. If you're using Idno as a blog or a closed community, you will probably also want to turn open registration off from here.
+Once you've registered and logged in, click "Site Configuration" in the toolbar menu. This will allow you to set some site configuration items, including the site name. You will also be able to enable some plugins from this screen. If you're using Idno as a blog or a closed community, you will probably also want to turn open registration off from here.
 
 ## Command Line Installation
 

@@ -479,16 +479,17 @@ final class LegacyFileSystemTest extends IdnoTestCase
         fclose($stream);
     }
 
-    public function testARangeReadKeepsTheBytesTheFilePageHasAlwaysRead(): void
+    public function testARangeReadHoldsExactlyTheBytesOfTheRange(): void
     {
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, '0123456789');
         rewind($stream);
         View::seekTo($stream, 2);
 
-        // As the file page has always read it: $end bytes from where the stream is (the response is cut to
-        // the Content-Length it announces, which Tests/Characterisation/FileServingTest pins).
-        $this->assertSame('23456', View::readRange($stream, 2, 5));
+        // Both positions of a range are inclusive: bytes 2 to 5 are four bytes, the number the response's
+        // Content-Length announces. The file page used to read $end bytes (five here) and rely on the
+        // client cutting the body, and announced one byte too few.
+        $this->assertSame('2345', View::readRange($stream, 2, 5));
         fclose($stream);
     }
 

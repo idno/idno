@@ -18,6 +18,8 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $redirect_uri = $this->getInput('redirect_uri');
             $state        = $this->getInput('state');
             $scope        = $this->getInput('scope');
+            $code_challenge        = $this->getInput('code_challenge');
+            $code_challenge_method = $this->getInput('code_challenge_method');
 
             if (!empty($me) && parse_url($me, PHP_URL_HOST) == parse_url($user->getIndieAuthURL(), PHP_URL_HOST)) {
 
@@ -32,23 +34,21 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                     }
                 }
 
-                $indieauth_codes = $user->indieauth_codes;
-                if (empty($indieauth_codes)) {
-                    $indieauth_codes = array();
+                if ($problem = Auth::challengeError($code_challenge, $code_challenge_method)) {
+                    $this->setResponse(400);
+                    echo $problem;
+                    return;
                 }
 
-                $code = md5(rand(0, 99999) . time() . $user->getUUID() . $client_id . $state . rand(0, 999999));
-                $indieauth_codes[$code] = array(
+                $code = Auth::issueCode($user, array(
                     'me'           => $me,
                     'redirect_uri' => $redirect_uri,
                     'scope'        => $scope,
                     'state'        => $state,
                     'client_id'    => $client_id,
-                    'issued_at'    => time(),
-                    'nonce'        => mt_rand(1000000, pow(2, 30))
-                );
-                $user->indieauth_codes = $indieauth_codes;
-                $user->save();
+                    'code_challenge'        => (string) $code_challenge,
+                    'code_challenge_method' => (string) $code_challenge_method,
+                ));
 
                 if (strpos($redirect_uri, '?') === false) {
                     $redirect_uri .= '?';

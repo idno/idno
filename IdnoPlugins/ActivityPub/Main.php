@@ -64,35 +64,10 @@ class Main extends Plugin
             );
         }
 
-        // -------------------------------------------------------
-        // Mark ActivityPub inbox requests as API requests to bypass CSRF
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener('user/auth/request', function (\Idno\Core\Event $event) {
-
-            $contentType = $_SERVER['CONTENT_TYPE'] ?? $_SERVER['HTTP_CONTENT_TYPE'] ?? '';
-            $method = $_SERVER['REQUEST_METHOD'] ?? '';
-            $path = $_SERVER['REQUEST_URI'] ?? '';
-
-            $isInboxPath = (
-                preg_match('#/actor/[^/]+/inbox#', $path) ||
-                preg_match('#^/inbox/?$#', $path)
-            );
-
-            // Log all requests to inbox paths for debugging federation
-            if ($isInboxPath) {
-                \Idno\Core\Idno::site()->logging()->info(
-                    'ActivityPub: Inbox request: ' . $method . ' ' . $path .
-                    ' Content-Type: ' . $contentType
-                );
-            }
-
-            // For POST requests to inbox paths, always treat as API request
-            // to bypass CSRF token validation. Some AP implementations send
-            // non-standard content types, so we match on path alone.
-            if ($isInboxPath && strtoupper($method) === 'POST') {
-                \Idno\Core\Idno::site()->session()->setIsAPIRequest(true);
-            }
-        });
+        // The inboxes take POSTs that have no form token. Pages\Inbox and Pages\SharedInbox
+        // see to that themselves, by overriding post(). Nothing here may mark a request as an
+        // API request: that turns off the form token check for whichever page the request
+        // reaches, and ends the session of a logged-in visitor.
 
         // -------------------------------------------------------
         // Eager key generation for new users

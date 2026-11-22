@@ -21,7 +21,7 @@ If you use Apache 2.4, you either must install and activate:
 
 * mod_access_compat (see [http://httpd.apache.org/docs/2.4/mod/mod_access_compat.html](http://httpd.apache.org/docs/2.4/mod/mod_access_compat.html))
 
-Or manually edit Idno's stock .htaccess file by replacing:
+Or use the Apache 2.4 version of the rules, which is stored in `warmup/webserver-configs/htaccess-2.4.dist`, as your `.htaccess`. Or manually edit Idno's stock .htaccess file by replacing:
 
     <Files ~ "\.ini$">
     Order allow,deny
@@ -56,6 +56,8 @@ Additionally, Idno requires the following PHP components:
 + reflection
 + session
 + simplexml
+
+The `exif` extension is optional. If it is installed, Idno uses it to read the orientation and metadata of uploaded photos.
 
 !!! note "Note" 
     You may need to restart the web server after installing these components. Idno's installer will tell you if a required module isn't available.

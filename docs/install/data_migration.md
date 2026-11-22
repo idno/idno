@@ -24,7 +24,7 @@ As it turns out, the "Monthly Backup" contained the database backup I needed, an
 
 Make sure you take a copy of your profile picture, background picture, any custom CSS or custom Javascript you might have on your old site before you start cutting over to the new domain, because you obviously won't be able to navigate back to your old site once you do the DNS switch. You should copy down the name of your site, site description and other configuration values too, because these get lost.
 
-You should start with a working Idno installation on your hosting of choice. I'm running Debian 9, Apache, MariaDB and PHP 7, but available choices are documented elsewhere.
+You should start with a working Idno installation on your hosting of choice. I ran Debian 9, Apache and MariaDB when I did this, but the versions Idno needs today are listed in the [system requirements](requirements.md).
 
 **Use a test user account named differently from the account you're migrating - very important!**
 

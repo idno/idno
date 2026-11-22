@@ -1,6 +1,6 @@
 # Using config.ini to Configure Idno
 
-Idno is configured through config.ini, a simple file that is stored in the ```/configuration``` directory.
+Idno is configured through config.ini, a simple file that is stored in the ```/configuration``` directory. (A config.ini in the root of your installation is still read, but that location is deprecated.)
 
 Usually, config.ini is created automatically during installation. There is no need to create a config.ini file manually.
 However, sometimes you may wish to add values here.
@@ -13,8 +13,8 @@ Config.ini files use the [INI file format](https://en.wikipedia.org/wiki/INI_fil
     dbhost = 'localhost'
     dbname = 'database_name'
     dbpass = 'database_password'
-    dbuser = 'known_db_user'
-    uploadpath = '/Users/ben/Sites/known.dev/data/';
+    dbuser = 'idno_db_user'
+    uploadpath = '/Users/ben/Sites/idno.dev/data/'
 
 ## Common config.ini directives
 
@@ -28,13 +28,16 @@ does not start, and `php bin/console idno:import:mongo` moves its data to MySQL,
 The database host. This is most commonly "localhost".
 
 **dbname**<br>
-The database name. This is whatever you have configured your database server to use - for example, "known".
+The database name. This is whatever you have configured your database server to use - for example, "idno". The default is "idno".
 
 On SQLite, `database = 'sqlite'` and `dbname` is the database file: a path relative to the Idno directory
 (`data/idno.sqlite`) or an absolute one, or `:memory:`.
 
 **dbpass**<br>
 Your database password. Depending on your server configuration, this may not be required.
+
+**dbport**<br>
+The database port, if it is not the default one. Used by MySQL.
 
 **dbstring**<br>
 The MongoDB connection string of a site that is being moved off MongoDB (`php bin/console idno:import:mongo`
@@ -79,7 +82,7 @@ could not, and names a setting that cannot be used (never its value). Idno write
 cannot be sent; it names the kind of error only, never the server or the password.
 
 **loglevel**<br>
-Log levels to show:
+Log levels to show. Anything above 4 shows everything, and the default is 5:
 * 0 - off
 * 1 - errors
 * 2 - errors & warnings
@@ -87,7 +90,7 @@ Log levels to show:
 * 4 - errors, warnings, useful information, & debugging output
 
 **debug**<br>
-Enable debugging output.
+Enable debugging output. When this is set, error pages show the message and stack trace of the error to every visitor, so only use it on a development or test installation.
 
 ## Other config.ini directives
 
@@ -187,6 +190,6 @@ downloads when a Micropub client gives it a URL.
     webservice_max_download = 20971520
 
 **sessionname**<br>
-The internal identifier used to store the user session.
+The internal identifier used to store the user session. The default is 'idno'.
 
-    sessionname = 'knownsession'
+    sessionname = 'idnosession'

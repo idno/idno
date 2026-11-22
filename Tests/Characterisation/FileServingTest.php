@@ -70,20 +70,20 @@ namespace Tests\Characterisation {
             $this->assertSame($this->bytes(), $r->body);
         }
 
-        public function testARangeIsServedAsToday(): void
+        public function testARangeIsServedWithExactlyItsBytes(): void
         {
             $id = $this->storeFixtureFile();
 
             $r = $this->site()->request('GET', 'file/' . $id . '/name.txt', ['Range' => 'bytes=100-199']);
 
-            // Quirks, pinned as they are: "bytes=100-199" is Content-Length 99 (end minus start, not the
-            // 100 bytes of the range) with a Content-Range that says 100-199, and the body is the
-            // bytes from offset 100 on, cut by the client at the declared length.
+            // Both positions of a range are inclusive: "bytes=100-199" is 100 bytes, and Content-Length says
+            // so. It used to say 99 (end minus start) while the body ran on from offset 100 and the client
+            // cut it, so a player was one byte short.
             $this->assertSame(206, $r->status);
             $this->assertSame('bytes 100-199/2000', $r->header('Content-Range'));
-            $this->assertSame('99', $r->header('Content-Length'));
+            $this->assertSame('100', $r->header('Content-Length'));
             $this->assertSame('bytes', $r->header('Accept-Ranges'));
-            $this->assertSame(substr($this->bytes(), 100, 99), $r->body);
+            $this->assertSame(substr($this->bytes(), 100, 100), $r->body);
             $this->assertSame('WXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJ', substr($r->body, 0, 40));
         }
 

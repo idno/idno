@@ -7,11 +7,11 @@ for most users.
 
 Idno uses event queues to dispatch things like Webmention pings. 
 
-By default, this dispatching is synchronous. However, you it is possible to enqueue events and have them dispatched later in an asynchronous fashion, enabling faster page loading.
+By default, this dispatching is synchronous. However, it is possible to enqueue events and have them dispatched later in an asynchronous fashion, enabling faster page loading.
 
 ### Enabling asynchronous queues
 
-To use something the asynchronous queue, add the following line to your ```config.ini```:
+To use the asynchronous queue, add the following line to your ```config.ini```:
 
 ```
 event_queue = 'AsynchronousQueue'
@@ -33,8 +33,10 @@ The queue is carried by Symfony Messenger (the `idno_messages` table of your dat
     If you’re using per-domain configuration you’ll need to set an environment variable in order for everything to work as expected:
 
     ```
-    export KNOWN_DOMAIN='your.domain.name'
+    export IDNO_DOMAIN='your.domain.name'
     ```
+
+    If your site is not on port 80, also set `IDNO_PORT`. The older `KNOWN_DOMAIN` and `KNOWN_PORT` variables still work.
 
 !!! warning "Updating Idno"
     When you update Idno core or any plugins (especially syndication plugins), it is important to restart your event queue so that
