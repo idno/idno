@@ -50,6 +50,11 @@ namespace Idno\Pages\Pubsubhubbub {
                         $subscriber->save();
 
                         \Idno\Core\Idno::site()->logging()->debug("Pubsub: $hub_challenge");
+
+                        // The challenge is taken from the request: answer in plain text, and
+                        // tell browsers not to guess another type, so it is never run as HTML
+                        header('Content-Type: text/plain; charset=utf-8');
+                        header('X-Content-Type-Options: nosniff');
                         echo $hub_challenge;
                         exit;
                     }
