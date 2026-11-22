@@ -6,7 +6,8 @@ namespace Idno\Templating;
 
 /**
  * What `$this` and `$t` are inside a `.tpl.php` file: an object a template can call (`$t->draw()`, `$t->__()`,
- * the formatting helpers). Idno\Core\DefaultTemplate is the one the site has.
+ * the formatting helpers) and what `idno_include()` and `slot()` of a Twig template draw through. Idno\Core\DefaultTemplate
+ * is the one the site has.
  */
 interface PhpTemplateContext
 {
@@ -24,4 +25,23 @@ interface PhpTemplateContext
      * @return class-string
      */
     public function phpTemplateScope(): string;
+
+    /**
+     * Draws the template $templateName as `$this->draw()` in a template does: with this object's variables and type, and
+     * what plugins and themes registered for the name.
+     *
+     * @param  string $templateName
+     * @param  bool   $returnBlank  true gives a blank string for a template that is not there, false gives false
+     * @return string|false
+     */
+    public function draw($templateName, $returnBlank = true);
+
+    /**
+     * Draws only what plugins and themes registered for the template name (prepends, extensions and added content),
+     * not a template of that name itself.
+     *
+     * @param  string $name
+     * @return string
+     */
+    public function drawSlot($name);
 }

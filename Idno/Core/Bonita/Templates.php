@@ -97,6 +97,18 @@ namespace Idno\Core\Bonita {
         }
 
         /**
+         * Draws only what plugins and themes registered for a template name (prepends, extensions and added content),
+         * for the `slot()` function of a Twig template
+         *
+         * @param  string $name
+         * @return string
+         */
+        function drawSlot($name)
+        {
+            return $this->renderer()->drawSlot((string)$name, fn () => $this->vars, fn () => $this->getTemplateType(), $this, fn () => $this->fallbackToDefault);
+        }
+
+        /**
          * A copy of this template whose variables are the given ones
          *
          * @param  array $vars

@@ -1,0 +1,1 @@
+<?php ob_start(); echo 'leak'; throw new \LogicException('leaked from a php template');

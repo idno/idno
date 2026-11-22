@@ -97,6 +97,30 @@ final class TemplateRenderer
     }
 
     /**
+     * Draws only what is registered for the name, in the order of draw(): the prepends, then for `*` and the type the
+     * extensions, then the pre-rendered content; never the template itself or a replacement. A name nothing is registered
+     * for is the empty string.
+     *
+     * @param array<string, mixed>|\Closure $vars
+     * @param string|\Closure               $type
+     * @param bool|\Closure                 $fallbackToDefault
+     */
+    public function drawSlot(string $name, mixed $vars, string|\Closure $type, PhpTemplateContext $context, bool|\Closure $fallbackToDefault = true): string
+    {
+        $result = '';
+        foreach ($this->slots->prepends($name) as $template) {
+            $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
+        }
+        foreach (['*', $this->value($type)] as $slotType) {
+            foreach ($this->slots->extensions($name, $slotType) as $template) {
+                $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
+            }
+        }
+
+        return $result . $this->slots->content($name);
+    }
+
+    /**
      * One template, by name, with no contributions.
      *
      * @param array<string, mixed> $vars
@@ -115,9 +139,15 @@ final class TemplateRenderer
         if ($located === null) {
             return null;
         }
-        $engine = $located->engine === 'twig' && $this->twig !== null ? $this->twig : $this->php;
+        if ($located->engine === 'twig') {
+            if ($this->twig === null) {
+                throw new \LogicException('A Twig template was found but this renderer has no Twig engine');
+            }
 
-        return $engine->render($located, $this->value($vars), $context);
+            return $this->twig->render($located, $this->value($vars), $context);
+        }
+
+        return $this->php->render($located, $this->value($vars), $context);
     }
 
     private function value(mixed $value): mixed

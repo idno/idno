@@ -7,8 +7,9 @@ namespace Tests\Kernel;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
- * What rendering writes to disk, and where: the HTML purifier's serialised definitions go to the kernel's cache
- * directory, never to the upload path (which is served, and may be an s3:// address).
+ * What rendering writes to disk, and where: the HTML purifier's serialised definitions and Twig's compiled templates (PHP
+ * files that are included) go to the kernel's cache directory, never to the upload path (which is served, and may be an
+ * s3:// address) or a shared temporary directory.
  */
 final class TemplateCachesTest extends PrivateSiteTestCase
 {
@@ -33,5 +34,23 @@ final class TemplateCachesTest extends PrivateSiteTestCase
 
         $purifierDirectory = $this->runInSite('return \Idno\Core\Idno::container()->get("kernel")->getCacheDir() . "/htmlpurifier";');
         $this->assertDirectoryExists($purifierDirectory, 'the purifier\'s cache is in the kernel\'s cache directory');
+    }
+
+    public function testTwigsCompiledTemplatesGoToTheKernelCacheDirectory(): void
+    {
+        $result = $this->runInSite('
+            $container = \Idno\Core\Idno::container();
+            $kernel = $container->get("kernel");
+            $twig = $container->get("idno.test.twig");
+            return [
+                "twig" => $twig->getCache(true),
+                "cacheDir" => $kernel->getCacheDir(),
+                "upload" => rtrim((string) \Idno\Core\Idno::site()->config()->uploadpath, "/"),
+            ];
+        ');
+        $this->assertIsArray($result);
+        $this->assertSame($result['cacheDir'] . '/twig', $result['twig'], 'the compiled templates are in the kernel\'s cache directory, trusted as the compiled container is');
+        $this->assertFalse(str_starts_with($result['twig'], $result['upload'] . '/'), 'and not in the upload path');
+        $this->assertFalse(str_starts_with($result['twig'], sys_get_temp_dir() . '/') && !str_starts_with($result['cacheDir'], sys_get_temp_dir() . '/'), 'nor a shared temporary directory');
     }
 }

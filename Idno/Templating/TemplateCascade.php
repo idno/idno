@@ -15,6 +15,8 @@ final class TemplateCascade
     /** @var list<string> */
     private array $added = [];
 
+    private int $generation = 0;
+
     public function __construct(private readonly string $coreDir)
     {
     }
@@ -29,6 +31,16 @@ final class TemplateCascade
             return;
         }
         array_unshift($this->added, $dir);
+        ++$this->generation;
+    }
+
+    /**
+     * A number that changes each time the list of directories does, for what is worked out from it (the locator remembers
+     * which file a name is until it changes).
+     */
+    public function generation(): int
+    {
+        return $this->generation;
     }
 
     /**

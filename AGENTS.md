@@ -240,7 +240,10 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
   (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
-  only when the variable names a file; nothing is called or written otherwise.
+  only when the variable names a file; nothing is called or written otherwise. Twig templates in the cascade are pinned by
+  `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
+  `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
+  `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".
 - A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range, and never sleeps to make two moments differ.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
@@ -274,7 +277,7 @@ idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
   Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass,
-                               MessengerTrimPass
+                               MessengerTrimPass, TwigTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
@@ -339,7 +342,8 @@ Idno/
                                five small interfaces its Idno\Legacy adapters implement (SiteFacts, FeedShell,
                                ExportState, ResultNotifier, PostWriter). See "Import and export"
   Templating/                  Template lookup and rendering (modern style): TemplateCascade, TemplateLocator,
-                               TemplateRenderer, SlotRegistry, PhpTemplateEngine and their helpers. See "Templates"
+                               TemplateRenderer, SlotRegistry, the two engines (PhpTemplateEngine, TwigTemplateEngine with CascadeTwigLoader and
+                               IdnoTwigExtension) and their helpers. See "Templates"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -363,7 +367,7 @@ Idno/
   Entities/                    Core entity types (User, BaseObject, File, AccessGroup, etc.)
   Pages/                       Built-in legacy page handlers (Account, Admin, Entity, Feed, etc.)
 config/                        Kernel configuration: bundles.php, services.php, routes.php,
-                               packages/ (framework, monolog, doctrine), routes/test/ (test-only routes),
+                               packages/ (framework, monolog, doctrine, twig), routes/test/ (test-only routes),
                                services_test.php (test-only services)
 var/                           The compiled container (var/cache/); must be writable by the web server
                                (or set IDNO_CACHE_DIR). config/, bin/, var/ and Tests/ each hold a
@@ -751,8 +755,8 @@ other new code may.
 
 ### Kernel and services
 
-- `Idno\Kernel` is configured by `config/` (`bundles.php`: FrameworkBundle, MonologBundle
-  and DoctrineBundle (DBAL only, no ORM); `packages/framework.php`: Symfony's session and error
+- `Idno\Kernel` is configured by `config/` (`bundles.php`: FrameworkBundle, MonologBundle,
+  DoctrineBundle (DBAL only, no ORM) and TwigBundle (see "Templates"); `packages/framework.php`: Symfony's session and error
   handling are disabled, the legacy application owns both; `packages/doctrine.php`: the DBAL
   connection, see below; `services.php`; `routes.php`).
   `Kernel::boot()` refuses a site with no configuration (`LegacyBootstrap::ensureInstalled()`),
@@ -790,7 +794,7 @@ other new code may.
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
-  `DoctrineTrimPass.php` and `MessengerTrimPass.php` are excluded (the kernel adds them in `build()`); in
+  `DoctrineTrimPass.php`, `MessengerTrimPass.php` and `TwigTrimPass.php` are excluded (the kernel adds them in `build()`); in
   `Idno/Queue/`, the message `QueuedEvent.php`, the interfaces `EventTrigger.php`, `EntityCache.php` and
   `UserContext.php`, `ResilientTransport.php` (a decorator) and `KeepFailedMessage.php` (wired by hand),
   `StopWhenQueueIsEmpty.php` (built by the command) and the static helper `WorkerSiteUrl.php`; in
@@ -1418,8 +1422,8 @@ other new code may.
   `registerPages()`, and content types via `registerContentTypes()`. They hook
   into events (`saved`, `updated`, `deleted`, `syndicate`, etc.) using the
   Symfony EventDispatcher (wrapped by `Idno\Core\EventDispatcher`).
-- **Template system**: templates are `.tpl.php` files (PHP), found and drawn by `Idno\Templating` and
-  called through `Idno\Core\DefaultTemplate` (`Idno::site()->template()`). See "Templates".
+- **Template system**: templates are `.tpl.php` files (PHP) or Twig files (`.html.twig`, `.txt.twig`), found and drawn by
+  `Idno\Templating` (one cascade, two engines) and called through `Idno\Core\DefaultTemplate` (`Idno::site()->template()`). See "Templates".
 - **Async queue**: `Idno::site()->queue()` is `Idno\Legacy\MessengerEventQueue`. With
   `event_queue = 'AsynchronousQueue'` an event becomes a message on Symfony Messenger (`Idno\Queue\`,
   the table `idno_messages`) and the worker, `service-event-queue` (`Idno\Console\QueueWorkCommand`),
@@ -2484,19 +2488,32 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 `Idno\Templating` (modern style, a scanned directory) finds and renders templates; `Idno\Core\DefaultTemplate` (over
 `Idno\Core\Bonita\Templates`) is the adapter every page and plugin calls, and delegates to it. The classes:
 
-- Excluded from the scan in `config/services.php` and wired there, public: `TemplateCascade`, `SlotRegistry` and `TemplateRenderer`
-  (its Twig engine argument is null); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
+- Excluded from the scan in `config/services.php` and wired there, public: `TemplateCascade`, `SlotRegistry`, `TemplateRenderer`,
+  `TwigTemplateEngine`, `CascadeTwigLoader` and `IdnoTwigExtension` (the adapter `Idno\Legacy\LegacyTemplateTranslation` is wired
+  there too); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
 - `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
   holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
   (`TemplateName::isSafe()` is the check without the strip). The pattern ends in `$`, so a trailing newline passes (it names no file).
 - `TypeChain::for($type)`: `default` is `['default']`, any other type `[$type, 'default']` (`modern` on a Twenty26 site
   included); `selectable($type)` is true for every type.
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
-  puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`.
+  puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
+  `generation()` (changes with each directory added).
   Filled at run time by the plugins and the theme (`Bonita\Main::additionalPath()` forwards to it), never from the
   container's configuration. A command-line process has core's directory too (it is the cascade's, not added at boot).
-- `TemplateLocator::locate($name, $type, $fallbackToDefault = true)`: for each type of the chain, for each base, the file
-  `<base>/templates/<type>/<name>.tpl.php`, as a `LocatedTemplate` (`path`, `engine`, `type`, `base`, `logicalName`), or null;
+- `TemplateLocator::locate($name, $type, $fallbackToDefault = true)`: the order is the type, then the base, then the format:
+  for each type of the chain, for each base, `<base>/templates/<type>/<name>.html.twig` (`.txt.twig` for `email-text`; only
+  the types `default`, `email` and `email-text` have Twig files, `TemplateLocator::TWIG_EXTENSIONS`; the feed, JSON, JSONP, JSON Feed,
+  ActivityPub and KML types are `.tpl.php` only, whatever Twig file of their name exists) and then `<name>.tpl.php`, as a `LocatedTemplate`
+  (`path`, `engine` `php` or `twig`, `type`, `base`, `logicalName` `<type>/<name>.<ext>`), or null. So a third-party
+  `.tpl.php` override in a plugin or theme still beats a Twig file of the same name and type in core, and within one directory
+  Twig wins. The answers are remembered (type, name, fallback) until the cascade's `generation()` changes: the files of a directory do not
+  change while a request is served, and an ordinary page draws the same names again and again, each look-up a file-system check per directory,
+  type and format (measured: the Twig check alone made a locate about twice as slow; remembered, a repeat costs a fraction of a microsecond).
+  The Twig candidate is offered only when `CascadeTwigLoader::isLogicalName()` (the one predicate) accepts its logical name: a name with a
+  leading or doubled slash (`TemplateName` accepts it, the file system resolves it) is a `.tpl.php` name only, and a Twig file of it alone is not found.
+  The memo holds at most `TemplateLocator::REMEMBER_LIMIT` answers and is emptied when it passes (names come from requests). Known limit: the
+  `email-text` chain falls back to `default`, so a plain-text mail can draw `default/<name>.html.twig`, which autoescapes as HTML, until the type chain changes.
   `typeExists($type)`: some base has a `templates/<type>/` directory.
 - `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
   record (`extend`, `prepend`, `replace`, `extendWithContent`; `extensions()`, `prepends()`, `replacement()`, `content()`
@@ -2510,8 +2527,13 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   the template unless replaced; the added content) and returns null when nothing was rendered; without `$contributions` it draws the
   one file (the plain `Bonita\Templates::draw()`: `drawList()`, `drawObject()` and `process()` draw this way, with no extensions);
   `withSlots()` reads another registry. `$vars`, `$type` and `$fallbackToDefault` may be closures (`DefaultTemplate` passes them), called each time a file is drawn: an extension that sets a variable, or a prepend that changes the type or turns the fallback off, changes what the later files and the template itself see (the type that picks the `*` and type registrations is read once, after the prepends), as `Bonita\Templates::draw()` read `$this` for each contribution. Each file drawn calls the trace hook `TemplateRenderer::$trace` (type, name, path or `-`)
-  before it is rendered, except a refused name. `$vars` is untyped on purpose: an object whose `vars` were replaced by a non-array
-  through `__(['vars' => ...])` fails in the render, as it always did.
+  before it is rendered, except a refused name (a Twig file is traced like any other). `drawSlot($name, $vars, $type, $context,
+  $fallbackToDefault = true)` draws only the registrations of a name (prepends, then the `*` and the type's extensions, then the added
+  content: no replacement, not the template itself), for `slot()`. A located Twig file with no Twig engine is a `\LogicException`, never
+  `include`d as PHP. `$vars` is untyped on purpose: an object whose `vars` were replaced by a non-array
+  through `__(['vars' => ...])` fails in the render, as it always did (in a Twig render: an `\UnexpectedValueException`).
+- `PhpTemplateContext` has, beside `withVars()` and `phpTemplateScope()`, `draw($templateName, $returnBlank = true)` and
+  `drawSlot($name)`: what `idno_include()` and `slot()` of a Twig template draw through (`Bonita\Templates` implements both).
 - `PhpTemplateEngine` (`TemplateEngine`): `include`s the file in a function bound to the `PhpTemplateContext` (`$this` and `$t`;
   `DefaultTemplate` is one, `withVars()` gives a copy with other variables; the file is bound with the scope `phpTemplateScope()` names, `Bonita\Templates`, so no private member of a subclass is reachable from a template and a variable may be named `slots`) with the variables extracted into its scope, inside an
   output buffer. Its own variables are visible to the file and pinned: `$path` (a template variable named `path` changes the file
@@ -2520,6 +2542,44 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   alone), so a draw nested any depth leaves the buffer level as it found it
   (`TemplateContractTest::testAnExceptionInATemplateLeavesNoOutputBufferOpen`, `testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen`).
   `Idno\Templating\OutputBuffers::endDownTo($level)` does the closing (the engine and `Logging::oopsAlert()`, which stays as a defence, use it): a buffer PHP cannot remove (a handler without the removable or cleanable flags) stops it, with what is below it left as it is, and nothing is thrown or raised, so the exception being handled is never replaced and nothing loops (`Tests/Unit/Templating/OutputBuffersTest`, `TemplateContractTest::testAnExceptionWithABufferThatCannotBeRemovedPropagatesTheOriginalAndStops`). `View::endOutputBuffers()` already stops at a buffer it cannot end.
+- **Twig** (`symfony/twig-bundle`, `config/packages/twig.php`) is the second engine. Twig's cache is `%kernel.cache_dir%/twig` (compiled
+  templates are PHP files that get included: they are trusted exactly as the compiled container is, and never go in the upload path or a
+  shared temporary directory; `TemplateCachesTest`, `TwigEngineTest::testCompiledTemplatesLiveInTheKernelCacheDir`); `strict_variables` is
+  off (legacy templates pass sparse variables); the autoescape strategy is the bundle's `name`: HTML for `.html.twig`, none for `.txt.twig`.
+  There are no `paths` and no globals from the configuration (the bundle's `app` global stays); in a production build a template edited
+  on disk is recompiled when the cache is cleared (`auto_reload` follows debug). `translator` stays OFF in FrameworkBundle: `t()` is Idno's own.
+  - `CascadeTwigLoader` (`Twig\Loader\LoaderInterface`, tagged `twig.loader` priority 100): `<type>/<name>.html.twig` or `.txt.twig` is the
+    file in the first directory of the cascade that has it, `@core/<type>/<name>...twig` is core's alone; any other name is not its own
+    (`exists()` false). A name reaches the file system only after it is at least two segments of `[a-zA-Z0-9_-]` joined by single slashes, that
+    `TemplateName::normalise()` leaves as they are, with the suffix (`isLogicalName()`): `..`, a backslash, NUL, a trailing newline, a leading or
+    doubled slash, an absolute path and `@Twig/...` are refused before any file is looked for, so `{% include %}`, `{% extends %}` and `source()` of
+    any name reach only a file of a `templates/` directory of the cascade (`CascadeTwigLoaderTest`, `TwigEngineTest::testATemplateCanLoadOnlyAFileOfTheCascade`).
+    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. `Idno\Kernel\TwigTrimPass` (priority 10, before the bundle's
+    loader pass) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
+    included), so this is the only loader, and removes `twig.error_renderer.html` (which would draw Symfony's production error page of a
+    new-style controller from the bundle's `@Twig` templates: the page is what it was; the CLI never used it), `twig.mailer.message_listener` and
+    `twig.mime_body_renderer` (mail is `Idno\Mail`, whose mailer has no dispatcher). The bundle's `lint:twig` and `debug:twig` stay, and so does
+    the `kernel.view` listener for `#[Template]`, which only acts when a controller returns no response; the others it registers do not run on a
+    legacy request. `Tests/Kernel/TwigTrimTest` (test and freshly compiled prod containers, no legacy application: `debug:twig` runs too).
+  - `TwigTemplateEngine` (`TemplateEngine`): holds a CLOSURE to the `twig` service, so the environment is built when the first Twig file is
+    drawn and a page that draws none never builds it (`TwigEngineTest::testTheEnvironmentIsBuiltWhenAFirstTwigFileIsDrawnAndNotBefore`,
+    `TwigTrimTest`). It loads `$located->logicalName` through the loader (the file the locator found) and renders it with the variables
+    plus `_idno_type` (the type folder the file was found in) and `_idno_context` (the template object), in an output buffer of its own, which
+    it ends, with any the template left open, when the render throws (it does not use Twig's `render()`, whose own cleanup fails on a buffer PHP cannot
+    remove). An exception thrown by something a Twig template called (a `.tpl.php` file drawn by `idno_include()`) leaves as itself, not as Twig's
+    `RuntimeError` wrapper; a Twig error (syntax, a missing template) is thrown as it is, never swallowed (`HybridTwigTemplate` caught every exception).
+    The variables are a snapshot for the whole render: a Twig template does not see a variable an included template sets afterwards (a `.tpl.php`
+    file reads them from the object at each draw); they must be an array, else an `\UnexpectedValueException`.
+  - `IdnoTwigExtension`: `idno_include(name, vars)` draws as `$this->draw()` does (type then `default`, either engine, contributions) through
+    a COPY of the template object (`withVars()`) holding the including template's variables, less Twig's globals (`app`, ...: only a value identical to the global) and bookkeeping (`_idno_type`, `_idno_context`, `_parent`, `_seq`, `_key`, `_iterated`, `loop`; any other `_foo` variable is kept), and
+    the given ones over them; `slot(name)` is `drawSlot()`; both are `is_safe: html` and need `_idno_context`; `t(text, subs)` is
+    `TemplateTranslation::translate()` (`Idno\Legacy\LegacyTemplateTranslation` over `Language::_()`, fetched when a string is first translated, so
+    the environment can be built without the legacy application) and is escaped as any string. No other function or filter is marked safe
+    (`IdnoTwigExtensionTest`).
+  - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
+    bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
+    `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`.
+    No core template is a Twig file yet, so no golden page changes.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s
@@ -2527,7 +2587,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
   (never the upload path; with no writable directory the definition cache is off).
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
-  `TemplateRendererTest`), `Tests/Kernel/TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path), and the
+  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
+  Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
 
 #### The cache
@@ -2712,7 +2773,7 @@ The container's services and the legacy filesystem:
   `output_buffering` on, a large file is never accumulated in memory (pinned in
   `Tests/Pages/File/LargeRangeStreamingTest` under two nested buffers and a 32M limit).
   The cache pool (see "The cache"), the Purifier cache and the Twig cache never use an `s3://` upload path as a
-  directory: the Purifier and Twig caches use the temporary directory instead.
+  directory: the Purifier and Twig caches use the kernel's cache directory instead.
 - Deliberate differences from the old local filesystem: deleting a file removes its `.data` file too;
   an SQL site with an `uploadpath` and no `filesystem` setting stores files locally (it had no
   filesystem); `file_path_host` and the `file/path/host` event work for new uploads (the old code made

@@ -99,6 +99,78 @@ final class TemplateLocatorTest extends TestCase
         $this->assertSame($core, (new TemplateLocator($cascade))->locate('x', 'default')?->base);
     }
 
+    private function twigBase(string $name, string ...$templates): string
+    {
+        foreach ($templates as $template) {
+            $path = $this->root . '/' . $name . '/templates/' . $template;
+            if (!is_dir(dirname($path))) {
+                mkdir(dirname($path), 0700, true);
+            }
+            file_put_contents($path, $name . ':' . $template);
+        }
+
+        return $this->root . '/' . $name;
+    }
+
+    public function testTwigIsFoundForDefaultEmailAndEmailTextOnly(): void
+    {
+        $core = $this->twigBase('core', 'default/x.html.twig', 'email/x.html.twig', 'email-text/x.txt.twig', 'rss/x.html.twig', 'json/x.html.twig', 'jsonp/x.html.twig', 'jsonfeed/x.html.twig', 'activitypub/x.html.twig', 'kml/x.html.twig', 'rss/x.tpl.php', 'default/y.txt.twig', 'email/y.txt.twig', 'email-text/y.html.twig');
+        $locator = new TemplateLocator(new TemplateCascade($core));
+
+        $found = $locator->locate('x', 'default');
+        $this->assertSame('twig', $found?->engine);
+        $this->assertSame($core . '/templates/default/x.html.twig', $found?->path);
+        $this->assertSame('default/x.html.twig', $found?->logicalName);
+        $this->assertSame('email/x.html.twig', $locator->locate('x', 'email')?->logicalName);
+        $this->assertSame('email-text/x.txt.twig', $locator->locate('x', 'email-text')?->logicalName);
+        $this->assertSame('php', $locator->locate('x', 'rss')?->engine, 'a feed type has .tpl.php files only');
+        $this->assertSame('rss/x.tpl.php', $locator->locate('x', 'rss')?->logicalName);
+        foreach (['json', 'jsonp', 'jsonfeed', 'activitypub', 'kml'] as $type) {
+            $located = $locator->locate('x', $type);
+            $this->assertSame('default/x.html.twig', $located?->logicalName, $type . ' ignores its own Twig file and falls back to default\'s');
+            $this->assertNull($locator->locate('x', $type, false), $type . ' alone has no x');
+        }
+        $this->assertNull($locator->locate('y', 'default'), 'default has .html.twig files only');
+        $this->assertNull($locator->locate('y', 'email'), 'email has .html.twig files only');
+        $this->assertNull($locator->locate('y', 'email-text'), 'email-text has .txt.twig files only');
+    }
+
+    public function testTheOrderIsTypeThenDirectoryThenFormat(): void
+    {
+        $core = $this->twigBase('core', 'default/a.html.twig', 'default/b.html.twig', 'email/c.html.twig', 'default/c.html.twig');
+        $theme = $this->twigBase('theme', 'default/a.tpl.php', 'default/d.tpl.php', 'default/d.html.twig');
+        $cascade = new TemplateCascade($core);
+        $cascade->addBase($theme);
+        $locator = new TemplateLocator($cascade);
+
+        $this->assertSame($theme, $locator->locate('a', 'default')?->base, 'a theme\'s .tpl.php wins over core\'s Twig file');
+        $this->assertSame('php', $locator->locate('a', 'default')?->engine);
+        $this->assertSame('twig', $locator->locate('b', 'default')?->engine);
+        $this->assertSame('email', $locator->locate('c', 'email')?->type, 'the type before the directory');
+        $this->assertSame('twig', $locator->locate('d', 'default')?->engine, 'within one directory Twig comes first');
+        $this->assertSame($theme . '/templates/default/d.html.twig', $locator->locate('d', 'default')?->path);
+    }
+
+    public function testAnAnswerIsRememberedUntilADirectoryIsAdded(): void
+    {
+        $core = $this->base('core', 'default/x');
+        $cascade = new TemplateCascade($core);
+        $locator = new TemplateLocator($cascade);
+        $this->assertSame($core, $locator->locate('x', 'default')?->base);
+        $this->assertNull($locator->locate('later', 'default'));
+
+        // The files of a directory do not change while a request is served: a name found or not stays so...
+        file_put_contents($core . '/templates/default/later.tpl.php', 'late');
+        unlink($core . '/templates/default/x.tpl.php');
+        $this->assertSame($core, $locator->locate('x', 'default')?->base);
+        $this->assertNull($locator->locate('later', 'default'));
+
+        // ...until the cascade changes
+        $cascade->addBase($this->base('theme', 'default/y'));
+        $this->assertNull($locator->locate('x', 'default'));
+        $this->assertSame($core, $locator->locate('later', 'default')?->base);
+    }
+
     public function testMissingIsNull(): void
     {
         $locator = new TemplateLocator(new TemplateCascade($this->base('core', 'default/x')));
@@ -124,5 +196,46 @@ final class TemplateLocatorTest extends TestCase
         $this->assertFalse($locator->typeExists('nope'));
         $this->assertFalse($locator->typeExists('../x'));
         $this->assertFalse($locator->typeExists(''));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function slashNames(): array
+    {
+        return ['leading slash' => ['/x'], 'doubled slash' => ['a//b']];
+    }
+
+    /**
+     * @dataProvider slashNames
+     */
+    public function testANameWithALeadingOrDoubledSlashIsAPhpNameOnly(string $name): void
+    {
+        $twigOnly = $this->twigBase('twigonly', 'default/' . $name . '.html.twig');
+        $phpOnly = $this->twigBase('phponly', 'default/' . $name . '.tpl.php');
+        $both = $this->twigBase('both', 'default/' . $name . '.html.twig', 'default/' . $name . '.tpl.php');
+        $this->assertFileExists($twigOnly . '/templates/default/' . $name . '.html.twig', 'the file system resolves the slashes');
+
+        $this->assertNull((new TemplateLocator(new TemplateCascade($twigOnly)))->locate($name, 'default'), 'a Twig file of such a name is not found, as for any name the loader would refuse');
+        $this->assertSame('php', (new TemplateLocator(new TemplateCascade($phpOnly)))->locate($name, 'default')?->engine);
+        $this->assertSame('php', (new TemplateLocator(new TemplateCascade($both)))->locate($name, 'default')?->engine, 'the .tpl.php file is drawn');
+    }
+
+    public function testTheMemoIsBoundedAndKeysTheFallback(): void
+    {
+        $core = $this->base('core', 'default/x');
+        $locator = new TemplateLocator(new TemplateCascade($core), 3);
+
+        $this->assertSame('default', $locator->locate('x', 'alt')?->type);
+        $this->assertNull($locator->locate('x', 'alt', false), 'the answer with the fallback off is not the one with it on');
+        $this->assertSame('default', $locator->locate('x', 'alt')?->type);
+
+        $locator->locate('n1', 'default');
+        $locator->locate('n2', 'default');
+        $locator->locate('n3', 'default');
+        $memo = (new \ReflectionProperty($locator, 'remembered'))->getValue($locator);
+        $this->assertLessThanOrEqual(3, count($memo), 'past the limit the answers are forgotten');
+        file_put_contents($core . '/templates/default/n1.tpl.php', 'late');
+        $this->assertNotNull($locator->locate('n1', 'default'), 'a forgotten negative answer is looked up again');
     }
 }

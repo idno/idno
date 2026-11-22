@@ -8,11 +8,13 @@ use Idno\Kernel\CacheDirResolver;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Kernel\DoctrineTrimPass;
 use Idno\Kernel\MessengerTrimPass;
+use Idno\Kernel\TwigTrimPass;
 use Idno\Legacy\LegacyBootstrap;
 use Idno\Upgrade\SchemaGate;
 use Idno\Upgrade\SchemaStatus;
 use Idno\Upgrade\UpgradePage;
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -75,12 +77,14 @@ class Kernel extends BaseKernel
     /**
      * Removes the console commands and the request listener DoctrineBundle registers that Idno
      * does not use (see DoctrineTrimPass), and the Messenger command that creates tables (see
-     * MessengerTrimPass).
+     * MessengerTrimPass), and what TwigBundle registers that Idno does not use (see TwigTrimPass).
      */
     protected function build(ContainerBuilder $container): void
     {
         $container->addCompilerPass(new DoctrineTrimPass());
         $container->addCompilerPass(new MessengerTrimPass());
+        // Before the bundle's loader pass collects the loaders (priority 0)
+        $container->addCompilerPass(new TwigTrimPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
     }
 
     /**

@@ -11,7 +11,7 @@ final class LocatedTemplate
 {
     /**
      * @param string $path        the file
-     * @param string $engine      what renders it: `php`
+     * @param string $engine      what renders it: `php` or `twig`
      * @param string $type        the template type directory it was found in
      * @param string $base        the cascade directory it was found in
      * @param string $logicalName `<type>/<name>.<extension>`

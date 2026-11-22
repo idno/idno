@@ -49,6 +49,8 @@ Here, any calls to `template/one` will also call `mytheme/template/one` with the
 
 A `[Prepend Extensions]` section works the same way, but draws the extra template before the original, as the Cherwell theme does for `admin/menu/items`.
 
+A theme's templates may be Twig templates (`.html.twig`) as well as PHP ones: see [Twig templates](../templating/index.md#twig-templates). A theme can change one block of a core Twig template with `{% extends '@core/default/<name>.html.twig' %}`.
+
 ## Example
 
 Let's say your theme is called PDX Carpet.

@@ -1,0 +1,1 @@
+<?php echo 'core:default/tw-core-php.tpl.php|';

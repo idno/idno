@@ -59,6 +59,16 @@ final class TemplateRendererTest extends TestCase
             {
                 return self::class;
             }
+
+            public function draw($templateName, $returnBlank = true)
+            {
+                return '';
+            }
+
+            public function drawSlot($name)
+            {
+                return '';
+            }
         };
     }
 
@@ -289,5 +299,67 @@ final class TemplateRendererTest extends TestCase
 
         $this->assertSame('default/e2|default/x|', $renderer->draw('x', [], 'default', $this->context));
         $this->assertSame('default/e|default/x|', $this->draw('x'), 'the original is unchanged');
+    }
+
+    public function testDrawSlotDrawsContributionsOnly(): void
+    {
+        $this->slots->extend('x', 'e');
+        $this->slots->extend('x', 'etype', false, 'alt');
+        $this->slots->extend('x', 'e2', false, 'other');
+        $this->slots->prepend('x', 'p1');
+        $this->slots->replace('x', 'r');
+        $this->slots->extendWithContent('x', '<c>');
+
+        $this->assertSame('default/p1|default/e|<c>', $this->renderer->drawSlot('x', [], 'default', $this->context));
+        $this->assertSame('default/p1|default/e|alt/etype|<c>', $this->renderer->drawSlot('x', [], 'alt', $this->context));
+        $this->assertSame('', $this->renderer->drawSlot('nothing', [], 'default', $this->context));
+    }
+
+    public function testATwigFileWithNoTwigEngineIsAnErrorNotPhp(): void
+    {
+        $twig = $this->core . '/templates/default/t.html.twig';
+        file_put_contents($twig, '<?php echo "executed";');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('no Twig engine');
+        $this->draw('t');
+    }
+
+    public function testATwigFileIsRenderedByTheTwigEngine(): void
+    {
+        file_put_contents($this->core . '/templates/default/t.html.twig', '{{ a }}');
+        $engine = new class () implements \Idno\Templating\TemplateEngine {
+            public function render(\Idno\Templating\LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string
+            {
+                return 'twig:' . $template->logicalName . ':' . json_encode($vars);
+            }
+        };
+        $renderer = new TemplateRenderer(new TemplateLocator(new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine(), $engine);
+        $trace = [];
+        TemplateRenderer::$trace = static function (string $type, string $name, string $path) use (&$trace): void {
+            $trace[] = [$type, $name, basename($path)];
+        };
+
+        $this->assertSame('twig:default/t.html.twig:{"a":1}', $renderer->draw('t', ['a' => 1], 'default', $this->context));
+        $this->assertSame([['default', 't', 't.html.twig']], $trace);
+    }
+
+    public function testADoubledSlashNameWithOnlyATwigFileDrawsNothingAndWithBothDrawsPhp(): void
+    {
+        mkdir($this->core . '/templates/default/a', 0700, true);
+        file_put_contents($this->core . '/templates/default/a/b.html.twig', '{{ a }}');
+        $engine = new class () implements \Idno\Templating\TemplateEngine {
+            public function render(\Idno\Templating\LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string
+            {
+                throw new \LogicException('the Twig engine is not offered a name the loader refuses');
+            }
+        };
+        $renderer = new TemplateRenderer(new TemplateLocator(new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine(), $engine);
+
+        $this->assertNull($renderer->draw('a//b', [], 'default', $this->context), 'only a Twig file: not found');
+
+        file_put_contents($this->core . '/templates/default/a/b.tpl.php', 'php b|');
+        $renderer = new TemplateRenderer(new TemplateLocator(new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine(), $engine);
+        $this->assertSame('php b|', $renderer->draw('a//b', [], 'default', $this->context), 'the .tpl.php file is drawn');
     }
 }

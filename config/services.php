@@ -40,7 +40,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // code. The excluded files are wired explicitly below, or are not services at all.
     $excludes = [
         // Compiler passes, registered by Idno\Kernel::build().
-        'Kernel' => ['DoctrineTrimPass.php', 'MessengerTrimPass.php'],
+        'Kernel' => ['DoctrineTrimPass.php', 'MessengerTrimPass.php', 'TwigTrimPass.php'],
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
@@ -80,9 +80,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // remote client, so it is wired by hand below.
         'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
-        // registry and the renderer are wired below (the renderer's Twig engine stays unset until it exists).
-        'Templating' => ['LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TypeChain.php'],
-        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        // registry, the renderer, the Twig loader and the Twig engine are wired below.
+        'Templating' => ['CascadeTwigLoader.php', 'LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
+        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -361,10 +361,36 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Templating\TemplateLocator::class)->public();
     $services->set(\Idno\Templating\PhpTemplateEngine::class)->public();
     $services->set(\Idno\Templating\TemplateRenderer::class)
-        ->args([service(\Idno\Templating\TemplateLocator::class), service(\Idno\Templating\SlotRegistry::class), service(\Idno\Templating\PhpTemplateEngine::class), null])
+        ->args([service(\Idno\Templating\TemplateLocator::class), service(\Idno\Templating\SlotRegistry::class), service(\Idno\Templating\PhpTemplateEngine::class), service(\Idno\Templating\TwigTemplateEngine::class)])
         ->autowire(false)
         ->autoconfigure(false)
         ->public();
+    // Twig (TwigBundle, config/packages/twig.php) is the second engine of the cascade. The engine holds a closure to the
+    // `twig` environment, so the environment is built when the first Twig file is drawn and not before; the loader is the
+    // only one in the chain (Idno\Kernel\TwigTrimPass untags the bundle's own); the extension's translation is over the
+    // legacy language service, fetched when a string is first translated.
+    $services->set(\Idno\Templating\TwigTemplateEngine::class)
+        ->args([service_closure('twig')])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->set(\Idno\Templating\CascadeTwigLoader::class)
+        ->args([service(\Idno\Templating\TemplateCascade::class)])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public()
+        ->tag('twig.loader', ['priority' => 100]);
+    $services->set(\Idno\Legacy\LegacyTemplateTranslation::class)
+        ->args([service_closure(\Idno\Core\Language::class)])
+        ->autowire(false)
+        ->autoconfigure(false);
+    $services->alias(\Idno\Templating\TemplateTranslation::class, \Idno\Legacy\LegacyTemplateTranslation::class);
+    $services->set(\Idno\Templating\IdnoTwigExtension::class)
+        ->args([service(\Idno\Templating\TemplateTranslation::class)])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public()
+        ->tag('twig.extension');
 
     // The queue of events (Idno\Queue, config/packages/messenger.php). The handler and the worker
     // middleware depend on two small interfaces, implemented over the legacy event dispatcher and

@@ -111,6 +111,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()->alias('idno.test.messenger_transport_idno', 'messenger.transport.idno')->public();
     $container->services()->alias('idno.test.messenger_transport_failed', 'messenger.transport.failed')->public();
     $container->services()->alias('idno.test.messenger_bus', 'messenger.bus.default')->public();
+    // The Twig environment is private; this public alias lets a test check how it is built and when.
+    $container->services()->alias('idno.test.twig', 'twig')->public();
     $container->services()->alias('idno.test.queue_event_trigger', \Idno\Queue\EventTrigger::class)->public();
     $container->services()->alias('idno.test.queue_user_context', \Idno\Queue\UserContext::class)->public();
     $container->services()->alias('idno.test.queue_entity_cache', \Idno\Queue\EntityCache::class)->public();

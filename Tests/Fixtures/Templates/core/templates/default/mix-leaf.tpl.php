@@ -1,0 +1,1 @@
+<?php echo 'leaf[a=' . ($a ?? 'unset') . ' b=' . ($b ?? 'unset') . ' loop=' . (isset($loop) ? 'set' : 'unset') . ' parent=' . (isset($_parent) ? 'set' : 'unset') . ']';

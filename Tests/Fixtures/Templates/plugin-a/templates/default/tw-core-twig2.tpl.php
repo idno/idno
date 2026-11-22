@@ -1,0 +1,1 @@
+<?php echo 'plugin-a:default/tw-core-twig2.tpl.php|';

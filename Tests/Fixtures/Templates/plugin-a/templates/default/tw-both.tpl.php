@@ -1,0 +1,1 @@
+<?php echo 'plugin-a:default/tw-both.tpl.php|';
