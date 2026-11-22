@@ -248,7 +248,7 @@ namespace Idno\Core\Bonita {
             if ($templateType === null || !\Idno\Templating\TypeChain::selectable($templateType)) {
                 return false;
             }
-            if (strtolower($templateType) === 'modern') {
+            if (in_array(strtolower($templateType), ['default', 'modern'], true)) {
                 // The web page is drawn from `modern` files first anyway (a third-party plugin's), so `modern` is the default type
                 $templateType = 'default';
             }

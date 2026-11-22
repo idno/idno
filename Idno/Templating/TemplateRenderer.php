@@ -85,7 +85,7 @@ final class TemplateRenderer
             $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
         }
         $replaced = false;
-        foreach (['*', $this->value($type)] as $slotType) {
+        foreach ($this->slotTypes($name, $this->value($type)) as $slotType) {
             $replacement = $this->slots->replacement($name, $slotType);
             if ($replacement !== null && $replacements) {
                 $result .= $this->drawFile($replacement, $vars, $type, $context, $fallbackToDefault);
@@ -121,7 +121,7 @@ final class TemplateRenderer
         foreach ($this->slots->prepends($name) as $template) {
             $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
         }
-        foreach (['*', $this->value($type)] as $slotType) {
+        foreach ($this->slotTypes($name, $this->value($type)) as $slotType) {
             foreach ($this->slots->extensions($name, $slotType) as $template) {
                 $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
             }
@@ -164,18 +164,42 @@ final class TemplateRenderer
     }
 
     /**
+     * The types whose registrations a draw of $name applies: `*`, the type, and for a web page also `modern`, because the type a
+     * Twenty26 theme's plugin registered for (`extendTemplate($name, $t, false, 'modern')`) is the web page's now. Using one logs the
+     * deprecation line (once a process).
+     *
+     * @return list<string>
+     */
+    private function slotTypes(string $name, mixed $type): array
+    {
+        $type = (string) $type;
+        $types = ['*', $type];
+        if (strtolower($type) === 'default' && ($this->slots->replacement($name, 'modern') !== null || $this->slots->extensions($name, 'modern') !== [])) {
+            $types[] = 'modern';
+            $this->logDeprecation('Deprecated: the template `' . preg_replace('/[[:cntrl:]]+/', ' ', $name) . '` has an extension or replacement registered for the `modern` template type. The `modern` template type is retired and its registrations are applied to web pages for this release only: register for the default type.');
+        }
+
+        return $types;
+    }
+
+    /**
      * A `modern` template directory (a third-party plugin's, written for the Twenty26 theme) still wins on web pages for one
      * release. The first such file a process draws logs one line naming it: a request is a process, so it is one line a request.
      */
     private function logModernDeprecation(LocatedTemplate $located): void
     {
+        $path = (string) preg_replace('/[[:cntrl:]]+/', ' ', $located->path);
+        $this->logDeprecation('Deprecated: the template ' . $path . ' is in a `modern` template directory. The `modern` template type is retired and its directories are read for this release only: move the file to templates/default/.');
+    }
+
+    private function logDeprecation(string $line): void
+    {
         if ($this->deprecated->logged || $this->logger === null) {
             return;
         }
         $this->deprecated->logged = true;
-        $path = (string) preg_replace('/[[:cntrl:]]+/', ' ', $located->path);
         try {
-            ($this->logger)()->warning('Deprecated: the template ' . $path . ' is in a `modern` template directory. The `modern` template type is retired and its directories are read for this release only: move the file to templates/default/.');
+            ($this->logger)()->warning($line);
         } catch (\Throwable) {
             // A page is never refused because a line could not be logged
         }

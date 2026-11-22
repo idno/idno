@@ -49,6 +49,8 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
     {
         return [
             'Idno 2026' => ['default'],
+            // What a feed or a mail draws: the `classic` templates, reached by the rss type's fallback (never selected)
+            'classic, through the rss chain' => ['rss'],
         ];
     }
 

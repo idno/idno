@@ -84,7 +84,7 @@ Finally, you'd create a normal static CSS file in `/Themes/PDXCarpet/css/default
 
 ## Templates of the `modern` type
 
-Idno 2026 used to be a theme, `Twenty26`, whose templates were in a `modern` template type. They are core's own `default` templates now, and a theme or plugin overrides them in `templates/default/` like any other. The `modern` type still works for one release, so that a third-party plugin or theme written for that theme keeps working: a file in `templates/modern/` is drawn before the `default` one on web pages, and the first one drawn in a request logs one deprecation line that names it. Move such files to `templates/default/`; the `modern` type is removed in 3.0. `?_t=modern` is the same as the default type.
+Idno 2026 used to be a theme, `Twenty26`, whose templates were in a `modern` template type. They are core's own `default` templates now, and a theme or plugin overrides them in `templates/default/` like any other. The `modern` type still works for one release, so that a third-party plugin or theme written for that theme keeps working: a file in `templates/modern/` is drawn before the `default` one on web pages, and the first one drawn in a request logs one deprecation line that names it. Move such files to `templates/default/`; the `modern` type is removed in 3.0. `?_t=modern` is the same as the default type. `getTemplateType()` returns `default` now where it returned `modern` on a Twenty26 site: test for `default`. Extensions and replacements a plugin registered for the type `modern` are applied to web pages too for this release, with the deprecation line; register them for the default type.
 
 ## The built-in look
 

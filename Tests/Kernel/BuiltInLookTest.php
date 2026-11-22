@@ -244,26 +244,69 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         return \$status->save(true);
         PHP);
 
-        $json = $this->site()->request('GET', $paths['status'] . '?_t=json');
-        $this->assertSame(200, $json->status);
         $html = $this->site()->request('GET', $paths['status']);
         $this->assertSame(200, $html->status);
         $this->assertStringContainsString('Mallory', $html->body, 'the annotations are drawn: the test is looking at them');
         $this->assertStringContainsString('Mallory &quot;&gt;&lt;img', $html->body, 'a name is text');
+        $this->assertMarkupIsInert($html->body, 'the page', true);
+        $this->assertStringNotContainsString('<script>alert(5)', $html->body);
+        $this->assertStringNotContainsString('<img src=x', $html->body);
 
+        // What a feed and the JSON draw come from the `classic` templates: the hostile values are as inert there.
+        $json = $this->site()->request('GET', $paths['status'] . '?_t=json');
+        $this->assertSame(200, $json->status);
+        $data = json_decode($json->body, true);
+        $this->assertIsArray($data, 'the JSON of the post');
+        $this->assertStringContainsString('Mallory', $json->body, 'the annotations are in it');
+        // The `annotation` and `annotations` of the JSON are the stored data (the sender's text, as a name or a title is): only what a template drew is markup
+        unset($data['annotation'], $data['annotations'], $data['object']['annotations']);
+        array_walk_recursive($data, function ($value, $key) {
+            if (is_string($value) && str_contains($value, '<')) {
+                $this->assertMarkupIsInert($value, 'the JSON value ' . $key);
+            }
+        });
+
+        foreach (['', $paths['status']] as $path) {
+            $rss = $this->site()->request('GET', $path . '?_t=rss');
+            $this->assertSame(200, $rss->status, $path);
+            $xml = new \DOMDocument();
+            $this->assertTrue(@$xml->loadXML($rss->body), 'the feed is well-formed XML: ' . substr($rss->body, 0, 200));
+            foreach ($xml->getElementsByTagName('*') as $element) {
+                foreach ($element->attributes ?? [] as $attribute) {
+                    $this->assertDoesNotMatchRegularExpression('/^on/i', $attribute->name, 'the feed');
+                    $this->assertDoesNotMatchRegularExpression('/^\s*javascript:/i', $attribute->value, 'the feed');
+                }
+                if (!$element->hasChildNodes() || $element->getElementsByTagName('*')->length > 0) {
+                    continue;
+                }
+                if (str_contains($element->textContent, '<')) {
+                    $this->assertMarkupIsInert($element->textContent, 'the feed element ' . $element->nodeName);
+                }
+            }
+            $this->assertStringNotContainsString('<script>alert(5)', $rss->body);
+        }
+    }
+
+    /**
+     * No element runs script by an `on...` attribute and no address starts with `javascript:`; a fragment has no script element
+     * (a whole page has its own).
+     */
+    private function assertMarkupIsInert(string $html, string $where, bool $pageWithItsOwnScripts = false): void
+    {
         $document = new \DOMDocument();
-        @$document->loadHTML($html->body);
+        @$document->loadHTML('<?xml encoding="utf-8"?>' . $html);
         foreach ($document->getElementsByTagName('*') as $element) {
+            if (!$pageWithItsOwnScripts) {
+                $this->assertNotSame('script', strtolower($element->nodeName), $where . ' has a script element');
+            }
             foreach ($element->attributes ?? [] as $attribute) {
                 $name = strtolower($attribute->name);
-                $this->assertDoesNotMatchRegularExpression('/^on/', $name, '<' . $element->nodeName . '> has the attribute ' . $attribute->name . ' that a hostile value opened');
+                $this->assertDoesNotMatchRegularExpression('/^on/', $name, $where . ': <' . $element->nodeName . '> has the attribute ' . $attribute->name . ' that a hostile value opened');
                 if (in_array($name, ['href', 'src', 'action', 'poster', 'srcset', 'data'], true)) {
-                    $this->assertDoesNotMatchRegularExpression('/^\s*javascript:/i', $attribute->value, '<' . $element->nodeName . ' ' . $name . '>');
+                    $this->assertDoesNotMatchRegularExpression('/^\s*javascript:/i', $attribute->value, $where . ': <' . $element->nodeName . ' ' . $name . '>');
                 }
             }
         }
-        $this->assertStringNotContainsString('<script>alert(5)', $html->body);
-        $this->assertStringNotContainsString('<img src=x', $html->body);
     }
 
     public function testDraftsPageIsServedFromCore(): void

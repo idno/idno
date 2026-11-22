@@ -193,6 +193,11 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
     public function testConfiguredThemeLoadsOnlyForRequestsWithAHostHeader(): void
     {
         $theme = dirname(__DIR__, 2) . '/Themes/ZzProbeTheme';
+        // A directory a killed run left would be a theme of the site: remove it before making ours
+        foreach (glob($theme . '/*') ?: [] as $stale) {
+            is_file($stale) && unlink($stale);
+        }
+        is_dir($theme) && rmdir($theme);
         mkdir($theme, 0777, true);
         try {
             file_put_contents($theme . '/theme.ini', "[Theme description]\nname = 'Zz probe'\nversion = '1.0'\n");
@@ -210,12 +215,10 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
             $this->assertSame('default', $console['template_type']);
             $this->assertSame(0, $console['probe_routes']);
         } finally {
-            foreach (['/theme.ini', '/Controller.php'] as $file) {
-                if (is_file($theme . $file)) {
-                    unlink($theme . $file);
-                }
+            foreach (glob($theme . '/*') ?: [] as $file) {
+                is_file($file) && unlink($file);
             }
-            rmdir($theme);
+            is_dir($theme) && rmdir($theme);
         }
     }
 

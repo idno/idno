@@ -350,6 +350,37 @@ final class TemplateRendererTest extends TestCase
         $this->assertStringContainsString($plugin . '/templates/modern/x.tpl.php', $lines[0], 'it names the file');
     }
 
+    /**
+     * A third-party plugin written for the Twenty26 theme registered extensions and replacements for the type `modern`
+     * (`extendTemplate($name, $extension, false, 'modern')`). The type of a web page is `default` now, so they apply to it, with
+     * one deprecation line; a feed never gets them.
+     */
+    public function testRegistrationsForTheModernTypeApplyToAWebPageWithOneDeprecationLine(): void
+    {
+        $lines = [];
+        $logger = new class ($lines) extends \Psr\Log\AbstractLogger {
+            public function __construct(public array &$lines)
+            {
+            }
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->lines[] = $level . ': ' . $message;
+            }
+        };
+        $renderer = new TemplateRenderer(new TemplateLocator(new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine(), null, static fn () => $logger);
+        $this->slots->extend('x', 'e', false, 'modern');
+        $this->slots->replace('p1', 'r', 'modern');
+
+        $this->assertSame('default/e|default/x|', $renderer->draw('x', [], 'default', $this->context), 'the extension registered for modern follows the page');
+        $this->assertSame('default/r|', $renderer->draw('p1', [], 'default', $this->context), 'and so does the replacement');
+        $this->assertSame('default/e|', $renderer->drawSlot('x', [], 'default', $this->context));
+        $this->assertSame('default/x|', $renderer->draw('x', [], 'rss', $this->context), 'a feed gets none of them');
+        $this->assertCount(1, $lines, 'one line');
+        $this->assertStringStartsWith('warning: Deprecated: ', $lines[0]);
+        $this->assertStringContainsString('modern', $lines[0]);
+    }
+
     public function testNothingIsLoggedForAFeedOrWithoutALogger(): void
     {
         $plugin = dirname($this->core) . '/plugin';

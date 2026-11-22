@@ -2516,8 +2516,10 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, ActivityPub, KML and mail reach them by falling back
   from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
-  `Templates::setTemplateType()` and the `?_t=` check both refuse it); `setTemplateType('modern')` sets `default`, so `?_t=modern` is the
-  default type. A third-party plugin's `default/<entity template>` override no longer changes a feed or a mail for a name `classic` has: `classic` is
+  `Templates::setTemplateType()` and the `?_t=` check both refuse it); `setTemplateType()` of `default` or `modern` in any letter case stores `default`
+  (`getTemplateType()` never returns `modern`: a plugin that tested for it tests for `default`), so `?_t=modern` is the default type. What a
+  third-party plugin registered for the type `modern` (`extendTemplate(..., 'modern')`, `replaceTemplate(..., 'modern')`) is applied to a web page
+  draw too (`TemplateRenderer::slotTypes()`, with the same one deprecation line, shared with the `modern` directory's); `Tests/Kernel/TemplateTypeNameTest`. A third-party plugin's `default/<entity template>` override no longer changes a feed or a mail for a name `classic` has: `classic` is
   tried before every directory's `default`.
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
   puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
@@ -2623,7 +2625,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). The rest of
   `default` (a Bootstrap-era template with no Idno 2026 one) still draws, as it did on a Twenty26 site.
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
-  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
+  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
 
