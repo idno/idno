@@ -43,7 +43,7 @@ namespace Idno\Stats {
                 return static::$timerTotals[$timer];
             }
 
-            throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_("Timer %s has not been started.", [$timer]));
+            throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_("Timer %s has not been started.", [$timer]));
         }
 
     }

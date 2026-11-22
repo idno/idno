@@ -8,7 +8,8 @@ namespace Tests\Core {
      * The error page (templates/default/pages/500.tpl.php) is what Page::exception() draws
      * when an exception is thrown while a page is being served. The exception's message can
      * contain text taken from the request, so the page must print it, and in debug mode the
-     * stack trace, as text and never as HTML.
+     * stack trace, as text and never as HTML. A technical message (see
+     * \Idno\Core\ExceptionMessage) is shown in debug mode only.
      */
     class ErrorPageTest extends \Tests\IdnoTestCase
     {
@@ -35,16 +36,21 @@ namespace Tests\Core {
         /**
          * Draw the error page for an exception, as Page::exception() does.
          *
-         * @param  boolean $debug Whether the site is in debug mode
+         * @param  boolean         $debug     Whether the site is in debug mode
+         * @param  \Throwable|null $exception The exception; by default one with a friendly message
          * @return string The page body
          */
-        private function errorPage($debug)
+        private function errorPage($debug, $exception = null)
         {
             \Idno\Core\Idno::site()->config()->debug = $debug;
 
+            if ($exception === null) {
+                $exception = new \RuntimeException(self::MESSAGE);
+            }
+
             $t = new DefaultTemplate();
 
-            return $t->__(['exception' => new \RuntimeException(self::MESSAGE)])->draw('pages/500');
+            return $t->__(['exception' => $exception])->draw('pages/500');
         }
 
         /**
@@ -98,6 +104,30 @@ namespace Tests\Core {
             $this->assertStringContainsString('Stack trace', $page);
             $this->assertStringContainsString('#0 ', $page);
             $this->assertStringContainsString(__FILE__, $page);
+        }
+
+        public function testTechnicalMessageIsNotShownWhenNotInDebugMode()
+        {
+            $page = $this->errorPage(false, new \Idno\Exceptions\TechnicalException(self::MESSAGE));
+
+            $this->assertStringContainsString(
+                '<p class="p-summary">' . \Idno\Core\Idno::site()->language()->_('Oh no! Something went wrong.') . '</p>',
+                $page,
+                'The visitor should be told only that something went wrong.'
+            );
+            $this->assertStringNotContainsString('Could not open', $page, 'The technical message should not be shown.');
+            $this->assertStringNotContainsString('alert(1)', $page, 'The technical message should not be shown.');
+            $this->assertStringNotContainsString('dbuser', $page, 'The technical message should not be shown.');
+            $this->assertStringNotContainsString('TechnicalException', $page, 'The exception class should not be shown.');
+        }
+
+        public function testTechnicalMessageIsShownEscapedInDebugMode()
+        {
+            $page = $this->errorPage(true, new \Idno\Exceptions\TechnicalException(self::MESSAGE));
+
+            $this->assertNothingIsPrintedAsHTML($page);
+            $this->assertStringContainsString('<p class="p-summary">' . self::ESCAPED . '</p>', $page);
+            $this->assertStringContainsString('TechnicalException: ' . self::ESCAPED, $page);
         }
 
     }

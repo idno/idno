@@ -290,16 +290,37 @@ Each content plugin has an `Entry.php` entity class that defines
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
   `Page::exception()`, which draws `templates/default/pages/500.tpl.php`. The page shows
-  the exception's message to every visitor, and the whole exception (message and stack
-  trace) when `debug` is set in the configuration. Both are passed through
-  `htmlspecialchars()`, because a message can contain text taken from the request. So an
-  exception message is plain text: HTML in it is displayed, not rendered. The message is
-  still shown to visitors, so don't put anything in one that they shouldn't see.
-  `Tests/Core/ErrorPageTest.php` checks this.
+  the exception's message, and the whole exception (message and stack trace) when `debug`
+  is set in the configuration. Both are passed through `htmlspecialchars()`, because a
+  message can contain text taken from the request. So an exception message is plain text:
+  HTML in it is displayed, not rendered. `Tests/Core/ErrorPageTest.php` checks this.
+- Exception messages, friendly and technical: `\Idno\Core\ExceptionMessage::forVisitor()`
+  decides what a visitor is told about an exception, and the error page and the JSON shells
+  both call it. A message is taken to be written for the visitor, and is shown, unless the
+  exception's type says it is a technical one. A technical message is logged, and shown
+  only when `debug` is set; otherwise the visitor is told only that something went wrong.
+  A type is technical when it implements `\Idno\Exceptions\Technical`; when it is a PHP
+  error (`\Error`) or a PHP warning turned into an exception (`\ErrorException`); when it,
+  or a class it extends, belongs to a PHP extension or to a library in a `vendor/`
+  directory (`\PDOException`, the MongoDB driver's exceptions, Twig's errors); or when it
+  was thrown by a library's code, whatever its type. A type that implements
+  `\Idno\Exceptions\Friendly` is never technical. So:
+  - throw `\Idno\Exceptions\TechnicalException` (it extends `\RuntimeException`) for a
+    message written for whoever maintains the site: one that names classes, identifiers,
+    queries or paths, or repeats what another server or a driver said;
+  - throw anything else (`\RuntimeException`, `SecurityException`,
+    `ConfigurationException`) only with a message that any visitor may read. This is the
+    default, so a message that should have been technical and is not marked is shown;
+  - to show a message whose type would be taken as technical, throw
+    `\Idno\Exceptions\FriendlyException` or implement `\Idno\Exceptions\Friendly`.
+
+  Code that catches an exception and shows its message itself is not affected.
+  `Tests/Core/ExceptionMessageTest.php` checks the rule.
 - Error responses in JSON: for the `json` and `jsonp` template types, `Page::exception()`
   answers with the page shell (`templates/json/shell.tpl.php`,
   `templates/jsonp/shell.tpl.php`), which adds an `exception` object to the response. It
-  holds the exception's `message` only. Its `class`, `file` and `line` describe the server:
+  holds a `message` only: the exception's message, or, when that is a technical one, that
+  something went wrong. The exception's `class`, `file` and `line` describe the server:
   `Page::exception()` logs them, and the shells add them to the response only when `debug`
   is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
   `Tests/Core/fixtures/exception_response.php` in its own PHP process.

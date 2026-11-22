@@ -66,7 +66,7 @@ class ATProtoClient
         }
 
         if (empty($did)) {
-            throw new \RuntimeException('Could not resolve handle to DID: ' . $handle);
+            throw new \Idno\Exceptions\TechnicalException('Could not resolve handle to DID: ' . $handle);
         }
 
         // Resolve DID document to find PDS
@@ -87,16 +87,16 @@ class ATProtoClient
             $domain = str_replace(':', '/', $domain);
             $resp = self::httpGet('https://' . $domain . '/.well-known/did.json');
         } else {
-            throw new \RuntimeException('Unsupported DID method: ' . $did);
+            throw new \Idno\Exceptions\TechnicalException('Unsupported DID method: ' . $did);
         }
 
         if (!$resp || $resp['status'] !== 200) {
-            throw new \RuntimeException('Failed to resolve DID document for: ' . $did);
+            throw new \Idno\Exceptions\TechnicalException('Failed to resolve DID document for: ' . $did);
         }
 
         $doc = json_decode($resp['body'], true);
         if (empty($doc['service'])) {
-            throw new \RuntimeException('No service entries in DID document for: ' . $did);
+            throw new \Idno\Exceptions\TechnicalException('No service entries in DID document for: ' . $did);
         }
 
         foreach ($doc['service'] as $svc) {
@@ -108,7 +108,7 @@ class ATProtoClient
             }
         }
 
-        throw new \RuntimeException('No PDS service endpoint found in DID document for: ' . $did);
+        throw new \Idno\Exceptions\TechnicalException('No PDS service endpoint found in DID document for: ' . $did);
     }
 
     /**
@@ -134,12 +134,12 @@ class ATProtoClient
 
         $resp = self::httpGet($authServerIssuer . '/.well-known/oauth-authorization-server');
         if (!$resp || $resp['status'] !== 200) {
-            throw new \RuntimeException('Failed to fetch authorization server metadata from: ' . $authServerIssuer);
+            throw new \Idno\Exceptions\TechnicalException('Failed to fetch authorization server metadata from: ' . $authServerIssuer);
         }
 
         $metadata = json_decode($resp['body'], true);
         if (empty($metadata['authorization_endpoint']) || empty($metadata['token_endpoint'])) {
-            throw new \RuntimeException('Invalid authorization server metadata');
+            throw new \Idno\Exceptions\TechnicalException('Invalid authorization server metadata');
         }
 
         return $metadata;
@@ -162,7 +162,7 @@ class ATProtoClient
         ]);
 
         if (!$key) {
-            throw new \RuntimeException('Failed to generate ES256 key: ' . openssl_error_string());
+            throw new \Idno\Exceptions\TechnicalException('Failed to generate ES256 key: ' . openssl_error_string());
         }
 
         openssl_pkey_export($key, $privatePem);
@@ -274,7 +274,7 @@ class ATProtoClient
         // 6. PAR request
         $parEndpoint = $authServer['pushed_authorization_request_endpoint'] ?? null;
         if (empty($parEndpoint)) {
-            throw new \RuntimeException('Authorization server does not support PAR');
+            throw new \Idno\Exceptions\TechnicalException('Authorization server does not support PAR');
         }
 
         $clientId = self::getClientMetadataUrl();
@@ -329,13 +329,13 @@ class ATProtoClient
 
         if ($parResponse['status'] !== 201 && $parResponse['status'] !== 200) {
             $err = json_decode($parResponse['body'], true);
-            throw new \RuntimeException('PAR request failed: ' . ($err['error_description'] ?? $err['error'] ?? $parResponse['body']));
+            throw new \Idno\Exceptions\TechnicalException('PAR request failed: ' . ($err['error_description'] ?? $err['error'] ?? $parResponse['body']));
         }
 
         $parData = json_decode($parResponse['body'], true);
         $requestUri = $parData['request_uri'] ?? null;
         if (empty($requestUri)) {
-            throw new \RuntimeException('PAR response missing request_uri');
+            throw new \Idno\Exceptions\TechnicalException('PAR response missing request_uri');
         }
 
         // 7. Build authorization URL
@@ -418,14 +418,14 @@ class ATProtoClient
 
         if ($response['status'] !== 200) {
             $err = json_decode($response['body'], true);
-            throw new \RuntimeException('Token exchange failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
+            throw new \Idno\Exceptions\TechnicalException('Token exchange failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
         }
 
         $tokenData = json_decode($response['body'], true);
 
         // Verify the sub matches the expected DID
         if (($tokenData['sub'] ?? '') !== $pendingAuth['did']) {
-            throw new \RuntimeException('Token DID mismatch: expected ' . $pendingAuth['did'] . ', got ' . ($tokenData['sub'] ?? 'none'));
+            throw new \Idno\Exceptions\TechnicalException('Token DID mismatch: expected ' . $pendingAuth['did'] . ', got ' . ($tokenData['sub'] ?? 'none'));
         }
 
         return [
@@ -448,7 +448,7 @@ class ATProtoClient
     public function refreshTokens(): void
     {
         if (empty($this->session['refresh_token'])) {
-            throw new \RuntimeException('No refresh token available');
+            throw new \Idno\Exceptions\TechnicalException('No refresh token available');
         }
 
         $tokenEndpoint = $this->session['auth_server']['token_endpoint'];
@@ -499,7 +499,7 @@ class ATProtoClient
 
         if ($response['status'] !== 200) {
             $err = json_decode($response['body'], true);
-            throw new \RuntimeException('Token refresh failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
+            throw new \Idno\Exceptions\TechnicalException('Token refresh failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
         }
 
         $tokenData = json_decode($response['body'], true);
@@ -516,7 +516,7 @@ class ATProtoClient
     private function ensureValidToken(): void
     {
         if (empty($this->session['access_token'])) {
-            throw new \RuntimeException('Not authenticated with AT Protocol PDS');
+            throw new \Idno\Exceptions\TechnicalException('Not authenticated with AT Protocol PDS');
         }
 
         // Refresh if token expires within 60 seconds
@@ -637,7 +637,7 @@ class ATProtoClient
 
         if ($response['status'] >= 400) {
             $err = json_decode($response['body'], true);
-            throw new \RuntimeException(
+            throw new \Idno\Exceptions\TechnicalException(
                 'XRPC error (' . $response['status'] . '): ' .
                 ($err['message'] ?? $err['error'] ?? $response['body'])
             );
@@ -787,12 +787,12 @@ class ATProtoClient
 
         $privateKey = openssl_pkey_get_private($privateKeyPem);
         if (!$privateKey) {
-            throw new \RuntimeException('Invalid private key: ' . openssl_error_string());
+            throw new \Idno\Exceptions\TechnicalException('Invalid private key: ' . openssl_error_string());
         }
 
         $success = openssl_sign($signingInput, $derSignature, $privateKey, OPENSSL_ALGO_SHA256);
         if (!$success) {
-            throw new \RuntimeException('JWT signing failed: ' . openssl_error_string());
+            throw new \Idno\Exceptions\TechnicalException('JWT signing failed: ' . openssl_error_string());
         }
 
         // Convert DER signature to the raw R||S format required by JWS
@@ -928,7 +928,7 @@ class ATProtoClient
         if ($response === false) {
             $error = curl_error($ch);
             curl_close($ch);
-            throw new \RuntimeException('HTTP POST failed: ' . $error);
+            throw new \Idno\Exceptions\TechnicalException('HTTP POST failed: ' . $error);
         }
 
         $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);

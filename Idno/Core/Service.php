@@ -55,7 +55,7 @@ namespace Idno\Core {
             $url = str_replace('http://', '', $url);
 
             if (empty($url)) {
-                throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_('Url not provided to token generation.'));
+                throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_('Url not provided to token generation.'));
             }
 
             return hash_hmac('sha256', $url, $site_secret);
@@ -72,7 +72,7 @@ namespace Idno\Core {
         {
 
             if (empty($endpoint)) {
-                throw new \RuntimeException('No endpoint given');
+                throw new \Idno\Exceptions\TechnicalException('No endpoint given');
             }
 
             if (strpos($endpoint, 'http')===false) { // Handle variation in endpoint call
@@ -95,11 +95,11 @@ namespace Idno\Core {
                 if ($error != 200) {
 
                     if (empty($content)) {
-                        throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_('Response from service endpoint was not json'));
+                        throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_('Response from service endpoint was not json'));
                     }
 
                     if (!empty($content->exception->message)) {
-                        throw new \RuntimeException($content->exception->message);
+                        throw new \Idno\Exceptions\TechnicalException($content->exception->message);
                     }
 
                 } else {
@@ -109,7 +109,7 @@ namespace Idno\Core {
                 }
 
             } else {
-                throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_('No result from endpoint.'));
+                throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_('No result from endpoint.'));
             }
              return false;
 

@@ -333,7 +333,7 @@ namespace Idno\Data {
          */
         public function generateID() : string
         {
-            throw new \RuntimeException('generateID() should not be used for Mongo');
+            throw new \Idno\Exceptions\TechnicalException('generateID() should not be used for Mongo');
         }
 
         /**
