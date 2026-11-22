@@ -22,6 +22,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set
 * Security: error pages and JSON error responses show technical error messages (those of PHP, the database driver and libraries, for example) only when `debug` is set. Plugins can throw `\Idno\Exceptions\TechnicalException` for a message that visitors shouldn't see
 * Security: ActivityPub deliveries are refused unless their signature covers the request target, host, date and body digest
+* Security: API requests (signed with a user's API key, or carrying an access token) are refused on the account pages under `/account/`, so a leaked key or token can't change the account's password or email address or read its API key. Those pages need a browser session
 * Security: IndieAuth authorization codes and Micropub access tokens are generated from the system's random source. Tokens already issued keep working
 * IndieAuth supports PKCE (`S256`), and no longer issues an access token when a client asked only to authenticate (no scope)
 * Fixed draft posts being readable by URL when their access was set to public

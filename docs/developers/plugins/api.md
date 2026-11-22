@@ -39,6 +39,8 @@ curl -s \
 Almost all requests that you make will require some sort of access credentials, and so must be signed. 
 The default method for doing this is through HTTP header variables. The bundled IndiePub plugin also provides IndieAuth and a Micropub endpoint (```/micropub/endpoint```) for clients that use bearer tokens.
 
+The account pages, those under ```/account/``` (settings, password, the API key itself, access tokens), are the exception: they answer an API request with a 403, whatever it is signed with. They can only be used from a logged-in browser. This includes pages that plugins register under ```/account/```.
+
 The headers are:
 
 * X-IDNO-USERNAME: the user's username (or email address).
