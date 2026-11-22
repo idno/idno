@@ -97,6 +97,12 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             //fail-by-default in case of unhandled errors
             $this->setResponse(500);
 
+            // A POST here has no form token, so it must carry its own credentials: an access
+            // token (or a signed API request). The session cookie of a logged-in browser is not
+            // enough, because a browser also sends it with requests made by other sites.
+            if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {
+                $this->error(401, 'unauthorized', 'A valid access token is required');
+            }
             $this->gatekeeper();
             // If we're here, we're authorized
 

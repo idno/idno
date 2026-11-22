@@ -234,6 +234,15 @@ Each content plugin has an `Entry.php` entity class that defines
   entities the user has no access to. An empty publish status counts as published.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
+- Pages that override `post()`: `Page::post()` is what checks the form token, so a page
+  that overrides it has no CSRF protection of its own and must not act on a session
+  cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
+  answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
+  sets after an access token (`Authorization: Bearer` or the `access_token` field) has
+  matched, and core sets after a signed API request; otherwise it answers 401. The
+  IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
+  on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
+  over HTTP with a logged-in browser.
 - HTML sanitization via HTMLPurifier
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
