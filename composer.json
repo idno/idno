@@ -65,7 +65,9 @@
         "league/flysystem": "^3",
         "league/flysystem-async-aws-s3": "^3",
         "symfony/http-client": "^8.0",
-        "symfony/mime": "^8.0"
+        "symfony/mime": "^8.0",
+        "symfony/messenger": "^8.0",
+        "symfony/doctrine-messenger": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,

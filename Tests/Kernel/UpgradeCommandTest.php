@@ -28,11 +28,15 @@ final class UpgradeCommandTest extends TestCase
 {
     private const BASELINE = '20261115000000';
 
-    /** The marker migration, recorded once the declared indexes exist. */
+    /** The empty migration of the indexed fields (it has no SQL). */
     private const MARKER = '20261115000001';
+
+    /** The newest migration (the queue's table): recorded last, once the declared indexes exist. */
+    private const NEWEST = '20261121000000';
 
     private const TABLES = [
         'idno_entities',
+        'idno_messages',
         'idno_migrations',
         'idno_reader',
         'idno_sessions',
@@ -107,10 +111,10 @@ final class UpgradeCommandTest extends TestCase
         foreach (self::TABLES as $table) {
             $this->assertTrue($catalog->hasTable($table), $table);
         }
-        $this->assertSame(self::MARKER, (new SchemaMigrator($this->connection()))->latest());
+        $this->assertSame(self::NEWEST, (new SchemaMigrator($this->connection()))->latest());
         $this->assertStringContainsString('Ran the migration ' . self::BASELINE . '.', $stdout);
-        // The marker is recorded after the indexes, never before.
-        $this->assertGreaterThan(strpos($stdout, 'Created the index '), strpos($stdout, 'Ran the migration ' . self::MARKER . '.'));
+        // The newest migration is recorded after the indexes, never before.
+        $this->assertGreaterThan(strpos($stdout, 'Created the index '), strpos($stdout, 'Ran the migration ' . self::NEWEST . '.'));
         foreach (self::CORE_INDEXES as $collection => $fields) {
             $this->assertSame([], array_values(array_diff($fields, $catalog->indexedFields($collection))), $collection . ': every core index exists');
             foreach ($fields as $field) {
@@ -145,7 +149,7 @@ final class UpgradeCommandTest extends TestCase
         [$exit, $stdout, $stderr] = $this->console('idno:upgrade', '--status');
 
         $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
-        $this->assertSame("Schema status: empty\nPending migration: " . self::BASELINE . "\nPending migration: " . self::MARKER . "\n", $stdout);
+        $this->assertSame("Schema status: empty\nPending migration: " . self::BASELINE . "\nPending migration: " . self::MARKER . "\nPending migration: " . self::NEWEST . "\n", $stdout);
         $this->assertSame('', $stderr);
         $this->assertSame([], $this->catalog()->tables(), '--status creates nothing');
 

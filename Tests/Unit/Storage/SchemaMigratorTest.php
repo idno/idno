@@ -22,11 +22,15 @@ final class SchemaMigratorTest extends TestCase
 {
     private const BASELINE = '20261115000000';
 
-    /** The marker migration: the declared indexed fields have been reconciled. */
+    /** The empty migration of the indexed fields (no SQL): recorded with the baseline; the newest migration is the one the upgrade holds back. */
     private const MARKER = '20261115000001';
+
+    /** The queue's table. */
+    private const QUEUE = '20261121000000';
 
     private const TABLES = [
         'idno_entities',
+        'idno_messages',
         'idno_migrations',
         'idno_reader',
         'idno_sessions',
@@ -66,7 +70,7 @@ final class SchemaMigratorTest extends TestCase
             $this->assertTrue($catalog->hasTable($table), $table);
         }
         $this->assertSame([], (new SchemaMigrator($connection))->pending());
-        $this->assertSame(self::MARKER, (new SchemaMigrator($connection))->latest());
+        $this->assertSame(self::QUEUE, (new SchemaMigrator($connection))->latest());
     }
 
     /**
@@ -77,7 +81,7 @@ final class SchemaMigratorTest extends TestCase
     {
         $connection = PrivateDatabase::sqliteMemory(migrate: false);
 
-        $this->assertSame([self::BASELINE, self::MARKER], (new SchemaMigrator($connection))->migrate());
+        $this->assertSame([self::BASELINE, self::MARKER, self::QUEUE], (new SchemaMigrator($connection))->migrate());
         $this->assertSame([], (new SchemaMigrator($connection))->migrate());
         $connection->close();
     }
@@ -93,7 +97,7 @@ final class SchemaMigratorTest extends TestCase
 
         $this->assertSame($before, $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name'));
         $this->assertSame('"yes"', $connection->fetchOne('select value from idno_settings where name = ?', ['kept']));
-        $this->assertSame(2, (int) $connection->fetchOne('select count(*) from idno_migrations'));
+        $this->assertSame(3, (int) $connection->fetchOne('select count(*) from idno_migrations'));
         $this->assertSame([], (new SchemaMigrator($connection))->pending());
     }
 
@@ -107,7 +111,7 @@ final class SchemaMigratorTest extends TestCase
         $connection->executeStatement('drop table idno_reader');
         $connection->executeStatement('delete from idno_migrations');
         $migrator = new SchemaMigrator($connection);
-        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending());
+        $this->assertSame([self::BASELINE, self::MARKER, self::QUEUE], $migrator->pending());
 
         $migrator->migrate();
 
@@ -124,7 +128,7 @@ final class SchemaMigratorTest extends TestCase
         $connection = self::emptyDatabase();
         $migrator = new SchemaMigrator($connection);
 
-        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending());
+        $this->assertSame([self::BASELINE, self::MARKER, self::QUEUE], $migrator->pending());
         $this->assertSame('0', $migrator->latest());
         $this->assertSame([], (new SchemaCatalog($connection))->tables(), 'asking creates nothing');
     }
@@ -146,7 +150,7 @@ final class SchemaMigratorTest extends TestCase
 
         $connection->executeStatement('delete from idno_migrations');
         $this->assertTrue($migrator->hasPending());
-        $this->assertSame([self::BASELINE, self::MARKER], $migrator->pending(), 'the same answer as pending()');
+        $this->assertSame([self::BASELINE, self::MARKER, self::QUEUE], $migrator->pending(), 'the same answer as pending()');
 
         $connection->executeStatement("insert into idno_migrations (version) values ('Idno\\Storage\\Migrations\\Version19990101000000')");
         $this->assertTrue($migrator->hasPending(), 'an executed version that is not on disk does not count');
@@ -154,22 +158,66 @@ final class SchemaMigratorTest extends TestCase
 
     /**
      * migrate(exceptLast: true) leaves the newest pending migration (the upgrade records it only once
-     * the declared indexes exist); the marker migration has no SQL of its own.
+     * the declared indexes exist). It is the newest, whichever it is: today the queue's table.
      */
     public function testMigrateCanLeaveTheLastPendingMigration(): void
     {
         $connection = PrivateDatabase::sqliteMemory(migrate: false);
         $migrator = new SchemaMigrator($connection);
 
-        $this->assertSame([self::BASELINE], $migrator->migrate(exceptLast: true));
-        $this->assertSame([self::MARKER], $migrator->pending());
+        $this->assertSame([self::BASELINE, self::MARKER], $migrator->migrate(exceptLast: true));
+        $this->assertSame([self::QUEUE], $migrator->pending());
         $this->assertTrue($migrator->hasPending());
+        $this->assertNotContains('idno_messages', (new SchemaCatalog($connection))->tables());
         $this->assertSame([], $migrator->migrate(exceptLast: true), 'the last one is left again');
-        $before = $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name');
-        $this->assertSame([self::MARKER], $migrator->migrate());
-        $this->assertSame($before, $connection->fetchAllAssociative('select type, name, sql from sqlite_master order by name'), 'the marker changes no table');
+        $this->assertSame([self::QUEUE], $migrator->migrate());
+        $this->assertContains('idno_messages', (new SchemaCatalog($connection))->tables());
         $this->assertFalse($migrator->hasPending());
-        $this->assertSame(self::MARKER, $migrator->latest());
+        $this->assertSame(self::QUEUE, $migrator->latest());
+    }
+
+    /**
+     * The queue's table is exactly the one symfony/doctrine-messenger declares (its own
+     * Connection::configureSchema(), written out in the migration as literal SQL): the same columns
+     * with the same types, the same key and the same index.
+     */
+    public function testTheQueuesTableIsTheOneTheTransportDeclares(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory();
+        $transport = new \Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection(['table_name' => 'idno_messages'], $connection);
+        $declared = $transport->configureSchema(new \Doctrine\DBAL\Schema\Schema(), $connection, static fn (): bool => true)->getTable('idno_messages');
+
+        $actual = $connection->createSchemaManager()->introspectTableByUnquotedName('idno_messages');
+
+        // SQLite has one integer type: the declared BIGINT is INTEGER there (an auto-increment key must be).
+        $normalise = static fn (string $type): string => $type === \Doctrine\DBAL\Types\BigIntType::class ? \Doctrine\DBAL\Types\IntegerType::class : $type;
+        $this->assertSame(
+            array_map(static fn ($column): array => [trim($column->getObjectName()->toString(), '"`'), $normalise($column->getType()::class), $column->getNotnull(), $column->getAutoincrement()], $declared->getColumns()),
+            array_map(static fn ($column): array => [trim($column->getObjectName()->toString(), '"`'), $normalise($column->getType()::class), $column->getNotnull(), $column->getAutoincrement()], $actual->getColumns()),
+        );
+        $this->assertSame(190, $actual->getColumn('queue_name')->getLength());
+        $indexed = array_values(array_filter($actual->getIndexes(), static fn ($index): bool => !$index->isPrimary()));
+        $this->assertCount(1, $indexed);
+        $this->assertSame(['queue_name', 'available_at', 'delivered_at', 'id'], array_map(static fn ($column): string => trim($column->getColumnName()->toString(), '"`'), $indexed[0]->getIndexedColumns()));
+        $this->assertSame(['id'], array_map(static fn ($name): string => trim($name->toString(), '"`'), $actual->getPrimaryKeyConstraint()->getColumnNames()));
+    }
+
+    /**
+     * A run interrupted after the queue's table was created and before its version was recorded
+     * (nothing is transactional on every platform) runs again without failing.
+     */
+    public function testAnInterruptedQueueMigrationCanBeRunAgain(): void
+    {
+        $connection = PrivateDatabase::sqliteMemory();
+        $connection->executeStatement('delete from idno_migrations where version like ?', ['%' . self::QUEUE]);
+        $connection->insert('idno_messages', ['body' => 'kept', 'headers' => '[]', 'queue_name' => 'idno', 'created_at' => '2026-11-21 00:00:00', 'available_at' => '2026-11-21 00:00:00']);
+        $migrator = new SchemaMigrator($connection);
+        $this->assertSame([self::QUEUE], $migrator->pending());
+
+        $migrator->migrate();
+
+        $this->assertSame([], $migrator->pending());
+        $this->assertSame('kept', $connection->fetchOne('select body from idno_messages'), 'what was queued is kept');
     }
 
     public function testConstructingQueriesNothing(): void

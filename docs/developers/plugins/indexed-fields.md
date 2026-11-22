@@ -54,9 +54,9 @@ Idno distinguishes two kinds of declaration.
   anything, whether the site is upgraded through the upgrade page in a browser or with
   `php bin/console idno:upgrade`. A new declaration on a core class must come with a new, empty
   schema migration (a class in `Idno/Storage/Migrations/` with its own version and no SQL, like
-  `Version20261115000001`): that pending migration is what closes the site for the upgrade and makes
-  every existing site create the index. The upgrade records the newest pending migration only once
-  nothing is left to create.
+  `Version20261115000001`): being the newest pending migration, it is what closes the site for the upgrade
+  and makes every existing site create the index. The upgrade records the newest pending migration only
+  once nothing is left to create.
 * **Plugin declarations**, including those of the plugins bundled with Idno (`StaticPages`:
   `category`; `ActivityPub`: `actor_uri`, `user_uuid`), are created:
   * when an administrator enables the plugin in the admin panel. If that fails, the administrator

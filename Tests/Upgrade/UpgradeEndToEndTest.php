@@ -1017,7 +1017,7 @@ final class UpgradeEndToEndTest extends TestCase
         $this->assertStringContainsString('Created the index entities.handle.', $stdout);
         $this->assertMatchesRegularExpression('#^entities: \d+ of 1202 copied$#m', $stdout);
         $this->assertStringContainsString("entities: 1202 of 1202 copied\n", $stdout);
-        $this->assertStringContainsString("Ran the migration 20261115000001.\n", $stdout);
+        $this->assertStringContainsString("Ran the migration 20261121000000.\n", $stdout);
         $this->assertStringContainsString('The 1.x data is copied.', $stdout);
         $tables = $this->tables();
         $this->assertContains('legacy_entities', $tables);

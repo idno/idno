@@ -8,21 +8,22 @@ use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 /**
- * The marker "the declared indexed fields have been reconciled": no SQL of its own. The upgrade
- * (Idno\Upgrade\UpgradeRunner) runs every pending migration but the newest, then creates the indexes
- * the entity classes declare (#[IndexedField]), and records the newest pending migration only once a
- * reconcile pass finds nothing left to create. While it is pending the schema is not current and the
- * schema gate stays closed, so a step killed between the baseline and the indexes is carried on by
- * the next one.
+ * The first "indexed fields" migration: no SQL of its own. The upgrade (Idno\Upgrade\UpgradeRunner)
+ * holds back the NEWEST pending migration, whichever it is, runs every other pending migration,
+ * creates the indexes the entity classes declare (#[IndexedField]), and records the held-back one only
+ * once a reconcile pass finds nothing left to create; until then the schema is not current and the
+ * schema gate stays closed, so a step killed between the baseline and the indexes is carried on by the
+ * next one. When this migration was the newest it was that one. Now that later migrations exist it is
+ * recorded with the baseline, before the indexes, and the newest migration is the one held back.
  *
  * A new #[IndexedField] declaration on a first-party class ships with a new migration like this one
- * (empty, its own version): that is what makes existing sites reconcile on upgrade.
+ * (empty, its own version): being the newest, it is what makes existing sites reconcile on upgrade.
  */
 final class Version20261115000001 extends AbstractMigration
 {
     public function getDescription(): string
     {
-        return 'The declared indexed fields have been reconciled (no SQL: recorded by the upgrade once the indexes exist).';
+        return 'An empty migration of the indexed fields (no SQL; it was the one the upgrade held back until the indexes existed, while it was the newest).';
     }
 
     public function isTransactional(): bool
@@ -32,7 +33,7 @@ final class Version20261115000001 extends AbstractMigration
 
     public function up(Schema $schema): void
     {
-        // Nothing: this version is recorded once the declared indexes exist (see the class comment).
+        // Nothing (see the class comment).
     }
 
     public function down(Schema $schema): void

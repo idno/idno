@@ -62,7 +62,7 @@ use Idno\Storage\Platform\Dialect;
 final class JsonRecordStore implements RecordStore
 {
     /** The tables `idno_<name>` that are no collections. */
-    public const SYSTEM_TABLES = ['settings', 'sessions', 'migrations', 'upgrade_progress', 'upgrade_rejects'];
+    public const SYSTEM_TABLES = ['settings', 'sessions', 'migrations', 'messages', 'upgrade_progress', 'upgrade_rejects'];
 
     private const TABLE_PREFIX = 'idno_';
 

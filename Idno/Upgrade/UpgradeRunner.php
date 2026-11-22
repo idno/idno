@@ -29,8 +29,8 @@ use Psr\Log\LoggerInterface;
  *  3. When migrations are pending: every pending migration but the newest
  *     (SchemaMigrator::migrate(exceptLast: true)), then the indexes the CORE entity classes (Idno/)
  *     declare, then the newest pending migration, recorded only once a core reconcile pass found
- *     nothing left to create (the marker migration
- *     Version20261115000001 is that newest one on a new or 1.x database). So a step killed anywhere
+ *     nothing left to create (whichever migration is the newest: a new core declaration ships with an
+ *     empty one, and the migration that creates the queue's table is the newest today). So a step killed anywhere
  *     before that leaves a migration pending (the gate stays closed) and the next step carries on. In
  *     a step() the reconcile is bounded: the deadline is checked after each index created, and a step
  *     that stops there reports `working`. run() is not bounded. Plugins never hold the marker: a web

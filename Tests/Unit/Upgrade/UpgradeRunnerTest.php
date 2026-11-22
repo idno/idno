@@ -38,6 +38,9 @@ final class UpgradeRunnerTest extends TestCase
 
     private const MARKER = '20261115000001';
 
+    /** The newest migration (the queue's table): the one a step records last, once the indexes exist. */
+    private const NEWEST = '20261121000000';
+
     private string $directory = '';
 
     private ?Connection $connection = null;
@@ -95,7 +98,28 @@ final class UpgradeRunnerTest extends TestCase
         $result = $this->runner()->step(microtime(true) + 5);
 
         self::assertSame('current', $result['status']);
-        self::assertSame(2, (int) $this->db()->fetchOne('select count(*) from idno_migrations'), 'the baseline and the indexed-fields marker');
+        self::assertSame(3, (int) $this->db()->fetchOne('select count(*) from idno_migrations'), 'every migration');
+    }
+
+    /**
+     * A database that was current before the queue's table existed (the baseline and the
+     * empty indexed-fields migration recorded, the indexes made) lacks only that table: the gate is closed
+     * (PendingMigrations), and one step creates it and opens the gate.
+     */
+    public function testADatabaseCurrentBeforeTheQueuesTableNeedsOneStep(): void
+    {
+        $this->runner()->step(microtime(true) + 5);
+        $this->db()->executeStatement('drop table idno_messages');
+        $this->db()->executeStatement('delete from idno_migrations where version like ?', ['%' . self::NEWEST]);
+        self::assertSame(SchemaStatus::PendingMigrations, $this->state($this->other())->status());
+        self::assertSame([self::NEWEST], (new SchemaMigrator($this->other()))->pending());
+
+        $result = $this->runner()->step(microtime(true) + 5);
+
+        self::assertSame('current', $result['status']);
+        self::assertContains('idno_messages', (new SchemaCatalog($this->other()))->tables());
+        self::assertSame(SchemaStatus::Current, $this->state($this->other())->status());
+        self::assertSame([], (new SchemaMigrator($this->other()))->pending());
     }
 
     /**
@@ -138,7 +162,7 @@ final class UpgradeRunnerTest extends TestCase
 
     /**
      * A step killed after the baseline and before the indexes (here: the first index's DDL fails)
-     * leaves the marker migration pending: the gate stays closed, and the next step carries on.
+     * leaves the newest migration pending: the gate stays closed, and the next step carries on.
      */
     public function testAStepKilledBeforeTheIndexesLeavesTheGateClosed(): void
     {
@@ -152,7 +176,8 @@ final class UpgradeRunnerTest extends TestCase
 
         self::assertSame('error', $result['status']);
         $migrator = new SchemaMigrator($this->other());
-        self::assertSame([self::MARKER], $migrator->pending(), 'the marker is not recorded');
+        self::assertSame([self::NEWEST], $migrator->pending(), 'the newest migration is not recorded');
+        self::assertSame(self::MARKER, $migrator->latest(), 'the migrations before it are');
         self::assertSame(SchemaStatus::PendingMigrations, $this->state($this->other())->status(), 'the gate stays closed');
 
         $this->connection->close();
@@ -167,14 +192,14 @@ final class UpgradeRunnerTest extends TestCase
 
     /**
      * A web step's reconcile is bounded: with a deadline already past it creates exactly one index
-     * and reports `working`, the marker still pending; repeated, it finishes.
+     * and reports `working`, the newest migration still pending; repeated, it finishes.
      */
     public function testAWebStepCreatesOneIndexPastItsDeadline(): void
     {
         $result = $this->runner()->step(microtime(true) - 1);
 
         self::assertSame('working', $result['status']);
-        self::assertSame([self::MARKER], (new SchemaMigrator($this->db()))->pending());
+        self::assertSame([self::NEWEST], (new SchemaMigrator($this->db()))->pending());
         self::assertSame(1, $this->indexCount());
 
         for ($i = 0; $i < 100 && $result['status'] === 'working'; ++$i) {
@@ -404,7 +429,7 @@ final class UpgradeRunnerTest extends TestCase
     }
 
     /**
-     * A core declaration that fails holds the marker: the gate stays closed, with the public
+     * A core declaration that fails holds the newest migration: the gate stays closed, with the public
      * sentence (the detail is private).
      */
     public function testAFailingCoreDeclarationKeepsTheGateClosed(): void
@@ -414,7 +439,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame('error', $result['status']);
         self::assertSame(PublicMessage::stopped()->text, $result['message']);
         self::assertStringContainsString('InvalidArgumentException', (string) $result['detail']);
-        self::assertSame([self::MARKER], (new SchemaMigrator($this->db()))->pending());
+        self::assertSame([self::NEWEST], (new SchemaMigrator($this->db()))->pending());
         self::assertSame(SchemaStatus::PendingMigrations, $this->state($this->other())->status());
     }
 

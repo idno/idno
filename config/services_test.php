@@ -90,4 +90,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();
     $container->services()->alias('idno.test.monolog_logger', 'monolog.logger')->public();
+
+    // The queue's transports and bus are private; these public aliases let a test check how they are configured.
+    $container->services()->alias('idno.test.messenger_transport_idno', 'messenger.transport.idno')->public();
+    $container->services()->alias('idno.test.messenger_transport_failed', 'messenger.transport.failed')->public();
+    $container->services()->alias('idno.test.messenger_bus', 'messenger.bus.default')->public();
+    $container->services()->alias('idno.test.queue_event_trigger', \Idno\Queue\EventTrigger::class)->public();
+    $container->services()->alias('idno.test.queue_user_context', \Idno\Queue\UserContext::class)->public();
+    $container->services()->alias('idno.test.queue_handler', \Idno\Queue\QueuedEventHandler::class)->public();
+    $container->services()->alias('idno.test.messenger_retry_idno', 'messenger.retry.multiplier_retry_strategy.idno')->public();
 };

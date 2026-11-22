@@ -7,6 +7,7 @@ namespace Idno;
 use Idno\Kernel\CacheDirResolver;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Kernel\DoctrineTrimPass;
+use Idno\Kernel\MessengerTrimPass;
 use Idno\Legacy\LegacyBootstrap;
 use Idno\Upgrade\SchemaGate;
 use Idno\Upgrade\SchemaStatus;
@@ -73,11 +74,13 @@ class Kernel extends BaseKernel
 
     /**
      * Removes the console commands and the request listener DoctrineBundle registers that Idno
-     * does not use (see DoctrineTrimPass).
+     * does not use (see DoctrineTrimPass), and the Messenger command that creates tables (see
+     * MessengerTrimPass).
      */
     protected function build(ContainerBuilder $container): void
     {
         $container->addCompilerPass(new DoctrineTrimPass());
+        $container->addCompilerPass(new MessengerTrimPass());
     }
 
     /**

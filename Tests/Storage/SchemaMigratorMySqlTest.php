@@ -27,6 +27,7 @@ final class SchemaMigratorMySqlTest extends TestCase
 {
     private const TABLES = [
         'idno_entities',
+        'idno_messages',
         'idno_migrations',
         'idno_reader',
         'idno_sessions',
@@ -83,7 +84,7 @@ final class SchemaMigratorMySqlTest extends TestCase
         }
         $migrator = new SchemaMigrator($this->connection());
         $this->assertSame([], $migrator->pending());
-        $this->assertSame('20261115000001', $migrator->latest());
+        $this->assertSame('20261121000000', $migrator->latest());
     }
 
     public function testMigrateTwiceIsANoOp(): void
@@ -97,7 +98,7 @@ final class SchemaMigratorMySqlTest extends TestCase
 
         $this->assertSame($before, $tables($this->connection()));
         $this->assertSame('"yes"', $this->connection()->fetchOne('select value from idno_settings where name = ?', ['kept']));
-        $this->assertSame(2, (int) $this->connection()->fetchOne('select count(*) from idno_migrations'));
+        $this->assertSame(3, (int) $this->connection()->fetchOne('select count(*) from idno_migrations'));
     }
 
     /**
@@ -109,7 +110,7 @@ final class SchemaMigratorMySqlTest extends TestCase
         $this->connection()->executeStatement('drop table idno_settings');
         $this->connection()->executeStatement('drop table idno_migrations');
         $migrator = new SchemaMigrator($this->connection());
-        $this->assertSame(['20261115000000', '20261115000001'], $migrator->pending());
+        $this->assertSame(['20261115000000', '20261115000001', '20261121000000'], $migrator->pending());
 
         $migrator->migrate();
 
@@ -118,7 +119,55 @@ final class SchemaMigratorMySqlTest extends TestCase
             $this->assertTrue($catalog->hasTable($table), $table);
         }
         $this->assertSame([], $migrator->pending());
-        $this->assertSame('20261115000001', $migrator->latest());
+        $this->assertSame('20261121000000', $migrator->latest());
+    }
+
+    /**
+     * The queue's table is the one symfony/doctrine-messenger declares (its own
+     * Connection::configureSchema(), written out in the migration as literal SQL): the same columns
+     * with the same types, nullability, length and auto-increment, the same key and the same index,
+     * in InnoDB and utf8mb4 with the schema's collation.
+     */
+    public function testTheQueuesTableIsTheOneTheTransportDeclares(): void
+    {
+        $connection = $this->connection();
+        $transport = new \Symfony\Component\Messenger\Bridge\Doctrine\Transport\Connection(['table_name' => 'idno_messages'], $connection);
+        $declared = $transport->configureSchema(new \Doctrine\DBAL\Schema\Schema(), $connection, static fn (): bool => true)->getTable('idno_messages');
+        $actual = $connection->createSchemaManager()->introspectTableByUnquotedName('idno_messages');
+
+        $describe = static fn ($column): array => [
+            trim($column->getObjectName()->toString(), '"`'),
+            $column->getType()::class,
+            $column->getNotnull(),
+            $column->getAutoincrement(),
+            $column->getLength(),
+            $column->getDefault(),
+        ];
+        $this->assertSame(array_map($describe, $declared->getColumns()), array_map($describe, $actual->getColumns()));
+        $indexed = array_values(array_filter($actual->getIndexes(), static fn ($index): bool => !$index->isPrimary()));
+        $this->assertCount(1, $indexed);
+        $this->assertSame(['queue_name', 'available_at', 'delivered_at', 'id'], array_map(static fn ($column): string => trim($column->getColumnName()->toString(), '"`'), $indexed[0]->getIndexedColumns()));
+        $this->assertSame(['id'], array_map(static fn ($name): string => trim($name->toString(), '"`'), $actual->getPrimaryKeyConstraint()->getColumnNames()));
+        $this->assertSame('INNODB', strtoupper((string) $connection->fetchOne("select engine from information_schema.tables where table_schema = database() and table_name = 'idno_messages'")));
+        $this->assertSame('utf8mb4_unicode_520_ci', $this->columns('idno_messages')['queue_name']['collation']);
+        $this->assertSame('datetime', $this->columns('idno_messages')['created_at']['type'], 'whole seconds, as the transport writes them');
+    }
+
+    /**
+     * A run interrupted after the queue's table was created and before its version was recorded
+     * (DDL is not transactional here) runs again without failing, and keeps what was queued.
+     */
+    public function testAnInterruptedQueueMigrationCanBeRunAgain(): void
+    {
+        $this->connection()->executeStatement('delete from idno_migrations where version like ?', ['%20261121000000']);
+        $this->connection()->insert('idno_messages', ['body' => 'kept', 'headers' => '[]', 'queue_name' => 'idno', 'created_at' => '2026-11-21 00:00:00', 'available_at' => '2026-11-21 00:00:00']);
+        $migrator = new SchemaMigrator($this->connection());
+        $this->assertSame(['20261121000000'], $migrator->pending());
+
+        $migrator->migrate();
+
+        $this->assertSame([], $migrator->pending());
+        $this->assertSame('kept', $this->connection()->fetchOne('select body from idno_messages'));
     }
 
     public function testColumnsAndCollations(): void

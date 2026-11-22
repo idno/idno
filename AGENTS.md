@@ -208,7 +208,8 @@ bin/console                    Console (CLI) entry point (refuses to run under a
 idno.php, known.php            Aliases for bin/console (backwards compatibility)
 Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
-  Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass
+  Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass,
+                               MessengerTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services")
   Console/                     Idno\Console\Application, the CLI application (see Entry points)
@@ -248,6 +249,10 @@ Idno/
                                Files/ holds the file store: FileStore (uploads on a Flysystem
                                filesystem, in the 1.x layout), StoredFile, FileStoreException and
                                FilesystemFactory (the filesystem from the boot configuration)
+  Queue/                       The queue of events on Symfony Messenger (modern style): the message
+                               (QueuedEvent), its handler, the worker middleware (WorkerHygiene) and the two
+                               small interfaces they depend on (EventTrigger, UserContext). See "The queue of
+                               events"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -675,7 +680,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -692,7 +697,9 @@ other new code may.
   `JsonRecordStore.php`, `SettingsRecordStore.php`) are excluded too: the container's `RecordStore` is built by a factory (see
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
-  `DoctrineTrimPass.php` is excluded (the kernel adds it in `build()`).
+  `DoctrineTrimPass.php` and `MessengerTrimPass.php` are excluded (the kernel adds them in `build()`); in
+  `Idno/Queue/`, the message `QueuedEvent.php`, the interfaces `EventTrigger.php` and `UserContext.php`, and
+  `ResilientTransport.php` (a decorator, wired by hand).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
@@ -1314,7 +1321,9 @@ other new code may.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
   (`ConsolePlugins/EventQueueService`) polling for pending
-  `AsynchronousQueuedEvent` entities. **Required for ActivityPub.**
+  `AsynchronousQueuedEvent` entities. **Required for ActivityPub.** The pieces of its replacement on
+  Symfony Messenger (`Idno\Queue\`, the table `idno_messages`) exist and are tested, but nothing sends
+  to them yet: see "The queue of events".
 
 ### Database
 
@@ -1394,7 +1403,9 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
   `utf8mb4_unicode_520_ci` (`MySqlDialect::COLLATION`) except the `utf8mb4_bin` ones above.
   The second migration, `Version20261115000001`, has no SQL: it is the indexed-fields marker (see
   "The schema gate and the upgrade"); `SchemaMigrator::migrate(exceptLast: true)` leaves the newest
-  pending migration for the upgrade to record once the declared indexes exist. The one exception is `idno_migrations`,
+  pending migration for the upgrade to record once the declared indexes exist. The third migration,
+  `Version20261121000000`, creates `idno_messages`, the queue's table (see "The queue of events"), and is
+  now that newest migration. The one exception is `idno_migrations`,
   which doctrine/migrations creates itself with the database's default charset and collation; it
   holds only migration class names and timings. On SQLite the same tables, with
   `COLLATE NOCASE` on `id`, `uuid`, `type`, `owner` and `publish_status`, `INTEGER` for `created`,
@@ -1611,8 +1622,15 @@ name in `config/services.php`).
   `UpgradeProgress::countText()`/`line()` (`entities: 1500 of 12000 copied, 3 not carried over`) in the
   page, the runner and the command (the page's script repeats it).
 - The indexed-fields marker. The newest pending migration is recorded only once the declared indexed
-  fields exist: on a new or 1.x database that is `Version20261115000001`, a migration with no SQL that
-  stands for "the declared indexed fields have been reconciled". The runner, whenever migrations are
+  fields exist. When `Version20261115000001` was the newest migration, that was it: a migration with no
+  SQL that stands for "the declared indexed fields have been reconciled". Now that later migrations exist
+  (the queue's table, `Version20261121000000`, is the newest), the held-back one is whichever migration is
+  newest, and `Version20261115000001` is recorded with the baseline, before the indexes: what protects the
+  gate is unchanged (the schema is not current, and the gate stays closed, until the newest migration is
+  recorded, and that happens only after a reconcile pass found nothing left to create). A database that
+  was current before the queue's table existed has every older migration and its indexes, so it is
+  `PendingMigrations` and one step (or `idno:upgrade`) creates the table. A new core declaration ships
+  with a new, empty migration, which is then the newest. The runner, whenever migrations are
   pending, runs every pending migration but the newest (`SchemaMigrator::migrate(exceptLast: true)`),
   reconciles the indexed fields (`IndexedFields::reconcileDirectoryUntil()`), and runs the newest only
   when a reconcile pass finds nothing left to create. A step killed anywhere before that (a
@@ -1960,7 +1978,7 @@ attribute keeps its name.
 `TypeMap`, the `SchemaCatalog` of the same connection, the quote normaliser and the two search
 settings) keeps collection `c` in the table `idno_<c>` (the name reduced to `[a-zA-Z0-9_]` and
 lower-cased) when the catalog lists that table and `c` is not in `JsonRecordStore::SYSTEM_TABLES`
-(`settings`, `sessions`, `migrations`, `upgrade_progress`, `upgrade_rejects`); any other name is no
+(`settings`, `sessions`, `migrations`, `messages`, `upgrade_progress`, `upgrade_rejects`); any other name is no
 collection, and no statement is sent for it. The catalog is read once: code that creates a table
 afterwards calls `SchemaCatalog::forget()`.
 
@@ -2012,6 +2030,97 @@ afterwards calls `SchemaCatalog::forget()`.
   in memory or on SQLite). A field with a declared index (#[IndexedField], below) matches scalar
   values only (no hook: pinned by
   `IndexedFieldsContract::testAListValueIsNoLongerMatchedOnceTheFieldIsIndexed`).
+
+#### The queue of events
+
+The events a site queues to run later (syndication, federation, webhooks, ...) are to be messages on
+Symfony Messenger's Doctrine transport. The pieces exist and are tested; nothing sends to them yet (the
+legacy `AsynchronousQueue` and its worker still run), so a site that does not use them behaves as before.
+`symfony/messenger` and `symfony/doctrine-messenger` (`^8.0`) are required.
+
+- `Idno\Queue\QueuedEvent`: the message, a value object: `queue` (the queue it was sent to), `event`
+  (the event's name), `data` (an array) and `runAs` (the uuid of the user it runs as, null for nobody).
+  Messenger's default PHP serializer is kept ON PURPOSE: `data` may hold entity objects, as the data of
+  an event always could (`serialize()`); `Tests/Queue/TransportTest::testAMessageKeepsItsDataIncludingAnEntity`
+  pins it with a real entity. Do not switch it to JSON.
+- `Idno\Queue\QueuedEventHandler` (`#[AsMessageHandler]`): runs the event as `runAs` (a user that no
+  longer exists is a `\RuntimeException` and nothing is triggered), returns what the listeners returned,
+  and LETS EVERY THROWABLE OUT (`\Error` too) so that Messenger moves the message to the failure
+  transport; nobody is left logged on either way. It depends on two interfaces of `Idno\Queue\`, not on
+  the legacy application: `EventTrigger` (trigger a named event with its data) and `UserContext`
+  (`runAs($uuid, $work)`, `ensureNobodyLoggedOn()`); `Idno\Legacy\LegacyEventTrigger` and
+  `Idno\Legacy\LegacyUserContext` implement them over the legacy event dispatcher and session
+  (aliased in `config/services.php`; they need the legacy application, so they are built only when a
+  message is dispatched or consumed). The unit test uses doubles (`Tests/Unit/Queue/`).
+- `Idno\Queue\WorkerHygiene` (a bus middleware, named in `config/packages/messenger.php`, and a
+  subscriber of the worker's `WorkerRunningEvent`): for RECEIVED messages only (a `ReceivedStamp`; a
+  message dispatched by a web request is untouched) it checks the site's DBAL connection before the
+  message is handled and again after it (the handler may outlive the server's idle timeout, and the
+  transport acknowledges on that connection) and closes a lost one so the next query opens a new one;
+  after it, also when it failed, it makes sure nobody is logged on (each cleanup step on its own: a
+  failure of one is logged and never masks the handler's own exception). The same connection check
+  runs after each message and whenever the worker is idle.
+- `Idno\Queue\ResilientTransport` decorates the `idno` transport (`config/services.php`; it takes the
+  transport's tags, so `messenger:consume idno` and anything else that receives from or sends to it
+  get it). `get()` returns no message, after logging ONE warning line, when the transport fails because
+  the database is locked or busy (DBAL's `RetryableException`: lock wait timeout, deadlock; on SQLite
+  this is what a read gets when another process committed between the transport's SELECT and UPDATE,
+  any commit, not only on `idno_messages`) or the connection was lost (`ConnectionLost`: it also closes
+  the connection so that the next query opens a new one), so the worker sleeps and reads again.
+  Any other failure propagates; `ack()` and `reject()` failures propagate too (a message that could not
+  be acknowledged must be visible); sending is passed through.
+- A worker killed while it handles an event leaves that event ABANDONED, and it is never run again
+  unless an operator requeues it. The Doctrine transport gives any message taken longer ago than
+  `redeliver_timeout` (default an hour) to the next worker; both transports set it to
+  `AbandonedMessages::REDELIVER_TIMEOUT_SECONDS` (ten years), because an event may already have posted
+  to another server and running it twice would deliver it twice. `Idno\Queue\AbandonedMessages` (on the
+  site's connection, table `idno_messages`, every value bound) lists them for an operator:
+  `count($queue, $olderThanSeconds = 3600)`, `ids(...)` (at most 100) and `requeue(...)` (sets
+  `delivered_at` to NULL for exactly those rows, in one statement, so the next worker runs them).
+- `config/packages/messenger.php`: transports `idno` and `failed`, both `doctrine://default` (the site's
+  own DBAL connection: one database, no second connection), table `idno_messages`, queue names `idno`
+  and `failed`, `auto_setup` OFF; `idno` has `max_retries` 0 (a message is never retried: what a queued
+  event sends to other servers must not be sent twice); `failure_transport: failed`; `QueuedEvent` is
+  routed to `idno`. A failed message stays in `failed` until someone looks at it
+  (`messenger:failed:show|retry|remove`).
+- The table: `Idno\Storage\Migrations\Version20261121000000` creates `idno_messages` as literal SQL, the
+  columns, types and index of the installed transport's own schema
+  (`Connection::configureSchema()`): `id` auto-increment (`BIGINT`; `INTEGER PRIMARY KEY AUTOINCREMENT` on
+  SQLite), `body` and `headers` text, `queue_name` `VARCHAR(190)`, `created_at`, `available_at` and
+  `delivered_at` `DATETIME` (whole seconds, UTC, written and compared by the transport), and the index
+  `(queue_name, available_at, delivered_at, id)`. On MySQL and MariaDB it is InnoDB and utf8mb4
+  (`utf8mb4_bin` for the two text columns, the schema's `utf8mb4_unicode_520_ci` for `queue_name`); on
+  SQLite `queue_name` is `COLLATE NOCASE`. Pinned against the transport's own declaration by
+  `SchemaMigratorTest` and `SchemaMigratorMySqlTest`. It is the newest migration, so the upgrade holds it
+  back until the declared indexes exist (see "The indexed-fields marker"); a database upgraded earlier
+  needs one more upgrade step (the upgrade page or `idno:upgrade`) to get the table. `messages` is in
+  `JsonRecordStore::SYSTEM_TABLES`: the table is never a collection.
+- At run time the transport never issues DDL (auto_setup off: a missing table is an error, pinned by
+  `testWithoutTheTableTheTransportFailsInsteadOfCreatingIt`). It sends with one transaction around an
+  insert; it reads in a transaction with `SELECT ... FOR UPDATE SKIP LOCKED` on MySQL and MariaDB (the
+  clause is left off on SQLite, which has none), then marks the row delivered; it acknowledges by deleting
+  the row. `LISTEN/NOTIFY` (`pg_notify`) is PostgreSQL only and never used here. A message handled but not
+  acknowledged would be delivered again after `redeliver_timeout` (3600 s), which is why `WorkerHygiene`
+  also checks the connection after the handler.
+- At most once, with several workers: pinned by `TransportTest::testTwoConsumersNeverHandleOneMessageTwice`
+  (two consumer subprocesses, `Tests/Queue/consumer.php`, on a SQLite file and on MySQL/MariaDB: each of
+  100 ids is handled exactly once, both consumers handled some and both exit 0). On SQLite the read runs
+  in a deferred transaction, so a read that finds another process's commit in between fails at once
+  ("database is locked", never waited for); the message is untouched (rolled back before it is marked
+  delivered), and `ResilientTransport` makes the worker read again, so no worker dies of it.
+- Console: FrameworkBundle registers `messenger:consume`, `messenger:stop-workers`,
+  `messenger:failed:show|retry|remove`, `messenger:stats` and `debug:messenger`; they are wanted and stay.
+  `messenger:setup-transports` would create the tables outside the migrations: `Idno\Kernel\MessengerTrimPass`
+  (added in `Kernel::build()`, as `DoctrineTrimPass` is) removes it. `messenger:stop-workers` works (the
+  framework's cache pool `cache.messenger.restart_workers_signal` is on the kernel's cache directory:
+  workers and the command must share `IDNO_CACHE_DIR`). Pinned by `Tests/Kernel/MessengerConfigurationTest`
+  (test and prod containers).
+- Tests: `Tests/Unit/Queue/QueuedEventHandlerTest` (doubles), `Tests/Queue/TransportTest` and
+  `WorkerHygieneTest` (a SQLite file, and a private MySQL or MariaDB database on the rig's server; the
+  tables come from the migrations only; `MessengerRig` builds the transport and bus as the config does),
+  `Tests/Kernel/MessengerConfigurationTest` and `QueueAdaptersTest` (the container and the legacy
+  adapters; the test container exposes the private transports and bus through `idno.test.*` aliases in
+  `config/services_test.php`).
 
 #### The file store
 
@@ -2318,7 +2427,7 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   it), loaded through the autoloader (never `require`), confirmed by reflection; a file that fails to
   load is skipped.
 - When it runs. CORE declarations (classes under `Idno/`): created by the upgrade (the upgrade page's
-  steps and `idno:upgrade`) before any copy, on the still empty tables, held by the marker migration
+  steps and `idno:upgrade`) before any copy, on the still empty tables, held by the newest migration
   (a failure keeps the site closed); a new core declaration ships with a new, empty migration.
   PLUGIN declarations, bundled plugins included: created when the plugin is enabled in the admin panel
   (`Idno\Pages\Admin\Plugins`; skipped on a non-SQL site; a failure is logged and shown as an error

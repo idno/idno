@@ -39,8 +39,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // keys the cache directory, so it is not repeated here); the rest of Idno/ is legacy
     // code. The excluded files are wired explicitly below, or are not services at all.
     $excludes = [
-        // A compiler pass, registered by Idno\Kernel::build().
-        'Kernel' => ['DoctrineTrimPass.php'],
+        // Compiler passes, registered by Idno\Kernel::build().
+        'Kernel' => ['DoctrineTrimPass.php', 'MessengerTrimPass.php'],
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
@@ -68,6 +68,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // the importer, the key unescaping helper, its record defaults and stream) is built with new by
         // the import command.
         'Upgrade' => ['ConfigCopier.php', 'Mongo', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
+        // The message is a value object; the two interfaces are implemented by Idno\Legacy adapters, aliased below;
+        // ResilientTransport decorates the idno transport (below).
+        'Queue' => ['EventTrigger.php', 'QueuedEvent.php', 'ResilientTransport.php', 'UserContext.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -316,6 +319,29 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->public();
     $services->alias(HttpClientInterface::class, 'idno.http_client')->public();
     $services->alias(HttpClientInterface::class . ' $remoteClient', 'idno.http_client.remote')->public();
+
+    // The queue of events (Idno\Queue, config/packages/messenger.php). The handler and the worker
+    // middleware depend on two small interfaces, implemented over the legacy event dispatcher and
+    // session; they need the legacy application, so they are built only when a message is dispatched
+    // or consumed. Nothing from the configuration is compiled in.
+    $services->set(\Idno\Legacy\LegacyEventTrigger::class);
+    $services->set(\Idno\Legacy\LegacyUserContext::class);
+    $services->alias(\Idno\Queue\EventTrigger::class, \Idno\Legacy\LegacyEventTrigger::class);
+    $services->alias(\Idno\Queue\UserContext::class, \Idno\Legacy\LegacyUserContext::class);
+    // The middleware config/packages/messenger.php names, and the handler (set explicitly, like the
+    // services above, so the definitions exist whatever the scan finds).
+    $services->set(\Idno\Queue\WorkerHygiene::class);
+    $services->set(\Idno\Queue\QueuedEventHandler::class);
+    // What an operator may do with messages a killed worker left (Idno\Queue\AbandonedMessages).
+    $services->set(\Idno\Queue\AbandonedMessages::class)->public();
+    // Reading the idno transport rides out a busy or lost database (see ResilientTransport). The
+    // decorator takes the transport's tags, so `messenger:consume idno` and everything else that
+    // receives from or sends to it get it.
+    $services->set(\Idno\Queue\ResilientTransport::class)
+        ->decorate('messenger.transport.idno')
+        ->args([service('.inner'), service('database_connection'), service(\Psr\Log\LoggerInterface::class)])
+        ->autowire(false)
+        ->autoconfigure(false);
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);
