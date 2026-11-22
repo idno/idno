@@ -3,6 +3,9 @@ theme: readthedocs
 markdown_extensions:
  - admonition
 repo_url: https://github.com/idno/idno/
+# Files in docs/ that are not part of the published site.
+exclude_docs: |
+  requirements.txt
 nav:
 - Home: 'index.md'
 - Installing and Upgrading Idno: 'install/index.md'

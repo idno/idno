@@ -28,7 +28,7 @@ As such, we have an [anti-harassment policy](harassment.md) that covers all our 
 is required to make Idno thrive, so we're dedicated to making it as welcoming as possible.
 
 If you have any concerns about any activity in the community, you shouldn't hesitate to
-[get in touch with a member of the team](harassment.md##get-in-touch-with-the-core-team). We promise to deal with it
+[get in touch with a member of the team](harassment.md#get-in-touch-with-the-core-team). We promise to deal with it
 sensitively and discretely.
 
 ## License
