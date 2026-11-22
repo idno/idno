@@ -103,10 +103,11 @@ namespace IdnoPlugins\ActivityPub\Tests {
         {
             $entity = $this->entity(self::CREATED, self::CREATED);
             $first = ActivityBuilder::buildCreate($entity);
-            sleep(1);
             $second = ActivityBuilder::buildCreate($entity);
 
             $this->assertSame($first, $second, 'built for the outbox or sent again, a Create does not change');
+            $this->assertSame($this->rfc3339(self::CREATED), $first['published'], 'the time the post was published, not the time of the build');
+            $this->assertSame($this->rfc3339(self::CREATED), $second['published']);
         }
 
         public function testACreateOfAPostEditedSinceKeepsTheTimeItWasPublished(): void
@@ -133,6 +134,19 @@ namespace IdnoPlugins\ActivityPub\Tests {
 
             $this->assertArrayNotHasKey('updated', $update['object']);
             $this->assertSame($this->rfc3339(self::CREATED), $update['published']);
+        }
+
+        public function testAnEditTimeEarlierThanTheCreationTimeIsNotAnUpdate(): void
+        {
+            $entity = $this->entity(self::EDITED, self::CREATED);
+            $create = ActivityBuilder::buildCreate($entity);
+            $update = ActivityBuilder::buildUpdate($entity);
+
+            $this->assertArrayNotHasKey('updated', $create['object']);
+            $this->assertArrayNotHasKey('updated', $update['object']);
+            $this->assertSame($create['object']['published'], $create['published']);
+            $this->assertSame($update['object']['published'], $update['published']);
+            $this->assertSame($this->rfc3339(self::EDITED), $update['published']);
         }
 
         public function testAnEntityWithoutStoredTimesGetsTheTimeOfTheCall(): void

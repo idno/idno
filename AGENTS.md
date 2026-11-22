@@ -241,6 +241,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   (file relative to the project, or `-`) to the file, through `Idno\Core\Bonita\Templates::$trace`, a static hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
   only when the variable names a file; nothing is called or written otherwise.
+- A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range, and never sleeps to make two moments differ.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
@@ -254,7 +255,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   with `Tests/rig/mongo-import-check.php` that the end-to-end test ran). Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
-  from the configuration or the filesystem. A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range. Both load the same plugins: keep `alwaysplugins[]` in
+  from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
   `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_mysql.ini` in step
   (`Tests/Kernel/RigScriptsTest` checks the rig's two and the CI copy, and that it is the only
   `Tests/build/config_*.ini`). Every test that touches the database runs on MySQL and SQLite (the
@@ -3178,7 +3179,8 @@ Each content plugin has an `Entry.php` entity class that defines
 1. **Outgoing**: When an entity is saved/updated/deleted, `Main.php` hooks build
    the activity via `ActivityBuilder` and call `Delivery::deliverToFollowers()`
    which enqueues signed POSTs to each follower's inbox.
-   The times an activity carries are the post's own, so the same activity is built every time:
+   The times an activity carries are the post's own, so the same times are built every time (an `Update`'s `id` still ends in the build time,
+   `#update-<time()>`; a `Create`'s is `#create`):
    a `Create`'s `published` is its object's `published` (the post's creation time, equal by
    construction, also in the outbox); an `Update`'s `published` is the object's `updated` (the
    time the post was last saved, which `Entity::save()` sets from the same clock reading as
