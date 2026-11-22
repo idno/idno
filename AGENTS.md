@@ -1283,6 +1283,10 @@ other new code may.
     `$result['error']` is read only as a flag (empty or not) in the repository, by
     `IdnoPlugins\IndiePub\Pages\MicroPub\Endpoint::fetchMedia()`, `file_get_contents()` and
     `safeFileGetContents()`; it is never logged or shown.
+  - A request's URL is sent to the client with every byte outside ASCII percent-encoded after the authority (path,
+    query, fragment: `wireUrl()`), because the client's own `parse_url()` would turn some of those bytes into an
+    underscore. The scheme and the authority (user information, host, port) are left exactly as given, so an
+    internationalised host (`bücher.example`) is turned into punycode by the client, never percent-encoded.
   - Redirects are followed BY THE ADAPTER, one request per hop, each sent with `max_redirects` 0, so
     that `header` holds the header block of every hop in order, `effective_url` is the last URL, and the
     remote client checks every hop's address. Five are followed; a sixth is the failed result with the
@@ -3397,7 +3401,8 @@ the CLI installer no longer writes one.
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - Account pages are closed to API requests: a page registered for a route under
   `/account/` (settings, password, API key, access tokens, the account's own export of its
-  posts as a feed (`Idno\Pages\Account\Export`, served by `Idno\Portability\FeedExporter`) and
+  posts as a feed (the form `Idno\Pages\Account\Export`; the feeds `Idno\Pages\Account\Export\RSS` and
+  `Idno\Pages\Account\Export\WXR`, served by `Idno\Portability\FeedExporter`) and
   what plugins put there) answers 403 to any request for which `Session::isAPIRequest()` is
   true by the time the page is dispatched, that is, one signed with `X-IDNO-USERNAME` /
   `X-IDNO-SIGNATURE`. An API key or token is a credential for publishing, and must not be

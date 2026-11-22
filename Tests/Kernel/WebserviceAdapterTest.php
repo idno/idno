@@ -115,6 +115,28 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertSame($typed, $result['effective_url'], 'the address the caller gave is the one reported');
     }
 
+    public function testAnInternationalisedHostIsLeftAloneWhenThePathIsEncoded(): void
+    {
+        Webservice::useClient($this->client([new MockResponse('ok')]));
+
+        $typed = "https://b\xC3\xBCcher.example/\xD0\xBF\xD1\x80?q=\xD1\x80";
+        $result = Webservice::get($typed);
+
+        $this->assertSame(200, $result['response']);
+        $host = (string) parse_url($this->seen[0][1], PHP_URL_HOST);
+        $this->assertSame('xn--bcher-kva.example', $host, 'the client, not the adapter, turns the host into punycode');
+        $this->assertStringEndsWith('/%D0%BF%D1%80?q=%D1%80', $this->seen[0][1]);
+    }
+
+    public function testOnlyWhatFollowsTheAuthorityIsEncoded(): void
+    {
+        Webservice::useClient($this->client([new MockResponse('ok')]));
+
+        Webservice::get("https://user:p\xC3\xA9@example.com:8443/caf\xC3\xA9");
+
+        $this->assertSame('https://user:p%C3%A9@example.com:8443/caf%C3%A9', $this->seen[0][1]);
+    }
+
     public function testATransportFailureIsAnErrorResultNotAnException(): void
     {
         Webservice::useClient($this->client([new TransportException('Could not resolve host: example.invalid')]));

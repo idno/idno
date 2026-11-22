@@ -443,14 +443,23 @@ namespace Idno\Core {
         }
 
         /**
-         * The URL as it goes to the HTTP client: every byte outside ASCII percent-encoded. A caller may give an
-         * address with its path as typed (`/2026/привет`), and the client reads the URL with parse_url(), which
-         * replaces some of those bytes (0x80 to 0x9f, among them) with an underscore: another address is requested.
-         * Encoding them says exactly what was meant; an address that is already encoded is unchanged.
+         * The URL as it goes to the HTTP client: every byte outside ASCII after the authority (the path, the query
+         * and the fragment) percent-encoded. A caller may give an address with its path as typed (`/2026/привет`),
+         * and the client reads the URL with parse_url(), which replaces some of those bytes (0x80 to 0x9f, among
+         * them) with an underscore: another address is requested. Encoding them says exactly what was meant; an
+         * address that is already encoded is unchanged. The scheme and the authority (user information, host and
+         * port) are left byte for byte, so the client turns an internationalised host into its punycode form
+         * itself. A string with no `scheme://authority` is encoded whole.
          */
         private static function wireUrl(string $url): string
         {
-            return (string)preg_replace_callback('/[\x80-\xff]/', static fn (array $byte): string => sprintf('%%%02X', ord($byte[0])), $url);
+            $encode = static fn (string $part): string => (string)preg_replace_callback('/[\x80-\xff]/', static fn (array $byte): string => sprintf('%%%02X', ord($byte[0])), $part);
+
+            if (preg_match('~^([A-Za-z][A-Za-z0-9+.-]*://[^/?#]*)(.*)$~s', $url, $parts) !== 1) {
+                return $encode($url);
+            }
+
+            return $parts[1] . $encode($parts[2]);
         }
 
         /**
