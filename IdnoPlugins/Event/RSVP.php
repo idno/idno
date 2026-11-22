@@ -15,12 +15,16 @@ namespace IdnoPlugins\Event {
 
         function getDescription()
         {
-            $body = $this->body;
-            if (!empty($this->inreplyto)) {
-                $body = '<a href="'.$this->inreplyto.'" class="u-in-reply-to"></a>' . $body;
+            // This is HTML that feeds and other sites are given. The text, the answer and
+            // the address of the event are as the member typed them (RSVPs stored before
+            // they were checked on saving are not rewritten), so clean and escape them here.
+            $body = \Idno\Core\Idno::site()->template()->sanitize_html((string) $this->body);
+            $inreplyto = \Idno\Core\UrlValidator::httpUrl($this->inreplyto);
+            if ($inreplyto !== '') {
+                $body = '<a href="' . htmlspecialchars($inreplyto) . '" class="u-in-reply-to"></a>' . $body;
             }
             if (!empty($this->rsvp)) {
-                $body = '<data class="p-rsvp" value="'.$this->rsvp.'">' . $body . '</data>';
+                $body = '<data class="p-rsvp" value="' . htmlspecialchars((string) $this->rsvp) . '">' . $body . '</data>';
             }
             return $body;
         }
@@ -81,13 +85,14 @@ namespace IdnoPlugins\Event {
             $rsvp = \Idno\Core\Idno::site()->currentPage()->getInput('rsvp');
             $access = \Idno\Core\Idno::site()->currentPage()->getInput('access');
             if (!empty($rsvp)) {
-                $this->body = $body;
+                $this->body = \Idno\Core\Idno::site()->template()->sanitize_html((string) $body);
                 $rsvp = strtolower($rsvp);
                 if ($rsvp != 'yes' && $rsvp != 'maybe') {
                     $rsvp = 'no';
                 }
                 $this->rsvp = $rsvp;
-                $this->inreplyto = \Idno\Core\Idno::site()->currentPage()->getInput('inreplyto');
+                // The address of the event is printed as a link: only an http or https one is kept
+                $this->inreplyto = \Idno\Core\UrlValidator::httpUrl(\Idno\Core\Idno::site()->currentPage()->getInput('inreplyto'));
                 $this->setAccess($access);
                 if ($this->publish($new)) {
                     if ($access == 'PUBLIC') {

@@ -410,6 +410,11 @@ Each content plugin has an `Entry.php` entity class that defines
   that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
   only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`
   checks this for bookmarks, check-in place names and images embedded from a post's text.
+- RSVPs (`IdnoPlugins/Event/RSVP.php`): the text is passed through `sanitize_html()` and
+  the address of the event through `UrlValidator::httpUrl()` when an RSVP is saved, and
+  again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
+  which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
+  `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
