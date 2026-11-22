@@ -219,7 +219,7 @@ namespace IdnoPlugins\Media {
                 $json['contentUrl'] = $mainsrc;
             }
 
-            if (substr($vars['object']->media_type, 0, 5) == 'video') {
+            if (substr((string) $this->media_type, 0, 5) == 'video') {
                 $json['@type'] = 'VideoObject';
             } else {
                 $json['@type'] = 'AudioObject';

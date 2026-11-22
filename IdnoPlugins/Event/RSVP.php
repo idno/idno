@@ -20,14 +20,35 @@ namespace IdnoPlugins\Event {
             // the address of the event are as the member typed them (RSVPs stored before
             // they were checked on saving are not rewritten), so clean and escape them here.
             $body = \Idno\Core\Idno::site()->template()->sanitize_html((string) $this->body);
-            $inreplyto = \Idno\Core\UrlValidator::httpUrl($this->inreplyto);
-            if ($inreplyto !== '') {
+            foreach ($this->getEventURLs() as $inreplyto) {
                 $body = '<a href="' . htmlspecialchars($inreplyto) . '" class="u-in-reply-to"></a>' . $body;
             }
             if (!empty($this->rsvp)) {
                 $body = '<data class="p-rsvp" value="' . htmlspecialchars((string) $this->rsvp) . '">' . $body . '</data>';
             }
             return $body;
+        }
+
+        /**
+         * The address of the event this RSVP answers, as a list.
+         *
+         * It is stored as one string, but an RSVP saved by an earlier version can hold
+         * a list of addresses (asking for getReplyToURLs() used to turn it into one, and
+         * the next save stored that). Only http and https addresses are returned.
+         *
+         * @return string[]
+         */
+        function getEventURLs()
+        {
+            $urls = [];
+            foreach ((array) $this->inreplyto as $url) {
+                $url = \Idno\Core\UrlValidator::httpUrl($url);
+                if ($url !== '') {
+                    $urls[] = $url;
+                }
+            }
+
+            return $urls;
         }
 
         function getURL()

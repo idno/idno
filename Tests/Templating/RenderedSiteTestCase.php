@@ -252,15 +252,8 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
     {
         $this->page($directory . '/home.html', '');
         $this->page($directory . '/home-offset.html', '?offset=10');
-        foreach (['status', 'article', 'photo', 'bookmark', 'event', 'reply', 'rsvp', 'bobs', 'checkin', 'page'] as $name) {
+        foreach (['status', 'article', 'photo', 'bookmark', 'event', 'reply', 'rsvp', 'bobs', 'checkin', 'media', 'page'] as $name) {
             $this->page($directory . '/permalink-' . $name . '.html', $paths[$name]);
-        }
-        // A DEFECT, pinned: Media::getJSONLD() (IdnoPlugins/Media/Media.php, the page's JSON-LD) reads `$vars`, which is not
-        // defined there, so the permalink of a media post is an exception under the rig's pedantic_mode (an E_WARNING otherwise).
-        // There is no page to keep a golden of; the JSON of the post (non-html/json-media.txt) is.
-        $media = $this->site()->request('GET', $paths['media']);
-        if ($media->status !== 500) {
-            $this->differences[] = $directory . '/permalink-media: answered ' . $media->status . ', not the 500 the defect gives; if the defect is fixed, capture a golden for it';
         }
         $this->page($directory . '/permalink-private-visitor.html', $paths['private'], 410);
         $this->page($directory . '/permalink-draft-visitor.html', $paths['draft'], 410);
@@ -326,7 +319,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
             $pages[] = $in('drafts', 'drafts/');
         }
         // The edit form of a new post and of an existing one, for each bundled content type.
-        foreach (['entry', 'photo', 'event', 'like', 'checkin', 'media', 'staticpages'] as $type) {
+        foreach (['status', 'entry', 'photo', 'event', 'like', 'checkin', 'media', 'staticpages'] as $type) {
             $pages[] = $in('edit-new-' . $type, $type . '/edit/');
         }
         foreach (['status' => 'status', 'entry' => 'article', 'photo' => 'photo', 'event' => 'event', 'like' => 'bookmark', 'checkin' => 'checkin', 'media' => 'media', 'staticpages' => 'page', 'reply' => 'reply', 'rsvp' => 'rsvp'] as $route => $name) {
