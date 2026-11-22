@@ -15,8 +15,8 @@ use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
  *
  * When the site's `event_queue` setting is `AsynchronousQueue` (or `Idno\Core\AsynchronousQueue`: the
  * class of that name is gone, but the value stays the way a site turns the queue on) enqueue() sends
- * a QueuedEvent on the bus, which routes it to the `idno` transport; a worker (`service-event-queue`
- * or `messenger:consume idno`) triggers the event later, as the user it was queued for. In any other
+ * a QueuedEvent on the bus, which routes it to the `idno` transport; the worker (`service-event-queue`)
+ * triggers the event later, as the user it was queued for. In any other
  * case the event runs at once, in the caller's request, as the synchronous queue always did, and its
  * result is kept for the request.
  *

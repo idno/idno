@@ -132,6 +132,105 @@ final class QueueAdaptersTest extends TestCase
         $this->assertFalse(Idno::site()->session()->currentUser());
     }
 
+    /**
+     * The worker's process has run earlier events: a user it cached then (the previous event of the
+     * same user) and who has been deleted since must not pass the check, or the event would run as nobody
+     * with the stale user's data.
+     */
+    public function testAUserCachedByAnEarlierEventAndDeletedSinceMakesTheNextEventFail(): void
+    {
+        $user = new User();
+        $user->handle = 'gone' . bin2hex(random_bytes(4));
+        $user->email = $user->handle . '@example.com';
+        $user->setPassword(bin2hex(random_bytes(8)));
+        $user->setTitle('Gone User');
+        $this->assertNotFalse($user->save(true));
+        $uuid = $user->getUUID();
+        $ran = 0;
+        $this->context()->runAs($uuid, static function () use (&$ran): void {
+            ++$ran;
+        });
+        $this->assertSame(1, $ran, 'the first event ran, and cached the user');
+        $this->assertNotFalse(User::getByUUID($uuid), 'cached');
+
+        // Deleted by something else (another process): this one's cache does not know.
+        $this->assertTrue(Idno::site()->db()->deleteRecord($user->getID()));
+
+        try {
+            $this->context()->runAs($uuid, static function () use (&$ran): void {
+                ++$ran;
+            });
+            $this->fail('A user deleted since it was cached still passed.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Invalid user', $e->getMessage());
+        }
+        $this->assertSame(1, $ran, 'nothing was triggered');
+        $this->assertFalse(Idno::site()->session()->currentUser());
+    }
+
+    /**
+     * A user the session refuses to log on (the address is blocked, say) is not "someone": the event
+     * does not run as nobody instead.
+     */
+    public function testAUserTheSessionWillNotLogOnMakesTheEventFailInsteadOfRunningAsNobody(): void
+    {
+        $blocked = new User();
+        $blocked->handle = 'blocked' . bin2hex(random_bytes(4));
+        $blocked->email = $blocked->handle . '@blocked.example';
+        $blocked->setPassword(bin2hex(random_bytes(8)));
+        $blocked->setTitle('Blocked User');
+        $this->assertNotFalse($blocked->save(true));
+        $previous = Idno::site()->config()->blocked_emails ?? null;
+        Idno::site()->config()->blocked_emails = [$blocked->email];
+        $ran = false;
+        try {
+            if (!Idno::site()->config()->emailIsBlocked($blocked->email)) {
+                $this->markTestSkipped('The site\'s email blocking does not take this setting.');
+            }
+            try {
+                $this->context()->runAs($blocked->getUUID(), static function () use (&$ran): void {
+                    $ran = true;
+                });
+                $this->fail('The event ran although the user could not be logged on.');
+            } catch (\RuntimeException $e) {
+                $this->assertStringContainsString('Invalid user', $e->getMessage());
+            }
+            $this->assertFalse($ran);
+        } finally {
+            Idno::site()->config()->blocked_emails = $previous;
+            $blocked->delete();
+        }
+    }
+
+    /**
+     * What the worker does after every message: an entity read and cached by one event, and changed in the
+     * database since, is read fresh by the next.
+     */
+    public function testTheEntityCacheAdapterMakesTheNextEventReadFreshData(): void
+    {
+        $cache = Idno::container()->get('idno.test.queue_entity_cache');
+        $this->assertInstanceOf(\Idno\Legacy\LegacyEntityCache::class, $cache);
+        $entity = new \IdnoPlugins\Status\Status();
+        $entity->body = 'before';
+        $this->assertNotFalse($entity->save(true));
+        $uuid = $entity->getUUID();
+        try {
+            $this->assertSame('before', \Idno\Common\Entity::getByUUID($uuid)->body, 'read, and cached');
+            // Another process changes it (written straight to the database, as a web request's save does
+            // from its own process: this process's cache is not told).
+            $other = \IdnoPlugins\Status\Status::getOneFromAll(["uuid" => $uuid]);
+            $other->body = 'after';
+            $this->assertNotFalse(Idno::site()->db()->saveObject($other));
+            $this->assertSame('before', \Idno\Common\Entity::getByUUID($uuid)->body, 'the cache is stale: what a long-running worker would see');
+
+            $cache->clear();
+
+            $this->assertSame('after', \Idno\Common\Entity::getByUUID($uuid)->body, 'emptied: the next event reads fresh data');
+        } finally {
+            $entity->delete();
+        }
+    }
+
     public function testEnsureNobodyLoggedOnLogsOffWhoeverIsOn(): void
     {
         Idno::site()->session()->refreshSessionUser(self::$user);

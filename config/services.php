@@ -70,7 +70,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Upgrade' => ['ConfigCopier.php', 'Mongo', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
         // The message is a value object; the two interfaces are implemented by Idno\Legacy adapters, aliased below;
         // ResilientTransport decorates the idno transport (below).
-        'Queue' => ['EventTrigger.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php'],
+        'Queue' => ['EventTrigger.php', 'EntityCache.php', 'KeepFailedMessage.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php', 'WorkerSiteUrl.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -327,6 +327,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // or consumed. Nothing from the configuration is compiled in.
     $services->set(\Idno\Legacy\LegacyEventTrigger::class);
     $services->set(\Idno\Legacy\LegacyUserContext::class);
+    $services->set(\Idno\Legacy\LegacyEntityCache::class);
+    $services->alias(\Idno\Queue\EntityCache::class, \Idno\Legacy\LegacyEntityCache::class);
     $services->alias(\Idno\Queue\EventTrigger::class, \Idno\Legacy\LegacyEventTrigger::class);
     $services->alias(\Idno\Queue\UserContext::class, \Idno\Legacy\LegacyUserContext::class);
     // The middleware config/packages/messenger.php names, and the handler (set explicitly, like the
@@ -336,8 +338,14 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // What an operator may do with messages a killed worker left (Idno\Queue\AbandonedMessages).
     $services->set(\Idno\Queue\AbandonedMessages::class)->public();
     // Reading the idno transport rides out a busy or lost database (see ResilientTransport). The
-    // decorator takes the transport's tags, so `messenger:consume idno` and everything else that
+    // decorator takes the transport's tags, so the worker and everything else that
     // receives from or sends to it get it.
+    // An event retried by an operator (messenger:failed:retry) that fails again is put back in the failure
+    // transport: Messenger would remove it, and the transport does not retry.
+    $services->set(\Idno\Queue\KeepFailedMessage::class)
+        ->args([service('messenger.transport.failed'), service('database_connection')])
+        ->autowire(false)
+        ->tag('kernel.event_subscriber');
     $services->set(\Idno\Queue\ResilientTransport::class)
         ->decorate('messenger.transport.idno')
         ->args([service('.inner'), service('database_connection'), service(\Psr\Log\LoggerInterface::class)])

@@ -15,6 +15,7 @@ use Symfony\Component\Messenger\Event\WorkerRunningEvent;
 use Symfony\Component\Messenger\Stamp\ReceivedStamp;
 use Symfony\Component\Messenger\Worker;
 use Tests\Storage\PrivateDatabase;
+use Tests\Unit\Queue\RecordingEntityCache;
 use Tests\Unit\Queue\RecordingUserContext;
 
 /**
@@ -67,7 +68,7 @@ final class WorkerHygieneTest extends TestCase
                 $this->loseConnection($connection);
             }
         };
-        $hygiene = new WorkerHygiene($connection, new RecordingUserContext(), new \Psr\Log\NullLogger());
+        $hygiene = new WorkerHygiene($connection, new RecordingUserContext(), new RecordingEntityCache(), new \Psr\Log\NullLogger());
         $bus = MessengerRig::bus([QueuedEvent::class => [$handler]], [$hygiene]);
         $transport->send(new Envelope(new QueuedEvent('idno', 'first', [], null)));
         $transport->send(new Envelope(new QueuedEvent('idno', 'second', [], null)));
@@ -85,7 +86,7 @@ final class WorkerHygieneTest extends TestCase
     public function testAConnectionLostWhileTheWorkerIsIdleIsReplacedBeforeTheNextRead(string $engine): void
     {
         $connection = $this->database($engine, 'hygiene');
-        $hygiene = new WorkerHygiene($connection, new RecordingUserContext(), new \Psr\Log\NullLogger());
+        $hygiene = new WorkerHygiene($connection, new RecordingUserContext(), new RecordingEntityCache(), new \Psr\Log\NullLogger());
         $connection->fetchOne('select 1');
         $this->loseConnection($connection);
 
@@ -122,7 +123,7 @@ final class WorkerHygieneTest extends TestCase
     {
         $connection = $this->database($engine, 'hygiene');
         $users = new RecordingUserContext();
-        $hygiene = new WorkerHygiene($connection, $users, new \Psr\Log\NullLogger());
+        $hygiene = new WorkerHygiene($connection, $users, new RecordingEntityCache(), new \Psr\Log\NullLogger());
         $received = static fn (): Envelope => (new Envelope(new QueuedEvent('idno', 'e', [], null)))->with(new ReceivedStamp('idno'));
 
         foreach ([null, new \RuntimeException('failed'), new \TypeError('an error')] as $failure) {
@@ -156,7 +157,7 @@ final class WorkerHygieneTest extends TestCase
             }
         };
         $log = new \Tests\Unit\Queue\CollectingLogger();
-        $hygiene = new WorkerHygiene($connection, $users, $log);
+        $hygiene = new WorkerHygiene($connection, $users, new RecordingEntityCache(), $log);
         $handlerFailure = new \RuntimeException('the handler failed');
         $bus = MessengerRig::bus([QueuedEvent::class => [static function () use ($handlerFailure): void {
             throw $handlerFailure;
@@ -175,6 +176,60 @@ final class WorkerHygieneTest extends TestCase
     }
 
     /**
+     * The worker lives for hours: what one event loaded (users, entities) must not be what the next
+     * one sees, so the entity cache is emptied after every received message, whatever it did.
+     *
+     * @dataProvider engines
+     */
+    public function testTheEntityCacheIsEmptiedAfterEveryReceivedMessageWhateverItDid(string $engine): void
+    {
+        $connection = $this->database($engine, 'hygiene');
+        $cache = new RecordingEntityCache();
+        $hygiene = new WorkerHygiene($connection, new RecordingUserContext(), $cache, new \Psr\Log\NullLogger());
+        $received = static fn (): Envelope => (new Envelope(new QueuedEvent('idno', 'e', [], null)))->with(new ReceivedStamp('idno'));
+
+        foreach ([null, new \RuntimeException('failed'), new \TypeError('an error')] as $n => $failure) {
+            $bus = MessengerRig::bus([QueuedEvent::class => [static function () use ($failure): void {
+                if ($failure !== null) {
+                    throw $failure;
+                }
+            }]], [$hygiene]);
+            try {
+                $bus->dispatch($received());
+            } catch (\Throwable) {
+                // the worker's to deal with
+            }
+            $this->assertSame($n + 1, $cache->cleared, 'emptied after message ' . ($n + 1));
+        }
+    }
+
+    /**
+     * @dataProvider engines
+     */
+    public function testAFailureToEmptyTheCacheIsLoggedAndMasksNothing(string $engine): void
+    {
+        $connection = $this->database($engine, 'hygiene');
+        $users = new RecordingUserContext();
+        $log = new \Tests\Unit\Queue\CollectingLogger();
+        $hygiene = new WorkerHygiene($connection, $users, new RecordingEntityCache(new \LogicException('cache broke')), $log);
+        $handlerFailure = new \RuntimeException('the handler failed');
+        $bus = MessengerRig::bus([QueuedEvent::class => [static function () use ($handlerFailure, $users): void {
+            $users->loggedOn = 'https://example.com/user/1';
+            throw $handlerFailure;
+        }]], [$hygiene]);
+
+        try {
+            $bus->dispatch((new Envelope(new QueuedEvent('idno', 'e', [], null)))->with(new ReceivedStamp('idno')));
+            $this->fail('The handler\'s failure was lost.');
+        } catch (\Throwable $e) {
+            $this->assertSame([$handlerFailure], array_values($e->getWrappedExceptions()));
+        }
+        $this->assertNull($users->loggedOn, 'the other cleanup steps still ran');
+        $this->assertCount(1, $log->lines);
+        $this->assertStringContainsString('cache broke', $log->lines[0][1]);
+    }
+
+    /**
      * @dataProvider engines
      */
     public function testAMessageDispatchedByARequestIsLeftAlone(string $engine): void
@@ -182,7 +237,8 @@ final class WorkerHygieneTest extends TestCase
         $connection = $this->database($engine, 'hygiene');
         $users = new RecordingUserContext();
         $users->loggedOn = 'https://example.com/user/1'; // the request's own user
-        $hygiene = new WorkerHygiene($connection, $users, new \Psr\Log\NullLogger());
+        $cache = new RecordingEntityCache();
+        $hygiene = new WorkerHygiene($connection, $users, $cache, new \Psr\Log\NullLogger());
         $bus = MessengerRig::bus([QueuedEvent::class => [static function (): void {
         }]], [$hygiene]);
         $disconnected = !$connection->isConnected();
@@ -190,6 +246,7 @@ final class WorkerHygieneTest extends TestCase
         $bus->dispatch(new Envelope(new QueuedEvent('idno', 'e', [], null)));
 
         $this->assertSame('https://example.com/user/1', $users->loggedOn, 'the request\'s user stays logged on');
+        $this->assertSame(0, $cache->cleared, 'and the request\'s cache too');
         $this->assertSame($disconnected, !$connection->isConnected(), 'the connection was not even touched');
     }
 

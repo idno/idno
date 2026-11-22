@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Idno\Console;
 
+use Idno\Config\BootConfig;
 use Idno\Core\EventQueue;
 use Idno\Queue\AbandonedMessages;
 use Idno\Queue\LegacyQueueDrain;
 use Idno\Queue\QueuedEvent;
 use Idno\Queue\StopWhenQueueIsEmpty;
+use Idno\Queue\WorkerSiteUrl;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -26,6 +28,7 @@ use Symfony\Component\Messenger\Event\WorkerMessageFailedEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageHandledEvent;
 use Symfony\Component\Messenger\Event\WorkerMessageReceivedEvent;
 use Symfony\Component\Messenger\Event\WorkerRunningEvent;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnTimeLimitListener;
 use Symfony\Component\Messenger\Exception\WrappedExceptionsInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\TransportMessageIdStamp;
@@ -37,10 +40,13 @@ use Symfony\Component\Messenger\Worker;
  * cron (the README). It refuses (exit 1) unless the site's queue is asynchronous
  * (`event_queue = 'AsynchronousQueue'`), moves the events the previous version of Idno left in its
  * own records into the queue (LegacyQueueDrain), and then consumes the `idno` transport, as
- * `messenger:consume idno` does, printing one line for each event it takes and one when it is done
+ * a Messenger worker does, printing one line for each event it takes and one when it is done
  * or fails. With --once it handles everything waiting now and exits 0; otherwise it runs until it is
  * stopped (SIGTERM, SIGINT), sleeping --interval seconds when the queue is empty, and stops by itself
- * (exit 0, for a supervisor to start again) when it has used a lot of memory.
+ * (exit 0, for a supervisor to start again) when it has used a lot of memory or after --time-limit
+ * seconds (so that changed settings and plugins are read), and on `messenger:stop-workers`. It refuses
+ * (exit 1) unless the boot configuration has an explicit absolute `url`: it never guesses the address.
+ * It is the only worker: `messenger:consume` is removed (Idno\Kernel\MessengerTrimPass).
  *
  * A failed event is not retried: Messenger keeps it in the `failed` transport with its error
  * (`messenger:failed:show`, `retry`, `remove`). A message a worker took and never finished (the
@@ -63,6 +69,9 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
      * lower `memory_limit` lowers it (memoryLimitBytes()).
      */
     public const MEMORY_LIMIT_BYTES = 268435456;
+
+    /** How long the daemon runs before it stops itself, in seconds (`--time-limit`): changed settings and plugins reach a new process. */
+    public const DEFAULT_TIME_LIMIT_SECONDS = 3600;
 
     /** Seconds `--once` waits between reads while the database is busy. */
     private const BUSY_SLEEP_MICROSECONDS = 500000;
@@ -98,6 +107,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
         private readonly \Closure $logger,
         private readonly EventDispatcherInterface $events,
         private readonly KernelInterface $kernel,
+        private readonly BootConfig $bootConfig,
         private readonly float $busyGiveUpSeconds = 30.0,
     )
     {
@@ -108,6 +118,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
     {
         $this->addOption('queue', null, InputOption::VALUE_OPTIONAL, 'The named queue to process (every queue name is served: see the command\'s documentation)', 'default');
         $this->addOption('interval', null, InputOption::VALUE_OPTIONAL, 'Polling interval in seconds', 1);
+        $this->addOption('time-limit', null, InputOption::VALUE_REQUIRED, 'Seconds the daemon runs before it stops itself after its current message (exit 0, for a supervisor to start it again with the current settings and plugins); 0 means no limit', (string) self::DEFAULT_TIME_LIMIT_SECONDS);
         $this->addOption('once', null, InputOption::VALUE_NONE, 'Process the pending events and exit (for use with cron)');
         $this->addOption('requeue-abandoned', null, InputOption::VALUE_NONE, 'Put the messages a worker took over an hour ago and never finished back in the queue before starting');
     }
@@ -126,6 +137,14 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
         $queue = ($this->queue)();
         if (!$queue->isAsynchronous()) {
             $output->writeln('<error>The event queue is not set to AsynchronousQueue. Set event_queue = \'AsynchronousQueue\' in config.ini.</error>');
+
+            return 1;
+        }
+
+        // The worker never guesses the site's address: what it signs and sends names it.
+        $problem = WorkerSiteUrl::problem($this->bootConfig->get('url'));
+        if ($problem !== null) {
+            ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln('<error>' . $problem . '</error>');
 
             return 1;
         }
@@ -166,7 +185,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
             return 0;
         }
 
-        if ($this->consume($output, $interval, $once)) {
+        if ($this->consume($output, $interval, $once, self::timeLimitSeconds((string) $input->getOption('time-limit')))) {
             ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln('<error>The database stayed busy for ' . (int) $this->busyGiveUpSeconds . ' seconds: events may be waiting in the queue. Run the worker again.</error>');
 
             return 1;
@@ -225,7 +244,20 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
     /**
      * @return bool true when `--once` gave up because the database stayed busy
      */
-    private function consume(OutputInterface $output, int $interval, bool $once): bool
+    /**
+     * The daemon's time limit from the option: whole seconds, 0 (or less) for none; a value that is not a
+     * number is the default.
+     */
+    public static function timeLimitSeconds(string $option): int
+    {
+        if (!is_numeric($option)) {
+            return self::DEFAULT_TIME_LIMIT_SECONDS;
+        }
+
+        return max(0, (int) $option);
+    }
+
+    private function consume(OutputInterface $output, int $interval, bool $once, int $timeLimit): bool
     {
         $transport = ($this->transport)();
         $memoryLimit = self::memoryLimitBytes(ini_get('memory_limit'));
@@ -257,8 +289,19 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
         foreach ($listeners as $name => $listener) {
             $this->events->addListener($name, $listener);
         }
+        $subscribers = [];
         if ($stopWhenEmpty !== null) {
-            $this->events->addSubscriber($stopWhenEmpty);
+            $subscribers[] = $stopWhenEmpty;
+        } else {
+            // The daemon stops after the time limit (between messages). `messenger:stop-workers` needs nothing
+            // here: FrameworkBundle registers its listener (StopWorkerOnRestartSignalListener) on the event
+            // dispatcher this worker runs on, for `--once` runs too.
+            if ($timeLimit > 0) {
+                $subscribers[] = new StopWorkerOnTimeLimitListener($timeLimit, ($this->logger)());
+            }
+        }
+        foreach ($subscribers as $subscriber) {
+            $this->events->addSubscriber($subscriber);
         }
         $this->worker = new Worker(['idno' => $transport], ($this->bus)(), $this->events, ($this->logger)());
         if ($this->stopRequested) {
@@ -269,8 +312,8 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
             $this->worker->run(['sleep' => $once ? self::BUSY_SLEEP_MICROSECONDS : $interval * 1_000_000]);
         } finally {
             $this->worker = null;
-            if ($stopWhenEmpty !== null) {
-                $this->events->removeSubscriber($stopWhenEmpty);
+            foreach ($subscribers as $subscriber) {
+                $this->events->removeSubscriber($subscriber);
             }
             foreach ($listeners as $name => $listener) {
                 $this->events->removeListener($name, $listener);

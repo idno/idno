@@ -112,4 +112,51 @@ final class QueueWorkCommandTest extends AsyncSiteTestCase
             $this->assertStringContainsString($option, $stdout);
         }
     }
+
+    /**
+     * The daemon, as a supervisor runs it: `messenger:stop-workers` (the framework's own command, through
+     * the cache pool every worker shares) makes it stop after its current message, exit 0.
+     */
+    public function testMessengerStopWorkersStopsARunningDaemonWithExitZero(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', 'service-event-queue', '--time-limit=0', '--interval=1'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            $root,
+            array_filter($this->environment(), static fn (?string $value): bool => $value !== null),
+        );
+        $this->assertIsResource($process);
+        stream_set_blocking($pipes[1], false);
+        stream_set_blocking($pipes[2], false);
+        $output = '';
+        try {
+            $deadline = microtime(true) + 30;
+            while (!str_contains($output, 'Press Ctrl+C') && microtime(true) < $deadline) {
+                $output .= (string) stream_get_contents($pipes[1]) . (string) stream_get_contents($pipes[2]);
+                usleep(50_000);
+            }
+            $this->assertStringContainsString('Starting event queue worker', $output);
+            sleep(2); // the worker has started (the signal must be later than that)
+
+            [$exit, $stdout, $stderr] = $this->console('messenger:stop-workers');
+            $this->assertSame(0, $exit, $stdout . $stderr);
+
+            $deadline = microtime(true) + 30;
+            while (proc_get_status($process)['running'] && microtime(true) < $deadline) {
+                usleep(100_000);
+            }
+            $status = proc_get_status($process);
+            $this->assertFalse($status['running'], 'the daemon stopped: ' . $output . $this->serverLog());
+            $this->assertSame(0, $status['exitcode']);
+        } finally {
+            if (proc_get_status($process)['running']) {
+                proc_terminate($process, 9);
+            }
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+        }
+    }
 }

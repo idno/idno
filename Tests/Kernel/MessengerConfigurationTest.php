@@ -94,12 +94,14 @@ final class MessengerConfigurationTest extends TestCase
     /**
      * @dataProvider kernels
      */
-    public function testTheCommandThatCreatesTablesIsNotRegisteredAndTheOthersAre(string $environment): void
+    public function testTheCommandsThatCreateTablesOrRunAnotherWorkerAreNotRegisteredAndTheOthersAre(string $environment): void
     {
         $names = array_keys((new Application($this->kernel($environment)))->all());
 
         $this->assertNotContains('messenger:setup-transports', $names, 'tables are created by migrations only');
-        foreach (['messenger:consume', 'messenger:stop-workers', 'messenger:failed:show', 'messenger:failed:retry', 'messenger:failed:remove', 'messenger:stats'] as $command) {
+        $this->assertNotContains('messenger:consume', $names, 'service-event-queue is the one worker: it checks the queue, the site address and the schema gate, moves the old queue\'s records and stops itself');
+        $this->assertContains('service-event-queue', $names);
+        foreach (['messenger:stop-workers', 'messenger:failed:show', 'messenger:failed:retry', 'messenger:failed:remove', 'messenger:stats'] as $command) {
             $this->assertContains($command, $names);
         }
     }
@@ -206,6 +208,75 @@ final class MessengerConfigurationTest extends TestCase
         $envelope = new \Symfony\Component\Messenger\Envelope(new QueuedEvent('idno', 'e', [], null));
 
         $this->assertFalse($strategy->isRetryable($envelope), 'max_retries is 0');
+    }
+
+    public function testAFailedMessageIsNeverRetriedFromTheFailureTransportEither(): void
+    {
+        $strategy = $this->kernel('test')->getContainer()->get('idno.test.messenger_retry_failed');
+        $envelope = new \Symfony\Component\Messenger\Envelope(new QueuedEvent('idno', 'e', [], null));
+
+        $this->assertFalse($strategy->isRetryable($envelope), 'the failure transport has max_retries 0 too: a retry of a failed event that fails again is not re-sent');
+    }
+
+    /**
+     * What an operator's `messenger:failed:retry` does, on the container's own pieces: a message in the
+     * failure transport whose handler fails again is handled once by that retry and is in the failure
+     * transport once afterwards (not run again by the framework's retry strategy, up to four times).
+     */
+    public function testARetryOfAFailedEventThatFailsAgainRunsOnceAndStaysInTheFailureTransportOnce(): void
+    {
+        $container = $this->kernel('test')->getContainer();
+        $idno = $container->get('idno.test.messenger_transport_idno');
+        $failed = $container->get('idno.test.messenger_transport_failed');
+        $dispatcher = $container->get('event_dispatcher');
+        $bus = $container->get('idno.test.messenger_bus');
+
+        $logFile = tempnam(sys_get_temp_dir(), 'idno-messenger-log') ?: '/dev/null';
+        $previousLog = ini_set('error_log', $logFile);
+        $failures = [];
+        $count = static function (WorkerMessageFailedEvent $event) use (&$failures): void {
+            $failures[] = $event->getReceiverName();
+        };
+        $idle = 0;
+        $stop = static function (WorkerRunningEvent $event) use (&$idle): void {
+            $idle = $event->isWorkerIdle() ? $idle + 1 : 0;
+            if ($idle >= 2) {
+                $event->getWorker()->stop();
+            }
+        };
+        $dispatcher->addListener(WorkerMessageFailedEvent::class, $count, -1000);
+        $dispatcher->addListener(WorkerRunningEvent::class, $stop);
+        try {
+            // First failure: the idno worker handles it, it lands in `failed`.
+            $bus->dispatch(new QueuedEvent('idno', 'queue/test/' . bin2hex(random_bytes(4)), [], 'https://example.com/user/nobody-' . bin2hex(random_bytes(4))));
+            (new Worker(['idno' => $idno], $bus, $dispatcher))->run(['sleep' => 1000]);
+            $this->assertSame(['idno'], $failures);
+            $this->assertSame(1, $failed->getMessageCount());
+
+            // The operator's retry: a worker on the failure transport (what messenger:failed:retry runs).
+            $idle = 0;
+            $failures = [];
+            (new Worker(['failed' => $failed], $bus, $dispatcher))->run(['sleep' => 1000]);
+
+            $this->assertSame(['failed'], $failures, 'handled once by the retry, not retried again by the framework');
+            $rows = static fn (): int => (int) $container->get('database_connection')->fetchOne("select count(*) from idno_messages where queue_name = 'failed'");
+            $this->assertSame(1, $rows(), 'and it is in the failure transport exactly once afterwards (kept, not lost)');
+            $this->assertSame(0, $idno->getMessageCount());
+            // It is back for the operator, with the error of the retry, once the pause that stops
+            // `messenger:failed:retry` from finding it again at once is over.
+            $container->get('database_connection')->executeStatement("update idno_messages set available_at = '2000-01-01 00:00:00' where queue_name = 'failed'");
+            $listed = iterator_to_array($failed->all(), false);
+            $this->assertCount(1, $listed);
+            $this->assertNotNull($listed[0]->last(\Symfony\Component\Messenger\Stamp\ErrorDetailsStamp::class));
+        } finally {
+            ini_set('error_log', (string) $previousLog);
+            if ($logFile !== '/dev/null') {
+                @unlink($logFile);
+            }
+            $dispatcher->removeListener(WorkerMessageFailedEvent::class, $count);
+            $dispatcher->removeListener(WorkerRunningEvent::class, $stop);
+            $container->get('database_connection')->executeStatement("delete from idno_messages where queue_name in ('failed', 'idno')");
+        }
     }
 
     public function testTheWorkerMiddlewareIsOnTheBus(): void

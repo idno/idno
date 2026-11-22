@@ -23,11 +23,13 @@ final class LegacyUserContext implements UserContext
     {
         try {
             if ($uuid !== null && $uuid !== '') {
-                $user = User::getByUUID($uuid);
-                if (!$user instanceof User) {
+                // Read fresh, never from the entity cache: a worker lives long, and a user deleted since an
+                // earlier event cached them must not pass. A user the session will not log on (a blocked
+                // address) is no user either: the event must not run as nobody instead.
+                $user = User::getByUUID($uuid, false);
+                if (!$user instanceof User || !$this->session->logUserOn($user)) {
                     throw new \RuntimeException('Invalid user (' . $uuid . ') given for runAsContext, aborting');
                 }
-                $this->session->logUserOn($user);
             } else {
                 $this->ensureNobodyLoggedOn();
             }

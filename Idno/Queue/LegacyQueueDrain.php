@@ -148,7 +148,19 @@ final class LegacyQueueDrain
             $this->connection->beginTransaction();
             try {
                 // The claim: whoever deletes the row moves it.
-                $claimed = (int) $this->connection->executeStatement('delete from ' . $table . ' where id = ?', [$id]);
+                try {
+                    $claimed = (int) $this->connection->executeStatement('delete from ' . $table . ' where id = ?', [$id]);
+                } catch (\Throwable $e) {
+                    if (!ResilientTransport::isInterruption($e)) {
+                        throw $e;
+                    }
+                    // Another worker holds the record's lock (it is moving it) past the busy timeout:
+                    // not ours, and not a problem.
+                    $this->connection->rollBack();
+                    $this->logger->debug('A queued event of the previous queue is being moved by another worker: ' . self::printable($id));
+
+                    return null;
+                }
                 if ($claimed === 0) {
                     $this->connection->commit();
 

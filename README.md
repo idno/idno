@@ -50,10 +50,26 @@ event_queue = 'AsynchronousQueue'
 Without this line, all events are processed inline during the web request.
 (`SynchronousQueue`, the old default's name, still means the same.)
 
-#### 2. Start the event queue worker
+#### 2. Tell the worker the site's address
+
+The worker has no web request to tell it where the site is, and the address (with its scheme) is part of
+what it signs and sends to other servers (an ActivityPub actor and key id, for example). It never guesses
+it: it refuses to start unless the configuration has an explicit `url`. Add it to `configuration/config.ini`,
+which every console command reads (the way to do it):
+
+```ini
+url = "https://your.domain/"
+```
+
+Alternatively set `IDNO_URL=https://your.domain/` in the worker's environment (and in that of every other
+command that runs events, such as `messenger:failed:retry`, which refuses without it). It must be the
+address visitors use, scheme included: a site served over TLS needs an `https` url, or what the worker
+sends names `http`.
+
+#### 3. Start the event queue worker
 
 ```bash
-sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-event-queue
+sudo -u www-data ./bin/console service-event-queue
 ```
 
 (`./idno.php` still works as an alias for `./bin/console`.)
@@ -62,15 +78,13 @@ sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-event-queue
 |-----------------------|-----------|-----------------------------------------------------------------------------|
 | `--queue`             | `default` | Accepted for compatibility; one worker handles the events of every queue name |
 | `--interval`          | `1`       | Seconds to sleep when there is nothing to do                                |
+| `--time-limit`        | `3600`    | Seconds before the worker stops itself after its current message; 0 for no limit |
 | `--once`              |           | Handle what is waiting now and exit (for cron)                              |
 | `--requeue-abandoned` |           | Put back the events a killed worker took over an hour ago (see below)       |
 
-The queue is Symfony Messenger's, in the `idno_messages` table of your database, so the worker is
-also available as Messenger's own command, with its options (`--time-limit`, `--memory-limit`, ...):
-
-```bash
-sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console messenger:consume idno -vv
-```
+The queue is Symfony Messenger's, in the `idno_messages` table of your database. `service-event-queue` is
+the only worker to run (Messenger's own `messenger:consume` is not available: it would skip the checks
+above). `./bin/console messenger:stop-workers` asks every running worker to stop after its current message.
 
 **How it works:** when the site publishes something, the web request puts one message per event into
 the queue and returns. The worker takes each message, logs in as the user the event was queued for,
@@ -80,17 +94,32 @@ deletes the message. It prints one line when it takes an event and one when it i
 
 **If the worker dies, queued events pile up in the database but are not lost.** They are handled once
 the worker is restarted. The worker also stops by itself, with exit status 0, when it has used a lot of
-memory (80% of PHP's `memory_limit` when that is set, at most 256 MiB): **a supervisor must start it
-again**, such as the systemd unit below with `Restart=always`, or cron with `--once`.
+memory (80% of PHP's `memory_limit` when that is set, at most 256 MiB), and after an hour (`--time-limit`),
+so that a changed setting or plugin list reaches it: **a supervisor must start it again**, such as the
+systemd unit below with `Restart=always`, or cron with `--once`. A setting or plugin you change reaches the
+worker when it next starts; restart it to apply the change at once.
 
 **An event that fails is kept, not retried.** What an event sends to other servers must not be sent
-twice, so a failed event goes once to a separate `failed` queue, with its error. Look at it and decide:
+twice, so a failed event goes once to a separate `failed` queue, with its error, and nothing runs it again
+by itself. An event runs again only when you retry it, once for each time you do, and if it fails again it
+is kept in `failed` again. Retrying an event that had partly succeeded (it reached some followers before it
+failed) sends it again to whoever already received it. Look at it and decide:
 
 ```bash
-./bin/console messenger:failed:show        # the failed events and why
-./bin/console messenger:failed:retry       # run them again (asks which)
-./bin/console messenger:failed:remove      # forget one
+./bin/console messenger:failed:show        # the failed events and why, with their ids
+./bin/console messenger:failed:retry 12    # run event 12 again (pass the ids: without one it is refused)
+./bin/console messenger:failed:remove 12   # forget it
 ```
+
+`messenger:failed:retry` needs the ids because, without them, Messenger would go on taking events from
+the failure queue until none was left, and could run one a second time. It also needs the same `url`
+configuration as the worker, and refuses without it. An event that is retried and fails again is kept
+under a **new** id, and is hidden from the plain `messenger:failed:show` list for a minute. (The hint the
+retry command prints, to run `messenger:consume failed`, does not apply: Idno has no such command.)
+
+The error kept with a failed event (shown by `messenger:failed:show -vv`) can include the arguments of the
+call that failed unless PHP's `zend.exception_ignore_args` is on (the production default in php.ini):
+treat that output as sensitive.
 
 **An event a worker was handling when it was killed** (an out-of-memory kill, a power cut) may already
 have sent something, so nothing runs it again by itself. When the worker starts and there are such
@@ -104,7 +133,7 @@ first time the worker starts. Stop the old worker before you upgrade (see the up
 be left running. The worker also removes the old queue's completed records, a few hundred each time it
 starts (nothing reads them any more).
 
-#### 3. Keep it alive with systemd (recommended)
+#### 4. Keep it alive with systemd (recommended)
 
 The worker must stay running permanently. The simplest way is a systemd service
 unit. Create `/etc/systemd/system/idno-queue.service`, taking care to replace the
@@ -118,7 +147,7 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-Environment=IDNO_DOMAIN=your.domain
+# Environment=IDNO_URL=https://your.domain/   # only if config.ini has no url
 WorkingDirectory=/var/www/idno
 ExecStart=/var/www/idno/bin/console service-event-queue #replace with your path
 Restart=always
@@ -149,13 +178,13 @@ instead. The `--once` flag makes the worker handle everything that is waiting
 and exit, which is ideal for cron:
 
 ```
-* * * * * sudo -u www-data IDNO_DOMAIN='your.domain' /var/www/idno/bin/console service-event-queue --once >> /var/log/idno-queue.log 2>&1
+* * * * * sudo -u www-data /var/www/idno/bin/console service-event-queue --once >> /var/log/idno-queue.log 2>&1
 ```
 
 This processes pending events once per minute. Events may take up to 60 seconds
 to be delivered (compared to ~1 second with the systemd worker above).
 
-#### 4. After updates — restart the workers
+#### 5. After updates — restart the workers
 
 When you update Idno core or any plugins, **restart the worker** so it
 picks up the new code:

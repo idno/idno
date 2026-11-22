@@ -19,7 +19,9 @@ return static function (ContainerConfigurator $container): void {
     // middle of an event would make it run again. Nothing is ever redelivered by itself; such a
     // message is "abandoned" and an operator may requeue it (Idno\Queue\AbandonedMessages).
     //
-    // A message is not retried (max_retries 0): the events a site queues send requests to other
+    // Neither transport retries (max_retries 0; FrameworkBundle gives `failed` three retries unless told
+    // not to, and an operator's messenger:failed:retry of an event that fails again would then run it up to
+    // four times). A message is not retried (max_retries 0): the events a site queues send requests to other
     // servers, and running one twice would deliver it twice. A message whose handler fails goes to
     // the `failed` transport once, with its error, and stays there until someone looks at it.
     //
@@ -37,6 +39,7 @@ return static function (ContainerConfigurator $container): void {
                 'failed' => [
                     'dsn' => 'doctrine://default',
                     'options' => ['table_name' => 'idno_messages', 'queue_name' => 'failed', 'auto_setup' => false, 'redeliver_timeout' => AbandonedMessages::REDELIVER_TIMEOUT_SECONDS],
+                    'retry_strategy' => ['max_retries' => 0],
                 ],
             ],
             'routing' => [

@@ -259,7 +259,9 @@ Idno/
                                small interfaces they depend on (EventTrigger, UserContext), the decorator of
                                the transport that rides out a busy database (ResilientTransport), the
                                operator's view of killed workers' messages (AbandonedMessages) and the move
-                               of the previous queue's records (LegacyQueueDrain). See "The queue of
+                               of the previous queue's records (LegacyQueueDrain), what the worker needs
+                               between messages (EntityCache, StopWhenQueueIsEmpty, KeepFailedMessage) and the
+                               check of the site's address (WorkerSiteUrl). See "The queue of
                                events"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
@@ -290,7 +292,7 @@ data/                          Where an SQLite site's database file lives (data/
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
-ConsolePlugins/                CLI service plugins (BuildLanguage, Export, GhostExport; third-party console plugins load from here too)
+ConsolePlugins/                CLI service plugins (BuildLanguage, Example, Export, GhostExport; third-party console plugins load from here too)
 Themes/                        Visual themes; Twenty26 (Idno 2026) is the only bundled theme. A site
                                configured with a retired theme (Themes::RETIRED) is resolved to Twenty26
                                at load; the setting is saved, and the admin told, when an admin next
@@ -706,8 +708,9 @@ other new code may.
   the storage services below). The container's `Idno\Storage\TypeMap` is `AttributeTypeMap` (an alias in `config/services.php`). `BootConfigConnectionFactory.php` is
   excluded from the scan and wired by hand. In `Idno/Kernel/`, the compiler pass
   `DoctrineTrimPass.php` and `MessengerTrimPass.php` are excluded (the kernel adds them in `build()`); in
-  `Idno/Queue/`, the message `QueuedEvent.php`, the interfaces `EventTrigger.php` and `UserContext.php`, and
-  `ResilientTransport.php` (a decorator, wired by hand).
+  `Idno/Queue/`, the message `QueuedEvent.php`, the interfaces `EventTrigger.php`, `EntityCache.php` and
+  `UserContext.php`, `ResilientTransport.php` (a decorator) and `KeepFailedMessage.php` (wired by hand),
+  `StopWhenQueueIsEmpty.php` (built by the command) and the static helper `WorkerSiteUrl.php`.
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
@@ -2073,9 +2076,12 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   counted in `left` and logged once with its id and event name (never its data). `drain(?\Closure
   $shouldStop)` asks before each record and ends there (whole records only). `removeCompleted($limit = 500)`
   deletes complete records of the class (the old garbage collector is gone, nothing else reads them), the
-  command calling it once at each start. It reads documents through the `RecordStore`, never entities.
+  command calling it once at each start (a failure of that housekeeping is one warning, never an obstacle to
+  consuming). A claim that fails because the database is busy or locked (`ResilientTransport::isInterruption()`,
+  the one classification the queue uses) means another worker is moving the record: not counted as left, not a
+  warning, the drain goes on. It reads documents through the `RecordStore`, never entities.
 - `Idno\Console\QueueWorkCommand` is `service-event-queue [--queue=default] [--interval=N] [--once]
-  [--requeue-abandoned]` (a Symfony command; the legacy console plugin of that name is gone, so it is listed
+  [--time-limit=N] [--requeue-abandoned]` (a Symfony command; the legacy console plugin of that name is gone, so it is listed
   while the schema gate is closed too, and refuses there with exit 1 after the console's closed-gate line). It
   exits 1 with `The event queue is not set to AsynchronousQueue. Set event_queue = 'AsynchronousQueue' in
   config.ini.` unless the queue is asynchronous; prints `Processing pending events from queue '<q>' (single
@@ -2094,12 +2100,26 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   returned nothing only because it was ridden out), waiting 0.5 s between reads, and after 30 s of
   interrupted reads in a row exits 1 with a line on stderr. A failing event never makes the exit code non-zero. `--queue` is
   accepted and one worker serves every queue name (one transport cannot be filtered by the name in the
-  message); a worker given another name says so. `messenger:consume idno` is the same worker with Messenger's
-  options.
+  message); a worker given another name says so. It is the ONLY worker: `Idno\Kernel\MessengerTrimPass`
+  removes `messenger:consume`, which lacks the checks below. After the queue check and before anything is
+  drained or consumed it refuses (exit 1, one message on stderr) unless the BOOT configuration has an
+  explicit absolute `url` (`Idno\Queue\WorkerSiteUrl::problem()`, a pure check: `http` or `https` and a
+  host; the message names `url = "https://example.com/"` in `configuration/config.ini` and
+  `IDNO_URL=https://example.com/`); the worker never guesses the address, because `url` is never stored
+  in the database and an installer-made site has none in `config.ini`, so without a request the address
+  would be built from `IDNO_DOMAIN` with an http scheme. A site without the asynchronous queue never
+  needs `url` (the command refuses it for the queue first). The daemon stops itself, between messages,
+  after `--time-limit` seconds (default 3600; 0 none; `--once` ignores it) so that a supervisor's restart
+  re-reads settings and plugins, and on `messenger:stop-workers` (FrameworkBundle's
+  `StopWorkerOnRestartSignalListener`, a subscriber on the event dispatcher the command's worker runs on, so
+  `--once` runs stop too; pinned by a subprocess test); it needs a supervisor (systemd `Restart=always`, or cron with `--once`).
 - Events run in the worker's process (the console), so their listeners must be registered there: the
   link-preview listener is registered by the console boot too (it was web-only). A listener must not read the
-  request. `Page::isSSL()` in a console process (no `REQUEST_METHOD`) is true exactly when the configured `url`
-  is https, so an activity's `keyId` built in the worker is https for an https-configured site and http for an http-configured one, whatever a web server would present: a site served over TLS must have an https `url` configured, or what its worker signs and sends names http.
+  request. `Page::isSSL()` in a console process (no `REQUEST_METHOD`) is true exactly when the explicit boot
+  `url` is https (the worker refuses to start without one, above), so an activity's `keyId` built in the
+  worker is https for an https `url` and http for an http one, whatever a web server would present, also with
+  `IDNO_DOMAIN` set (pinned in a subprocess by `Tests/Queue/QueueWorkerSiteUrlTest`): a site served over TLS
+  must have an https `url` configured, or what its worker signs and sends names http.
 
 - `Idno\Queue\QueuedEvent`: the message, a value object: `queue` (the queue it was sent to), `event`
   (the event's name), `data` (an array) and `runAs` (the uuid of the user it runs as, null for nobody).
@@ -2107,7 +2127,9 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   an event always could (`serialize()`); `Tests/Queue/TransportTest::testAMessageKeepsItsDataIncludingAnEntity`
   pins it with a real entity. Do not switch it to JSON.
 - `Idno\Queue\QueuedEventHandler` (`#[AsMessageHandler]`): runs the event as `runAs` (a user that no
-  longer exists is a `\RuntimeException` and nothing is triggered), returns what the listeners returned,
+  longer exists, or whom the session will not log on, is a `\RuntimeException` and nothing is triggered;
+  `LegacyUserContext` reads the user uncached, never from the entity cache, so a user deleted after an earlier
+  event cached them does not pass), returns what the listeners returned,
   and LETS EVERY THROWABLE OUT (`\Error` too) so that Messenger moves the message to the failure
   transport; nobody is left logged on either way. It depends on two interfaces of `Idno\Queue\`, not on
   the legacy application: `EventTrigger` (trigger a named event with its data) and `UserContext`
@@ -2121,10 +2143,13 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   message is handled and again after it (the handler may outlive the server's idle timeout, and the
   transport acknowledges on that connection) and closes a lost one so the next query opens a new one;
   after it, also when it failed, it makes sure nobody is logged on (each cleanup step on its own: a
-  failure of one is logged and never masks the handler's own exception). The same connection check
-  runs after each message and whenever the worker is idle.
+  failure of one is logged and never masks the handler's own exception), and it empties the entity cache
+  (`Idno\Queue\EntityCache`, a third small interface with the adapter `Idno\Legacy\LegacyEntityCache` over
+  `Entity::clearEntityCache()`: `Entity::$entity_cache` is static and unbounded, and the old worker ran each
+  event in a fresh request), so one event never sees what an earlier one loaded and memory does not grow with
+  the number of events. The same connection check runs after each message and whenever the worker is idle.
 - `Idno\Queue\ResilientTransport` decorates the `idno` transport (`config/services.php`; it takes the
-  transport's tags, so `messenger:consume idno` and anything else that receives from or sends to it
+  transport's tags, so the worker and anything else that receives from or sends to it
   get it). `get()` returns no message, after logging ONE warning line, when the transport fails because
   the database is locked or busy (DBAL's `RetryableException`: lock wait timeout, deadlock; on SQLite
   this is what a read gets when another process committed between the transport's SELECT and UPDATE,
@@ -2146,10 +2171,24 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   take minutes), so 0 would requeue a message being handled.
 - `config/packages/messenger.php`: transports `idno` and `failed`, both `doctrine://default` (the site's
   own DBAL connection: one database, no second connection), table `idno_messages`, queue names `idno`
-  and `failed`, `auto_setup` OFF; `idno` has `max_retries` 0 (a message is never retried: what a queued
-  event sends to other servers must not be sent twice); `failure_transport: failed`; `QueuedEvent` is
-  routed to `idno`. A failed message stays in `failed` until someone looks at it
-  (`messenger:failed:show|retry|remove`).
+  and `failed`, `auto_setup` OFF; BOTH have `max_retries` 0 (a message is never retried by itself: what a
+  queued event sends to other servers must not be sent twice; FrameworkBundle gives `failed` three retries
+  unless told, so `messenger:failed:retry` of an event that fails again would run it up to four times);
+  `failure_transport: failed`; `QueuedEvent` is routed to `idno`. A failed message stays in `failed` until
+  someone looks at it (`messenger:failed:show|retry|remove`); an event runs again only when an operator
+  retries it, once per retry, and retrying one that had partly succeeded sends again to whoever already
+  received it. Messenger removes a message that fails without a retry and `failed` has no failure transport
+  of its own, so `Idno\Queue\KeepFailedMessage` (a subscriber on the failure event, receiver `failed`) puts a
+  retried event that fails again back in `failed` with the error of the retry, paused for a minute
+  (`available_at`: Messenger lists and finds only available messages, so `messenger:failed:retry` does not find
+  it again at once and loop); it reappears in `messenger:failed:show` a minute later. The new copy and the
+  delete of the received copy's row are ONE transaction on the site's connection, so a crash between them leaves
+  neither two copies nor none (the worker's later `reject()` deletes nothing, which the transport tolerates: it
+  is `delete ... where id = ?` and returns whether a row went); if the copy cannot be written the exception
+  propagates and the original stays. The copy has a NEW id. Pinned by `MessengerConfigurationTest`,
+  `KeepFailedMessageTest` and `FailedRetryGuardTest`. The error stored with a failed message (`messenger:failed:show -vv`) can
+  include the arguments of the failing call unless PHP's `zend.exception_ignore_args` is on (the production
+  php.ini default): that output is sensitive.
 - The table: `Idno\Storage\Migrations\Version20261121000000` creates `idno_messages` as literal SQL, the
   columns, types and index of the installed transport's own schema
   (`Connection::configureSchema()`): `id` auto-increment (`BIGINT`; `INTEGER PRIMARY KEY AUTOINCREMENT` on
@@ -2175,10 +2214,18 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   in a deferred transaction, so a read that finds another process's commit in between fails at once
   ("database is locked", never waited for); the message is untouched (rolled back before it is marked
   delivered), and `ResilientTransport` makes the worker read again, so no worker dies of it.
-- Console: FrameworkBundle registers `messenger:consume`, `messenger:stop-workers`,
-  `messenger:failed:show|retry|remove`, `messenger:stats` and `debug:messenger`; they are wanted and stay.
-  `messenger:setup-transports` would create the tables outside the migrations: `Idno\Kernel\MessengerTrimPass`
-  (added in `Kernel::build()`, as `DoctrineTrimPass` is) removes it. `messenger:stop-workers` works (the
+- Console: FrameworkBundle registers `messenger:stop-workers`, `messenger:failed:show|retry|remove`,
+  `messenger:stats` and `debug:messenger`; they are wanted and stay. `messenger:setup-transports` would
+  create the tables outside the migrations and `messenger:consume` is a second, unchecked way to run a
+  worker: `Idno\Kernel\MessengerTrimPass` (added in `Kernel::build()`, as `DoctrineTrimPass` is) removes both.
+  `messenger:failed:retry` runs events, whose listeners are legacy code: `Idno\Console\Application` refuses it
+  (exit 1, before a message is taken) while the schema gate is closed
+  (`Application::NEED_THE_LEGACY_APPLICATION`), and also (same hook, `Application::failedRetryRefusal()`)
+  without an explicit absolute boot `url` (`WorkerSiteUrl::problem()`, with the worker's message: a shell
+  without it would sign what it sends with a guessed http url, and a remote server's refusal still counts as
+  handled, deleting the message) and without message ids (it loops over the failure transport until nothing
+  is available, and takes back an event it put back after the pause); the retry command's own hint to run
+  `messenger:consume failed` does not apply (that command does not exist here). `messenger:stop-workers` works (the
   framework's cache pool `cache.messenger.restart_workers_signal` is on the kernel's cache directory:
   workers and the command must share `IDNO_CACHE_DIR`). Pinned by `Tests/Kernel/MessengerConfigurationTest`
   (test and prod containers).
@@ -2744,6 +2791,10 @@ the CLI installer no longer writes one.
 - Key settings: `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
   `filesystem`, `uploadpath`, `site_secret`
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
+- `url` is a boot setting (`config.ini`, `config.json` or `IDNO_URL`; never stored in the database). The queue
+  worker requires an explicit absolute one and refuses to start without it; the installers do not write one
+  (the web installer would have to trust the request's Host header, and the CLI installer has no address), so
+  an installer-made site adds it by hand
 - Sensitive files: `.env`, `config.ini`, `configuration/` — never commit these
 
 ## Security

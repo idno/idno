@@ -33,6 +33,7 @@ final class WorkerHygiene implements MiddlewareInterface, EventSubscriberInterfa
     public function __construct(
         private readonly Connection $connection,
         private readonly UserContext $users,
+        private readonly EntityCache $entities,
         private readonly LoggerInterface $logger,
     )
     {
@@ -59,6 +60,12 @@ final class WorkerHygiene implements MiddlewareInterface, EventSubscriberInterfa
                 $this->users->ensureNobodyLoggedOn();
             } catch (\Throwable $e) {
                 $this->logger->error('A user could not be logged off after a queued message: ' . self::describe($e));
+            }
+            // What the message loaded (users, entities) is not what the next one may see.
+            try {
+                $this->entities->clear();
+            } catch (\Throwable $e) {
+                $this->logger->error('The entity cache could not be emptied after a queued message: ' . self::describe($e));
             }
             $this->replaceLostConnection();
         }

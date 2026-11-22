@@ -356,6 +356,14 @@ namespace Idno\Common {
         }
 
         /**
+         * Empty the entity cache (a long-running process, the queue's worker, does this between events)
+         */
+        static function clearEntityCache()
+        {
+            self::$entity_cache = [];
+        }
+
+        /**
          * Invalidate the cache for a particular entity
          * @param $uuid
          */

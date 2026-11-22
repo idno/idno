@@ -97,6 +97,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()->alias('idno.test.messenger_bus', 'messenger.bus.default')->public();
     $container->services()->alias('idno.test.queue_event_trigger', \Idno\Queue\EventTrigger::class)->public();
     $container->services()->alias('idno.test.queue_user_context', \Idno\Queue\UserContext::class)->public();
+    $container->services()->alias('idno.test.queue_entity_cache', \Idno\Queue\EntityCache::class)->public();
     $container->services()->alias('idno.test.queue_handler', \Idno\Queue\QueuedEventHandler::class)->public();
     $container->services()->alias('idno.test.messenger_retry_idno', 'messenger.retry.multiplier_retry_strategy.idno')->public();
+    $container->services()->alias('idno.test.messenger_retry_failed', 'messenger.retry.multiplier_retry_strategy.failed')->public();
 };

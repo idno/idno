@@ -383,4 +383,40 @@ final class LegacyQueueDrainTest extends TestCase
         $this->assertSame($expected, $this->remaining(), 'a pending record and another entity are left');
         $this->assertSame([], $this->messages(), 'removing completed records sends nothing');
     }
+
+    /**
+     * Another worker that holds the claim's lock past the busy timeout makes this worker's delete fail
+     * with a lock failure: the record is the other worker's, not "left": no warning, not counted, and the
+     * drain goes on to the next record.
+     */
+    public function testAClaimThatFindsTheDatabaseBusyIsNotOursAndIsNotReportedAsLeft(): void
+    {
+        $this->database('sqlite', 'drain');
+        $first = $this->legacyEvent('post/note/a', 100);
+        $second = $this->legacyEvent('post/note/b', 200);
+        $driver = new class('database is locked') extends \Doctrine\DBAL\Driver\AbstractException {
+        };
+        $claims = 0;
+        $busy = $this->createMock(Connection::class);
+        $busy->method('beginTransaction');
+        $busy->method('isTransactionActive')->willReturn(true);
+        $busy->expects($this->once())->method('rollBack'); // the busy claim's transaction
+        $busy->method('executeStatement')->willReturnCallback(function (string $sql, array $params = []) use (&$claims, $driver): int {
+            if (++$claims === 1) {
+                throw new \Doctrine\DBAL\Exception\LockWaitTimeoutException($driver, null);
+            }
+
+            return $this->connection->executeStatement($sql, $params);
+        });
+        $busy->method('commit');
+        $logger = new CollectingLogger();
+
+        $result = (new LegacyQueueDrain($busy, $this->store(), $this->bus(), $logger))->drain();
+
+        $this->assertSame(['moved' => 1, 'left' => 0], $result, 'the busy one is neither moved nor left');
+        $this->assertSame([], array_filter($logger->lines, static fn (array $line): bool => in_array($line[0], ['warning', 'error'], true)), 'nothing is reported as a problem');
+        $this->assertSame(['post/note/b'], array_map(static fn (QueuedEvent $m): string => $m->event, $this->messages()), 'the next record was moved');
+        $this->assertContains($first, $this->remaining(), 'the busy record is still there for whoever holds it');
+        $this->assertNotContains($second, $this->remaining());
+    }
 }

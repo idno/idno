@@ -130,6 +130,26 @@ final class SchemaGateBootTest extends TestCase
     }
 
     /**
+     * `messenger:failed:retry` runs the events again, and an event's listeners are legacy code: with the
+     * gate closed the legacy application is not there, so the command refuses (exit 1) before it takes a
+     * message, and the failed messages stay as they are.
+     */
+    public function testRetryingFailedEventsRefusesWhileTheGateIsClosed(): void
+    {
+        (new SchemaMigrator($this->db()))->migrate();
+        // A migration that is pending again closes the gate; the queue's table is there, with a failed message in it.
+        $this->db()->executeStatement("delete from idno_migrations where version like '%Version20261121000000'");
+        $this->db()->executeStatement("insert into idno_messages (body, headers, queue_name, created_at, available_at, delivered_at) values ('b', '[]', 'failed', '2026-01-01 00:00:00', '2026-01-01 00:00:00', null)");
+
+        [$exit, $stdout, $stderr] = $this->script('bin/console', 'messenger:failed:retry', '--force');
+
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString(SchemaGate::CLOSED_MESSAGE, $stderr);
+        $this->assertStringContainsString('needs the site\'s database to be set up', $stdout . $stderr);
+        $this->assertSame(1, (int) $this->db()->fetchOne("select count(*) from idno_messages where queue_name = 'failed' and delivered_at is null"), 'the message was not taken');
+    }
+
+    /**
      * Which command runs no longer decides how the kernel boots: an abbreviated name and Symfony's
      * global options reach idno:upgrade as any other command does, and it runs without the line.
      */

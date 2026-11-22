@@ -41,6 +41,12 @@ final class Application extends FrameworkApplication
     /** The commands that run, and say nothing about it, while the gate is closed: they are the way out of it. */
     private const RUN_WITH_THE_GATE_CLOSED = ['idno:upgrade', 'idno:import:mongo'];
 
+    /**
+     * Symfony commands that run the site's events again, whose listeners are legacy code: they refuse
+     * (exit 1, before they take a message) while the legacy application is not booted.
+     */
+    private const NEED_THE_LEGACY_APPLICATION = ['messenger:failed:retry'];
+
     private bool $gateClosedSaid = false;
 
     public function __construct(KernelInterface $kernel)
@@ -89,9 +95,50 @@ final class Application extends FrameworkApplication
     {
         if (!$this->runsWithTheGateClosed($command, $input)) {
             $this->sayTheGateIsClosed($output);
+            $kernel = $this->getKernel();
+            if (in_array($command->getName(), self::NEED_THE_LEGACY_APPLICATION, true) && $kernel instanceof \Idno\Kernel && $kernel->bootsLegacy() && !$kernel->legacyBooted()) {
+                ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln('<error>' . $command->getName() . ' needs the site\'s database to be set up: run php bin/console idno:upgrade first. Nothing was taken from the queue.</error>');
+
+                return 1;
+            }
+            if ($command->getName() === 'messenger:failed:retry' && ($refusal = $this->failedRetryRefusal($command, $input)) !== null) {
+                ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln('<error>' . $refusal . ' Nothing was taken from the queue.</error>');
+
+                return 1;
+            }
         }
 
         return parent::doRunCommand($command, $input, $output);
+    }
+
+    /**
+     * Why `messenger:failed:retry` must not run, or null. It runs events again, so it is held to what the
+     * queue worker is held to: it needs the site's address (a shell without it would sign what it sends
+     * with a guessed http url, and a remote server's refusal still counts as handled, deleting the
+     * message), and it needs the ids of the messages to retry: without ids it loops over the failure
+     * transport until nothing is available, and takes back an event it put back after a pause.
+     */
+    private function failedRetryRefusal(Command $command, InputInterface $input): ?string
+    {
+        $kernel = $this->getKernel();
+        if ($kernel instanceof \Idno\Kernel && $kernel->legacyBooted()) {
+            $problem = \Idno\Queue\WorkerSiteUrl::problem($kernel->getContainer()->get(\Idno\Config\BootConfig::class)->get('url'));
+            if ($problem !== null) {
+                return $problem;
+            }
+        }
+        try {
+            $command->mergeApplicationDefinition();
+            $input->bind($command->getDefinition());
+            $ids = $input->getArgument('id');
+        } catch (\Throwable) {
+            return null; // the command reports its own usage errors
+        }
+        if (empty($ids)) {
+            return 'messenger:failed:retry needs the id of each message to retry: run messenger:failed:show and pass the ids it shows, for example messenger:failed:retry 12.';
+        }
+
+        return null;
     }
 
     /**

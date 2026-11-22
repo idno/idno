@@ -110,6 +110,16 @@ final class ResilientTransport implements TransportInterface, KeepaliveReceiverI
     }
 
     /**
+     * Whether a failure is the database being busy or gone for a moment (a lock wait timeout, a deadlock,
+     * a lost connection), found in the exception or what it wraps: the one classification the queue's
+     * code uses for "try again, this is not an error of ours".
+     */
+    public static function isInterruption(\Throwable $e): bool
+    {
+        return self::cause($e) !== null;
+    }
+
+    /**
      * The database failure that makes a read worth trying again (busy, locked, lost), found in the
      * exception or what it wraps; null for anything else.
      */

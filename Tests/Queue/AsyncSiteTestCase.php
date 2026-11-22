@@ -201,16 +201,18 @@ abstract class AsyncSiteTestCase extends TestCase
     /**
      * Runs PHP code with the legacy application booted on the test site (`Idno/start.php`, the
      * site's environment): for what only the entity classes can do (a follower record, a queued event
-     * written as the queue writes it). The code's last statement is `return`ed as JSON.
+     * written as the queue writes it). The code's last statement is `return`ed as JSON. $asConsole
+     * defines IDNO_CONSOLE first, as bin/console does: the process is then as the queue worker is, with no request.
      *
      * @return mixed the JSON the code returned, decoded
      */
-    protected function runInSite(string $code): mixed
+    protected function runInSite(string $code, bool $asConsole = false): mixed
     {
         $root = dirname(__DIR__, 2);
         $script = $this->directory . '/script-' . bin2hex(random_bytes(4)) . '.php';
         file_put_contents($script, "<?php\n"
             . "if (PHP_SAPI !== 'cli') { exit(1); }\n"
+            . ($asConsole ? "define('IDNO_CONSOLE', true);\n" : '')
             . 'require ' . $this->literal($root . '/Idno/start.php') . ";\n"
             . "\$result = (function () {\n" . $code . "\n})();\n"
         . "fwrite(STDOUT, \"\\n#RESULT#\" . json_encode(\$result, JSON_UNESCAPED_SLASHES));\n");

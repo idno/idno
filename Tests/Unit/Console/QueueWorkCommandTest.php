@@ -7,6 +7,7 @@ namespace Tests\Unit\Console;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\AbstractException;
 use Doctrine\DBAL\Exception\LockWaitTimeoutException;
+use Idno\Config\BootConfig;
 use Idno\Console\QueueWorkCommand;
 use Idno\Legacy\MessengerEventQueue;
 use Idno\Queue\AbandonedMessages;
@@ -49,6 +50,11 @@ final class QueueWorkCommandTest extends TestCase
     private ?CollectingLogger $log = null;
 
     private bool $deleteFails = false;
+
+    /** @var array<string, mixed> */
+    private array $boot = ['url' => 'https://example.com/'];
+
+    private string $queueSetting = 'AsynchronousQueue';
 
     /** @var list<string> */
     private array $drainSends = [];
@@ -143,7 +149,7 @@ final class QueueWorkCommandTest extends TestCase
         $kernel = $this->createMock(KernelInterface::class);
 
         return $this->command = new QueueWorkCommand(
-            static fn (): MessengerEventQueue => new MessengerEventQueue(static fn (): MessageBusInterface => new MessageBus([]), static fn (): string => 'AsynchronousQueue', static fn (): ?string => null, static fn (): mixed => null, new NullLogger()),
+            fn (): MessengerEventQueue => new MessengerEventQueue(static fn (): MessageBusInterface => new MessageBus([]), fn (): string => $this->queueSetting, static fn (): ?string => null, static fn (): mixed => null, new NullLogger()),
             static fn (): LegacyQueueDrain => $drain,
             fn (): AbandonedMessages => new AbandonedMessages($this->connection),
             function () use ($transport): TransportInterface {
@@ -157,6 +163,7 @@ final class QueueWorkCommandTest extends TestCase
             fn (): CollectingLogger => $this->log,
             new EventDispatcher(),
             $kernel,
+            new BootConfig($this->boot, false),
             $busyGiveUp,
         );
     }
@@ -259,6 +266,125 @@ final class QueueWorkCommandTest extends TestCase
         $this->assertCount(1, $warnings, 'one warning line (the worker logs its own lines at other levels)');
         $this->assertStringContainsString(\RuntimeException::class, $warnings[0][1]);
         $this->assertStringNotContainsString('secret-detail', $warnings[0][1], 'the exception\'s class only');
+    }
+
+    /**
+     * @return array<string, array{array<string, mixed>}>
+     */
+    public static function bootConfigurationsWithoutAUsableUrl(): array
+    {
+        return [
+            'no url' => [[]],
+            'a url with no scheme' => [['url' => 'example.com/']],
+            'a relative url' => [['url' => '/']],
+        ];
+    }
+
+    /**
+     * @dataProvider bootConfigurationsWithoutAUsableUrl
+     *
+     * @param array<string, mixed> $boot
+     */
+    public function testItRefusesToStartWithoutAnExplicitAbsoluteUrlBeforeDrainingOrConsuming(array $boot): void
+    {
+        $this->boot = $boot;
+        $this->legacyRecord(1);
+        $tester = new CommandTester($this->command(static fn (): TransportInterface => new ScriptedTransport([[new Envelope(new QueuedEvent('idno', 'waiting', [], null))]])));
+
+        $exit = $tester->execute(['--once' => true], ['capture_stderr_separately' => true]);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('url = "https://example.com/"', $tester->getErrorOutput());
+        $this->assertStringContainsString('IDNO_URL=https://example.com/', $tester->getErrorOutput());
+        $this->assertSame([], $this->drainSends, 'nothing was drained');
+        $this->assertSame(0, $this->transportFetched, 'nothing was consumed');
+        $this->assertSame(1, $this->pending());
+        $this->assertStringNotContainsString('Processing', $tester->getDisplay());
+    }
+
+    public function testASiteWithoutTheAsynchronousQueueNeverNeedsAUrlAndIsRefusedForTheQueueAsBefore(): void
+    {
+        $this->boot = [];
+        $this->queueSetting = 'SynchronousQueue';
+        $tester = new CommandTester($this->command(static fn (): TransportInterface => new ScriptedTransport([])));
+
+        $exit = $tester->execute(['--once' => true]);
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('The event queue is not set to AsynchronousQueue', $tester->getDisplay());
+        $this->assertStringNotContainsString('IDNO_URL', $tester->getDisplay());
+    }
+
+    /**
+     * A transport that is always empty and that throws when read more than $limit times, so that a
+     * daemon that does not stop fails the test instead of hanging it.
+     */
+    private function emptyButNotForEver(int $limit, ?\Closure $onRead = null): \Closure
+    {
+        return static function () use ($limit, $onRead): TransportInterface {
+            return new class($limit, $onRead) implements TransportInterface {
+                private int $reads = 0;
+
+                public function __construct(private readonly int $limit, private readonly ?\Closure $onRead)
+                {
+                }
+
+                public function get(): iterable
+                {
+                    if (++$this->reads > $this->limit) {
+                        throw new \LogicException('the worker did not stop');
+                    }
+                    if ($this->onRead !== null) {
+                        ($this->onRead)($this->reads);
+                    }
+
+                    return [];
+                }
+
+                public function ack(Envelope $envelope): void
+                {
+                }
+
+                public function reject(Envelope $envelope): void
+                {
+                }
+
+                public function send(Envelope $envelope): Envelope
+                {
+                    return $envelope;
+                }
+            };
+        };
+    }
+
+    public function testTheDaemonStopsItselfAfterItsTimeLimitBetweenMessages(): void
+    {
+        $tester = new CommandTester($this->command($this->emptyButNotForEver(10)));
+        $started = microtime(true);
+
+        $exit = $tester->execute(['--time-limit' => '1', '--interval' => '1']);
+
+        $this->assertSame(0, $exit);
+        $this->assertLessThan(6, microtime(true) - $started);
+        $this->assertGreaterThan(0.5, microtime(true) - $started, 'not at once: after the limit');
+    }
+
+    public function testTheTimeLimitIsOneHourByDefaultAndZeroMeansNone(): void
+    {
+        $definition = $this->command(static fn (): TransportInterface => new ScriptedTransport([]))->getDefinition();
+
+        $this->assertSame('3600', (string) $definition->getOption('time-limit')->getDefault());
+        $this->assertSame(0, QueueWorkCommand::timeLimitSeconds('0'));
+        $this->assertSame(0, QueueWorkCommand::timeLimitSeconds('-5'));
+        $this->assertSame(3600, QueueWorkCommand::timeLimitSeconds('3600'));
+        $this->assertSame(3600, QueueWorkCommand::timeLimitSeconds('soon'), 'an unreadable limit is the default');
+    }
+
+    public function testOnceIgnoresTheTimeLimit(): void
+    {
+        $tester = new CommandTester($this->command(static fn (): TransportInterface => new ScriptedTransport([])));
+
+        $this->assertSame(0, $tester->execute(['--once' => true, '--time-limit' => '1']));
     }
 
     public function testWithoutAStopItDrainsAndConsumesAndEndsOnAnEmptyQueue(): void

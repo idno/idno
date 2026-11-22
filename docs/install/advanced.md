@@ -22,10 +22,12 @@ event_queue = 'AsynchronousQueue'
 Next, you need to run the Idno event queue dispatching service using the Idno console tool:
 
 ```
-sudo -u www-data KNOWN_DOMAIN='your.domain' ./known service-event-queue
+sudo -u www-data ./known service-event-queue
 ```
 
-The queue is carried by Symfony Messenger (the `idno_messages` table of your database), so `./bin/console messenger:consume idno` is the same worker with Messenger's own options, and `messenger:failed:show`, `messenger:failed:retry` and `messenger:failed:remove` look after the events that failed (a failed event is kept once, with its error, and never retried by itself). See the README for the details.
+The worker needs the site's address: an explicit `url = "https://your.domain/"` in `configuration/config.ini` (which every console command reads), or `IDNO_URL` in its environment, the address visitors use with its scheme. It refuses to start without one.
+
+The queue is carried by Symfony Messenger (the `idno_messages` table of your database). `service-event-queue` is the only worker to run: it stops itself after an hour (`--time-limit`, 0 for no limit) so that a supervisor starts it with the current settings and plugins, and `messenger:stop-workers` stops it after its current message. `messenger:failed:show`, `messenger:failed:retry` and `messenger:failed:remove` look after the events that failed (a failed event is kept once, with its error, and runs again only when you retry it by id: `messenger:failed:retry <id>`; without an id the command is refused, and it needs the same `url` as the worker). See the README for the details.
 
 !!! note "Per-domain configuration"
     If you’re using per-domain configuration you’ll need to set an environment variable in order for everything to work as expected:
