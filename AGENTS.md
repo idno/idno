@@ -245,6 +245,15 @@ Each content plugin has an `Entry.php` entity class that defines
   must be safe to run twice. Only draft-cavage signatures are understood, not RFC 9421.
   `IdnoPlugins/ActivityPub/Tests/HTTPSignatureCoverageTest.php` checks this.
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
+- Pages that override `post()`: `Page::post()` is what checks the form token, so a page
+  that overrides it has no CSRF protection of its own and must not act on a session
+  cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
+  answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
+  sets after an access token (`Authorization: Bearer` or the `access_token` field) has
+  matched, and core sets after a signed API request; otherwise it answers 401. The
+  IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
+  on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
+  over HTTP with a logged-in browser.
 - A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
   overrides `post()` itself and authenticates the request another way. Never get the same
   effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
