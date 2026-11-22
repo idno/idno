@@ -178,7 +178,38 @@ final class PersistentCacheTest extends TestCase
         $this->assertTrue($cache->store('a', 1));
     }
 
-    public function testTheDefaultSeamPrunesAboutOnceIn500Stores(): void
+    public function testTheDefaultDecisionIsOneInFiveHundred(): void
+    {
+        $pool = new class extends ArrayAdapter implements \Symfony\Component\Cache\PruneableInterface {
+            public int $pruned = 0;
+
+            public function prune(): bool
+            {
+                $this->pruned++;
+
+                return true;
+            }
+        };
+        $asked = [];
+        $next = 1;
+        $cache = new PersistentCache(static fn () => $pool, null, static function (int $min, int $max) use (&$asked, &$next): int {
+            $asked[] = [$min, $max];
+
+            return $next;
+        });
+
+        $next = 1;
+        $cache->store('a', 1);
+        $next = 2;
+        $cache->store('b', 1);
+        $next = 500;
+        $cache->store('c', 1);
+
+        $this->assertSame(1, $pool->pruned, 'only a draw of 1 prunes');
+        $this->assertSame([[1, 500], [1, 500], [1, 500]], $asked);
+    }
+
+    public function testTheRealDefaultPrunesRarely(): void
     {
         $pool = new class extends ArrayAdapter implements \Symfony\Component\Cache\PruneableInterface {
             public int $pruned = 0;
@@ -195,7 +226,6 @@ final class PersistentCacheTest extends TestCase
             $cache->store('k', $i);
         }
 
-        $this->assertGreaterThan(0, $pool->pruned);
         $this->assertLessThan(60, $pool->pruned);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Cache;
 
 use Idno\Cache\CachePoolFactory;
+use Idno\Kernel\CacheDirResolver;
 use PHPUnit\Framework\TestCase;
 
 final class CachePoolFactoryTest extends TestCase
@@ -169,17 +170,41 @@ final class CachePoolFactoryTest extends TestCase
         $this->assertSame($candidate, CachePoolFactory::directory([], $unusableBase, $tmp));
     }
 
-    public function testAnotherUsersDirectoryIsRefused(): void
+    public function testADirectoryOwnedByAnotherUserIsRefused(): void
     {
-        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
-            $this->markTestSkipped('needs root to create a directory owned by someone else');
-        }
-        $tmp = $this->tempDir();
-        $candidate = CachePoolFactory::temporaryDirectory('/nonexistent-base/x', $tmp);
-        mkdir($candidate, 0700);
-        chown($candidate, 12345);
+        $dir = $this->tempDir() . '/mine';
+        mkdir($dir, 0700);
+        $owner = (int) fileowner($dir);
 
-        $this->assertNull(CachePoolFactory::directory([], '/nonexistent-base/x', $tmp));
+        $this->assertTrue(CacheDirResolver::usableAndPrivate($dir, static fn (): ?int => $owner), 'the owner may use it');
+        $this->assertFalse(CacheDirResolver::usableAndPrivate($dir, static fn (): ?int => $owner + 1), 'someone else may not');
+
+        $tmp = $this->tempDir();
+        $base = $tmp . '/no/such/base/' . str_repeat('x', 300);
+        $candidate = CachePoolFactory::temporaryDirectory($base, $tmp);
+        mkdir($candidate, 0700);
+        $this->assertSame($candidate, CachePoolFactory::directory([], $base, $tmp, static fn (): ?int => (int) fileowner($candidate)));
+        $this->assertNull(CachePoolFactory::directory([], $base, $tmp, static fn (): ?int => (int) fileowner($candidate) + 1));
+    }
+
+    /**
+     * Without a way to learn the current user (no posix extension) the pool's temporary directory is refused:
+     * mode alone proves nothing about who owns it. The kernel's own cache fallback stays lenient, so a site
+     * without ext-posix still boots.
+     */
+    public function testWithoutAWayToLearnTheOwnerTheTemporaryDirectoryIsRefusedButTheKernelStaysLenient(): void
+    {
+        $tmp = $this->tempDir();
+        $base = $tmp . '/no/such/base/' . str_repeat('x', 300);
+        $unknown = static fn (): ?int => null;
+
+        $this->assertNull(CachePoolFactory::directory([], $base, $tmp, $unknown));
+        $this->assertInstanceOf(\Symfony\Component\Cache\Adapter\NullAdapter::class, CachePoolFactory::create([], $base, 'example.com', $tmp, $unknown));
+
+        $dir = $tmp . '/lenient';
+        mkdir($dir, 0700);
+        $this->assertFalse(CacheDirResolver::usableAndPrivate($dir, $unknown, true));
+        $this->assertTrue(CacheDirResolver::usableAndPrivate($dir, $unknown), 'the kernel does not require an owner it cannot learn');
     }
 
     public function testWithNothingUsableThePoolIsANullPool(): void

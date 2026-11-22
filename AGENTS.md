@@ -2414,7 +2414,10 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
   more of `var/cache`, so one that is group-writable for a deploy user keeps working). The last resort,
   `<system temporary directory>/idno-pool-<12 hex of sha1(cache base)>`, is REQUIRED to pass
   `CacheDirResolver::usableAndPrivate()` (created 0700; owned by the current user; not a link; not writable by
-  group or others). When no candidate is usable, `CachePoolFactory::create()` returns a `NullAdapter`: the cache
+  group or others); the pool's call passes `$requireOwner`, so without a way to learn the current user's id (no
+  ext-posix) the directory is refused rather than accepted on its mode alone, while the kernel's own use of the
+  method (its temp-dir fallback for the compiled container) stays lenient, so a site without ext-posix still boots.
+  When no candidate is usable, `CachePoolFactory::create()` returns a `NullAdapter`: the cache
   is disabled (`load()` is null, `store()` succeeds and keeps nothing) and `LegacyServiceFactory::warnWhenDisabled()`
   logs one warning when the pool is first built. Two installs with the same host name on one cache base share a
   pool; give one a `cachepath`.
@@ -2434,7 +2437,10 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
 - HSTS state comes only from the header block of the FINAL response of a `Webservice` request, only when its URL
   is https, and is recorded under THAT URL's host (RFC 6797): a header on a redirect hop, on a plain-http
   response, or from another host changes nothing. A header with no valid `max-age` is ignored; only an explicit
-  `max-age=0` removes the entry. `isHSTS()` treats a stored value that is not an array with `stored_ts` and
+  `max-age=0` removes the entry. The state is kept, read and deleted under the LOWER-CASED host; a header from an
+  IP literal (IPv4, or bracketed IPv6) is ignored (RFC 6797, 8.1). A known host's request is upgraded by replacing
+  only the URL's own scheme (anchored, case-insensitive), never an `http://` inside the path or query.
+  `isHSTS()` treats a stored value that is not an array with `stored_ts` and
   `max-age` as no entry and deletes it.
 - The only thing Idno keeps in the cache is per-host HSTS state (`Webservice::isHSTS()` and `checkForHSTSHeader()`),
   keyed by the bare host name, the value `serialize(['stored_ts', 'max-age', 'includeSubDomains'])` as before. The
@@ -2544,7 +2550,11 @@ The container's services and the legacy filesystem:
 - The file page (`Idno\Pages\File\View`) positions a stream for a range request with
   `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3), and
   streams the range's bytes (both positions inclusive) to the output 8 KiB at a time with `View::streamRange()` (a range of any size is never held in memory: `Tests/Pages/File/LargeRangeStreamingTest`, 64 MiB under `memory_limit=32M`), which stops at the end of the stream or on an empty or
-  failed read (a stream shorter than the stored size never makes the page wait).
+  failed read (a stream shorter than the stored size never makes the page wait). Both it and `streamAll()` (the
+  whole file), when they echo, first end every active output buffer with `View::endOutputBuffers()` (flushing
+  what was buffered, so earlier output keeps its place), which the store's `passThroughBytes()` also uses: with
+  `output_buffering` on, a large file is never accumulated in memory (pinned in
+  `Tests/Pages/File/LargeRangeStreamingTest` under two nested buffers and a 32M limit).
   The cache pool (see "The cache"), the Purifier cache and the Twig cache never use an `s3://` upload path as a
   directory: the Purifier and Twig caches use the temporary directory instead.
 - Deliberate differences from the old local filesystem: deleting a file removes its `.data` file too;

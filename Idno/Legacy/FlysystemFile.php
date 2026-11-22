@@ -65,9 +65,7 @@ final class FlysystemFile extends \Idno\Files\File
         if ($stream === false) {
             return;
         }
-        if (ob_get_level() > 0) {
-            ob_end_flush();
-        }
+        \Idno\Pages\File\View::endOutputBuffers();
         fpassthru($stream);
         fclose($stream);
     }

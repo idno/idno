@@ -147,4 +147,59 @@ final class WebserviceHstsTest extends \Tests\IdnoTestCase
         Idno::site()->cache()->store('a.hsts-test.invalid', serialize('not an array'));
         $this->assertFalse(Webservice::isHSTS('http://a.hsts-test.invalid/'));
     }
+
+    /**
+     * @return list<string> the URLs the client was asked for
+     */
+    private function requestedBy(string $url): array
+    {
+        $seen = [];
+        Webservice::useClient(new MockHttpClient(static function (string $method, string $requested) use (&$seen) {
+            $seen[] = $requested;
+
+            return new MockResponse('', ['http_code' => 200]);
+        }));
+        Webservice::get($url);
+
+        return $seen;
+    }
+
+    public function testOnlyTheSchemeOfAKnownHostIsUpgraded(): void
+    {
+        $this->remember('a.hsts-test.invalid');
+
+        $this->assertSame(['https://a.hsts-test.invalid/x?url=http://other/y'], $this->requestedBy('http://a.hsts-test.invalid/x?url=http://other/y'));
+        $this->assertSame(['https://a.hsts-test.invalid/p?u=http://o/'], $this->requestedBy('https://a.hsts-test.invalid/p?u=http://o/'));
+        $this->assertSame(['https://a.hsts-test.invalid/up'], $this->requestedBy('HTTP://a.hsts-test.invalid/up'));
+    }
+
+    public function testTheHostIsLowerCased(): void
+    {
+        $this->remember('a.hsts-test.invalid');
+        $this->answer([new MockResponse('', ['http_code' => 200, 'response_headers' => ['Strict-Transport-Security: max-age=0']])]);
+
+        Webservice::get('https://A.HSTS-Test.invalid/');
+
+        $this->assertFalse($this->known('a.hsts-test.invalid'));
+
+        $this->answer([new MockResponse('', ['http_code' => 200, 'response_headers' => ['Strict-Transport-Security: max-age=600']])]);
+        Webservice::get('https://B.HSTS-Test.invalid/');
+        $this->assertTrue($this->known('b.hsts-test.invalid'));
+        $this->assertTrue(Webservice::isHSTS('http://B.hsts-test.INVALID/'));
+    }
+
+    public function testAnIpLiteralIsNeverPinned(): void
+    {
+        foreach (['https://127.0.0.1/', 'https://[::1]/', 'https://[2001:db8::1]:8443/'] as $url) {
+            foreach (['127.0.0.1', '::1', '[::1]', '2001:db8::1', '[2001:db8::1]'] as $stale) {
+                Idno::site()->cache()->delete($stale);
+            }
+            Webservice::checkForHSTSHeader($url, ['Strict-Transport-Security: max-age=600']);
+            $host = strtolower(trim((string) parse_url($url, PHP_URL_HOST), '[]'));
+            foreach ([$host, '[' . $host . ']', (string) parse_url($url, PHP_URL_HOST)] as $key) {
+                $this->assertNull(Idno::site()->cache()->load($key), $url);
+            }
+            $this->assertFalse(Webservice::isHSTS(str_replace('https', 'http', $url)));
+        }
+    }
 }

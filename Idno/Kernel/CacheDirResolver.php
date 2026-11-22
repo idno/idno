@@ -76,8 +76,15 @@ final class CacheDirResolver
     /**
      * Whether $dir is a directory only this user can write: created 0700 when missing, not a symbolic
      * link, writable, owned by the current user and not writable by group or others.
+     *
+     * @param (callable(): ?int)|null $effectiveUser the current user's id, null when it cannot be learned;
+     *                                               by default posix_geteuid() when the posix extension is there
+     * @param bool                    $requireOwner  refuse the directory when the current user cannot be learned
+     *                                               (the kernel's own fallback accepts it, so that a site without
+     *                                               ext-posix still boots; the cache pool, whose files are
+     *                                               unserialized, does not)
      */
-    public static function usableAndPrivate(string $dir): bool
+    public static function usableAndPrivate(string $dir, ?callable $effectiveUser = null, bool $requireOwner = false): bool
     {
         if (!file_exists($dir) && !is_link($dir)) {
             // The predictable path may be created by someone else between the check and mkdir;
@@ -89,7 +96,8 @@ final class CacheDirResolver
             return false;
         }
 
-        if (function_exists('posix_geteuid') && fileowner($dir) !== posix_geteuid()) {
+        $user = $effectiveUser !== null ? $effectiveUser() : (function_exists('posix_geteuid') ? posix_geteuid() : null);
+        if ($user === null ? $requireOwner : fileowner($dir) !== $user) {
             return false;
         }
 

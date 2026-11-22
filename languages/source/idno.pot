@@ -1,6 +1,3 @@
-msgid "No domain specified for cache"
-msgstr ""
-
 #: ./Idno/Common/Entity.php:703
 msgid "There was a problem syndicating."
 msgstr ""

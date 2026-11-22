@@ -251,22 +251,23 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $this->assertFalse($file->write($this->uploads . '/missing-directory/copy.bin'));
     }
 
-    public function testPassThroughBytesWritesTheFile(): void
+    public function testPassThroughBytesEndsEveryOutputBufferAndWritesTheFile(): void
     {
-        $filesystem = $this->filesystem();
-        $id         = $filesystem->storeContent('passed through', ['filename' => 'p.txt']);
-        $file       = $filesystem->findOne($id);
+        // In a subprocess: it ends every output buffer, which PHPUnit's own must not lose.
+        $directory = sys_get_temp_dir() . '/idno-passthrough-' . bin2hex(random_bytes(6));
+        mkdir($directory);
+        try {
+            $process = proc_open([PHP_BINARY, '-d', 'error_reporting=22527', dirname(__DIR__) . '/Pages/File/pass_through_buffered.php', $directory], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+            $this->assertIsResource($process);
+            $output = stream_get_contents($pipes[1]);
+            $level  = stream_get_contents($pipes[2]);
+            $this->assertSame(0, proc_close($process), $level);
+        } finally {
+            exec('rm -rf ' . escapeshellarg($directory));
+        }
 
-        // PHPUnit's own output buffer is level 1 when a test runs; passThroughBytes() ends one level, as
-        // it always has, so give it a buffer of its own to end and capture its output in another.
-        $level = ob_get_level();
-        ob_start();
-        ob_start();
-        $file->passThroughBytes();
-        $this->assertSame($level + 1, ob_get_level());
-        $output = ob_get_clean();
-
-        $this->assertSame('passed through', $output);
+        $this->assertSame('BEFOREpassed through', $output, 'what was buffered comes first, then the file');
+        $this->assertSame('0', $level, 'both buffers were ended');
     }
 
     public function testDeleteRemovesTheDataFileToo(): void

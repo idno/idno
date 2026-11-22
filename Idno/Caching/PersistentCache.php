@@ -34,8 +34,9 @@ final class PersistentCache implements \ArrayAccess
     /**
      * @param \Closure(): CacheItemPoolInterface $source     the pool, fetched at first use
      * @param (\Closure(): bool)|null            $shouldPrune says whether this store also prunes; null: one in 500
+     * @param (\Closure(int, int): int)|null     $random      the random_int() the default one-in-500 decision uses (a test's)
      */
-    public function __construct(private readonly \Closure $source, private readonly ?\Closure $shouldPrune = null)
+    public function __construct(private readonly \Closure $source, private readonly ?\Closure $shouldPrune = null, private readonly ?\Closure $random = null)
     {
     }
 
@@ -61,7 +62,7 @@ final class PersistentCache implements \ArrayAccess
         $saved = $this->pool()->save($item);
 
         $pool = $this->pool();
-        if ($pool instanceof PruneableInterface && ($this->shouldPrune !== null ? ($this->shouldPrune)() : random_int(1, 500) === 1)) {
+        if ($pool instanceof PruneableInterface && ($this->shouldPrune !== null ? ($this->shouldPrune)() : ($this->random ?? random_int(...))(1, 500) === 1)) {
             $pool->prune();
         }
 

@@ -24,10 +24,12 @@ final class CachePoolFactory
      * @param array<string, mixed> $bootConfig the boot configuration (`cachepath`, `uploadpath`)
      * @param string               $cacheBase  the compiled cache's base directory (`IDNO_CACHE_DIR`, else `var/cache`)
      * @param string               $host       the site's host name
+     * @param string|null          $temporaryDirectory the system temporary directory (a test's)
+     * @param (callable(): ?int)|null $effectiveUser     the current user's id (a test's); see CacheDirResolver::usableAndPrivate()
      */
-    public static function create(array $bootConfig, string $cacheBase, string $host, ?string $temporaryDirectory = null): AdapterInterface
+    public static function create(array $bootConfig, string $cacheBase, string $host, ?string $temporaryDirectory = null, ?callable $effectiveUser = null): AdapterInterface
     {
-        $directory = self::directory($bootConfig, $cacheBase, $temporaryDirectory);
+        $directory = self::directory($bootConfig, $cacheBase, $temporaryDirectory, $effectiveUser);
 
         return $directory === null ? new NullAdapter() : new FilesystemAdapter(md5($host), 0, $directory);
     }
@@ -43,7 +45,7 @@ final class CachePoolFactory
     /**
      * @param array<string, mixed> $bootConfig
      */
-    public static function directory(array $bootConfig, string $cacheBase, ?string $temporaryDirectory = null): ?string
+    public static function directory(array $bootConfig, string $cacheBase, ?string $temporaryDirectory = null, ?callable $effectiveUser = null): ?string
     {
         $uploadPath = $bootConfig['uploadpath'] ?? '';
         $uploadPath = is_string($uploadPath) && $uploadPath !== '' && !str_starts_with($uploadPath, 's3://') ? $uploadPath : '';
@@ -65,7 +67,7 @@ final class CachePoolFactory
 
         $fallback = self::temporaryDirectory($cacheBase, $temporaryDirectory);
 
-        return !self::insideUploads($fallback, $uploadPath) && CacheDirResolver::usableAndPrivate($fallback) ? $fallback : null;
+        return !self::insideUploads($fallback, $uploadPath) && CacheDirResolver::usableAndPrivate($fallback, $effectiveUser, true) ? $fallback : null;
     }
 
     private static function usable(string $dir): bool

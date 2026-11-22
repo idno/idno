@@ -50,6 +50,9 @@ namespace Idno\Pages\File {
          */
         public static function streamRange($stream, $start, $end, $write = null)
         {
+            if ($write === null) {
+                self::endOutputBuffers();
+            }
             $length  = $end - $start + 1;
             $written = 0;
             while ($written < $length) {
@@ -69,6 +72,20 @@ namespace Idno\Pages\File {
         }
 
         /**
+         * End every active output buffer, flushing what it holds first (so output that came before is
+         * not lost or reordered), so that what a file page echoes next goes out as it is written and is
+         * never accumulated in memory. The one place that does it: the file store's pass-through uses it too.
+         */
+        public static function endOutputBuffers()
+        {
+            while (ob_get_level() > 0) {
+                if (!@ob_end_flush()) {
+                    break;
+                }
+            }
+        }
+
+        /**
          * Write a whole stream to the output, 8 KiB at a time. It stops at the end of the stream, or on an
          * empty or failed read, as streamRange() does: it never spins, and never writes `false`.
          *
@@ -78,6 +95,9 @@ namespace Idno\Pages\File {
          */
         public static function streamAll($stream, $write = null)
         {
+            if ($write === null) {
+                self::endOutputBuffers();
+            }
             $written = 0;
             while (!feof($stream)) {
                 $chunk = fread($stream, 8192);

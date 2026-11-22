@@ -163,7 +163,8 @@ namespace Idno\Core {
 
             // Check HSTS - if so, rewrite the endpoint to use HTTPS
             if (static::isHSTS($endpoint)) {
-                $endpoint = str_replace('http://', 'https://', $endpoint);
+                // Only the URL's own scheme: an http:// inside the path or the query string is data
+                $endpoint = preg_replace('#^http://#i', 'https://', $endpoint, 1);
                 \Idno\Core\Idno::site()->logging()->debug("HSTS Found, so endpoint call is now going to " . self::loggableUrl($endpoint));
             }
 
@@ -807,6 +808,24 @@ namespace Idno\Core {
         }
 
         /**
+         * The key HSTS state is kept under: the URL's host in lower case; null when there is no host, or it
+         * is an IP address (IPv4, or IPv6 in brackets), which HSTS never applies to (RFC 6797, 8.1).
+         */
+        private static function hstsHost($url): ?string
+        {
+            $host = parse_url((string) $url, PHP_URL_HOST);
+            if (!is_string($host) || $host === '') {
+                return null;
+            }
+            $host = strtolower($host);
+            if (filter_var(trim($host, '[]'), FILTER_VALIDATE_IP) !== false) {
+                return null;
+            }
+
+            return $host;
+        }
+
+        /**
          * Check whether a given url has valid HSTS stored for it
          *
          * @todo  Handle includeSubDomains
@@ -816,9 +835,9 @@ namespace Idno\Core {
         {
 
             // Get the domain
-            $domain = parse_url($url, PHP_URL_HOST);
+            $domain = static::hstsHost($url);
 
-            if (empty($domain)) {
+            if ($domain === null) {
                 return false;
             }
 
@@ -916,10 +935,10 @@ namespace Idno\Core {
                 return;
             }
 
-            $host = parse_url($url, PHP_URL_HOST);
+            $host  = static::hstsHost($url);
             $cache = \Idno\Core\Idno::site()->cache();
 
-            if (empty($host) || empty($cache)) {
+            if ($host === null || empty($cache)) {
                 return;
             }
 
