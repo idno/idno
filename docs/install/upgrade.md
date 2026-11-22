@@ -111,7 +111,7 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
 ## Afterwards
 
 * **Everyone logs in again.** Logged-in sessions are not carried over.
-* **Start your queue and cron services again**, with the new code (for example
+* **Start your queue worker again**, with the new code (for example
   `php bin/console service-event-queue`; see the README). The first time the queue worker starts it
   moves any events the old queue left waiting into the new queue (it says so, and says if one could not
   be moved: such a record, including one whose data holds an object of a class that no longer exists, is
@@ -304,7 +304,7 @@ GridFS) into a new MySQL, MariaDB or SQLite database and the upload directory. I
 the PHP extension `mongodb` alone (`pecl install mongodb`); the `mongodb/mongodb` library is not
 needed. Your MongoDB database is only read: nothing in it is changed. The MongoDB server must be version 3.6 or later: that is the oldest the `mongodb` extension talks to. To move the data of an older server, dump it (`mongodump`) and restore it (`mongorestore`) into a newer `mongod` first, and run the import against that one.
 
-1. **Stop every process of the site** (the web server's PHP, the queue and cron services): the import
+1. **Stop every process of the site** (the web server's PHP, the queue and cron services of the old version): the import
    must see a database nobody writes to. If it finds the counts changed while it ran, it stops.
 2. **Make a new, empty database** (MySQL 8.0 or later, MariaDB 10.6 or later), and a user that can
    create tables in it. For SQLite, choose where the database file will be (not on a network
@@ -433,6 +433,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 * The hand-written SQL backend classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` (see "For developers" below).
 * The MongoDB backend (`Idno\Data\Mongo`) and its GridFS file system (`Idno\Files\MongoDBFileSystem`, `MongoDBFile`). A site configured for MongoDB does not start; `php bin/console idno:import:mongo` moves it to MySQL, MariaDB or SQLite (see "Moving a MongoDB site"). The `mongodb/mongodb` library is no longer used; the import needs only the PHP extension `mongodb`.
 * The queue's classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQueue`, its worker plugin `ConsolePlugins/EventQueueService`, and the pages `/service/queue/list`, `/service/queue/dispatch/<id>` and `/service/queue/gc` (they answer 404). See "The queue of events" below.
+* The cron service (`service-cron`, `ConsolePlugins/CronService`) and its events `cron/minute`, `cron/hourly` and `cron/daily`. Nothing triggers them any more, and no scheduler replaces them. A site that ran `service-cron` removes that systemd unit or crontab line. A third-party plugin that listened to those events needs its own schedule (for example a crontab line running its own console command).
 * The 1.x database tables (`entities`, `entities_metadata`, `entities_search`, `reader`, `site`, `config` and their `_metadata`/`_search` tables, `versions`, `session`) are no longer read or written. The upgrade copies them into the new tables and renames them `legacy_<name>`.
 
 ## For developers

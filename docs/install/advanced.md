@@ -37,21 +37,3 @@ The queue is carried by Symfony Messenger (the `idno_messages` table of your dat
 !!! warning "Updating Idno"
     When you update Idno core or any plugins (especially syndication plugins), it is important to restart your event queue so that
     the queue runs the updated code.
-
-## Periodic Execution Service
-
-Sometimes it is desirable to execute actions in the background and periodic intervals, the advanced periodic execution services allows you to do this.
-
-After completing the configuration step for enabling the [Asynchronous Event Queue](#asynchronous-event-queue), you can then run the Idno console periodic execution service:
-
-```
-sudo -u www-data KNOWN_DOMAIN='your.domain' ./known.php service-cron
-```
-
-Once running, this service will periodically trigger an event to which code can listen to. Available events are ```cron/minute```, ```cron/hourly``` and ```cron/daily```.
-
-!!! note "Service User"
-    You should run both ```service-event-queue``` and ```service-cron``` as the webserver user so that it can read and write to files. On Debian this is usually ```www-data```.
-
-!!! warning "Updating Idno"
-    When you update Idno core or any plugins (especially syndication plugins), it is important to restart your cron service to take advantage of the new code!

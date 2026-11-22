@@ -290,7 +290,7 @@ data/                          Where an SQLite site's database file lives (data/
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
-ConsolePlugins/                CLI service plugins (CronService, Export)
+ConsolePlugins/                CLI service plugins (BuildLanguage, Export, GhostExport; third-party console plugins load from here too)
 Themes/                        Visual themes; Twenty26 (Idno 2026) is the only bundled theme. A site
                                configured with a retired theme (Themes::RETIRED) is resolved to Twenty26
                                at load; the setting is saved, and the admin told, when an admin next

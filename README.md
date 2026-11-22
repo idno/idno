@@ -155,25 +155,13 @@ and exit, which is ideal for cron:
 This processes pending events once per minute. Events may take up to 60 seconds
 to be delivered (compared to ~1 second with the systemd worker above).
 
-#### 4. Run the periodic cron service (optional)
+#### 4. After updates — restart the workers
 
-If you need periodic background tasks (triggered via `cron/minute`,
-`cron/hourly`, and `cron/daily` events), start the cron service the same way:
-
-```bash
-sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-cron
-```
-
-You can create a second systemd unit (`idno-cron.service`) following the same
-pattern as above if you want it managed automatically.
-
-#### 5. After updates — restart the workers
-
-When you update Idno core or any plugins, **restart both services** so they
-pick up the new code:
+When you update Idno core or any plugins, **restart the worker** so it
+picks up the new code:
 
 ```bash
-sudo systemctl restart idno-queue idno-cron
+sudo systemctl restart idno-queue
 ```
 
 ### Support us

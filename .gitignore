@@ -75,7 +75,6 @@ ConsolePlugins/*
 !ConsolePlugins/BuildLanguage
 !ConsolePlugins/Export
 !ConsolePlugins/GhostExport
-!ConsolePlugins/CronService
 
 error_log
 

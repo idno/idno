@@ -30,7 +30,6 @@ final class ConsoleTest extends TestCase
         'example',
         'export',
         'ghost-export',
-        'service-cron',
         'service-event-queue',
         'version',
     ];
@@ -77,6 +76,18 @@ final class ConsoleTest extends TestCase
         foreach (self::LEGACY_COMMANDS as $name) {
             $this->assertTrue($app->has($name), $name);
         }
+    }
+
+    public function testTheCronServiceIsGone(): void
+    {
+        $this->assertFalse($this->application()->has('service-cron'));
+        $this->assertDirectoryDoesNotExist(dirname(__DIR__, 2) . '/ConsolePlugins/CronService');
+
+        [$code, , $err] = $this->cli('bin/console', ['service-cron']);
+
+        $this->assertNotSame(0, $code);
+        $this->assertStringContainsString('service-cron', $err);
+        $this->assertStringContainsString('not defined', $err);
     }
 
     public function testSymfonyCommandsAreRegisteredNextToLegacyOnes(): void
