@@ -21,6 +21,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: outbound requests verify TLS certificates, and requests to URLs supplied by other sites are checked at every redirect
 * Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set
 * Security: error pages and JSON error responses show technical error messages (those of PHP, the database driver and libraries, for example) only when `debug` is set. Plugins can throw `\Idno\Exceptions\TechnicalException` for a message that visitors shouldn't see
+* Security: the archive made by the site export is served to logged-in administrators only and is never cached, including archives made by earlier versions. Its `config.json` holds only the settings saved in the database, with secrets removed: no longer the database password, `site_secret` or anything else from `config.ini`. The diagnostics report removes secrets by the same rule
 * Security: ActivityPub deliveries are refused unless their signature covers the request target, host, date and body digest
 * Security: IndieAuth authorization codes and Micropub access tokens are generated from the system's random source. Tokens already issued keep working
 * Security: a Micropub access token authenticates requests to the Micropub endpoint only. Before, a request to any page of the site could carry one and act as the token's user. Plugins that want to accept these tokens on a page of their own call `\IdnoPlugins\IndiePub\Main::authenticate()` there
