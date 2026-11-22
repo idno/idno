@@ -74,7 +74,7 @@ class OAuthCallback extends Page
                 'StandardSiteSync: OAuth callback failed: ' . $e->getMessage()
             );
             \Idno\Core\Idno::site()->session()->addErrorMessage(
-                'Authentication failed: ' . $e->getMessage()
+                'Authentication failed: ' . \Idno\Core\ExceptionMessage::forVisitor($e)
             );
         }
 

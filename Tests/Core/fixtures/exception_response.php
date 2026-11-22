@@ -5,13 +5,17 @@
  * given template type, and throws an exception while the page is being served, so that
  * Page::exception() answers with that template type's page shell.
  *
- *     php exception_response.php <mode> <template type>
+ *     php exception_response.php <mode> <template type> [<message>]
  *
  * Modes:
  *     production  the site is not in debug mode
  *     debug       the site is in debug mode
  *
  * Template types: json, jsonp
+ *
+ * Messages:
+ *     friendly    the exception's message is written for the visitor (the default)
+ *     technical   the exception's type marks its message as a technical one
  *
  * The response body is written to standard output. Run it with -d error_log=<file> to collect
  * what was logged.
@@ -28,6 +32,7 @@ define('EXCEPTION_RESPONSE_TEST_MESSAGE', 'Could not open <script>alert(1)</scri
 
 $mode = isset($argv[1]) ? $argv[1] : 'production';
 $template = isset($argv[2]) ? $argv[2] : 'json';
+$message = isset($argv[3]) ? $argv[3] : 'friendly';
 
 include dirname(__DIR__, 2) . '/_bootstrap.php';
 
@@ -41,5 +46,9 @@ $_SERVER['REQUEST_URI'] = '/';
 $page = new \Idno\Pages\Homepage();
 $page->setInput('_t', $template);
 $page->init();
+
+if ($message == 'technical') {
+    throw new \Idno\Exceptions\TechnicalException(EXCEPTION_RESPONSE_TEST_MESSAGE);
+}
 
 throw new \RuntimeException(EXCEPTION_RESPONSE_TEST_MESSAGE);

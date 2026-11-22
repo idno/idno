@@ -450,7 +450,7 @@ namespace Idno\Core {
                         $this->site_details->save();
 
                         if (empty($this->site_details)) {
-                            throw new \RuntimeException($this->language()->_('Site entity for "%s" could not be created', [$domain]));
+                            throw new \Idno\Exceptions\TechnicalException($this->language()->_('Site entity for "%s" could not be created', [$domain]));
                         }
                     }
                 }

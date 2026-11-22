@@ -3314,6 +3314,24 @@ the CLI installer no longer writes one.
   IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
   on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
   over HTTP with a logged-in browser.
+- Access tokens count at one page: an IndieAuth access token (and the first administrator's
+  API key, which the plugin also takes as one) authenticates a request only where
+  `\IdnoPlugins\IndiePub\Main::authenticate()` is called, and that is the Micropub endpoint's
+  `get()` and `post()`. On every other page a request that carries a token is treated as
+  if it carried none: it is anonymous, or it has its browser session and needs a form
+  token. Don't call `authenticate()` from an event listener or anywhere else that runs for
+  every request; a plugin that wants to accept tokens calls it in its own page. The token
+  endpoint (`GET /indieauth/token`) looks a token up to describe it and logs nobody in.
+  The scope stored with a token is not enforced. The core signed API (`X-IDNO-USERNAME` /
+  `X-IDNO-SIGNATURE`, made with the user's API key) is a separate, general credential: it
+  authenticates a request to any page, and `User::isAdmin()` is false for every API
+  request, so neither credential passes `adminGatekeeper()`.
+  `IdnoPlugins/IndiePub/Tests/AccessTokenReachTest.php` checks this over HTTP. A queue
+  worker or console process has no request and so no token: events run as the user the
+  message names (`LegacyUserContext`), and the `user/auth/request` event no longer has an
+  IndiePub listener. The import and export pages, which an API request must not reach
+  without a form token, are closed to a bearer token for the same reason
+  (`Tests/Characterisation/AdminPortabilityPagesTest`).
 - A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
   overrides `post()` itself and authenticates the request another way. Never get the same
   effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
@@ -3381,16 +3399,50 @@ the CLI installer no longer writes one.
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
   `Page::exception()`, which draws `templates/default/pages/500.tpl.php`. The page shows
-  the exception's message to every visitor, and the whole exception (message and stack
-  trace) when `debug` is set in the configuration. Both are passed through
-  `htmlspecialchars()`, because a message can contain text taken from the request. So an
-  exception message is plain text: HTML in it is displayed, not rendered. The message is
-  still shown to visitors, so don't put anything in one that they shouldn't see.
-  `Tests/Core/ErrorPageTest.php` checks this.
+  the exception's message, and the whole exception (message and stack trace) when `debug`
+  is set in the configuration. Both are passed through `htmlspecialchars()`, because a
+  message can contain text taken from the request. So an exception message is plain text:
+  HTML in it is displayed, not rendered. `Tests/Core/ErrorPageTest.php` checks this.
+- Exception messages, friendly and technical: `\Idno\Core\ExceptionMessage::forVisitor()`
+  decides what a visitor is told about an exception, and the error page and the JSON shells
+  both call it. A message is taken to be written for the visitor, and is shown, unless the
+  exception's type says it is a technical one. A technical message is logged, and shown
+  only when `debug` is set; otherwise the visitor is told only that something went wrong.
+  A type is technical when it implements `\Idno\Exceptions\Technical`; when it is a PHP
+  error (`\Error`) or a PHP warning turned into an exception (`\ErrorException`); when it,
+  or a class it extends, belongs to a PHP extension or to a library in a `vendor/`
+  directory (`\PDOException`, the MongoDB driver's exceptions, Twig's errors); or when it
+  was thrown by a library's code, whatever its type. A type that implements
+  `\Idno\Exceptions\Friendly` is never technical. So:
+  - throw `\Idno\Exceptions\TechnicalException` (it extends `\RuntimeException`) for a
+    message written for whoever maintains the site: one that names classes, identifiers,
+    queries or paths, or repeats what another server or a driver said;
+  - throw anything else (`\RuntimeException`, `SecurityException`,
+    `ConfigurationException`) only with a message that any visitor may read. This is the
+    default, so a message that should have been technical and is not marked is shown;
+  - to show a message whose type would be taken as technical, throw
+    `\Idno\Exceptions\FriendlyException` or implement `\Idno\Exceptions\Friendly`.
+
+  Code that catches an exception and shows its message itself is not affected, except that
+  a page which puts a caught exception's message in a session message (the visitor sees
+  it) passes it through `ExceptionMessage::forVisitor()` first: the admin's test mail page
+  and the StandardSiteSync pages (the AT Protocol client's exceptions are all
+  `TechnicalException`s). `Tests/Core/ExceptionMessageCallSitesTest` pins those call sites.
+  The core classes the rule marks as technical are the timers, `Service`, entity mutation
+  and `GenericDataItem`, `GetTextTranslation` and the AT Protocol client; the old
+  asynchronous queue and cache classes that were marked in 1.x no longer exist (the queue
+  is on Messenger, the cache is a PSR-6 pool). Messages of this branch's own
+  exceptions (`FileStoreException`, the portability services, the queue) are a fixed
+  vocabulary with no path, identifier or driver text, so they stay plain exceptions that a
+  visitor may read; keep it so. The installers (`Idno\Core\Installer`, `warmup/`) run
+  before the site exists and show a failed connection's message to whoever is setting
+  the site up: they do not use the rule.
+  `Tests/Core/ExceptionMessageTest.php` checks the rule.
 - Error responses in JSON: for the `json` and `jsonp` template types, `Page::exception()`
   answers with the page shell (`templates/json/shell.tpl.php`,
   `templates/jsonp/shell.tpl.php`), which adds an `exception` object to the response. It
-  holds the exception's `message` only. Its `class`, `file` and `line` describe the server:
+  holds a `message` only: the exception's message, or, when that is a technical one, that
+  something went wrong. The exception's `class`, `file` and `line` describe the server:
   `Page::exception()` logs them, and the shells add them to the response only when `debug`
   is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
   `Tests/Core/fixtures/exception_response.php` in its own PHP process.

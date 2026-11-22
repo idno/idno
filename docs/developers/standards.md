@@ -73,6 +73,11 @@ switch ($var) {
 
 * Notice errors are errors, please develop your code with ```pedantic_mode = true``` set in your config.ini (PHP notices and warnings then throw exceptions)
 * Unless there's a VERY good reason you can explain (and should explain) in comments, never use the '@' error suppression operator.
+* When an exception stops a page from being served, visitors are shown its message unless the exception's type marks the message as a technical one. So:
+    * Throw `\Idno\Exceptions\TechnicalException` when the message is for whoever maintains the site: one that names classes, identifiers, queries or file paths, or repeats what another server or a database driver said. The message is logged, and shown on the page only when `debug` is set in config.ini.
+    * Throw any other exception (`\RuntimeException`, for example) only with a message that any visitor may read.
+    * PHP's own errors, and the exceptions of PHP extensions and of libraries in `vendor/`, are treated as technical without being marked. To show the message of one of those, or of a class that extends `TechnicalException`, throw `\Idno\Exceptions\FriendlyException` or implement the `\Idno\Exceptions\Friendly` interface.
+    * The message is shown as text, so don't put HTML in it.
 
 ## Fetching URLs
 

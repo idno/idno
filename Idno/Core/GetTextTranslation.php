@@ -32,7 +32,7 @@ namespace Idno\Core {
         {
             // We can't provide translations with no specified translation domain.
             if (empty($domain)) {
-                throw new \RuntimeException('You must specify a language domain: "idno" for core translations, or "yourpluginname", for a plugin');
+                throw new \Idno\Exceptions\TechnicalException('You must specify a language domain: "idno" for core translations, or "yourpluginname", for a plugin');
             }
 
             // If the path for translations is empty, set a standard base path

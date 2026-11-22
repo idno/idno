@@ -10,7 +10,7 @@
     <?php if (!empty($vars['exception'])) { ?>
     <div class="row">
         <div class="col-md-offset-1 col-md-10">
-            <p class="p-summary"><?php echo htmlspecialchars($vars['exception']->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
+            <p class="p-summary"><?php echo htmlspecialchars(\Idno\Core\ExceptionMessage::forVisitor($vars['exception']), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); ?></p>
             <p>
                 <?php echo \Idno\Core\Idno::site()->language()->_('<a href="#" onclick="window.history.back();">Click here to try again</a> or <a href="%s">click here to go back to the homepage</a>.', [\Idno\Core\Idno::site()->config()->getDisplayURL()]); ?>
             </p>

@@ -15,15 +15,6 @@ namespace IdnoPlugins\IndiePub {
             );
         }
 
-        function registerEventHooks()
-        {
-            \Idno\Core\site()->events()->addListener('user/auth/request', function (\Idno\Core\Event $event) {
-                if ($user = \IdnoPlugins\IndiePub\Main::authenticate()) {
-                    $event->setResponse($user);
-                }
-            });
-        }
-
         function registerPages()
         {
             \Idno\Core\Idno::site()->routes()->addRoute('/indieauth/auth/?', '\IdnoPlugins\IndiePub\Pages\IndieAuth\Auth', true);
@@ -43,20 +34,29 @@ namespace IdnoPlugins\IndiePub {
         }
 
         /**
-         * Check that this token is either a user token or the
-         * site's API token, and auth the current request for that user if so.
+         * Authenticate the current request by the access token it carries, if it carries one:
+         * an IndieAuth access token of a user, or the API key of the site's first
+         * administrator. The token is taken from the Authorization header (Bearer), or else
+         * from the access_token field.
          *
-         * @return \Idno\Entities\User user on success
+         * On success the token's user becomes the user of this request, and the request is
+         * marked as an API request, which means that no form token is asked of it and that
+         * the session is destroyed when it ends.
+         *
+         * Call this only from the page a token is meant for (the Micropub endpoint). It is
+         * deliberately not called for every request: a token given to a Micropub client must
+         * not let that client use the rest of the site as the user.
+         *
+         * @return \Idno\Entities\User|false user on success
          */
-        private static function authenticate()
+        public static function authenticate()
         {
-            $access_token = \Idno\Core\Input::getInput('access_token');
             $headers = \Idno\Common\Page::getallheaders();
             if (!empty($headers['Authorization'])) {
                 $token = $headers['Authorization'];
                 $token = trim(str_replace('Bearer', '', $token));
-            } else if ($token = \Idno\Core\Input::getInput('access_token')) {
-                $token = trim($token);
+            } else {
+                $token = trim((string) \Idno\Core\Input::getInput('access_token'));
             }
 
             if (!empty($token)) {
@@ -70,8 +70,7 @@ namespace IdnoPlugins\IndiePub {
                     return $user;
                 }
                 $user = \Idno\Entities\User::getOne(array('admin' => true));
-                if ($user)
-                if ($token == $user->getAPIkey()) {
+                if ($user && hash_equals((string) $user->getAPIkey(), $token)) {
                     \Idno\Core\Idno::site()->session()->setIsAPIRequest(true);
                     \Idno\Core\Idno::site()->session()->refreshSessionUser($user);
 

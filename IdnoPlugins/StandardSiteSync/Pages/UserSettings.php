@@ -65,7 +65,7 @@ class UserSettings extends Page
                 $this->forward($authData['url']);
             } catch (\Exception $e) {
                 \Idno\Core\Idno::site()->logging()->error('StandardSiteSync: OAuth start failed: ' . $e->getMessage());
-                \Idno\Core\Idno::site()->session()->addErrorMessage('Failed to start authentication: ' . $e->getMessage());
+                \Idno\Core\Idno::site()->session()->addErrorMessage('Failed to start authentication: ' . \Idno\Core\ExceptionMessage::forVisitor($e));
                 $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/settings/standardsitesync/');
             }
         }

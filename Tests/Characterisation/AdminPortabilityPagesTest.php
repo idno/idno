@@ -155,6 +155,34 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $this->assertSame($flag, $this->storedConfig()['export_in_progress'] ?? null, 'nothing was started');
     }
 
+    public function testABearerTokenDoesNotReachTheExportAndImportPagesWithoutAFormToken(): void
+    {
+        // The plugin that takes IndieAuth tokens also takes the first administrator's API key as one.
+        // A token authenticates at the Micropub endpoint only, so on these pages it is no credential
+        // at all, whether it comes alone or beside the administrator's own session.
+        $flag = $this->storedConfig()['export_in_progress'] ?? null; // whatever an earlier test left
+        $admin = $this->admin();
+        $bearer = ['Authorization' => 'Bearer ' . $admin->getAPIkey()];
+        RecordingMailTransport::drain();
+
+        foreach (['admin/export/rss', 'admin/export/wxr', 'admin/export/generate/', 'admin/import/'] as $path) {
+            $alone = $this->site()->request('POST', $path, $bearer, ['allposts' => '1', 'import_type' => 'WordPress']);
+            $this->assertSame(302, $alone->status, $path);
+            $this->assertSame($this->site()->baseUrl(), $alone->header('Location'), $path);
+            $this->assertStringNotContainsString('<rss', $alone->body, $path);
+        }
+        $this->assertSame(403, $this->site()->request('GET', 'admin/export/', $bearer)->status, 'a token opens no admin page');
+
+        $cookie = $this->logIn($admin);
+        foreach (['admin/export/generate/', 'admin/import/'] as $path) {
+            $this->assertSame(302, $this->site()->request('POST', $path, $bearer + ['Cookie' => $cookie], ['import_type' => 'WordPress'])->status, $path);
+        }
+        $page = $this->site()->request('GET', 'admin/export/', ['Cookie' => $cookie]);
+        $this->assertStringContainsString('Invalid token.', $page->body, 'a token does not stand in for the form token');
+        $this->assertSame($flag, $this->storedConfig()['export_in_progress'] ?? null, 'nothing was started');
+        $this->assertSame([], RecordingMailTransport::drain(), 'and no mail was sent');
+    }
+
     public function testAnAdminSeesTheExportPageWithAnRssFormAndAWxrFormAndTheFullArchive(): void
     {
         $cookie = $this->logIn($this->admin());

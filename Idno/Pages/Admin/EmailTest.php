@@ -32,7 +32,7 @@ namespace Idno\Pages\Admin {
                     }
                 }
             } catch (\Exception $e) {
-                \Idno\Core\Idno::site()->session()->addErrorMessage($e->getMessage());
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\ExceptionMessage::forVisitor($e));
             }
 
             $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/email');

@@ -20,8 +20,10 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: fixes for cross-site scripting, server-side request forgery, an open redirect, access control on uploaded files, and ActivityPub actor spoofing
 * Security: outbound requests verify TLS certificates, and requests to URLs supplied by other sites are checked at every redirect
 * Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set
+* Security: error pages and JSON error responses show technical error messages (those of PHP, the database driver and libraries, for example) only when `debug` is set. Plugins can throw `\Idno\Exceptions\TechnicalException` for a message that visitors shouldn't see
 * Security: ActivityPub deliveries are refused unless their signature covers the request target, host, date and body digest
 * Security: IndieAuth authorization codes and Micropub access tokens are generated from the system's random source. Tokens already issued keep working
+* Security: a Micropub access token authenticates requests to the Micropub endpoint only. Before, a request to any page of the site could carry one and act as the token's user. Plugins that want to accept these tokens on a page of their own call `\IdnoPlugins\IndiePub\Main::authenticate()` there
 * IndieAuth supports PKCE (`S256`), and no longer issues an access token when a client asked only to authenticate (no scope)
 * Fixed draft posts being readable by URL when their access was set to public
 * Fixed posts containing emoji and other multi-byte text failing to save or to be found in search on MySQL
