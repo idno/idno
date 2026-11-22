@@ -2466,17 +2466,17 @@ needs a locale sets it itself.
 - `Idno\Translation\CatalogueLoader::load($directory, $domain, $locale)` (built with new; `Idno/Translation/` is NOT in
   `CodeFingerprint::SERVICE_DIRECTORIES` and `config/` references nothing in it: it is a helper of the legacy
   `Language`, so it is not a service; it depends on neither `Idno\Legacy` nor `Idno::site()`) reads
-  `<directory>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`, into source string => translation, with two small readers of
-  its own (no extension and no library: `symfony/translation` is not a dependency). Which locale directory: the exact locale
+  `<directory>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`, into source string => translation, through
+  `symfony/translation`'s `PoFileLoader` and `MoFileLoader` (no extension, no parser of our own). Which locale directory: the exact locale
   (`fr_CA`), then the bare language (`fr`), then the FIRST directory of that catalogue named `<language>_*` in sorted order
   that has the domain (`fr_FR`), so a visitor asking for `fr` or `fr_CA` gets `fr_FR` when that is all there is (a deliberate
   improvement over gettext). Those directory names come from the catalogue's own directory, each is checked against
   `LocaleNegotiator::PATTERN` before use, and the listing is made once per (directory, language) for the process;
   `has()` and `load()` use the same lookup. A missing directory or file is `[]`; an empty translation, a fuzzy entry and the
-  header are left out. Plural forms are ignored: an entry with `msgid_plural` keeps its SINGULAR translation (`msgstr[0]`) under the
-  singular source string and nothing else (in a `.mo`, the first form of a plural). That is why the formats are read here:
-  Symfony's loaders join the plural forms into one `singular|plural` key and value, which cannot be told from an ordinary
-  string containing a bar. A file that cannot be read (bad magic, truncated, an offset past the end, over 16 MiB) never throws: `[]`
+  header are left out. Plural entries are NOT supported (nothing in Idno has a plural lookup): Symfony's loaders store the forms of a
+  plural entry joined with `|` under `singular|plural`, and nothing splits them, so a plural entry is shown with its forms joined
+  by a bar if it is ever looked up by that key. A `.po` file that holds a `msgid_plural` line (a cheap match on the text) gets ONE warning
+  per file per process saying so; a `.mo` is not scanned; a bar in an ordinary string is untouched. A file that cannot be read (bad magic, over 16 MiB, ...) never throws: `[]`
   and ONE warning that names the file as `<locale>/LC_MESSAGES/<file>` (never the server's path). The locale and the domain
   (`[A-Za-z0-9_-]{1,64}`) are validated (patterns end in `\z`, which `$` does not: `$` matches before a trailing newline)
   BEFORE a path is built from them. A catalogue is read the first time it is looked
@@ -2504,8 +2504,8 @@ needs a locale sets it itself.
 - `Idno\Storage\QuoteNormaliser::normalise()` (static, pure, in `$excludes`) is what `Language::uncurlQuotes()` used to
   hold, byte for byte (the search text of every record goes through it); the record store factory and the MongoDB
   import call it directly.
-- `config/packages/framework.php` switches FrameworkBundle's `translator` off (it would be enabled by the package alone if
-  something installs `symfony/translation`; `Idno\Core\Language` is the site's translator), pinned by `Tests/Kernel/TranslatorDisabledTest`.
+- `symfony/translation` is a dependency for its loaders only. FrameworkBundle would enable its own translator once the
+  package is there, so `config/packages/framework.php` switches `translator` off (`Idno\Core\Language` is the site's translator), pinned by `Tests/Kernel/TranslatorDisabledTest`.
 - Tests: `Tests/Unit/Translation/` (`LocaleNegotiatorTest`, `CatalogueLoaderTest` with the fixtures in `fixtures/`, `NoGettextTest`),
   `Tests/Unit/Storage/QuoteNormaliserTest`, `Tests/Kernel/LanguageAdapterTest`, `Tests/Kernel/TranslatorDisabledTest`,
   `Tests/Characterisation/TranslationTest` (`Accept-Language` `fr-FR`, `fr`, `fr-fr` and `fr-CA` draw IdnoPlugins/Event's French string) and `Tests/Core/LanguageTest`.

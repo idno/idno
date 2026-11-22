@@ -6,11 +6,13 @@ namespace Idno\Translation;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Translation\Loader\MoFileLoader;
+use Symfony\Component\Translation\Loader\PoFileLoader;
 
 /**
  * Reads a message catalogue (a gettext `.po` file, else its compiled `.mo`) in the layout the gettext
  * tools use, `<directory>/<locale>/LC_MESSAGES/<domain>.po`, into an array of source string to translation.
- * No extension is needed: the two formats are read by the small readers below.
+ * No extension is needed: the files are read by symfony/translation's `PoFileLoader` and `MoFileLoader`.
  *
  * Which locale directory is read, in order: the exact locale (`fr_CA`), the bare language (`fr`), then the
  * first directory of that catalogue named `<language>_*` in sorted order (`fr_FR`), so a visitor asking for
@@ -18,10 +20,10 @@ use Psr\Log\NullLogger;
  * come from the catalogue's own directory and each must be a locale identifier; the listing is made once
  * per directory, domain and language for the process.
  *
- * Plural forms are ignored: an entry with a plural keeps its singular translation (`msgstr[0]`) under the
- * singular source string and nothing else. Both formats are read here, not with symfony/translation's
- * loaders, because those join the plural forms into one `singular|plural` key and value and cannot be
- * told from an ordinary string that contains a bar.
+ * Plural entries are NOT supported (Idno has no plural lookup). Symfony's loaders store a plural entry's forms
+ * joined with `|` under `singular|plural`, and nothing here splits them: a `.po` file that holds a `msgid_plural`
+ * line gets ONE warning per file per process saying so (found with a cheap match on the text, not a parse; a `.mo`
+ * is not scanned). A bar in an ordinary string is untouched.
  *
  * A catalogue is read the first time it is asked for and kept for the life of the process (keyed by the
  * file, its size and its modification time). A file is trusted input from a plugin's own directory, but a
@@ -88,127 +90,49 @@ final class CatalogueLoader
             if ($size === false || $size > self::MAX_BYTES) {
                 throw new \UnexpectedValueException('not a catalogue');
             }
-            $content = file_get_contents($file);
-            if ($content === false) {
-                throw new \UnexpectedValueException('unreadable');
+            $isPo = str_ends_with($file, '.po');
+            if ($isPo && preg_match('/^msgid_plural\s/m', (string) file_get_contents($file)) === 1) {
+                $this->logger->warning('The translation file ' . $this->describe($file) . ' has plural entries, which are not supported: they are shown with their forms joined by a bar');
             }
-
-            return str_ends_with($file, '.po') ? self::parsePo($content) : self::parseMo($content);
+            if (!$isPo && !self::moHeaderIsSane($file, $size)) {
+                throw new \UnexpectedValueException('bad header');
+            }
+            $loader = $isPo ? new PoFileLoader() : new MoFileLoader();
+            $messages = $loader->load($file, 'en', $domain)->all($domain);
         } catch (\Throwable $e) {
             $this->logger->warning('Could not read the translation file ' . $this->describe($file) . ': ' . get_class($e));
 
             return [];
         }
-    }
-
-    /**
-     * @return array<string, string> source => translation, without the header, fuzzy entries and empty translations
-     */
-    private static function parsePo(string $content): array
-    {
         $strings = [];
-        $entry = null;
-        $fuzzy = false;
-        $target = null;
-        $flush = static function () use (&$strings, &$entry, &$fuzzy, &$target): void {
-            if ($entry !== null && !$fuzzy && $entry['id'] !== null) {
-                $id = stripcslashes($entry['id']);
-                $translation = stripcslashes($entry['str'][0] ?? '');
-                if ($id !== '' && $translation !== '') {
-                    $strings[$id] = $translation;
-                }
-            }
-            $entry = null;
-            $fuzzy = false;
-            $target = null;
-        };
-        $quoted = static fn (string $text): string => strlen($text) >= 2 && $text[0] === '"' && str_ends_with($text, '"') ? substr($text, 1, -1) : '';
-
-        foreach (preg_split('/\R/', $content) ?: [] as $line) {
-            $line = trim($line, " \t\xEF\xBB\xBF");
-            if ($line === '') {
-                $flush();
-            } elseif (str_starts_with($line, '#~')) {
-                continue; // an obsolete entry
-            } elseif ($line[0] === '#') {
-                if ($entry !== null && $entry['str'] !== []) {
-                    $flush(); // a comment after a translation starts the next entry
-                }
-                if (str_starts_with($line, '#,') && in_array('fuzzy', array_map('trim', explode(',', substr($line, 2))), true)) {
-                    $fuzzy = true;
-                }
-            } elseif (preg_match('/^(msgctxt|msgid_plural|msgid|msgstr)(?:\[(\d+)\])?\s+(".*)$/s', $line, $m) === 1) {
-                $keyword = $m[1];
-                if (($keyword === 'msgid' || $keyword === 'msgctxt') && $entry !== null && $entry['id'] !== null) {
-                    $flush(); // the next entry begins
-                }
-                $entry ??= ['id' => null, 'str' => []];
-                $text = $quoted($m[3]);
-                if ($keyword === 'msgid') {
-                    $entry['id'] = $text;
-                    $target = 'id';
-                } elseif ($keyword === 'msgstr') {
-                    $index = (int) $m[2];
-                    $entry['str'][$index] = $text;
-                    $target = $index;
-                } else {
-                    $target = null; // msgctxt and msgid_plural: read past, never kept
-                }
-            } elseif ($line[0] === '"' && $entry !== null && $target !== null) {
-                $text = $quoted($line);
-                if ($target === 'id') {
-                    $entry['id'] .= $text;
-                } else {
-                    $entry['str'][$target] .= $text;
-                }
+        foreach ($messages as $source => $translation) {
+            if (is_string($translation) && $translation !== '' && $source !== '') {
+                $strings[(string) $source] = $translation;
             }
         }
-        $flush();
 
         return $strings;
     }
 
     /**
-     * @return array<string, string> source => translation: the first form of a plural, empty ones left out
+     * Symfony's `.mo` loader trusts the header: a count or an offset that points outside the file makes it
+     * allocate memory by a length it read from the file, which is a fatal error, not an exception. So the header
+     * (magic, entry count, the two table offsets) is checked against the file's size first. Nothing else is parsed here.
      */
-    private static function parseMo(string $content): array
+    private static function moHeaderIsSane(string $file, int $size): bool
     {
-        if (strlen($content) < 28) {
-            throw new \UnexpectedValueException('too short');
+        $head = @file_get_contents($file, false, null, 0, 20);
+        if ($head === false || strlen($head) < 20) {
+            return false;
         }
-        $magic = unpack('V', substr($content, 0, 4))[1];
-        if ($magic === 0x950412de) {
-            $format = 'V';
-        } elseif ($magic === 0xde120495) {
-            $format = 'N';
-        } else {
-            throw new \UnexpectedValueException('bad magic');
+        $magic = unpack('V', $head)[1];
+        $format = $magic === 0x950412de ? 'V' : ($magic === 0xde120495 ? 'N' : null);
+        if ($format === null) {
+            return false;
         }
-        [, $revision, $count, $idTable, $translationTable] = array_values(unpack($format . '5', substr($content, 0, 20)));
-        if (($revision >> 16) !== 0 || $count < 0 || $count > 1000000 || $idTable + 8 * $count > strlen($content) || $translationTable + 8 * $count > strlen($content)) {
-            throw new \UnexpectedValueException('bad header');
-        }
-        $string = static function (int $table, int $i) use ($content, $format): string {
-            [$length, $offset] = array_values(unpack($format . '2', substr($content, $table + 8 * $i, 8)));
-            if ($offset + $length > strlen($content)) {
-                throw new \UnexpectedValueException('bad offset');
-            }
+        [, , $count, $ids, $translations] = array_values(unpack($format . '5', $head));
 
-            return substr($content, $offset, $length);
-        };
-        $strings = [];
-        for ($i = 0; $i < $count; $i++) {
-            $id = explode("\0", $string($idTable, $i), 2)[0];
-            if (($context = strpos($id, "\4")) !== false) {
-                $id = substr($id, $context + 1); // msgctxt and the id are joined by \4
-            }
-            $translation = explode("\0", $string($translationTable, $i), 2)[0];
-            if ($id !== '' && $translation !== '') {
-                $strings[$id] = $translation;
-            }
-        }
-
-        return $strings;
+        return $count <= intdiv($size, 16) && $ids + 8 * $count <= $size && $translations + 8 * $count <= $size;
     }
 
     /**

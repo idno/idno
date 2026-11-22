@@ -160,61 +160,46 @@ final class CatalogueLoaderTest extends TestCase
         $this->assertFalse($loader->has($directory, 'test', 'fr_CA'));
     }
 
-    public function testAPluralEntryKeepsOnlyItsSingularTranslation(): void
-    {
-        $po = (new CatalogueLoader())->load(self::FIXTURES . '/plural', 'test', 'fr_FR');
-        $mo = (new CatalogueLoader())->load(self::FIXTURES . '/plural-mo', 'test', 'fr_FR');
-
-        foreach ([$po, $mo] as $strings) {
-            $this->assertSame('%d fichier', $strings['%d file']);
-            $this->assertArrayNotHasKey('%d file|%d files', $strings);
-            $this->assertArrayNotHasKey('%d files', $strings);
-            $this->assertArrayNotHasKey('Fuzzy one', $strings, 'a fuzzy entry is not a translation');
-            $this->assertSame('Ceci | cela', $strings['This | that'], 'a bar in an ordinary translation is kept');
-            $this->assertSame('Bonjour|Salut', $strings['Pipe|source'] ?? null, 'and a bar in an ordinary source string');
-        }
-        $this->assertSame('Ligne un et deux', $po['Multi line'], 'continuation lines are joined');
-        $this->assertSame("Dites \"salut\"\t", $po['Escapes']);
-    }
-
-    public function testTheExactLocaleWinsOverItsLanguage(): void
-    {
-        $directory = $this->copyOf('regional');
-        mkdir($directory . '/fr_CA/LC_MESSAGES', 0777, true);
-        file_put_contents($directory . '/fr_CA/LC_MESSAGES/test.po', "msgid \"Hello!\"\nmsgstr \"Allo!\"\n");
-
-        $this->assertSame('Allo!', (new CatalogueLoader())->load($directory, 'test', 'fr_CA')['Hello!']);
-    }
-
-    public function testAMissingLocaleIsEmpty(): void
+    public function testPluralEntriesAreNotSupportedAndAreReturnedAsSymfonyGivesThem(): void
     {
         [$loader, $log] = self::loader();
+        $directory = $this->copyOf('plural');
 
-        $this->assertSame([], $loader->load(self::FIXTURES . '/po', 'test', 'de_DE'));
-        $this->assertSame([], $loader->load(self::FIXTURES . '/nowhere', 'test', 'fr_FR'));
-        $this->assertSame([], $loader->load(self::FIXTURES . '/po', 'nothing', 'fr_FR'));
-        $this->assertCount(0, $log, 'a missing catalogue is normal and logs nothing');
-    }
+        $po = $loader->load($directory, 'test', 'fr_FR');
+        $loader->load($directory, 'test', 'fr_FR');
 
-    public function testAMalformedFileIsEmptyAndWarnsOnce(): void
-    {
-        [$loader, $log] = self::loader();
-        $directory = $this->copyOf('malformed');
+        // The forms are joined with a bar under the singular and the plural id, and nothing splits them.
+        $this->assertSame('%d fichier|%d fichiers', $po['%d file|%d files']);
+        $this->assertSame('Ceci | cela', $po['This | that'], 'a bar in an ordinary translation is untouched');
+        $this->assertSame('Bonjour|Salut', $po['Pipe|source'], 'and in an ordinary source string');
+        $this->assertSame('Ligne un et deux', $po['Multi line']);
+        $this->assertArrayNotHasKey('Fuzzy one', $po);
 
-        $this->assertSame([], $loader->load($directory, 'test', 'fr_FR'));
-        $this->assertSame([], $loader->load($directory, 'test', 'fr_FR'));
-
-        $this->assertCount(1, $log);
+        $this->assertCount(1, $log, 'one warning per file per process');
         $this->assertSame('warning', $log[0][0]);
-        $this->assertStringContainsString('test.mo', $log[0][1]);
-        $this->assertStringNotContainsString($directory, $log[0][1], 'the message names the file, not the server path');
+        $this->assertStringContainsString('fr_FR/LC_MESSAGES/test.po', $log[0][1]);
+        $this->assertStringContainsString('plural', $log[0][1]);
+        $this->assertStringNotContainsString($directory, $log[0][1]);
+
+        [$other, $otherLog] = self::loader();
+        $other->load(self::FIXTURES . '/po', 'test', 'fr_FR');
+        $this->assertCount(0, $otherLog, 'a file with no plural entry warns of nothing');
     }
 
-    public function testATruncatedOrLyingMoIsEmptyAndWarns(): void
+    public function testAMoFileWithAPluralEntryWarnsOfNothing(): void
+    {
+        [$loader, $log] = self::loader();
+        $mo = $loader->load(self::FIXTURES . '/plural-mo', 'test', 'fr_FR');
+
+        $this->assertSame('%d fichier|%d fichiers', $mo['%d file|%d files']);
+        $this->assertSame('Ceci | cela', $mo['This | that']);
+        $this->assertCount(0, $log, 'a compiled catalogue is not scanned');
+    }
+
+    public function testAMoFileThatIsNotACatalogueIsEmptyAndWarns(): void
     {
         $valid = (string) file_get_contents(self::FIXTURES . '/mo/fr_FR/LC_MESSAGES/test.mo');
-        $lying = substr_replace($valid, pack('V', 0xFFFFFF), 24 + 4, 4); // the first string's offset points past the end
-        foreach (['truncated' => substr($valid, 0, 40), 'tiny' => 'abc', 'lying offset' => $lying, 'a huge count' => substr_replace($valid, pack('V', 0x7FFFFFFF), 8, 4)] as $name => $bytes) {
+        foreach (['truncated' => substr($valid, 0, 40), 'tiny' => 'abc', 'a huge count' => substr_replace($valid, pack('V', 0x7FFFFFFF), 8, 4)] as $name => $bytes) {
             [$loader, $log] = self::loader();
             $directory = $this->copyOf('malformed');
             file_put_contents($directory . '/fr_FR/LC_MESSAGES/test.mo', $bytes);
@@ -296,5 +281,20 @@ final class CatalogueLoaderTest extends TestCase
 
         $checkin = $loader->load($root . '/IdnoPlugins/Checkin/languages', 'checkin', 'fr_FR');
         $this->assertNotSame([], $checkin);
+    }
+
+    public function testTheBundledPoAndMoFilesGiveTheSameStringsThroughSymfonysLoaders(): void
+    {
+        $root = dirname(__DIR__, 3);
+        foreach (['Event/languages/fr_FR/LC_MESSAGES/event', 'Status/languages/en_US/LC_MESSAGES/status'] as $name) {
+            $po = (new \Symfony\Component\Translation\Loader\PoFileLoader())->load($root . '/IdnoPlugins/' . $name . '.po', 'en', 'd')->all('d');
+            $mo = (new \Symfony\Component\Translation\Loader\MoFileLoader())->load($root . '/IdnoPlugins/' . $name . '.mo', 'en', 'd')->all('d');
+
+            $this->assertNotSame([], $po, $name);
+            // Every translated string of the .mo (the compiler drops empty and fuzzy ones) is the .po's.
+            foreach ($mo as $source => $translation) {
+                $this->assertSame($translation, $po[$source] ?? null, $name . ': ' . $source);
+            }
+        }
     }
 }

@@ -56,7 +56,7 @@ Open up your .POT file with a suitable tool, e.g. [poedit](https://poedit.net/),
 A `.mo` file is optional: Idno reads the `.po` file, and uses the `.mo` only where there is no `.po` for that locale. The visitor's locale is matched against your catalogue in this order: the exact
 locale (`fr_CA`), the language (`fr`), then the first directory named `fr_*` in sorted order. So a visitor whose browser asks for `fr`, `fr-fr` or `fr-CA` gets your `fr_FR` catalogue when that is the only French one you ship.
 The region is normalised (`fr-fr` is `fr_FR`, `zh-hant` is `zh_Hant`). A string with no translation, or an empty one, is shown as it is in the source (English).
-Plural forms are not used: an entry with a plural keeps its singular translation (`msgstr[0]`). A file that cannot be read is ignored, with one warning in the log.
+Plural forms are not supported (Idno has no plural lookup): a `.po` entry with `msgid_plural` is read as its forms joined by a bar, under `singular|plural`, so a translator's plural entry never matches a string you pass to `_()`; Idno logs one warning for a `.po` file that has one. Put the plural cases in separate, ordinary strings. A file that cannot be read is ignored, with one warning in the log.
 
 The locale is the first language of the browser's `Accept-Language` header (on the command line, `LANGUAGE`, then `LANG`). It is used as a directory name, so only a
 locale identifier is accepted (`fr`, `fr_FR`, `zh_Hant_TW`); anything else is `en_US`. An `Accept-Language` header over 1000 bytes is ignored, and a locale you pass to `new Language()` yourself loses its encoding (`en_US.UTF-8` is `en_US`). A catalogue is read the first time one of its strings is needed, and only for that locale.
