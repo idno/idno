@@ -41,8 +41,10 @@ namespace Idno\Pages\Session {
                 'fwd' => $fwd
             ];
 
-            // If user is logged in and we got this far, this is an api login so lets return a user api token (#2240)
-            if (\Idno\Core\Idno::site()->session()->isLoggedOn() && !in_array(\Idno\Core\Idno::site()->template()->getTemplateType(), ['default', 'modern']) && $this->isSSL()) {
+            // If user is logged in and we got this far, this is an api login so lets return a user api token (#2240).
+            // Only the JSON response may carry it. Another site can't read that one, but it can load
+            // any response that is a script (JSONP), and the browser may send the session cookie with it.
+            if (\Idno\Core\Idno::site()->session()->isLoggedOn() && \Idno\Core\Idno::site()->template()->getTemplateType() === 'json' && $this->isSSL()) {
                 $user = \Idno\Core\Idno::site()->session()->currentUser();
                 $vars['api-token'] = $user->getAPIkey();
             }
