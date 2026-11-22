@@ -233,6 +233,17 @@ Each content plugin has an `Entry.php` entity class that defines
   (unless `setIgnoreAccess(true)` is in effect), so they are not found, exactly like
   entities the user has no access to. An empty publish status counts as published.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
+- What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
+  unless its signature covers `(request-target)`, `host` and `date`, and, for any method
+  but GET and HEAD, `digest`. Each of those headers must be present; the `Digest` must be
+  the SHA-256 or SHA-512 of the body (RFC 3230: several digests and any letter case are
+  accepted); and the `Date` must be no more than twelve hours old (`MAX_AGE`) and no more
+  than an hour ahead (`MAX_CLOCK_SKEW`), the window Mastodon uses. Mastodon, GoToSocial,
+  Pleroma, Akkoma and Misskey sign all four on a delivery. Don't relax this: a signature
+  proves only the headers it lists, so without `digest` the body is unsigned. Deliveries
+  are not remembered, so one can be replayed while its `Date` is in the window; handlers
+  must be safe to run twice. Only draft-cavage signatures are understood, not RFC 9421.
+  `IdnoPlugins/ActivityPub/Tests/HTTPSignatureCoverageTest.php` checks this.
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
 - HTML sanitization via HTMLPurifier
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
