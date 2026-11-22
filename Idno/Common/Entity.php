@@ -780,6 +780,10 @@ namespace Idno\Common {
          */
         function syndicate()
         {
+            // An import brings in history, not news: nothing is syndicated for it
+            if (\Idno\Core\Idno::importInProgress()) {
+                return;
+            }
             if ($this->getActivityStreamsObjectType()) {
                 $event = new \Idno\Core\Event(array('object' => $this, 'object_type' => $this->getActivityStreamsObjectType()));
                 try {
@@ -950,7 +954,17 @@ namespace Idno\Common {
                 return false;
             }
 
-            return static::getOneFromAll(array('slug' => $slug));
+            $entity = static::getOneFromAll(array('slug' => $slug));
+            // A slug is stored percent-encoded (`caf%C3%A9-notes`, see prepareSlug()), and the router hands a page the
+            // path segment decoded (`café-notes`): when what was given is not found as it is, the encoded form is.
+            if (empty($entity) && is_string($slug) && mb_check_encoding($slug, 'UTF-8')) {
+                $encoded = rawurlencode(rawurldecode($slug));
+                if ($encoded !== $slug) {
+                    $entity = static::getOneFromAll(array('slug' => $encoded));
+                }
+            }
+
+            return $entity;
         }
 
         /**
@@ -2104,9 +2118,18 @@ namespace Idno\Common {
             $rssItem->appendChild($page->createElement('guid', $item->getUUID()));
             $rssItem->appendChild($page->createElement('pubDate', date(DATE_RSS, $item->created)));
 
-            // Needed for WP import into Idno
+            // Needed for WP import into Idno. A draft, and a post that is not public, say so: whoever
+            // imports the file must not publish what was never published.
+            $publishStatus = $item->getPublishStatus();
+            if (!empty($publishStatus) && $publishStatus != 'published') {
+                $exportedStatus = 'draft';
+            } else if (!empty($item->access) && $item->access != 'PUBLIC') {
+                $exportedStatus = 'private';
+            } else {
+                $exportedStatus = 'publish';
+            }
             $rssItem->appendChild($page->createElement('wp:post_type', 'post'));
-            $rssItem->appendChild($page->createElement('wp:status', 'publish'));
+            $rssItem->appendChild($page->createElement('wp:status', $exportedStatus));
 
             // WXR-specific item elements
             if ($wxr_mode) {
@@ -2244,7 +2267,8 @@ namespace Idno\Common {
                     case ':id':
                         return '([A-Za-z0-9]+)';
                     case ':slug':
-                        return '([\%A-Za-z0-9\-\_]+)';
+                        // Slugs are stored percent-encoded; the web server may hand the router the path decoded (`café`): both match
+                        return '([^/.]+)';
                     case ':year':
                         return '[0-9]{4}';
                     case ':month':

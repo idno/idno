@@ -178,11 +178,40 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   (`bin/console service-event-queue --once`, same environment), `sink()`, `queuedEvents()` and
   `failedEvents()` (the messages waiting in, and failed from, the `idno_messages` table),
   `markTakenAgo()` and `runInSite()` (PHP code with the site booted, for entity writes only the classes
-  can do). `Tests/Queue/QueuedDeliveryTest` and `QueuedDeliveryBehindTlsTest` pin what queued events
+  can do). Each site's files go to an upload directory of its own (`IDNO_UPLOADPATH`, removed in `tearDown()`), and
+  a test fails when the rig's shared upload directory gained a file (archives and uploads hold test password
+  hashes and nothing sweeps them there). `Tests/Queue/QueuedDeliveryTest` and `QueuedDeliveryBehindTlsTest` pin what queued events
   deliver (the signed ActivityPub delivery, webmentions, who an event runs as, failing events, the
   worker's output), `QueueWorkCommandTest` the worker command and `QueueSettingSiteTest` (and its
   synchronous twin) what the `event_queue` setting means to the code that asks; they do not run in the
   unit tier and skip on a MongoDB site.
+- Import and export are tested in `Tests/Portability/` (the importers on two hand-written fixtures, the feed
+  and archive exports, the jobs with doubles for their state and mail, a 64 MiB file exported under a memory
+  limit of 32M in a subprocess, `QueuedPortabilityTest` on an asynchronous site), `Tests/Unit/Portability/`
+  (`SafeXml`, `SettingsRedactor`, `ImportedMedia`, `ImportedImages`), `Tests/Kernel/PortabilityServicesTest`
+  and, over HTTP, `Tests/Characterisation/AdminPortabilityPagesTest` (who reaches the pages, the downloads,
+  who can fetch an archive, the work after the answer) and `AdminImportWithoutPedanticModeTest`.
+- Acceptance tests (`Tests/Acceptance/`, what a site owner does, end to end, with the pieces working TOGETHER;
+  each walkthrough is one ordered scenario on one site that carries its state from step to step, driven over
+  HTTP with forms and their signed tokens through `Tests\Acceptance\Browser`, the worker as a subprocess, mail
+  read from a `ScriptedSmtpServer`). `PhaseWalkthroughTest`, on an asynchronous site whose server demands a login:
+  the mail settings saved on `/admin/email` (a wrong password fails, the corrected one works, and a fresh process
+  of the site means the saved port), an invitation and its link, a password reset, French and English pages, the
+  full archive (queued, worked, mailed, downloaded with `Cache-Control: private, no-store` by the administrator
+  only, opened and checked for the member's posts with their access and publish status, an uploaded file's bytes,
+  the record dump and no secret), a WordPress import (nothing announced to a follower, the draft not public) and
+  the HSTS state of a host seen by a second process and expired (three command-line processes: an outbound HTTPS
+  request cannot be made in a test, and nothing a request does reaches the pool, so that a web process and the
+  worker share it is NOT covered). `UpgradedSiteWalkthroughTest` (MySQL and MariaDB; skips on SQLite): a 1.x
+  database whose stored settings have `smtp_host` with no port, an empty `smtp_secure` and `cache`, upgraded over
+  HTTP; the reset mail is delivered with those settings (a fresh process of the site builds the transport for
+  port 25, in the clear, through `TestMailTransportFactory::built()`), the `cache` setting is warned about once per
+  process that uses the cache, and French is shown. `RoundTripTest`: a WXR exported from one site is imported
+  into a second, empty one (`restartSite()` stops the first), and its docblock lists what survives and what does
+  not. A defect a walkthrough finds in production code is a test of the wanted behaviour that calls
+  `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
+  with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
+  `docs/developers/release-checklist.md`.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
@@ -250,6 +279,8 @@ Idno/
                                IndexedFields (creates the indexes entity classes declare with
                                Attribute/IndexedField), EntityClassFinder (the classes of a directory that
                                carry those attributes) and DialectFactory (the container's Dialect);
+                               CollectionDump (a collection's table as SQL, a few rows at a time, for the
+                               export archive);
                                SettingsRecordStore, a RecordStore decorator that serves the collection
                                `config` (the site's configuration, ONE document) from the key/value table
                                `idno_settings` and every other collection from the store it decorates
@@ -271,6 +302,12 @@ Idno/
                                for third-party plugins (legacy style)
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
                                settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting. See "Mail"
+  Portability/                 Import and export (modern style): ArchiveExporter (the administrator's
+                               archive), FeedExporter (RSS and WXR), WordPressImporter and BloggerImporter,
+                               ImportedMedia and ImportedImages (the pictures of an import), SafeXml,
+                               SettingsRedactor, ImportMode, PortabilityJobs (the jobs and their state), and the
+                               five small interfaces its Idno\Legacy adapters implement (SiteFacts, FeedShell,
+                               ExportState, ResultNotifier, PostWriter). See "Import and export"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -703,7 +740,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -723,7 +760,10 @@ other new code may.
   `DoctrineTrimPass.php` and `MessengerTrimPass.php` are excluded (the kernel adds them in `build()`); in
   `Idno/Queue/`, the message `QueuedEvent.php`, the interfaces `EventTrigger.php`, `EntityCache.php` and
   `UserContext.php`, `ResilientTransport.php` (a decorator) and `KeepFailedMessage.php` (wired by hand),
-  `StopWhenQueueIsEmpty.php` (built by the command) and the static helper `WorkerSiteUrl.php`.
+  `StopWhenQueueIsEmpty.php` (built by the command) and the static helper `WorkerSiteUrl.php`; in
+  `Idno/Portability/`, the static helpers `SafeXml.php` and `SettingsRedactor.php`, the value objects
+  `ImportedPost.php`, `ImportedComment.php` and `ImportResult.php`, the helper `ImportedImages.php`, the five
+  interfaces, and `ImportedMedia.php` (wired by hand: it takes a closure that fetches the remote client).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
@@ -2269,8 +2309,9 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   depends on neither `Idno\Legacy` nor `Idno::site()`) at each `create()`, and builds a `Mailer` over the
   transport the injected `TransportFactoryInterface` makes from the DSN
   (`idno.mail.transport_factory`, `SmtpTransportFactory`, below, in `config/services.php`). The container service
-  `Symfony\Component\Mailer\MailerInterface` is public and NOT shared: an admin's change applies to the
-  next mail, and a worker never keeps an old password. Like the storage services it needs the legacy
+  `Symfony\Component\Mailer\MailerInterface` is public and NOT shared: it is built at each fetch from the settings as THIS process last
+  loaded them, so a change reaches a long-running queue worker only when the worker next starts (it stops
+  itself after an hour; the documented rule of the queue: a changed setting reaches the worker when it restarts). Like the storage services it needs the legacy
   application (the settings are in the database), so it must not be fetched while the kernel boots.
   Nothing from the settings is compiled into the container. `Idno/Mail/` is in
   `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php`, `InvalidMailSetting.php`, `CramMd5Authenticator.php` and
@@ -2405,8 +2446,15 @@ usable of the boot configuration's `cachepath`; `<cache base>/pool`; the system 
 (`IDNO_CACHE_DIR`, else `var/cache`, else the private temporary directory): the compiled container's base, WITHOUT the
 per-environment, per-build directory, so a deploy or a version change never empties the pool. A candidate inside the
 local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is compiled into the container. Two processes
-(web workers, the queue worker) share the pool (`FilesystemAdapter` is safe for that; pinned in
-`Tests/Unit/Cache/CachePoolFactoryTest`).
+(web workers, the queue worker) share the pool ONLY when they run as the same Unix user (the namespace directory is
+created with the process's umask, and a process that did not create it may not be able to write in it) and the
+request's host equals the host of the `url` (the namespace is the host's hash; the worker has no request, so it
+takes the `url`'s). `FilesystemAdapter` is safe for sharing between processes that can write (pinned in
+`Tests/Unit/Cache/CachePoolFactoryTest`). Otherwise the processes have pools of their own, or one cannot write
+the other's: a save that cannot write fails silently and a read misses, so the HSTS memory (and any plugin's
+cached value) is lost, and no exception reaches the outbound request that triggered it (pinned by
+`Tests/Kernel/WebserviceHstsTest::testAPoolThePathCannotWriteIsAMissAndNeverAnErrorForAnOutboundRequest`). Run the
+worker as the web server's user.
 
 - Directories. The pool's files are unserialized, so a directory another local user could write must never be
   used. `cachepath` and `<cache base>/pool` are trusted exactly as far as `CacheDirResolver` trusts the cache base
@@ -2712,6 +2760,163 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   image when a build replaces it. The container (and the CI job `mongo-import`) have the `mongodb`
   extension and no `mongodb/mongodb` library: the import's subprocess, configured for MongoDB, boots
   the kernel with the gate closed and needs the extension only.
+
+#### Import and export
+
+The admin pages `/admin/export/`, `/admin/import/` and the account export pages use bounded services in
+`Idno/Portability/` (a scanned directory; public container services that need the legacy application, so they
+are built only when a page, a job or the worker asks). The services depend on five small interfaces,
+implemented over the legacy application by adapters in `Idno\Legacy`: `SiteFacts` (`LegacySiteFacts`: the
+site's address, host, temporary directory, download limit, content types, who is an administrator),
+`FeedShell` (`LegacyFeedShell`: the RSS template's document with no items), `ExportState`
+(`LegacyExportState`), `ResultNotifier` (`LegacyResultNotifier`: the mails) and `PostWriter`
+(`LegacyPostWriter`: articles and notes saved through `Entity::save()`, so slugs, tags, file links and events
+work). `Idno\Core\Migration`'s static methods are deprecated delegates for one release.
+
+- `ArchiveExporter::export($uuid)` (only for an administrator: a `\RuntimeException` otherwise) writes the
+  archive's files to a private working directory (`<temporary>/idno-export-<32 hex>`, mode 0700, files 0600,
+  removed on success and on failure), reads entities a few at a time (keyset paging on the store's own order, `created` then `_id` descending: never an
+  offset, so an entity added or removed between two pages neither repeats nor skips one) through
+  `EntityRepository::hydrate()`, copies
+  attached files as streams (`FileStore`; an attachment the store does not have is fetched from its address
+  through the site client only when the address is the site's own origin, else through the REMOTE client
+  (`idno.http_client.remote`, a service closure: private and reserved addresses refused, redirects checked), at
+  the size limit; one that fails is skipped with a log line), writes `exported_data.sql` through `CollectionDump`, builds
+  the zip with `ZipArchive` (`ext-zip`, a Composer `suggest`) from the files, and stores it through
+  `FileStore` with the metadata `restricted = admin`, `purpose = export`. Layout: `known.json`, `config.json`
+  (`{"config": the STORED settings with `SettingsRedactor::redact($settings, null)`, and without any key
+  `BootConfig::all()` holds (`Config::save()` copies those into the stored settings)}`: never the boot
+  configuration), `entities.json` (a list ending with `{}`), `json/<id>.json` (the entity's JSON plus its
+  `access` and `publish_status`), `html/<id>.html` (the entity's drawn content inside an `<article class="h-entry">` (`h-event` for an event) with the
+  author as an `h-card`, the address and the date: the page's shell, with its edit controls and tokens, is not drawn),
+  `exported_data.sql` (the records as stored, password
+  hashes and ActivityPub private keys included, because it is what restores the site), `files/readable/<id>.<ext>`
+  and `files/uploads/<host>/<a>/<b>/<c>/<d>/<id>.file` (+ `.data`), to which an entity's attachment address
+  (`../files/uploads/...`) points. `exportToFolder($parent)` and `zip($folder, $path)` are its halves.
+- One entity that cannot be written (any `\Throwable`, an `\Error` too, from serialising or drawing it) never ends
+  the export: it is counted (`ExportReport::$unrendered`), logged once with the exception's class and the
+  entity's uuid (never its content), and stays in `exported_data.sql`; the result mail says "N entries could not
+  be rendered and are included as data only".
+- The archive is for administrators only, in ONE place: `Pages\File\View` (see Security). The export page says so
+  next to the button, and says it must be kept as a database backup.
+- `FeedExporter::rss($hidePrivate, $userUuid, $wxr)` yields the document in chunks (the shell, then each item,
+  then the rest; nothing on disk); `stream()` copies it to a `php://temp` stream (memory up to 1 MiB, then a
+  file PHP removes itself) for the pages, which send `Content-Length`. `$hidePrivate` builds the criteria
+  explicitly (`access` PUBLIC, `publish_status` published or empty), so an administrator's export hides private
+  posts and drafts too; with private posts included the viewer's own rules apply (an administrator reads every
+  member's). `Entity::rssSerialise()` writes `wp:status` `publish`, `private` or `draft` as the entity is.
+- `WordPressImporter::import($path, $ownerUuid)` and `BloggerImporter::import(...)` (Atom and RSS) return
+  `['posts', 'comments', 'media', 'skipped']`; a file that cannot be read, is no XML or holds no post is zero
+  posts, logged, never an exception. `SafeXml::load($path, $maxBytes)` (32 MiB for the importers) refuses a
+  file that is too large, not well-formed, or has a document type declaration (looked for in the prolog only,
+  so `<!DOCTYPE` in a post's CDATA is fine), with `LIBXML_NONET` and no entity substitution, and puts
+  libxml's error handling back. WordPress: only `post` items; `publish` is public and published, `private` (or a
+  password) private to the importing user, `draft`, `pending`, `future` and `auto-draft` drafts, anything else
+  skipped; only approved comments of type comment; a comment author's address only when http or https;
+  categories and tags as hashtags; an untitled post under 600 characters is a note. Blogger: `settings` and
+  `template` entries skipped, drafts (`app:draft` yes, `blogger:status` DRAFT) imported as drafts, `SOFT_TRASHED`
+  skipped, pages stay articles, comments become replies to the post their `thr:in-reply-to` names wherever it
+  is in the file. An RSS item with `wp:status` private or draft is imported private or as a draft.
+- An import goes on past an item that fails: each item (a post, its comments, a Blogger entry) is imported inside its
+  own `\Throwable` catch, counted as skipped and logged with the exception's class and the item's title (control
+  characters replaced, 80 characters), never the exception's message. A staged upload is marked `import_started`
+  (time) in its metadata when its job begins; a job that finds the mark REFUSES to run it (the failure mail says it
+  was started before and may have imported posts: a message put back by `--requeue-abandoned`, or a duplicated
+  job for the SAME staged upload, never runs it twice. Uploading or submitting the same file twice is not caught:
+  each submit stages a NEW upload, so its posts are imported twice). After `ImportResult::MAX_CONSECUTIVE_FAILURES` (25) items in a
+  row fail (a success between resets the count) the import STOPS and is a failure: the importer's counts carry
+  `stopped`, and the failure mail says it was stopped after repeated errors, how many posts were imported before
+  that, and to check the site's log. The result mails carry the counts (`ResultNotifier::importFinished($user, $ok,
+  $imported, $skipped, $startedBefore)`). A picture's temporary file goes in the job's own working directory
+  (`ImportedMedia::inDirectory()`, only for an `idno-import-<32 hex>` directory).
+- The full archive needs `ext-zip`: `ArchiveExporter::zipAvailable()` (with an injectable closure) decides, the export
+  page shows a notice in place of the button when it is false (both templates), and the generate page refuses.
+- Pictures: `ImportedMedia::forDomain($domain)->fetch($url)` / `import($url)`: only http or https on the
+  scheme's own port, no user name, the domain or a subdomain, extension jpg jpeg png gif webp, through the REMOTE
+  client (a closure fetched at each fetch), cut at `webservice_max_download` (a body of limit + 1 bytes is
+  refused), and kept only when `getimagesize()` says the bytes are one of those types; else null and one log
+  line (never the exception's message or the address's query). `ImportedImages::bring($html, $media, $siteUrl)`
+  replaces each fetched address in the HTML (as written, and with `&amp;`), and the stored files are attached
+  to the post (`attachFile()`), so the file route applies the post's access. The domains: `wordpress.com`
+  and `blogspot.com` (Blogger's pictures on `blogger.googleusercontent.com` stay hot-linked).
+- Nothing an import brings in is announced. `Idno\Portability\ImportMode` (a public service) holds a depth
+  counter; the importers wrap their work in `during()` (reset in a `finally`: a worker lives on). The places
+  that would announce ask `Idno::importInProgress()`: the ActivityPub and StandardSiteSync `saved`/`updated`
+  hooks, `Entity::syndicate()`, the PubSubHubbub `published` hook and `Webmention::pingMentions()` (the
+  `IDNO_NOMENTION` constant still works for scripts). Pinned by `ImportTest` (a follower's sink on the rig)
+  and `QueuedPortabilityTest` (the worker).
+- `PortabilityJobs`: `beginExport()` (one export at a time; `ExportState::begin()` refuses while one runs unless
+  its flag is six hours old), `exportState()` and `removeExpiredArchive()` (an archive is removed when a new one
+  is made and when it is a week old, counted from when it was MADE: the time is stored with its id,
+  `export_file_created`, and is the "Generated" date the page shows, never `export_last_requested`, which a later
+  request moves; checked whenever the export page is loaded or an export asked for: there is no scheduler),
+  `markRecordedArchive()` (an archive recorded by an earlier release has no `restricted` mark: it is written on
+  every page load and export request) and `sweep()` (at most hourly, on a page load and a job start: the
+  working directories of this install in the temporary directory, exactly `idno-export-`, `idno-import-` or
+  `idno-archive-` plus 32 hex digits, a real directory owned by the current user (the temporary directory is
+  shared: nothing else is touched), older than 24 hours; and, from the list the jobs keep in the settings
+  (`portability_tracked`: id, kind `upload` or `archive`, time; at most `TRACKED_LIMIT` (50), the oldest beyond it
+  deleted when a new one is added), an upload older than 24 hours and an archive that is not the recorded one a
+  week old, files already gone dropped from the list. THE FILE STORE IS NEVER LISTED: a page request must not
+  read a whole upload tree (minutes on a large store or S3). A stored upload or archive is recorded when it is
+  stored (`stageUpload()`, `runExport()`) and forgotten when it is removed; a job killed between storing an
+  archive and returning its id leaves a file nothing knows about),
+  `stageUpload()` (the upload waits in the file store, `restricted`,
+  `purpose = import`, removed when the import ends), `runExport($uuid)` and `runImport($uuid, $fileId, $type)`.
+  A job never throws: any `\Throwable` is logged, the flag cleared, the failure mail sent, and the event is
+  not parked in the failure transport. `runImport` reads and removes only a file whose `purpose` is `import`
+  (the event names a file by id), and only for an administrator. `LegacyExportState` re-reads the stored
+  settings before every change and sets only its own keys (`export_last_requested`, `export_in_progress`,
+  `export_file_id`, `export_filename`, `export_file_created`, `portability_last_sweep`, `portability_tracked`): a worker's
+  configuration object is as old as the worker. JOB AGAINST JOB: the settings are ONE document and each change is a reload, then a save of the whole
+  document, so two writers at once (an export and an import, a job and a page's sweep, two jobs of two workers)
+  can lose one of the two changes: the one that saved first is overwritten by the one that read before it. What
+  can be lost is a tracked file (nothing then sweeps it: it stays until someone deletes it), an `export_in_progress`
+  flag or the recorded archive (the page then shows no archive; the file stays restricted). Nothing is corrupted,
+  and a lost change is never a secret leaking. A SETTINGS SAVE elsewhere during an export (an administrator
+  saving the site's configuration page, whose form was loaded before the export began) writes the whole
+  settings document and can restore the old export state: the page then shows no archive or no running export,
+  and `export_in_progress` clears by itself after six hours; the archive file stays restricted and the sweep
+  removes it after a week.
+- The pages: `Pages\Admin\Import` refuses (a session message, no job, no mail) a request with no source of
+  `PortabilityJobs::IMPORT_TYPES`, no file, an empty or unreadable one, or one over 32 MiB; otherwise it stages
+  the upload and, with `queue()->isAsynchronous()`, enqueues `portability/import` (data `user`, `file`, `type`;
+  run as the user) or, without, runs the job through `Idno\Core\AfterResponse::run()` (redirect, close the
+  connection, `set_time_limit(0)`, the job, exit: no sleep). `Pages\Admin\Export\Generate` does the same
+  with `portability/export` (data `user`). The listeners are registered by `Idno\Core\Admin::registerEventHooks()`
+  (the worker's boot has them). The "Idno" import form, which had no code behind it, is gone: an Idno RSS file
+  imports through the WordPress form.
+- The worker is a console process: `Config::loadIniFiles()` gives it the host of the boot `url` (its host
+  was empty, so its file directory, named after the host, was not the pages'). Pinned by
+  `Tests/Queue/QueueWorkerHostTest`.
+- `SettingsRedactor::redact($settings, $replacement)` is the one rule for which settings are secrets
+  (a password, secret, token, key, credential, signature, salt, DSN, JWT, HMAC, authorization, bearer, OAuth,
+  IndieAuth, cookie, `private` or service user name, at any depth; an OAuth `client_id` is public, and a number under a
+  key that names a duration (`form_token_expiry`) is no secret; a value that starts `sk_live_`, `sk_test_`,
+  `rk_live_` or `rk_test_` is removed whatever its key). It is a DENYLIST of key names: a secret under another name is
+  not found, so an archive's `config.json` is to be reviewed before it is shared; a string that is an address with a user name or
+  password has them removed wherever it is; a key that names a `webhook` keeps its entries with each address
+  reduced to scheme and host (the path is the secret). The diagnostics page (marker `** REDACTED **`, on a
+  copy, for the configuration, `$_SESSION` and `$_SERVER`) and the archive's `config.json` (keys removed) use it.
+- An import reads its upload from a file in a private directory this install makes
+  (`<temporary>/idno-import-<32 hex>`, mode 0700, removed when the import ends).
+- A command-line process (the queue worker, a console plugin) registers the project directory as a Bonita template
+  path like a web request: `LegacyBootstrap::boot()` did it only outside a console, so every core template drew
+  as an empty string in the worker and the export and import result mails had empty bodies. Pinned by
+  `Tests/Kernel/ConsoleTemplatesTest` and `Tests/Acceptance/PhaseWalkthroughTest`. What the worker sends to other
+  servers (ActivityPub activities, webmentions) is built by the request that queued it, not drawn in the worker
+  (`QueuedDeliveryTest::testTheContentTheWorkerDeliversIsTheFormattedBodyOfThePost`).
+- `Entity::getBySlug()` finds the stored (percent-encoded) slug of a path segment the web server decoded, and the
+  `:slug` route token matches any segment without a slash or a dot: an article titled `Café notes` is served at
+  `/2024/caf%C3%A9-notes` (`SlugRoutingTest`).
+- `WordPressImporter` appends a category as a hashtag only when the body does not already show that tag (a
+  re-import of an export of this site does not repeat them).
+- The deprecated `Migration::archiveExportFolder()` makes its zip in a directory of its own in the temporary
+  directory (`idno-archive-<32 hex>`, mode 0700) and returns the path inside it; the caller removes both.
+- The console never creates a Site record: under `IDNO_CONSOLE`, `Idno::site_details()` uses the `Site` record
+  whose domain is the host of the boot `url` (the worker's host), else the only `Site` record there is, else none
+  (never more than one is looked at; a console process does not create one; a web request creates it, as
+  before). Creating one in the worker made a second site per queue run. Pinned by `Tests/Queue/QueueWorkerHostTest`.
 
 #### The settings store
 
@@ -3155,9 +3360,10 @@ the CLI installer no longer writes one.
   site served from a loopback or private address (a development or intranet install) can no longer
   discover and subscribe to the hub of a profile or feed on that same address.
   Also moved, to the remote client, because every URL it requests comes from a member's input or from
-  a document a remote server returned: `IdnoPlugins\StandardSiteSync\ATProtoClient` (below). Not
-  moved: the import of an attachment URL from an admin's export (`File::getFileDataFromAttachment()`,
-  admin supplied).
+  a document a remote server returned: `IdnoPlugins\StandardSiteSync\ATProtoClient` (below), and the
+  pictures an import fetches (`Idno\Portability\ImportedMedia`, below). The export's fetch of an
+  attachment the file store does not have goes through the site client only for the site's own origin and the
+  remote client otherwise (`ArchiveExporter`). `File::getFileDataFromAttachment()` is gone (nothing called it).
 - TLS: every HTTPS request `Webservice` makes verifies the certificate and host name, on both
   clients, unless the boot configuration's `disable_ssl_verify` is set (see "Webservice" above). Do not
   turn verification off anywhere else.
@@ -3165,7 +3371,12 @@ the CLI installer no longer writes one.
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
   files (e.g. Photo thumbnails) override `getAttachedFileIDs()`. Custom filesystems
-  must implement `updateMetadata()` for this to apply.
+  must implement `updateMetadata()` for this to apply. A file whose metadata has the key `restricted` (whatever
+  it holds, even something that reads as no; the export archive and an import's upload carry `admin`) is served to administrators only:
+  `Pages\File\View` answers anyone else 403 before it reads anything, fails closed for any value, and sends
+  `Cache-Control: private, no-store` (see "Import and export"). A file is also administrators-only when its id is
+  the recorded export archive (`export_file_id`), marked or not (an archive an earlier release stored has no mark);
+  HEAD and Range requests are refused the same way, before any header that describes the file.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to

@@ -16,6 +16,7 @@ namespace Tests\API {
             if ($cache = \Idno\Core\Idno::site()->cache()) {
                  $cache->delete(parse_url('http://localhost', PHP_URL_HOST));
                  $cache->delete(parse_url('http://example.com', PHP_URL_HOST));
+                 $cache->delete('127.0.0.1'); // the rig's own address must never stay pinned to https
             }
 
         }
@@ -120,6 +121,7 @@ namespace Tests\API {
             if ($cache = \Idno\Core\Idno::site()->cache()) {
                  $cache->delete(parse_url('http://localhost', PHP_URL_HOST));
                  $cache->delete(parse_url('http://example.com', PHP_URL_HOST));
+                 $cache->delete('127.0.0.1');
             }
         }
 

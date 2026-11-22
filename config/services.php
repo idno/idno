@@ -74,6 +74,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // MailTransportDsn is a pure function of the settings, InvalidMailSetting an exception; MailerFactory and
         // the transport factory are wired below.
         'Mail' => ['CramMd5Authenticator.php', 'InvalidMailSetting.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
+        // Import and export. SafeXml and SettingsRedactor are static helpers, ImportedPost, ImportedComment and
+        // ImportResult are value objects, ImportedImages is a helper the importers call; the interfaces are
+        // implemented by Idno\Legacy adapters (aliased below); ImportedMedia takes a closure that fetches the
+        // remote client, so it is wired by hand below.
+        'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -231,6 +236,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Storage\Platform\Dialect::class)
         ->factory([service(\Idno\Storage\DialectFactory::class), 'create']);
     $services->set(\Idno\Storage\IndexedFields::class)->public();
+    // A collection's table as SQL, for the export archive (Idno\Portability\ArchiveExporter).
+    $services->set(\Idno\Storage\CollectionDump::class)->public();
 
     // The file store: uploads on a Flysystem filesystem (a local directory, or S3 for an `s3://`
     // upload path), in the layout every site has used. Both are built at runtime, when first fetched,
@@ -385,6 +392,37 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autowire(false)
         ->autoconfigure(false)
         ->public();
+
+    // Import and export (Idno\Portability). The services depend on five small interfaces, implemented over the
+    // legacy configuration, entities, mailer and stored settings by adapters in Idno\Legacy; they need the
+    // legacy application, so they are built only when a page, a job or the queue's worker asks. All of them
+    // are public because the legacy pages and Idno\Core\Migration fetch them with Idno::container()->get().
+    // ImportedMedia is given a closure that fetches the remote client at each fetch (it is not shared).
+    // The adapters are set explicitly (not only found by the scan), like the queue's, so the definitions exist
+    // whatever the scan finds.
+    foreach ([\Idno\Legacy\LegacySiteFacts::class, \Idno\Legacy\LegacyFeedShell::class, \Idno\Legacy\LegacyExportState::class, \Idno\Legacy\LegacyResultNotifier::class, \Idno\Legacy\LegacyPostWriter::class] as $adapter) {
+        $services->set($adapter);
+    }
+    $services->alias(\Idno\Portability\SiteFacts::class, \Idno\Legacy\LegacySiteFacts::class)->public();
+    $services->alias(\Idno\Portability\FeedShell::class, \Idno\Legacy\LegacyFeedShell::class);
+    $services->alias(\Idno\Portability\ExportState::class, \Idno\Legacy\LegacyExportState::class);
+    $services->alias(\Idno\Portability\ResultNotifier::class, \Idno\Legacy\LegacyResultNotifier::class);
+    $services->alias(\Idno\Portability\PostWriter::class, \Idno\Legacy\LegacyPostWriter::class);
+    $services->set(\Idno\Portability\ArchiveExporter::class)
+        ->arg('$remoteClient', service_closure('idno.http_client.remote'))
+        ->public();
+    $services->set(\Idno\Portability\ImportedMedia::class)
+        ->arg('$remoteClient', service_closure('idno.http_client.remote'))
+        ->public();
+    foreach ([
+        \Idno\Portability\ImportMode::class,
+        \Idno\Portability\FeedExporter::class,
+        \Idno\Portability\WordPressImporter::class,
+        \Idno\Portability\BloggerImporter::class,
+        \Idno\Portability\PortabilityJobs::class,
+    ] as $portability) {
+        $services->set($portability)->public();
+    }
 
     $services->set(LegacySiteSettings::class)
         ->args([service(\Idno\Core\Config::class), service(BootConfig::class)]);

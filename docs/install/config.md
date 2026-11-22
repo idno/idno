@@ -83,7 +83,7 @@ it will be impossible to send password recovery emails: `from_email` is the addr
     certificate is never involved. Your SMTP password is then sent without protection: use `tls` or `ssl`
     unless the server is on the same machine or a trusted network.
 
-The next mail sent uses the settings as you last saved them. The admin page that sends a test mail says when it
+The next mail a web request sends uses the settings as you last saved them; the queue worker (which sends the export and import result mails) reads them when it starts, so restart it after changing them. The admin page that sends a test mail says when it
 could not, and names a setting that cannot be used (never its value). Idno writes a line to the log when mail
 cannot be sent; it names the kind of error only, never the server or the password.
 

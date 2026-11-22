@@ -196,6 +196,17 @@ namespace Idno\Core {
             if (!empty($this->ini_config)) {
                 $this->config = array_replace_recursive($this->config, $this->ini_config);
             }
+
+            // A console process (the queue's worker) has no request to take the host from: init() found none.
+            // The site's address is the boot configuration's `url`, and the host is its host: the same the web
+            // server's requests have, so that the worker's file directory (which is named after the host) is
+            // the one the pages store files in. A web request is left as it was: its host is the request's.
+            if (defined('IDNO_CONSOLE') && empty($this->config['host']) && !empty($this->config['url'])) {
+                $host = parse_url((string)$this->config['url'], PHP_URL_HOST);
+                if (is_string($host) && $host !== '') {
+                    $this->config['host'] = $host;
+                }
+            }
         }
 
         /**

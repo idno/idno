@@ -136,6 +136,35 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         $this->assertSame($byName['activitypub/deliver'][0]['data']['activity'], $activity, 'the activity sent is the one stored when the post was published');
     }
 
+    public function testTheContentTheWorkerDeliversIsTheFormattedBodyOfThePost(): void
+    {
+        // The activity is built by the publishing request and only signed and sent by the worker; nothing the
+        // worker sends to another server is drawn from a template in the worker (the mails it sends are: ConsoleTemplatesTest).
+        // This pins that the delivered content is the formatted body, not empty, whatever the worker's templates.
+        $cookie = $this->registerUser('alice');
+        $sink = $this->newSink('inbox');
+        $this->addFollower('alice', $this->baseUrl() . '_test/sink/' . $sink);
+
+        $this->publishStatus($cookie, 'Hello #fediverse see https://example.com/page');
+        $queued = null;
+        foreach ($this->queuedEvents() as $event) {
+            if ($event['event'] === 'activitypub/deliver') {
+                $queued = $event['data']['activity'];
+            }
+        }
+        $this->assertIsArray($queued);
+        $this->assertSame(0, $this->runWorkerOnce()['exit']);
+
+        $requests = $this->sink($sink);
+        $this->assertCount(1, $requests);
+        $delivered = json_decode((string) base64_decode($requests[0]['body'], true), true);
+        $content = (string) ($delivered['object']['content'] ?? '');
+        $this->assertSame($queued['object']['content'], $content, 'what the request built is what the worker sent');
+        $this->assertStringContainsString('fediverse', $content);
+        $this->assertStringContainsString('example.com/page', $content);
+        $this->assertStringContainsString('<a ', $content, 'the address and the tag are links');
+    }
+
     public function testAWebmentionIsSentByTheWorkerNotByThePublishRequest(): void
     {
         $cookie = $this->registerUser('alice');

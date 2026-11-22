@@ -28,7 +28,7 @@
                            data-on="<?php echo \Idno\Core\Idno::site()->language()->_('Yes'); ?>"
                            data-off="<?php echo \Idno\Core\Idno::site()->language()->_('No'); ?>"
                            name="allposts" id="allposts"
-                           value="0">
+                           value="1">
                 </div>
                 <div class="col-md-7">
                     <p class="config-desc"><?php echo \Idno\Core\Idno::site()->language()->_('Platforms like WordPress may assume that all your posts should be displayed publicly. In order to protect your privacy, you may wish to just download your public posts.'); ?></p>
@@ -61,7 +61,7 @@
                            data-on="<?php echo \Idno\Core\Idno::site()->language()->_('Yes'); ?>"
                            data-off="<?php echo \Idno\Core\Idno::site()->language()->_('No'); ?>"
                            name="allposts" id="allposts_wxr"
-                           value="0">
+                           value="1">
                 </div>
                 <div class="col-md-7">
                     <p class="config-desc"><?php echo \Idno\Core\Idno::site()->language()->_('Platforms like WordPress may assume that all your posts should be displayed publicly. In order to protect your privacy, you may wish to just download your public posts.'); ?></p>

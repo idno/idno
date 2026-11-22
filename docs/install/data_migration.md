@@ -20,6 +20,23 @@ Getting hold of all the files you've uploaded is a case of raising a support tic
 
 As it turns out, the "Monthly Backup" contained the database backup I needed, and the file zip contained all my images - at the original quality they were uploaded - so I needed both things to complete the migration.
 
+## The export and import pages
+
+An administrator finds these under Site Configuration, "Export" and "Import".
+
+### Export
+
+* **RSS file** and **WordPress (WXR) file**: your posts as a feed that other sites read. "Include private posts?" is off by default. Off, the file holds public, published posts only, **also for an administrator**. On, an administrator's file holds every member's private posts and drafts as well, and each private post or draft is marked `private` or `draft` in the file, so a site that imports it does not publish it. A member's own export (Account, "Export your data") holds that member's posts only.
+* **Full archive** (needs the PHP `zip` extension: without it the page says so instead of offering the button): a complete, restorable copy of the site as one zip file: every entity as JSON and as HTML, every attached file, the settings (`config.json`, with passwords, keys and secrets left out *by the name of the setting*: it is a list of names that look like secrets, so a secret kept under another name would be in it, and you should read `config.json` before you share the archive; never the configuration file), and `exported_data.sql`, the stored records exactly as they are. **It contains every account's password hash and every user's private key for signing their posts to the fediverse (whoever has the archive can sign as any user), and every private post: keep it as carefully as a backup of your database.** Only administrators can download it, and it is removed when you make a new one and when it is a week old (checked when the export page is loaded). One archive is made at a time; you are emailed when it is ready, and the export page then links to it. It is made by the queue's worker when the site's queue is asynchronous, and right after the page answers otherwise.
+
+### Import
+
+* **WordPress**: a WordPress export file (an RSS file exported from another Idno site works too). Each post becomes an article, or a note when it has no title and is short. A private post (or one with a password) is imported private to you, and a draft, a pending or a scheduled post as a draft: an import never publishes what was not published. Pages, attachments and posts in the trash are skipped. Approved comments become replies (not spam, pending comments, pingbacks or trackbacks). Pictures on wordpress.com are copied to your site.
+* **Blogger**: a Blogger export file. Posts become articles, drafts stay drafts, **pages become articles too** (Idno has no pages), and comments become replies. Pictures on blogspot.com are copied; most Blogger pictures are on blogger.googleusercontent.com, and stay where they are.
+* Nothing you import is announced: it is not sent to your followers, syndicated, sent as a webmention or pinged to a hub.
+* The file can be up to 32 MB: export a shorter period from the other site and import the files one after another. Importing the same file twice makes every post twice. An item the import cannot save is skipped and the rest goes on; the mail says how many posts were imported. If an import stops part-way, the posts already imported stay: check your posts before you upload the file again, and Idno will not run an upload it had already started (a requeued or duplicated job for the same upload; uploading the same file again is a new upload and imports its posts again). An import that meets 25 errors in a row (items that could not be saved one after another) stops, counts as failed, and its mail says so and how many posts it had imported: look in the site's log.
+* You are emailed when the import is done, or when it failed (a file that is empty, is not XML or holds no post).
+
 ## Where do I begin?
 
 Make sure you take a copy of your profile picture, background picture, any custom CSS or custom Javascript you might have on your old site before you start cutting over to the new domain, because you obviously won't be able to navigate back to your old site once you do the DNS switch. You should copy down the name of your site, site description and other configuration values too, because these get lost.

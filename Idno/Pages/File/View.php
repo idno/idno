@@ -127,8 +127,25 @@ namespace Idno\Pages\File {
                 $this->noContent();
             }
 
+            // A file that carries `restricted` metadata (an export archive, an upload waiting for its import)
+            // is for administrators only, whoever has its address. It fails closed: the key being there
+            // restricts, whatever it holds, and without an administrator's session the answer is 403, before
+            // anything of the file is read or sent.
+            $adminOnly = is_array($object->file) && array_key_exists('restricted', $object->file);
+            // An archive made by an earlier release has no mark: the one the settings record is an archive, and
+            // restricted all the same (the setting is the request's own, loaded from the database, not an entity).
+            if (!$adminOnly) {
+                $recorded = \Idno\Core\Idno::site()->config()->config['export_file_id'] ?? null;
+                $adminOnly = is_string($recorded) && $recorded !== '' && strcasecmp($recorded, (string)($object->file['_id'] ?? '')) === 0;
+            }
+            if ($adminOnly && !\Idno\Core\Idno::site()->session()->isAdmin()) {
+                $this->setResponse(403);
+                echo '';
+                return;
+            }
+
             // Enforce access control: if file is attached to an entity, check canRead()
-            $restricted = false;
+            $restricted = $adminOnly;
             if (!empty($object->file['attached_entity'])) {
                 // Load the entity whether or not the current user can see it: a lookup that
                 // respects access would not find it, and the check below would be skipped
@@ -143,7 +160,7 @@ namespace Idno\Pages\File {
                         return;
                     }
                     $publishStatus = $parentEntity->getPublishStatus();
-                    $restricted = ($parentEntity->access !== 'PUBLIC') || (!empty($publishStatus) && $publishStatus != 'published');
+                    $restricted = $adminOnly || ($parentEntity->access !== 'PUBLIC') || (!empty($publishStatus) && $publishStatus != 'published');
                 }
             }
 
@@ -158,9 +175,15 @@ namespace Idno\Pages\File {
                 $upload_ts = time();
             }
 
-            $this->lastModifiedGatekeeper($upload_ts); // 304 if we've not updated the object
+            if (!$adminOnly) {
+                $this->lastModifiedGatekeeper($upload_ts); // 304 if we've not updated the object
+            }
 
-            if ($restricted) {
+            if ($adminOnly) {
+                // A whole-site archive: nothing, in a shared cache or a browser's, may keep a copy
+                header("Cache-Control: private, no-store");
+                header("Pragma: no-cache");
+            } else if ($restricted) {
                 // Never let shared caches keep a copy of a file with restricted access
                 header("Cache-Control: private, no-cache");
             } else {

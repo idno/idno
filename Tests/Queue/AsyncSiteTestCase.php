@@ -41,6 +41,12 @@ abstract class AsyncSiteTestCase extends TestCase
 
     private string $directory = '';
 
+    /** The site's own upload directory (under $directory): the rig's shared one is never written to. */
+    private string $uploadPath = '';
+
+    /** @var list<string> the files in the rig's own upload directory when the test began */
+    private array $rigUploadsBefore = [];
+
     private string $url = '';
 
     private string $dbname = '';
@@ -60,6 +66,9 @@ abstract class AsyncSiteTestCase extends TestCase
         parent::setUp();
         $this->directory = sys_get_temp_dir() . '/idno-queue-' . bin2hex(random_bytes(6));
         mkdir($this->directory, 0700);
+        $this->uploadPath = $this->directory . '/uploads';
+        mkdir($this->uploadPath, 0700);
+        $this->rigUploadsBefore = self::filesUnder((string) Idno::site()->config()->uploadpath);
 
         $family = ConnectionParameters::driverFamily(Idno::container()->get(BootConfig::class)->all());
         $dbname = '';
@@ -105,15 +114,13 @@ abstract class AsyncSiteTestCase extends TestCase
                 $this->connection = null;
             }
             if ($this->directory !== '' && is_dir($this->directory)) {
-                foreach (glob($this->directory . '/{,.}*', GLOB_BRACE) ?: [] as $file) {
-                    if (is_file($file)) {
-                        unlink($file);
-                    }
-                }
-                rmdir($this->directory);
+                self::removeTree($this->directory);
             }
             $this->directory = '';
+            $this->uploadPath = '';
+            $leaked = array_values(array_diff(self::filesUnder((string) Idno::site()->config()->uploadpath), $this->rigUploadsBefore));
             parent::tearDown();
+            $this->assertSame([], $leaked, 'the site of the test wrote into the rig\'s shared upload directory');
         }
     }
 
@@ -449,6 +456,9 @@ abstract class AsyncSiteTestCase extends TestCase
             'IDNO_DBNAME' => $this->dbname,
             'IDNO_URL' => $this->configuredScheme() . substr($this->url, strlen('http')),
             'IDNO_EVENT_QUEUE' => 'AsynchronousQueue',
+            // The site's files go to a directory of the test's own (removed in tearDown): an archive or an upload made
+            // by a test, with its test password hashes, never stays in the rig's shared upload directory.
+            'IDNO_UPLOADPATH' => $this->uploadPath,
             'IDNO_TEST_HTTP_ALLOW' => $origin,
             'PATH' => (string) getenv('PATH'),
         ];
@@ -618,5 +628,39 @@ abstract class AsyncSiteTestCase extends TestCase
         self::assertNotSame(8089, $port);
 
         return $port;
+    }
+
+    /**
+     * @return list<string> the files below a directory (none when it is not there), sorted
+     */
+    private static function filesUnder(string $directory): array
+    {
+        if ($directory === '' || !is_dir($directory)) {
+            return [];
+        }
+        $files = [];
+        foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+            if ($file->isFile()) {
+                $files[] = $file->getPathname();
+            }
+        }
+        sort($files);
+
+        return $files;
+    }
+
+    private static function removeTree(string $path): void
+    {
+        if (is_link($path) || is_file($path)) {
+            @unlink($path);
+
+            return;
+        }
+        foreach (scandir($path) ?: [] as $name) {
+            if ($name !== '.' && $name !== '..') {
+                self::removeTree($path . '/' . $name);
+            }
+        }
+        @rmdir($path);
     }
 }

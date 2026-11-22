@@ -278,7 +278,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $this->assertSame('A subject', RecordingMailTransport::drain()[0]['subject']);
     }
 
-    public function testAChangedSmtpSettingAppliesToTheNextMailInTheSameProcess(): void
+    public function testAChangedSettingInThisProcessConfigurationAppliesToTheNextMailOfThisProcess(): void
     {
         $this->simple()->send();
         $first = RecordingMailTransport::drain()[0]['transport'];

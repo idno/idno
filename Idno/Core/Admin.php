@@ -12,6 +12,26 @@ namespace Idno\Core {
     class Admin extends \Idno\Common\Component
     {
 
+        /**
+         * The jobs of the archive export and the imports, run by the queue's worker (or after the response, by
+         * the page) as the administrator who asked: see Idno\Portability\PortabilityJobs.
+         */
+        function registerEventHooks()
+        {
+            \Idno\Core\Idno::site()->events()->addListener(
+                \Idno\Portability\PortabilityJobs::EXPORT_EVENT, function (\Idno\Core\Event $event) {
+                    $data = $event->data();
+                    $event->setResponse(Idno::container()->get(\Idno\Portability\PortabilityJobs::class)->runExport((string)($data['user'] ?? '')));
+                }
+            );
+            \Idno\Core\Idno::site()->events()->addListener(
+                \Idno\Portability\PortabilityJobs::IMPORT_EVENT, function (\Idno\Core\Event $event) {
+                    $data = $event->data();
+                    $event->setResponse(Idno::container()->get(\Idno\Portability\PortabilityJobs::class)->runImport((string)($data['user'] ?? ''), (string)($data['file'] ?? ''), (string)($data['type'] ?? '')));
+                }
+            );
+        }
+
         function registerPages()
         {
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/?', '\Idno\Pages\Admin\Home');

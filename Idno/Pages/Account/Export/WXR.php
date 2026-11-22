@@ -4,7 +4,7 @@ namespace Idno\Pages\Account\Export {
 
     use Idno\Common\Page;
     use Idno\Core\Idno;
-    use Idno\Core\Migration;
+    use Idno\Portability\FeedExporter;
 
     class WXR extends Page
     {
@@ -21,9 +21,9 @@ namespace Idno\Pages\Account\Export {
                 $hide_private = false;
             }
 
-            $f = Migration::getExportRSS(
+            $f = Idno::container()->get(FeedExporter::class)->stream(
                 $hide_private,
-                Idno::site()->session()->currentUserUUID(),
+                (string)Idno::site()->session()->currentUserUUID(),
                 true // wxr_mode
             );
 
@@ -34,9 +34,8 @@ namespace Idno\Pages\Account\Export {
                 header('Content-disposition: attachment; filename=user_export.xml');
                 header('Content-Length: ' . $stats['size']);
 
-                while ($content = fgets($f)) {
-                    echo $content;
-                }
+                \Idno\Pages\File\View::endOutputBuffers(); // so that the document is sent as it is read, not held
+                fpassthru($f);
 
                 fclose($f);
             } else {

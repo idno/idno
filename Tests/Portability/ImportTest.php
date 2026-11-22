@@ -7,23 +7,26 @@ namespace Tests\Portability;
 use Idno\Common\Entity;
 use Idno\Core\Idno;
 use Idno\Core\Migration;
-use Idno\Core\Webservice;
+use Idno\Legacy\LegacyPostWriter;
+use Idno\Legacy\LegacySiteFacts;
+use Idno\Portability\BloggerImporter;
+use Idno\Portability\ImportedMedia;
+use Idno\Portability\ImportResult;
+use Idno\Portability\ImportMode;
+use Idno\Portability\WordPressImporter;
+use Idno\Storage\Files\FileStore;
 use IdnoPlugins\Status\Status;
 use IdnoPlugins\Text\Entry;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 /**
- * The three importers, Migration::importWordPressXML(), importBloggerXML() and importFeedXML() (which
- * the Blogger one is), run in this process as the administrator, on the two hand-written exports in
- * fixtures/ and on small documents of their own.
- *
- * The importers fetch the images of a post with fopen(), outside the site's HTTP client, so no test may
- * let them: RecordingStreamWrapper takes the place of PHP's http, https, ftp and ftps wrappers for the
- * length of each test, records every URL opened and serves a one-pixel PNG.
- *
- * Tests named "testToday..." pin what the code does now where that is a defect (the next change must flip
- * them); each is followed by the test of the wanted behaviour, marked incomplete until it passes.
+ * The importers, WordPressImporter and BloggerImporter (the feed importer, which also reads the RSS Idno
+ * exports), run in this process as the administrator, on the two hand-written exports in fixtures/ and on
+ * small documents of their own. The pictures of a post are fetched through a mock remote client that
+ * records its requests and serves a one-pixel PNG, so no test reaches a host. Migration's static methods
+ * are checked for the one thing they still are: delegates.
  */
 final class ImportTest extends PortabilityTestCase
 {
@@ -31,7 +34,11 @@ final class ImportTest extends PortabilityTestCase
 
     private const LOW_TIDE = 'Low tide, high hopes';
 
+    private const WORDPRESS_DRAFT = 'Draft: what lives under the jetty';
+
     private const HERONS = 'Három gém & a mist over the Dráva 🦩';
+
+    private const WEIR = 'The heron on the weir';
 
     private const DRAFT = 'Notes for the autumn count (unfinished)';
 
@@ -40,13 +47,15 @@ final class ImportTest extends PortabilityTestCase
 
     private bool $libxmlInternalErrors = false;
 
+    /** @var list<string> the requests of the mock remote client, as "GET <url>" */
+    private array $requests = [];
+
     protected function setUp(): void
     {
         parent::setUp();
-        // The importer turns libxml's internal error handling on and leaves it on: put it back as it was.
         $this->libxmlInternalErrors = libxml_use_internal_errors();
         $this->logOn($this->admin());
-        RecordingStreamWrapper::install();
+        $this->requests = [];
         $this->knownUuids = $this->postUuids();
     }
 
@@ -54,8 +63,6 @@ final class ImportTest extends PortabilityTestCase
     {
         libxml_clear_errors();
         libxml_use_internal_errors($this->libxmlInternalErrors);
-        RecordingStreamWrapper::restore();
-        Webservice::useClient(null);
         // Whatever the test imported goes, with the files its bodies point at.
         foreach ($this->importedPosts() as $post) {
             $this->track($post);
@@ -64,6 +71,72 @@ final class ImportTest extends PortabilityTestCase
             }
         }
         parent::tearDown();
+    }
+
+    // ------------------------------------------------------------------ building and running an importer
+
+    private function client(): HttpClientInterface
+    {
+        return new MockHttpClient(function (string $method, string $url): MockResponse {
+            $this->requests[] = $method . ' ' . $url;
+
+            return new MockResponse((string) base64_decode(self::PNG_BASE64, true), ['response_headers' => ['content-type' => 'image/png']]);
+        });
+    }
+
+    private function media(?HttpClientInterface $client = null): ImportedMedia
+    {
+        $client ??= $this->client();
+        $facts = new LegacySiteFacts(Idno::site()->config());
+
+        return new ImportedMedia(static fn (): HttpClientInterface => $client, Idno::container()->get(FileStore::class), $facts, Idno::site()->logging());
+    }
+
+    /**
+     * An importer built as the container builds it, but with the mock remote client; it shares the
+     * container's ImportMode, which is what the places that would announce a post ask.
+     *
+     * @param class-string<WordPressImporter|BloggerImporter> $class
+     */
+    private function importer(string $class, ?HttpClientInterface $client = null, ?\Idno\Portability\PostWriter $writer = null, ?\Psr\Log\LoggerInterface $logger = null): WordPressImporter|BloggerImporter
+    {
+        $logger ??= Idno::site()->logging();
+
+        return new $class(
+            $this->media($client),
+            $writer ?? new LegacyPostWriter(Idno::site()->plugins(), $logger),
+            Idno::container()->get(ImportMode::class),
+            new LegacySiteFacts(Idno::site()->config()),
+            $logger
+        );
+    }
+
+    /**
+     * @return array{posts: int, comments: int, media: int, skipped: int}
+     */
+    private function wordpress(string $xml, ?HttpClientInterface $client = null): array
+    {
+        return $this->runImporter($this->importer(WordPressImporter::class, $client), $xml);
+    }
+
+    /**
+     * @return array{posts: int, comments: int, media: int, skipped: int}
+     */
+    private function blogger(string $xml, ?HttpClientInterface $client = null): array
+    {
+        return $this->runImporter($this->importer(BloggerImporter::class, $client), $xml);
+    }
+
+    /**
+     * @return array{posts: int, comments: int, media: int, skipped: int}
+     */
+    private function runImporter(WordPressImporter|BloggerImporter $importer, string $xml): array
+    {
+        $path = (string) tempnam(sys_get_temp_dir(), 'idno-portability-');
+        $this->removeAfterwards($path);
+        file_put_contents($path, $xml);
+
+        return $importer->import($path, $this->admin()->getUUID());
     }
 
     private static function fixture(string $name): string
@@ -132,20 +205,72 @@ final class ImportTest extends PortabilityTestCase
 
     // ------------------------------------------------------------------ WordPress
 
-    public function testTheWordPressFixtureCreatesItsTwoPublishedPostsAndNothingElse(): void
+    public function testTheWordPressFixtureCreatesItsPostsAndNothingElse(): void
     {
-        $this->assertTrue(Migration::importWordPressXML(self::fixture('wordpress-export.xml')));
+        $counts = $this->wordpress(self::fixture('wordpress-export.xml'));
 
-        // The draft, the page and the attachment of the export are not imported.
-        $this->assertSame([self::LOW_TIDE, self::TIDE_POOL], $this->titlesImported());
+        // The two published posts and the draft; the page and the attachment of the export are not imported.
+        $this->assertSame(['posts' => 3, 'comments' => 1, 'media' => 1, 'skipped' => 2], $counts);
+        $this->assertSame([self::WORDPRESS_DRAFT, self::LOW_TIDE, self::TIDE_POOL], $this->titlesImported());
         foreach ($this->importedPosts() as $post) {
             $this->assertInstanceOf(Entry::class, $post, 'a titled post is an article');
         }
     }
 
+    public function testAWordPressDraftIsImportedAsADraftAndNeverPublished(): void
+    {
+        $this->wordpress(self::fixture('wordpress-export.xml'));
+        $draft = $this->articleTitled(self::WORDPRESS_DRAFT);
+
+        $this->assertSame('draft', $draft->getPublishStatus());
+        $this->assertTrue($draft->isHiddenByPublishStatus($this->user()->getUUID()), 'nobody but its owner (and the administrators) can read it');
+        $this->assertStringContainsString('Half a thought about barnacles', $draft->body);
+        $this->assertSame($this->admin()->getUUID(), $draft->getOwnerID());
+    }
+
+    /**
+     * @return array<string, array{string, string, bool, bool}> the status in the file, and whether the post is a draft, whether it is private
+     */
+    public static function statuses(): array
+    {
+        return [
+            'publish' => ['publish', '', false, false],
+            'private' => ['private', '', false, true],
+            'draft' => ['draft', '', true, false],
+            'pending' => ['pending', '', true, false],
+            'future' => ['future', '', true, false],
+            'auto-draft' => ['auto-draft', '', true, false],
+            'a published post with a password' => ['publish', '<wp:post_password>letmein</wp:post_password>', false, true],
+        ];
+    }
+
+    /**
+     * @dataProvider statuses
+     */
+    public function testAWordPressPostIsNeverMorePublicThanItWasAtItsSource(string $status, string $extra, bool $draft, bool $private): void
+    {
+        $xml = $this->wxr('<item><title>Status ' . $status . '</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>' . $status . '</wp:status><wp:post_type>post</wp:post_type>' . $extra . '<content:encoded><![CDATA[<p>Body.</p>]]></content:encoded></item>');
+
+        $this->assertSame(1, $this->wordpress($xml)['posts']);
+        $post = $this->articleTitled('Status ' . $status);
+
+        $this->assertSame($draft ? 'draft' : 'published', $post->getPublishStatus());
+        $this->assertSame($private ? $this->admin()->getUUID() : 'PUBLIC', $post->access, $private ? 'private to the importing user' : 'public');
+    }
+
+    public function testAWordPressItemInTheTrashOrOfAnotherTypeIsSkipped(): void
+    {
+        $item = static fn (string $title, string $status, string $type): string => '<item><title>' . $title . '</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>' . $status . '</wp:status>' . ($type === '' ? '' : '<wp:post_type>' . $type . '</wp:post_type>') . '<content:encoded><![CDATA[<p>Body.</p>]]></content:encoded></item>';
+
+        $counts = $this->wordpress($this->wxr($item('In the trash', 'trash', 'post') . $item('A page', 'publish', 'page') . $item('A menu entry', 'publish', 'nav_menu_item') . $item('No type at all', 'publish', '') . $item('Kept', 'publish', 'post')));
+
+        $this->assertSame(['posts' => 1, 'comments' => 0, 'media' => 0, 'skipped' => 4], $counts);
+        $this->assertSame(['Kept'], $this->titlesImported());
+    }
+
     public function testAWordPressPostKeepsItsBodyDateAndTagsAndBelongsToTheImportingUser(): void
     {
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+        $this->wordpress(self::fixture('wordpress-export.xml'));
         $post = $this->articleTitled(self::TIDE_POOL);
 
         $this->assertSame(1707553800, (int) $post->created, 'wp:post_date, read in the site\'s time zone (UTC here)');
@@ -165,9 +290,234 @@ final class ImportTest extends PortabilityTestCase
         $this->assertSame($this->admin()->getUUID(), $post->getOwnerID(), 'the author named in the export (dc:creator) is not read: the importing user owns the post');
     }
 
+    /**
+     * A post writer that fails for the item whose turn it is (the second), as a database error would.
+     */
+    private function writerFailingOnThe(int $nth, string $failure = 'writer'): \Idno\Portability\PostWriter
+    {
+        $inner = new LegacyPostWriter(Idno::site()->plugins(), Idno::site()->logging());
+
+        return new class($inner, $nth, $failure) implements \Idno\Portability\PostWriter {
+            private int $writes = 0;
+
+            public function __construct(private readonly LegacyPostWriter $inner, private readonly int $nth, private readonly string $failure)
+            {
+            }
+
+            public function available(): bool
+            {
+                return $this->inner->available();
+            }
+
+            public function write(\Idno\Portability\ImportedPost $post, string $ownerUuid): ?string
+            {
+                if (++$this->writes === $this->nth && $this->failure === 'writer') {
+                    throw new \RuntimeException('the database went away: secret detail');
+                }
+
+                return $this->inner->write($post, $ownerUuid);
+            }
+
+            public function addComments(string $postUuid, array $comments): int
+            {
+                if ($this->failure === 'comments') {
+                    throw new \RuntimeException('comments failed');
+                }
+
+                return $this->inner->addComments($postUuid, $comments);
+            }
+        };
+    }
+
+    private function recordingLogger(): \Psr\Log\AbstractLogger
+    {
+        return new class() extends \Psr\Log\AbstractLogger {
+            /** @var list<string> */
+            public array $lines = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->lines[] = $level . ': ' . $message;
+            }
+        };
+    }
+
+    public function testAnItemThatFailsIsSkippedAndLoggedAndTheImportGoesOn(): void
+    {
+        $long = str_repeat('Long title ', 12) . "\nwith a line break";
+        $item = static fn (string $title): string => '<item><title>' . htmlspecialchars($title) . '</title><wp:post_date>2024-02-10 08:30:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body of ' . 'x' . '.</p>]]></content:encoded></item>';
+        $xml = '<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>T</title>'
+            . $item('First kept') . $item($long) . $item('Third kept') . '</channel></rss>';
+        $logger = $this->recordingLogger();
+
+        $counts = $this->runImporter($this->importer(WordPressImporter::class, null, $this->writerFailingOnThe(2), $logger), $xml);
+
+        $this->assertSame(['posts' => 2, 'comments' => 0, 'media' => 0, 'skipped' => 1], $counts);
+        $this->assertSame(['First kept', 'Third kept'], array_values(array_filter($this->titlesImported(), static fn (string $t): bool => str_ends_with($t, 'kept'))));
+        $line = implode("\n", $logger->lines);
+        $this->assertStringContainsString('RuntimeException', $line, 'the exception\'s class');
+        $this->assertStringContainsString(substr(str_replace("\n", ' ', $long), 0, 80), $line, 'the title cut to 80 characters');
+        $this->assertStringNotContainsString(substr(str_replace("\n", ' ', $long), 0, 90), $line);
+        $this->assertStringNotContainsString('secret detail', $line, 'never the exception\'s message');
+        $this->assertSame(1, preg_match_all('/\n/', $line) + 1, 'one line, no line break from the title');
+    }
+
+    /**
+     * A WordPress file of $count published posts.
+     */
+    private function wordpressFileOf(int $count): string
+    {
+        $items = '';
+        for ($i = 1; $i <= $count; $i++) {
+            $items .= '<item><title>Item ' . $i . '</title><wp:post_date>2024-02-10 08:30:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body ' . $i . '.</p>]]></content:encoded></item>';
+        }
+
+        return '<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>T</title>' . $items . '</channel></rss>';
+    }
+
+    /**
+     * A post writer that fails for the writes the callback says, and counts every call.
+     *
+     * @param \Closure(int): bool $fails given the number of the write (from 1)
+     */
+    private function countingWriter(\Closure $fails, int &$calls): \Idno\Portability\PostWriter
+    {
+        $inner = new LegacyPostWriter(Idno::site()->plugins(), Idno::site()->logging());
+
+        return new class($inner, $fails, $calls) implements \Idno\Portability\PostWriter {
+            public function __construct(private readonly LegacyPostWriter $inner, private readonly \Closure $fails, private int &$calls)
+            {
+            }
+
+            public function available(): bool
+            {
+                return $this->inner->available();
+            }
+
+            public function write(\Idno\Portability\ImportedPost $post, string $ownerUuid): ?string
+            {
+                if (($this->fails)(++$this->calls)) {
+                    throw new \RuntimeException('the database is gone');
+                }
+
+                return $this->inner->write($post, $ownerUuid);
+            }
+
+            public function addComments(string $postUuid, array $comments): int
+            {
+                return $this->inner->addComments($postUuid, $comments);
+            }
+        };
+    }
+
+    public function testAnImportStopsAfterTwentyFiveItemsInARowFail(): void
+    {
+        $calls = 0;
+        $writer = $this->countingWriter(static fn (int $n): bool => $n > 3, $calls);
+
+        $counts = $this->runImporter($this->importer(WordPressImporter::class, null, $writer, $this->recordingLogger()), $this->wordpressFileOf(60));
+
+        $this->assertSame(3 + ImportResult::MAX_CONSECUTIVE_FAILURES, $calls, 'three imported, then 25 failures, and the other 32 items untouched');
+        $this->assertSame(28, $calls);
+        $this->assertSame(['posts' => 3, 'comments' => 0, 'media' => 0, 'skipped' => 25, 'stopped' => true], $counts);
+    }
+
+    public function testASuccessBetweenFailuresResetsTheCount(): void
+    {
+        $calls = 0;
+        // 24 failures, one success, 24 failures, one success, ...: never 25 in a row
+        $writer = $this->countingWriter(static fn (int $n): bool => $n % 25 !== 0, $calls);
+
+        $counts = $this->runImporter($this->importer(WordPressImporter::class, null, $writer, $this->recordingLogger()), $this->wordpressFileOf(100));
+
+        $this->assertSame(100, $calls, 'every item was tried');
+        $this->assertArrayNotHasKey('stopped', $counts);
+        $this->assertSame(4, $counts['posts']);
+        $this->assertSame(96, $counts['skipped']);
+    }
+
+    public function testABloggerImportStopsAfterTwentyFiveEntriesInARowFail(): void
+    {
+        $entries = '';
+        for ($i = 1; $i <= 40; $i++) {
+            $entries .= '<entry><id>tag:x,1999:post-' . $i . '</id><published>2023-01-01T00:00:00Z</published><category scheme="http://schemas.google.com/g/2005#kind" term="http://schemas.google.com/blogger/2008/kind#post"/><title>Post ' . $i . '</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>';
+        }
+        $xml = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:thr="http://purl.org/syndication/thread/1.0">' . $entries . '</feed>';
+        $calls = 0;
+        $writer = $this->countingWriter(static fn (int $n): bool => $n > 2, $calls);
+
+        $counts = $this->runImporter($this->importer(BloggerImporter::class, null, $writer, $this->recordingLogger()), $xml);
+
+        $this->assertSame(27, $calls);
+        $this->assertSame(2, $counts['posts']);
+        $this->assertTrue($counts['stopped']);
+    }
+
+    public function testABloggerEntryThatFailsIsSkippedToo(): void
+    {
+        $entry = static fn (string $n): string => '<entry><id>tag:x,1999:post-' . $n . '</id><published>2023-01-01T00:00:00Z</published><category scheme="http://schemas.google.com/g/2005#kind" term="http://schemas.google.com/blogger/2008/kind#post"/><title>Post ' . $n . '</title><content type="html">&lt;p&gt;Body ' . $n . '&lt;/p&gt;</content></entry>';
+        $xml = '<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:thr="http://purl.org/syndication/thread/1.0">' . $entry('1') . $entry('2') . $entry('3') . '</feed>';
+
+        $counts = $this->runImporter($this->importer(BloggerImporter::class, null, $this->writerFailingOnThe(2), $this->recordingLogger()), $xml);
+
+        $this->assertSame(2, $counts['posts']);
+        $this->assertSame(1, $counts['skipped']);
+    }
+
+    public function testAPostWhoseCommentsFailAreCountedAndTheCommentsAreNot(): void
+    {
+        $xml = self::fixture('wordpress-export.xml');
+
+        $counts = $this->runImporter($this->importer(WordPressImporter::class, null, $this->writerFailingOnThe(0, 'comments'), $this->recordingLogger()), $xml);
+
+        $this->assertSame(3, $counts['posts']);
+        $this->assertSame(0, $counts['comments']);
+    }
+
+    public function testAPictureIsFetchedIntoTheJobsPrivateDirectoryAndNotTheSharedTemporaryOne(): void
+    {
+        $temporary = rtrim(Idno::site()->config()->getTempDir(), '/');
+        $private = $temporary . '/idno-import-' . bin2hex(random_bytes(16));
+        mkdir($private, 0700);
+        $this->removeAfterwards($private);
+        $media = $this->media()->forDomain('wordpress.com');
+        $sharedBefore = glob($temporary . '/import_*') ?: [];
+
+        $path = $media->inDirectory($private)->fetch('https://tidepoolnotes.files.wordpress.com/2024/02/anemone.png');
+
+        $this->assertNotNull($path);
+        $this->assertSame(realpath($private), realpath(dirname($path)), 'in the working directory, where a sweep or the job\'s clean-up removes it');
+        $this->assertSame($sharedBefore, glob($temporary . '/import_*') ?: [], 'nothing in the shared temporary directory');
+        @unlink($path);
+
+        $other = $temporary . '/some-other-directory';
+        mkdir($other, 0700);
+        $this->removeAfterwards($other);
+        $elsewhere = $media->inDirectory($other)->fetch('https://tidepoolnotes.files.wordpress.com/2024/02/anemone.png');
+        $this->assertNotNull($elsewhere);
+        $this->assertNotSame(realpath($other), realpath(dirname($elsewhere)), 'a directory that is not one of this install\'s working directories is ignored');
+        @unlink($elsewhere);
+    }
+
+    public function testATagTheBodyAlreadyShowsIsNotAppendedAgain(): void
+    {
+        $xml = '<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wp="http://wordpress.org/export/1.2/"><channel><title>T</title>'
+            . '<item><title>Exported here</title><wp:post_date>2024-02-10 08:30:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type>'
+            . '<content:encoded><![CDATA[<p>Text <a href="https://x.example/tag/TidePools" class="p-category" rel="tag">#TidePools</a> and #heronsnest</p>]]></content:encoded>'
+            . '<category>tidepools</category><category>Tide Pools</category><category>herons</category><category>fieldnotes</category><category>fieldnotes</category><category>tide</category></item></channel></rss>';
+
+        $this->wordpress($xml);
+
+        $post = $this->articleTitled('Exported here');
+        // #tidepools is in the body (another case); #herons is not a whole tag there (#heronsnest); #fieldnotes twice is once;
+        // #tide is only the start of a longer tag in the body, and "Tide Pools" is the tag #tidepools again.
+        $this->assertSame(1, substr_count(strtolower((string) $post->body), '#tidepools'), 'not repeated');
+        $this->assertStringEndsWith('<p>#herons #fieldnotes #tide</p>', $post->body);
+    }
+
     public function testAWordPressPostInTheUncategorizedCategoryGetsNoHashtag(): void
     {
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+        $this->wordpress(self::fixture('wordpress-export.xml'));
         $post = $this->articleTitled(self::LOW_TIDE);
 
         $this->assertSame(1708796700, (int) $post->created);
@@ -177,7 +527,7 @@ final class ImportTest extends PortabilityTestCase
 
     public function testTheWordPressCommentBecomesAReplyAnnotationOfItsPost(): void
     {
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+        $this->wordpress(self::fixture('wordpress-export.xml'));
         $post = $this->articleTitled(self::TIDE_POOL);
 
         $replies = $post->getAnnotations('reply');
@@ -192,12 +542,12 @@ final class ImportTest extends PortabilityTestCase
 
     public function testTheWordPressImageOnAnAllowedHostIsFetchedAndItsAddressReplacedByAFileOfThisSite(): void
     {
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+        $this->wordpress(self::fixture('wordpress-export.xml'));
         $post = $this->articleTitled(self::LOW_TIDE);
 
         $this->assertSame(
-            ['https://tidepoolnotes.files.wordpress.com/2024/02/anemone.png?w=640'],
-            RecordingStreamWrapper::$opened,
+            ['GET https://tidepoolnotes.files.wordpress.com/2024/02/anemone.png?w=640'],
+            $this->requests,
             'one fetch: the image on files.wordpress.com; the one on example.org is not fetched'
         );
         $ids = $this->fileIdsIn((string) $post->body);
@@ -209,14 +559,26 @@ final class ImportTest extends PortabilityTestCase
         $this->assertNotFalse($file);
         $this->assertSame('image/png', $file->file['mime_type']);
         $this->assertSame('anemone.png', $file->file['filename']);
-        $this->assertSame((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true), $file->getBytes());
+        $this->assertSame((string) base64_decode(self::PNG_BASE64, true), $file->getBytes());
+    }
+
+    public function testTheStoredPictureBelongsToItsPostSoTheFileRouteAppliesThePostsAccess(): void
+    {
+        $this->wordpress(self::fixture('wordpress-export.xml'));
+        $post = $this->articleTitled(self::LOW_TIDE);
+        $id = $this->fileIdsIn((string) $post->body)[0];
+
+        $file = \Idno\Entities\File::getByID($id);
+
+        $this->assertSame($post->getUUID(), $file->file['attached_entity'], 'attached_entity names the post');
+        $this->assertSame([$id], $post->getAttachedFileIDs());
     }
 
     public function testAnUntitledShortWordPressPostBecomesAStatusNote(): void
     {
         $xml = $this->wxr('<item><title></title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Just a short note.</p>]]></content:encoded></item>');
 
-        $this->assertTrue(Migration::importWordPressXML($xml));
+        $this->assertSame(1, $this->wordpress($xml)['posts']);
 
         $posts = $this->importedPosts();
         $this->assertCount(1, $posts);
@@ -228,29 +590,71 @@ final class ImportTest extends PortabilityTestCase
     public function testImportingTheSameFileTwiceCreatesEveryPostTwice(): void
     {
         $xml = self::fixture('wordpress-export.xml');
-        $this->assertTrue(Migration::importWordPressXML($xml));
-        $this->assertTrue(Migration::importWordPressXML($xml));
+        $this->assertSame(3, $this->wordpress($xml)['posts']);
+        $this->assertSame(3, $this->wordpress($xml)['posts']);
 
-        $this->assertSame([self::LOW_TIDE, self::LOW_TIDE, self::TIDE_POOL, self::TIDE_POOL], $this->titlesImported(), 'nothing recognises a post that is already here');
+        $this->assertSame([self::WORDPRESS_DRAFT, self::WORDPRESS_DRAFT, self::LOW_TIDE, self::LOW_TIDE, self::TIDE_POOL, self::TIDE_POOL], $this->titlesImported(), 'nothing recognises a post that is already here');
+    }
+
+    private function wxrComment(string $name, string $date, string $extra = '<wp:comment_approved>1</wp:comment_approved>', string $url = ''): string
+    {
+        return '<wp:comment><wp:comment_author>' . $name . '</wp:comment_author><wp:comment_author_url>' . $url . '</wp:comment_author_url><wp:comment_date_gmt>' . $date . '</wp:comment_date_gmt><wp:comment_content>Hello from ' . $name . '</wp:comment_content>' . $extra . '</wp:comment>';
     }
 
     public function testAWordPressFileWithMoreThanOneCommentOnAPostImportsAllOfThem(): void
     {
-        $comment = static fn (string $name, string $date): string => '<wp:comment><wp:comment_author>' . $name . '</wp:comment_author><wp:comment_author_url></wp:comment_author_url><wp:comment_date_gmt>' . $date . '</wp:comment_date_gmt><wp:comment_content>Hello from ' . $name . '</wp:comment_content></wp:comment>';
-        $xml = $this->wxr('<item><title>Two comments</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body.</p>]]></content:encoded>' . $comment('Ana', '2024-03-02 10:00:00') . $comment('Ben', '2024-03-02 11:00:00') . '</item>');
+        $xml = $this->wxr('<item><title>Two comments</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body.</p>]]></content:encoded>' . $this->wxrComment('Ana', '2024-03-02 10:00:00') . $this->wxrComment('Ben', '2024-03-02 11:00:00') . '</item>');
 
-        $this->assertTrue(Migration::importWordPressXML($xml));
+        $this->assertSame(2, $this->wordpress($xml)['comments']);
         $replies = array_values($this->articleTitled('Two comments')->getAnnotations('reply'));
 
         $this->assertCount(2, $replies);
         $this->assertSame(['Ana', 'Ben'], [$replies[0]['owner_name'], $replies[1]['owner_name']]);
     }
 
+    public function testOnlyApprovedCommentsOfTypeCommentAreImported(): void
+    {
+        $comments = $this->wxrComment('Approved', '2024-03-02 10:00:00')
+            . $this->wxrComment('Typed', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved><wp:comment_type>comment</wp:comment_type>')
+            . $this->wxrComment('Pending', '2024-03-02 10:00:00', '<wp:comment_approved>0</wp:comment_approved>')
+            . $this->wxrComment('Spam', '2024-03-02 10:00:00', '<wp:comment_approved>spam</wp:comment_approved>')
+            . $this->wxrComment('Trash', '2024-03-02 10:00:00', '<wp:comment_approved>trash</wp:comment_approved>')
+            . $this->wxrComment('Pingback', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved><wp:comment_type>pingback</wp:comment_type>')
+            . $this->wxrComment('Trackback', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved><wp:comment_type>trackback</wp:comment_type>')
+            . $this->wxrComment('Unmarked', '2024-03-02 10:00:00', '');
+        $xml = $this->wxr('<item><title>Comments</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body.</p>]]></content:encoded>' . $comments . '</item>');
+
+        $this->assertSame(2, $this->wordpress($xml)['comments']);
+
+        $names = array_map(static fn (array $reply): string => $reply['owner_name'], array_values($this->articleTitled('Comments')->getAnnotations('reply')));
+        $this->assertSame(['Approved', 'Typed'], $names);
+    }
+
+    public function testACommentAuthorsAddressIsKeptOnlyWhenItIsHttpOrHttps(): void
+    {
+        $comments = $this->wxrComment('Web', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved>', 'https://shoreline.example/ana')
+            . $this->wxrComment('Script', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved>', 'javascript:alert(1)')
+            . $this->wxrComment('Data', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved>', 'data:text/html,hi')
+            . $this->wxrComment('Mail', '2024-03-02 10:00:00', '<wp:comment_approved>1</wp:comment_approved>', 'mailto:ana@example.org');
+        $xml = $this->wxr('<item><title>Authors</title><wp:post_date>2024-03-01 12:00:00</wp:post_date><wp:status>publish</wp:status><wp:post_type>post</wp:post_type><content:encoded><![CDATA[<p>Body.</p>]]></content:encoded>' . $comments . '</item>');
+
+        $this->wordpress($xml);
+
+        $urls = [];
+        foreach ($this->articleTitled('Authors')->getAnnotations('reply') as $reply) {
+            $urls[$reply['owner_name']] = $reply['owner_url'];
+        }
+        $this->assertSame(['Web' => 'https://shoreline.example/ana', 'Script' => '', 'Data' => '', 'Mail' => ''], $urls);
+    }
+
     // ------------------------------------------------------------------ Blogger
 
-    public function testTheBloggerFixtureCreatesItsTwoPostsWithTheirDatesTagsAndImage(): void
+    public function testTheBloggerFixtureCreatesItsPostsWithTheirDatesTagsAndImage(): void
     {
-        $this->assertTrue(Migration::importBloggerXML(self::fixture('blogger-export.xml')));
+        $counts = $this->blogger(self::fixture('blogger-export.xml'));
+
+        // The two posts, the draft and the page; the settings entry is skipped, and the comment is a reply.
+        $this->assertSame(['posts' => 4, 'comments' => 1, 'media' => 1, 'skipped' => 1], $counts);
 
         $herons = $this->articleTitled(self::HERONS);
         $this->assertSame(1686752460, (int) $herons->created, '2023-06-14T07:21:00-07:00');
@@ -262,94 +666,97 @@ final class ImportTest extends PortabilityTestCase
         // The picture of this post is on blogger.googleusercontent.com, which is not a blogspot.com host.
         $this->assertStringContainsString('https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgmist/s320/mist.jpg', $herons->body);
 
-        $weir = $this->articleTitled('The heron on the weir');
+        $weir = $this->articleTitled(self::WEIR);
         $this->assertSame(1688000700, (int) $weir->created);
         $ids = $this->fileIdsIn((string) $weir->body);
         $this->assertCount(1, $ids, 'the picture on 1.bp.blogspot.com is fetched and replaced');
         $this->assertStringContainsString('src="' . Idno::site()->config()->getURL() . 'file/' . $ids[0] . '"', $weir->body);
-        $this->assertSame(['https://1.bp.blogspot.com/-QzF7xKj1b2A/ZIm5C0rY6TI/AAAAAAAAB0g/abc/s1600/heron.jpg'], RecordingStreamWrapper::$opened);
+        $this->assertSame(['GET https://1.bp.blogspot.com/-QzF7xKj1b2A/ZIm5C0rY6TI/AAAAAAAAB0g/abc/s1600/heron.jpg'], $this->requests);
 
         foreach ($this->importedPosts() as $post) {
-            $this->assertSame('PUBLIC', $post->access);
             $this->assertSame($this->admin()->getUUID(), $post->getOwnerID());
+            if ($post->title !== self::DRAFT) {
+                $this->assertSame('PUBLIC', $post->access);
+            }
         }
     }
 
     public function testTheBloggerSettingsEntryIsSkipped(): void
     {
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
+        $this->blogger(self::fixture('blogger-export.xml'));
 
         $this->assertNotContains('BLOG_DESCRIPTION', $this->titlesImported());
     }
 
-    public function testTodayTheBloggerImporterImportsADraftAsAPublicPost(): void
+    public function testABloggerDraftIsImportedAsADraftAndNeverPublished(): void
     {
-        // importFeedXML() skips an entry only when its Google "kind" is settings, template or comment
-        // (Migration.php:314-327); the draft marker (app:control/app:draft, blogger:status DRAFT) is not
-        // read. The next change must flip this to the test below.
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
+        $this->blogger(self::fixture('blogger-export.xml'));
 
         $draft = $this->articleTitled(self::DRAFT);
-        $this->assertSame('PUBLIC', $draft->access);
-        $this->assertSame('published', $draft->getPublishStatus());
+        $this->assertSame('draft', $draft->getPublishStatus());
+        $this->assertTrue($draft->isHiddenByPublishStatus($this->user()->getUUID()), 'nobody but its owner (and the administrators) can read it');
+        $this->assertSame('published', $this->articleTitled(self::WEIR)->getPublishStatus(), 'the posts that were live are published');
     }
 
-    public function testABloggerDraftIsNotImportedAsAPublishedPost(): void
+    public function testABloggerPostThatIsMarkedAsADraftOnlyByTheAtomPublishingProtocolIsADraft(): void
     {
-        $this->markTestIncomplete('importFeedXML() ignores the draft markers of a Blogger entry (app:control/app:draft, blogger:status) and saves it as a public, published article (Migration.php:309-358)');
+        $entry = '<entry><id>tag:x,1999:post-1</id><published>2023-01-01T00:00:00Z</published><app:control xmlns:app="http://purl.org/atom/app#"><app:draft>yes</app:draft></app:control><title>Marked by app:draft</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>'
+            . '<entry><id>tag:x,1999:post-2</id><published>2023-01-01T00:00:00Z</published><blogger:status>DRAFT</blogger:status><title>Marked by blogger:status</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>'
+            . '<entry><id>tag:x,1999:post-3</id><published>2023-01-01T00:00:00Z</published><app:control xmlns:app="http://purl.org/atom/app#"><app:draft>no</app:draft></app:control><title>Published</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>'
+            . '<entry><id>tag:x,1999:post-4</id><published>2023-01-01T00:00:00Z</published><blogger:status>SOFT_TRASHED</blogger:status><title>In the trash</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>';
 
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
+        $counts = $this->blogger($this->atom($entry));
 
-        $this->assertNotContains(self::DRAFT, $this->titlesImported());
+        $this->assertSame(3, $counts['posts']);
+        $this->assertSame('draft', $this->articleTitled('Marked by app:draft')->getPublishStatus());
+        $this->assertSame('draft', $this->articleTitled('Marked by blogger:status')->getPublishStatus());
+        $this->assertSame('published', $this->articleTitled('Published')->getPublishStatus());
+        $this->assertNotContains('In the trash', $this->titlesImported());
     }
 
-    public function testTodayTheBloggerImporterImportsAPageAsAPost(): void
+    public function testABloggerPageStaysAPostBecauseIdnoHasNoPages(): void
     {
         // The page "About" (kind#page, blogger:type PAGE) becomes an article dated as the page.
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
+        $this->blogger(self::fixture('blogger-export.xml'));
 
         $page = $this->articleTitled('About');
         $this->assertSame(1673316600, (int) $page->created);
+        $this->assertSame('published', $page->getPublishStatus());
     }
 
-    public function testABloggerPageIsNotImportedAsAPost(): void
+    public function testABloggerCommentBecomesAReplyOfItsPost(): void
     {
-        $this->markTestIncomplete('importFeedXML() imports every Blogger entry that is not settings, template or comment, so a page (kind#page) becomes an article (Migration.php:314-358)');
-
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
-
-        $this->assertNotContains('About', $this->titlesImported());
-    }
-
-    public function testTodayABloggerCommentIsDroppedAndItsPostHasNoAnnotation(): void
-    {
-        // The comment's kind is "comment", so importFeedXML() skips it and nothing else reads it.
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
-
-        $this->assertNotContains('Lovely photo, ¿which lens?', $this->titlesImported());
-        $this->assertSame([], $this->articleTitled(self::HERONS)->getAnnotations('reply'));
-        $this->assertSame([], $this->articleTitled(self::HERONS)->getAnnotations('comment'));
-    }
-
-    public function testABloggerCommentBecomesAnAnnotationOfItsPost(): void
-    {
-        $this->markTestIncomplete('importFeedXML() skips entries of kind#comment (Migration.php:319-323) and never reads thr:in-reply-to, so Blogger comments are lost');
-
-        Migration::importBloggerXML(self::fixture('blogger-export.xml'));
+        $this->blogger(self::fixture('blogger-export.xml'));
 
         $replies = array_values($this->articleTitled(self::HERONS)->getAnnotations('reply'));
         $this->assertCount(1, $replies);
         $this->assertSame('Zsófia', $replies[0]['owner_name']);
+        $this->assertSame('https://www.blogger.com/profile/01234567890123456789', $replies[0]['owner_url']);
         $this->assertStringContainsString('Lovely photo, ¿which lens? 📷', $replies[0]['content']);
+        $this->assertSame(strtotime('2023-06-15T03:12:00.000-07:00'), $replies[0]['time']);
+        $this->assertNotContains('Lovely photo, ¿which lens?', $this->titlesImported(), 'the comment is not a post');
+        $this->assertSame([], $this->articleTitled(self::WEIR)->getAnnotations('reply'));
     }
 
-    // ------------------------------------------------------------------ Idno's own export (the "Known" import)
+    public function testABloggerCommentThatComesBeforeItsPostIsStillItsReplyAndOneWhosePostIsMissingIsSkipped(): void
+    {
+        $comment = static fn (string $ref, string $who): string => '<entry><id>tag:x,1999:comment-' . $who . '</id><published>2023-02-01T00:00:00Z</published><category scheme="http://schemas.google.com/g/2005#kind" term="http://schemas.google.com/blogger/2008/kind#comment"/><title>c</title><content type="html">Hello from ' . $who . '</content><thr:in-reply-to ref="' . $ref . '"/><author><name>' . $who . '</name><uri>javascript:alert(1)</uri></author></entry>';
+        $post = '<entry><id>tag:x,1999:post-1</id><published>2023-01-01T00:00:00Z</published><category scheme="http://schemas.google.com/g/2005#kind" term="http://schemas.google.com/blogger/2008/kind#post"/><title>The post</title><content type="html">&lt;p&gt;Body&lt;/p&gt;</content></entry>';
+
+        $counts = $this->blogger($this->atom($comment('tag:x,1999:post-1', 'Early') . $post . $comment('tag:x,1999:post-1', 'Late') . $comment('tag:x,1999:post-404', 'Orphan')));
+
+        $this->assertSame(['posts' => 1, 'comments' => 2, 'media' => 0, 'skipped' => 1], $counts);
+        $replies = array_values($this->articleTitled('The post')->getAnnotations('reply'));
+        $this->assertSame(['Early', 'Late'], array_map(static fn (array $reply): string => $reply['owner_name'], $replies));
+        $this->assertSame('', $replies[0]['owner_url'], 'an address that is not http or https is not kept');
+    }
+
+    // ------------------------------------------------------------------ Idno's own export
 
     public function testIdnosOwnRssExportCanBeImportedThroughTheFeedImporter(): void
     {
-        // The import form offers "Idno" (import_type Known) and the page has no case for it, but the
-        // feed importer that Blogger uses reads the RSS that Idno exports. This is what a Known case
-        // would call; it is pinned here as it works today.
+        // The Blogger importer reads an RSS file as well, which is what the feed importer was: the RSS that
+        // Idno exports comes back as articles.
         $admin = $this->admin();
         $article = new Entry();
         $article->title = 'Round trip: ' . self::TIDE_POOL;
@@ -362,12 +769,9 @@ final class ImportTest extends PortabilityTestCase
         $this->store($note, $admin);
         $this->knownUuids[] = $note->getUUID();
 
-        $run = $this->probe('rss', ['hide_private' => true, 'wxr' => false, 'uri' => '/admin/export/rss']);
-        $this->assertSame(0, $run['exit'], $run['output']);
-        $document = (string) $run['result']['document'];
-        $this->removeAfterwards(dirname(dirname((string) $run['result']['file'])));
+        $document = $this->exportedFeed(true, false);
 
-        $this->assertTrue(Migration::importFeedXML($document));
+        $this->assertTrue(Migration::importFeedXML($document), 'the delegate Migration keeps');
 
         $imported = $this->importedPosts();
         $titles = array_map(static fn (Entity $post): string => (string) $post->title, $imported);
@@ -383,12 +787,72 @@ final class ImportTest extends PortabilityTestCase
         $this->assertStringContainsString('#roundtrip', $round->body);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function importers(): array
+    {
+        return ['the WordPress importer' => ['wordpress'], 'the feed importer' => ['feed']];
+    }
+
+    /**
+     * @dataProvider importers
+     */
+    public function testAnIdnoExportThatIncludesPrivatePostsAndDraftsImportsThemPrivateAndAsDraftsThroughBothImporters(string $importer): void
+    {
+        $admin = $this->admin();
+        $private = new Status();
+        $private->body = 'A private note that must stay private';
+        $this->store($private, $admin, $admin->getUUID());
+        $draft = new Entry();
+        $draft->title = 'A draft that must stay a draft';
+        $draft->body = '<p>Not ready.</p>';
+        $this->store($draft, $admin, 'PUBLIC', 'draft');
+        $public = new Entry();
+        $public->title = 'A public article';
+        $public->body = '<p>Out in the open.</p>';
+        $this->store($public, $admin);
+        foreach ([$private, $draft, $public] as $post) {
+            $this->knownUuids[] = $post->getUUID();
+        }
+        $document = $this->exportedFeed(false, true);
+        $this->assertStringContainsString('<wp:status>private</wp:status>', $document);
+        $this->assertStringContainsString('<wp:status>draft</wp:status>', $document);
+
+        $counts = $importer === 'wordpress' ? $this->wordpress($document) : $this->blogger($document);
+
+        $this->assertGreaterThanOrEqual(3, $counts['posts']);
+        $found = [];
+        foreach ($this->importedPosts() as $post) {
+            foreach (['private note' => 'A private note that must stay private', 'draft' => 'Not ready.', 'public' => 'Out in the open.'] as $name => $text) {
+                if (str_contains((string) $post->body, $text)) {
+                    $found[$name] = $post;
+                }
+            }
+        }
+        $this->assertEqualsCanonicalizing(['private note', 'draft', 'public'], array_keys($found));
+        $this->assertSame($admin->getUUID(), $found['private note']->access, 'the private note stays private');
+        $this->assertSame('draft', $found['draft']->getPublishStatus(), 'the draft stays a draft');
+        $this->assertSame('PUBLIC', $found['public']->access);
+        $this->assertSame('published', $found['public']->getPublishStatus());
+    }
+
+    /**
+     * The RSS or WXR document of the whole site as the administrator, in a process of its own.
+     */
+    private function exportedFeed(bool $hidePrivate, bool $wxr): string
+    {
+        $run = $this->probe('rss', ['hide_private' => $hidePrivate, 'wxr' => $wxr, 'login' => $this->admin()->getUUID(), 'uri' => '/admin/export/rss']);
+        $this->assertSame(0, $run['exit'], $run['output']);
+
+        return (string) $run['result']['document'];
+    }
+
     // ------------------------------------------------------------------ what an import must not announce
 
     /**
      * A follower of the importing user whose inbox is a sink of the site itself (the rig's queue is
-     * synchronous, so what ActivityPub delivers has been delivered when the import returns), and the
-     * requests the sink has recorded.
+     * synchronous, so what ActivityPub delivers has been delivered when the import returns).
      */
     private function followerSink(): string
     {
@@ -415,29 +879,117 @@ final class ImportTest extends PortabilityTestCase
         return $response->json();
     }
 
-    public function testTodayImportingAFileDeliversEveryPostToTheFollowersOfTheImportingUser(): void
-    {
-        // The page defines IDNO_NOMENTION, which stops webmentions only; the "saved" hook of the ActivityPub
-        // plugin federates each imported post as a new one. The next change must flip this to the test below.
-        $sink = $this->followerSink();
-
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
-
-        $requests = $this->delivered($sink);
-        $types = array_map(static fn (array $request): ?string => json_decode((string) base64_decode((string) $request['body'], true), true)['type'] ?? null, $requests);
-        $this->assertGreaterThanOrEqual(2, count(array_keys($types, 'Create', true)), 'a Create for each of the two posts: ' . json_encode($types));
-    }
-
     public function testImportingAFileDeliversNothingToTheFollowersOfTheImportingUser(): void
     {
-        $this->markTestIncomplete('Entity::save() triggers "saved" for each imported post, and the ActivityPub hook (IdnoPlugins/ActivityPub/Main.php) delivers a Create to the follower inboxes: an imported post is history, not news');
-
         $sink = $this->followerSink();
 
-        Migration::importWordPressXML(self::fixture('wordpress-export.xml'));
+        $this->assertSame(3, $this->wordpress(self::fixture('wordpress-export.xml'))['posts']);
+        $this->assertSame(4, $this->blogger(self::fixture('blogger-export.xml'))['posts']);
 
-        $this->assertSame([], $this->delivered($sink));
+        $this->assertSame([], $this->delivered($sink), 'an imported post is history, not news');
         $this->assertNotSame([], $this->importedPosts(), 'the posts were imported');
+        $this->assertFalse(Idno::importInProgress(), 'and the mode ended with the import');
+    }
+
+    public function testTheModeEndsEvenWhenTheImportFailsSoLaterPostsAreAnnouncedAgain(): void
+    {
+        $sink = $this->followerSink();
+        $this->wordpress('not xml at all');
+        $this->assertFalse(Idno::importInProgress());
+
+        $note = new Status();
+        $note->body = 'A note written after the import';
+        $this->store($note, $this->admin());
+
+        $this->assertNotSame([], $this->delivered($sink), 'a post written normally is federated as before');
+    }
+
+    public function testNothingIsSyndicatedWhileAnImportRuns(): void
+    {
+        $mode = Idno::container()->get(ImportMode::class);
+        $events = [];
+        $armed = true;
+        // There is no way to remove a listener: this one records only while the test runs.
+        Idno::site()->events()->addListener('syndicate', static function () use (&$events, &$armed): void {
+            if ($armed) {
+                $events[] = 'syndicate';
+            }
+        });
+        try {
+            $note = new Status();
+            $note->body = 'Syndicate me';
+            $this->store($note, $this->admin());
+
+            $mode->during(function () use ($note, &$events): void {
+                $note->syndicate();
+                $this->assertSame([], $events, 'nothing is syndicated during an import');
+            });
+
+            $note->syndicate();
+            $this->assertSame(['syndicate'], $events, 'and it is again afterwards');
+        } finally {
+            $armed = false;
+        }
+    }
+
+    public function testAnImportPingsNoHubSendsNoWebmentionAndSyncsNothing(): void
+    {
+        $events = [];
+        $armed = true;
+        foreach (['pubsubhubbub/ping', 'standardsitesync/sync'] as $name) {
+            // There is no way to remove a listener: these record only while the test runs.
+            Idno::site()->events()->addListener($name, static function () use (&$events, &$armed, $name): void {
+                if ($armed) {
+                    $events[] = $name;
+                }
+            });
+        }
+        $siteRequests = [];
+        $remoteRequests = [];
+        $recorder = static fn (array &$into): MockHttpClient => new MockHttpClient(static function (string $method, string $url) use (&$into): MockResponse {
+            $into[] = $method . ' ' . $url;
+
+            return new MockResponse('<html></html>', ['response_headers' => ['Content-Type: text/html']]);
+        });
+        \Idno\Core\Webservice::useClient($recorder($siteRequests), $recorder($remoteRequests));
+        // Standard.site sync is not one of the rig's plugins: its hooks are registered here, and given what the plugin
+        // needs to decide to queue a sync (site-wide switch on, an AT Protocol session on the owner; the queueing
+        // needs no network). Listeners cannot be removed: with the switch off again they do nothing.
+        $config = Idno::site()->config();
+        $switch = $config->standardsitesync_enabled ?? null;
+        $admin = $this->admin();
+        $session = $admin->standardsitesync_session ?? null;
+        (new \IdnoPlugins\StandardSiteSync\Main())->registerEventHooks();
+        $config->standardsitesync_enabled = true;
+        $admin->standardsitesync_session = ['did' => 'did:plc:testadmin', 'access_token' => 'not-a-real-token'];
+        $admin->save(true);
+        try {
+            $this->wordpress(self::fixture('wordpress-export.xml'));
+            $this->assertNotSame([], $this->importedPosts(), 'the import made posts');
+            $this->assertSame([], $events, 'no hub is told and nothing is queued for a PDS while a post is imported');
+
+            $mode = Idno::container()->get(ImportMode::class);
+            $mode->during(function () use (&$siteRequests, &$remoteRequests): void {
+                $this->assertTrue(\Idno\Core\Webmention::pingMentions(Idno::site()->config()->getURL() . 'x', '<a href="http://target.example/post">a link</a>'));
+                $this->assertSame([], [...$siteRequests, ...$remoteRequests], 'no webmention is sent during an import');
+            });
+
+            // The control: outside an import the same post does all three.
+            $note = new Status();
+            $note->body = 'Written normally';
+            $this->store($note, $this->admin());
+            $note->publish();
+            $this->assertContains('pubsubhubbub/ping', $events, 'a post published normally pings the hub (the queue here is the synchronous one)');
+            \Idno\Core\Webmention::pingMentions(Idno::site()->config()->getURL() . 'x', '<a href="http://target.example/post">a link</a>');
+            $this->assertNotSame([], [...$siteRequests, ...$remoteRequests], 'and a webmention is looked for outside one');
+            $this->assertContains('standardsitesync/sync', $events, 'and a post saved normally is queued for the PDS: the absence during the import is the guard\'s');
+        } finally {
+            $armed = false;
+            $config->standardsitesync_enabled = $switch;
+            $admin->standardsitesync_session = $session;
+            $admin->save(true);
+            \Idno\Core\Webservice::useClient(null);
+        }
     }
 
     // ------------------------------------------------------------------ what a bad file does
@@ -463,200 +1015,79 @@ final class ImportTest extends PortabilityTestCase
     /**
      * @dataProvider documentsWithNoPost
      */
-    public function testTodayAnImportThatCreatesNothingThrowsATypeError(string $importer, string $xml): void
-    {
-        // The importers are declared ": bool" and end without a return when nothing was imported
-        // (Migration.php:296, 437, 447), so PHP throws a TypeError. It is an \Error, which the import
-        // page's catch (\Exception) does not catch. The next change must flip this to the test below.
-        $this->expectException(\TypeError::class);
-
-        Migration::$importer($xml);
-    }
-
-    /**
-     * @dataProvider documentsWithNoPost
-     */
     public function testAnImportThatCreatesNothingReturnsFalse(string $importer, string $xml): void
     {
-        $this->markTestIncomplete('Migration::importWordPressXML() and importFeedXML() are declared ": bool" and fall off their end when nothing was imported, which is a TypeError (Migration.php:296-365, 447-576)');
-
         $this->assertFalse(Migration::$importer($xml));
         $this->assertSame([], $this->importedPosts());
     }
 
-    // ------------------------------------------------------------------ the images
-
-    private function bodyWithImages(string ...$sources): string
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function filesThatAreNoExport(): array
     {
-        return '<p>Pictures</p>' . implode('', array_map(static fn (string $src): string => '<p><img src="' . $src . '"></p>', $sources));
+        return [
+            'empty' => [''],
+            'text' => ['This is not an export file.'],
+            'XML that holds no post' => ['<?xml version="1.0"?><rss version="2.0"><channel><title>Nothing here</title></channel></rss>'],
+            'an Atom feed with no entry' => ['<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>x</title></feed>'],
+            'a document type' => ['<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "b">]><rss><channel><item><title>&a;</title></item></channel></rss>'],
+        ];
     }
 
     /**
-     * @return list<string> the ids of the files made, removed in tearDown()
+     * @dataProvider filesThatAreNoExport
      */
-    private function adopt(string $html): array
+    public function testAnImporterThatFindsNothingReturnsZeroCountsAndCreatesNothing(string $xml): void
     {
-        $ids = $this->fileIdsIn($html);
-        foreach ($ids as $id) {
-            $this->removeFileAfterwards($id);
-        }
+        $nothing = ['posts' => 0, 'comments' => 0, 'media' => 0, 'skipped' => 0];
 
-        return $ids;
+        $this->assertSame($nothing, $this->wordpress($xml));
+        $this->assertSame($nothing, $this->blogger($xml));
+        $this->assertSame([], $this->importedPosts());
     }
 
-    public function testImagesAreFetchedOnlyFromTheSourceDomainAndSubdomainsAndOnlyWhenTheyAreImageFiles(): void
+    public function testAnImporterWithNoFileOnDiskReturnsZeroCountsToo(): void
     {
-        $fetched = [
-            'https://wordpress.com/a.png',
-            'https://tidepoolnotes.files.wordpress.com/b.JPG',
-            'http://a.b.wordpress.com/c.jpeg',
-            'https://a.wordpress.com/d.webp?w=640&h=480',
-            'https://A.WordPress.com/e.gif',
-        ];
-        $refused = [
-            'https://evilwordpress.com/f.png' => 'a host that only ends with the domain',
-            'https://wordpress.com.evil.example/g.png' => 'the domain as a prefix of another host',
-            'https://a.wordpress.com@evil.example/h.png' => 'the domain as the user name of a URL',
-            'https://example.org/i.png' => 'another host',
-            'https://a.wordpress.com/j.php' => 'a script',
-            'https://a.wordpress.com/k.svg' => 'a type that is not listed',
-            'https://a.wordpress.com/no-extension' => 'no extension',
-            '/relative/l.png' => 'no host',
-            'data:image/png;base64,iVBORw0KGgo=' => 'a data URI',
-        ];
+        $importer = $this->importer(WordPressImporter::class);
 
-        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages(...$fetched, ...array_keys($refused)), 'wordpress.com');
-        $ids = $this->adopt($body);
+        $this->assertSame(['posts' => 0, 'comments' => 0, 'media' => 0, 'skipped' => 0], $importer->import(sys_get_temp_dir() . '/idno-portability-missing-' . bin2hex(random_bytes(4)), $this->admin()->getUUID()));
+    }
 
-        $this->assertSame($fetched, RecordingStreamWrapper::$opened);
-        $this->assertCount(count($fetched), $ids);
-        foreach (array_keys($refused) as $src) {
-            $this->assertStringContainsString('src="' . $src . '"', $body, 'left as it was: ' . $refused[$src]);
-        }
-        foreach ($fetched as $src) {
-            $this->assertStringNotContainsString('src="' . $src . '"', $body);
+    public function testAnImportLeavesLibxmlsErrorHandlingAsItWas(): void
+    {
+        libxml_use_internal_errors(false);
+        $this->wordpress('not xml');
+        $this->wordpress(self::fixture('wordpress-export.xml'));
+
+        $this->assertFalse(libxml_use_internal_errors());
+    }
+
+    // ------------------------------------------------------------------ the delegates
+
+    public function testMigrationsImportersAreDelegatesThatReadTheStringAsTheLoggedInUser(): void
+    {
+        $this->assertTrue(Migration::importWordPressXML(self::fixture('wordpress-export.xml')));
+        $this->assertTrue(Migration::importBloggerXML(self::fixture('blogger-export.xml')));
+
+        $this->assertContains(self::TIDE_POOL, $this->titlesImported());
+        $this->assertContains(self::HERONS, $this->titlesImported());
+        foreach ($this->importedPosts() as $post) {
+            $this->assertSame($this->admin()->getUUID(), $post->getOwnerID());
         }
     }
 
-    public function testTodayTheSchemeAndPortOfAnImageUrlAreNotRestrictedOnAnAllowedHost(): void
+    public function testMigrationsImageDelegateLeavesAnAddressTheSiteClientCannotReach(): void
     {
-        // Only the host and the extension are checked (Migration.php:377-393): an ftp:// address, or an
-        // http one on any port, is opened. The next change must restrict this (http and https, and the
-        // remote HTTP client, which refuses private addresses).
-        $sources = ['ftp://a.wordpress.com/a.png', 'https://a.wordpress.com:8443/b.png', 'http://a.wordpress.com:25/c.png'];
+        // The rig's clients go to no host but the site's own: the address stays, nothing is stored.
+        $html = '<p><img src="https://a.wordpress.com/a.png"></p>';
 
-        $this->adopt(Migration::importImagesFromBodyHTML($this->bodyWithImages(...$sources), 'wordpress.com'));
-
-        $this->assertSame($sources, RecordingStreamWrapper::$opened);
+        $this->assertSame($html, Migration::importImagesFromBodyHTML($html, 'wordpress.com'));
     }
 
-    public function testTodayAnImageIsFetchedOutsideTheSitesHttpClient(): void
+    private function atom(string $entries): string
     {
-        // The site's clients refuse private addresses, bound the size and the time, and are what tests
-        // replace; fopen() does none of that. A client given to Webservice sees nothing.
-        $requests = [];
-        $client = new MockHttpClient(function (string $method, string $url) use (&$requests): MockResponse {
-            $requests[] = $method . ' ' . $url;
-
-            return new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true));
-        });
-        Webservice::useClient($client, $client);
-
-        $this->adopt(Migration::importImagesFromBodyHTML($this->bodyWithImages('https://a.wordpress.com/a.png'), 'wordpress.com'));
-
-        $this->assertSame(['https://a.wordpress.com/a.png'], RecordingStreamWrapper::$opened, 'opened as a PHP stream');
-        $this->assertSame([], $requests, 'the HTTP client was not asked');
-    }
-
-    public function testAnImageIsFetchedThroughTheRemoteHttpClient(): void
-    {
-        $this->markTestIncomplete('Migration::importImagesFromBodyHTML() reads the image with fopen($src) (Migration.php:402), not through the remote HTTP client; it sees no private-address refusal, size limit or timeout');
-
-        $requests = [];
-        $client = new MockHttpClient(function (string $method, string $url) use (&$requests): MockResponse {
-            $requests[] = $method . ' ' . $url;
-
-            return new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true), ['response_headers' => ['content-type' => 'image/png']]);
-        });
-        Webservice::useClient($client, $client);
-
-        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages('https://a.wordpress.com/a.png'), 'wordpress.com');
-        $this->adopt($body);
-
-        $this->assertSame(['GET https://a.wordpress.com/a.png'], $requests);
-        $this->assertSame([], RecordingStreamWrapper::$opened);
-    }
-
-    public function testTodayAnImageOverTheSitesDownloadLimitIsFetchedAndStored(): void
-    {
-        // webservice_max_download (10 MB by default) bounds every other fetch of the site; this one has
-        // no limit at all. A 11 MiB body is read whole and stored as a file of the site.
-        $limit = (int) (Idno::site()->config()->webservice_max_download ?: 10 * 1024 * 1024);
-        RecordingStreamWrapper::$size = $limit + 1024 * 1024;
-
-        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages('https://a.wordpress.com/big.png'), 'wordpress.com');
-        $ids = $this->adopt($body);
-
-        $this->assertCount(1, $ids);
-        $this->assertSame($limit + 1024 * 1024, (int) \Idno\Entities\File::getByID($ids[0])->getSize());
-    }
-
-    public function testAnImageOverTheSitesDownloadLimitIsNotImported(): void
-    {
-        $this->markTestIncomplete('importImagesFromBodyHTML() copies the whole body of the image to disk with no size limit (Migration.php:402); webservice_max_download is not applied');
-
-        // The remote client serves a body over the limit. A request through it is cut at the limit, which is
-        // not an image, so nothing is stored; the address stays as it was.
-        $limit = (int) (Idno::site()->config()->webservice_max_download ?: 10 * 1024 * 1024);
-        $served = 0;
-        $client = new MockHttpClient(function () use ($limit, &$served): MockResponse {
-            $served++;
-
-            return new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true) . str_repeat("\0", $limit + 1024 * 1024));
-        });
-        Webservice::useClient($client, $client);
-
-        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages('https://a.wordpress.com/big.png'), 'wordpress.com');
-
-        $this->assertSame(1, $served, 'the client was asked');
-        $this->assertSame([], $this->adopt($body));
-        $this->assertSame([], RecordingStreamWrapper::$opened, 'and nothing was opened as a PHP stream');
-        $this->assertStringContainsString('src="https://a.wordpress.com/big.png"', $body);
-    }
-
-    public function testOnlyHttpAndHttpsOnTheDefaultPortsOfAnAllowedHostAreFetched(): void
-    {
-        $this->markTestIncomplete('Only the host and the extension of an image address are checked (Migration.php:377-393): an ftp:// address, or one on any port, is opened');
-
-        $client = new MockHttpClient(static fn (): MockResponse => new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true)));
-        Webservice::useClient($client, $client);
-        $refused = ['ftp://a.wordpress.com/a.png', 'https://a.wordpress.com:8443/b.png', 'http://a.wordpress.com:25/c.png', 'https://user:pass@a.wordpress.com/d.png'];
-        $fetched = ['http://a.wordpress.com:80/e.png', 'https://a.wordpress.com:443/f.png', 'http://a.wordpress.com/g.png'];
-
-        $body = Migration::importImagesFromBodyHTML($this->bodyWithImages(...$refused, ...$fetched), 'wordpress.com');
-        $this->adopt($body);
-
-        foreach ($refused as $src) {
-            $this->assertStringContainsString('src="' . $src . '"', $body, $src);
-        }
-        foreach ($fetched as $src) {
-            $this->assertStringNotContainsString('src="' . $src . '"', $body, $src);
-        }
-        $this->assertSame([], RecordingStreamWrapper::$opened);
-    }
-
-    public function testAnImageAddressWrittenWithAnAmpersandEntityIsRewrittenToo(): void
-    {
-        $this->markTestIncomplete('importImagesFromBodyHTML() looks for the decoded address (Migration.php:422): an address written with &amp; in the HTML is fetched but never found in the body, so the post keeps pointing at the other site and the file is stored for nothing');
-
-        $client = new MockHttpClient(static fn (): MockResponse => new MockResponse((string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true)));
-        Webservice::useClient($client, $client);
-
-        $body = Migration::importImagesFromBodyHTML('<p><img src="https://a.wordpress.com/p.png?w=640&amp;h=480" alt="x"></p>', 'wordpress.com');
-        $ids = $this->adopt($body);
-
-        $this->assertCount(1, $ids);
-        $this->assertStringNotContainsString('wordpress.com', $body);
+        return '<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:blogger="http://schemas.google.com/blogger/2008" xmlns:thr="http://purl.org/syndication/thread/1.0"><id>tag:x,1999:blog</id><title>Inline</title>' . $entries . '</feed>';
     }
 
     private function wxr(string $items): string

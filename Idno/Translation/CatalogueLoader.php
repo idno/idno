@@ -18,7 +18,7 @@ use Symfony\Component\Translation\Loader\PoFileLoader;
  * first directory of that catalogue named `<language>_*` in sorted order (`fr_FR`), so a visitor asking for
  * `fr` or `fr_CA` gets `fr_FR` when that is all there is. (gettext itself would not.) The directory names
  * come from the catalogue's own directory and each must be a locale identifier; the listing is made once
- * per directory, domain and language for the process.
+ * per catalogue directory and language (not per domain) for the process.
  *
  * Plural entries are NOT supported (Idno has no plural lookup). Symfony's loaders store a plural entry's forms
  * joined with `|` under `singular|plural`, and nothing here splits them: a `.po` file that holds a `msgid_plural`

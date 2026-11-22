@@ -382,50 +382,6 @@ namespace Idno\Entities {
         }
 
         /**
-         * Retrieve file data from an attachment (first trying load from local storage, then from URL)
-         *
-         * @param  $attachment
-         * @return bool|mixed|string
-         */
-        static function getFileDataFromAttachment($attachment)
-        {
-            \Idno\Core\Idno::site()->logging()->debug("getting file data from attachment", ['attachment' => $attachment]);
-            if (!empty($attachment['_id'])) {
-                //\Idno\Core\Idno::site()->logging()->debug("Checking attachment ID");
-                if ($bytes = self::getFileDataByID((string)$attachment['_id'])) {
-                    //\Idno\Core\Idno::site()->logging()->debug("Retrieved some bytes");
-                    if (strlen($bytes)) {
-                        //\Idno\Core\Idno::site()->logging()->debug("Bytes! " . $bytes);
-                        return $bytes;
-                    } else {
-                        //\Idno\Core\Idno::site()->logging()->debug("Sadly no bytes");
-                    }
-                } else {
-                    //\Idno\Core\Idno::site()->logging()->debug("No bytes retrieved");
-                }
-            } else {
-                \Idno\Core\Idno::site()->logging()->debug("Empty attachment _id");
-            }
-            if (!empty($attachment['url'])) {
-                try {
-                    if ($bytes = @file_get_contents($attachment['url'])) {
-                        \Idno\Core\Idno::site()->logging()->debug("Returning bytes");
-
-                        return $bytes;
-                    } else {
-                        \Idno\Core\Idno::site()->logging()->debug("Couldn't get bytes from " . $attachment['url']);
-                    }
-                } catch (\Exception $e) {
-                    \Idno\Core\Idno::site()->logging()->debug("Couldn't get bytes from " . $attachment['url']);
-                }
-            } else {
-                \Idno\Core\Idno::site()->logging()->debug('Attachment url was empty ' . $attachment['url']);
-            }
-
-            return false;
-        }
-
-        /**
          * Retrieve file data by ID
          *
          * @param string $id

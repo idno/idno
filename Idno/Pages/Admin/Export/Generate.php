@@ -3,9 +3,9 @@
 namespace Idno\Pages\Admin\Export {
 
     use Idno\Common\Page;
-    use Idno\Core\Email;
-    use Idno\Core\Migration;
-    use Idno\Entities\File;
+    use Idno\Core\AfterResponse;
+    use Idno\Core\Idno;
+    use Idno\Portability\PortabilityJobs;
 
     class Generate extends Page
     {
@@ -20,75 +20,42 @@ namespace Idno\Pages\Admin\Export {
 
             $this->adminGatekeeper();
 
-            // Flag that a site export has been requested
-            \Idno\Core\Idno::site()->config()->export_last_requested = time();
-            \Idno\Core\Idno::site()->config()->export_in_progress    = 1;
-            \Idno\Core\Idno::site()->config()->save();
+            $session = Idno::site()->session();
+            $back    = Idno::site()->config()->getDisplayURL() . 'admin/export/';
+            $jobs    = Idno::container()->get(PortabilityJobs::class);
 
-            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/export/', false);
-
-            ignore_user_abort(true);    // This is dangerous, but we need export to continue
-
-            session_write_close();
-
-            header('Connection: close');
-            header('Content-length: ' . (string)ob_get_length());
-
-            @ob_end_flush();            // Return output to the browser
-            @ob_end_clean();
-            @flush();
-
-            sleep(10);                  // Pause
-
-            set_time_limit(0);          // Eliminate time limit - this could take a while
-
-            // Remove the previous export file
-            if (!empty(\Idno\Core\Idno::site()->config()->export_file_id)) {
-                if ($file = File::getByID(\Idno\Core\Idno::site()->config()->export_file_id)) {
-                    $file->remove();
-                    \Idno\Core\Idno::site()->config()->export_file_id  = false;
-                    \Idno\Core\Idno::site()->config()->export_filename = false;
-                    \Idno\Core\Idno::site()->config()->save();
-                }
+            if (!Idno::container()->get(\Idno\Portability\ArchiveExporter::class)->zipAvailable()) {
+                $session->addErrorMessage(Idno::site()->language()->_('The full archive needs the PHP zip extension, which this server does not have.'));
+                $this->forward($back);
+                return;
             }
 
-            if ($path = Migration::createCompressedArchive()) {
-
-                $filename = \Idno\Core\Idno::site()->config()->host . '.zip';
-                /*                    header('Content-disposition: attachment;filename=' . $filename);
-                                    if ($fp = fopen($path, 'r')) {
-                                        while ($content = fread($fp, 4096)) {
-                                            echo $content;
-                                        }
-                                    }
-                                    fclose($fp);*/
-
-                if ($file = File::createFromFile($path, $filename)) {
-                    @unlink($path);
-                    \Idno\Core\Idno::site()->config()->export_filename    = $filename;
-                    \Idno\Core\Idno::site()->config()->export_file_id     = $file;
-                    \Idno\Core\Idno::site()->config()->export_in_progress = 0;
-                    \Idno\Core\Idno::site()->config()->save();
-
-                    $mail = new Email();
-                    $mail->setHTMLBodyFromTemplate('admin/export');
-                    $mail->setTextBodyFromTemplate('admin/export');
-                    $mail->addTo(\Idno\Core\Idno::site()->session()->currentUser()->email);
-                    $mail->setSubject("Your data export is ready");
-                    $mail->send();
-                } else {
-                    \Idno\Core\Idno::site()->logging()->error("There was a problem creating file {$path}{$filename}");
-                }
-
-                exit;
-
-            } else {
-                \Idno\Core\Idno::site()->logging()->error("Export did not return an archive path.");
+            // One export at a time
+            if (!$jobs->beginExport()) {
+                $session->addErrorMessage(Idno::site()->language()->_('An export is already being made. Please wait for it to finish: we will email you.'));
+                $this->forward($back);
+                return;
             }
+
+            $user = (string)$session->currentUserUUID();
+
+            // With the asynchronous queue the worker makes the archive; without it, it is made after this answer.
+            $queue = Idno::site()->queue();
+            if ($queue->isAsynchronous()) {
+                if ($queue->enqueue('default', PortabilityJobs::EXPORT_EVENT, ['user' => $user], $user) === false) {
+                    $jobs->cancelExport();
+                    $session->addErrorMessage(Idno::site()->language()->_("We couldn't start your export. Please try again."));
+                }
+                $this->forward($back);
+                return;
+            }
+
+            AfterResponse::run($this, $back, static function () use ($jobs, $user): void {
+                $jobs->runExport($user);
+            });
 
         }
 
     }
 
 }
-

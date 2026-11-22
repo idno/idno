@@ -3,7 +3,8 @@
 namespace Idno\Pages\Admin\Export {
 
     use Idno\Common\Page;
-    use Idno\Core\Migration;
+    use Idno\Core\Idno;
+    use Idno\Portability\FeedExporter;
 
     class RSS extends Page
     {
@@ -20,7 +21,7 @@ namespace Idno\Pages\Admin\Export {
                 $hide_private = false;
             }
 
-            $f = Migration::getExportRSS($hide_private);
+            $f = Idno::container()->get(FeedExporter::class)->stream($hide_private, null, false);
 
             if ($f) {
                 $stats = fstat($f);
@@ -29,9 +30,8 @@ namespace Idno\Pages\Admin\Export {
                 header('Content-disposition: attachment; filename=export.rss');
                 header('Content-Length: ' . $stats['size']);
 
-                while ($content = fgets($f)) {
-                    echo $content;
-                }
+                \Idno\Pages\File\View::endOutputBuffers(); // so that the document is sent as it is read, not held
+                fpassthru($f);
 
                 fclose($f);
             } else {
@@ -48,4 +48,3 @@ namespace Idno\Pages\Admin\Export {
     }
 
 }
-

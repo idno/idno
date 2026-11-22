@@ -86,6 +86,10 @@ The queue is Symfony Messenger's, in the `idno_messages` table of your database.
 the only worker to run (Messenger's own `messenger:consume` is not available: it would skip the checks
 above). `./bin/console messenger:stop-workers` asks every running worker to stop after its current message.
 
+After you change the mail settings (Site Configuration, Email), restart the queue worker: it reads the settings when it
+starts, so the mails it sends (the export and import results) use the old ones until it does (it also restarts itself
+every `--time-limit` seconds, an hour by default).
+
 **How it works:** when the site publishes something, the web request puts one message per event into
 the queue and returns. The worker takes each message, logs in as the user the event was queued for,
 triggers the event (which signs and POSTs an ActivityPub activity, sends a webmention, and so on) and

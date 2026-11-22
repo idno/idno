@@ -433,6 +433,16 @@ namespace Idno\Core {
 
                     $this->site_details = Site::getOne([ 'domain' => $domain ]);
 
+                    // A console process (the queue's worker, a command) takes its host from the boot `url`, which
+                    // may not be the host visitors use (example.com, www.example.com): it never creates a site
+                    // record. It uses the site's record when there is exactly one, else it has none.
+                    if (empty($this->site_details) && defined('IDNO_CONSOLE')) {
+                        $sites = Site::get([], [], 2);
+                        $this->site_details = count($sites) === 1 ? $sites[0] : null;
+
+                        return $this->site_details;
+                    }
+
                     if (empty($this->site_details)) {
 
                         $this->site_details = new Site();
@@ -721,6 +731,18 @@ namespace Idno\Core {
             }
 
             return self::$container;
+        }
+
+        /**
+         * Is an import running in this process? What an import brings in is history, not news: while it
+         * runs, nothing is federated, syndicated, sent as a webmention or pinged to a hub for it. Every place
+         * that would announce a post asks this (Idno\Portability\ImportMode is the flag).
+         *
+         * @return bool
+         */
+        public static function importInProgress(): bool
+        {
+            return self::container()->get(\Idno\Portability\ImportMode::class)->active();
         }
 
         /**

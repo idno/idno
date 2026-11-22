@@ -12,14 +12,12 @@ use IdnoPlugins\Status\Status;
 use IdnoPlugins\Text\Entry;
 
 /**
- * The full archive of a site, Migration::exportToFolder() and archiveExportFolder() (what the admin's
- * "Create archive" runs, through createCompressedArchive()), run in this process as the administrator.
+ * The full archive of a site: the folder ArchiveExporter::exportToFolder() makes (through its delegate
+ * Migration::exportToFolder()) and the zip archive of it (archiveExportFolder(), createCompressedArchive()),
+ * run in this process as the administrator.
  *
  * The site holds an article with an attachment and a private note; the archive holds, besides those,
  * every other entity of the site (its users included).
- *
- * Tests named "testToday..." pin what the code does now where that is a defect or a risk (the next change
- * must flip them); each is followed by the test of the wanted behaviour, marked incomplete until it passes.
  */
 final class ExportArchiveTest extends PortabilityTestCase
 {
@@ -44,8 +42,13 @@ final class ExportArchiveTest extends PortabilityTestCase
     /** @var array<string, mixed> */
     private array $savedConfig = [];
 
+    /** @var list<string> */
+    private array $archives = [];
+
     /** @var array<string, mixed> */
     private array $savedBootConfig = [];
+
+    private bool $settingsSaved = false;
 
     protected function setUp(): void
     {
@@ -53,7 +56,7 @@ final class ExportArchiveTest extends PortabilityTestCase
         $admin = $this->admin();
         $this->logOn($admin);
 
-        $this->pngBytes = (string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true);
+        $this->pngBytes = (string) base64_decode(self::PNG_BASE64, true);
         $this->fileId = $this->storeFile($this->pngBytes, 'pool.png', 'image/png');
 
         $article = new Entry();
@@ -80,9 +83,16 @@ final class ExportArchiveTest extends PortabilityTestCase
         $config = Idno::site()->config();
         $config->config = $this->savedConfig;
         $config->ini_config = $this->savedBootConfig;
-        $zip = $this->zipPath();
-        if (is_file($zip)) {
-            @unlink($zip);
+        if ($this->settingsSaved) {
+            $config->save(); // what the test stored goes: the stored settings are the document it started with
+            $config->config = $this->savedConfig;
+            $config->ini_config = $this->savedBootConfig;
+        }
+        foreach ($this->archives as $archive) {
+            if (is_file($archive)) {
+                @unlink($archive);
+            }
+            @rmdir(dirname($archive));
         }
         parent::tearDown();
     }
@@ -108,13 +118,9 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertSame(0, $run['exit'], $run['output']);
         $archive = $run['result']['archive'] ?? null;
         $this->assertIsString($archive, $run['output']);
+        $this->archives[] = $archive;
 
         return $archive;
-    }
-
-    private function zipPath(): string
-    {
-        return Idno::site()->config()->getTempDir() . str_replace('.', '_', (string) Idno::site()->config()->host) . '.zip';
     }
 
     /**
@@ -225,16 +231,38 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertStringContainsString('A private note for the archive', $this->dumpedDocuments($path));
     }
 
-    public function testTodayTheJsonOfAPrivateEntityDoesNotSayItIsPrivate(): void
+    public function testTheJsonOfAnEntitySaysItsAccessAndPublishStatus(): void
     {
-        // json/<id>.json and entities.json carry no access setting, so they cannot tell a private note
-        // from a public one; only the stored document in exported_data.sql ("access") does. Anything that
-        // restores an archive from the JSON would publish it.
+        // So that whoever handles the files can tell a private note from a public article without reading the
+        // SQL dump (which says it too).
         $path = $this->export();
 
-        $json = $this->jsonFile($path . '/json/' . $this->note->getID() . '.json');
-        $this->assertArrayNotHasKey('access', $json);
-        $this->assertStringContainsString('"access":"' . str_replace('/', '\/', $this->admin()->getUUID()) . '"', $this->dumpedDocuments($path));
+        $note = $this->jsonFile($path . '/json/' . $this->note->getID() . '.json');
+        $this->assertSame($this->admin()->getUUID(), $note['access']);
+        $this->assertSame('published', $note['publish_status']);
+        $this->assertSame('PUBLIC', $this->jsonFile($path . '/json/' . $this->article->getID() . '.json')['access']);
+
+        $all = $this->jsonFile($path . '/entities.json');
+        $byUuid = [];
+        foreach ($all as $entity) {
+            if (isset($entity['uuid'])) {
+                $byUuid[$entity['uuid']] = $entity;
+            }
+        }
+        $this->assertSame($this->admin()->getUUID(), $byUuid[$this->note->getUUID()]['access'], 'entities.json too');
+        $this->assertSame('PUBLIC', $byUuid[$this->article->getUUID()]['access']);
+    }
+
+    public function testADraftIsMarkedAsOneInItsJson(): void
+    {
+        $draft = new Entry();
+        $draft->title = 'An unfinished draft';
+        $draft->body = '<p>Not yet.</p>';
+        $this->store($draft, $this->admin(), 'PUBLIC', 'draft');
+
+        $json = $this->jsonFile($this->export() . '/json/' . $draft->getID() . '.json');
+
+        $this->assertSame('draft', $json['publish_status']);
     }
 
     public function testAnAttachmentIsCopiedIntoTheFilesDirectoryWithItsMetadata(): void
@@ -248,92 +276,83 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertSame(['filename' => $this->fileId . '.png', 'mime_type' => 'image/png'], json_decode((string) file_get_contents($stored . '.data'), true));
     }
 
-    public function testTodayTheAddressOfAnAttachmentInAnEntityPointsAtAPlaceTheArchiveDoesNotHold(): void
+    public function testTheAddressOfAnAttachmentInAnEntityPointsAtItsFileInTheArchive(): void
     {
-        // The entity's attachment address is rewritten to ../files/<host>/<id path>.file (Migration.php:132)
-        // but the bytes are written under files/uploads/<host>/<id path>.file (Migration.php:139): the
-        // address is one directory short. And the directory loop makes an empty files/<host>/<id0> too.
-        // The next change must flip this to the test below.
         $path = $this->export();
         $host = Idno::site()->config()->pathHost();
 
         $attachment = $this->jsonFile($path . '/json/' . $this->article->getID() . '.json')['attachments'][0];
-        $this->assertSame('../files/' . $host . '/' . $this->idPath($this->fileId) . '.file', $attachment['url']);
-        $this->assertFileDoesNotExist($path . '/json/' . $attachment['url']);
-        $this->assertFileExists($path . '/files/uploads/' . $host . '/' . $this->idPath($this->fileId) . '.file');
-        $this->assertDirectoryExists($path . '/files/' . $host . '/' . $this->fileId[0], 'an empty directory beside uploads/');
-        $this->assertSame([], $this->namesIn($path . '/files/' . $host . '/' . $this->fileId[0]));
+
+        $this->assertSame('../files/uploads/' . $host . '/' . $this->idPath($this->fileId) . '.file', $attachment['url']);
+        $this->assertFileExists($path . '/json/' . $attachment['url']);
+        $this->assertSame($this->pngBytes, file_get_contents($path . '/json/' . $attachment['url']));
+        $this->assertSame(['readable', 'uploads'], $this->namesIn($path . '/files'), 'and no empty directory beside uploads/');
     }
 
-    public function testTheAddressOfAnAttachmentInAnEntityPointsAtItsFileInTheArchive(): void
+    public function testAFileAttachedToTwoEntitiesIsCopiedOnce(): void
     {
-        $this->markTestIncomplete('Migration::exportToFolder() rewrites an attachment address to ../files/<host>/... (Migration.php:132) but writes the file under files/uploads/<host>/... (Migration.php:139)');
+        $second = new Entry();
+        $second->title = 'Another article with the same picture';
+        $second->body = '<p>Again.</p>';
+        $second->attachFile(\Idno\Entities\File::getByID($this->fileId));
+        $this->store($second, $this->admin());
 
         $path = $this->export();
 
-        $attachment = $this->jsonFile($path . '/json/' . $this->article->getID() . '.json')['attachments'][0];
-        $this->assertFileExists($path . '/json/' . $attachment['url']);
-        $this->assertSame($this->pngBytes, file_get_contents($path . '/json/' . $attachment['url']));
+        $mine = array_values(array_filter($this->namesIn($path . '/files/readable'), fn (string $name): bool => str_starts_with($name, $this->fileId)));
+        $this->assertSame([$this->fileId . '.png'], $mine, 'once, though two entities hold it (the site may hold other files too)');
+        foreach ([$this->article, $second] as $entity) {
+            $this->assertSame($this->pngBytes, file_get_contents($path . '/json/' . $this->jsonFile($path . '/json/' . $entity->getID() . '.json')['attachments'][0]['url']));
+        }
     }
 
     // ------------------------------------------------------------------ config.json
 
-    public function testConfigJsonHoldsTheConfigurationInEffectAndTheBootConfiguration(): void
+    public function testConfigJsonHoldsTheStoredSettingsAndNeverTheBootConfiguration(): void
     {
-        $config = $this->jsonFile($this->export() . '/config.json');
-
-        $this->assertSame(['config', 'ini_config'], array_keys($config), 'json_encode() of the Config object: its two public properties');
-        $notNull = static fn (array $settings): array => array_filter($settings, static fn (mixed $value): bool => $value !== null);
-        $this->assertEquals($notNull(Idno::site()->config()->config), $notNull($config['config']));
-        $this->assertEquals($notNull(Idno::site()->config()->ini_config), $notNull($config['ini_config']));
-        $this->assertSame(Idno::site()->config()->getURL(), $config['config']['url']);
-        $this->assertSame(Idno::site()->config()->title, $config['config']['title']);
-        $this->assertSame(Idno::site()->config()->path, $config['config']['path'], 'the server\'s directory');
-        foreach ($config['ini_config'] as $key => $value) {
-            $this->assertSame($value, $config['config'][$key], 'the boot configuration is merged over the settings: ' . $key);
-        }
-    }
-
-    public function testTodayConfigJsonHoldsTheSiteSecretAndEverySecretOfTheConfiguration(): void
-    {
-        // Nothing is left out of config.json: the site secret (which signs the CSRF tokens), the database
-        // and mail passwords, the cloud keys, whatever plugins keep in the settings. An archive is passed
-        // around (to a new host, to a person), so it carries the keys to this site. The next change must
-        // flip this to the test below.
         $config = Idno::site()->config();
-        foreach (self::SECRETS as $key => $value) {
-            $config->config[$key] = $value;
-            $config->ini_config[$key] = $value;
-        }
-        $config->config['someplugin'] = ['apikey' => 'sentinel-plugin-key', 'secret' => 'sentinel-plugin-secret'];
+        $config->config['archive_test_setting'] = 'a stored setting';
+        $config->save();
+        $this->settingsSaved = true;
+        // What only the boot configuration (config.ini, the environment) holds: in memory, never stored.
+        $config->config['boot_only_setting'] = 'from config.ini';
+        $config->ini_config['boot_only_setting'] = 'from config.ini';
 
         $archived = $this->jsonFile($this->export() . '/config.json');
 
-        foreach (self::SECRETS as $key => $value) {
-            $this->assertSame($value, $archived['config'][$key], $key . ' (settings)');
-            $this->assertSame($value, $archived['ini_config'][$key], $key . ' (boot configuration)');
-        }
-        $this->assertSame(['apikey' => 'sentinel-plugin-key', 'secret' => 'sentinel-plugin-secret'], $archived['config']['someplugin']);
-        $this->assertNotEmpty($archived['config']['site_secret']);
-        $this->assertSame(Idno::site()->config()->site_secret, $archived['config']['site_secret']);
+        $this->assertSame(['config'], array_keys($archived), 'the stored settings: no boot configuration beside them');
+        $this->assertSame('a stored setting', $archived['config']['archive_test_setting']);
+        $this->assertArrayNotHasKey('boot_only_setting', $archived['config']);
+        $this->assertStringNotContainsString('from config.ini', (string) file_get_contents($this->export() . '/config.json'));
+        $this->assertSame(Idno::site()->config()->title, $archived['config']['title'] ?? Idno::site()->config()->title);
     }
 
-    public function testConfigJsonHoldsNoSecret(): void
+    public function testConfigJsonHoldsNoSecretOfAnyLayer(): void
     {
-        $this->markTestIncomplete('Migration::exportToFolder() writes json_encode(Idno::site()->config()) to config.json (Migration.php:83): site_secret, dbpass, dbuser, smtp_password, aws_key, aws_secret and plugin credentials are all in it');
-
         $config = Idno::site()->config();
-        foreach (self::SECRETS as $key => $value) {
-            $config->config[$key] = $value;
-            $config->ini_config[$key] = $value;
+        // The stored layer: Config::save() stores whatever the configuration holds but the database's own settings.
+        foreach (['smtp_password', 'aws_secret', 'aws_key', 'dbuser'] as $key) {
+            $config->config[$key] = self::SECRETS[$key];
         }
+        $config->config['someplugin'] = ['apikey' => 'sentinel-plugin-key', 'secret' => 'sentinel-plugin-secret', 'screen_name' => 'kept'];
+        $config->save();
+        $this->settingsSaved = true;
+        $this->assertNotEmpty($config->site_secret, 'the site secret is a stored setting');
+        // (The boot layer, config.ini and the environment, is never read by the export at all: the test that plants
+        // values in a real BootConfig is ArchiveExporterTest::testASettingTheBootConfigurationDefinesIsNotWrittenToConfigJson.)
 
         $text = (string) file_get_contents($this->export() . '/config.json');
 
-        foreach (array_values(self::SECRETS) as $value) {
+        foreach (self::SECRETS as $value) {
             $this->assertStringNotContainsString($value, $text);
         }
-        $this->assertStringNotContainsString((string) Idno::site()->config()->site_secret, $text);
+        $this->assertStringNotContainsString('sentinel-plugin-key', $text);
+        $this->assertStringNotContainsString('sentinel-plugin-secret', $text);
+        $this->assertStringNotContainsString((string) $config->site_secret, $text);
+        $archived = json_decode($text, true);
+        $this->assertSame('kept', $archived['config']['someplugin']['screen_name'], 'what is no secret stays');
+        $this->assertArrayNotHasKey('site_secret', $archived['config'], 'a secret is removed, not replaced by a marker a restore would load');
+        $this->assertArrayNotHasKey('smtp_password', $archived['config']);
     }
 
     public function testTheSqlDumpKeepsEveryUsersPasswordHashAndActivityPubPrivateKeySoTheSiteCanBeRestored(): void
@@ -360,6 +379,19 @@ final class ExportArchiveTest extends PortabilityTestCase
 
     // ------------------------------------------------------------------ the archive
 
+    public function testAnEntitysHtmlInTheFolderIsAMicroformats2ObjectWithItsAuthor(): void
+    {
+        $path = $this->export();
+
+        $html = (string) file_get_contents($path . '/html/' . $this->article->getID() . '.html');
+
+        $this->assertStringContainsString('<article class="h-entry">', $html);
+        $this->assertMatchesRegularExpression('~<a class="p-author h-card" href="[^"]+">[^<]+</a>~', $html, 'the author as an h-card');
+        $this->assertStringContainsString(htmlspecialchars((string) $this->article->getURL(), ENT_QUOTES), $html, 'its address');
+        $this->assertStringContainsString('class="dt-published"', $html);
+        $this->assertStringContainsString('e-content', $html, 'and the drawn content inside');
+    }
+
     public function testTheArchiveFunctionTheCodeCallsExistsSoTheArchiveIsMade(): void
     {
         // archiveExportFolder() calls site() unqualified (Migration.php:240), which is Idno\Core\site(), the
@@ -369,7 +401,6 @@ final class ExportArchiveTest extends PortabilityTestCase
         $archive = $this->archive($this->export());
 
         $this->assertIsString($archive);
-        $this->assertSame(realpath($this->zipPath()), realpath($archive));
         $this->assertFileExists($archive);
     }
 
@@ -395,7 +426,19 @@ final class ExportArchiveTest extends PortabilityTestCase
             basename($archive),
             'the same name every time, for this host'
         );
-        $this->assertSame(realpath(Idno::site()->config()->getTempDir()), realpath(dirname($archive)));
+        $this->assertStringStartsWith(realpath(Idno::site()->config()->getTempDir()) . '/idno-archive-', dirname(realpath($archive)));
+    }
+
+    public function testTheArchiveIsMadeInADirectoryOfItsOwnThatOnlyTheServerCanEnter(): void
+    {
+        $first = $this->archive($this->export());
+        $this->logOn($this->admin());
+        $second = $this->archive($this->export());
+
+        $this->assertNotSame(dirname($first), dirname($second), 'the directory name cannot be guessed, and is new each time');
+        $this->assertMatchesRegularExpression('~/idno-archive-[0-9a-f]{32}$~', dirname($first));
+        $this->assertSame(0700, fileperms(dirname($first)) & 0777);
+        $this->assertNotSame(rtrim(Idno::site()->config()->getTempDir(), '/'), dirname($first), 'never directly in the temporary directory at a predictable path');
     }
 
     public function testCreateCompressedArchiveReturnsTheArchiveAndRemovesTheFolder(): void
@@ -412,34 +455,16 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertContains('known.json', $this->entriesOf($archive));
     }
 
-    public function testTodayAnArchiveOfTheSameHostIsAddedToNotReplaced(): void
+    public function testAnArchiveHoldsOnlyWhatTheSiteHeldWhenItWasMade(): void
     {
-        // The archive's name is the same each time and PharData opens an existing file and adds to it
-        // (Migration.php:245), while the code deletes <host>.tar and <host>.tar.gz (Migration.php:240-243),
-        // not the zip. The page unlinks the zip after storing it, so this shows only when that step did
-        // not run (the store failed): the next archive then holds the entities of the last one. The next
-        // change must flip this to the test below.
         $first = $this->archive($this->export());
         $this->assertContains('json/' . $this->note->getID() . '.json', $this->entriesOf($first));
-
         $this->logOn($this->admin());
         $this->note->delete();
         $second = $this->archive($this->export());
 
-        $this->assertSame(realpath($first), realpath($second));
-        $this->assertContains('json/' . $this->note->getID() . '.json', $this->entriesOf($second), 'an entity deleted since is still in the second archive');
-    }
-
-    public function testAnArchiveHoldsOnlyWhatTheSiteHeldWhenItWasMade(): void
-    {
-        $this->markTestIncomplete('Migration::archiveExportFolder() adds to an archive left from an earlier export of the same host (Migration.php:240-246): it removes <host>.tar and <host>.tar.gz and builds <host>.zip');
-
-        $first = $this->archive($this->export());
-        $this->assertContains('json/' . $this->note->getID() . '.json', $this->entriesOf($first));
-        $this->note->delete();
-        $second = $this->archive($this->export());
-
-        $this->assertNotContains('json/' . $this->note->getID() . '.json', $this->entriesOf($second));
+        $this->assertSame(basename($first), basename($second), 'the same file name, for this host');
+        $this->assertNotContains('json/' . $this->note->getID() . '.json', $this->entriesOf($second), 'an entity deleted since is not in the second archive');
     }
 
     // ------------------------------------------------------------------ what can go wrong
@@ -468,28 +493,28 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertDirectoryDoesNotExist($path);
     }
 
-    public function testTodayTheExportFolderAndItsFilesCanBeReadByOtherUsersOfTheServer(): void
-    {
-        // The folder is made with mode 0777 and the files with the default mode, so they are only as
-        // private as the umask: in the shared temporary directory, with a usual umask, readable by every
-        // user of the machine, config.json (with its secrets) included. The next change must flip this.
-        if ((umask() & 0005) !== 0) {
-            $this->markTestSkipped('This process\'s umask hides new files from other users.');
-        }
-        $path = $this->export();
-
-        $this->assertSame(0004, fileperms($path . '/config.json') & 0004, 'config.json is world-readable');
-        $this->assertSame(0005, fileperms($path) & 0005, 'the folder is world-readable and searchable');
-    }
-
     public function testTheExportFolderIsReadableByTheUserRunningTheSiteOnly(): void
     {
-        $this->markTestIncomplete('Migration::exportToFolder() makes its folders with mode 0777 and writes its files with the default mode (Migration.php:38-62, 70-83), in the shared temporary directory');
-
         $path = $this->export();
 
-        $this->assertSame(0, fileperms($path . '/config.json') & 0077);
-        $this->assertSame(0, fileperms($path) & 0077);
+        $this->assertSame(0, fileperms($path) & 0077, 'the folder');
+        foreach (['config.json', 'known.json', 'entities.json', 'exported_data.sql', 'json/' . $this->article->getID() . '.json', 'html/' . $this->article->getID() . '.html', 'files/readable/' . $this->fileId . '.png'] as $file) {
+            $this->assertSame(0, fileperms($path . '/' . $file) & 0077, $file);
+        }
+        foreach (['json', 'html', 'files', 'files/uploads'] as $directory) {
+            $this->assertSame(0, fileperms($path . '/' . $directory) & 0077, $directory);
+        }
+        $archive = $this->archive($path);
+        $this->assertSame(0, fileperms($archive) & 0077, 'the archive');
+    }
+
+    public function testTheFolderIsNamedByRandomDigitsNotByWhatCanBeGuessed(): void
+    {
+        $first = $this->export();
+        $second = $this->export();
+
+        $this->assertNotSame(basename($first), basename($second));
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', basename($first));
     }
 
     // ------------------------------------------------------------------ helpers

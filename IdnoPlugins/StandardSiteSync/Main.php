@@ -100,6 +100,11 @@ class Main extends Plugin
             $eventdata = $event->data();
             $object = $eventdata['object'];
 
+            // An import brings in history, not news: nothing it imports is synced
+            if (\Idno\Core\Idno::importInProgress()) {
+                return;
+            }
+
             if (!$this->shouldSync($object)) {
                 return;
             }
@@ -133,6 +138,11 @@ class Main extends Plugin
 
             $eventdata = $event->data();
             $object = $eventdata['object'];
+
+            // An import brings in history, not news: nothing it imports is synced
+            if (\Idno\Core\Idno::importInProgress()) {
+                return;
+            }
 
             if (!$this->shouldSync($object)) {
                 return;

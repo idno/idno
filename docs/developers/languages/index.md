@@ -10,8 +10,8 @@ method hook.
 ## Adding a translation for a language
 
 Idno reads translations from [gettext](https://en.wikipedia.org/wiki/Gettext) files (`.po`, and compiled `.mo`), which is a widely supported localisation format and the recommended way
-to add translations to your code. Idno parses the files itself: the PHP `gettext` extension is not needed (and is never called), and Idno does not change the
-process's locale (`setlocale()`) or environment (`LANG`, `LANGUAGE`).
+to add translations to your code. Idno reads the files with Symfony's gettext loaders (`PoFileLoader`, `MoFileLoader`): the PHP `gettext` extension is not needed (and is never called), and Idno does not change the
+process's locale (`setlocale()`) or environment (`LANG`, `LANGUAGE`). A catalogue file is trusted like the plugin's own code: Idno checks a `.mo` file's header against its size, but nothing more, and a malformed or hostile `.mo` can still exhaust memory, so only ship catalogue files you trust.
 
 ### Creating .POT file
 

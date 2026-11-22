@@ -89,6 +89,16 @@ only reads the fixture. `composer test:mail` delivers the site's mails to three 
 STARTTLS, implicit TLS) and reads them back through Mailpit's API. Before a release, also send the admin's test
 mail (Admin, Email) with the site's real provider's settings once.
 
+## Acceptance tests
+
+`Tests/Acceptance/` tests what a site owner does, from the first mail setting to a full export, with the pieces working together, where the other tests check each piece. Each walkthrough is one ordered scenario on one site, so what the owner has done (settings saved, a member invited, posts made, an export run) is still there at the next step. `Tests\Acceptance\Browser` drives the site over HTTP as a person does: it reads a form, posts it with its signed token and the person's session cookie, uploads a file and logs in. The queue worker runs as a subprocess, mail is read from a `ScriptedSmtpServer` the site really delivers to, and the archive is downloaded by its address and unzipped.
+
+- `PhaseWalkthroughTest` is a new site: the administrator saves the mail settings on the admin page (a wrong password fails, the corrected one works), invites a member, the member resets a password and publishes, the site is read in French and in English, the administrator exports the whole site and imports a WordPress file, and the HSTS state of a host is shared between processes.
+- `UpgradedSiteWalkthroughTest` upgrades a 1.x database over HTTP (MySQL and MariaDB only) and checks that the mail settings, the retired `cache` setting and the translations behave.
+- `RoundTripTest` exports a site as WordPress (WXR) and imports the file into a second, empty site.
+
+A walkthrough that finds a defect in production code does not hide it: the test asserts the behaviour that is wanted and calls `markTestIncomplete()` with the file and the cause when it sees the defect. Run `composer test -- Tests/Acceptance` on SQLite, MySQL and MariaDB. The checks that no test replaces (the real mail provider, a real WordPress export, a very large site, a non-English browser, the real worker supervisor, a real 1.x database) are listed in [the release checklist](release-checklist.md).
+
 ## The unit tier
 
 `composer test:unit` runs `Tests/Unit/` alone (`phpunit.unit.xml`), with nothing but PHP and the extensions `composer.json` requires: no rig, no database server, no configuration. It includes the record storage contract against the in-memory store and against SQLite in memory.

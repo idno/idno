@@ -36,15 +36,18 @@ namespace Idno\Pages\Admin {
                     $report .= "Basic checks on installation discovered no problems.\n\n";
                 }
 
-                $config                       = \Idno\Core\Idno::site()->config();
-                $config->config['dbpass']     = '** REDACTED **';
-                $config->ini_config['dbpass'] = '** REDACTED **';
-                $config->config['site_secret']     = '** REDACTED **';
-                $config->config['smtp_password']   = '** REDACTED **';
+                // The same rule of what a secret is as the export archive's (Idno\Portability\SettingsRedactor),
+                // applied to a copy: the running configuration is left as it is.
+                $config = \Idno\Core\Idno::site()->config();
+                $shown  = [
+                    'config'     => \Idno\Portability\SettingsRedactor::redact($config->config),
+                    'ini_config' => \Idno\Portability\SettingsRedactor::redact($config->ini_config),
+                ];
 
-                $report .= "\nRunning config:\n---------------\n" . json_encode($config, JSON_PRETTY_PRINT) . "\n\n";
-                $report .= "\$_SESSION:\n----------\n" . json_encode($_SESSION, JSON_PRETTY_PRINT) . "\n\n";
-                $report .= "\$_SERVER:\n---------\n" . json_encode($_SERVER, JSON_PRETTY_PRINT) . "\n\n";
+                $report .= "\nRunning config:\n---------------\n" . json_encode($shown, JSON_PRETTY_PRINT) . "\n\n";
+                // Both dumps hold secrets (IDNO_DBPASS and the like in the server's variables, a session's own keys)
+                $report .= "\$_SESSION:\n----------\n" . json_encode(\Idno\Portability\SettingsRedactor::redact((array)$_SESSION), JSON_PRETTY_PRINT) . "\n\n";
+                $report .= "\$_SERVER:\n---------\n" . json_encode(\Idno\Portability\SettingsRedactor::redact($_SERVER), JSON_PRETTY_PRINT) . "\n\n";
 
                 // Hook so other plugins and subsystems can add their own data to the report.
                 $report = \Idno\Core\Idno::site()->events()->triggerEvent('diagnostics/report', [], $report);

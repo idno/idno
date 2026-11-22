@@ -17,6 +17,9 @@ use Tests\IdnoTestCase;
  */
 abstract class PortabilityTestCase extends IdnoTestCase
 {
+    /** The smallest valid PNG: one transparent pixel. */
+    public const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=';
+
     /** @var list<Entity> */
     private array $entities = [];
 
@@ -162,13 +165,18 @@ abstract class PortabilityTestCase extends IdnoTestCase
      *
      * @param array<string, mixed>       $arguments
      * @param array<string, string|null> $environment variables to add to the process's own, null to remove one
+     * @param array<string, string>      $ini         PHP settings for the process, as -d options
      *
      * @return array{exit: int, output: string, result: ?array<string, mixed>}
      */
-    protected function probe(string $operation, array $arguments = [], array $environment = []): array
+    protected function probe(string $operation, array $arguments = [], array $environment = [], array $ini = []): array
     {
+        $options = [];
+        foreach ($ini as $name => $value) {
+            array_push($options, '-d', $name . '=' . $value);
+        }
         $command = [
-            PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0',
+            PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', ...$options,
             __DIR__ . '/probe.php', $operation, json_encode($arguments, JSON_THROW_ON_ERROR),
         ];
         $env = $environment + getenv();

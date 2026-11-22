@@ -108,7 +108,8 @@
     "suggest": {
         "ext-pdo_mysql": "A site on MySQL or MariaDB needs it; Idno needs this or ext-pdo_sqlite",
         "ext-pdo_sqlite": "A site on SQLite needs it (SQLite 3.38 or later); Idno needs this or ext-pdo_mysql",
-        "ext-mongodb": "Only to import a MongoDB site into MySQL, MariaDB or SQLite (php bin/console idno:import:mongo)"
+        "ext-mongodb": "Only to import a MongoDB site into MySQL, MariaDB or SQLite (php bin/console idno:import:mongo)",
+        "ext-zip": "The admin export's full archive is a zip file (without it the archive cannot be made; the RSS and WXR exports still work)"
     },
     "funding": [
         {

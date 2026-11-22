@@ -46,6 +46,11 @@ namespace Idno\Core {
                 return false;
             }
 
+            // An import brings in history, not news (Idno\Portability\ImportMode)
+            if (\Idno\Core\Idno::importInProgress()) {
+                return true;
+            }
+
             if ($current_page = \Idno\Core\Idno::site()->currentPage()) {
                 if ($nowebmention = $current_page->getInput('nomention') || defined('IDNO_NOMENTION')) {
                     return true;

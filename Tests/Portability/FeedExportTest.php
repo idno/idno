@@ -12,7 +12,8 @@ use IdnoPlugins\Status\Status;
 use IdnoPlugins\Text\Entry;
 
 /**
- * The RSS and WXR exports, Migration::getExportRSS(), what the admin and account export pages call.
+ * The RSS and WXR exports, FeedExporter, what the admin and account export pages call (and, as a delegate,
+ * Migration::getExportRSS()).
  * They run in a subprocess (probe.php, operation rss), as a web request would run them: the RSS shell
  * template sends a header, which PHPUnit's own output makes impossible in this process.
  *
@@ -38,6 +39,9 @@ final class FeedExportTest extends PortabilityTestCase
 
     /** @var list<string> */
     private static array $leftBehind = [];
+
+    /** @var array<string, list<string>> what each run added to the temporary directory */
+    private static array $created = [];
 
     protected function setUp(): void
     {
@@ -85,7 +89,7 @@ final class FeedExportTest extends PortabilityTestCase
         $member = $this->user();
         $this->logOn($admin);
 
-        self::$pngBytes = (string) base64_decode(RecordingStreamWrapper::PNG_BASE64, true);
+        self::$pngBytes = (string) base64_decode(self::PNG_BASE64, true);
         self::$fileId = $this->storeFile(self::$pngBytes, 'pool.png', 'image/png');
         $this->keepFile(self::$fileId); // the posts live until the class ends, and so does their file
 
@@ -134,9 +138,9 @@ final class FeedExportTest extends PortabilityTestCase
     }
 
     /**
-     * Runs Migration::getExportRSS() in a subprocess and returns the document, once per distinct run.
+     * Runs the feed export in a subprocess and returns the document, once per distinct run.
      *
-     * @return array{document: string, file: string}
+     * @return array{document: string, created: list<string>}
      */
     private function export(?User $loggedOn, bool $hidePrivate, bool $wxr, ?User $forUser = null): array
     {
@@ -154,7 +158,9 @@ final class FeedExportTest extends PortabilityTestCase
             $this->assertIsArray($run['result'], $run['output']);
             $this->assertIsString($run['result']['document'], 'the export returned a document: ' . $run['output']);
             self::$runs[$key] = $run['result'];
-            self::$leftBehind[] = dirname(dirname((string) $run['result']['file']));
+            foreach ($run['result']['created'] as $name) {
+                self::$leftBehind[] = rtrim(sys_get_temp_dir(), '/') . '/' . $name;
+            }
         }
 
         return self::$runs[$key];
@@ -351,48 +357,60 @@ final class FeedExportTest extends PortabilityTestCase
         $this->assertItems(['article', 'note', 'private', 'draft', 'memberPublic', 'memberPrivate'], $document);
     }
 
-    public function testTodayAnAdminsExportThatHidesPrivatePostsStillHoldsThem(): void
-    {
-        // An administrator reads every record whatever its access, so the PUBLIC group the export asks
-        // for (Migration.php:589) narrows nothing for them: "hide private posts" hides nothing.
-        // The next change must flip this to the test below.
-        $document = $this->export($this->admin(), true, true)['document'];
-
-        $this->assertItems(['article', 'note', 'private', 'draft', 'memberPublic', 'memberPrivate'], $document);
-    }
-
     public function testHidingPrivatePostsHidesThemFromAnAdminsExportToo(): void
     {
-        $this->markTestIncomplete('Migration::getExportRSS() with $hide_private asks for the PUBLIC group only (Migration.php:589), which an admin reading as an admin ignores: private posts and drafts are exported');
-
+        // An administrator reads every record whatever its access: what is hidden is decided by the export's
+        // own criteria (public and published), not by what the viewer may read.
         $document = $this->export($this->admin(), true, true)['document'];
 
         $this->assertItems(['article', 'note', 'memberPublic'], $document);
     }
 
-    public function testTodayEveryItemIsMarkedPublishedWhateverItsAccessOrStatus(): void
+    public function testAnAdminsExportThatHidesPrivatePostsHoldsNoMembersPrivatePostEither(): void
     {
-        // rssSerialise() writes wp:status "publish" for every item (Entity.php:2109): a WordPress that
-        // imports the file publishes the private note and the draft. The next change must flip this.
-        $document = $this->export($this->admin(), false, true)['document'];
-        $xpath = $this->xpathOf($document);
-        $items = $this->itemsOf($document);
+        $document = $this->export($this->admin(), true, false)['document'];
 
-        foreach (['private', 'draft'] as $post) {
-            $this->assertSame('publish', $xpath->evaluate('string(wp:status)', $items[$this->uuid($post)]), $post);
-        }
+        $this->assertStringNotContainsString($this->uuid('memberPrivate'), $document);
+        $this->assertStringNotContainsString($this->uuid('draft'), $document);
+        $this->assertStringNotContainsString('The private note about the secret rock', $document);
+    }
+
+    public function testAPostWithNoPublishStatusIsExportedWhenPrivatePostsAreHidden(): void
+    {
+        // The criteria for "public and published" are `publish_status in ('published', '')`. A record whose status
+        // is empty or absent is indexed as published (RecordIndex), so the store matches it: such posts are in
+        // the export, as they are in the site's own pages.
+        $this->logOn($this->admin());
+        $empty = new Entry();
+        $empty->title = 'A post whose status is empty';
+        $empty->body = '<p>Empty.</p>';
+        $this->store($empty, $this->admin(), 'PUBLIC', '');
+        $absent = new Entry();
+        $absent->title = 'A post with no status at all';
+        $absent->body = '<p>Absent.</p>';
+        $this->store($absent, $this->admin());
+        unset($absent->publish_status);
+        $absent->save(true);
+        $this->assertArrayNotHasKey('publish_status', array_filter($absent->jsonSerialize(), static fn (mixed $v): bool => $v !== null && $v !== ''), 'the status is absent from the record');
+
+        self::$runs = []; // the runs are cached: this one must see the posts made above
+        $document = $this->export(null, true, false)['document'];
+
+        $this->assertStringContainsString('A post whose status is empty', $document, 'an empty status counts as published');
+        $this->assertStringContainsString('A post with no status at all', $document, 'an absent status counts as published');
     }
 
     public function testAPrivateOrDraftItemIsNotMarkedPublished(): void
     {
-        $this->markTestIncomplete('Entity::rssSerialise() writes <wp:status>publish</wp:status> for every item (Entity.php:2109), so a private post or a draft is imported as published');
-
         $document = $this->export($this->admin(), false, true)['document'];
         $xpath = $this->xpathOf($document);
         $items = $this->itemsOf($document);
 
         $this->assertSame('private', $xpath->evaluate('string(wp:status)', $items[$this->uuid('private')]));
+        $this->assertSame('private', $xpath->evaluate('string(wp:status)', $items[$this->uuid('memberPrivate')]));
         $this->assertSame('draft', $xpath->evaluate('string(wp:status)', $items[$this->uuid('draft')]));
+        $this->assertSame('publish', $xpath->evaluate('string(wp:status)', $items[$this->uuid('article')]));
+        $this->assertSame('publish', $xpath->evaluate('string(wp:status)', $items[$this->uuid('note')]));
     }
 
     public function testAMembersExportHoldsOnlyTheirOwnPublicPosts(): void
@@ -424,27 +442,41 @@ final class FeedExportTest extends PortabilityTestCase
 
     // ------------------------------------------------------------------ what it leaves behind
 
-    public function testTodayTheTemporaryDirectoryOfAnExportIsLeftBehind(): void
+    public function testAnExportLeavesNothingInTheTemporaryDirectory(): void
     {
-        // getExportRSS() makes <temp>/<hash>/rss/ and returns a handle on a file in it; nothing removes
-        // either, so every export (every click on "Download file") leaves the whole document on disk.
-        // The next change must flip this to the test below.
-        $run = $this->export(null, true, false);
-        $directory = dirname(dirname($run['file']));
+        foreach ([[null, true, false], [null, true, true], [$this->admin(), false, true]] as [$user, $hidePrivate, $wxr]) {
+            $run = $this->export($user, $hidePrivate, $wxr);
 
-        $this->assertDirectoryExists($directory);
-        $this->assertFileExists($run['file']);
-        $this->assertSame($run['document'], file_get_contents($run['file']));
-        $this->assertSame(['export.rss', 'items.rss.fragment', 'template.rss.fragment'], $this->namesIn($directory . '/rss'));
+            $this->assertSame([], $run['created'], 'no directory and no file is left behind');
+        }
     }
 
-    public function testAnExportRemovesItsTemporaryDirectoryOnceItIsRead(): void
+    public function testTheDelegateGivesTheSameDocument(): void
     {
-        $this->markTestIncomplete('Migration::getExportRSS() never removes <temp>/<hash>/rss/ or <temp>/<hash>/ (Migration.php:611-705); the pages read the handle and exit');
+        $arguments = ['login' => null, 'hide_private' => true, 'wxr' => true, 'user_uuid' => '', 'uri' => '/admin/export/wxr'];
+        $run = $this->probe('rss_delegate', $arguments);
+        $this->assertSame(0, $run['exit'], $run['output']);
 
-        $run = $this->export(null, true, false);
+        $this->assertIsString($run['result']['document']);
+        $this->assertSame([], $run['result']['created']);
+        $this->assertItems(['article', 'note', 'memberPublic'], $run['result']['document']);
+    }
 
-        $this->assertDirectoryDoesNotExist(dirname(dirname($run['file'])));
+    public function testADocumentIsWellFormedWhateverThePostsHold(): void
+    {
+        // Titles and bodies with the characters that end an XML or CDATA section early.
+        $admin = $this->admin();
+        $this->logOn($admin);
+        $tricky = new Entry();
+        $tricky->title = 'A title with ]]> and <b>markup</b> & an ampersand';
+        $tricky->body = '<p>Body with ]]> inside a CDATA section, and a NUL-free emoji 🦩</p>';
+        $this->store($tricky, $admin);
+
+        $run = $this->probe('rss', ['login' => null, 'hide_private' => true, 'wxr' => true, 'user_uuid' => '', 'uri' => '/admin/export/wxr']);
+        $this->assertSame(0, $run['exit'], $run['output']);
+        $document = (string) $run['result']['document'];
+
+        $this->assertArrayHasKey($tricky->getUUID(), $this->itemsOf($document), 'well-formed, and the post is in it');
     }
 
     /**

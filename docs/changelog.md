@@ -30,6 +30,11 @@ These changes are on the `dev` branch and will be part of the next release.
 * Fixed the asynchronous queue losing its MySQL connection
 * Fixed the WebSub subscription challenge response and range requests for files
 * Tests now run in GitHub Actions against SQLite, MySQL and MariaDB (and MongoDB, for the import)
+* Security: the full export archive (every account's password hash and the site's private keys are in it) can be downloaded by administrators only, is never cached, no longer holds the boot configuration or any secret setting in `config.json`, and is removed after a week
+* Export and import: the admin export page now offers the full archive and the link to the finished one; "Include private posts?" really leaves private posts and drafts out of an administrator's RSS or WXR file, and private posts and drafts are marked as such in the file; the account export's checkbox works
+* Export and import: imports never announce what they bring in (no federation, syndication, webmentions or hub pings), keep private posts private and drafts as drafts, import Blogger comments and drafts, and fail cleanly, with the failure mail, on a file that is empty, not XML or has no posts; pictures are fetched through the site's HTTP client with its limits
+* Export and import: the work runs in the queue's worker when the queue is asynchronous, and after the response otherwise, without the ten seconds of waiting; the import form for "Idno" RSS files, which never worked, is gone (choose WordPress)
+* Fixed the queue's worker using another upload directory than the site's pages (its host was empty)
 
 1.6.4
 -----

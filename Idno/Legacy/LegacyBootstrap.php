@@ -58,10 +58,12 @@ final class LegacyBootstrap
 
             // Shims
             require_once dirname(__DIR__) . '/shims.php';
-
-            // Register the idno-templates folder as the place to look for templates in Bonita
-            \Idno\Core\Bonita\Main::additionalPath(dirname(__DIR__, 2));
         }
+
+        // Register the idno-templates folder as the place to look for templates in Bonita. Every process needs
+        // it, a command-line one too: the queue worker draws the mails it sends (the export and import results)
+        // from the core templates, and without this path every one of them draws as an empty string.
+        \Idno\Core\Bonita\Main::additionalPath(dirname(__DIR__, 2));
 
         \Idno\Core\Idno::setContainer($this->container);
 

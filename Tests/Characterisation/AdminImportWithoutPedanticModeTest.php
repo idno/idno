@@ -7,16 +7,15 @@ namespace Tests\Characterisation;
 use Tests\Queue\AsyncSiteTestCase;
 
 /**
- * What the import page does with a request that has no usable file, on a site as production runs it. The
- * rig's own site runs with pedantic_mode, which turns the PHP warning of an undefined variable into an
- * exception that the page catches; production does not, and the same request ends in a TypeError, which
- * the page does not catch. So this is a site of its own (as the queue tests have) with pedantic_mode off.
+ * What the import page does with a request that has no usable file, on a site as production runs it: a site of
+ * its own (as the queue tests have) with pedantic_mode off and the asynchronous queue, so that the page queues
+ * the import for the worker. (The rig's own site runs with pedantic_mode, which turns a PHP warning into an
+ * exception that a page may catch where production would not.)
  *
- * The page answers at once, then waits ten seconds and imports (Pages\Admin\Import). Four requests are made
- * together, on four workers, and the test waits for what they do: three have no usable file (none, an
- * empty one, one that is not XML) and a fourth asks for the import type "Known", which the page has no case
- * for; that one ends in the failure mail, which is the proof that mail works on this site, so that the
- * absence of a mail for the others means something.
+ * Five requests are made: no file, an empty one, a source the page does not handle ("Known", which the page
+ * used to offer and never read) and no source start nothing, and say why; a file that is not XML is queued,
+ * and when the worker has run the admin is mailed that it failed, nothing is created, and no error escapes
+ * as a critical line in the log.
  */
 final class AdminImportWithoutPedanticModeTest extends AsyncSiteTestCase
 {
@@ -26,9 +25,9 @@ final class AdminImportWithoutPedanticModeTest extends AsyncSiteTestCase
     }
 
     /**
-     * Makes the four requests and waits for what they do.
+     * Makes the requests, runs the worker and reads what happened.
      *
-     * @return array{mails: list<array<string, mixed>>, log: string}
+     * @return array{mails: list<array<string, mixed>>, log: string, refused: array<string, string>, queuedBefore: list<string>, queuedAfter: list<string>, failedAfter: list<string>}
      */
     private function scenario(): array
     {
@@ -39,30 +38,35 @@ final class AdminImportWithoutPedanticModeTest extends AsyncSiteTestCase
         $jobs = [
             'no file' => ['WordPress', null],
             'empty file' => ['WordPress', ['empty.xml', '']],
-            'not XML' => ['WordPress', ['notes.txt', 'These are my notes, not an export.']],
             'Known' => ['Known', ['export.rss', '<?xml version="1.0"?><rss version="2.0"><channel><title>x</title></channel></rss>']],
+            'no source' => ['', ['export.xml', '<rss/>']],
+            'not XML' => ['WordPress', ['notes.txt', 'These are my notes, not an export.']],
         ];
+        $refused = [];
         foreach ($jobs as $name => [$type, $file]) {
             $page = $this->site()->request('GET', 'admin/import/', ['Cookie' => $cookie]);
             $this->assertSame(200, $page->status, $name . $this->serverLog());
-            [$boundary, $body] = $this->multipart($this->formToken($page->body, 'admin/import/') + ['import_type' => $type], $file);
+            $fields = $this->formToken($page->body, 'admin/import/') + ($type === '' ? [] : ['import_type' => $type]);
+            [$boundary, $body] = $this->multipart($fields, $file);
             $response = $this->site()->request('POST', 'admin/import/', ['Cookie' => $cookie, 'Content-Type' => 'multipart/form-data; boundary=' . $boundary], $body);
             $this->assertSame(302, $response->status, $name . ': ' . substr($response->body, 0, 500) . $this->serverLog());
             $this->assertSame($this->baseUrl() . 'admin/import/', $response->header('Location'), $name);
+            $refused[$name] = html_entity_decode($this->site()->request('GET', 'admin/import/', ['Cookie' => $cookie])->body, ENT_QUOTES);
         }
+        $before = array_column($this->queuedEvents(), 'event');
+        $this->assertSame([], $this->mailLog(), 'the page sends no mail: the worker does the work');
 
-        // Ten seconds of waiting in each of the four workers, then the work. A request for the mail record
-        // is answered when a worker is free again, which is after that.
-        $mails = [];
-        $deadline = microtime(true) + 45;
-        while ($mails === [] && microtime(true) < $deadline) {
-            $mails = $this->mailLog();
-            usleep(250_000);
-        }
-        sleep(2); // the others have had their time too
-        $mails = [...$mails, ...$this->mailLog()];
+        $worker = $this->runWorkerOnce();
+        $this->assertSame(0, $worker['exit'], $worker['output']);
 
-        return ['mails' => $mails, 'log' => $this->serverLogContents()];
+        return [
+            'mails' => $this->mailLog(),
+            'log' => $this->serverLogContents() . $worker['output'],
+            'refused' => $refused,
+            'queuedBefore' => $before,
+            'queuedAfter' => array_column($this->queuedEvents(), 'event'),
+            'failedAfter' => array_column($this->failedEvents(), 'event'),
+        ];
     }
 
     /**
@@ -77,35 +81,29 @@ final class AdminImportWithoutPedanticModeTest extends AsyncSiteTestCase
         return $response->json();
     }
 
-    public function testTodayABadImportEndsInAnUncaughtTypeErrorAndNoMail(): void
+    public function testARequestWithNoUsableFileOrSourceStartsNothingAndSaysWhy(): void
     {
-        // The import page runs its import inside try/catch (\Exception) (Pages\Admin\Import). What a missing,
-        // empty or unreadable file does is a TypeError (an \Error): in the import ("Return value must be of type
-        // bool, none returned") or at the call (a missing file leaves $xml undefined, so null is passed). It
-        // reaches the legacy exception handler, which logs it as critical, and the admin, who was told "We'll
-        // email you when it's done", is never mailed. The next change must flip this to the test below.
         $result = $this->scenario();
 
-        $this->assertStringContainsString('PHP [2] Undefined variable $xml in ' . dirname(__DIR__, 2) . '/Idno/Pages/Admin/Import.php:69', $result['log'], 'no file');
-        $this->assertStringContainsString('critical - Idno\Core\Migration::importWordPressXML(): Argument #1 ($xml) must be of type string, null given', $result['log'], 'no file');
-        $this->assertSame(2, substr_count($result['log'], 'critical - Idno\Core\Migration::importWordPressXML(): Return value must be of type bool, none returned'), 'an empty file, and a file that is not XML');
-        $this->assertSame(3, substr_count($result['log'], 'critical - '), 'one uncaught error for each of the three');
-
-        // The fourth, the type "Known", is answered the way a failed import is: one mail. The other three sent none.
-        $this->assertSame(1, substr_count($result['log'], 'Import completed, but may not have been successful'));
-        $this->assertCount(1, $result['mails'], json_encode(array_column($result['mails'], 'subject')));
-        $this->assertSame('Idno - Problem with your import', $result['mails'][0]['subject']);
-        $this->assertSame('alice@example.com', $result['mails'][0]['to'][0]['address']);
+        $this->assertStringContainsString('You need to upload an import file to continue.', $result['refused']['no file']);
+        $this->assertStringContainsString("We couldn't open the file you uploaded.", $result['refused']['empty file']);
+        $this->assertStringContainsString('Choose where your file comes from', $result['refused']['Known']);
+        $this->assertStringContainsString('Choose where your file comes from', $result['refused']['no source']);
+        $this->assertSame(['portability/import'], $result['queuedBefore'], 'only the file that is not XML is queued');
     }
 
     public function testABadImportMailsTheAdminThatItFailed(): void
     {
-        $this->markTestIncomplete('The importers throw a TypeError when nothing is imported (Migration.php:296, 437, 447) and the page catches only \Exception (Pages\Admin\Import.php:73): no failure mail is sent for a missing, empty or unreadable file, only for an import type the page has no case for');
-
         $result = $this->scenario();
 
-        $this->assertCount(4, $result['mails'], 'every request that does not import ends in the failure mail');
+        $this->assertCount(1, $result['mails'], json_encode(array_column($result['mails'], 'subject')));
+        $this->assertSame('Idno - Problem with your import', $result['mails'][0]['subject']);
+        $this->assertSame('alice@example.com', $result['mails'][0]['to'][0]['address']);
         $this->assertStringNotContainsString('critical - ', $result['log']);
+        $this->assertStringNotContainsString('Undefined variable', $result['log']);
+        $this->assertStringNotContainsString('TypeError', $result['log']);
+        $this->assertSame([], $result['queuedAfter'], 'the event was handled');
+        $this->assertSame([], $result['failedAfter'], 'and did not end in the failure transport: the job reports its failure by mail');
     }
 
     /**

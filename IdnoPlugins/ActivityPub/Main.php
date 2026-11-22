@@ -91,6 +91,9 @@ class Main extends Plugin
             $eventdata = $event->data();
             $object = $eventdata['object'];
 
+            // An import brings in history, not news: nothing it imports is federated
+            if (\Idno\Core\Idno::importInProgress()) return;
+
             // Skip non-content entities
             if ($object instanceof User) return;
             if ($object instanceof ActivityPubFollower) return;
@@ -122,6 +125,9 @@ class Main extends Plugin
 
             $eventdata = $event->data();
             $object = $eventdata['object'];
+
+            // An import brings in history, not news: nothing it imports is federated
+            if (\Idno\Core\Idno::importInProgress()) return;
 
             if ($object instanceof User) return;
             if ($object instanceof ActivityPubFollower) return;

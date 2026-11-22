@@ -58,6 +58,8 @@ Additionally, Idno requires the following PHP components:
 
 The `exif` extension is optional. If it is installed, Idno uses it to read the orientation and metadata of uploaded photos.
 
+The `zip` extension is optional too: the administrator's full export archive is a zip file, and cannot be made without it (the RSS and WordPress exports still work).
+
 !!! note "Note" 
     You may need to restart the web server after installing these components. Idno's installer will tell you if a required module isn't available.
 

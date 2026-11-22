@@ -8,6 +8,9 @@
             <p>
                 <?php echo \Idno\Core\Idno::site()->language()->_("Idno tries to send email using your server's default email settings. If you'd like it to do something else - for example, if you'd like to send email using an external provider - enter the new SMTP settings below."); ?>
             </p>
+            <p>
+                <?php echo \Idno\Core\Idno::site()->language()->_("After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started."); ?>
+            </p>
         </div>
     </div>
     <div class="col-md-10 col-md-offset-1">

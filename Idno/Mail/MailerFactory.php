@@ -12,9 +12,11 @@ use Symfony\Component\Mailer\Transport\TransportFactoryInterface;
 
 /**
  * Builds the site's mailer from the mail settings (smtp_host, smtp_port, smtp_username, smtp_password,
- * smtp_secure) as they are at the moment of the call. They are stored settings, which an admin edits,
- * so the mailer is never kept: the container service is not shared, and the next mail after a change
- * uses the new settings (a queue worker never holds an old password). Nothing from the settings is
+ * smtp_secure) as this process last loaded them (the SiteSettings it is given: in a web request the
+ * settings it read at its start, in a long-running queue worker the settings it read when it started).
+ * The mailer is built at each call and never kept, so a change made in THIS process's configuration
+ * applies to its next mail; a change an administrator saves in a web request reaches a running worker
+ * only when the worker next starts (it stops itself after an hour). Nothing from the settings is
  * compiled into the container.
  *
  * Reading the settings needs the legacy application behind SiteSettings, so the service must not be

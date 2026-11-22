@@ -29,9 +29,12 @@ final class WebserviceHstsTest extends \Tests\IdnoTestCase
         parent::tearDown();
     }
 
+    /** The keys an IP-literal host could leave (a failing test would pin the rig's own address to https). */
+    private const IP_KEYS = ['127.0.0.1', '::1', '[::1]', '2001:db8::1', '[2001:db8::1]'];
+
     private function forget(): void
     {
-        foreach (self::HOSTS as $host) {
+        foreach ([...self::HOSTS, ...self::IP_KEYS] as $host) {
             Idno::site()->cache()->delete($host);
         }
     }
@@ -200,6 +203,39 @@ final class WebserviceHstsTest extends \Tests\IdnoTestCase
                 $this->assertNull(Idno::site()->cache()->load($key), $url);
             }
             $this->assertFalse(Webservice::isHSTS(str_replace('https', 'http', $url)));
+        }
+    }
+
+    public function testAPoolThePathCannotWriteIsAMissAndNeverAnErrorForAnOutboundRequest(): void
+    {
+        // A queue worker run as another Unix user, or a pool directory made under another umask: the namespace
+        // directory is there and this process cannot write in it. HSTS memory is lost; nothing is thrown.
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('The superuser can write anywhere.');
+        }
+        $base = sys_get_temp_dir() . '/idno-unwritable-pool-' . bin2hex(random_bytes(6));
+        $namespace = md5('unwritable.example');
+        mkdir($base . '/' . $namespace, 0700, true);
+        chmod($base . '/' . $namespace, 0500);
+        $property = new \ReflectionProperty(Idno::site(), 'cache');
+        $property->setAccessible(true);
+        $real = $property->getValue(Idno::site());
+        $pool = new \Symfony\Component\Cache\Adapter\FilesystemAdapter($namespace, 0, $base);
+        $property->setValue(Idno::site(), new \Idno\Caching\PersistentCache(static fn () => $pool));
+        try {
+            Idno::site()->cache()->store('some-key', 'value');
+            $this->assertNull(Idno::site()->cache()->load('some-key'), 'the save could not be written: a miss');
+
+            $this->answer([new MockResponse('ok', ['http_code' => 200, 'response_headers' => ['Strict-Transport-Security: max-age=600']])]);
+            $result = Webservice::get('https://a.hsts-test.invalid/');
+
+            $this->assertSame(200, $result['response'], 'the outbound request succeeds');
+            $this->assertSame('ok', $result['content']);
+            $this->assertFalse(Webservice::isHSTS('http://a.hsts-test.invalid/'), 'only the HSTS memory is lost');
+        } finally {
+            $property->setValue(Idno::site(), $real);
+            @chmod($base . '/' . $namespace, 0700);
+            \Idno\Portability\ArchiveExporter::removeTree($base);
         }
     }
 }
