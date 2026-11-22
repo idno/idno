@@ -10,6 +10,7 @@ use Idno\Core\Idno;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\DialectFactory;
 use Idno\Storage\JsonRecordStore;
+use Idno\Storage\QuoteNormaliser;
 use Idno\Storage\RecordStore;
 use Idno\Storage\SchemaCatalog;
 use Idno\Storage\SettingsRecordStore;
@@ -22,7 +23,7 @@ use Idno\Storage\TypeMap;
  * the site's database (DialectFactory, from the boot configuration: MySqlDialect for MySQL and
  * MariaDB, SqliteDialect for SQLite), LegacyRecordDefaults, the container's TypeMap (the entities'
  * aliases) and SchemaCatalog (shared with IndexedFields, which tells it when it creates an index),
- * the legacy quote normaliser for the search text (Language::uncurlQuotes(), as the old backend's
+ * the quote normaliser for the search text (QuoteNormaliser, which Language::uncurlQuotes() also calls, as the old backend's
  * saveRecord() applied it) and the site's `boolean_search` / `bypass_fulltext_search` settings,
  * read from the legacy config each time a search condition is built (as the legacy backend read
  * them per query).
@@ -73,7 +74,7 @@ final class LegacyRecordStoreFactory
             $this->defaults,
             $this->types,
             ($this->catalog)(),
-            static fn (string $text): string => (string) Idno::site()->language()->uncurlQuotes($text),
+            QuoteNormaliser::normalise(...),
             // Read when each search runs, as the legacy backend read them (after the stored config is
             // merged, and whatever a plugin changes at runtime).
             static fn (): bool => (bool) Idno::site()->config()->boolean_search,

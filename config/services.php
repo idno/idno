@@ -58,7 +58,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // builds them); they are not services. EntityClassFinder is a static helper. SettingsRecordStore (a RecordStore decorator that serves `config` from the settings table) is built with new, like the other RecordStore implementations.
         // Files/ (the file store on Flysystem, its value object, its exception and the filesystem factory) is built with new or by a factory, not autowired.
         // ConnectionFactory is a static helper (the connection a legacy configuration gives).
-        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'Files', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
+        'Storage' => ['Attribute', 'BootConfigConnectionFactory.php', 'ConnectionFactory.php', 'ConnectionParameters.php', 'Criteria.php', 'Criterion', 'EntityClassFinder.php', 'EntityQuery.php', 'Files', 'FixedAccessContext.php', 'FixedRecordDefaults.php', 'IdentityTypeMap.php', 'InMemoryRecordStore.php', 'JsonRecordStore.php', 'Migrations', 'MySqlSemantics.php', 'Platform', 'QuoteNormaliser.php', 'RecordDefaults.php', 'RecordIndex.php', 'SettingsRecordStore.php'],
         // RepositoryDataConcierge (the db() service) is built by LegacyServiceFactory::db(), with
         // LegacySqlMaintenance.
         // The upgrade's progress is a value object; the copier's helpers (the 1.x source, the writer

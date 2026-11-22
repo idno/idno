@@ -47,7 +47,6 @@ Additionally, Idno requires the following PHP components:
 + date
 + dom
 + gd
-+ gettext
 + json
 + libxml
 + mbstring

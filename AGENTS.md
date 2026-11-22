@@ -271,6 +271,9 @@ Idno/
                                for third-party plugins (legacy style)
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
                                settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting. See "Mail"
+  Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
+                               nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
+                               LocaleNegotiator (the locale of a request or console run). See "Translation"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -706,7 +709,7 @@ other new code may.
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
   `ConnectionFactory.php`, `ConnectionParameters.php`, `Criteria.php`, `Criterion/`, `EntityClassFinder.php`, `EntityQuery.php`,
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
-  `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `FlysystemFile.php`, `FlysystemFileSystem.php`, `RepositoryDataConcierge.php`
+  `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `QuoteNormaliser.php`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `FlysystemFile.php`, `FlysystemFileSystem.php`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
   builds, and `MessengerEventQueue.php` and `LateLogger.php`, which `LegacyServiceFactory::queue()` builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
   enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
@@ -2443,6 +2446,53 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
   directories), `Tests/Kernel/CacheAdapterTest` (the container's pool, the adapter, the ignored setting, the
   disabled cache), `Tests/Kernel/WebserviceHstsTest` (what a response may teach), `Tests/API/HSTSTest`.
 
+#### Translation
+
+`Idno\Core\Language` (`Idno::site()->language()`) translates from gettext catalogues without the gettext
+extension: `ext-gettext` is not required, no gettext function (`gettext`, `dgettext`, `ngettext`,
+`bindtextdomain`, `textdomain`, ...) is called anywhere, and `Language` calls neither `putenv()` nor
+`setlocale()`, so the process's locale is never changed (`Tests/Unit/Translation/NoGettextTest` finds a gettext
+call by tokens in `Idno/`, `IdnoPlugins/`, `ConsolePlugins/`, `Themes/` and `templates/`, and reports a bare `_()`, which is
+PHP's alias of `gettext()`, as well; `Idno\Core\Language::_()` is a method and is not one). Nothing in the repository
+depended on the process locale: the one `strftime()` (IndiePub's account template) formats digits only. Code that
+needs a locale sets it itself.
+
+- `Idno\Translation\CatalogueLoader::load($directory, $domain, $locale)` (built with new; `Idno/Translation/` is NOT in
+  `CodeFingerprint::SERVICE_DIRECTORIES` and `config/` references nothing in it: it is a helper of the legacy
+  `Language`, so it is not a service; it depends on neither `Idno\Legacy` nor `Idno::site()`) reads
+  `<directory>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`, with `symfony/translation`'s `PoFileLoader` and
+  `MoFileLoader` into source string => translation. `fr_CA` falls back to `fr` when `fr_CA` has no file; a
+  missing directory or file is `[]`; an empty translation and the header are left out; plural forms are ignored (nothing calls a
+  plural lookup). A file that cannot be parsed never throws: `[]` and ONE warning that names the file as
+  `<locale>/LC_MESSAGES/<file>` (never the server's path). The locale (`LocaleNegotiator::PATTERN`) and the domain
+  (`[A-Za-z0-9_-]{1,64}`) are validated BEFORE a path is built from them. A catalogue is read the first time it is looked
+  up and kept for the process (a static array keyed by the file, its size and its modification time;
+  `CatalogueLoader::forget()` for tests); `has()` only looks for the file. Parsing 2,000 strings takes about 2 ms, so there is no disk cache; do not add one without a
+  measurement.
+- `Idno\Translation\LocaleNegotiator` (pure): `fromAcceptLanguage($header, $default = 'en_US')` takes the header up to
+  its first comma, removes `;q=`, turns `-` into `_` and lower-cases the language; `fromEnvironment($env, $default)` reads
+  `LANGUAGE` (its first entry) then `LANG` without `.encoding` or `@modifier`. The result matches
+  `/^[a-z]{2,3}(_[A-Za-z0-9]{2,8})*$/` (at most 35 bytes) or is the default (`*`, `C`, `POSIX`, a header
+  with a line break or `../`, a 300-byte value). The locale comes from a request header, so this is what keeps it out of a path.
+- `Language::__construct($language = null)`: an explicit locale, else the logged-in user's `language` attribute (nothing
+  in Idno sets it; the early `return` that left the object half built is gone), else the browser's (the console's, under
+  `IDNO_CONSOLE`), else `en_US`; always through `LocaleNegotiator::normalise()`. `_()`, `esc_()`, `get()`,
+  `getTranslation()`, `register()`, `getLanguage()` and `detectBrowserLanguage()` keep their signatures; lookup is the same: registration order, the first translation
+  whose string is non-empty and differs from the key, else the key. `register()` keeps a translation only if `canProvide()` is true for the locale.
+- `Idno\Core\GetTextTranslation($domain = 'idno', $path = '')` keeps its name for third-party plugins: `canProvide($locale)` is
+  true when `CatalogueLoader::has()` finds a catalogue for the locale (so an `en_US` request reads no file), and the
+  catalogue is read at the first `getString()`. The core registration (`Idno::init()`) is domain `idno`, path
+  `<root>/languages/`, matching `build-lang core`, which writes `languages/source/idno.pot` (`build-lang` and `PotGenerator` are
+  unchanged). Plugins register `new GetTextTranslation('<plugin>', __DIR__ . '/languages/')`. `ArrayKeyTranslation` subclasses work as before.
+- `Idno\Storage\QuoteNormaliser::normalise()` (static, pure, in `$excludes`) is what `Language::uncurlQuotes()` used to
+  hold, byte for byte (the search text of every record goes through it); the record store factory and the MongoDB
+  import call it directly.
+- `symfony/translation` is installed for its loaders only. FrameworkBundle would enable its own translator once the
+  package is there, so `config/packages/framework.php` switches `translator` off (pinned by `Tests/Kernel/TranslatorDisabledTest`).
+- Tests: `Tests/Unit/Translation/` (`LocaleNegotiatorTest`, `CatalogueLoaderTest` with the fixtures in `fixtures/`, `NoGettextTest`),
+  `Tests/Unit/Storage/QuoteNormaliserTest`, `Tests/Kernel/LanguageAdapterTest`, `Tests/Kernel/TranslatorDisabledTest`,
+  `Tests/Characterisation/TranslationTest` (an `Accept-Language: fr-FR` request draws IdnoPlugins/Event's French string) and `Tests/Core/LanguageTest`.
+
 #### The file store
 
 `Idno\Storage\Files\FileStore` keeps uploaded files on a Flysystem filesystem (`league/flysystem`;
@@ -2530,8 +2580,8 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   `unsanitizeFields()` left it; two keys becoming one is a reject), a non-empty `_id` and
   uuid required, saved through a `JsonRecordStore` with `ImportRecordDefaults` (fills in nothing:
   asking it for an id or a uuid is a `\LogicException`; `siteid` null), `AttributeTypeMap` and the
-  site's quote normaliser (`Idno\Core\Language::uncurlQuotes()`, called on an instance made without
-  its constructor, which needs the legacy application; the method uses nothing of the instance), so
+  site's quote normaliser (`Idno\Storage\QuoteNormaliser::normalise()`, a static pure function that
+  needs no legacy application; `Language::uncurlQuotes()` delegates to it), so
   the search text is what the site's store writes; then read back and compared (`===`) with the
   document as the store writes it (`siteid` null and `owner` '' when empty): a difference is a
   `\RuntimeException`. A reject (`idno_upgrade_rejects`: `collection`, `legacy_uuid` (at most 255

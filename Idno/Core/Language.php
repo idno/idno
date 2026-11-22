@@ -3,6 +3,8 @@
 namespace Idno\Core {
 
     use Idno\Common\Component;
+    use Idno\Storage\QuoteNormaliser;
+    use Idno\Translation\LocaleNegotiator;
 
     class Language extends Component
     {
@@ -28,11 +30,15 @@ namespace Idno\Core {
          */
         public function __construct($language = null)
         {
-            $session = \Idno\Core\Idno::site()->session();
-            if (!empty($session)) {
-                if ($user = \Idno\Core\Idno::site()->session()->currentUser()) {
-                    if (!empty($user->language)) {
-                        return $user->language;
+            // An explicit locale wins; then the logged-in user's own (a `language` attribute, which nothing
+            // in Idno sets today); then the browser's, or on the console the environment's.
+            if (empty($language)) {
+                $session = \Idno\Core\Idno::site()->session();
+                if (!empty($session)) {
+                    if ($user = $session->currentUser()) {
+                        if (!empty($user->language) && is_string($user->language)) {
+                            $language = $user->language;
+                        }
                     }
                 }
             }
@@ -41,18 +47,10 @@ namespace Idno\Core {
                 $language = self::detectBrowserLanguage();
             }
 
-            if (empty($language)) {
-                $language = 'en_US';
-            }
+            // The value can come from a request header: only a locale identifier is used, because it builds a path.
+            $this->language = LocaleNegotiator::normalise((string) $language, 'en_US');
 
-            $this->language = $language;
-
-            // Set locale, now we have one.
-            putenv("LANG=" . $language);
-            putenv("LANGUAGE=" . $language);
-            putenv("LC_ALL=" . $language . '.UTF-8');
-            setlocale(LC_ALL, $language . '.UTF-8');
-
+            // The process locale is left alone: translation reads its own catalogues, not the C library's.
             parent::__construct();
         }
 
@@ -167,36 +165,7 @@ namespace Idno\Core {
          */
         function uncurlQuotes($string)
         {
-            $chr_map = array(
-                // Windows codepage 1252
-                "\xC2\x82" => "'", // U+0082⇒U+201A single low-9 quotation mark
-                "\xC2\x84" => '"', // U+0084⇒U+201E double low-9 quotation mark
-                "\xC2\x8B" => "'", // U+008B⇒U+2039 single left-pointing angle quotation mark
-                "\xC2\x91" => "'", // U+0091⇒U+2018 left single quotation mark
-                "\xC2\x92" => "'", // U+0092⇒U+2019 right single quotation mark
-                "\xC2\x93" => '"', // U+0093⇒U+201C left double quotation mark
-                "\xC2\x94" => '"', // U+0094⇒U+201D right double quotation mark
-                "\xC2\x9B" => "'", // U+009B⇒U+203A single right-pointing angle quotation mark
-                // Regular Unicode     // U+0022 quotation mark (")
-                // U+0027 apostrophe     (')
-                "\xC2\xAB" => '"', // U+00AB left-pointing double angle quotation mark
-                "\xC2\xBB" => '"', // U+00BB right-pointing double angle quotation mark
-                "\xE2\x80\x98" => "'", // U+2018 left single quotation mark
-                "\xE2\x80\x99" => "'", // U+2019 right single quotation mark
-                "\xE2\x80\x9A" => "'", // U+201A single low-9 quotation mark
-                "\xE2\x80\x9B" => "'", // U+201B single high-reversed-9 quotation mark
-                "\xE2\x80\x9C" => '"', // U+201C left double quotation mark
-                "\xE2\x80\x9D" => '"', // U+201D right double quotation mark
-                "\xE2\x80\x9E" => '"', // U+201E double low-9 quotation mark
-                "\xE2\x80\x9F" => '"', // U+201F double high-reversed-9 quotation mark
-                "\xE2\x80\xB9" => "'", // U+2039 single left-pointing angle quotation mark
-                "\xE2\x80\xBA" => "'", // U+203A single right-pointing angle quotation mark
-            );
-            $chr = array_keys($chr_map); // but: for efficiency you should
-            $rpl = array_values($chr_map); // pre-calculate these two arrays
-            $string = str_replace($chr, $rpl, html_entity_decode($string, ENT_QUOTES, "UTF-8"));
-
-            return $string;
+            return QuoteNormaliser::normalise((string) $string);
         }
 
         /**
@@ -208,35 +177,19 @@ namespace Idno\Core {
          */
         public static function detectBrowserLanguage($full = true)
         {
+            $lang = '';
 
-            $length = 2; // Short form
-
-            $lang = "";
-
-            if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-                if ($full) {
-                    $length = strpos($_SERVER['HTTP_ACCEPT_LANGUAGE'], ',');
-                }
-
-                $lang = preg_replace("/[^a-zA-Z\-_\s]/", "", substr($_SERVER['HTTP_ACCEPT_LANGUAGE'], 0, $length));
-                $lang = str_replace('-', '_', $lang);
+            if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE']) && is_string($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
+                $lang = LocaleNegotiator::fromAcceptLanguage($_SERVER['HTTP_ACCEPT_LANGUAGE'], '');
             }
 
             // If running as console app, detect via environment
             if (defined('IDNO_CONSOLE')) {
+                $lang = LocaleNegotiator::fromEnvironment(['LANGUAGE' => getenv('LANGUAGE'), 'LANG' => getenv('LANG')], '');
+            }
 
-                $lang = getenv('LANGUAGE');
-                if (empty($lang)) {
-                    $lang = getenv('LANG');
-                }
-
-                if (preg_match('/[a-z]{2}_[A-Z]{2}/', $lang, $matches)) {
-                    $lang = $matches[0];
-                    if (!$full) {
-                        $lang = explode('_', $lang)[0];
-                    }
-
-                }
+            if (!$full && $lang !== '') {
+                $lang = explode('_', $lang)[0];
             }
 
             return $lang;

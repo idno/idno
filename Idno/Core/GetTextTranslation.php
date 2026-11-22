@@ -2,38 +2,37 @@
 
 namespace Idno\Core {
 
+    use Idno\Translation\CatalogueLoader;
+
     /**
-     * Translate via GetText.
+     * Translate from gettext catalogues (`<path>/<locale>/LC_MESSAGES/<domain>.po`, else `.mo`).
+     *
+     * The files are read by Idno itself: the gettext extension is not needed and is never called. A
+     * catalogue is read the first time a string is looked up in it, and only for the current locale.
      */
     class GetTextTranslation extends Translation
     {
 
         private $domain;
-        private $canProvide;
+        private $path;
+        private $locale  = null;
+        private $strings = null;
 
         /**
-         * Create a GetText translation.
+         * Create a catalogue translation.
          *
-         * @param  type $domain 'known' for core, 'mypluginname' for plugins
+         * @param  type $domain 'idno' for core, 'mypluginname' for plugins
          * @param  type $path   Full path to where to find the translations.
          * @throws \RuntimeException
          */
         public function __construct(
-            $domain = 'known',
+            $domain = 'idno',
             $path = ''
         )
         {
-            if (!extension_loaded('gettext')) {
-                $this->canProvide = false;
-                return;
-            }
-
-            // If we've got here, gettext is installed and we can provide translations
-            $this->canProvide = true;
-
             // We can't provide translations with no specified translation domain.
             if (empty($domain)) {
-                throw new \RuntimeException('You must specify a language domain: "known" for core translations, or "yourpluginname", for a plugin');
+                throw new \RuntimeException('You must specify a language domain: "idno" for core translations, or "yourpluginname", for a plugin');
             }
 
             // If the path for translations is empty, set a standard base path
@@ -42,36 +41,40 @@ namespace Idno\Core {
             }
 
             // Normalize path
-            $path = rtrim($path, '/') . '/';
+            $this->path = rtrim($path, '/') . '/';
 
             // Normalize domain
-            $domain = preg_replace("/[^a-zA-Z0-9\-\_\s]/", "", $domain);
-            $this->domain = $domain;
-
-            // Set domain
-            bindtextdomain($domain, $path);
-            bind_textdomain_codeset($domain, 'UTF-8');
+            $this->domain = preg_replace("/[^a-zA-Z0-9\-\_]/", "", $domain);
         }
 
         /**
-         * Whether this translation provider can provide translations.
-         *
-         * Note: Unlike the parent class, this does not check the specific
-         * $language parameter. GetText's language selection is handled by
-         * the system locale, not by this object's state. The $language
-         * parameter is accepted for interface compatibility but not used.
+         * Whether a catalogue exists for the locale (or for its language: fr for fr_CA).
+         * Nothing is read here; the catalogue is read when a string is first looked up.
          *
          * @param string $language
          * @return bool
          */
         public function canProvide($language)
         {
-            return $this->canProvide;
+            if (!is_string($language) || !(new CatalogueLoader())->has($this->path, $this->domain, $language)) {
+                return false;
+            }
+            if ($this->locale !== $language) {
+                $this->locale  = $language;
+                $this->strings = null;
+            }
+
+            return true;
         }
 
         public function getString($key)
         {
-            return $this->canProvide ? dgettext($this->domain, $key) : $key; // Get a specific translation, from this object's domain
+            if ($this->strings === null) {
+                $logger        = \Idno\Core\Idno::site()->logging();
+                $this->strings = $this->locale === null ? [] : (new CatalogueLoader($logger ?? new \Psr\Log\NullLogger()))->load($this->path, $this->domain, $this->locale);
+            }
+
+            return $this->strings[$key] ?? $key;
         }
 
     }

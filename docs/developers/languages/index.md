@@ -9,8 +9,9 @@ method hook.
 
 ## Adding a translation for a language
 
-Idno supports [gettext](https://en.wikipedia.org/wiki/Gettext), which is a widely supported localisation platform. This is the recommended method for adding
-translations to your code.
+Idno reads translations from [gettext](https://en.wikipedia.org/wiki/Gettext) files (`.po`, and compiled `.mo`), which is a widely supported localisation format and the recommended way
+to add translations to your code. Idno parses the files itself: the PHP `gettext` extension is not needed (and is never called), and Idno does not change the
+process's locale (`setlocale()`) or environment (`LANG`, `LANGUAGE`).
 
 ### Creating .POT file
 
@@ -46,15 +47,23 @@ The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all 
 
 ### Creating your translation
 
-Open up your .POT file with a suitable tool, e.g. [poedit](https://poedit.net/), and save your .mo and .po files as 
-```/path/to/your/plugin/languages/*LOCALE*/LC_MESSAGES/*DOMAIN*.mo|po```, where:
+Open up your .POT file with a suitable tool, e.g. [poedit](https://poedit.net/), and save your .po file (and, if you like, a compiled .mo) as 
+```/path/to/your/plugin/languages/*LOCALE*/LC_MESSAGES/*DOMAIN*.po|mo```, where:
 
 * LOCALE is the locale you're writing for, e.g. pt_BR
-* DOMAIN is the domain, e.g. your plugin name 'myplugin'
+* DOMAIN is the domain, e.g. your plugin name 'myplugin'; for Idno's own strings it is `idno`
+
+A `.mo` file is optional: Idno reads the `.po` file, and uses the `.mo` only where there is no `.po` for that locale. A locale with a region falls back to its language: a visitor
+whose browser asks for `fr_CA` gets `fr/LC_MESSAGES/*DOMAIN*.po` when there is no `fr_CA` one. A string with no translation, or an empty one, is shown as it is in the source (English).
+Plural forms are not used. A file that cannot be read is ignored, with one warning in the log.
+
+The locale is the first language of the browser's `Accept-Language` header (on the command line, `LANGUAGE`, then `LANG`). It is used as a directory name, so only a
+locale identifier is accepted (`fr`, `fr_FR`, `zh_Hant_TW`); anything else is `en_US`. A catalogue is read the first time one of its strings is needed, and only for that locale.
 
 ### Registering your translation
 
-In your plugin, register your language by registering a new ```GetTextTranslation``` class, passing the path of your languages directory, and the domain you used.
+In your plugin, register your language by registering a new ```GetTextTranslation``` object, passing the domain you used and the path of your languages directory. It is registered only if
+there is a catalogue for the current locale.
 
 So, for the above example this might look like:
 
@@ -86,7 +95,7 @@ To substitute values into the string, pass them as an array; they are applied wi
 
 ## Adding a translation for a language (alternative)
 
-If you don't want to go the Gettext route for whatever reason, you can quickly add a translation for a language in code.
+If you don't want to go the gettext-file route for whatever reason, you can quickly add a translation for a language in code.
 
 In order to add a translation, you need to register a ```Translation``` object for a given language short code. To do this you need to extend ```Idno/Core/ArrayKeyTranslation``` for each language you want to translate, and then implement its ```getStrings()``` method.
 

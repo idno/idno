@@ -670,7 +670,6 @@ namespace Idno\Core {
                 'session',
                 'simplexml',
                 'openssl',
-                'gettext',
             ];
         }
 

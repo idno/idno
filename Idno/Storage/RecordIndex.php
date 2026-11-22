@@ -141,7 +141,7 @@ final class RecordIndex
      * nothing (the old backend raised a TypeError).
      *
      * @param array<int|string, mixed> $record
-     * @param callable(string): string $uncurl the quote-normalising function (Language::uncurlQuotes())
+     * @param callable(string): string $uncurl the quote-normalising function (QuoteNormaliser::normalise())
      */
     public static function searchText(array $record, callable $uncurl): string
     {

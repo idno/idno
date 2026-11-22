@@ -73,7 +73,7 @@ final class JsonRecordStore implements RecordStore
     private const FIELD_COLUMNS = ['uuid' => 'uuid', '_id' => 'id', 'entity_subtype' => 'type', 'owner' => 'owner', 'publish_status' => 'publish_status', 'created' => 'created'];
 
     /**
-     * @param \Closure(string): string $uncurlQuotes   the quote normaliser applied to the search text (Language::uncurlQuotes())
+     * @param \Closure(string): string $uncurlQuotes   the quote normaliser applied to the search text (QuoteNormaliser::normalise())
      * @param bool|\Closure(): bool     $booleanSearch  the site's `boolean_search` setting, or a closure that
      *                                                   reads it: called each time a search condition is built
      * @param bool|\Closure(): bool     $bypassFulltext the site's `bypass_fulltext_search` setting, or a closure, likewise

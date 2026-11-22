@@ -12,6 +12,7 @@ use Idno\Storage\JsonRecordStore;
 use Idno\Storage\Platform\Dialect;
 use Idno\Storage\Platform\MySqlDialect;
 use Idno\Storage\Platform\SqliteDialect;
+use Idno\Storage\QuoteNormaliser;
 use Idno\Storage\SchemaCatalog;
 use Idno\Storage\SchemaMigrator;
 use Idno\Storage\SettingsRecordStore;
@@ -148,7 +149,7 @@ final class MongoImporter
             new ImportRecordDefaults(),
             new AttributeTypeMap(),
             $catalog,
-            self::uncurlQuotes(),
+            QuoteNormaliser::normalise(...),
             true,
             false,
         );
@@ -614,20 +615,6 @@ final class MongoImporter
         }
 
         return new MySqlDialect();
-    }
-
-    /**
-     * The site's search-text normaliser (Idno\Core\Language::uncurlQuotes(), which the record store of
-     * the site applies when it saves), called on an instance made without the constructor: the method
-     * uses nothing of the instance, and the constructor needs the legacy application.
-     *
-     * @return \Closure(string): string
-     */
-    private static function uncurlQuotes(): \Closure
-    {
-        $language = (new \ReflectionClass(\Idno\Core\Language::class))->newInstanceWithoutConstructor();
-
-        return static fn (string $text): string => (string) $language->uncurlQuotes($text);
     }
 
     private function rollBack(): void

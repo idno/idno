@@ -101,7 +101,7 @@ final class InMemoryRecordStore implements RecordStore
 
     /**
      * @param (callable(string): string)|null $uncurl      the quote-normalising function applied to search
-     *                                                      text (Language::uncurlQuotes()); none by default
+     *                                                      text (QuoteNormaliser::normalise()); none by default
      * @param list<string>                    $existing    the names of the collections that exist
      */
     public function __construct(

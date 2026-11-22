@@ -1,0 +1,16 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr_FR\n"
+
+msgid "%s said hello"
+msgstr "%s a dit bonjour"
+
+msgid "Hello!"
+msgstr "Bonjour !"
+
+msgid "Not translated yet"
+msgstr ""
+
+msgid "Say \"hi\""
+msgstr "Dites « salut »"

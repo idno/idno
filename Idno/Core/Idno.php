@@ -86,7 +86,7 @@ namespace Idno\Core {
             $this->site_details = $this->site_details();
             $this->template     = self::container()->get(Template::class);
             $this->language     = self::container()->get(Language::class);
-                $this->language()->register(new GetTextTranslation()); // Register default gettext translations
+            $this->language()->register(new GetTextTranslation()); // Register the core translations (domain idno)
             $this->syndication  = self::container()->get(Syndication::class);
             $this->reader       = self::container()->get(Reader::class);
             $this->helper_robot = self::container()->get(HelperRobot::class);
