@@ -28,21 +28,23 @@ If you want to run the (almost) latest and greatest code, but aren't able to tra
 
 ### Use the automatic installer
 
-If you're using a MySQL back-end, you can get started by pointing your browser at your Idno site address. If you want to use MongoDB (or another database backend), you'll need to create the configuration file manually, as described below, or use the CLI installer.
+If you're using a MySQL back-end, you can get started by pointing your browser at your Idno site address. If no configuration file exists, Idno sends you to the web installer at `/warmup/`. It asks for your site name, the database host, name, user and password, and the upload directory. It then loads the database schema, writes `configuration/config.ini` and takes you to the page where you register the first user. The web installer only sets up MySQL. If you want to use MongoDB, you'll need to create the configuration file manually, as described below, or use the CLI installer.
 
 ### Use environment variables
 
-If you’re using Docker or other virtualized server environments, you will need to create a config.ini file at the root of your installation. However, all configuration items can be stored in environment variables starting with KNOWN_. For example, the following environment variables will allow you to set the database:
+If you’re using Docker or other virtualized server environments, you will need to create a config.ini file in the `configuration` directory of your installation. However, configuration items can also be stored in environment variables starting with IDNO_ (the older KNOWN_ prefix still works, and IDNO_ variables take precedence). The name of the variable is the name of the config.ini item in upper case. For example, the following environment variables will allow you to set the database:
 
-    KNOWN_DATABASE = "MySQL"
-    KNOWN_DBNAME = "KnownDBName"
-    KNOWN_DBUSER = "KnownDBUser"
-    KNOWN_DBPASS = "KnownDBPassword"
-    KNOWN_DBHOST = "your.database.server"
+    IDNO_DATABASE = "MySQL"
+    IDNO_DBNAME = "IdnoDBName"
+    IDNO_DBUSER = "IdnoDBUser"
+    IDNO_DBPASS = "IdnoDBPassword"
+    IDNO_DBHOST = "your.database.server"
+
+You can also set `IDNO_DATABASE_URL` (for example `mysql://user:password@host:3306/dbname`) to supply the database type, name, user, password, host and port in one variable, and `IDNO_UPLOAD_PATH` to set the upload directory.
 
 ### If you’re using MySQL
 
-Currently, MySQL users need to create a file called ```config.ini``` in you ```/configuration/``` directory. This should contain the following information:
+MySQL users need to create a file called ```config.ini``` in your ```/configuration/``` directory. This should contain the following information:
 
     database = "MySQL"
     dbname = "Your MySQL database name"
@@ -54,20 +56,11 @@ If you need to use a non-standard database port, you can also select this:
 
     dbport = "Your database port"
 
-Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. For now, you will need to load the SQL schema stored in `/warmup/schemas/mysql/mysql.sql`.
-
-### If you're using SQLite
-
-As with MySQL, currently SQLite users need to create a ```config.ini``` in the root of their installation. This should contain the following information:
-
-    database = "Sqlite3"
-    dbname = "/path/to/sqlite.db"
-
-Assuming that you've got sqlite support built into PHP (this is usually provided by a module called php5-sqlite), and the location you select in dbname is writable, Idno will automatically set up your database.
+Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. You will also need to load the SQL schema stored in `/warmup/schemas/mysql/mysql.sql` into that database. Later schema upgrades are applied automatically the first time Idno connects after an update.
 
 ### Set the filesystem
 
-If you’re using MongoDB, you don’t have to do anything, and all uploaded files will be stored in MongoDB itself. However, you can also store files on your server’s local hard drive. Additionally, plugins can provide alternative filesystems like Amazon S3.
+If you’re using MongoDB and don't set a filesystem, all uploaded files will be stored in MongoDB itself. However, you can also store files on your server’s local hard drive. Additionally, plugins can provide alternative filesystems like Amazon S3.
 
 #### Store files on your server’s hard drive
 
@@ -82,20 +75,20 @@ Then, add the following to your config.ini file:
 
 Of course, replace the path with the path to your data folder.
 
-If you're using MySQL or SQLite, you must specify an upload directory if you want to store files, images or profile pictures.
+If you're using MySQL, you must specify an upload directory if you want to store files, images or profile pictures.
 
 ### If you’re using MongoDB
 
 ** MongoDB support is deprecated, we recommend using one of the other DB Backends (MySQL is recommended) **
 
-If your MongoDB installation accepts connections from localhost, and you're happy for your Idno MongoDB database to be called Idno, you can simply create a file called ```config.ini``` in the root of your installation containing:
+MongoDB needs the PHP `mongodb` extension and the `mongodb/mongodb` Composer package (`composer require mongodb/mongodb`). If your MongoDB installation accepts connections from localhost (the default connection string is `mongodb://localhost:27017`), and you're happy for your Idno MongoDB database to be called idno, you can simply create a file called ```config.ini``` in your ```/configuration/``` directory containing:
 
     database = "MongoDB"
 
 If you’d like to use an alternative [MongoDB connection string](http://docs.mongodb.org/manual/reference/connection-string/), you can add that to ```config.ini``` like this:
 
     dbstring  = "Your MongoDB connection string"
-    dbname    = "Your preferred Idno database name (default=known)"
+    dbname    = "Your preferred Idno database name (default=idno)"
 
 You can also include a subset of these items, for example to just change the database name.
 
@@ -105,29 +98,24 @@ By default, MongoDB will accept unauthenticated connections from localhost. If y
     dbpass    = "Your MongoDB user's password"
     dbauthsrc = "The database where this user is defined"
 
-When using authentication, your MongoDB user will need to be granted the ["readWrite"](https://docs.mongodb.org/manual/reference/built-in-roles/#readWrite) role on both the Idno database and a database called `idnosession` where session information is stored. For example to create a user called "knownuser" in the "admin" database, you might run these commands on the Mongo command line:
+When using authentication, your MongoDB user will need to be granted the ["readWrite"](https://docs.mongodb.org/manual/reference/built-in-roles/#readWrite) role on the Idno database. For example to create a user called "idnouser" in the "admin" database, you might run these commands on the Mongo command line:
 
     use admin
-    db.createUser({user:"knownuser", pwd:"p@ssword", roles: [
-      {role: "readWrite", db: "known"},
-      {role: "readWrite", db: "idnosession"}
+    db.createUser({user:"idnouser", pwd:"p@ssword", roles: [
+      {role: "readWrite", db: "idno"}
     ]})
-
-#### Upgrading from old mongo driver
-
-If you're upgrading from an older release (0.9.2 and below) you will need to install the new [PHP mongodb driver](https://secure.php.net/manual/en/set.mongodb.php).
 
 ### Load Idno
 
 Launch Idno in a web browser.
 
-For now, the first user to register will be the site administrator. Later, the installation script will take care of this for you.
+The first user to register will be the site administrator.
 
 Register and log in.
 
 ### Administer Idno
 
-Once you've registered and logged in, click "Administration" in the menu bar. This will allow you to set some site configuration items, including the site name. You will also be able to enable some plugins from this screen. If you're using Idno as a blog or a closed community, you will probably also want to turn open registration off from here.
+Once you've registered and logged in, click "Site Configuration" in the toolbar menu. This will allow you to set some site configuration items, including the site name. You will also be able to enable some plugins from this screen. If you're using Idno as a blog or a closed community, you will probably also want to turn open registration off from here.
 
 ## Command Line Installation
 

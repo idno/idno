@@ -15,10 +15,10 @@ Adds reset button to post form
 If your commit is part of a logical sub project, add it to your subject, e.g.
 
 ```
-PHP 7.2 compatibility: Changing out sizeof for strlen
+PHP 8.3 compatibility: Changing out sizeof for count
 ```
 
-Use your best judgement, but think about how to find relevant commits when scanning a change log.
+Use your best judgement, but think about how to find relevant commits when scanning a change log. Recent commits in the repository often start with a short type prefix instead, such as `fix:` or `docs:`; either style is fine as long as the subject says what changed.
 
 ## Explain why
 

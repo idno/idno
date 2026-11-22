@@ -15,7 +15,7 @@ for any Idno-related events you may choose to run.
 As with all aspects of Idno, we encourage you to submit suggested changes
 via GitHub: https://github.com/idno/idno/
 
-If you're wondering about how you can contribute, please see CONTRIBUTING.md,
+If you're wondering about how you can contribute, please see [CONTRIBUTING.md](https://github.com/idno/idno/blob/dev/CONTRIBUTING.md),
 or go ahead and email us: hello@idno.co. We'll be delighted to hear from
 you.
 

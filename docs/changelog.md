@@ -1,6 +1,121 @@
 # Changes by Version
 
-Starting with version 0.6.4, this is a list of changes in the self-hosted, open source version of Idno.
+This is a list of changes in the self-hosted, open source version of Idno, starting with version 0.6.3.
+The project was called Known from 2014 until version 1.6.4, so older entries describe releases made under that name.
+
+Every release since 1.2.2 also has notes, with links to each pull request, on the
+[GitHub releases page](https://github.com/idno/idno/releases).
+
+Unreleased
+----------
+These changes are on the `dev` branch and will be part of the next release.
+
+* PHP 8.3 or later is now required
+* New Twenty26 theme, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor
+* New StandardSiteSync plugin, which syncs posts to standard.site records on an AT Protocol PDS
+* Link previews are now fetched by the server instead of the browser
+* The language tools (formerly the separate known-language-tools package) are part of core
+* The MongoDB driver was upgraded to version 2 and is now an optional dependency
+* TinyMCE upgraded to version 8
+* Security: fixes for cross-site scripting, server-side request forgery, an open redirect, access control on uploaded files, and ActivityPub actor spoofing
+* Security: outbound requests verify TLS certificates, and requests to URLs supplied by other sites are checked at every redirect
+* Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set
+* Fixed draft posts being readable by URL when their access was set to public
+* Fixed posts containing emoji and other multi-byte text failing to save or to be found in search on MySQL
+* Fixed posting forms: cancel buttons, saving drafts and reply-to links
+* Fixed webmention parsing of h-feeds, and the styling of comment sources
+* Fixed the asynchronous queue losing its MySQL connection
+* Fixed the WebSub subscription challenge response and range requests for files
+* Tests now run in GitHub Actions against MySQL and MongoDB
+
+1.6.4
+-----
+February 28, 2026
+
+* The project is now called Idno again. The command line tool is `idno.php`, and environment variables, constants and HTTP headers start with `IDNO_` or `X-IDNO-`. The Known names (`known.php`, `KNOWN_*`, `X-KNOWN-*`) still work
+* ActivityPub: fixed follow acceptance, including with Ghost and other Fedify-based servers
+* ActivityPub: support for quote posts (FEP-044f), so that Mastodon users can quote posts
+* ActivityPub: fixed Webfinger responses, the outbox, and follower counts
+* ActivityPub now requires the asynchronous event queue
+* Removed the notifications system
+* Export: fixed memory problems and error handling, and added WordPress WXR export
+* Fixed several webmention parsing bugs, including self-mention detection and photo alt text
+* Fixed asynchronous queue failures, including an infinite loop
+* Security: fixed a CSRF bypass that allowed unauthenticated requests through the URL unfurl endpoint
+* Security: stricter validation of imported images and templates
+* Added AGENTS.md, a guide to the codebase for AI coding agents
+
+1.6.3
+-----
+February 13, 2026
+
+* New ActivityPub plugin: follow an Idno site from Mastodon and other Fediverse software
+* Security: fixed vulnerabilities in password reset
+* Docker setup for local development, with optional Tailscale support
+* Fixed PHP deprecation warnings
+* Removed the remaining PostgreSQL documentation
+* Library upgrades, including TinyMCE 7, Twig and Symfony 7 components
+
+1.6.2
+-----
+January 2, 2024
+
+* Stability improvements for PHP 8.2 and later
+* The bundled plugins and themes are back in the main repository
+* Set the URL of an image to use as the default social sharing preview
+* Removed Web Monetization and Coil support
+* Removed the image proxy
+* Security: fixed a cross-site scripting issue with uploaded GIFs
+* Library upgrades
+
+1.5
+---
+June 2, 2023
+
+The first release in three years.
+
+* PHP 8.1 or later is now required
+* PostgreSQL support was removed from core
+* TinyMCE upgraded to version 6
+* New Black theme
+* Uploaded images are always served with an image content type, and malicious files are filtered more strictly
+* Alt text on icons and user pictures in the default theme
+* Shorter, tidier profile links
+* Fixed webmentions to URLs with fragments
+* Added SECURITY.md, with instructions for reporting vulnerabilities
+* Modernized the JavaScript and CSS build
+* Release zip files include all libraries, so Composer is not needed to run them
+
+1.2.2
+-----
+June 11, 2020
+
+* PHP 7.2 or later is now required, along with the GD extension
+* Search text and entity metadata are stored in their own database tables
+* New date and time picker
+* Embeds for archive.org and BitChute, and lazy loading of embedded images
+* Tag pages are marked up as h-feeds
+* Email notifications have a preview line (preheader)
+* An OAuth client and JSON Web Token support for API authentication
+* More of the interface can be translated
+* Docker container for development
+
+1.0.0
+-----
+October 27, 2019
+
+* PHP 7.1 or later is now required
+* Libraries are installed with Composer
+* Translations use gettext
+* Templates can be written in Twig as well as PHP
+* Command line installer and console tools
+* JSON Feed output
+* JSON-LD structured data in pages
+* OAuth2 server
+* Asynchronous event queue
+* Pluggable statistics on the admin dashboard
+* Removed SQLite support
+* Removed AMP support and fragmentions
 
 0.9.9
 -----

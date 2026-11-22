@@ -15,17 +15,18 @@ Themes are selected from the `Themes` section of the administration panel.
 
 The theme's folder must sit inside /Themes.
 
-Each theme must have at least three things:
+Each theme must have at least two things:
 
 * theme.ini: a configuration file that provides information about the theme in the admin panel
-* preview.png: a screenshot of the theme for use in the administration panel
 * A set of templates under the theme's `templates` subfolder
+
+Themes should also have a preview.png, a screenshot of the theme for use in the administration panel. A theme may also have a `Controller.php` containing a class named `Controller` in the `Themes\ThemeName` namespace, which extends `\Idno\Common\Theme` (for example, to [register translations](../languages/index.md)); see `Themes/Solo/Controller.php`.
 
 ## Structure of theme.ini
 
-The theme.ini file contains a number of text entries::
+The theme.ini file contains a number of text entries:
 
-    [Plugin description]
+    [Theme description]
     name =              "The name of the theme"
     version =           "The theme's version number"
     author =            "Author's name"
@@ -38,7 +39,7 @@ a future plugin directory.
 
 ## Extending themes
 
-In addition, you can extend templates with entries in a special `[Extensions]` section. For example::
+In addition, you can extend templates with entries in a special `[Extensions]` section. For example:
 
     [Extensions]
     "template/one" = "mytheme/template/one"
@@ -46,27 +47,29 @@ In addition, you can extend templates with entries in a special `[Extensions]` s
 
 Here, any calls to `template/one` will also call `mytheme/template/one` with the same variables.
 
+A `[Prepend Extensions]` section works the same way, but draws the extra template before the original, as the Cherwell theme does for `admin/menu/items`.
+
 ## Example
 
 Let's say your theme is called PDX Carpet.
 
-Your theme would live in the folder `/Themes/PDXCarpet/`, and contain a `plugin.ini` and `preview.png` file as described
+Your theme would live in the folder `/Themes/PDXCarpet/`, and contain a `theme.ini` and `preview.png` file as described
 above, to help describe the theme in the administration panel.
 
 You will also need a `/Themes/PDXCarpet/templates/default/` folder.
 
-You could overwrite the `shell/footer` theme simply by adding a new file called `/Themes/PDXCarpet/templates/default/shell/footer.tpl.php`. This could contain some simple text::
+You could overwrite the `shell/footer` template simply by adding a new file called `/Themes/PDXCarpet/templates/default/shell/footer.tpl.php`. This could contain some simple text:
 
     <p>
         This is a custom <a href="https://idno.co">Idno</a> theme!
     </p>
 
-To add a custom, static CSS file, you might want to `extend` the `shell/head` theme to reference it. To do ths, you would add an extension to your `theme.ini` file::
+To add a custom, static CSS file, you might want to extend the `shell/head` template to reference it. To do this, you would add an extension to your `theme.ini` file:
 
     [Extensions]
     "shell/head" = "pdxcarpet/shell/head"
 
-You would then create a new template file in `/Themes/PDXCarpet/templates/default/pdxcarpet/shell/head.tpl.php` with some HTML to be injected into the page header::
+You would then create a new template file in `/Themes/PDXCarpet/templates/default/pdxcarpet/shell/head.tpl.php` with some HTML to be injected into the page header:
 
     <link href="<?= \Idno\Core\Idno::site()->config()->getStaticURL() ?>Themes/PDXCarpet/css/default.css" rel="stylesheet">
 
