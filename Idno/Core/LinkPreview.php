@@ -39,9 +39,13 @@ namespace Idno\Core {
          * @param  string $url  The source URL.
          * @param  array  $data The raw data from UnfurledUrl::unfurl().
          * @return array  Preview with keys: url, title, description, image, domain, site_name.
+         *                The url and the image are http or https addresses, or empty.
          */
         public static function buildPreviewFromData($url, $data)
         {
+            // The link and the image are printed as addresses: keep only http and https ones
+            $url = UrlValidator::httpUrl($url);
+
             $preview = [
                 'url'         => $url,
                 'title'       => '',
@@ -63,7 +67,8 @@ namespace Idno\Core {
             }
 
             if (!empty($data['og']['og:image'])) {
-                $preview['image'] = $data['og']['og:image'];
+                // This comes from the page that was fetched
+                $preview['image'] = UrlValidator::httpUrl($data['og']['og:image']);
             }
 
             if (!empty($data['og']['og:site_name'])) {
