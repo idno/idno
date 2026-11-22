@@ -234,6 +234,14 @@ Each content plugin has an `Entry.php` entity class that defines
   entities the user has no access to. An empty publish status counts as published.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - CSRF tokens on all form POSTs (inbox endpoints bypass via `post()` override)
+- A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
+  overrides `post()` itself and authenticates the request another way. Never get the same
+  effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
+  credential (an API signature or an access token): the flag turns off the token check in
+  `Page::post()` for whichever page the request reaches, and the session of the visitor who
+  sent it is destroyed when the request ends. In particular, don't decide what a request is
+  for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
+  `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
