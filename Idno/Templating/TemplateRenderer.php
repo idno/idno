@@ -45,8 +45,13 @@ final class TemplateRenderer
      * the type, the replacement (unless $replacements is false) and the extensions; then the template itself unless
      * a replacement was drawn; then the pre-rendered content. Each of those is drawn without contributions of its own.
      *
-     * @param array<string, mixed> $vars
-     * @param bool                 $fallbackToDefault false looks in the type alone
+     * @param array<string, mixed>|\Closure $vars              the variables, or a closure that gives them
+     * @param string|\Closure               $type              the template type, or a closure that gives it
+     * @param bool|\Closure                 $fallbackToDefault false looks in the type alone, or a closure that says so
+     *
+     * A closure is called each time a file is drawn (the variables, the type and the fallback of a template object
+     * can change while it draws: an extension may set a variable, a prepend may change the type), and the type that
+     * decides which `*` and type registrations are drawn is read once, after the prepends.
      *
      * @return string|null null when nothing was found and nothing drawn (without contributions: a template that
      *                     is found and prints nothing is the empty string; with them the empty string is null too)
@@ -54,10 +59,10 @@ final class TemplateRenderer
     public function draw(
         string $name,
         mixed $vars,
-        string $type,
+        string|\Closure $type,
         PhpTemplateContext $context,
         bool $contributions = true,
-        bool $fallbackToDefault = true,
+        bool|\Closure $fallbackToDefault = true,
         bool $replacements = true,
     ): ?string
     {
@@ -70,7 +75,7 @@ final class TemplateRenderer
             $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
         }
         $replaced = false;
-        foreach (['*', $type] as $slotType) {
+        foreach (['*', $this->value($type)] as $slotType) {
             $replacement = $this->slots->replacement($name, $slotType);
             if ($replacement !== null && $replacements) {
                 $result .= $this->drawFile($replacement, $vars, $type, $context, $fallbackToDefault);
@@ -96,13 +101,14 @@ final class TemplateRenderer
      *
      * @param array<string, mixed> $vars
      */
-    private function drawFile(string $name, mixed $vars, string $type, PhpTemplateContext $context, bool $fallbackToDefault): ?string
+    private function drawFile(string $name, mixed $vars, string|\Closure $type, PhpTemplateContext $context, bool|\Closure $fallbackToDefault): ?string
     {
         $normalised = TemplateName::normalise($name);
         if ($normalised === null) {
             return null;
         }
-        $located = empty($normalised) ? null : $this->locator->locate($normalised, $type, $fallbackToDefault);
+        $type = $this->value($type);
+        $located = empty($normalised) ? null : $this->locator->locate($normalised, $type, $this->value($fallbackToDefault));
         if (self::$trace !== null) {
             call_user_func(self::$trace, $type, $normalised, $located?->path ?? '-');
         }
@@ -111,6 +117,11 @@ final class TemplateRenderer
         }
         $engine = $located->engine === 'twig' && $this->twig !== null ? $this->twig : $this->php;
 
-        return $engine->render($located, $vars, $context);
+        return $engine->render($located, $this->value($vars), $context);
+    }
+
+    private function value(mixed $value): mixed
+    {
+        return $value instanceof \Closure ? $value() : $value;
     }
 }

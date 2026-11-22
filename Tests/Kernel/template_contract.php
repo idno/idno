@@ -356,6 +356,34 @@ switch ($case) {
         $result['drawsAfter'] = $t->draw('only-core');
         break;
 
+    case 'extension-sets-a-variable-the-base-prints':
+        $register('core');
+        $t = $template();
+        $t->extendTemplate('showv', 'ext-setvar');
+        $result = ['draw' => $t->draw('showv'), 'v' => $t->v];
+        break;
+
+    case 'prepend-changes-the-type-mid-draw':
+        $register('core');
+        $t = $template();
+        $t->prependTemplate('typed', 'settype');
+        $t->extendTemplate('typed', 'etype', false, 'alt');
+        $result = ['draw' => $t->draw('typed'), 'type' => $t->getTemplateType()];
+        break;
+
+    case 'prepend-turns-the-default-fallback-off':
+        $register('core');
+        $t = $template();
+        $t->setTemplateType('alt');
+        $t->prependTemplate('only-core', 'nofallback');
+        $result = ['draw' => $t->draw('only-core'), 'fallback' => $t->fallbackToDefault];
+        break;
+
+    case 'variables-named-after-the-template-objects-privates':
+        $register('core');
+        $result = ['set' => $template()->__(['slots' => 'mine'])->draw('privates'), 'unset' => $template()->draw('privates')];
+        break;
+
     case 'clone-of-the-template-object':
         $register('core');
         $t = $template();

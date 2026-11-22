@@ -27,7 +27,7 @@ final class PhpTemplateEngine implements TemplateEngine
 
             return ob_get_clean();
         };
-        $render = $render->bindTo($context, $context::class);
+        $render = $render->bindTo($context, $context->phpTemplateScope());
 
         return $render($template->path, $vars, $context);
     }

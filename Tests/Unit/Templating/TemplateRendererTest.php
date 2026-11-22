@@ -26,7 +26,7 @@ final class TemplateRendererTest extends TestCase
     {
         $root = sys_get_temp_dir() . '/idno-renderer-' . bin2hex(random_bytes(6));
         $this->core = $root . '/core';
-        foreach (['default/x', 'default/e', 'default/e2', 'default/p1', 'default/p2', 'default/r', 'default/only-default', 'default/empty', 'default/zero', 'default/vars', 'default/throws', 'alt/x', 'alt/etype', 'alt/r2', 'default/estar'] as $name) {
+        foreach (['default/x', 'default/e', 'default/e2', 'default/p1', 'default/p2', 'default/r', 'default/only-default', 'default/empty', 'default/zero', 'default/vars', 'default/throws', 'alt/x', 'alt/etype', 'alt/r2', 'default/estar', 'default/setvar', 'default/showv', 'default/settype', 'default/nofallback', 'alt/typed'] as $name) {
             if (!is_dir(dirname($this->core . '/templates/' . $name))) {
                 mkdir(dirname($this->core . '/templates/' . $name), 0700, true);
             }
@@ -34,6 +34,10 @@ final class TemplateRendererTest extends TestCase
                 $name === 'default/empty' => '',
                 $name === 'default/zero' => '0',
                 $name === 'default/vars' => '<?php echo "a=", $a ?? "unset", " t=", get_class($t), " same=", var_export($t === $this, true), "|";',
+                $name === 'default/setvar' => '<?php $this->vars["v"] = "set"; echo "setvar|";',
+                $name === 'default/showv' => '<?php echo "showv:", $v ?? "unset", "|";',
+                $name === 'default/settype' => '<?php $this->type = "alt"; echo "settype|";',
+                $name === 'default/nofallback' => '<?php $this->fallback = false; echo "nofallback|";',
                 $name === 'default/throws' => '<?php echo "partial"; throw new \RuntimeException("thrown");',
                 default => $name . '|',
             };
@@ -42,9 +46,18 @@ final class TemplateRendererTest extends TestCase
         $this->slots = new SlotRegistry();
         $this->renderer = new TemplateRenderer(new TemplateLocator(new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine());
         $this->context = new class () implements PhpTemplateContext {
+            public array $vars = [];
+            public string $type = 'default';
+            public bool $fallback = true;
+
             public function withVars(array $vars): static
             {
                 return $this;
+            }
+
+            public function phpTemplateScope(): string
+            {
+                return self::class;
             }
         };
     }
@@ -225,6 +238,38 @@ final class TemplateRendererTest extends TestCase
             ['default', 'nope', '-'],
             ['default', '0', '-'],
         ], $lines, 'a refused name is not traced');
+    }
+
+    private function drawLive(string $name, string $type = 'default'): ?string
+    {
+        $context = $this->context;
+        $context->vars = [];
+        $context->type = $type;
+        $context->fallback = true;
+
+        return $this->renderer->draw($name, static fn () => $context->vars, static fn () => $context->type, $context, true, static fn () => $context->fallback);
+    }
+
+    public function testAVariableAnExtensionSetsIsSeenByTheTemplateDrawnAfterIt(): void
+    {
+        $this->slots->extend('showv', 'setvar');
+
+        $this->assertSame('setvar|showv:set|', $this->drawLive('showv'));
+    }
+
+    public function testAPrependThatChangesTheTypeChangesWhereLaterFilesAreFound(): void
+    {
+        $this->slots->prepend('typed', 'settype');
+        $this->slots->extend('typed', 'etype', false, 'alt');
+
+        $this->assertSame('settype|alt/etype|alt/typed|', $this->drawLive('typed'));
+    }
+
+    public function testAPrependThatTurnsTheFallbackOffIsSeenByLaterFiles(): void
+    {
+        $this->slots->prepend('only-default', 'nofallback');
+
+        $this->assertSame('nofallback|', $this->drawLive('only-default', 'alt'), 'the base is only in default');
     }
 
     public function testWithSlotsReadsAnotherRegistry(): void

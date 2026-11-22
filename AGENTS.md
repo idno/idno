@@ -2504,16 +2504,16 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `DefaultTemplate::useSlots()`, called by `LegacyServiceFactory::template()`), but every other `DefaultTemplate` (`new
   DefaultTemplate()` for the feed shell or a user search) has a registry of its own, empty, and a `clone` of a template object
   copies its registry: what is registered on a copy does not reach the original (pinned by `TemplateContractTest`). The public
-  properties `extensions`, `prepends`, `replacements` and `rendered_extensions` are read-only views (`DefaultTemplate::__get()`).
+  properties `extensions`, `prepends`, `replacements` and `rendered_extensions` are read-only views (`DefaultTemplate::__get()`, and `__isset()`, always true for them; a write is an ordinary template variable). The registry is made when first needed (`DefaultTemplate::slots()`), so a subclass that skips the parent constructor works.
 - `TemplateRenderer` (container service): `draw($name, $vars, $type, $context, $contributions = true, $fallbackToDefault = true,
   $replacements = true)` is `DefaultTemplate::draw()`'s order (prepends; for `*` then the type the replacement and the extensions;
   the template unless replaced; the added content) and returns null when nothing was rendered; without `$contributions` it draws the
   one file (the plain `Bonita\Templates::draw()`: `drawList()`, `drawObject()` and `process()` draw this way, with no extensions);
-  `withSlots()` reads another registry. Each file drawn calls the trace hook `TemplateRenderer::$trace` (type, name, path or `-`)
+  `withSlots()` reads another registry. `$vars`, `$type` and `$fallbackToDefault` may be closures (`DefaultTemplate` passes them), called each time a file is drawn: an extension that sets a variable, or a prepend that changes the type or turns the fallback off, changes what the later files and the template itself see (the type that picks the `*` and type registrations is read once, after the prepends), as `Bonita\Templates::draw()` read `$this` for each contribution. Each file drawn calls the trace hook `TemplateRenderer::$trace` (type, name, path or `-`)
   before it is rendered, except a refused name. `$vars` is untyped on purpose: an object whose `vars` were replaced by a non-array
   through `__(['vars' => ...])` fails in the render, as it always did.
 - `PhpTemplateEngine` (`TemplateEngine`): `include`s the file in a function bound to the `PhpTemplateContext` (`$this` and `$t`;
-  `DefaultTemplate` is one, `withVars()` gives a copy with other variables) with the variables extracted into its scope, inside an
+  `DefaultTemplate` is one, `withVars()` gives a copy with other variables; the file is bound with the scope `phpTemplateScope()` names, `Bonita\Templates`, so no private member of a subclass is reachable from a template and a variable may be named `slots`) with the variables extracted into its scope, inside an
   output buffer. Its own variables are visible to the file and pinned: `$path` (a template variable named `path` changes the file
   included), `$vars`, `$k`, `$v`; a variable named `this` is an Error; an exception in a template propagates and leaves the
   output buffer open (`TemplateContractTest::testAnExceptionInATemplateLeaksTheOutputBuffer`).

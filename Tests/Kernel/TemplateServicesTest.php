@@ -85,6 +85,58 @@ final class TemplateServicesTest extends TestCase
         }
     }
 
+    public function testTheRegistrationViewsAreSetAsTheArraysTheyReplacedWere(): void
+    {
+        $template = new DefaultTemplate();
+        $template->extendTemplate('x', 'e');
+        $template->replaceTemplate('x', 'r');
+
+        foreach (['extensions', 'prepends', 'replacements', 'rendered_extensions'] as $view) {
+            $this->assertTrue(isset($template->$view), $view);
+        }
+        $this->assertFalse(empty($template->extensions));
+        $this->assertTrue(empty($template->prepends), 'an empty array is empty');
+        $this->assertFalse(empty($template->replacements['x']));
+        $this->assertTrue(empty($template->replacements['y']));
+        $this->assertTrue(isset($template->extensions['x']['*']));
+        $this->assertFalse(isset($template->extensions['x']['rss']));
+        $this->assertFalse(isset($template->nothing), 'a template variable is not "set", as before');
+        $this->assertSame(['x' => 'r'], array_map(static fn (array $types): string => $types['*'], $template->replacements));
+    }
+
+    public function testAWriteToAViewIsATemplateVariableAndLeavesTheRegistrationsAlone(): void
+    {
+        $template = new DefaultTemplate();
+        $template->extendTemplate('x', 'e');
+        $template->extensions = ['y' => ['*' => ['z']]];
+
+        $this->assertSame(['x' => ['*' => ['e']]], $template->extensions);
+        $this->assertSame(['y' => ['*' => ['z']]], $template->vars['extensions']);
+    }
+
+    public function testASubclassThatDoesNotCallTheParentConstructorStillRegistersAndDraws(): void
+    {
+        $template = new class () extends DefaultTemplate {
+            public function __construct()
+            {
+            }
+        };
+
+        $template->extendTemplate('x', 'e');
+        $template->prependTemplate('x', 'p');
+        $template->replaceTemplate('x', 'r');
+        $template->extendTemplateWithContent('x', '<c>');
+
+        $this->assertSame('<c>', $template->draw('x'), 'no template files of those names: the added content');
+        $this->assertSame(['x' => ['*' => ['e']]], $template->extensions);
+        $this->assertSame('<c>', (clone $template)->draw('x'));
+        $this->assertSame([], (new class () extends DefaultTemplate {
+            public function __construct()
+            {
+            }
+        })->extensions);
+    }
+
     public function testATypeThatIsNoStringIsRefused(): void
     {
         $template = new DefaultTemplate();

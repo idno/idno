@@ -320,6 +320,38 @@ final class TemplateContractTest extends TestCase
         );
     }
 
+    /**
+     * What a template sees is read when the file is drawn, not when the draw began: a variable an extension sets is seen by
+     * the template drawn after it, a prepend that changes the type changes where the later files (and the extensions for the
+     * type) are found, and a prepend that turns the fallback off does so for the later files.
+     */
+    public function testWhatATemplateSeesIsReadAtEachFileDrawn(): void
+    {
+        $result = $this->runCase('extension-sets-a-variable-the-base-prints');
+        $this->assertSame('core:default/ext-setvar|core:default/showv:set-by-extension|', $result['draw']);
+        $this->assertSame('set-by-extension', $result['v']);
+
+        $result = $this->runCase('prepend-changes-the-type-mid-draw');
+        $this->assertSame('core:default/settype|core:alt/etype|core:alt/typed|', $result['draw']);
+        $this->assertSame('alt', $result['type']);
+
+        $result = $this->runCase('prepend-turns-the-default-fallback-off');
+        $this->assertSame('core:default/nofallback|', $result['draw'], 'the base is not found in alt once the fallback is off');
+        $this->assertFalse($result['fallback']);
+    }
+
+    /**
+     * Inside a template `$this` can reach what Bonita\Templates declares and nothing private to DefaultTemplate: a variable
+     * named `slots` is an ordinary variable.
+     */
+    public function testVariablesNamedAfterThePrivatesOfTheTemplateObjectAreOrdinary(): void
+    {
+        $result = $this->runCase('variables-named-after-the-template-objects-privates');
+
+        $this->assertSame('var="mine" prop="mine"|after="assigned"|', $result['set']);
+        $this->assertSame('var=null prop=null|after="assigned"|', $result['unset']);
+    }
+
     public function testACloneOfTheTemplateObjectKeepsItsExtensionsAndVariablesToItself(): void
     {
         $result = $this->runCase('clone-of-the-template-object');

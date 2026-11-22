@@ -16,4 +16,12 @@ interface PhpTemplateContext
      * @param array<string, mixed> $vars
      */
     public function withVars(array $vars): static;
+
+    /**
+     * The class a template file is bound to: inside the file, what `$this` can reach is what that class can (the
+     * private members of a subclass are not reachable, so a variable may have any name).
+     *
+     * @return class-string
+     */
+    public function phpTemplateScope(): string;
 }

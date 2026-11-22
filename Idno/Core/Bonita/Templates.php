@@ -85,7 +85,7 @@ namespace Idno\Core\Bonita {
          */
         function draw($templateName, $returnBlank = true)
         {
-            $result = $this->renderer()->draw((string)$templateName, $this->vars, $this->getTemplateType(), $this, false, $this->fallbackToDefault);
+            $result = $this->renderer()->draw((string)$templateName, fn () => $this->vars, fn () => $this->getTemplateType(), $this, false, fn () => $this->fallbackToDefault);
             if ($result !== null) {
                 return $result;
             }
@@ -107,6 +107,17 @@ namespace Idno\Core\Bonita {
             $copy = clone $this;
             $copy->vars = $vars;
             return $copy;
+        }
+
+        /**
+         * The class template files are bound to: this one, so that `$this` in a template reaches what a Bonita
+         * template always reached
+         *
+         * @return string
+         */
+        function phpTemplateScope(): string
+        {
+            return self::class;
         }
 
         /**
