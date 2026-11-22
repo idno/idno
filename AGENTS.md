@@ -276,6 +276,15 @@ Each content plugin has an `Entry.php` entity class that defines
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
+- Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
+  that a person or another site supplied with `htmlspecialchars()`, in text and inside an
+  attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe
+  inside an attribute, because both keep the double quote. An address that goes into
+  `href` or `src` must also be an http or https one, or a browser runs it
+  (`javascript:`): pass it through `\Idno\Core\UrlValidator::httpUrl()`, which returns
+  the address or an empty string, and then through `htmlspecialchars()`. Do this where the
+  value is printed even if it was checked when it was stored, because values stored
+  before the check are not rewritten. `Tests/Core/UrlValidatorTest.php` checks `httpUrl()`.
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
   `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with
@@ -291,6 +300,11 @@ Each content plugin has an `Entry.php` entity class that defines
   connect to an address other than the ones checked. `Tests/Core/WebserviceTest.php`
   checks all this; tests of code that fetches URLs extend `Tests\OutboundHttpTestCase`,
   which runs a local server so that nothing leaves the machine.
+- Link previews: `LinkPreview::buildPreviewFromData()` keeps the link and the image
+  (`og:image` of the fetched page) only when `UrlValidator::httpUrl()` accepts them, and
+  `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them
+  again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
+  checks this.
 - TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
   the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or
   `CURLOPT_SSL_VERIFYHOST` anywhere else.
