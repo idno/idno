@@ -18,5 +18,8 @@ return static function (ContainerConfigurator $container): void {
         // The site's HTTP clients are Idno's own (config/services.php: idno.http_client and
         // idno.http_client.remote); FrameworkBundle must not register a second http_client.
         'http_client' => ['enabled' => false],
+        // Mail is Idno's own too (config/services.php: Idno\Mail\MailerFactory builds the mailer from the
+        // stored settings); FrameworkBundle must not register a mailer that needs a configured DSN.
+        'mailer' => ['enabled' => false],
     ]);
 };

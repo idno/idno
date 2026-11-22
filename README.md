@@ -244,7 +244,7 @@ Third party libraries are licensed separately.
 * Barnaby Walters's Microformats 2 Parser, which is distributed under the MIT License. Source: https://github.com/indieweb/php-mf2
 * FitVids.js, which is distributed under the WTFPL License. Source: http://fitvidsjs.com/
 * Leaflet.js, which is distributed under the BSD 2-Clause License. Source: http://leafletjs.com/ 
-* SwiftMailer, which is distributed under the MIT License. Source: https://github.com/swiftmailer/swiftmailer
+* Symfony Mailer, which is distributed under the MIT License. Source: https://github.com/symfony/mailer
 * Antwort, an email template which is distributed under the MIT License. Source: https://github.com/internations/antwort
 * Mention.js, a Bootstrap user at-mention library, which is distributed under the MIT License. Source: https://github.com/jakiestfu/Mention.js
 * MediaElement.js, a cross-browser media player, which is distributed under the MIT License. Source: https://github.com/johndyer/mediaelement

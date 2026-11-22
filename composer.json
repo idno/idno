@@ -29,7 +29,6 @@
         "psr/log": "~3.0",
         "idno/torophp": "^3.0",
         "mf2/mf2": "0.5.1",
-        "swiftmailer/swiftmailer": "6.3.0",
         "forkawesome/fork-awesome": "1.2",
         "twbs/bootstrap": "3.4.1",
         "ezyang/htmlpurifier": "4.19.1",
@@ -67,7 +66,8 @@
         "symfony/http-client": "^8.0",
         "symfony/mime": "^8.0",
         "symfony/messenger": "^8.0",
-        "symfony/doctrine-messenger": "^8.0"
+        "symfony/doctrine-messenger": "^8.0",
+        "symfony/mailer": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,

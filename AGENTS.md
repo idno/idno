@@ -263,6 +263,8 @@ Idno/
                                between messages (EntityCache, StopWhenQueueIsEmpty, KeepFailedMessage) and the
                                check of the site's address (WorkerSiteUrl). See "The queue of
                                events"
+  Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
+                               settings) and MailTransportDsn (the settings as a DSN). See "Mail"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -535,7 +537,9 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   bytes, at most 50 MB decoded and a few dozen kilobytes on the wire); `/_test/sink/{name}` (appends the request, in `/_test/echo`'s
   shape, to a file of its own and answers 202) and `/_test/sink/{name}/log` (the recorded requests as
   a JSON list, then the file is emptied), with `name` matching `[a-z0-9-]{1,40}`; and
-  `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint). The
+  `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint); and
+  `/_test/mail/log` (the mail the site has sent, recorded by `RecordingMailTransport`, as a JSON list
+  oldest first, then emptied; see "Mail"). The
   sink's files are in `<sys_get_temp_dir()>/idno-test-sink-<first 12 hex digits of the SHA-256 of the
   checkout's real path>/`, made on demand (CI's servers do not use the rig, so the rig's directory
   may not exist), and are written under `LOCK_EX` because the web server has several workers. A test
@@ -690,7 +694,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -2238,6 +2242,59 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   `Tests/Queue/LegacyQueueDrainTest` (a SQLite file and a private MySQL or MariaDB database, two drains in
   subprocesses: `Tests/Queue/drain.php`), `AbandonedMessagesTest`, `QueueWorkCommandTest` and the
   black-box `QueuedDelivery*Test` classes.
+
+#### Mail
+
+Mail is sent by Symfony Mailer (`symfony/mailer`, `symfony/mime`); SwiftMailer is gone. FrameworkBundle's own
+mailer is switched off in `config/packages/framework.php` (it needs a configured DSN), so there is exactly one.
+
+- The mail settings (`smtp_host`, `smtp_port`, `smtp_username`, `smtp_password`, `smtp_secure`, plus
+  `from_email` and `title` for the sender) are STORED settings, which an admin edits, not boot
+  configuration. `Idno\Mail\MailerFactory` reads them through `Idno\Config\SiteSettings` (so `Idno\Mail`
+  depends on neither `Idno\Legacy` nor `Idno::site()`) at each `create()`, and builds a `Mailer` over the
+  transport the injected `TransportFactoryInterface` makes from the DSN
+  (`idno.mail.transport_factory`, `EsmtpTransportFactory` in `config/services.php`). The container service
+  `Symfony\Component\Mailer\MailerInterface` is public and NOT shared: an admin's change applies to the
+  next mail, and a worker never keeps an old password. Like the storage services it needs the legacy
+  application (the settings are in the database), so it must not be fetched while the kernel boots.
+  Nothing from the settings is compiled into the container. `Idno/Mail/` is in
+  `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php` is in the `$excludes`.
+- `Idno\Mail\MailTransportDsn::fromSettings(array)` is pure: an empty host is `smtp://localhost:25`; a host
+  without a port leaves the port to the transport; `smtp_secure` `ssl` is `smtps://`, `tls` adds
+  `?require_tls=true`, anything else is Symfony's opportunistic STARTTLS; the user name and password are
+  percent-encoded and used only with a user name. A host that is not a host name or an IP address (a
+  scheme, a slash, a line break, an `@`) or a port that is not 1 to 65535 throws an
+  `\InvalidArgumentException` that names the setting and never its value.
+- `Idno\Core\Email` stays as the adapter for legacy callers (the password reset, invitations, the admin test
+  mail, the import and export mails, `Logging::oopsAlert()`), with the same methods. Its `message` is a
+  `Symfony\Component\Mime\Email`. A setter that is given an address or name the message refuses (a line
+  break, not an address) does not throw: it remembers it, and `send()` sends nothing. A subject's line
+  breaks become a space. `send()` sets From from `from_email` and `title` when `from_email` is set (else what
+  the caller set stands; with neither there is no sender and nothing is sent), triggers `email/send` with the
+  `Email` adapter as data and the message as the value (a listener may return another
+  `Symfony\Component\Mime\Email` to replace it; anything else is ignored), sends through the container's
+  `MailerInterface`, and returns the number of To and Bcc recipients. It catches every `\Throwable` (also
+  while building or sending), logs ONE line `Error sending mail: <exception class>` (the exception's message
+  can quote the DSN, so it is never logged, and a failing logger changes nothing) and returns 0. This is
+  what lets `Logging::oopsAlert()` call it from an error handler: with no container or no legacy
+  application it returns 0 quietly. `Email::useMailer(?MailerInterface)` replaces the mailer for tests.
+- Secrets: `smtp_password` is in the DSN given to the transport factory and nowhere else: never in a log
+  line, an exception message that reaches a page (the exceptions of `MailTransportDsn` name settings
+  only) or the compiled container.
+- No test sends real mail. In the test environment `config/services_test.php` replaces
+  `idno.mail.transport_factory` with `Tests\Fixtures\RecordingMailTransportFactory`, whose transport,
+  `RecordingMailTransport`, sends nothing and appends each message (From, To, Bcc, Reply-To, subject, text
+  and HTML bodies, the prepared headers, the envelope's recipients and the transport's DSN WITHOUT the
+  password) as one JSON line to `<sys_get_temp_dir()>/idno-test-mail-<first 12 hex digits of the SHA-256
+  of the checkout's real path>/mail.jsonl`, made on demand (CI's servers do not use the rig's directory),
+  under `LOCK_EX`. The PHPUnit process and the rig's web server both append to it: a test reads it with
+  `RecordingMailTransport::drain()` (which empties it) or, for mail the web server sent, over HTTP from
+  `/_test/mail/log` (`Tests\Fixtures\MailLogController`, which also empties it). A test that sends mail
+  drains the file in `setUp()` and `tearDown()`.
+- Tests: `Tests/Unit/Mail/MailTransportDsnTest`, `Tests/Kernel/EmailAdapterTest`, and
+  `Tests/Characterisation/MailFlowsTest` (what each mail carries: the password reset, the invitation, the
+  admin test mail and `oopsAlert`: recipients, From, Reply-To, subject, the HTML part in the email shell, the
+  text part and the link; and a password reset sent by the web server and read from `/_test/mail/log`).
 
 #### The file store
 

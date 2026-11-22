@@ -1,0 +1,117 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Mail;
+
+use Idno\Mail\MailTransportDsn;
+use PHPUnit\Framework\TestCase;
+use Symfony\Component\Mailer\Transport\Dsn;
+
+final class MailTransportDsnTest extends TestCase
+{
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function plainSettings(): iterable
+    {
+        yield 'no host is the local mail server' => [['smtp_host' => ''], 'smtp://localhost:25'];
+        yield 'nothing set at all' => [[], 'smtp://localhost:25'];
+        yield 'a port without a host is not used' => [['smtp_host' => '', 'smtp_port' => 587], 'smtp://localhost:25'];
+        yield 'a host leaves the port to the transport' => [['smtp_host' => 'mail.example.com'], 'smtp://mail.example.com'];
+        yield 'a host and a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587'];
+        yield 'a port as text, as the admin form saves it' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '2525'], 'smtp://mail.example.com:2525'];
+        yield 'an empty port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => ''], 'smtp://mail.example.com'];
+        yield 'ssl is implicit tls' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 465, 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:465'];
+        yield 'ssl without a port' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'ssl'], 'smtps://mail.example.com'];
+        yield 'tls requires starttls' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com?require_tls=true'];
+        yield 'tls with a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587, 'smtp_secure' => 'tls'], 'smtp://mail.example.com:587?require_tls=true'];
+        yield 'any other secure value is opportunistic' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'starttls'], 'smtp://mail.example.com'];
+        yield 'an IPv4 address' => [['smtp_host' => '192.0.2.10', 'smtp_port' => 25], 'smtp://192.0.2.10:25'];
+        yield 'an IPv6 address is bracketed' => [['smtp_host' => '2001:db8::1', 'smtp_port' => 25], 'smtp://[2001:db8::1]:25'];
+        yield 'a password without a username is not used' => [['smtp_host' => 'mail.example.com', 'smtp_password' => 'x'], 'smtp://mail.example.com'];
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     * @dataProvider plainSettings
+     */
+    public function testTheDsnOfTheSettings(array $settings, string $expected): void
+    {
+        $this->assertSame($expected, MailTransportDsn::fromSettings($settings));
+    }
+
+    public function testCredentialsArePercentEncodedAndReadBackExactly(): void
+    {
+        $password = 'p@ss:w/rd%#?';
+        $dsn = MailTransportDsn::fromSettings([
+            'smtp_host' => 'mail.example.com',
+            'smtp_port' => 587,
+            'smtp_username' => 'me@example.com',
+            'smtp_password' => $password,
+            'smtp_secure' => 'tls',
+        ]);
+
+        $this->assertStringNotContainsString($password, $dsn);
+        $parsed = Dsn::fromString($dsn);
+        $this->assertSame('smtp', $parsed->getScheme());
+        $this->assertSame('mail.example.com', $parsed->getHost());
+        $this->assertSame(587, $parsed->getPort());
+        $this->assertSame('me@example.com', $parsed->getUser());
+        $this->assertSame($password, $parsed->getPassword());
+        $this->assertTrue($parsed->getBooleanOption('require_tls'));
+    }
+
+    public function testAUsernameWithoutAPasswordIsSentAlone(): void
+    {
+        $parsed = Dsn::fromString(MailTransportDsn::fromSettings(['smtp_host' => 'mail.example.com', 'smtp_username' => 'me']));
+        $this->assertSame('me', $parsed->getUser());
+        $this->assertNull($parsed->getPassword());
+    }
+
+    public function testEveryByteOfACredentialSurvives(): void
+    {
+        $user = "us er/\u{e9}\u{1f600}:x";
+        $password = " !\"#\$%&'()*+,-./:;<=>?@[\\]^_`{|}~\u{e9}";
+        $parsed = Dsn::fromString(MailTransportDsn::fromSettings(['smtp_host' => 'h.example', 'smtp_username' => $user, 'smtp_password' => $password]));
+        $this->assertSame($user, $parsed->getUser());
+        $this->assertSame($password, $parsed->getPassword());
+    }
+
+    /**
+     * @return iterable<string, array{array<string, mixed>, string}>
+     */
+    public static function refusedSettings(): iterable
+    {
+        yield 'a newline in the host' => [['smtp_host' => "evil\nhost"], 'smtp_host'];
+        yield 'a slash in the host' => [['smtp_host' => 'evil.example/path'], 'smtp_host'];
+        yield 'a scheme in the host' => [['smtp_host' => 'ssl://mail.example.com'], 'smtp_host'];
+        yield 'an at sign in the host' => [['smtp_host' => 'user@mail.example.com'], 'smtp_host'];
+        yield 'a space in the host' => [['smtp_host' => 'mail example.com'], 'smtp_host'];
+        yield 'a query in the host' => [['smtp_host' => 'mail.example.com?x=1'], 'smtp_host'];
+        yield 'a host that is not text' => [['smtp_host' => ['a']], 'smtp_host'];
+        yield 'a word as the port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 'abc'], 'smtp_port'];
+        yield 'a port out of range' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 70000], 'smtp_port'];
+        yield 'a negative port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => -1], 'smtp_port'];
+        yield 'a port with a newline' => [['smtp_host' => 'mail.example.com', 'smtp_port' => "25\nx"], 'smtp_port'];
+        yield 'a port with a path' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '25/x'], 'smtp_port'];
+    }
+
+    /**
+     * @param array<string, mixed> $settings
+     * @dataProvider refusedSettings
+     */
+    public function testAHostOrPortThatCannotBeADsnIsRefusedWithoutItsValue(array $settings, string $setting): void
+    {
+        try {
+            MailTransportDsn::fromSettings($settings);
+            $this->fail('Expected an InvalidArgumentException.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString($setting, $e->getMessage());
+            $value = $settings[$setting];
+            if (is_string($value)) {
+                $this->assertStringNotContainsString($value, $e->getMessage());
+            }
+        }
+    }
+}
