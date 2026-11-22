@@ -96,7 +96,8 @@ final class SchemaGateBootTest extends TestCase
 
     /**
      * With the gate closed the console still runs Symfony's commands and idno:upgrade, says on
-     * stderr why the rest is missing, and loads no legacy console plugin (nor `version`).
+     * stderr why the rest is missing, and loads no legacy console plugin (nor `version`). The queue
+     * worker is a Symfony command and is listed; running it is refused (below).
      */
     public function testTheConsoleRunsWithoutTheLegacyApplicationWhileTheGateIsClosed(): void
     {
@@ -106,9 +107,25 @@ final class SchemaGateBootTest extends TestCase
         $this->assertSame(SchemaGate::CLOSED_MESSAGE . "\n", $stderr);
         $this->assertStringContainsString('idno:upgrade', $stdout);
         $this->assertStringContainsString('debug:router', $stdout);
-        foreach (['version', 'service-event-queue', 'export'] as $legacy) {
+        foreach (['version', 'export'] as $legacy) {
             $this->assertDoesNotMatchRegularExpression('/^\s+' . preg_quote($legacy, '/') . '\s/m', $stdout, $legacy);
         }
+        $this->assertSame([], $this->tables(), 'nothing was created');
+    }
+
+    /**
+     * The queue worker is a Symfony command, so it is registered while the gate is closed, but it needs
+     * the legacy application (the events' listeners): the console says why on stderr as for every
+     * command but idno:upgrade, and the command refuses with exit 1 and starts nothing.
+     */
+    public function testTheQueueWorkerRefusesWhileTheGateIsClosed(): void
+    {
+        [$exit, $stdout, $stderr] = $this->script('bin/console', 'service-event-queue', '--once');
+
+        $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertStringContainsString(SchemaGate::CLOSED_MESSAGE, $stderr);
+        $this->assertStringContainsString('The event queue worker needs the site\'s database to be set up', $stdout . $stderr);
+        $this->assertStringNotContainsString('Processing pending events', $stdout . $stderr);
         $this->assertSame([], $this->tables(), 'nothing was created');
     }
 

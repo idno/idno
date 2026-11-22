@@ -172,11 +172,14 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   a temporary directory; the schema from `idno:upgrade`) with `IDNO_EVENT_QUEUE=AsynchronousQueue`, its
   own `IDNO_URL` and `IDNO_TEST_HTTP_ALLOW` naming itself, and stops it and drops the database in
   `tearDown()`. It gives `site()`, `registerUser()`/`publishStatus()` (over HTTP), `runWorkerOnce()`
-  (`bin/console service-event-queue --once`, same environment), `sink()` and `runInSite()` (PHP code with
-  the site booted, for entity writes only the classes can do). `Tests/Queue/QueuedDeliveryTest` and
-  `QueuedDeliveryBehindTlsTest` pin what queued events deliver today (the signed ActivityPub delivery,
-  webmentions, who an event runs as, failing events, the worker's output); they do not run in the unit
-  tier and skip on a MongoDB site.
+  (`bin/console service-event-queue --once`, same environment), `sink()`, `queuedEvents()` and
+  `failedEvents()` (the messages waiting in, and failed from, the `idno_messages` table),
+  `markTakenAgo()` and `runInSite()` (PHP code with the site booted, for entity writes only the classes
+  can do). `Tests/Queue/QueuedDeliveryTest` and `QueuedDeliveryBehindTlsTest` pin what queued events
+  deliver (the signed ActivityPub delivery, webmentions, who an event runs as, failing events, the
+  worker's output), `QueueWorkCommandTest` the worker command and `QueueSettingSiteTest` (and its
+  synchronous twin) what the `event_queue` setting means to the code that asks; they do not run in the
+  unit tier and skip on a MongoDB site.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
@@ -212,9 +215,11 @@ Idno/
                                MessengerTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services")
-  Console/                     Idno\Console\Application, the CLI application (see Entry points)
+  Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
+                               commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
-  Legacy/                      Shims between the kernel and the legacy application (see below)
+  Legacy/                      Shims between the kernel and the legacy application (see below), among them
+                               MessengerEventQueue (the site's queue) and LegacyEventTrigger / LegacyUserContext
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
@@ -250,8 +255,11 @@ Idno/
                                filesystem, in the 1.x layout), StoredFile, FileStoreException and
                                FilesystemFactory (the filesystem from the boot configuration)
   Queue/                       The queue of events on Symfony Messenger (modern style): the message
-                               (QueuedEvent), its handler, the worker middleware (WorkerHygiene) and the two
-                               small interfaces they depend on (EventTrigger, UserContext). See "The queue of
+                               (QueuedEvent), its handler, the worker middleware (WorkerHygiene), the two
+                               small interfaces they depend on (EventTrigger, UserContext), the decorator of
+                               the transport that rides out a busy database (ResilientTransport), the
+                               operator's view of killed workers' messages (AbandonedMessages) and the move
+                               of the previous queue's records (LegacyQueueDrain). See "The queue of
                                events"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
@@ -282,7 +290,7 @@ data/                          Where an SQLite site's database file lives (data/
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Legacy templates (.tpl.php), one directory per template type
 IdnoPlugins/                   First-party content & feature plugins
-ConsolePlugins/                CLI service plugins (EventQueueService, CronService, Export)
+ConsolePlugins/                CLI service plugins (CronService, Export)
 Themes/                        Visual themes; Twenty26 (Idno 2026) is the only bundled theme. A site
                                configured with a retired theme (Themes::RETIRED) is resolved to Twenty26
                                at load; the setting is saved, and the admin told, when an admin next
@@ -688,7 +696,7 @@ other new code may.
   `Attribute/` (attribute classes), `FixedAccessContext.php`, `FixedRecordDefaults.php`, `IdentityTypeMap.php`, `Migrations/` (the schema migrations),
   `Files/` (the file store, below), `MySqlSemantics.php`, `Platform/`, `RecordDefaults.php`, `RecordIndex.php` and `SettingsRecordStore.php`; in `Idno/Legacy/`, `FlysystemFile.php`, `FlysystemFileSystem.php`, `RepositoryDataConcierge.php`
   and `LegacySqlMaintenance.php`, which `LegacyServiceFactory::db()`
-  builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
+  builds, and `MessengerEventQueue.php` and `LateLogger.php`, which `LegacyServiceFactory::queue()` builds; in `Idno/Upgrade/`, the value objects `UpgradeProgress.php` and `PublicMessage.php`, the
   enum `SchemaStatus.php`, the exception `LegacyTableReferenced.php`, the static helpers
   `ServerVersion.php` and `UpgradePage.php`, and the copier's helpers `ConfigCopier.php`,
   `DocumentCheck.php`, `LegacySource.php`, `RowWriter.php`, and `Mongo/`, the MongoDB import, built with
@@ -1318,12 +1326,11 @@ other new code may.
   is `Idno\Core\HybridTwigTemplate`, which could also render Twig templates, but there are
   none: Twig is not in use. Templates are extended via `extendTemplate()` to inject plugin
   UI into shell chrome, admin menus, etc.
-- **Async queue**: Events can be processed asynchronously via
-  `AsynchronousQueue`. The queue worker runs as a CLI service
-  (`ConsolePlugins/EventQueueService`) polling for pending
-  `AsynchronousQueuedEvent` entities. **Required for ActivityPub.** The pieces of its replacement on
-  Symfony Messenger (`Idno\Queue\`, the table `idno_messages`) exist and are tested, but nothing sends
-  to them yet: see "The queue of events".
+- **Async queue**: `Idno::site()->queue()` is `Idno\Legacy\MessengerEventQueue`. With
+  `event_queue = 'AsynchronousQueue'` an event becomes a message on Symfony Messenger (`Idno\Queue\`,
+  the table `idno_messages`) and the worker, `service-event-queue` (`Idno\Console\QueueWorkCommand`),
+  runs it in its own process; otherwise it runs at once in the request. **Required for ActivityPub.**
+  Code asks `queue()->isAsynchronous()`, never for a class. See "The queue of events".
 
 ### Database
 
@@ -2033,10 +2040,66 @@ afterwards calls `SchemaCatalog::forget()`.
 
 #### The queue of events
 
-The events a site queues to run later (syndication, federation, webhooks, ...) are to be messages on
-Symfony Messenger's Doctrine transport. The pieces exist and are tested; nothing sends to them yet (the
-legacy `AsynchronousQueue` and its worker still run), so a site that does not use them behaves as before.
-`symfony/messenger` and `symfony/doctrine-messenger` (`^8.0`) are required.
+The events a site queues to run later (syndication, federation, webhooks, ...) are messages on Symfony
+Messenger's Doctrine transport. `symfony/messenger` and `symfony/doctrine-messenger` (`^8.0`) are
+required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQueue`, the console plugin
+`ConsolePlugins/EventQueueService` and the pages `/service/queue/*` no longer exist.
+
+- `Idno\Legacy\MessengerEventQueue` (final, an `Idno\Core\EventQueue`, built by
+  `LegacyServiceFactory::queue()` whatever `event_queue` says, from closures that read the legacy
+  configuration, session, event dispatcher and logger when needed: the queue is built before they exist,
+  and the bus is fetched when the first event is sent) is `Idno::site()->queue()`. `isAsynchronous()` reads
+  the `event_queue` setting at each call: `AsynchronousQueue`, `Idno\Core\AsynchronousQueue` (any case,
+  leading backslash optional, as `componentFactory()` resolved it) is true; unset, empty, `SynchronousQueue`
+  and any other value false, and any other non-empty value logs ONE warning. `enqueue($queueName,
+  $eventName, array $eventData, $runAsUser = null)`: asynchronous, it dispatches a `QueuedEvent` (queue name
+  `default` when empty; run as the named user, else the session's user, else nobody) and returns the
+  transport's message id as a string, or false (logged: the event's name and the exception's class, never its
+  data) when it cannot be sent; otherwise it triggers the event at once, catching and logging an exception
+  as `SynchronousQueue` did, and returns an opaque 32-hex id whose result `isComplete()`/`getResult()` keep
+  for the request (false and null for any other id: nothing reports on an asynchronous event). Bundled code
+  asks `queue()->isAsynchronous()` (ActivityPub, StandardSiteSync's backfill); a plugin must not test a class.
+  The legacy queue name (`default`, the first argument, kept in `QueuedEvent::$queue`) is NOT the transport's
+  `queue_name` (`idno`, `failed`): every legacy queue name shares the one `idno` transport; nothing bundled
+  enqueues to a name but `default`.
+- `Idno\Queue\LegacyQueueDrain` moves the previous queue's records (entities of
+  `Idno\Entities\AsynchronousQueuedEvent`, which still exists for this) that are not complete into the queue,
+  oldest first, when the worker starts: per record ONE transaction in which the record is deleted (the delete
+  is the claim: a worker that finds it already gone sends nothing, so two workers starting together move each
+  record once; it is the one SQL statement of its own, on the table `JsonRecordStore::tableName()` gives,
+  because `RecordStore::delete()` does not say whether it removed a row) and a `QueuedEvent` is sent; a failure
+  of either rolls both back. A record whose data does not unserialise to an array, holds an object of a class
+  that no longer exists (`__PHP_Incomplete_Class`, found by walking the value), or whose send fails, stays, is
+  counted in `left` and logged once with its id and event name (never its data). `drain(?\Closure
+  $shouldStop)` asks before each record and ends there (whole records only). `removeCompleted($limit = 500)`
+  deletes complete records of the class (the old garbage collector is gone, nothing else reads them), the
+  command calling it once at each start. It reads documents through the `RecordStore`, never entities.
+- `Idno\Console\QueueWorkCommand` is `service-event-queue [--queue=default] [--interval=N] [--once]
+  [--requeue-abandoned]` (a Symfony command; the legacy console plugin of that name is gone, so it is listed
+  while the schema gate is closed too, and refuses there with exit 1 after the console's closed-gate line). It
+  exits 1 with `The event queue is not set to AsynchronousQueue. Set event_queue = 'AsynchronousQueue' in
+  config.ini.` unless the queue is asynchronous; prints `Processing pending events from queue '<q>' (single
+  run)...` (or the starting lines); says how many abandoned messages the `idno` queue has when more than 0
+  (and how to requeue), or with `--requeue-abandoned` requeues those older than an hour and prints how many;
+  drains the legacy records (one line only when something moved or was left); then runs a Messenger `Worker`
+  on the container's `idno` transport (so `ResilientTransport` applies) and the default bus, printing one
+  line for each event taken (`[date] Dispatching event <message id>: <event>`) and one when it is done
+  (`Event <id> completed.`) or failed (`Error dispatching event <id>: <message> (kept in the failure
+  transport ...)`). `--once` stops the worker when it is idle (everything waiting now, exit 0); otherwise it
+  runs until SIGTERM, SIGINT or SIGQUIT, sleeping `--interval` seconds when idle, and stops itself with exit 0
+  at `QueueWorkCommand::memoryLimitBytes()` (80% of `memory_limit` when set, at most 256 MiB) for a
+  supervisor to restart. SIGTERM, SIGINT and SIGQUIT set a stop flag at any time (also before the worker
+  exists): the drain ends between records, the command does not start consuming, exit 0. `--once` stops on
+  a GENUINE empty read (`StopWhenQueueIsEmpty`: `ResilientTransport::lastGetWasInterrupted()` says a read
+  returned nothing only because it was ridden out), waiting 0.5 s between reads, and after 30 s of
+  interrupted reads in a row exits 1 with a line on stderr. A failing event never makes the exit code non-zero. `--queue` is
+  accepted and one worker serves every queue name (one transport cannot be filtered by the name in the
+  message); a worker given another name says so. `messenger:consume idno` is the same worker with Messenger's
+  options.
+- Events run in the worker's process (the console), so their listeners must be registered there: the
+  link-preview listener is registered by the console boot too (it was web-only). A listener must not read the
+  request. `Page::isSSL()` in a console process (no `REQUEST_METHOD`) is true exactly when the configured `url`
+  is https, so an activity's `keyId` built in the worker is https for an https-configured site and http for an http-configured one, whatever a web server would present: a site served over TLS must have an https `url` configured, or what its worker signs and sends names http.
 
 - `Idno\Queue\QueuedEvent`: the message, a value object: `queue` (the queue it was sent to), `event`
   (the event's name), `data` (an array) and `runAs` (the uuid of the user it runs as, null for nobody).
@@ -2075,8 +2138,12 @@ legacy `AsynchronousQueue` and its worker still run), so a site that does not us
   `AbandonedMessages::REDELIVER_TIMEOUT_SECONDS` (ten years), because an event may already have posted
   to another server and running it twice would deliver it twice. `Idno\Queue\AbandonedMessages` (on the
   site's connection, table `idno_messages`, every value bound) lists them for an operator:
-  `count($queue, $olderThanSeconds = 3600)`, `ids(...)` (at most 100) and `requeue(...)` (sets
-  `delivered_at` to NULL for exactly those rows, in one statement, so the next worker runs them).
+  `count($queue = AbandonedMessages::QUEUE, $olderThanSeconds = 3600)`, `ids(...)` (at most 100) and
+  `requeue(...)` (sets `delivered_at` to NULL for exactly those rows, in one statement, so the next worker
+  runs them). `$queue` is the TRANSPORT's queue name (`idno`, the default, or `failed`), not the legacy queue
+  name of an event. An age below `AbandonedMessages::MINIMUM_AGE_SECONDS` (60) is an
+  `\InvalidArgumentException` from every method: a live worker holds its message that long (and an event may
+  take minutes), so 0 would requeue a message being handled.
 - `config/packages/messenger.php`: transports `idno` and `failed`, both `doctrine://default` (the site's
   own DBAL connection: one database, no second connection), table `idno_messages`, queue names `idno`
   and `failed`, `auto_setup` OFF; `idno` has `max_retries` 0 (a message is never retried: what a queued
@@ -2100,8 +2167,8 @@ legacy `AsynchronousQueue` and its worker still run), so a site that does not us
   insert; it reads in a transaction with `SELECT ... FOR UPDATE SKIP LOCKED` on MySQL and MariaDB (the
   clause is left off on SQLite, which has none), then marks the row delivered; it acknowledges by deleting
   the row. `LISTEN/NOTIFY` (`pg_notify`) is PostgreSQL only and never used here. A message handled but not
-  acknowledged would be delivered again after `redeliver_timeout` (3600 s), which is why `WorkerHygiene`
-  also checks the connection after the handler.
+  acknowledged (the worker was killed) is not delivered again: it is abandoned (above). `WorkerHygiene` checks
+  the connection after the handler so that the acknowledgement is made on a live one.
 - At most once, with several workers: pinned by `TransportTest::testTwoConsumersNeverHandleOneMessageTwice`
   (two consumer subprocesses, `Tests/Queue/consumer.php`, on a SQLite file and on MySQL/MariaDB: each of
   100 ids is handled exactly once, both consumers handled some and both exit 0). On SQLite the read runs
@@ -2120,7 +2187,10 @@ legacy `AsynchronousQueue` and its worker still run), so a site that does not us
   tables come from the migrations only; `MessengerRig` builds the transport and bus as the config does),
   `Tests/Kernel/MessengerConfigurationTest` and `QueueAdaptersTest` (the container and the legacy
   adapters; the test container exposes the private transports and bus through `idno.test.*` aliases in
-  `config/services_test.php`).
+  `config/services_test.php`), `Tests/Kernel/QueueShimTest` (the adapter and the deleted classes),
+  `Tests/Queue/LegacyQueueDrainTest` (a SQLite file and a private MySQL or MariaDB database, two drains in
+  subprocesses: `Tests/Queue/drain.php`), `AbandonedMessagesTest`, `QueueWorkCommandTest` and the
+  black-box `QueuedDelivery*Test` classes.
 
 #### The file store
 

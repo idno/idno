@@ -41,8 +41,20 @@ final class ResilientTransport implements TransportInterface, KeepaliveReceiverI
     {
     }
 
+    private bool $interrupted = false;
+
+    /**
+     * Whether the last get() returned nothing only because the read was ridden out (the database
+     * was busy or the connection lost), not because the queue was empty. Reset by each get().
+     */
+    public function lastGetWasInterrupted(): bool
+    {
+        return $this->interrupted;
+    }
+
     public function get(): iterable
     {
+        $this->interrupted = false;
         try {
             return $this->inner->get(...func_get_args());
         } catch (\Throwable $e) {
@@ -53,6 +65,7 @@ final class ResilientTransport implements TransportInterface, KeepaliveReceiverI
             if ($cause instanceof ConnectionLost) {
                 $this->connection->close();
             }
+            $this->interrupted = true;
             $this->logger->warning('The queue could not be read, trying again: ' . self::describe($cause));
 
             return [];

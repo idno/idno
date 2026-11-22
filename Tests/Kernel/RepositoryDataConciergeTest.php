@@ -977,34 +977,37 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
-     * The async queue's query shapes through the adapter: enqueue (save), the pending lookup
-     * (`complete $not $in [true]`), dispatch (marks complete and saves), the garbage collector
-     * (`completedTs $lt`, `complete` true).
+     * The query shapes of the legacy queue's records (AsynchronousQueuedEvent, which the queue's
+     * drain reads) through the adapter: a save, the pending lookup (`complete $not $in [true]`), a
+     * save that marks it complete, and the lookup the old garbage collector made (`completedTs $lt`,
+     * `complete` true).
      */
-    public function testTheAsynchronousQueueRunsThroughTheAdapter(): void
+    public function testTheLegacyQueueRecordsRunThroughTheAdapter(): void
     {
-        $queue = new \Idno\Core\AsynchronousQueue();
         $name = 'adapterqueue' . bin2hex(random_bytes(4));
-        $event = 'adapter/event/' . bin2hex(random_bytes(4));
-        $received = [];
-        Idno::site()->events()->addListener($event, static function (\Idno\Core\Event $e) use (&$received): void {
-            $received[] = $e->data();
-        });
+        $event = new \Idno\Entities\AsynchronousQueuedEvent();
+        $event->queue = $name;
+        $event->event = 'adapter/event/' . bin2hex(random_bytes(4));
+        $event->eventData = serialize(['n' => 1]);
+        $event->complete = false;
+        $event->queuedTs = time();
+        $this->assertNotFalse($event->save(true));
+        $this->created[] = $event->getUUID();
 
-        $id = $queue->enqueue($name, $event, ['n' => 1]);
-        $this->assertIsString($id);
         $pending = \Idno\Entities\AsynchronousQueuedEvent::getPendingFromQueue($name);
         $this->assertCount(1, $pending);
-        $this->assertFalse($queue->isComplete($id));
-        $this->created[] = $pending[0]->getUUID();
+        $this->assertSame($event->getID(), $pending[0]->getID());
+        $this->assertSame([['n' => 1]], [unserialize($pending[0]->eventData)]);
 
-        $this->assertNotFalse($queue->dispatch($pending[0]));
-        $this->assertSame([['n' => 1]], $received);
-        $this->assertTrue($queue->isComplete($id));
+        $pending[0]->complete = true;
+        $pending[0]->completedTs = time() - 600;
+        $this->assertNotFalse($pending[0]->save(true));
         $this->assertSame([], \Idno\Entities\AsynchronousQueuedEvent::getPendingFromQueue($name));
         $this->assertCount(1, \Idno\Entities\AsynchronousQueuedEvent::getFromQueue($name));
 
-        $queue->gc(-60, $name);
+        $old = \Idno\Entities\AsynchronousQueuedEvent::get(['queue' => $name, 'completedTs' => ['$lt' => time() - 300], 'complete' => true]);
+        $this->assertCount(1, $old);
+        $old[0]->delete();
         $this->assertSame([], \Idno\Entities\AsynchronousQueuedEvent::getFromQueue($name));
     }
 

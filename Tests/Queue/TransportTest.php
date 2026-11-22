@@ -250,6 +250,38 @@ final class TransportTest extends TestCase
     }
 
     /**
+     * A listener that throws an `\Error` (a TypeError: the old queue's poison event) is a failure like any
+     * other: the message goes to the failure transport once, nothing retries it, and the worker goes on to
+     * the next message.
+     *
+     * @dataProvider engines
+     */
+    public function testAListenerThatThrowsAnErrorFailsOnceAndTheWorkerGoesOn(string $engine): void
+    {
+        $connection = $this->database($engine, 'transport');
+        $main = MessengerRig::transport($connection, 'idno');
+        $failed = MessengerRig::transport($connection, 'failed');
+        $handled = [];
+        $bus = MessengerRig::bus([QueuedEvent::class => [function (QueuedEvent $message) use (&$handled): void {
+            $handled[] = $message->event;
+            if ($message->event === 'poison') {
+                throw new \TypeError('Cannot access offset of type string on string');
+            }
+        }]]);
+        $main->send(new Envelope(new QueuedEvent('idno', 'poison', [], null)));
+        $main->send(new Envelope(new QueuedEvent('idno', 'good', [], null)));
+
+        $this->runUntilIdle(new Worker(['idno' => $main], $bus, $this->dispatcher($main, $failed)));
+
+        $this->assertSame(['poison', 'good'], $handled, 'each handled once, the good one after the poison one');
+        $this->assertSame(0, $main->getMessageCount());
+        $this->assertSame(1, $failed->getMessageCount(), 'the poison event is kept once');
+        $stored = iterator_to_array($failed->get(), false)[0];
+        $this->assertSame('poison', $stored->getMessage()->event);
+        $this->assertStringContainsString('Cannot access offset', (string) $stored->last(\Symfony\Component\Messenger\Stamp\ErrorDetailsStamp::class)?->getExceptionMessage());
+    }
+
+    /**
      * @dataProvider engines
      */
     public function testAnEventForAUserThatNoLongerExistsFailsOnceAndTheNextIsHandled(string $engine): void

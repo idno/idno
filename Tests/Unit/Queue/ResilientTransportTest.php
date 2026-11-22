@@ -80,6 +80,21 @@ final class ResilientTransportTest extends TestCase
         }
     }
 
+    public function testItSaysWhetherItsLastReadWasRiddenOut(): void
+    {
+        $failure = new TransportException('locked', 0, new LockWaitTimeoutException(self::driverFailure('database is locked'), null));
+        $inner = new ScriptedTransport([$failure, [], [new Envelope(new QueuedEvent('idno', 'e', [], null))]]);
+        $transport = new ResilientTransport($inner, PrivateDatabase::sqliteMemory(), new CollectingLogger());
+
+        $this->assertFalse($transport->lastGetWasInterrupted(), 'before any read');
+        $transport->get();
+        $this->assertTrue($transport->lastGetWasInterrupted(), 'a busy read that returned nothing');
+        $transport->get();
+        $this->assertFalse($transport->lastGetWasInterrupted(), 'a genuinely empty read');
+        $transport->get();
+        $this->assertFalse($transport->lastGetWasInterrupted(), 'a read that found a message');
+    }
+
     public function testAMessageThatIsThereIsReturned(): void
     {
         $envelope = new Envelope(new QueuedEvent('idno', 'e', [], null));

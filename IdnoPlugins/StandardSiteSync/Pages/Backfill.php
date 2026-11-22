@@ -61,7 +61,7 @@ class Backfill extends Page
         }
 
         $queue = \Idno\Core\Idno::site()->queue();
-        $useAsync = ($queue instanceof \Idno\Core\AsynchronousQueue);
+        $useAsync = $queue->isAsynchronous();
         $count = 0;
 
         foreach ($entities as $entity) {

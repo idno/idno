@@ -68,17 +68,19 @@ final class AbandonedMessagesTest extends TestCase
         $waiting = $this->send();
         $other = $this->send('failed');
         $this->takenAgo($old, 7200);
-        $this->takenAgo($recent, 60);
+        $this->takenAgo($recent, 300);
         $this->takenAgo($other, 7200);
         $abandoned = new AbandonedMessages($this->connection);
 
         $this->assertSame(1, $abandoned->count('idno'));
         $this->assertSame([(string) $old], $abandoned->ids('idno'));
-        $this->assertSame(2, $abandoned->count('idno', 30), 'older than 30 seconds');
-        $this->assertSame([(string) $old, (string) $recent], $abandoned->ids('idno', 30));
+        $this->assertSame(1, $abandoned->count(), 'the default queue is the one the site\'s events go to, `idno`');
+        $this->assertSame([(string) $old], $abandoned->ids());
+        $this->assertSame(2, $abandoned->count('idno', 60), 'older than a minute');
+        $this->assertSame([(string) $old, (string) $recent], $abandoned->ids('idno', 60));
         $this->assertSame(0, $abandoned->count('nosuchqueue'));
         $this->assertSame(1, $abandoned->count('failed'));
-        $this->assertNotContains((string) $waiting, $abandoned->ids('idno', 0), 'a message nobody took is not abandoned');
+        $this->assertNotContains((string) $waiting, $abandoned->ids('idno', 60), 'a message nobody took is not abandoned');
     }
 
     /**
@@ -108,11 +110,11 @@ final class AbandonedMessagesTest extends TestCase
         $recent = $this->send();
         $other = $this->send('failed');
         $this->takenAgo($old, 7200);
-        $this->takenAgo($recent, 60);
+        $this->takenAgo($recent, 300);
         $this->takenAgo($other, 7200);
         $abandoned = new AbandonedMessages($this->connection);
 
-        $this->assertSame(1, $abandoned->requeue('idno'));
+        $this->assertSame(1, $abandoned->requeue());
 
         $this->assertNull($this->connection->fetchOne('select delivered_at from idno_messages where id = ?', [$old]));
         $this->assertNotNull($this->connection->fetchOne('select delivered_at from idno_messages where id = ?', [$recent]), 'a recent one is left');
@@ -121,5 +123,29 @@ final class AbandonedMessagesTest extends TestCase
         $this->assertCount(1, $received);
         $this->assertSame((string) $old, (string) $received[0]->last(\Symfony\Component\Messenger\Stamp\TransportMessageIdStamp::class)->getId());
         $this->assertSame(0, $abandoned->requeue('idno'), 'nothing is left to requeue');
+    }
+
+    /**
+     * @dataProvider engines
+     */
+    public function testAnAgeBelowAMinuteIsRefusedBecauseALiveWorkerHoldsItsMessageThatLong(string $engine): void
+    {
+        $this->database($engine, 'abandoned');
+        $id = $this->send();
+        MessengerRig::transport($this->connection)->get();
+        $abandoned = new AbandonedMessages($this->connection);
+
+        foreach ([0, 1, 59, -5] as $seconds) {
+            foreach (['count', 'ids', 'requeue'] as $method) {
+                try {
+                    $abandoned->$method('idno', $seconds);
+                    $this->fail($method . ' accepted ' . $seconds . ' seconds');
+                } catch (\InvalidArgumentException $e) {
+                    $this->assertStringContainsString('60', $e->getMessage());
+                }
+            }
+        }
+        $this->assertNotNull($this->connection->fetchOne('select delivered_at from idno_messages where id = ?', [$id]), 'nothing was changed');
+        $this->assertSame(0, $abandoned->count('idno', 60), 'sixty seconds is allowed');
     }
 }

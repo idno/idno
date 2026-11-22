@@ -25,6 +25,8 @@ Next, you need to run the Idno event queue dispatching service using the Idno co
 sudo -u www-data KNOWN_DOMAIN='your.domain' ./known service-event-queue
 ```
 
+The queue is carried by Symfony Messenger (the `idno_messages` table of your database), so `./bin/console messenger:consume idno` is the same worker with Messenger's own options, and `messenger:failed:show`, `messenger:failed:retry` and `messenger:failed:remove` look after the events that failed (a failed event is kept once, with its error, and never retried by itself). See the README for the details.
+
 !!! note "Per-domain configuration"
     If you’re using per-domain configuration you’ll need to set an environment variable in order for everything to work as expected:
 

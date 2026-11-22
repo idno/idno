@@ -1027,6 +1027,14 @@ namespace Idno\Common {
          */
         static function isSSL()
         {
+            // A command-line process (the queue's worker) has no request to say how it was made: the
+            // site is https when its configured url is.
+            if (defined('IDNO_CONSOLE') && !isset($_SERVER['REQUEST_METHOD'])) {
+                $config = \Idno\Core\Idno::site()?->config();
+
+                return $config !== null && str_starts_with((string) $config->url, 'https://');
+            }
+
             if (isset($_SERVER['HTTPS'])) {
                 if ($_SERVER['HTTPS'] == '1') {
                     return true;

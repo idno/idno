@@ -112,7 +112,11 @@ seconds ("Idno is setting up its database", "Idno is updating its database").
 
 * **Everyone logs in again.** Logged-in sessions are not carried over.
 * **Start your queue and cron services again**, with the new code (for example
-  `php bin/console service-event-queue`; see the README).
+  `php bin/console service-event-queue`; see the README). The first time the queue worker starts it
+  moves any events the old queue left waiting into the new queue (it says so, and says if one could not
+  be moved: such a record, including one whose data holds an object of a class that no longer exists, is
+  left where it is). It also removes the old queue's completed records (a few hundred each time it
+  starts; nothing reads them any more).
 * **Plugin indexes.** Plugins can ask for database indexes on fields they look up often. The upgrade
   page creates Idno's own indexes, not the plugins'. A plugin's indexes are created when you enable
   the plugin on the admin Plugins page, or for every enabled plugin when you run
@@ -407,6 +411,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
     * the retired theme directories `Themes/Black`, `Themes/Cherwell`, `Themes/ElkinsPark`, `Themes/Fauvists`, `Themes/Green`, `Themes/Kandinsky`, `Themes/MarketStreet` and `Themes/Solo`. Idno never loads a retired theme (a site set to one gets Idno 2026), but leftover directories still appear in the admin theme list until you delete them;
     * `Idno/Core/Hub.php` and the `Idno/Pages/Hub/` directory;
     * `Idno/Data/MySQL.php`, `Idno/Data/AbstractSQL.php` and `Idno/Data/Mongo.php`, and `Idno/Files/MongoDBFileSystem.php` and `Idno/Files/MongoDBFile.php` (a database class of your own in `Idno/Data/` still works);
+    * `Idno/Core/AsynchronousQueue.php`, `Idno/Core/SynchronousQueue.php`, the directory `Idno/Pages/Service/Queues/` and the directory `ConsolePlugins/EventQueueService/` (a leftover `ConsolePlugins/EventQueueService/` would register a second `service-event-queue` command, which the new one replaces);
     * the directory `warmup/schemas/` (the installers no longer load SQL files: the database is set up by the upgrade page or `idno:upgrade`);
     * any `hosts/` directory (it is no longer read).
 
@@ -427,6 +432,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 * The `IDNO_KERNEL_SECRET` environment variable is replaced by `APP_SECRET` (not used by anything yet).
 * The hand-written SQL backend classes `Idno\Data\MySQL` and `Idno\Data\AbstractSQL` (see "For developers" below).
 * The MongoDB backend (`Idno\Data\Mongo`) and its GridFS file system (`Idno\Files\MongoDBFileSystem`, `MongoDBFile`). A site configured for MongoDB does not start; `php bin/console idno:import:mongo` moves it to MySQL, MariaDB or SQLite (see "Moving a MongoDB site"). The `mongodb/mongodb` library is no longer used; the import needs only the PHP extension `mongodb`.
+* The queue's classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQueue`, its worker plugin `ConsolePlugins/EventQueueService`, and the pages `/service/queue/list`, `/service/queue/dispatch/<id>` and `/service/queue/gc` (they answer 404). See "The queue of events" below.
 * The 1.x database tables (`entities`, `entities_metadata`, `entities_search`, `reader`, `site`, `config` and their `_metadata`/`_search` tables, `versions`, `session`) are no longer read or written. The upgrade copies them into the new tables and renames them `legacy_<name>`.
 
 ## For developers
@@ -510,6 +516,19 @@ A new indexed field on a core class (under `Idno/`) ships with a new, empty sche
 in `Idno/Storage/Migrations/` with its own version and no SQL): that pending migration is what makes
 every existing site create the index when it upgrades. A plugin's indexes are created when the plugin
 is enabled and by `idno:upgrade`; plugins cannot ship migrations.
+
+### The queue of events
+
+`Idno::site()->queue()` is now one class, `Idno\Legacy\MessengerEventQueue`, on Symfony Messenger. `event_queue = 'AsynchronousQueue'` still turns the asynchronous queue on; any other value (or none) runs events at once, in the request. `enqueue($queueName, $eventName, array $eventData, $runAsUser = null)` keeps its signature and returns an id, or `false` when the event could not be queued. What differs from the old queue:
+
+* **`Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQueue` no longer exist.** A plugin that tested `$queue instanceof \Idno\Core\AsynchronousQueue` asks `Idno::site()->queue()->isAsynchronous()`. A site whose `event_queue` names any other class gets the events-run-at-once form and one warning in the log. `AsynchronousQueue::dispatch()` and `gc()` have no successor: nothing needs them.
+* **Queued events run in the worker's process** (the command line), not in a web request the worker made to the site. A listener that reads the request (`$_SERVER`, the current page) sees none; the site is https there exactly when its configured `url` is. A site served over TLS must have an https `url` configured, or what its worker signs and sends (an ActivityPub `keyId`, for example) names http.
+* **`/service/queue/list`, `/service/queue/dispatch/<id>` and `/service/queue/gc` are gone** (404), and with them the `AsynchronousQueuedEvent` records of new events: a queued event is a message in the `idno_messages` table (a database that was upgraded earlier needs one more upgrade step, the upgrade page or `idno:upgrade`, to get it).
+* **A failed event is kept** in the `failed` queue with its error, instead of being marked complete; nothing retries it by itself (`messenger:failed:show`, `retry`, `remove`). **Completed events leave no record** (the old queue kept them for five minutes).
+* **`isComplete()` and `getResult()` no longer report on asynchronous events** (false and null). They still report on an event that ran at once.
+* **A worker that was killed mid-event** leaves its message in the queue, and nothing runs it again by itself; the worker says how many there are when it starts, and `--requeue-abandoned` puts them back. Use it only when no other worker is running: an event can take longer than an hour (a video transcode), and one still running would run twice.
+* **A worker stops itself when it has used a lot of memory** (80% of PHP's `memory_limit`, at most 256 MiB), exiting 0: a supervisor (systemd `Restart=always`, or cron with `--once`) must start it again. `--once` waits out a busy database and gives up, exit 1, only after 30 seconds of it.
+* **The command line and link previews.** Two side effects of events running in the worker: in a console process (no request) `Page::isSSL()` follows the configured `url`, and link previews are fetched for entities published from the console, since the link preview listener is now registered there too.
 
 ### Outbound requests: `Webservice`
 

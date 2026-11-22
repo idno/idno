@@ -290,30 +290,69 @@ abstract class AsyncSiteTestCase extends TestCase
     }
 
     /**
-     * The queue's events as the database holds them, oldest first by queuedTs then id.
+     * The events waiting in the queue (the messages of the `idno` queue of `idno_messages`, whose rows
+     * a worker deletes when it has handled them), oldest first.
      *
-     * @return list<array{id: string, event: string, queue: string, runAsContext: mixed, complete: bool, error: mixed, queuedTs: mixed, completedTs: mixed, data: mixed}>
+     * @return list<array{id: string, event: string, queue: string, runAsContext: ?string, data: mixed}>
      */
     protected function queuedEvents(): array
     {
-        $events = $this->runInSite(
-            '\Idno\Core\Idno::site()->db()->setIgnoreAccess(true);' . "\n"
-            . '$rows = [];' . "\n"
-            . 'foreach (\Idno\Entities\AsynchronousQueuedEvent::get([], [], 1000) ?: [] as $e) {' . "\n"
-            . '    $rows[] = ["id" => $e->getID(), "event" => $e->event, "queue" => $e->queue, "runAsContext" => $e->runAsContext, "complete" => (bool) $e->complete, "error" => $e->error, "queuedTs" => $e->queuedTs, "completedTs" => $e->completedTs, "data" => unserialize($e->eventData)];' . "\n"
-            . '}' . "\n"
-            . 'usort($rows, static fn ($a, $b) => [$a["queuedTs"], $a["id"]] <=> [$b["queuedTs"], $b["id"]]);' . "\n"
-            . 'return $rows;'
+        return $this->messagesOf('idno');
+    }
+
+    /**
+     * Marks the queued message as taken by a worker $secondsAgo seconds ago and never finished (what a
+     * worker killed in the middle of an event leaves), writing the datetime as the transport does.
+     */
+    protected function markTakenAgo(string $messageId, int $secondsAgo): void
+    {
+        $this->assertNotNull($this->connection);
+        $this->connection->executeStatement(
+            'update idno_messages set delivered_at = ? where id = ?',
+            [(new \DateTimeImmutable('UTC'))->modify('-' . $secondsAgo . ' seconds'), (int) $messageId],
+            [\Doctrine\DBAL\Types\Types::DATETIME_IMMUTABLE, \Doctrine\DBAL\Types\Types::INTEGER],
         );
-        $this->assertIsArray($events);
+    }
+
+    /**
+     * The events a worker could not handle (the messages of the `failed` queue), with the error each
+     * was kept with.
+     *
+     * @return list<array{id: string, event: string, queue: string, runAsContext: ?string, data: mixed, error: string}>
+     */
+    protected function failedEvents(): array
+    {
+        return $this->messagesOf('failed');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function messagesOf(string $queueName): array
+    {
+        $this->assertNotNull($this->connection);
+        $events = [];
+        $serializer = new \Symfony\Component\Messenger\Transport\Serialization\PhpSerializer();
+        foreach ($this->connection->fetchAllAssociative('select id, body, headers from idno_messages where queue_name = ? order by id', [$queueName]) as $row) {
+            $envelope = $serializer->decode(['body' => $row['body'], 'headers' => json_decode((string) $row['headers'], true) ?? []]);
+            $message = $envelope->getMessage();
+            $this->assertInstanceOf(\Idno\Queue\QueuedEvent::class, $message);
+            $event = ['id' => (string) $row['id'], 'event' => $message->event, 'queue' => $message->queue, 'runAsContext' => $message->runAs, 'data' => $message->data];
+            if ($queueName === 'failed') {
+                $details = $envelope->last(\Symfony\Component\Messenger\Stamp\ErrorDetailsStamp::class);
+                $event['error'] = $details instanceof \Symfony\Component\Messenger\Stamp\ErrorDetailsStamp ? $details->getExceptionMessage() : '';
+            }
+            $events[] = $event;
+        }
 
         return $events;
     }
 
     /**
-     * Writes a queued event exactly as AsynchronousQueue::enqueue() does, but with the event data
-     * given as the text stored (so that data enqueue() would refuse can be stored), and returns the
-     * stored event's id.
+     * Writes a queued event record exactly as the previous queue's enqueue() did (an
+     * AsynchronousQueuedEvent entity), with the event data given as the text stored (so that data
+     * which does not unserialise can be stored), and returns the stored record's id. The worker moves
+     * such a record into the queue before it consumes (LegacyQueueDrain).
      */
     protected function storeQueuedEvent(string $event, string $serializedData, ?string $runAsContext): string
     {

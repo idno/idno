@@ -55,10 +55,8 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         foreach ($events as $event) {
             $byName[$event['event']][] = $event;
             $this->assertSame('default', $event['queue']);
-            $this->assertFalse($event['complete']);
-            $this->assertNull($event['error']);
-            $this->assertNull($event['completedTs']);
-            $this->assertIsInt($event['queuedTs']);
+            // (The previous queue's record also held `complete`, `error`, `queuedTs` and `completedTs`:
+            // a message has none of them. A message is in the queue until it is handled.)
             $this->assertSame($userUuid, $event['runAsContext'], 'queued as the user who published');
         }
         $names = array_keys($byName);
@@ -186,7 +184,9 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             '$s = new \IdnoPlugins\Status\Status(); $s->body = "Another private note"; $s->setOwner(\Idno\Entities\User::getByHandle("alice"));'
             . ' $s->setAccess(' . $this->literal($userUuid) . '); $s->setPublishStatus("published"); if (!$s->save(true)) { throw new \RuntimeException("not saved"); } return $s->getID();'
         );
-        $this->storeQueuedEvent('linkpreview/fetch', serialize(['entity_id' => $otherId, 'url' => $page]), null);
+        // Queued with no user: no session in this process (the adapter's enqueue(), as the previous
+        // queue's was, takes the session's user and none is logged on).
+        $this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "linkpreview/fetch", ["entity_id" => ' . $this->literal($otherId) . ', "url" => ' . $this->literal($page) . '], null);');
 
         $contexts = [];
         $ownId = null;
@@ -212,23 +212,21 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             'the preview is stored for the private post when run as its owner, and not when run as no one'
         );
 
-        // The dispatch also logs who it ran each event as (in the server's log today).
-        $log = $this->serverLogContents() . $worker['output'];
-        $this->assertSame(1, preg_match('/Dispatching event [0-9a-f-]{36}: linkpreview\/fetch as Alice queued at /', $log));
-        $this->assertSame(1, preg_match('/Dispatching event [0-9a-f-]{36}: linkpreview\/fetch as ANONYMOUS queued at /', $log));
+        // The previous queue's dispatch also logged "Dispatching event <id>: <event> as Alice queued
+        // at <date>" for each event. The worker prints "Dispatching event <id>: <event>" and does not
+        // name the user (who an event ran as is pinned by its effect above), so that line is not
+        // asserted any more.
 
-        // Every event was handled, none left pending, and a handled event is kept (marked complete,
-        // with the time) until garbage collection removes it five minutes later.
-        foreach ($this->queuedEvents() as $event) {
-            $this->assertTrue($event['complete'], $event['event']);
-            $this->assertNull($event['error'], $event['event']);
-            $this->assertIsInt($event['completedTs'], $event['event']);
-        }
+        // Every event was handled: none is left waiting or failed, and a handled event leaves no
+        // record (the previous queue kept it, marked complete, until garbage collection five minutes later).
+        $this->assertSame([], $this->queuedEvents());
+        $this->assertSame([], $this->failedEvents());
     }
 
     /**
      * An event queued with the user named explicitly (as the ActivityPub plugin queues its deliveries)
-     * or with none is stored as such: the context is the named user, else the session's, else none (`false`).
+     * or with none is stored as such: the context is the named user, else the session's, else none (`null`:
+     * the previous queue's record held `false`).
      */
     public function testTheStoredContextIsTheNamedUserElseTheSessionsElseNone(): void
     {
@@ -245,7 +243,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         ksort($stored);
         $this->assertSame([
             'activitypub/deliver' => $userUuid,
-            'idno/queue/probe' => false,
+            'idno/queue/probe' => null,
             'idno/queue/probe-named' => $userUuid,
             'pubsubhubbub/ping' => $userUuid,
             'webmention/sendall' => $userUuid,
@@ -253,12 +251,14 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
     }
 
     /**
-     * The poison event below is a KNOWN DEFECT of today's queue, pinned only so that a change is
-     * noticed: an event whose listener throws an `\Error` (a TypeError, say) is never marked, so it
-     * stays pending and every later run of the worker dispatches it again, for ever. The new queue
-     * is expected to change this deliberately (a failed event is to be kept apart with its error);
-     * when it does, this test's expectations about that event change with it. What must keep holding
-     * is that the other events are delivered.
+     * A failing event does not stop the ones after it, and a failed event is kept, not retried.
+     *
+     * The previous queue had a KNOWN DEFECT here, which this test pinned until the queue moved: an event
+     * whose listener threw an `\Error` (a TypeError, say) was never marked, so it stayed pending and every
+     * later run of the worker dispatched it again, for ever; one that threw an `\Exception` was marked
+     * complete with its error. Now both kinds are handled alike: the worker prints the error, the event is
+     * kept ONCE in the failure transport with its error (`messenger:failed:show`), and no later run takes
+     * it again. What must keep holding, and does, is that the other events are delivered.
      */
     public function testAFailingEventDoesNotStopTheOnesAfterIt(): void
     {
@@ -266,16 +266,18 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         $sink = $this->newSink('inbox');
         $this->addFollower('alice', $this->baseUrl() . '_test/sink/' . $sink);
 
-        // Events that fail, stored before and after a good one (the worker takes the newest first
-        // today; the order must not matter to the good one). Two ways to fail, with the real
+        // Events that fail, queued before and after a good one. Two ways to fail, with the real
         // webmention listener and no test-only code: an event to run as a user that does not exist
-        // (the dispatch itself refuses it with an exception it catches), and event data the listener
-        // cannot read (a TypeError, which nothing catches).
-        $unknownUser = $this->storeQueuedEvent('idno/queue/probe', serialize([]), 'http://nobody.example/view/none');
+        // (the handler refuses it with an exception), and event data the listener cannot read (no
+        // `source`: the site's `pedantic_mode` makes the undefined key an exception; the previous
+        // queue's test used data that was not an array at all, a TypeError, which the adapter, whose
+        // data is an array, cannot queue: it is left where it is by the drain, see LegacyQueueDrainTest).
+        // Both are queued as the adapter queues an event.
+        $unknownUser = $this->runInSite('return \\Idno\\Core\\Idno::site()->queue()->enqueue("default", "idno/queue/probe", [], "http://nobody.example/view/none");');
         sleep(1);
         $this->publishStatus($cookie, 'Hello queue');
         sleep(1);
-        $unreadable = $this->storeQueuedEvent('webmention/sendall', serialize('not an array'), null);
+        $unreadable = $this->runInSite('return \\Idno\\Core\\Idno::site()->queue()->enqueue("default", "webmention/sendall", ["text" => "no source"], null);');
 
         $first = $this->runWorkerOnce();
         $this->assertSame(0, $first['exit'], 'the worker exits 0 whatever the events did: ' . $first['output']);
@@ -283,34 +285,36 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
 
         $this->assertCount(1, $this->sink($sink), 'the good event was delivered');
 
-        // An event the dispatch refuses (an exception it catches): handled, marked complete with the
-        // error, never retried.
-        $this->assertContains('Dispatching event ' . $unknownUser . ': idno/queue/probe', $lines);
-        $this->assertContains('Event ' . $unknownUser . ' completed.', $lines);
-        // An event that throws an Error: the dispatch request fails, the worker prints the error and
-        // goes on; nothing marks the event, which is dispatched again by every later run.
-        $this->assertContains('Dispatching event ' . $unreadable . ': webmention/sendall', $lines);
-        $this->assertNotContains('Event ' . $unreadable . ' completed.', $lines);
-        $this->assertCount(1, array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'Error dispatching event ' . $unreadable . ': ')), 'the worker reports the failure');
-        // The good ones around it were all dispatched.
+        // An event the handler refuses (an exception) and one whose listener throws an Error: each is
+        // reported, not completed, and the worker goes on.
+        foreach ([[$unknownUser, 'idno/queue/probe'], [$unreadable, 'webmention/sendall']] as [$id, $name]) {
+            $this->assertContains('Dispatching event ' . $id . ': ' . $name, $lines);
+            $this->assertNotContains('Event ' . $id . ' completed.', $lines, implode("\n", $lines));
+            $this->assertCount(1, array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'Error dispatching event ' . $id . ': ')), 'the worker reports the failure of ' . $name);
+        }
+        // The good ones around them were all dispatched.
         foreach (['activitypub/deliver', 'webmention/sendall', 'pubsubhubbub/ping'] as $event) {
-            $this->assertNotEmpty(array_filter($lines, static fn (string $line): bool => preg_match('/^Dispatching event [0-9a-f-]{36}: ' . preg_quote($event, '/') . '$/', $line) === 1), $event);
+            $this->assertNotEmpty(array_filter($lines, static fn (string $line): bool => preg_match('/^Dispatching event \d+: ' . preg_quote($event, '/') . '$/', $line) === 1), $event);
         }
 
-        $stored = [];
-        foreach ($this->queuedEvents() as $event) {
-            $stored[$event['id']] = $event;
+        // Nothing is left waiting; the two failed events are kept once, with their errors.
+        $this->assertSame([], $this->queuedEvents());
+        $failed = [];
+        foreach ($this->failedEvents() as $event) {
+            $failed[$event['event']] = $event['error'];
         }
-        $this->assertTrue($stored[$unknownUser]['complete']);
-        $this->assertSame('Invalid user (http://nobody.example/view/none) given for runAsContext, aborting', $stored[$unknownUser]['error']);
-        $this->assertFalse($stored[$unreadable]['complete'], 'an event that throws an Error stays pending');
-        $this->assertNull($stored[$unreadable]['error']);
+        ksort($failed);
+        $this->assertSame(['idno/queue/probe', 'webmention/sendall'], array_keys($failed));
+        $this->assertStringContainsString('Invalid user (http://nobody.example/view/none) given for runAsContext, aborting', $failed['idno/queue/probe']);
+        $this->assertNotSame('', $failed['webmention/sendall']);
 
+        // Neither is dispatched again by a later run (the previous queue dispatched the Error one
+        // again, for ever), and the good event was not delivered twice.
         $second = $this->runWorkerOnce();
         $this->assertSame(0, $second['exit']);
-        $this->assertContains('Dispatching event ' . $unreadable . ': webmention/sendall', $this->lines($second['output']), 'and is tried again by the next run');
-        $this->assertNotContains('Dispatching event ' . $unknownUser . ': idno/queue/probe', $this->lines($second['output']));
+        $this->assertSame([self::FIRST_LINE], $this->lines($second['output']));
         $this->assertSame([], $this->sink($sink), 'the good event was not delivered twice');
+        $this->assertCount(2, $this->failedEvents(), 'and the failed ones are still kept, once');
     }
 
     public function testTheWorkersExitCodeAndThatASecondRunHasNothingToDo(): void
@@ -361,7 +365,9 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
     {
         $id = $this->runInSite('return \Idno\Core\Idno::site()->queue()->enqueue("default", "idno/queue/probe", ["a" => 1], null);');
         $this->assertIsString($id);
-        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id, 'a UUID, the stored event\'s id');
+        // The previous queue returned a UUID, the stored entity's id; the id is now the message's, a
+        // whole number in a string.
+        $this->assertMatchesRegularExpression('/^[0-9]+$/', $id, 'the stored message\'s id');
         $events = $this->queuedEvents();
         $this->assertSame([$id], array_column($events, 'id'));
         $this->assertSame(['a' => 1], $events[0]['data']);
@@ -369,7 +375,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         // With the synchronous queue (the rig's own site, this process) the event runs at once and the
         // return value is an opaque 32-character hexadecimal string.
         $queue = \Idno\Core\Idno::site()->queue();
-        if (!$queue instanceof \Idno\Core\SynchronousQueue) {
+        if ($queue->isAsynchronous()) {
             $this->markTestIncomplete('This process\'s site does not use the synchronous queue.');
         }
         $returned = $queue->enqueue('default', 'idno/queue/probe', []);

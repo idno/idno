@@ -72,9 +72,8 @@ final class LegacyBootstrap
         new \Idno\Core\Webfinger();
         new \Idno\Core\Webmention();
         new \Idno\Core\PubSubHubbub();
-        if (!$console) {
-            new \Idno\Core\LinkPreview();
-        }
+        // The link preview listens for an event the queue runs in the worker (the console) too.
+        new \Idno\Core\LinkPreview();
 
         $this->booted = true;
     }

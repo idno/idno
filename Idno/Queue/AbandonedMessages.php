@@ -14,12 +14,30 @@ use Doctrine\DBAL\Types\Types;
  * already have posted to another server. This service lets an operator see them and, knowing what
  * they do, put them back in the queue.
  *
- * "Abandoned" is a message of the queue taken more than $olderThanSeconds ago. It reads and writes
+ * "Abandoned" is a message of the queue taken more than $olderThanSeconds ago; $queue is the
+ * transport's queue name (QUEUE), and an age below MINIMUM_AGE_SECONDS is an
+ * \InvalidArgumentException from every method. It reads and writes
  * the transport's own table, binding every value as the transport does (UTC datetimes of whole
  * seconds).
  */
 final class AbandonedMessages
 {
+    /**
+     * The transport's own name for the queue the site's events are sent to: the `queue_name` column
+     * (and option) of the `idno` transport. The other one is `failed`, where a message whose handler
+     * threw is kept. This is NOT the legacy queue name an event is enqueued with (`default`, the
+     * first argument of EventQueue::enqueue(), kept in QueuedEvent::$queue): every legacy queue
+     * shares the one `idno` transport.
+     */
+    public const QUEUE = 'idno';
+
+    /**
+     * The youngest age a message may be called abandoned: a live worker holds the message it is
+     * handling, and an event may take minutes (a video transcode), so putting back anything younger
+     * would run an event twice.
+     */
+    public const MINIMUM_AGE_SECONDS = 60;
+
     /**
      * Ten years in seconds, as `redeliver_timeout` of the queue's transports. The Doctrine transport
      * gives any message whose `delivered_at` is older than that to the next worker, and the
@@ -37,7 +55,7 @@ final class AbandonedMessages
     {
     }
 
-    public function count(string $queue = 'default', int $olderThanSeconds = 3600): int
+    public function count(string $queue = self::QUEUE, int $olderThanSeconds = 3600): int
     {
         return (int) $this->connection->fetchOne(
             'select count(*) from ' . self::TABLE . ' where queue_name = ? and delivered_at is not null and delivered_at < ?',
@@ -51,7 +69,7 @@ final class AbandonedMessages
      *
      * @return list<string>
      */
-    public function ids(string $queue = 'default', int $olderThanSeconds = 3600): array
+    public function ids(string $queue = self::QUEUE, int $olderThanSeconds = 3600): array
     {
         return array_map('strval', $this->connection->fetchFirstColumn(
             'select id from ' . self::TABLE . ' where queue_name = ? and delivered_at is not null and delivered_at < ? order by id limit ' . self::MAX_IDS,
@@ -65,7 +83,7 @@ final class AbandonedMessages
      * becomes NULL), so that the next worker runs them. Only an operator who knows what the events
      * did should call it. Returns how many rows it changed.
      */
-    public function requeue(string $queue = 'default', int $olderThanSeconds = 3600): int
+    public function requeue(string $queue = self::QUEUE, int $olderThanSeconds = 3600): int
     {
         return (int) $this->connection->executeStatement(
             'update ' . self::TABLE . ' set delivered_at = null where queue_name = ? and delivered_at is not null and delivered_at < ?',
@@ -76,6 +94,10 @@ final class AbandonedMessages
 
     private function cutoff(int $olderThanSeconds): \DateTimeImmutable
     {
-        return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('-' . max(0, $olderThanSeconds) . ' seconds');
+        if ($olderThanSeconds < self::MINIMUM_AGE_SECONDS) {
+            throw new \InvalidArgumentException('A message is abandoned only when it was taken at least ' . self::MINIMUM_AGE_SECONDS . ' seconds ago, not ' . $olderThanSeconds . ': a live worker holds its message that long.');
+        }
+
+        return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->modify('-' . $olderThanSeconds . ' seconds');
     }
 }

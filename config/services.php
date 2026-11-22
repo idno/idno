@@ -70,8 +70,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Upgrade' => ['ConfigCopier.php', 'Mongo', 'DocumentCheck.php', 'LegacySource.php', 'LegacyTableReferenced.php', 'RowWriter.php', 'PublicMessage.php', 'SchemaStatus.php', 'ServerVersion.php', 'UpgradePage.php', 'UpgradeProgress.php'],
         // The message is a value object; the two interfaces are implemented by Idno\Legacy adapters, aliased below;
         // ResilientTransport decorates the idno transport (below).
-        'Queue' => ['EventTrigger.php', 'QueuedEvent.php', 'ResilientTransport.php', 'UserContext.php'],
-        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        'Queue' => ['EventTrigger.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php'],
+        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -104,6 +104,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             service_closure(EntityRepository::class),
             service_closure(\Psr\Log\LoggerInterface::class),
             service_closure(\Idno\Storage\Files\FileStore::class),
+            service_closure('messenger.bus.default'),
         ])
         ->autowire(false)
         ->autoconfigure(false);

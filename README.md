@@ -47,8 +47,8 @@ Add this line to your `config.ini`:
 event_queue = 'AsynchronousQueue'
 ```
 
-Without this line (or with the default `SynchronousQueue`), all events are
-processed inline during the web request.
+Without this line, all events are processed inline during the web request.
+(`SynchronousQueue`, the old default's name, still means the same.)
 
 #### 2. Start the event queue worker
 
@@ -58,22 +58,51 @@ sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console service-event-queue
 
 (`./idno.php` still works as an alias for `./bin/console`.)
 
-| Option       | Default   | Description                                |
-|--------------|-----------|--------------------------------------------|
-| `--queue`    | `default` | Named queue to process                     |
-| `--interval` | `1`       | Seconds to sleep between polling cycles    |
+| Option                | Default   | Description                                                                 |
+|-----------------------|-----------|-----------------------------------------------------------------------------|
+| `--queue`             | `default` | Accepted for compatibility; one worker handles the events of every queue name |
+| `--interval`          | `1`       | Seconds to sleep when there is nothing to do                                |
+| `--once`              |           | Handle what is waiting now and exit (for cron)                              |
+| `--requeue-abandoned` |           | Put back the events a killed worker took over an hour ago (see below)       |
 
-**How it works:** The worker runs an infinite loop. Each cycle it:
+The queue is Symfony Messenger's, in the `idno_messages` table of your database, so the worker is
+also available as Messenger's own command, with its options (`--time-limit`, `--memory-limit`, ...):
 
-1. Queries the database for up to 50 pending events.
-2. Dispatches each one via an internal HTTP call to `/service/queue/dispatch/{id}`,
-   which triggers the event handler (e.g., signing and POSTing an ActivityPub
-   activity to a remote inbox).
-3. Runs garbage collection to remove completed events older than 5 minutes.
-4. Sleeps for `--interval` seconds, then repeats.
+```bash
+sudo -u www-data IDNO_DOMAIN='your.domain' ./bin/console messenger:consume idno -vv
+```
 
-**If the worker dies, queued events pile up in the database but are not lost.**
-They will be processed once the worker is restarted.
+**How it works:** when the site publishes something, the web request puts one message per event into
+the queue and returns. The worker takes each message, logs in as the user the event was queued for,
+triggers the event (which signs and POSTs an ActivityPub activity, sends a webmention, and so on) and
+deletes the message. It prints one line when it takes an event and one when it is done, and sleeps
+`--interval` seconds when the queue is empty. Events run in the worker's process, not in a web request.
+
+**If the worker dies, queued events pile up in the database but are not lost.** They are handled once
+the worker is restarted. The worker also stops by itself, with exit status 0, when it has used a lot of
+memory (80% of PHP's `memory_limit` when that is set, at most 256 MiB): **a supervisor must start it
+again**, such as the systemd unit below with `Restart=always`, or cron with `--once`.
+
+**An event that fails is kept, not retried.** What an event sends to other servers must not be sent
+twice, so a failed event goes once to a separate `failed` queue, with its error. Look at it and decide:
+
+```bash
+./bin/console messenger:failed:show        # the failed events and why
+./bin/console messenger:failed:retry       # run them again (asks which)
+./bin/console messenger:failed:remove      # forget one
+```
+
+**An event a worker was handling when it was killed** (an out-of-memory kill, a power cut) may already
+have sent something, so nothing runs it again by itself. When the worker starts and there are such
+events (taken more than an hour ago and never finished) it says how many. If running them again is
+safe, start it once with `--requeue-abandoned`, **and only when no other worker is running**: an event
+can take longer than an hour (a video transcode), and one that is still running would then run twice.
+
+
+**Upgrading from 1.x or an earlier 2.x?** Events the old queue had stored are moved into the new one the
+first time the worker starts. Stop the old worker before you upgrade (see the upgrade notes): it cannot
+be left running. The worker also removes the old queue's completed records, a few hundred each time it
+starts (nothing reads them any more).
 
 #### 3. Keep it alive with systemd (recommended)
 
@@ -116,7 +145,7 @@ sudo journalctl -u idno-queue -f   # tail the logs
 #### Alternative: use cron instead of systemd
 
 If you don't have access to systemd (e.g. shared hosting), you can use cron
-instead. The `--once` flag makes the worker process one batch of pending events
+instead. The `--once` flag makes the worker handle everything that is waiting
 and exit, which is ideal for cron:
 
 ```

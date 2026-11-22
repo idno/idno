@@ -20,7 +20,7 @@ class Admin extends \Idno\Common\Page
 
         // Check queue configuration
         $queue = \Idno\Core\Idno::site()->queue();
-        $queueOk = ($queue instanceof \Idno\Core\AsynchronousQueue);
+        $queueOk = $queue->isAsynchronous();
 
         // Gather stats
         $users = User::get([], [], PHP_INT_MAX);

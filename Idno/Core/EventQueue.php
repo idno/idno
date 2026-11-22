@@ -17,9 +17,21 @@ abstract class EventQueue extends \Idno\Common\Component
      * @param  string $queueName the named queue to put this event on (currently unused)
      * @param  string $eventName the name of the event, e.g. "webmention/send"
      * @param  array  $eventData the data sent to the event when it is triggered.
-     * @return string an ID that can be used to query the job status
+     * @param  string|null $runAsUser the uuid of the user the event runs as (the logged-in user's when empty)
+     * @return string|false an ID that can be used to query the job status; false when the event could not be queued
      */
-    abstract function enqueue($queueName, $eventName, array $eventData);
+    abstract function enqueue($queueName, $eventName, array $eventData, $runAsUser = null);
+
+    /**
+     * Whether events are queued for a worker to run later (true) or run at once, in the caller's
+     * request (false). A plugin that needs the worker (ActivityPub) asks this.
+     *
+     * @return bool
+     */
+    function isAsynchronous()
+    {
+        return false;
+    }
 
     /**
      * Check whether a previously enqueued job has completed.

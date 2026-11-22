@@ -58,7 +58,7 @@ class Main extends Plugin
         // Require asynchronous queue for ActivityPub federation
         // -------------------------------------------------------
         $queue = \Idno\Core\Idno::site()->queue();
-        if (!($queue instanceof \Idno\Core\AsynchronousQueue)) {
+        if (!$queue->isAsynchronous()) {
             \Idno\Core\Idno::site()->logging()->warning(
                 'ActivityPub requires the asynchronous event queue. Federation is disabled.'
             );

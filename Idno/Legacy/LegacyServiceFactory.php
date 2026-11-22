@@ -33,6 +33,7 @@ final class LegacyServiceFactory
      * @param (\Closure(): \Idno\Storage\EntityRepository)|null     $repository
      * @param (\Closure(): \Psr\Log\LoggerInterface)|null           $logger     the site's logger (Idno\Core\Logging)
      * @param (\Closure(): \Idno\Storage\Files\FileStore)|null      $fileStore  the FileStore service, which the filesystem() service serves
+     * @param (\Closure(): \Symfony\Component\Messenger\MessageBusInterface)|null $messageBus the bus queued events are sent on, which queue() sends them with
      */
     public function __construct(
         private readonly ?\Closure $connection = null,
@@ -40,6 +41,7 @@ final class LegacyServiceFactory
         private readonly ?\Closure $repository = null,
         private readonly ?\Closure $logger = null,
         private readonly ?\Closure $fileStore = null,
+        private readonly ?\Closure $messageBus = null,
     )
     {
     }
@@ -215,7 +217,25 @@ final class LegacyServiceFactory
 
     public function queue(): ?\Idno\Core\EventQueue
     {
-        return Idno::site()->componentFactory(Idno::site()->config()->event_queue, "Idno\\Core\\EventQueue", "Idno\\Core\\", "Idno\\Core\\SynchronousQueue");
+        // The adapter over Messenger, whatever `event_queue` says: the setting only decides, at each
+        // call, whether events are sent to the queue or run at once (see MessengerEventQueue). The
+        // session, the event dispatcher and the logger do not exist yet when the queue is built, so
+        // they are read when they are used.
+        if ($this->messageBus === null) {
+            throw new \LogicException('The queue is built from the container\'s message bus.');
+        }
+
+        return new MessengerEventQueue(
+            $this->messageBus,
+            static fn (): ?string => Idno::site()->config()->event_queue ?? null,
+            static function (): ?string {
+                $uuid = Idno::site()->session()->currentUserUUID();
+
+                return $uuid ?: null;
+            },
+            static fn (string $event, array $data): mixed => Idno::site()->events()->triggerEvent($event, $data),
+            new LateLogger(static fn (): \Psr\Log\LoggerInterface => Idno::site()->logging()),
+        );
     }
 
     public function statistics(): ?\Idno\Stats\StatisticsCollector
