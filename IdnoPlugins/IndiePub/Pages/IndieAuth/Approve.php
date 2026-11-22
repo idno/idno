@@ -18,6 +18,8 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $redirect_uri = $this->getInput('redirect_uri');
             $state        = $this->getInput('state');
             $scope        = $this->getInput('scope');
+            $code_challenge        = $this->getInput('code_challenge');
+            $code_challenge_method = $this->getInput('code_challenge_method');
 
             if (!empty($me) && parse_url($me, PHP_URL_HOST) == parse_url($user->getIndieAuthURL(), PHP_URL_HOST)) {
 
@@ -32,12 +34,20 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                     }
                 }
 
+                if ($problem = Auth::challengeError($code_challenge, $code_challenge_method)) {
+                    $this->setResponse(400);
+                    echo $problem;
+                    return;
+                }
+
                 $code = Auth::issueCode($user, array(
                     'me'           => $me,
                     'redirect_uri' => $redirect_uri,
                     'scope'        => $scope,
                     'state'        => $state,
                     'client_id'    => $client_id,
+                    'code_challenge'        => (string) $code_challenge,
+                    'code_challenge_method' => (string) $code_challenge_method,
                 ));
 
                 if (strpos($redirect_uri, '?') === false) {

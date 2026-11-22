@@ -214,6 +214,96 @@ namespace IdnoPlugins\IndiePub\Tests {
             $this->assertEmpty(Token::findUserForToken([$token]));
         }
 
+        private function challengeFor($verifier)
+        {
+            return rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
+        }
+
+        public function testCodeIssuedWithAChallengeNeedsItsVerifier()
+        {
+            $verifier = Auth::generateSecret();
+            $changes = ['code_challenge' => $this->challengeFor($verifier), 'code_challenge_method' => 'S256'];
+
+            $code = $this->issueCode($changes);
+            $this->assertTrue(Auth::verifyCode($code, self::CLIENT, self::REDIRECT, $verifier)['valid']);
+
+            $code = $this->issueCode($changes);
+            $this->assertFalse(Auth::verifyCode($code, self::CLIENT, self::REDIRECT, Auth::generateSecret())['valid']);
+            // a wrong guess spends the code
+            $this->assertFalse(Auth::verifyCode($code, self::CLIENT, self::REDIRECT, $verifier)['valid']);
+
+            $code = $this->issueCode($changes);
+            $this->assertFalse(Auth::verifyCode($code, self::CLIENT, self::REDIRECT)['valid']);
+
+            $code = $this->issueCode($changes);
+            $this->assertFalse(Auth::verifyCode($code, self::CLIENT, self::REDIRECT, [$verifier])['valid']);
+        }
+
+        /**
+         * Clients that do not use PKCE keep working, but a verifier with nothing to check it against is refused.
+         */
+        public function testCodeIssuedWithoutAChallenge()
+        {
+            $code = $this->issueCode();
+            $this->assertTrue(Auth::verifyCode($code, self::CLIENT, self::REDIRECT)['valid']);
+
+            $code = $this->issueCode();
+            $this->assertFalse(Auth::verifyCode($code, self::CLIENT, self::REDIRECT, Auth::generateSecret())['valid']);
+        }
+
+        public function testOnlyAWellFormedS256ChallengeIsAccepted()
+        {
+            $challenge = $this->challengeFor(Auth::generateSecret());
+
+            $this->assertNull(Auth::challengeError($challenge, 'S256'));
+            $this->assertNull(Auth::challengeError('', ''));
+            $this->assertNull(Auth::challengeError(null, null));
+
+            $this->assertNotNull(Auth::challengeError($challenge, 'plain'));
+            $this->assertNotNull(Auth::challengeError($challenge, ''));
+            $this->assertNotNull(Auth::challengeError(substr($challenge, 0, 20), 'S256'));
+            $this->assertNotNull(Auth::challengeError(str_repeat('!', 43), 'S256'));
+            $this->assertNotNull(Auth::challengeError([$challenge], 'S256'));
+            $this->assertNotNull(Auth::challengeError('', 'S256'));
+        }
+
+        public function testTokenEndpointChecksTheVerifier()
+        {
+            $verifier = Auth::generateSecret();
+            $changes = ['code_challenge' => $this->challengeFor($verifier), 'code_challenge_method' => 'S256'];
+            $endpoint = \Idno\Core\Idno::site()->config()->url . 'indieauth/token';
+            $params = ['client_id' => self::CLIENT, 'redirect_uri' => self::REDIRECT];
+
+            $refused = \Idno\Core\Webservice::post($endpoint, $params + ['code' => $this->issueCode($changes), 'code_verifier' => 'not-the-verifier']);
+            $this->assertEquals(400, $refused['response']);
+
+            $granted = \Idno\Core\Webservice::post($endpoint, $params + ['code' => $this->issueCode($changes), 'code_verifier' => $verifier]);
+            $this->assertEquals(200, $granted['response']);
+            $this->assertNotEmpty(json_decode($granted['content'], true)['access_token']);
+        }
+
+        /**
+         * A code granted with no scope identifies the user and nothing more: the authorization
+         * endpoint confirms it, the token endpoint issues no token for it.
+         */
+        public function testCodeWithoutScopeBuysNoToken()
+        {
+            $base = \Idno\Core\Idno::site()->config()->url;
+            $params = ['client_id' => self::CLIENT, 'redirect_uri' => self::REDIRECT];
+
+            $refused = \Idno\Core\Webservice::post($base . 'indieauth/token', $params + ['code' => $this->issueCode(['scope' => ''])]);
+
+            $this->assertEquals(400, $refused['response']);
+            $this->assertStringNotContainsString('access_token', $refused['content']);
+            $stored = \Idno\Entities\User::getByUUID($this->user()->getUUID());
+            $this->assertEmpty($stored->indieauth_tokens);
+
+            $confirmed = \Idno\Core\Webservice::post($base . 'indieauth/auth', $params + ['code' => $this->issueCode(['scope' => ''])]);
+
+            $this->assertEquals(200, $confirmed['response']);
+            $this->assertEquals('https://user.example/', json_decode($confirmed['content'], true)['me']);
+        }
+
         /**
          * The whole exchange over HTTP: a code buys one token, and the token is accepted afterwards.
          */

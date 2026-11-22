@@ -21,6 +21,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: outbound requests verify TLS certificates, and requests to URLs supplied by other sites are checked at every redirect
 * Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set
 * Security: IndieAuth authorization codes and Micropub access tokens are generated from the system's random source. Tokens already issued keep working
+* IndieAuth supports PKCE (`S256`), and no longer issues an access token when a client asked only to authenticate (no scope)
 * Fixed draft posts being readable by URL when their access was set to public
 * Fixed posts containing emoji and other multi-byte text failing to save or to be found in search on MySQL
 * Fixed posting forms: cancel buttons, saving drafts and reply-to links
