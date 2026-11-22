@@ -21,6 +21,9 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 
 const MAX_LIFETIME_SECONDS = 600;
 
+/** The most seconds the server waits for the first byte a client sends. */
+const FIRST_BYTE_SECONDS = 3.0;
+
 $configuration = json_decode((string) file_get_contents($argv[1] ?? ''), true);
 if (!is_array($configuration)) {
     fwrite(STDERR, "No configuration.\n");
@@ -100,16 +103,15 @@ function serve($connection, int $number): void
     record(['t' => 'open', 'c' => $number]);
     stream_set_timeout($connection, 20);
     $tls = false;
-    $firstTls = firstByteIsTls($connection, $implicitTls ? 2.0 : 0.15);
-    record(['t' => 'first', 'c' => $number, 'tls' => $firstTls === true, 'silent' => $firstTls === null]);
     if ($implicitTls) {
+        // The client must begin with a handshake: wait for its first byte (a client that is only slow is
+        // not taken for one that did not begin with TLS).
+        $firstTls = firstByteIsTls($connection, FIRST_BYTE_SECONDS);
+        record(['t' => 'first', 'c' => $number, 'tls' => $firstTls === true, 'silent' => $firstTls === null]);
         if ($firstTls !== true || !handshake($connection, $number)) {
             return;
         }
         $tls = true;
-    } elseif ($firstTls === true) {
-        // A client that begins with a TLS handshake on a server that speaks plain SMTP.
-        return;
     }
 
     $say = static function (string ...$lines) use ($connection, $number): void {
@@ -146,6 +148,15 @@ function serve($connection, int $number): void
         return;
     }
     $say('220 scripted.test ESMTP ready');
+    if (!$implicitTls) {
+        // What the client sends first decides whether it began with a TLS handshake (a ClientHello was
+        // sent before it read the greeting): the first byte it really sent, however late.
+        $firstTls = firstByteIsTls($connection, FIRST_BYTE_SECONDS);
+        record(['t' => 'first', 'c' => $number, 'tls' => $firstTls === true, 'silent' => $firstTls === null]);
+        if ($firstTls === true) {
+            return;
+        }
+    }
 
     $authenticated = false;
     $from = null;

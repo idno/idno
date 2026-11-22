@@ -212,6 +212,30 @@ return [
         'sentCount' => 2,
         'failure' => null,
     ],
+    'host-465-tls' => [
+        'connectedTo' => [
+            'protocol' => 'tcp',
+            'host' => '127.0.0.1',
+            'port' => 465,
+            'startTls' => true,
+            'timeout' => 30,
+        ],
+        'connections' => 1,
+        'beganWithTls' => false,
+        'startTlsSent' => true,
+        'tlsEstablished' => true,
+        'authMechanism' => null,
+        'authAccepted' => null,
+        'mailFrom' => 'site@example.com',
+        'rcptTo' => [
+            'reader@example.net',
+            'archive@example.net',
+        ],
+        'accepted' => true,
+        'outcome' => 'sent',
+        'sentCount' => 2,
+        'failure' => null,
+    ],
     'port-zero' => [
         'connectedTo' => [
             'protocol' => '',

@@ -42,8 +42,8 @@ final class SwiftMailerParityTest extends IdnoTestCase
 
     /**
      * Rows on which SwiftMailer built an address that could never connect (a scheme in the host with
-     * smtp_secure): it never delivered, so the new transport may behave in any clean way (smtp_secure
-     * decides). They are checked only for not throwing.
+     * smtp_secure): it never delivered, so there is nothing to compare; the new rule (smtp_secure decides) is
+     * pinned by testSmtpSecureDecidesWhenTheHostHasASchemeToo.
      */
     private const NEVER_DELIVERED_BY_SWIFTMAILER = [
         'ssl-scheme-host-and-tls/implicit-server', 'ssl-scheme-host-and-tls/starttls-server',
@@ -64,16 +64,6 @@ final class SwiftMailerParityTest extends IdnoTestCase
         parent::tearDown();
     }
 
-    /**
-     * @return iterable<string, array{string}>
-     */
-    public static function rows(): iterable
-    {
-        foreach (array_keys(SettingsMatrix::rows()) as $name) {
-            yield $name => [$name];
-        }
-    }
-
     public function testTheFixtureHoldsEveryRowOfTheMatrix(): void
     {
         $fixture = require __DIR__ . '/fixtures/swiftmailer-transcripts.php';
@@ -87,16 +77,21 @@ final class SwiftMailerParityTest extends IdnoTestCase
     }
 
     /**
-     * @dataProvider rows
+     * Sends one mail with the settings to a server of the kind given, through the production wiring, and
+     * says what the server saw and what the production factory built (before the test wiring changed the
+     * address): the host and port the settings MEAN.
+     *
+     * @param array<string, mixed> $settings
+     * @param array<string, mixed> $server
+     *
+     * @return array{host: string, port: int, beganWithTls: bool, startTlsSent: bool, authMechanism: ?string, authAccepted: ?bool, mailFrom: ?string, rcptTo: list<string>, outcome: string, messages: list<string>}
      */
-    public function testTheNewTransportDoesWhatSwiftMailerDid(string $name): void
+    private function observe(array $settings, array $server): array
     {
-        $old = (require __DIR__ . '/fixtures/swiftmailer-transcripts.php')[$name];
-        $row = SettingsMatrix::rows()[$name];
         $message = SettingsMatrix::message();
-
-        $server = $this->startSmtp($row['server']);
-        $this->mailSettings($row['settings']);
+        $smtp = $this->startSmtp($server);
+        TestMailTransportFactory::forget();
+        $this->mailSettings($settings);
         $email = new Email();
         $email->addTo($message['to']);
         $email->addBcc($message['bcc']);
@@ -107,29 +102,51 @@ final class SwiftMailerParityTest extends IdnoTestCase
 
         $built = TestMailTransportFactory::built();
         $this->assertCount(1, $built, 'one transport is built for one mail');
-        $connections = $server->connections();
+        $connections = $smtp->connections();
         $first = $connections[0] ?? null;
         $delivered = false;
         foreach ($connections as $connection) {
             $delivered = $delivered || $connection['accepted'];
         }
-        $delivered = $delivered && $sent === 2;
-        $new = [
+
+        return [
+            'host' => $built[0]['host'],
             'port' => $built[0]['port'],
             'beganWithTls' => $first['beganWithTls'] ?? false,
             'startTlsSent' => $first['startTlsSent'] ?? false,
+            'authMechanism' => $first['authMechanism'] ?? null,
+            'authAccepted' => $first['authAccepted'] ?? null,
             'mailFrom' => $first['mailFrom'] ?? null,
             'rcptTo' => $first['rcptTo'] ?? [],
-            'outcome' => $delivered ? 'sent' : 'failed',
+            'outcome' => $delivered && $sent === 2 ? 'sent' : 'failed',
+            'messages' => $smtp->messages(),
         ];
+    }
 
-        if (in_array($name, self::NEVER_DELIVERED_BY_SWIFTMAILER, true)) {
-            $this->assertContains($sent, [0, 2]);
-
-            return;
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function rowsSwiftMailerCouldDeliver(): iterable
+    {
+        foreach (array_keys(SettingsMatrix::rows()) as $name) {
+            if (!in_array($name, self::NEVER_DELIVERED_BY_SWIFTMAILER, true)) {
+                yield $name => [$name];
+            }
         }
+    }
+
+    /**
+     * @dataProvider rowsSwiftMailerCouldDeliver
+     */
+    public function testTheNewTransportDoesWhatSwiftMailerDid(string $name): void
+    {
+        $old = (require __DIR__ . '/fixtures/swiftmailer-transcripts.php')[$name];
+        $row = SettingsMatrix::rows()[$name];
+        $new = $this->observe($row['settings'], $row['server']);
 
         $expected = [
+            // The host the settings mean: SwiftMailer's own, less the scheme it was written with.
+            'host' => (string) preg_replace('~\A(ssl|tls)://~', '', $old['connectedTo']['host']),
             'port' => $old['connectedTo']['port'],
             'beganWithTls' => $old['beganWithTls'],
             'startTlsSent' => $old['startTlsSent'],
@@ -146,15 +163,58 @@ final class SwiftMailerParityTest extends IdnoTestCase
             }
         }
 
-        // The AUTH mechanism may differ (the server offers several and both clients prefer one); what
-        // matters is that a login was attempted when SwiftMailer attempted one.
-        if ($old['authMechanism'] !== null) {
-            $this->assertNotNull($first['authMechanism'] ?? null, $name . ': SwiftMailer logged in (' . $old['authMechanism'] . '), the new transport did not');
-        } else {
-            $this->assertNull($first['authMechanism'] ?? null, $name . ': SwiftMailer did not log in, the new transport did');
+        // The AUTH mechanism: both are recorded. A login was attempted exactly when SwiftMailer attempted
+        // one; the mechanism itself may differ (the server offers several and each client prefers one),
+        // and then both are named and the server must have accepted the new one.
+        $mechanisms = $name . ': SwiftMailer used ' . ($old['authMechanism'] ?? 'no AUTH') . ', the new transport used ' . ($new['authMechanism'] ?? 'no AUTH');
+        $this->assertSame($old['authMechanism'] === null, $new['authMechanism'] === null, $mechanisms);
+        if ($old['authMechanism'] !== $new['authMechanism'] && $old['outcome'] === 'sent' && $new['outcome'] === 'sent') {
+            $this->assertTrue($new['authAccepted'], $mechanisms . ' and the server did not accept it');
         }
         if ($new['outcome'] === 'failed') {
-            $this->assertSame([], $server->messages(), $name . ': a failed row delivered a message');
+            $this->assertSame([], $new['messages'], $name . ': a failed row delivered a message');
+        }
+    }
+
+    /**
+     * Rows with a scheme in the host AND smtp_secure `ssl` or `tls`: SwiftMailer built an address that could
+     * never connect, so there is nothing to be on a par with. The rule of the new code is that smtp_secure
+     * decides, so such a row must look on the wire exactly like the row without the scheme.
+     *
+     * @return iterable<string, array{string, string}>
+     */
+    public static function schemeRows(): iterable
+    {
+        foreach (self::NEVER_DELIVERED_BY_SWIFTMAILER as $name) {
+            yield $name => [$name, str_contains($name, '-and-tls') ? 'tls' : 'ssl'];
+        }
+    }
+
+    /**
+     * @dataProvider schemeRows
+     */
+    public function testSmtpSecureDecidesWhenTheHostHasASchemeToo(string $name, string $secure): void
+    {
+        $row = SettingsMatrix::rows()[$name];
+        $reference = ['smtp_host' => '127.0.0.1', 'smtp_secure' => $secure] + $row['settings'];
+        $this->assertSame('', $reference['smtp_port']);
+
+        $with = $this->observe($row['settings'], $row['server']);
+        $without = $this->observe($reference, $row['server']);
+
+        $messagesWith = $with['messages'];
+        unset($with['messages'], $without['messages']);
+        $this->assertSame($without, $with, $name . ' is observed on the wire as the row without the scheme');
+
+        // Against the wrong kind of server (tls on a server that speaks TLS first, ssl on one that does
+        // not) nothing is sent in the clear.
+        $wrongKind = $secure === 'tls' ? $row['server']['implicitTls'] : !$row['server']['implicitTls'];
+        if ($wrongKind) {
+            $this->assertSame('failed', $with['outcome'], $name);
+            $this->assertNull($with['mailFrom'], $name . ': nothing was sent over a connection of the wrong kind');
+            $this->assertSame([], $messagesWith, $name . ': a message arrived');
+        } else {
+            $this->assertSame('sent', $with['outcome'], $name);
         }
     }
 
@@ -164,7 +224,7 @@ final class SwiftMailerParityTest extends IdnoTestCase
         $cases = [
             ['host-only', 25], ['host-587', 587], ['host-465-ssl', 465], ['host-ssl-no-port', 25],
             ['host-tls-no-port', 25], ['port-zero', 25], ['port-numeric-string', 2525], ['no-host', 25],
-            ['ssl-scheme-host', 25], ['tls-scheme-host/implicit-server', 25],
+            ['ssl-scheme-host', 25], ['tls-scheme-host/implicit-server', 25], ['host-465-tls', 465],
         ];
         foreach ($cases as [$name, $port]) {
             TestMailTransportFactory::forget();
@@ -172,6 +232,11 @@ final class SwiftMailerParityTest extends IdnoTestCase
             $this->mailSettings(SettingsMatrix::rows()[$name]['settings']);
             $this->sampleEmail()->send();
             $this->assertSame($port, TestMailTransportFactory::built()[0]['port'], $name);
+            if ($name === 'host-465-tls') {
+                // Where Symfony's own factory would make the connection encrypted from the first byte.
+                $this->assertFalse(TestMailTransportFactory::built()[0]['implicitTls']);
+                $this->assertTrue(TestMailTransportFactory::built()[0]['requireTls']);
+            }
         }
     }
 }

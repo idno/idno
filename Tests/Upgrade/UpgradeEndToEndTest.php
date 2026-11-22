@@ -126,7 +126,8 @@ final class UpgradeEndToEndTest extends TestCase
         $this->assertStringContainsString('no-store', $page['headers']['cache-control'] ?? '');
         $this->assertStringContainsString('<h1>Idno is upgrading its database</h1>', $page['body']);
         $this->assertStringContainsString("default-src 'none'; script-src 'nonce-", $page['headers']['content-security-policy'] ?? '');
-        $this->assertDoesNotMatchRegularExpression('#https?:|//[a-z0-9]#i', $page['body'], 'no URL to another origin');
+        // The random nonce may contain `//x`: it is taken out of the body (it is named by the response's own policy) first.
+        $this->assertDoesNotMatchRegularExpression('#https?:|//[a-z0-9]#i', \Tests\Upgrade\PageNonce::withoutNonce($page['body'], $page['headers']['content-security-policy']), 'no URL to another origin');
 
         $head = $this->request('HEAD', '/', ['Accept: text/html']);
         $this->assertSame(503, $head['status']);

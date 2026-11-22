@@ -7,7 +7,7 @@ namespace Tests\Fixtures\Smtp;
 /**
  * A throwaway certificate authority and two server certificates, made with the openssl extension in
  * a temporary directory (no network, nothing outside it): one signed by the authority, valid for
- * `localhost` and 127.0.0.1 (`valid-for-localhost`), and one that signs itself (`self-signed`). A
+ * `localhost` and 127.0.0.1 (`valid-for-localhost`), one signed by the authority but only for another name (`valid-for-another-name`), and one that signs itself (`self-signed`). A
  * client trusts the authority only where a test says so, by giving the TLS stream the authority's
  * file as its `cafile` (caFile(); Tests\Fixtures\TestMailTransportFactory does it for the mail
  * transport): the environment variable SSL_CERT_FILE is not used, because PHP builds that name a
@@ -62,12 +62,13 @@ final class TestPki
     /**
      * The PEM file (certificate then private key) a server presents.
      *
-     * @param 'valid-for-localhost'|'self-signed' $certificate
+     * @param 'valid-for-localhost'|'valid-for-another-name'|'self-signed' $certificate
      */
     public function serverFile(string $certificate): string
     {
         return match ($certificate) {
             'valid-for-localhost' => $this->directory . '/valid.pem',
+            'valid-for-another-name' => $this->directory . '/other-name.pem',
             'self-signed' => $this->directory . '/self-signed.pem',
             default => throw new \InvalidArgumentException('Unknown certificate "' . $certificate . '".'),
         };
@@ -99,6 +100,11 @@ basicConstraints = CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
 subjectAltName = DNS:localhost,IP:127.0.0.1{$this->alternativeNames}
+[v3_other_name]
+basicConstraints = CA:FALSE
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = DNS:mail.other.example.test
 CNF);
         $options = ['config' => $config, 'digest_alg' => 'sha256'];
 
@@ -114,6 +120,12 @@ CNF);
         $serverCert = openssl_csr_sign($serverCsr, $caCert, $caKey, 3, $options + ['x509_extensions' => 'v3_server'], 2);
         $this->check($serverCert !== false);
         $this->write($this->serverFile('valid-for-localhost'), $serverCert, $serverKey);
+
+        $otherKey = $this->key($config);
+        $otherCsr = $this->csr('mail.other.example.test', $otherKey, $options);
+        $otherCert = openssl_csr_sign($otherCsr, $caCert, $caKey, 3, $options + ['x509_extensions' => 'v3_other_name'], 4);
+        $this->check($otherCert !== false);
+        $this->write($this->serverFile('valid-for-another-name'), $otherCert, $otherKey);
 
         $ownKey = $this->key($config);
         $ownCsr = $this->csr('localhost', $ownKey, $options);

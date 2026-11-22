@@ -72,6 +72,9 @@ final class SmtpWireTest extends IdnoTestCase
         yield 'tls, a self-signed certificate' => ['tls', 'self-signed', false];
         yield 'ssl, a certificate of the trusted authority' => ['ssl', 'valid-for-localhost', true];
         yield 'ssl, a self-signed certificate' => ['ssl', 'self-signed', false];
+        // A valid chain from the trusted authority, but for another name than the host connected to.
+        yield 'tls, a certificate for another name' => ['tls', 'valid-for-another-name', false];
+        yield 'ssl, a certificate for another name' => ['ssl', 'valid-for-another-name', false];
     }
 
     /**
@@ -90,7 +93,11 @@ final class SmtpWireTest extends IdnoTestCase
         $this->assertSame($delivered ? 1 : 0, $email->send());
 
         $connection = $server->connections()[0];
-        $this->assertSame($delivered, $connection['tlsEstablished']);
+        if ($delivered) {
+            $this->assertTrue($connection['tlsEstablished']);
+        }
+        // (With TLS 1.3 the server's side of the handshake can finish before the client has checked the
+        // certificate and refused it, so a refusal is read from what was sent, not from the handshake.)
         $this->assertCount($delivered ? 1 : 0, $server->messages());
         if (!$delivered) {
             $this->assertNull($connection['mailFrom'], 'nothing is sent over a connection whose certificate was refused');
@@ -304,16 +311,7 @@ final class SmtpWireTest extends IdnoTestCase
         $this->mailSettings(['smtp_host' => '127.0.0.1', 'oops_notify' => 'ops@example.net']);
         $expected = [];
 
-        // The password reset form (Idno\Pages\Account\Password::postContent()).
-        $t = clone Idno::site()->template();
-        $t->setTemplateType('email');
-        $email = new Email();
-        $email->setSubject('Password reset');
-        $email->addTo('someone@example.net');
-        $email->setHTMLBody($t->__(['email' => 'someone@example.net', 'code' => 'code-1'])->draw('account/password'));
-        $email->setTextBodyFromTemplate('account/password', ['email' => 'someone@example.net', 'code' => 'code-1']);
-        $this->assertSame(1, $email->send());
-        $expected['Password reset'] = ['someone@example.net', 'code=code-1'];
+        // The password reset is driven through the real page over HTTP: PasswordResetPageMailTest.
 
         // An invitation.
         $admin = $this->admin();
@@ -341,7 +339,8 @@ final class SmtpWireTest extends IdnoTestCase
         $expected[Idno::site()->config()->host . ': Oh no'] = ['ops@example.net', 'Something broke'];
 
         // The results of an import (both outcomes) and of an export (Idno\Pages\Admin\Import,
-        // Idno\Pages\Admin\Export\Generate), built as those pages build them.
+        // Idno\Pages\Admin\Export\Generate), built here as those pages build them. They are driven through
+        // the real pages by the import and export tests that follow in a later change.
         foreach ([
             'admin/import' => 'Idno - Your data import is complete',
             'admin/import_failure' => 'Idno - Problem with your import',

@@ -43,6 +43,8 @@ final class SettingsMatrix
             'host-ssl-no-port' => [['smtp_host' => '127.0.0.1', 'smtp_secure' => 'ssl'], $implicit],
             'host-tls-no-port' => [['smtp_host' => '127.0.0.1', 'smtp_secure' => 'tls'], $startTls],
             'host-587-tls' => [['smtp_host' => '127.0.0.1', 'smtp_port' => 587, 'smtp_secure' => 'tls'], $startTls],
+            // The place Symfony's own factory would differ: it makes port 465 implicit TLS whatever the DSN asks.
+            'host-465-tls' => [['smtp_host' => '127.0.0.1', 'smtp_port' => 465, 'smtp_secure' => 'tls'], $startTls],
             'port-zero' => [['smtp_host' => '127.0.0.1', 'smtp_port' => 0], $plain],
             'port-numeric-string' => [['smtp_host' => '127.0.0.1', 'smtp_port' => '2525'], $plain],
             'ssl-scheme-host' => [['smtp_host' => 'ssl://127.0.0.1'], $implicit],
