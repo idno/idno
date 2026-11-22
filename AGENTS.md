@@ -3420,6 +3420,10 @@ the CLI installer no longer writes one.
   the address or an empty string, and then through `htmlspecialchars()`. Do this where the
   value is printed even if it was checked when it was stored, because values stored
   before the check are not rewritten. `Tests/Core/UrlValidatorTest.php` checks `httpUrl()`.
+  Its pattern is a nowdoc (`UrlValidator::HTTP_URL_PATTERN`). Write a regular expression
+  that holds backslashes that way: in a quoted PHP string `\\` is one backslash, which
+  once turned a `\s` into "a backslash or the letter s" and refused every host that
+  begins with "s".
 - Link previews: `LinkPreview::buildPreviewFromData()` keeps the link and the image
   (`og:image` of the fetched page) only when `UrlValidator::httpUrl()` accepts them, and
   `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them

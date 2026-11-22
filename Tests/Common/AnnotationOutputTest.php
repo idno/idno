@@ -108,10 +108,9 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
      * Add an annotation to a post the way a received webmention does: from the
      * microformats of the page that mentions it.
      */
-    private function receiveWebmention(Status $post, string $ownerUrl, string $ownerImage, string $permalink, string $type): void
+    private function receiveWebmention(Status $post, string $ownerUrl, string $ownerImage, string $permalink, string $type, string $source = 'http://evil.example/source'): void
     {
         $target = $post->getURL();
-        $source = 'http://evil.example/source';
         $e = function ($value) {
             return htmlspecialchars($value, ENT_QUOTES);
         };
@@ -263,6 +262,38 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
         $annotations = $post->getAnnotations('reply');
         $this->assertCount(1, $annotations);
         $this->assertSame('http://evil.example/source', reset($annotations)['permalink']);
+    }
+
+    /**
+     * UrlValidator::httpUrl() once refused every host that begins with "s", so a
+     * webmention from such a site lost its author's address and picture, and was filed
+     * under a made-up address (which also meant that sending it again added it again).
+     */
+    public function testWebmentionFromAHostThatBeginsWithSIsKeptWhole()
+    {
+        $source = 'https://social.example/@sam/1';
+        foreach (['reply', 'like', 'share', 'mention', 'rsvp'] as $type) {
+            $post = $this->post();
+            $this->receiveWebmention($post, 'https://social.example/@sam', 'https://static.social.example/sam.jpg', $source, $type, $source);
+            $this->receiveWebmention($post, 'https://social.example/@sam', 'https://static.social.example/sam.jpg', $source, $type, $source);
+
+            $annotations = $post->getAnnotations($type);
+            $this->assertCount(1, $annotations, "A $type sent twice should be stored once.");
+            $annotation = reset($annotations);
+            $this->assertSame('https://social.example/@sam', $annotation['owner_url']);
+            $this->assertSame('https://static.social.example/sam.jpg', $annotation['owner_image']);
+            $this->assertSame($source, $annotation['permalink']);
+
+            foreach (self::lookProvider() as $look) {
+                $html = $this->drawAnnotations($post, $look[0]);
+                $this->assertMarkupIsSafe($html);
+                $this->assertStringContainsString('https://social.example/@sam', $html, "$type, {$look[0]}");
+                // Mentions have no picture in the core look
+                if ($type !== 'mention' || str_contains($html, '<img')) {
+                    $this->assertStringContainsString('src="https://static.social.example/sam.jpg"', $html, "$type, {$look[0]}");
+                }
+            }
+        }
     }
 
     /**

@@ -220,4 +220,30 @@ class LinkPreviewCardTest extends \Tests\IdnoTestCase
         $this->assertStringContainsString('Salt, vinegar', $html);
         $this->assertStringContainsString('example.com', $html);
     }
+
+    /**
+     * UrlValidator::httpUrl() once refused every host that begins with "s".
+     *
+     * @dataProvider lookProvider
+     */
+    public function testPreviewOfAPageOnAHostThatBeginsWithSIsDrawn($look)
+    {
+        $preview = LinkPreview::buildPreviewFromData(
+            'https://substack.com/@someone/p/a-post?s=r',
+            ['og' => [
+                'og:title' => 'A post',
+                'og:image' => 'https://substackcdn.com/image/a.png',
+            ]]
+        );
+        $this->assertSame('https://substack.com/@someone/p/a-post?s=r', $preview['url']);
+        $this->assertSame('https://substackcdn.com/image/a.png', $preview['image']);
+        $this->assertSame('substack.com', $preview['domain']);
+
+        $html = $this->drawCard($preview, $look);
+
+        $this->assertMarkupIsSafe($html);
+        $this->assertStringContainsString('href="https://substack.com/@someone/p/a-post?s=r"', $html);
+        $this->assertStringContainsString('src="https://substackcdn.com/image/a.png"', $html);
+        $this->assertStringContainsString('substack.com', $html);
+    }
 }

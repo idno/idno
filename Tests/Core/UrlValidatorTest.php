@@ -91,7 +91,104 @@ namespace Tests\Core {
                 ['http://s.example/', 'http://s.example/'],
                 ['https://xn--caf-dma.example/', 'https://xn--caf-dma.example/'],
                 ["  http://example.com/ \n", 'http://example.com/'],
+                // Hosts that begin with "s" were once refused (see hostFirstCharacterProvider())
+                ['https://substack.com/@someone', 'https://substack.com/@someone'],
+                ['https://stackoverflow.com/questions/1', 'https://stackoverflow.com/questions/1'],
+                ['https://social.example/@user', 'https://social.example/@user'],
+                ['//s.example/x', '//s.example/x'],
+                ['HTTPS://Sx.example/', 'HTTPS://Sx.example/'],
+                ['HTTPS://Social.Example/@User', 'HTTPS://Social.Example/@User'],
+                ['//static.example.com/a.png', '//static.example.com/a.png'],
+                'the letter s alone' => ['https://s', 'https://s'],
+                'user name'          => ['https://sam@example.com/', 'https://sam@example.com/'],
+                'user and password'  => ['https://sam:secret@example.com/', 'https://sam:secret@example.com/'],
+                'port'               => ['http://example.com:8080/a', 'http://example.com:8080/a'],
+                'IPv4'               => ['http://203.0.113.7/a', 'http://203.0.113.7/a'],
+                'IPv6'               => ['http://[2001:db8::1]/a', 'http://[2001:db8::1]/a'],
+                'IPv6 and port'      => ['https://[2001:db8::5]:8443/', 'https://[2001:db8::5]:8443/'],
+                'IDN host'           => ['https://straße.example/', 'https://straße.example/'],
+                'IDN host, Cyrillic' => ['https://сайт.example/', 'https://сайт.example/'],
+                'punycode host'      => ['https://xn--strae-oqa.example/', 'https://xn--strae-oqa.example/'],
+                'backslash later'    => ['https://example.com/a\\b', 'https://example.com/a\\b'],
+                's in the path'      => ['https://example.com/s/s?s=s#s', 'https://example.com/s/s?s=s#s'],
             ];
+        }
+
+        /**
+         * A host may begin with any letter or digit. The pattern in httpUrl() once
+         * refused the letter "s": the white space class reached the regular expression
+         * engine as an escaped backslash followed by the letter s.
+         */
+        public static function hostFirstCharacterProvider(): array
+        {
+            $cases = [];
+            foreach (array_merge(range('a', 'z'), range('A', 'Z'), range('0', '9')) as $character) {
+                $character = (string) $character;
+                foreach (['http://', 'https://', 'HTTPS://', '//'] as $start) {
+                    $cases[$start . $character] = [$start . $character . 'ite.example/' . $character . '?' . $character . '=1'];
+                }
+            }
+
+            return $cases;
+        }
+
+        /**
+         * @dataProvider hostFirstCharacterProvider
+         */
+        public function testHttpUrlAcceptsAHostThatBeginsWithAnyLetterOrDigit($url)
+        {
+            $this->assertSame($url, UrlValidator::httpUrl($url));
+        }
+
+        /**
+         * Every character of printable ASCII, as the first character of the host and
+         * later in the address: only the ones a URL cannot contain are refused, and at
+         * the start of the host a slash or a backslash, which leave no host.
+         */
+        public static function asciiCharacterProvider(): array
+        {
+            $cases = [];
+            for ($code = 0x21; $code <= 0x7e; $code++) {
+                $character = chr($code);
+                $never = in_array($character, ['"', '<', '>', '`'], true);
+                $cases['first, 0x' . dechex($code)] = [
+                    'https://' . $character . 'ite.example/',
+                    !$never && $character !== '/' && $character !== '\\',
+                ];
+                $cases['later, 0x' . dechex($code)] = ['https://example.com/a' . $character . 'b', !$never];
+            }
+
+            return $cases;
+        }
+
+        /**
+         * @dataProvider asciiCharacterProvider
+         */
+        public function testHttpUrlRefusesOnlyTheCharactersItNames($url, $accepted)
+        {
+            $this->assertSame($accepted ? $url : '', UrlValidator::httpUrl($url));
+        }
+
+        /**
+         * White space and control characters are refused anywhere inside the address.
+         */
+        public static function controlCharacterProvider(): array
+        {
+            $cases = [];
+            foreach (array_merge(range(0x00, 0x20), [0x7f]) as $code) {
+                $cases['first, 0x' . dechex($code)] = ['https://' . chr($code) . 'ite.example/'];
+                $cases['later, 0x' . dechex($code)] = ['https://example.com/a' . chr($code) . 'b'];
+            }
+
+            return $cases;
+        }
+
+        /**
+         * @dataProvider controlCharacterProvider
+         */
+        public function testHttpUrlRefusesWhiteSpaceAndControlCharacters($url)
+        {
+            $this->assertSame('', UrlValidator::httpUrl($url));
         }
 
         /**
@@ -116,6 +213,21 @@ namespace Tests\Core {
                 'scheme only'       => ['https://'],
                 'one slash'         => ['http:/example.com'],
                 'backslashes'       => ['http:\\\\example.com'],
+                'backslash first'   => ['http://\\example.com/'],
+                'backslash, no scheme' => ['//\\example.com/'],
+                'three slashes'     => ['///example.com/'],
+                'slash, backslash'  => ['/\\example.com/'],
+                'space first'       => ['http:// example.com/'],
+                'tab first'         => ["http://\texample.com/"],
+                'quote first'       => ['http://"example.com/'],
+                'bracket first'     => ['http://<example.com/'],
+                'backtick first'    => ['http://`example.com/'],
+                'no host, no scheme' => ['//'],
+                'javascript, slashes' => ['javascript://example.com/%0aalert(1)'],
+                'javascript, s host' => ['javascript://s.example/%0aalert(1)'],
+                'data, s host'      => ['data://s.example/'],
+                'https twice'       => ['httpss://s.example/'],
+                'line after'        => ["javascript:alert(1)\nhttps://s.example/"],
                 'double quote'      => ['http://example.com/"onmouseover="alert(1)'],
                 'angle brackets'    => ['http://example.com/<script>'],
                 'backtick'          => ['http://example.com/`a`'],
