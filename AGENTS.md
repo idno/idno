@@ -320,7 +320,15 @@ Each content plugin has an `Entry.php` entity class that defines
   `Token::findUserForToken()`. Both are stored as the keys of `indieauth_codes` and
   `indieauth_tokens` on the user, in plain text, and are matched with `hash_equals()`
   (`Auth::matchingKey()`). Tokens do not expire, and tokens issued by earlier versions
-  (32 hex characters) remain valid. PKCE is not implemented.
+  (32 hex characters) remain valid.
+- IndieAuth PKCE and scope: a client may send `code_challenge` with
+  `code_challenge_method=S256` (`Auth::challengeError()` refuses `plain` and malformed
+  challenges). The challenge is stored with the code, and `Auth::verifyCode()` then
+  requires the matching `code_verifier`. A client that sends no challenge is still
+  accepted, but a `code_verifier` for a code issued without a challenge is refused. The
+  token endpoint issues no token for a code granted with an empty scope; such a code can
+  only be confirmed at the authorization endpoint. Scope is otherwise not enforced: the
+  Micropub endpoint does not read it.
   `IdnoPlugins/IndiePub/Tests/IndieAuthCodeAndTokenTest.php` checks this.
 - Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
   that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The

@@ -33,7 +33,7 @@
             </div>
 
             <?php
-            foreach (array("me", "client_id", "redirect_uri", "scope", "state") as $param) {
+            foreach (array("me", "client_id", "redirect_uri", "scope", "state", "code_challenge", "code_challenge_method") as $param) {
                 echo '<input type="hidden" name="' . $param . '" value="' . htmlspecialchars($vars[$param] ?? '', ENT_QUOTES, 'UTF-8') . '" />';
             }
             ?>

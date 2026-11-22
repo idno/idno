@@ -33,12 +33,21 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             // Get parameters
             $code         = $this->getInput('code');
             $redirect_uri = $this->getInput('redirect_uri');
-            $state        = $this->getInput('state');
             $client_id    = $this->getInput('client_id');
 
             $headers      = self::getallheaders();
 
-            $verified = Auth::verifyCode($code, $client_id, $redirect_uri, $state);
+            $verified = Auth::verifyCode($code, $client_id, $redirect_uri, $this->getInput('code_verifier'));
+
+            // A code that was granted with no scope identifies the user and nothing more.
+            // The IndieAuth specification forbids issuing an access token for it.
+            if ($verified['valid'] === true && trim((string) $verified['scope']) === '') {
+                $verified = array(
+                    'valid'  => false,
+                    'reason' => 'this code was issued without a scope, so no access token can be issued for it',
+                );
+            }
+
             if ($verified['valid']===true) {
 
                 // Generate access token and save it to the user
