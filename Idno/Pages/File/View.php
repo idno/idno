@@ -90,61 +90,41 @@ namespace Idno\Pages\File {
             header('Accept-Ranges: bytes');
 
             // Partial content
-            if (isset($_SERVER['HTTP_RANGE'])) {
+            $size = (int) $object->getSize();
+            $range = isset($_SERVER['HTTP_RANGE']) ? static::parseRange($_SERVER['HTTP_RANGE'], $size) : null;
 
-                $size = $object->getSize();
-                $start = 0;
-                $end = $size; // - 1;
+            if ($range === false) {
+                $this->setResponse(416);
+                \Idno\Core\Idno::site()->logging()->debug('Requested Range Not Satisfiable');
+                header('HTTP/1.1 416 Requested Range Not Satisfiable');
+                header("Content-Range: bytes */$size");
+                exit;
+            }
 
-                $c_start = (empty($start) || $end < abs(intval($start))) ? 0 : max(abs(intval($start)), 0);//$start;
-                $c_end = (empty($end)) ? ($size - 1) : min(abs(intval($end)), ($size - 1)); //$end;
+            if ($range !== null) {
 
-                // Parse range
-                list(, $range) = explode('=', $_SERVER['HTTP_RANGE'], 2);
+                list($c_start, $c_end) = $range;
 
-                if ($range[0] == '-') {
-                    // Range form "-123"
-                    $c_start = (int)($size - (int)substr($range, 1));
-                } else {
-                    // Range form "123-" or "123-345"
-                    $range = explode('-', $range);
-                    $c_start = (int)$range[0];
-
-                    if (isset($range[1]) && is_numeric($range[1])) {
-                        $c_end = (int)$range[1];
-                    }
-                }
+                // Both positions are inclusive, so bytes 5-5 is one byte
+                $length = $c_end - $c_start + 1;
 
                 \Idno\Core\Idno::site()->logging()->debug("Partial content request for $c_start - $c_end bytes from $size available bytes");
 
-                // Validate range
-                if (($c_start > $c_end)  // Start after end
-                    || ($c_end > $size)  // End after size
-                    || ($c_start < 0) // Start less than zero
-                ) {
-                    $this->setResponse(416);
-                    \Idno\Core\Idno::site()->logging()->debug('Requested Range Not Satisfiable');
-                    header('HTTP/1.1 416 Requested Range Not Satisfiable');
-                    exit;
-                }
-
                 // Now output headers and partial content
                 $this->setResponse(206);
-                header('Content-Length: ' . ($c_end-$c_start));
+                header('Content-Length: ' . $length);
                 header("Content-Range: bytes $c_start-$c_end/$size");
-
-                \Idno\Core\Idno::site()->logging()->debug('Content-Length: ' . ($c_end-$c_start));
-                \Idno\Core\Idno::site()->logging()->debug("Content-Range: bytes $c_start-$c_end/$size");
 
                 if ($stream = $object->getResource()) {
                     @fseek($stream, $c_start);
-                    $buffer = "";
-                    while ( strlen($buffer)< $c_end-$c_start) {
-                        $buffer .= fread($stream, $c_end-strlen($buffer));
+                    while ($length > 0 && !feof($stream)) {
+                        $chunk = fread($stream, min(8192, $length));
+                        if ($chunk === false || $chunk === '') {
+                            break;
+                        }
+                        echo $chunk;
+                        $length -= strlen($chunk);
                     }
-                    //$data =  fread($stream, $c_end-$c_start);
-
-                    echo $buffer;
                 } else {
                     \Idno\Core\Idno::site()->logging()->error('Could not open stream.');
                 }
@@ -163,6 +143,48 @@ namespace Idno\Pages\File {
                     }
                 }
             }
+        }
+
+        /**
+         * Work out which bytes of a file a Range request header asks for (RFC 9110, section 14).
+         *
+         * @param  string $header The value of the Range header, for example "bytes=0-499", "bytes=500-" or "bytes=-500"
+         * @param  int    $size   The size of the file in bytes
+         * @return array|false|null The positions of the first and the last byte to send, counted from 0;
+         *                          false if the file has none of the bytes asked for (answer 416);
+         *                          null if the header is not a single range of bytes, and so is ignored
+         */
+        static function parseRange($header, $size)
+        {
+            if (!preg_match('/^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$/i', (string) $header, $matches)) {
+                return null;
+            }
+            list(, $first, $last) = $matches;
+            $size = (int) $size;
+
+            if ($first === '') {
+                if ($last === '') {
+                    return null;
+                }
+
+                // "-500": the last 500 bytes, or the whole file if it is smaller
+                if ((int) $last == 0 || $size == 0) {
+                    return false;
+                }
+
+                return [max($size - (int) $last, 0), $size - 1];
+            }
+
+            $start = (int) $first;
+
+            // "500-": from byte 500 to the end. An end past the last byte means the last byte.
+            $end = ($last === '') ? $size - 1 : min((int) $last, $size - 1);
+
+            if ($start >= $size || ($last !== '' && (int) $last < $start)) {
+                return false;
+            }
+
+            return [$start, $end];
         }
 
     }
