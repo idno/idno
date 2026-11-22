@@ -42,7 +42,7 @@ namespace Idno\Entities {
         public function save($overrideAccess = false)
         {
             if (empty($this->datatype)) {
-                throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_("GenericDataItem classes must have a datatype label set."));
+                throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_("GenericDataItem classes must have a datatype label set."));
             }
 
             return parent::save($overrideAccess);

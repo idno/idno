@@ -16,7 +16,7 @@ namespace Idno\Caching {
         {
             $domain = md5(\Idno\Core\Idno::site()->config()->host);
             if (empty($domain)) {
-                throw new \RuntimeException(\Idno\Core\Idno::site()->language()->_("No domain specified for cache"));
+                throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_("No domain specified for cache"));
             }
 
             $pathbase = \Idno\Core\Idno::site()->config()->cachepath;

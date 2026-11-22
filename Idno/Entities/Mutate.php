@@ -18,7 +18,7 @@ trait Mutate
 
         // First, check that we're either a parent or a child
         if (!($this instanceof $targetClass) && !($targetClass instanceof $this)) {
-            throw new \RuntimeException(Idno::site()->language()->_('%s is not a parent or child of %s', [$targetClass, get_called_class()]));
+            throw new \Idno\Exceptions\TechnicalException(Idno::site()->language()->_('%s is not a parent or child of %s', [$targetClass, get_called_class()]));
         }
 
         // Now do some witchcraft
