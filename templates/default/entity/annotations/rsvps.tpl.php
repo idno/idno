@@ -10,7 +10,8 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
     $rsvps_by_response = ['yes' => '', 'maybe' => '', 'no' => '', 'etc' => ''];
 
     foreach($vars['annotations'] as $locallink => $annotation) {
-        $permalink = !empty($annotation['permalink']) ? $annotation['permalink'] : $locallink;
+        // The addresses come from whoever sent the annotation: only http and https ones are printed
+        $permalink = \Idno\Core\UrlValidator::httpUrl(!empty($annotation['permalink']) ? $annotation['permalink'] : $locallink);
         $rsvp = !empty($annotation['rsvp']) ? strtolower(trim($annotation['rsvp'])) : 'etc';
 
         ob_start();
@@ -25,7 +26,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                     <p>
                         <strong><?php echo strip_tags($annotation['content']); ?></strong>
                     </p>
-                    <p><small><a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo date('M d Y', $annotation['time']);?></a> on <a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo parse_url($permalink, PHP_URL_HOST)?></a></small></p>
+                    <p><small><a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo date('M d Y', $annotation['time']);?></a> on <a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a></small></p>
                 </div>
             </div>
         <?php

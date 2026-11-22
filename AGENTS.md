@@ -355,6 +355,13 @@ Each content plugin has an `Entry.php` entity class that defines
   `config.ini` or the environment sets. A plugin that stores a secret in the configuration must give the
   setting a name the rule recognises. `Tests/Pages/Admin/ExportArchiveTest.php` checks all
   of this.
+- Annotations (replies, likes, shares, mentions and RSVPs, most of which arrive as
+  webmentions): `Entity::addAnnotation()` keeps the owner's address, the owner's image and
+  the annotation's address only when `UrlValidator::httpUrl()` accepts them, and stores an
+  empty string otherwise (for the annotation's address, an address of its own on this
+  site). The annotation templates of both looks (`templates/default/entity/annotations/`,
+  `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
+  `Tests/Common/AnnotationOutputTest.php` checks this.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
