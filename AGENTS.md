@@ -290,6 +290,18 @@ Each content plugin has an `Entry.php` entity class that defines
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
 - Content Security Policy headers via template system
+- IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
+  `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
+  build one from `rand()`, `mt_rand()`, `uniqid()` or the time. Authorization codes are
+  issued by `Auth::issueCode()` and redeemed by `Auth::verifyCode()`, which accepts a code
+  once and for `Auth::CODE_LIFETIME` (ten minutes, the most the IndieAuth specification
+  allows), and spends it even when the rest of the request is wrong. Access tokens are
+  issued by `Pages\IndieAuth\Token::issueToken()` and looked up by
+  `Token::findUserForToken()`. Both are stored as the keys of `indieauth_codes` and
+  `indieauth_tokens` on the user, in plain text, and are matched with `hash_equals()`
+  (`Auth::matchingKey()`). Tokens do not expire, and tokens issued by earlier versions
+  (32 hex characters) remain valid. PKCE is not implemented.
+  `IdnoPlugins/IndiePub/Tests/IndieAuthCodeAndTokenTest.php` checks this.
 - Fatal-error page: the shutdown function at the top of `Idno/start.php` answers a request
   that died of an uncaught error with a 500 page drawn by `statics/error-page.php`. The
   page tells visitors only that there was a problem. The message, file, line, stack trace

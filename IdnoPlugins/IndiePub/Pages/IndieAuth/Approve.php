@@ -32,23 +32,13 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                     }
                 }
 
-                $indieauth_codes = $user->indieauth_codes;
-                if (empty($indieauth_codes)) {
-                    $indieauth_codes = array();
-                }
-
-                $code = md5(rand(0, 99999) . time() . $user->getUUID() . $client_id . $state . rand(0, 999999));
-                $indieauth_codes[$code] = array(
+                $code = Auth::issueCode($user, array(
                     'me'           => $me,
                     'redirect_uri' => $redirect_uri,
                     'scope'        => $scope,
                     'state'        => $state,
                     'client_id'    => $client_id,
-                    'issued_at'    => time(),
-                    'nonce'        => mt_rand(1000000, pow(2, 30))
-                );
-                $user->indieauth_codes = $indieauth_codes;
-                $user->save();
+                ));
 
                 if (strpos($redirect_uri, '?') === false) {
                     $redirect_uri .= '?';

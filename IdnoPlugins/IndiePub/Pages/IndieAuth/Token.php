@@ -41,25 +41,14 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             $verified = Auth::verifyCode($code, $client_id, $redirect_uri, $state);
             if ($verified['valid']===true) {
 
-                // Get user & existing tokens
-                $user             = $verified['user'];
-                $indieauth_tokens = $user->indieauth_tokens;
-                if (empty($indieauth_tokens)) {
-                    $indieauth_tokens = array();
-                }
-
                 // Generate access token and save it to the user
-                $token                    = md5(rand(0, 99999) . time() . $user->getUUID() . $client_id . $state . rand(0, 999999));
-                $indieauth_tokens[$token] = array(
+                $user  = $verified['user'];
+                $token = self::issueToken($user, array(
                     'me'           => $verified['me'],
                     'redirect_uri' => $redirect_uri,
                     'scope'        => $verified['scope'],
                     'client_id'    => $client_id,
-                    'issued_at'    => time(),
-                    'nonce'        => mt_rand(1000000, pow(2, 30))
-                );
-                $user->indieauth_tokens   = $indieauth_tokens;
-                $user->save();
+                ));
                 if (\Idno\Core\Idno::site()->session()->isLoggedOn() && $user->getUUID() == \Idno\Core\Idno::site()->session()->currentUser()->getUUID()) {
                     \Idno\Core\Idno::site()->session()->refreshSessionUser($user);
                 }
@@ -80,9 +69,35 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
             }
         }
 
+        /**
+         * Issue an access token to a user and store it.
+         *
+         * @param  \Idno\Entities\User $user
+         * @param  array               $data me, redirect_uri, scope, client_id
+         * @return string the token
+         */
+        static function issueToken($user, array $data)
+        {
+            $indieauth_tokens = $user->indieauth_tokens;
+            if (empty($indieauth_tokens) || !is_array($indieauth_tokens)) {
+                $indieauth_tokens = array();
+            }
+
+            $token = Auth::generateSecret();
+            $data['issued_at'] = time();
+            $indieauth_tokens[$token] = $data;
+            $user->indieauth_tokens = $indieauth_tokens;
+            $user->save(true);
+
+            return $token;
+        }
+
         static function findUserForToken($token)
         {
-            // find a user by their code
+            if (!is_string($token) || $token === '') {
+                return array();
+            }
+            // find a user by their token
             for ($offset = 0 ; ; $offset += 10) {
                 $users = \Idno\Entities\User::get(array(), array(), 10, $offset);
                 if (empty($users)) {
@@ -90,10 +105,11 @@ namespace IdnoPlugins\IndiePub\Pages\IndieAuth {
                 }
                 foreach ($users as $user) {
                     $indieauth_tokens = $user->indieauth_tokens;
-                    if (!empty($indieauth_tokens) && isset($indieauth_tokens[$token])) {
+                    $key = Auth::matchingKey($indieauth_tokens, $token);
+                    if ($key !== null) {
                         return array(
                             'user' => $user,
-                            'data' => $indieauth_tokens[$token],
+                            'data' => $indieauth_tokens[$key],
                         );
                     }
                 }
