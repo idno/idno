@@ -194,7 +194,18 @@ final class LegacyServiceFactory
 
     public function template(): ?\Idno\Core\Template
     {
-        return Idno::site()->componentFactory(Idno::site()->config()->template, \Idno\Core\Template::class, "Idno\\Core\\", \Idno\Core\HybridTwigTemplate::class);
+        $setting = Idno::site()->config()->template;
+        // The template class that rendered Twig files is gone: a site that names it gets the default one
+        if (is_string($setting) && preg_match('/^\\\\?(Idno\\\\Core\\\\)?HybridTwigTemplate$/i', $setting)) {
+            $setting = '';
+        }
+        $template = Idno::site()->componentFactory($setting, \Idno\Core\Template::class, "Idno\\Core\\", \Idno\Core\DefaultTemplate::class);
+        if ($template instanceof \Idno\Core\DefaultTemplate) {
+            // The site's template keeps what plugins and themes register in the container's registry
+            $template->useSlots(Idno::container()->get(\Idno\Templating\SlotRegistry::class));
+        }
+
+        return $template;
     }
 
     public function language(): \Idno\Core\Language

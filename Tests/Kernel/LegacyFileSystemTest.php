@@ -564,15 +564,11 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $this->assertDirectoryDoesNotExist($cwd . '/s3:/b/up');
         $this->assertStringNotContainsString('s3:', \Idno\Cache\CachePoolFactory::directory(['uploadpath' => 's3://b/up/'], $tmp . '/pool-base'));
 
-        // The HTMLPurifier cache directory.
+        // The HTMLPurifier cache directory: the kernel's, never the upload path.
         $purifier = new \Idno\Core\Purifier();
-        $this->assertStringStartsWith($tmp, rtrim($this->purifierSerializerPath($purifier), '/\\'));
-
-        // The Twig cache.
-        $template = new \Idno\Core\HybridTwigTemplate();
-        $twig     = (new \ReflectionProperty(\Idno\Core\HybridTwigTemplate::class, 'twig'))->getValue($template);
-        $this->assertStringStartsWith($tmp, $twig->getCache());
-        $this->assertStringNotContainsString('s3:', $twig->getCache());
+        $path = rtrim($this->purifierSerializerPath($purifier), '/\\');
+        $this->assertSame(rtrim(Idno::container()->get('kernel')->getCacheDir(), '/\\') . '/htmlpurifier', $path);
+        $this->assertStringNotContainsString('s3:', $path);
     }
 
     private function purifierSerializerPath(\Idno\Core\Purifier $purifier): string

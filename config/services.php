@@ -79,6 +79,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // implemented by Idno\Legacy adapters (aliased below); ImportedMedia takes a closure that fetches the
         // remote client, so it is wired by hand below.
         'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
+        // Template names, type chains and located files are value objects and static helpers; the cascade, the
+        // registry and the renderer are wired below (the renderer's Twig engine stays unset until it exists).
+        'Templating' => ['LocatedTemplate.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TypeChain.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -342,6 +345,26 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->public();
     $services->alias(HttpClientInterface::class, 'idno.http_client')->public();
     $services->alias(HttpClientInterface::class . ' $remoteClient', 'idno.http_client.remote')->public();
+
+    // Templates (Idno\Templating): the directories they are found in (core's is the project directory; the theme's and
+    // the plugins' are added at run time), what plugins registered for them, and the renderer. Public: legacy code
+    // (Bonita\Main, the template classes) fetches them from the container.
+    $services->set(\Idno\Templating\TemplateCascade::class)
+        ->args(['%kernel.project_dir%'])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->set(\Idno\Templating\SlotRegistry::class)
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->set(\Idno\Templating\TemplateLocator::class)->public();
+    $services->set(\Idno\Templating\PhpTemplateEngine::class)->public();
+    $services->set(\Idno\Templating\TemplateRenderer::class)
+        ->args([service(\Idno\Templating\TemplateLocator::class), service(\Idno\Templating\SlotRegistry::class), service(\Idno\Templating\PhpTemplateEngine::class), null])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
 
     // The queue of events (Idno\Queue, config/packages/messenger.php). The handler and the worker
     // middleware depend on two small interfaces, implemented over the legacy event dispatcher and

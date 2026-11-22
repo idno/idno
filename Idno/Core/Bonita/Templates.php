@@ -11,20 +11,12 @@
 
 namespace Idno\Core\Bonita {
 
-    class Templates
+    class Templates implements \Idno\Templating\PhpTemplateContext
     {
 
         public $templateType = 'default';  // Which template are we using?
         public $fallbackToDefault = true;  // Fallback to
         public $vars = array();     // Template variables
-
-        /**
-         * Test hook: when set (only in the test environment, by Tests\Fixtures\TemplateTrace), called as
-         * ($templateType, $templateName, $path) for each draw, $path being the file the draw found or '-'.
-         *
-         * @var callable|null
-         */
-        public static $trace = null;
 
         /**
          * Constructor allows copying; we're shunning use of clone here
@@ -93,68 +85,38 @@ namespace Idno\Core\Bonita {
          */
         function draw($templateName, $returnBlank = true)
         {
-            $templateName = preg_replace('/^_[A-Z0-9\/]+/i', '', $templateName);
-
-            // Reject template names with path traversal sequences or invalid characters
-            if (strpos($templateName, '..') !== false) {
-                if ($returnBlank) {
-                    return '';
-                }
-                return false;
+            $result = $this->renderer()->draw((string)$templateName, $this->vars, $this->getTemplateType(), $this, false, $this->fallbackToDefault);
+            if ($result !== null) {
+                return $result;
             }
-            // Only allow alphanumeric characters, forward slashes, hyphens, and underscores
-            if (!preg_match('/^[a-zA-Z0-9\/_-]+$/', $templateName)) {
-                if ($returnBlank) {
-                    return '';
-                }
-                return false;
-            }
-
-            if (!empty($templateName)) {
-
-                // Add the Bonita base path to our additional paths list
-                $paths = \Idno\Core\Bonita\Main::getPaths();
-
-                // Add template types to an array; ensure we revert to default
-                $templateTypes = array($this->getTemplateType());
-                if ($this->fallbackToDefault) {
-                    if ($this->getTemplateType() != 'default') {
-                        $templateTypes[] = 'default';
-                    }
-                }
-
-                // Cycle through the additional paths and check for the template file
-                // - if it exists, break out of the foreach
-                foreach ($templateTypes as $templateType) {
-                    foreach ($paths as $basepath) {
-                        $path = $basepath . '/templates/' . $templateType . '/' . $templateName . '.tpl.php';
-                        if (file_exists($path)) {
-                            if (self::$trace !== null) {
-                                call_user_func(self::$trace, $this->getTemplateType(), $templateName, $path);
-                            }
-                            // create an anonymous function for scoping
-                            $fn = (function ($path, $vars, $t) {
-                                // dump the variables into the local scope
-                                foreach ($vars as $k => $v) {
-                                    ${$k} = $v;
-                                }
-                                ob_start();
-                                include $path;
-                                return ob_get_clean();
-                            });
-                            return $fn($path, $this->vars, $this);
-                        }
-                    }
-                }
-            }
-            // If we've got here, just return a blank string; the template doesn't exist
-            if (self::$trace !== null) {
-                call_user_func(self::$trace, $this->getTemplateType(), $templateName, '-');
-            }
+            // The template doesn't exist (or its name is refused): a blank string
             if ($returnBlank) {
                 return '';
             }
             return false;
+        }
+
+        /**
+         * A copy of this template whose variables are the given ones
+         *
+         * @param  array $vars
+         * @return static
+         */
+        function withVars(array $vars): static
+        {
+            $copy = clone $this;
+            $copy->vars = $vars;
+            return $copy;
+        }
+
+        /**
+         * The renderer that finds and draws template files
+         *
+         * @return \Idno\Templating\TemplateRenderer
+         */
+        protected function renderer()
+        {
+            return \Idno\Core\Idno::container()->get(\Idno\Templating\TemplateRenderer::class);
         }
 
         /**
@@ -186,9 +148,6 @@ namespace Idno\Core\Bonita {
             if (is_object($object)) {
                 $t = new \Idno\Core\Bonita\Templates($this);
                 $t->object = $object;
-                if (($result = $t->draw('object/' . get_class($object), false)) !== false) {
-                    return $result;
-                }
                 if ($object instanceof BonDrawable) {
                     return $t->draw('object/default');
                 }
@@ -259,8 +218,11 @@ namespace Idno\Core\Bonita {
          */
         function setTemplateType($templateType)
         {
-            $templateType = preg_replace('/^_[A-Z0-9\/]+/i', '', $templateType);
-            if (strpos($templateType, '..') !== false || !preg_match('/^[a-zA-Z0-9\/_-]+$/', $templateType)) {
+            if (!is_string($templateType)) {
+                return false;
+            }
+            $templateType = \Idno\Templating\TemplateName::normalise($templateType);
+            if ($templateType === null || !\Idno\Templating\TypeChain::selectable($templateType)) {
                 return false;
             }
             if ($this->templateTypeExists($templateType)) {
@@ -278,30 +240,14 @@ namespace Idno\Core\Bonita {
          */
         function templateTypeExists($templateType)
         {
-            $templateType = preg_replace('/^_[A-Z0-9\/]+/i', '', $templateType);
-            if (strpos($templateType, '..') !== false || !preg_match('/^[a-zA-Z0-9\/_-]+$/', $templateType)) {
+            if (!is_string($templateType)) {
                 return false;
             }
-            if (!empty($templateType)) {
-                $paths = \Idno\Core\Bonita\Main::getPaths();
-                foreach ($paths as $basepath) {
-                    $path = $basepath . '/templates/' . $templateType . '/';
-                    if (file_exists($path)) {
-                        return true;
-                    }
-                }
+            $templateType = \Idno\Templating\TemplateName::normalise($templateType);
+            if ($templateType === null) {
+                return false;
             }
-            return false;
-        }
-
-        /**
-         * Detects templates based on the given browser string
-         * (defaults, of course, to "default")
-         */
-        function detectTemplateType()
-        {
-            $device = \Idno\Core\Bonita\Main::detectDevice();
-            return $this->setTemplateType($device);
+            return \Idno\Core\Idno::container()->get(\Idno\Templating\TemplateLocator::class)->typeExists($templateType);
         }
 
     }

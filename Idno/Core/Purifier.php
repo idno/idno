@@ -9,11 +9,6 @@ namespace Idno\Core {
 
         function init()
         {
-            $upload_dir = Idno::site()->config()->getUploadPath();
-            if (empty($upload_dir) || str_starts_with($upload_dir, 's3://')) {
-                $upload_dir = \Idno\Core\Idno::site()->config()->getTempDir();
-            }
-
             $allowedIframes = [
                 'www.youtube-nocookie.com/embed/',
                 'www.youtube.com/embed/',
@@ -30,10 +25,29 @@ namespace Idno\Core {
             }
 
             $config = \HTMLPurifier_Config::createDefault();
-            $config->set('Cache.SerializerPath', $upload_dir);
+            $this->useCacheDirectory($config);
             $config->set('HTML.SafeIframe', true);
             $config->set('URI.SafeIframeRegexp', '%^https?://('.implode('|', $allowedIframes).')%');
             $this->purifier = new \HTMLPurifier($config);
+        }
+
+        /**
+         * Keeps HTMLPurifier's serialised definitions in the kernel's cache directory (never in the uploads)
+         *
+         * @param \HTMLPurifier_Config $config
+         */
+        private function useCacheDirectory(\HTMLPurifier_Config $config)
+        {
+            $directory = \Idno\Core\Idno::container()->get('kernel')->getCacheDir() . '/htmlpurifier';
+            if (!is_dir($directory)) {
+                @mkdir($directory, 0775, true);
+            }
+            if (is_dir($directory) && is_writable($directory)) {
+                $config->set('Cache.SerializerPath', $directory);
+            } else {
+                // Without a directory to write to, definitions are built again for each request
+                $config->set('Cache.DefinitionImpl', null);
+            }
         }
 
         function registerEventHooks()
@@ -66,12 +80,7 @@ namespace Idno\Core {
             if ($basic_html) {
                 $config = \HTMLPurifier_Config::createDefault();
 
-                $upload_dir = Idno::site()->config()->getUploadPath();
-                if (empty($upload_dir) || str_starts_with($upload_dir, 's3://')) {
-                    $upload_dir = \Idno\Core\Idno::site()->config()->getTempDir();
-                }
-
-                $config->set('Cache.SerializerPath', $upload_dir);
+                $this->useCacheDirectory($config);
                 $config->set('CSS.AllowedProperties', []);
                 $config->set('HTML.TidyRemove', 'br@clear');
                 $purifier = new \HTMLPurifier($config);

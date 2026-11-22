@@ -238,7 +238,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   files it reaches by fallback that a `modern` file shadows, derived from a real traced run; and `shadowed`: every `default`
   file of core and the bundled plugins that a `modern` file shadows, computed from the file system and asserted. With
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
-  (file relative to the project, or `-`) to the file, through `Idno\Core\Bonita\Templates::$trace`, a static hook that
+  (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
   only when the variable names a file; nothing is called or written otherwise.
 - A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range, and never sleeps to make two moments differ.
@@ -338,6 +338,8 @@ Idno/
                                SettingsRedactor, ImportMode, PortabilityJobs (the jobs and their state), and the
                                five small interfaces its Idno\Legacy adapters implement (SiteFacts, FeedShell,
                                ExportState, ResultNotifier, PostWriter). See "Import and export"
+  Templating/                  Template lookup and rendering (modern style): TemplateCascade, TemplateLocator,
+                               TemplateRenderer, SlotRegistry, PhpTemplateEngine and their helpers. See "Templates"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -771,7 +773,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`, `Templating`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -1416,12 +1418,8 @@ other new code may.
   `registerPages()`, and content types via `registerContentTypes()`. They hook
   into events (`saved`, `updated`, `deleted`, `syndicate`, etc.) using the
   Symfony EventDispatcher (wrapped by `Idno\Core\EventDispatcher`).
-- **Template system**: templates are `.tpl.php` files (PHP), found in `templates/<type>/`
-  and in plugin and theme `templates/` directories, and rendered by the Bonita engine
-  (`Idno\Core\Bonita`, through `Idno\Core\DefaultTemplate`). The site's template service
-  is `Idno\Core\HybridTwigTemplate`, which could also render Twig templates, but there are
-  none: Twig is not in use. Templates are extended via `extendTemplate()` to inject plugin
-  UI into shell chrome, admin menus, etc.
+- **Template system**: templates are `.tpl.php` files (PHP), found and drawn by `Idno\Templating` and
+  called through `Idno\Core\DefaultTemplate` (`Idno::site()->template()`). See "Templates".
 - **Async queue**: `Idno::site()->queue()` is `Idno\Legacy\MessengerEventQueue`. With
   `event_queue = 'AsynchronousQueue'` an event becomes a message on Symfony Messenger (`Idno\Queue\`,
   the table `idno_messages`) and the worker, `service-event-queue` (`Idno\Console\QueueWorkCommand`),
@@ -2481,6 +2479,54 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   admin test mail and `oopsAlert`: recipients, From, Reply-To, subject, the HTML part in the email shell, the
   text part and the link; and a password reset sent by the web server and read from `/_test/mail/log`).
 
+#### Templates
+
+`Idno\Templating` (modern style, a scanned directory) finds and renders templates; `Idno\Core\DefaultTemplate` (over
+`Idno\Core\Bonita\Templates`) is the adapter every page and plugin calls, and delegates to it. The classes:
+
+- Excluded from the scan in `config/services.php` and wired there, public: `TemplateCascade`, `SlotRegistry` and `TemplateRenderer`
+  (its Twig engine argument is null); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
+- `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
+  holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
+  (`TemplateName::isSafe()` is the check without the strip). The pattern ends in `$`, so a trailing newline passes (it names no file).
+- `TypeChain::for($type)`: `default` is `['default']`, any other type `[$type, 'default']` (`modern` on a Twenty26 site
+  included); `selectable($type)` is true for every type.
+- `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
+  puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`.
+  Filled at run time by the plugins and the theme (`Bonita\Main::additionalPath()` forwards to it), never from the
+  container's configuration. A command-line process has core's directory too (it is the cascade's, not added at boot).
+- `TemplateLocator::locate($name, $type, $fallbackToDefault = true)`: for each type of the chain, for each base, the file
+  `<base>/templates/<type>/<name>.tpl.php`, as a `LocatedTemplate` (`path`, `engine`, `type`, `base`, `logicalName`), or null;
+  `typeExists($type)`: some base has a `templates/<type>/` directory.
+- `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
+  record (`extend`, `prepend`, `replace`, `extendWithContent`; `extensions()`, `prepends()`, `replacement()`, `content()`
+  and the `*Map()` readers). The container has one (the site's template object keeps its registrations in it:
+  `DefaultTemplate::useSlots()`, called by `LegacyServiceFactory::template()`), but every other `DefaultTemplate` (`new
+  DefaultTemplate()` for the feed shell or a user search) has a registry of its own, empty, and a `clone` of a template object
+  copies its registry: what is registered on a copy does not reach the original (pinned by `TemplateContractTest`). The public
+  properties `extensions`, `prepends`, `replacements` and `rendered_extensions` are read-only views (`DefaultTemplate::__get()`).
+- `TemplateRenderer` (container service): `draw($name, $vars, $type, $context, $contributions = true, $fallbackToDefault = true,
+  $replacements = true)` is `DefaultTemplate::draw()`'s order (prepends; for `*` then the type the replacement and the extensions;
+  the template unless replaced; the added content) and returns null when nothing was rendered; without `$contributions` it draws the
+  one file (the plain `Bonita\Templates::draw()`: `drawList()`, `drawObject()` and `process()` draw this way, with no extensions);
+  `withSlots()` reads another registry. Each file drawn calls the trace hook `TemplateRenderer::$trace` (type, name, path or `-`)
+  before it is rendered, except a refused name. `$vars` is untyped on purpose: an object whose `vars` were replaced by a non-array
+  through `__(['vars' => ...])` fails in the render, as it always did.
+- `PhpTemplateEngine` (`TemplateEngine`): `include`s the file in a function bound to the `PhpTemplateContext` (`$this` and `$t`;
+  `DefaultTemplate` is one, `withVars()` gives a copy with other variables) with the variables extracted into its scope, inside an
+  output buffer. Its own variables are visible to the file and pinned: `$path` (a template variable named `path` changes the file
+  included), `$vars`, `$k`, `$v`; a variable named `this` is an Error; an exception in a template propagates and leaves the
+  output buffer open (`TemplateContractTest::testAnExceptionInATemplateLeaksTheOutputBuffer`).
+- `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
+  `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
+  (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s
+  per-class lookup (`object/<Class>` never matched) are gone. A `_t` request value that is not a string asks for no type.
+- `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
+  (never the upload path; with no writable directory the definition cache is off).
+- Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
+  `TemplateRendererTest`), `Tests/Kernel/TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path), and the
+  contract and golden pages named under "Build & Test".
+
 #### The cache
 
 Idno has ONE cache: `Psr\Cache\CacheItemPoolInterface` (aliased as `Symfony\Contracts\Cache\CacheInterface`), a public
@@ -2949,10 +2995,10 @@ work). `Idno\Core\Migration`'s static methods are deprecated delegates for one r
   copy, for the configuration, `$_SESSION` and `$_SERVER`) and the archive's `config.json` (keys removed) use it.
 - An import reads its upload from a file in a private directory this install makes
   (`<temporary>/idno-import-<32 hex>`, mode 0700, removed when the import ends).
-- A command-line process (the queue worker, a console plugin) registers the project directory as a Bonita template
-  path like a web request: `LegacyBootstrap::boot()` did it only outside a console, so every core template drew
-  as an empty string in the worker and the export and import result mails had empty bodies. Pinned by
-  `Tests/Kernel/ConsoleTemplatesTest` and `Tests/Acceptance/PhaseWalkthroughTest`. What the worker sends to other
+- A command-line process (the queue worker, a console plugin) draws the core templates as a web request does: core's
+  directory is the template cascade's last base (the cascade is built with it, nothing adds it at boot), so the export
+  and import result mails have bodies in the worker. Pinned by
+  `Tests/Kernel/ConsoleTemplatesTest`, `TemplateContractTest::testConsoleProcessFindsCoreTemplates` and `Tests/Acceptance/PhaseWalkthroughTest`. What the worker sends to other
   servers (ActivityPub activities, webmentions) is built by the request that queued it, not drawn in the worker
   (`QueuedDeliveryTest::testTheContentTheWorkerDeliversIsTheFormattedBodyOfThePost`).
 - `Entity::getBySlug()` finds the stored (percent-encoded) slug of a path segment the web server decoded, and the

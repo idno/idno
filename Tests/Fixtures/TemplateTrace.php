@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Fixtures;
 
-use Idno\Core\Bonita\Templates;
+use Idno\Templating\TemplateRenderer;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 
 /**
@@ -30,7 +30,7 @@ final class TemplateTrace
      */
     public static function install(string $file, string $projectDirectory): void
     {
-        Templates::$trace = static function (string $type, string $name, string $path) use ($file, $projectDirectory): void {
+        TemplateRenderer::$trace = static function (string $type, string $name, string $path) use ($file, $projectDirectory): void {
             if ($path !== '-' && str_starts_with($path, $projectDirectory . '/')) {
                 $path = substr($path, strlen($projectDirectory) + 1);
             }
@@ -40,6 +40,6 @@ final class TemplateTrace
 
     public static function uninstall(): void
     {
-        Templates::$trace = null;
+        TemplateRenderer::$trace = null;
     }
 }

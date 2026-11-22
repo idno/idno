@@ -36,17 +36,9 @@ namespace Idno\Core {
         use Templating\Classes;
 
 
-        // We'll keep track of extensions to templates here
-        public $extensions = array();
-
-        // We'll keep track of prepended templates here
-        public $prepends = array();
-
-        // We'll keep track of replaced templates here
-        public $replacements = array();
-
-        // We can also extend templates with HTML or other content
-        public $rendered_extensions = array();
+        // What plugins and themes extended, prepended and replaced, by template name. The properties
+        // $extensions, $prepends, $replacements and $rendered_extensions read from it (see __get()).
+        private \Idno\Templating\SlotRegistry $slots;
 
         // Keep track of data attributes to add to objects of certain types
         public $object_data = [];
@@ -63,15 +55,55 @@ namespace Idno\Core {
          */
         function __construct($template = false)
         {
-            if (!($template instanceof Template)) {
-                $this->detectTemplateType();
-            }
+            $this->slots = new \Idno\Templating\SlotRegistry();
 
             \Idno\Core\Bonita\Main::siteSecret(\Idno\Core\Idno::site()->config()->site_secret);
 
             $this->purifier = new Purifier();
 
             return parent::__construct($template);
+        }
+
+        /**
+         * A copy has registrations of its own: what is registered on it does not reach the original
+         */
+        function __clone()
+        {
+            $this->slots = clone $this->slots;
+        }
+
+        /**
+         * The registrations are read through the properties third-party code has always read
+         * (extensions, prepends, replacements, rendered_extensions), as arrays
+         */
+        function __get($name)
+        {
+            switch ($name) {
+                case 'extensions':
+                    return $this->slots->extensionMap();
+                case 'prepends':
+                    return $this->slots->prependMap();
+                case 'replacements':
+                    return $this->slots->replacementMap();
+                case 'rendered_extensions':
+                    return $this->slots->contentMap();
+            }
+            return parent::__get($name);
+        }
+
+        /**
+         * Makes this template keep its registrations in the given registry (the site's template uses the container's)
+         *
+         * @param \Idno\Templating\SlotRegistry $slots
+         */
+        function useSlots(\Idno\Templating\SlotRegistry $slots)
+        {
+            $this->slots = $slots;
+        }
+
+        protected function renderer()
+        {
+            return parent::renderer()->withSlots($this->slots);
         }
 
         /**
@@ -95,30 +127,7 @@ namespace Idno\Core {
          */
         function draw($templateName, $returnBlank = true, $replacements = true)
         {
-            $result = '';
-            if (!empty($this->prepends[$templateName])) {
-                foreach ($this->prepends[$templateName] as $template) {
-                    $result .= parent::draw($template, $returnBlank);
-                }
-            }
-            $replaced = false;
-            foreach (['*', $this->getTemplateType()] as $templateType) {
-                if (!empty($this->replacements[$templateName][$templateType]) && $replacements == true) {
-                    $result .= parent::draw($this->replacements[$templateName][$templateType], $returnBlank);
-                    $replaced = true;
-                }
-                if (!empty($this->extensions[$templateName][$templateType])) {
-                    foreach ($this->extensions[$templateName][$templateType] as $template) {
-                        $result .= parent::draw($template, $returnBlank);
-                    }
-                }
-            }
-            if (!$replaced) {
-                $result .= parent::draw($templateName, $returnBlank);
-            }
-            if (!empty($this->rendered_extensions[$templateName])) {
-                $result .= $this->rendered_extensions[$templateName];
-            }
+            $result = (string)$this->renderer()->draw((string)$templateName, $this->vars, $this->getTemplateType(), $this, true, $this->fallbackToDefault, $replacements == true);
 
             if ($templateName == 'shell' && !empty(Idno::site()->config()->filter_shell)) {
                 if (is_array(Idno::site()->config()->filter_shell)) {
@@ -220,14 +229,7 @@ namespace Idno\Core {
          */
         function extendTemplate($templateName, $extensionTemplateName, $to_front = false, $templateType = '*')
         {
-            if (empty($this->extensions[$templateName][$templateType])) {
-                $this->extensions[$templateName][$templateType] = array();
-            }
-            if ($to_front) {
-                array_unshift($this->extensions[$templateName][$templateType], $extensionTemplateName);
-            } else {
-                $this->extensions[$templateName][$templateType][] = $extensionTemplateName;
-            }
+            $this->slots->extend((string)$templateName, (string)$extensionTemplateName, (bool)$to_front, (string)$templateType);
         }
 
         /**
@@ -242,14 +244,7 @@ namespace Idno\Core {
          */
         function prependTemplate($templateName, $prependTemplateName, $to_front = false)
         {
-            if (empty($this->prepends[$templateName])) {
-                $this->prepends[$templateName] = array();
-            }
-            if ($to_front) {
-                array_unshift($this->prepends[$templateName], $prependTemplateName);
-            } else {
-                $this->prepends[$templateName][] = $prependTemplateName;
-            }
+            $this->slots->prepend((string)$templateName, (string)$prependTemplateName, (bool)$to_front);
         }
 
         /**
@@ -265,10 +260,7 @@ namespace Idno\Core {
          */
         function replaceTemplate($templateName, $replacementTemplateName, $templateType = '*')
         {
-            if (empty($this->replacements[$templateName][$templateType])) {
-                $this->replacements[$templateName][$templateType] = array();
-            }
-            $this->replacements[$templateName][$templateType] = $replacementTemplateName;
+            $this->slots->replace((string)$templateName, (string)$replacementTemplateName, (string)$templateType);
         }
 
         /**
@@ -280,11 +272,7 @@ namespace Idno\Core {
          */
         function extendTemplateWithContent($templateName, $content)
         {
-            if (empty($this->rendered_extensions[$templateName])) {
-                $this->rendered_extensions[$templateName] = $content;
-            } else {
-                $this->rendered_extensions[$templateName] .= $content;
-            }
+            $this->slots->extendWithContent((string)$templateName, (string)$content);
         }
 
         /**
@@ -294,6 +282,9 @@ namespace Idno\Core {
         {
             if ($page = site()->currentPage()) {
                 $template = $page->getInput('_t');
+                if (!is_string($template)) {
+                    $template = '';
+                }
                 if (!empty($template)) {
                     site()->template()->setTemplateType($template);
                 } else if ($page->isAcceptedContentType('application/json')) {

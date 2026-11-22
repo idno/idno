@@ -45,16 +45,13 @@ final class TemplateTypeRequestTest extends RenderedSiteTestCase
     }
 
     /**
-     * WANTED: `?_t[]=x` is not a server error and the default type is used. Today it is a TypeError (strpos() given an array,
-     * in Idno\Core\Bonita\Templates::setTemplateType()), a 500. Marked incomplete until it is fixed.
+     * `?_t[]=x` (an array, not a type) asks for no type: the answer is not a server error and the default type is used.
      */
     public function testAnArrayTypeIsNotAServerError(): void
     {
         $this->seedSite();
         $response = $this->site()->request('GET', '?_t[]=x');
-        if ($response->status >= 500) {
-            $this->markTestIncomplete('DEFECT: GET /?_t[]=x answers ' . $response->status . ', a TypeError from strpos() on an array in Idno\\Core\\Bonita\\Templates::setTemplateType() (the type is taken from the request as it is). Wanted: not a 5xx, the default type used.');
-        }
+
         $this->assertSame(200, $response->status);
         $this->assertSame($this->describe(''), $this->describe('?_t[]=x'), 'the default type is used');
     }

@@ -15,8 +15,6 @@ namespace Idno\Core\Bonita {
          * Configuration variables *
          */
         static $path = '';      // The path of the Bonita base
-        static $additionalPaths = array();  // Additional paths to check for templates
-        static $cache = false;     // Set depending on the existence of the cache
         static $secret = '';     // Site secret
 
         /**
@@ -29,42 +27,26 @@ namespace Idno\Core\Bonita {
          */
 
         /**
-         * Returns whether or not we're running off the cache
+         * Sets an additional path to check for (eg) templates: a directory with a templates/ directory in it.
+         * The directory is searched before the ones added earlier, and core's own always last. It forwards to
+         * the container's Idno\Templating\TemplateCascade.
          *
-         * @return true|false
-         */
-        static function cached()
-        {
-            return self::$cache;
-        }
-
-        /**
-         * Sets an additional path to check for (eg) templates
-         * Does nothing if we're running off the cache
-         *
-         * @param  string $path A full path
-         * @return true|false Depending on success
+         * @param string $path A full path
          */
         static function additionalPath($path)
         {
-            if (self::cached()) {
-                return false;
-            }
-            if (!empty($path) && is_dir($path)) {
-                if (!in_array($path, self::$additionalPaths)) {
-                    array_unshift(self::$additionalPaths, $path);
-                }
-            }
+            \Idno\Core\Idno::container()->get(\Idno\Templating\TemplateCascade::class)->addBase((string)$path);
         }
 
         /**
-         * Get any saved additional paths (or an empty array if there aren't any)
+         * Get the directories templates are looked for in, apart from the main Bonita path: the added ones, the last
+         * added first, and core's directory last
          *
          * @return array
          */
         static function getAdditionalPaths()
         {
-            return self::$additionalPaths;
+            return \Idno\Core\Idno::container()->get(\Idno\Templating\TemplateCascade::class)->bases();
         }
 
         /**
@@ -95,68 +77,6 @@ namespace Idno\Core\Bonita {
         public static function getSiteSecret()
         {
             return self::$secret;
-        }
-
-        /**
-         * Returns a string identifier describing the user's device OS, based on the
-         * browser string. (Default: "default")
-         *
-         * @return string A string describing the device OS, or "default" by default
-         */
-        static function detectDevice()
-        {
-            if (empty($_SERVER['HTTP_USER_AGENT'])) {
-                return 'default';
-            }
-            $ua = $_SERVER['HTTP_USER_AGENT'];
-
-            // Android
-            if (preg_match('/android/i', $ua)) {
-                return 'android';
-            }
-
-            // iOS devices
-            if (preg_match('/ipad/i', $ua)) {
-                return 'ipad';
-            }
-            if (preg_match('/ipod/i', $ua) || preg_match('/iphone/i', $ua)) {
-                return 'iphone';
-            }
-
-            // Blackberry (WebKit and older)
-            if (preg_match('/blackberry/i', $ua)) {
-                if (!preg_match('/webkit/i', $ua)) {
-                    return 'blackberry';
-                }
-                return 'blackberry-webkit';
-            }
-
-            // Windows Phone
-            if (preg_match('/windows phone/i', $ua)) {
-                return 'windows-phone';
-            }
-
-            // Windows Mobile
-            if (preg_match('/windows ce/i', $ua)) {
-                return 'windows-mobile';
-            }
-
-            // Opera Mini
-            if (preg_match('/opera mini/i', $ua)) {
-                return 'opera-mini';
-            }
-
-            // Opera
-            if (preg_match('/opera/i', $ua)) {
-                return 'opera';
-            }
-
-            // Internet Explorer
-            if (preg_match('/msie/i', $ua)) {
-                return 'msie';
-            }
-
-            return 'default';
         }
 
     }
