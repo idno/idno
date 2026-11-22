@@ -234,6 +234,22 @@ namespace IdnoPlugins\Event\Tests {
             $this->assertSame('', $rsvp->inreplyto);
         }
 
+        /**
+         * UrlValidator::httpUrl() once refused every host that begins with "s", so an
+         * RSVP to an event on such a site was stored with no event address.
+         */
+        public function testEventOnAHostThatBeginsWithSIsStoredAndLinked()
+        {
+            $rsvp = $this->saveFromInput(['rsvp' => 'yes', 'body' => 'See you there', 'inreplyto' => 'https://social.example/events/1?a=1&b=2']);
+
+            $this->assertSame('https://social.example/events/1?a=1&b=2', $rsvp->inreplyto);
+            $this->assertSame(['https://social.example/events/1?a=1&b=2'], $rsvp->getEventURLs());
+            $this->assertStringContainsString(
+                '<a href="https://social.example/events/1?a=1&amp;b=2" class="u-in-reply-to"></a>',
+                $rsvp->getDescription()
+            );
+        }
+
         public function testTextIsCleanedWhenSaved()
         {
             $rsvp = $this->saveFromInput([

@@ -131,6 +131,19 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
         }
     }
 
+    /**
+     * UrlValidator::httpUrl() once refused every host that begins with "s".
+     */
+    public function testImageOnAHostThatBeginsWithSIsEmbedded()
+    {
+        foreach (self::lookProvider() as $look) {
+            $html = $this->draw('content/embed', ['value' => 'A cat: https://static.example.com/pics/cat.png and https://s3.example.net/dog.JPG'], $look[0]);
+
+            $this->assertStringContainsString('<img src="https://static.example.com/pics/cat.png"', $html);
+            $this->assertStringContainsString('<img src="https://s3.example.net/dog.JPG"', $html);
+        }
+    }
+
     // ---- Like ----------------------------------------------------------------------
 
     public static function hostileBookmarkProvider(): array
@@ -241,6 +254,50 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
         $this->toDelete[] = $like;
 
         $this->assertSame('https://example.com/a?b=1&c=2', $like->body);
+    }
+
+    /**
+     * UrlValidator::httpUrl() once refused every host that begins with "s", so such
+     * a site could not be bookmarked, liked or reposted.
+     */
+    public static function bookmarkOnAnSHostProvider(): array
+    {
+        return [
+            'body'        => ['body', 'body'],
+            'bookmark-of' => ['bookmark-of', 'bookmarkof'],
+            'like-of'     => ['like-of', 'likeof'],
+            'repost-of'   => ['repost-of', 'repostof'],
+        ];
+    }
+
+    /**
+     * @dataProvider bookmarkOnAnSHostProvider
+     */
+    public function testBookmarkOfAHostThatBeginsWithSIsSavedAndDrawn($input, $field)
+    {
+        $address = 'https://stackoverflow.com/questions/1?a=1&b=2';
+        $page = new \Idno\Pages\Homepage();
+        foreach ([$input => $address, 'title' => 'A title', 'access' => 'PUBLIC', 'publish_status' => 'draft'] as $name => $value) {
+            $page->setInput($name, $value);
+        }
+        Idno::site()->setCurrentPage($page);
+
+        $like = new Like();
+        $saved = $like->saveDataFromInput();
+        if ($like->_id) {
+            $this->toDelete[] = $like;
+        }
+        Idno::site()->session()->getAndFlushMessages();
+
+        $this->assertTrue($saved, 'The bookmark should have been saved.');
+        $this->assertSame($address, $like->body);
+        $this->assertSame($address, $like->$field);
+
+        foreach (self::lookProvider() as $look) {
+            $html = $this->draw('entity/Like', ['object' => $like], $look[0]);
+            $this->assertMarkupIsSafe($html);
+            $this->assertStringContainsString('href="https://stackoverflow.com/questions/1?a=1&amp;b=2"', $html);
+        }
     }
 
     // ---- Checkin -------------------------------------------------------------------
