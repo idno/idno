@@ -11,12 +11,12 @@
 
     <h2 class="idno-entry-title p-name">
         <?php if (empty($vars['feed_view'])) { ?>
-            <a href="<?= $object->getURL() ?>"><?= $object->getTitle() ?></a>
+            <a href="<?= $object->getURL() ?>"><?= htmlspecialchars($object->getTitle()) ?></a>
         <?php } ?>
     </h2>
 
     <span class="p-location u-checkin h-card">
-        <data class="p-name" value="<?= $object->placename ?>"></data>
+        <data class="p-name" value="<?= htmlspecialchars((string) $object->placename) ?>"></data>
         <data class="p-latitude" value="<?= $object->lat() ?>"></data>
         <data class="p-longitude" value="<?= $object->long() ?>"></data>
     </span>

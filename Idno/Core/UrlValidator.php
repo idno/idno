@@ -29,6 +29,35 @@ class UrlValidator
     }
 
     /**
+     * The URL, if it may be printed as the address of a link or an image, or an
+     * empty string if it may not.
+     *
+     * Use this for an address that somebody else supplied (a webmention, a fetched
+     * page, a post): a browser runs a "javascript:" address when it is followed. Only
+     * http and https addresses are accepted (and "//host/..." ones, which take the
+     * scheme of the page), and none that holds white space, a control character, a
+     * double quote, an angle bracket or a backtick, which a URL cannot contain.
+     *
+     * This does not escape anything: print the result with htmlspecialchars(). And it
+     * does not make the URL safe to fetch: see isSafeUrl().
+     *
+     * @param mixed $url The URL to check
+     * @return string The URL, without surrounding white space, or ''
+     */
+    public static function httpUrl($url): string
+    {
+        if (!is_string($url)) {
+            return '';
+        }
+        $url = trim($url);
+        if (preg_match('~^(https?:)?//[^/\\\\\s"<>`\x00-\x20\x7f][^\s"<>`\x00-\x20\x7f]*$~iD', $url) !== 1) {
+            return '';
+        }
+
+        return $url;
+    }
+
+    /**
      * The IP addresses that the host of a URL resolves to, if the URL is safe for
      * server-side fetching (see isSafeUrl()).
      *

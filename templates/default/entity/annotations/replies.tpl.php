@@ -8,7 +8,10 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
     );
     foreach ($vars['annotations'] as $locallink => $annotation) {
 
-        $permalink = $annotation['permalink'] ? $annotation['permalink'] : $locallink;
+        // The addresses come from whoever sent the annotation: only http and https ones are printed
+        $permalink = \Idno\Core\UrlValidator::httpUrl($annotation['permalink'] ? $annotation['permalink'] : $locallink);
+        $owner_url = \Idno\Core\UrlValidator::httpUrl($annotation['owner_url']);
+        $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         ?>
             <div class="idno-annotation row u-comment h-cite">
                 <div class="idno-annotation-image col-md-1 hidden-sm">
@@ -21,11 +24,11 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                     <p>
                         <small>
                     <span class="p-author h-card">
-                        <a class="u-photo" rel="nofollow" href="<?php echo strip_tags($annotation['owner_image']) ?>"></a>
+                        <a class="u-photo" rel="nofollow" href="<?php echo htmlspecialchars($owner_image) ?>"></a>
                         <a class="p-name u-url"
-                           href="<?php echo htmlspecialchars(strip_tags($annotation['owner_url'])) ?>" alt="<?php echo htmlspecialchars($annotation['owner_name']) ?>" rel="nofollow"><?php echo htmlentities($annotation['owner_name'], ENT_QUOTES, 'UTF-8') ?></a></span>,
-                            <a href="<?php echo $permalink ?>" rel="nofollow"><?php echo date('M d Y', $annotation['time']); ?></a>
-                            on <a href="<?php echo $permalink ?>" rel="nofollow" class="u-url"><?php echo parse_url($permalink, PHP_URL_HOST) ?></a>
+                           href="<?php echo htmlspecialchars($owner_url) ?>" alt="<?php echo htmlspecialchars($annotation['owner_name']) ?>" rel="nofollow"><?php echo htmlentities($annotation['owner_name'], ENT_QUOTES, 'UTF-8') ?></a></span>,
+                            <a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo date('M d Y', $annotation['time']); ?></a>
+                            on <a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow" class="u-url"><?php echo htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a>
                         </small>
                     </p>
                 </div>

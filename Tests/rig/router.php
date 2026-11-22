@@ -14,6 +14,12 @@ if (PHP_SAPI !== 'cli-server') {
 
 $root = dirname(__DIR__, 2);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+// A NUL byte in a path (`%00`) is never a file: realpath() would throw. Real web servers refuse such a request
+// before PHP runs; the built-in server hands it on, so the rig answers it as there being nothing there.
+if (str_contains(rawurldecode($path), "\0")) {
+    http_response_code(404);
+    return true;
+}
 $file = realpath($root . rawurldecode($path));
 
 // Mirror the deny rules in .htaccess and warmup/webserver-configs: never serve these

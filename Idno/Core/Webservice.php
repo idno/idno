@@ -245,7 +245,7 @@ namespace Idno\Core {
                     }
 
                     self::$lastRequest = self::describeRequest($method, $url, $requestLines, $body);
-                    $response          = $client->request($method, $url, $options);
+                    $response          = $client->request($method, self::wireUrl($url), $options);
                     $status            = $response->getStatusCode();
                     $responseHeaders   = $response->getHeaders(false);
 
@@ -440,6 +440,17 @@ namespace Idno\Core {
             }
 
             return implode("\r\n", $lines) . "\r\n\r\n";
+        }
+
+        /**
+         * The URL as it goes to the HTTP client: every byte outside ASCII percent-encoded. A caller may give an
+         * address with its path as typed (`/2026/привет`), and the client reads the URL with parse_url(), which
+         * replaces some of those bytes (0x80 to 0x9f, among them) with an underscore: another address is requested.
+         * Encoding them says exactly what was meant; an address that is already encoded is unchanged.
+         */
+        private static function wireUrl(string $url): string
+        {
+            return (string)preg_replace_callback('/[\x80-\xff]/', static fn (array $byte): string => sprintf('%%%02X', ord($byte[0])), $url);
         }
 
         /**

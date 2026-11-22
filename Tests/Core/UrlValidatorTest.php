@@ -78,6 +78,67 @@ namespace Tests\Core {
             $this->assertFalse(UrlValidator::isPublicIp('::ffff:10.0.0.1'));
             $this->assertFalse(UrlValidator::isPublicIp('not an ip'));
         }
+
+        public static function printableUrlProvider(): array
+        {
+            return [
+                ['http://example.com/', 'http://example.com/'],
+                ['https://example.com/a?b=1&c=2#d', 'https://example.com/a?b=1&c=2#d'],
+                ['HTTPS://Example.com/O\'Brien.jpg', 'HTTPS://Example.com/O\'Brien.jpg'],
+                ['//cdn.example.com/a.png', '//cdn.example.com/a.png'],
+                // a host or a first letter of any kind: none is refused for its spelling
+                ['https://shoreline.example/ana', 'https://shoreline.example/ana'],
+                ['http://s.example/', 'http://s.example/'],
+                ['https://xn--caf-dma.example/', 'https://xn--caf-dma.example/'],
+                ["  http://example.com/ \n", 'http://example.com/'],
+            ];
+        }
+
+        /**
+         * @dataProvider printableUrlProvider
+         */
+        public function testHttpUrlKeepsHttpAndHttpsAddresses($url, $expected)
+        {
+            $this->assertSame($expected, UrlValidator::httpUrl($url));
+        }
+
+        public static function unprintableUrlProvider(): array
+        {
+            return [
+                'javascript'        => ['javascript:alert(1)'],
+                'mixed case'        => ['JaVaScRiPt:alert(1)'],
+                'data'              => ['data:text/html,<script>alert(1)</script>'],
+                'vbscript'          => ['vbscript:msgbox(1)'],
+                'file'              => ['file:///etc/passwd'],
+                'ftp'               => ['ftp://example.com/'],
+                'relative'          => ['/a/b'],
+                'no host'           => ['http:///a'],
+                'scheme only'       => ['https://'],
+                'one slash'         => ['http:/example.com'],
+                'backslashes'       => ['http:\\\\example.com'],
+                'double quote'      => ['http://example.com/"onmouseover="alert(1)'],
+                'angle brackets'    => ['http://example.com/<script>'],
+                'backtick'          => ['http://example.com/`a`'],
+                'space'             => ['http://example.com/a b'],
+                'line break'        => ["http://example.com/a\nb"],
+                'tab in the scheme' => ["java\tscript:alert(1)"],
+                'leading control'   => ["\x01javascript:alert(1)"],
+                'null byte'         => ["http://example.com/\0a"],
+                'text before'       => ['x http://example.com/'],
+                'empty'             => [''],
+                'null'              => [null],
+                'array'             => [['http://example.com/']],
+                'number'            => [0],
+            ];
+        }
+
+        /**
+         * @dataProvider unprintableUrlProvider
+         */
+        public function testHttpUrlRefusesEverythingElse($url)
+        {
+            $this->assertSame('', UrlValidator::httpUrl($url));
+        }
     }
 
 }

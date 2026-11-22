@@ -50,6 +50,20 @@ final class ArchiveExporter
     /** How many entities are read at a time. */
     private const BATCH = 10;
 
+    /**
+     * Settings that describe the server the site runs on (its database, paths, sessions, outbound proxy) and not
+     * the site. They belong to the configuration file or the environment, and `config.json` never holds them,
+     * whether or not the boot configuration defines them now: `Config::save()` can leave a copy of some in the
+     * stored record.
+     */
+    public const SERVER_SETTINGS = [
+        'database', 'dbname', 'dbuser', 'dbpass', 'dbhost', 'dbport', 'dbstring', 'dbauthsrc',
+        'path', 'url', 'host', 'feed', 'uploadpath', 'upload_tmp_dir',
+        'session_path', 'session_hash_function', 'sessions_database', 'sessions_storage',
+        'cookie_jar', 'proxy_string', 'proxy_type', 'disable_ssl_verify', 'http_allow_private',
+        'antiplugins', 'alwaysplugins', 'bypass_fulltext_search',
+    ];
+
     public function __construct(
         private readonly EntityRepository $entities,
         private readonly FileStore $files,
@@ -201,7 +215,7 @@ final class ArchiveExporter
             // and none of the values that look like secrets.
             // Settings the boot configuration defines (and Config::save() copied into the stored ones) are not
             // the stored settings' own: dropped, whatever they are.
-            $stored = array_diff_key($this->records->findLatest('config') ?? [], $this->boot->all());
+            $stored = array_diff_key($this->records->findLatest('config') ?? [], $this->boot->all(), array_flip(self::SERVER_SETTINGS));
             $this->write($folder . '/config.json', json_encode(['config' => SettingsRedactor::redact($stored, null)], JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE));
 
             $this->writeEntities($folder, $report);

@@ -10,7 +10,7 @@ namespace Tests\Core {
 
         public function testGatekeeper()
         {
-            $result = \Idno\Core\Webservice::get(\Idno\Core\Idno::site()->config()->url . 'account/settings/', [], []);
+            $result = \Idno\Core\Webservice::get(\Idno\Core\Idno::site()->config()->url . 'begin/profile/', [], []);
 
             $response = $result['response'];
             $this->assertEmpty($result['error'], 'The result\'s error property should be empty.');
@@ -19,10 +19,11 @@ namespace Tests\Core {
             $user = \Tests\IdnoTestCase::user();
             $this->assertIsObject(\Idno\Core\Idno::site()->session()->logUserOn($user));
 
+            // Not an account page: those are closed to API requests, see Tests\API\AccountPagesTest
             $result = \Idno\Core\Webservice::get(
-                \Idno\Core\Idno::site()->config()->url . 'account/settings/', [], [
+                \Idno\Core\Idno::site()->config()->url . 'begin/profile/', [], [
                 'X-IDNO-USERNAME: ' . $user->handle,
-                'X-IDNO-SIGNATURE: ' . base64_encode(hash_hmac('sha256', '/account/settings/', $user->getAPIkey(), true)),
+                'X-IDNO-SIGNATURE: ' . base64_encode(hash_hmac('sha256', '/begin/profile/', $user->getAPIkey(), true)),
 
                 ]
             );

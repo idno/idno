@@ -9,7 +9,8 @@ namespace Idno\Portability;
  * apply it, so what one hides the other hides. It works on any tree of values (the settings, the server's
  * variables):
  *  - a key that names a password, secret, token, key, credential, signature, salt, DSN, JWT, HMAC,
- *    authorization, authentication, cookie, session or user name for a service, or "private", whatever the
+ *    authorization, authentication, cookie, session or user name for a service, the database connection string
+ *    and the proxy string (both can hold a password), or "private", whatever the
  *    spelling (`smtp_password`, `dbpass`, `IDNO_DBPASS`, `site_secret`, `aws_key`, `apikey`, `consumerKey`,
  *    `HTTP_COOKIE`), has its value replaced (or its key removed), at any depth;
  *  - a key that names a webhook keeps its entries, with each address reduced to its scheme and host (the path of
@@ -27,7 +28,7 @@ final class SettingsRedactor
 {
     public const MARKER = '** REDACTED **';
 
-    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|(?:^|[_.\-])(?:pass|pw|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
+    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|^dbstring$|^proxy_string$|pass(?:code|key)|(?:^|[_.\-])(?:pass|pw|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
 
     private const WEBHOOK = '/webhook/i';
 

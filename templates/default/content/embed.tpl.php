@@ -9,7 +9,12 @@
 
 if (preg_match_all('/https?:\/\/([^\s]+\.[^\s\.]+\.(png|jpg|jpeg|gif))/i', $body, $matches)) {
     foreach ($matches[0] as $m) {
-        $embedded .= '<p><img src="' . $m . '" loading="lazy" /></p>';
+        // The match is taken from the text of the post and can hold quotes and tags
+        $src = \Idno\Core\UrlValidator::httpUrl(html_entity_decode($m, ENT_QUOTES, 'UTF-8'));
+        if ($src === '') {
+            continue;
+        }
+        $embedded .= '<p><img src="' . htmlspecialchars($src) . '" loading="lazy" /></p>';
         $urls[] = $m;
     }
 }

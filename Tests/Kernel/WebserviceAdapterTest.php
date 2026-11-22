@@ -102,6 +102,19 @@ final class WebserviceAdapterTest extends IdnoTestCase
         return $path;
     }
 
+    public function testAnAddressWithItsPathAsTypedReachesTheClientEncodedNotCorrupted(): void
+    {
+        Webservice::useClient($this->client([new MockResponse('ok')]));
+
+        // "р" is the bytes D1 80: the client's own URL parsing would turn 0x80 into an underscore
+        $typed = "https://example.com/2026/\xD0\xBF\xD1\x80\xD0\xB8-caf\xC3\xA9?q=\xD1\x80";
+        $result = Webservice::get($typed);
+
+        $this->assertSame(200, $result['response']);
+        $this->assertSame('https://example.com/2026/%D0%BF%D1%80%D0%B8-caf%C3%A9?q=%D1%80', $this->seen[0][1]);
+        $this->assertSame($typed, $result['effective_url'], 'the address the caller gave is the one reported');
+    }
+
     public function testATransportFailureIsAnErrorResultNotAnException(): void
     {
         Webservice::useClient($this->client([new TransportException('Could not resolve host: example.invalid')]));

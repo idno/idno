@@ -1422,6 +1422,19 @@ other new code may.
   the table `idno_messages`) and the worker, `service-event-queue` (`Idno\Console\QueueWorkCommand`),
   runs it in its own process; otherwise it runs at once in the request. **Required for ActivityPub.**
   Code asks `queue()->isAsynchronous()`, never for a class. See "The queue of events".
+- **Slugs in URLs**: `Entity::prepareSlug()` stores a slug percent-encoded (the title
+  `Café notes` gives `caf%C3%A9-notes`), and `getURL()` prints it that way. A web server
+  may hand the router the path as sent (percent-encoded, hex digits in either case) or
+  decoded, so a route that takes a slug matches any one path segment without a dot
+  (`([^/.]+)`: the `:slug` part of `Entity::getPermalinkRoute()`, and `/pages/` in
+  StaticPages), and `Entity::getBySlug()` looks the value up as given and then as
+  `rawurlencode(rawurldecode($slug))`. A value that is not UTF-8, as given or once decoded
+  (`%FF`), is looked up as nothing (false), because no slug is anything but UTF-8 and a
+  database may refuse to compare other bytes; `%00` decodes to a valid string and is
+  just another value that finds nothing. Don't write a slug route as a list of ASCII
+  characters, and only ever pass the slug to the database as a query value.
+  `Tests/Pages/NonAsciiPermalinkTest.php` and `Tests/Characterisation/SlugRoutingTest` check this
+  over HTTP.
 
 ### Database
 
@@ -2815,7 +2828,8 @@ work). `Idno\Core\Migration`'s static methods are deprecated delegates for one r
   the zip with `ZipArchive` (`ext-zip`, a Composer `suggest`) from the files, and stores it through
   `FileStore` with the metadata `restricted = admin`, `purpose = export`. Layout: `known.json`, `config.json`
   (`{"config": the STORED settings with `SettingsRedactor::redact($settings, null)`, and without any key
-  `BootConfig::all()` holds (`Config::save()` copies those into the stored settings)}`: never the boot
+  `BootConfig::all()` holds (`Config::save()` copies those into the stored settings) or names in
+  `ArchiveExporter::SERVER_SETTINGS`}`: never the boot
   configuration), `entities.json` (a list ending with `{}`), `json/<id>.json` (the entity's JSON plus its
   `access` and `publish_status`), `html/<id>.html` (the entity's drawn content inside an `<article class="h-entry">` (`h-event` for an event) with the
   author as an `h-card`, the address and the date: the page's shell, with its edit controls and tokens, is not drawn),
@@ -2921,7 +2935,7 @@ work). `Idno\Core\Migration`'s static methods are deprecated delegates for one r
   `Tests/Queue/QueueWorkerHostTest`.
 - `SettingsRedactor::redact($settings, $replacement)` is the one rule for which settings are secrets
   (a password, secret, token, key, credential, signature, salt, DSN, JWT, HMAC, authorization, bearer, OAuth,
-  IndieAuth, cookie, `private` or service user name, at any depth; an OAuth `client_id` is public, and a number under a
+  IndieAuth, cookie, `private` or service user name, at any depth, and the names `dbstring` and `proxy_string`; an OAuth `client_id` is public, and a number under a
   key that names a duration (`form_token_expiry`) is no secret; a value that starts `sk_live_`, `sk_test_`,
   `rk_live_` or `rk_test_` is removed whatever its key). It is a DENYLIST of key names: a secret under another name is
   not found, so an archive's `config.json` is to be reviewed before it is shared; a string that is an address with a user name or
@@ -3372,7 +3386,36 @@ the CLI installer no longer writes one.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
+- Account pages are closed to API requests: a page registered for a route under
+  `/account/` (settings, password, API key, access tokens, the account's own export of its
+  posts as a feed (`Idno\Pages\Account\Export`, served by `Idno\Portability\FeedExporter`) and
+  what plugins put there) answers 403 to any request for which `Session::isAPIRequest()` is
+  true by the time the page is dispatched, that is, one signed with `X-IDNO-USERNAME` /
+  `X-IDNO-SIGNATURE`. An API key or token is a credential for publishing, and must not be
+  enough to change the password or email address or to read the key. `PageHandler` records
+  the page classes when `addRoute()` / `hijackRoute()` is called with such a pattern
+  (`PageHandler::isAccountPage()`), and `PageHandler::serve()` refuses them in a
+  `before_handler` hook; the decision is made from how the page was registered, never
+  from the address of the request. Put a page that manages credentials under `/account/`.
+  Only a web request goes through `serve()`: the queue worker and the console have no request,
+  no API signature and no router, so nothing there is affected (events run as the user a
+  message names). Everywhere else a signed request acts as its user with no form token, and
+  is never an admin (`User::isAdmin()`). `Tests/API/AccountPagesTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
+- Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
+  that a person or another site supplied with `htmlspecialchars()`, in text and inside an
+  attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe
+  inside an attribute, because both keep the double quote. An address that goes into
+  `href` or `src` must also be an http or https one, or a browser runs it
+  (`javascript:`): pass it through `\Idno\Core\UrlValidator::httpUrl()`, which returns
+  the address or an empty string, and then through `htmlspecialchars()`. Do this where the
+  value is printed even if it was checked when it was stored, because values stored
+  before the check are not rewritten. `Tests/Core/UrlValidatorTest.php` checks `httpUrl()`.
+- Link previews: `LinkPreview::buildPreviewFromData()` keeps the link and the image
+  (`og:image` of the fetched page) only when `UrlValidator::httpUrl()` accepts them, and
+  `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them
+  again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
+  checks this.
 - SSRF protection: the plain client (`Webservice::send()` and its wrappers, the `idno.http_client`
   service) is for the site's own URLs and for services the site's ADMIN configured (the PuSH hub, a
   webhook the admin configured in the site's `webhook_syndication` setting, an API endpoint; a webhook
@@ -3422,9 +3465,29 @@ the CLI installer no longer writes one.
   must implement `updateMetadata()` for this to apply. A file whose metadata has the key `restricted` (whatever
   it holds, even something that reads as no; the export archive and an import's upload carry `admin`) is served to administrators only:
   `Pages\File\View` answers anyone else 403 before it reads anything, fails closed for any value, and sends
-  `Cache-Control: private, no-store` (see "Import and export"). A file is also administrators-only when its id is
+  `Cache-Control: private, no-store`, on the 403 as well (see "Import and export"). A file with the key
+  `site_export` (the mark an earlier 2.0 development build put on an archive) is restricted the same way. A file is also administrators-only when its id is
   the recorded export archive (`export_file_id`), marked or not (an archive an earlier release stored has no mark);
   HEAD and Range requests are refused the same way, before any header that describes the file.
+- Showing or exporting the configuration: pass settings through
+  `\Idno\Portability\SettingsRedactor` first (`redact($settings)` shows a marker, `redact($settings, null)`
+  removes the key). It is the ONE rule for which settings are secrets: a name that says password, secret,
+  token, key, credential, private, signature, salt, cookie and the like, `dbstring` and `proxy_string`, and the
+  user name and password inside any address. The diagnostics report (the running configuration, `$_SESSION` and
+  `$_SERVER`) and the archive's `config.json` both use it; never `json_encode()` the `Config` object itself, which
+  holds the database password and everything else from `config.ini`. `config.json` holds the stored
+  settings only (`ArchiveExporter`): minus the ones that describe the server
+  (`ArchiveExporter::SERVER_SETTINGS`: database, paths, sessions, proxy) and whatever the boot
+  configuration (`config.ini` or the environment) defines. A plugin that stores a secret in the configuration
+  must give the setting a name the rule recognises. `Tests/Pages/Admin/ExportArchiveTest.php` and
+  `Tests/Unit/Portability/SettingsRedactorTest` check this.
+- Annotations (replies, likes, shares, mentions and RSVPs, most of which arrive as
+  webmentions): `Entity::addAnnotation()` keeps the owner's address, the owner's image and
+  the annotation's address only when `UrlValidator::httpUrl()` accepts them, and stores an
+  empty string otherwise (for the annotation's address, an address of its own on this
+  site). The annotation templates of both looks (`templates/default/entity/annotations/`,
+  `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
+  `Tests/Common/AnnotationOutputTest.php` checks this.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
@@ -3482,6 +3545,15 @@ the CLI installer no longer writes one.
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+- `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
+  that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
+  only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`
+  checks this for bookmarks, check-in place names and images embedded from a post's text.
+- RSVPs (`IdnoPlugins/Event/RSVP.php`): the text is passed through `sanitize_html()` and
+  the address of the event through `UrlValidator::httpUrl()` when an RSVP is saved, and
+  again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
+  which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
+  `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
   build one from `rand()`, `mt_rand()`, `uniqid()` or the time. Authorization codes are

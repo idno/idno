@@ -944,27 +944,41 @@ namespace Idno\Common {
         }
 
         /**
-         * Retrieve a single record by its URL slug
+         * Retrieve a single record by its URL slug.
+         *
+         * Slugs are stored percent-encoded (see prepareSlug()), but the slug taken from a request
+         * may be percent-encoded, with hex digits in either case, or already decoded, depending
+         * on the web server. It is looked up as given and then, if nothing was found, in the
+         * form prepareSlug() stores.
+         *
          * @param $slug
          * @return bool|Entity
          */
         static function getBySlug($slug)
         {
-            if (empty($slug)) {
+            if (empty($slug) || !is_string($slug)) {
                 return false;
             }
 
-            $entity = static::getOneFromAll(array('slug' => $slug));
-            // A slug is stored percent-encoded (`caf%C3%A9-notes`, see prepareSlug()), and the router hands a page the
-            // path segment decoded (`café-notes`): when what was given is not found as it is, the encoded form is.
-            if (empty($entity) && is_string($slug) && mb_check_encoding($slug, 'UTF-8')) {
-                $encoded = rawurlencode(rawurldecode($slug));
-                if ($encoded !== $slug) {
-                    $entity = static::getOneFromAll(array('slug' => $encoded));
-                }
+            // No slug is anything but UTF-8, and a database may refuse to compare other bytes
+            if (!mb_check_encoding($slug, 'UTF-8')) {
+                return false;
             }
 
-            return $entity;
+            if ($entity = static::getOneFromAll(array('slug' => $slug))) {
+                return $entity;
+            }
+
+            $decoded = rawurldecode($slug);
+            if (!mb_check_encoding($decoded, 'UTF-8')) {
+                return false;
+            }
+            $stored = rawurlencode($decoded);
+            if ($stored === $slug) {
+                return false;
+            }
+
+            return static::getOneFromAll(array('slug' => $stored));
         }
 
         /**
@@ -2267,7 +2281,8 @@ namespace Idno\Common {
                     case ':id':
                         return '([A-Za-z0-9]+)';
                     case ':slug':
-                        // Slugs are stored percent-encoded; the web server may hand the router the path decoded (`café`): both match
+                        // Any one path segment: the path may arrive percent-encoded or decoded
+                        // (see getBySlug()). No dot, so that file names are never slugs.
                         return '([^/.]+)';
                     case ':year':
                         return '[0-9]{4}';
@@ -2477,6 +2492,11 @@ namespace Idno\Common {
                         if ((strpos($source, 'https://brid-gy.appspot.com/') !== false) && in_array($mention['type'], array('like', 'share', 'rsvp'))) {
                             $permalink = \Idno\Core\Idno::site()->template()->getURLWithVar('known_from', $source, implode('', $mention['url']));
                         }
+                        // An address that can't be kept is replaced by the page that sent the
+                        // webmention, so that the same page sending again replaces its annotation
+                        if (\Idno\Core\UrlValidator::httpUrl($permalink) === '') {
+                            $permalink = $source;
+                        }
                         if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $mention['created'], $mention['title'], $mention['fields'])) {
                             $return = false;
                         }
@@ -2680,9 +2700,11 @@ namespace Idno\Common {
          */
         function addAnnotation($subtype, $owner_name, $owner_url, $owner_image, $content, $annotation_url = null, $time = null, $title = '', $extra_fields = [], $send_notification = true)
         {
-            $owner_url = strip_tags(filter_var($owner_url, FILTER_SANITIZE_URL));
-            $owner_image = strip_tags(filter_var($owner_image, FILTER_SANITIZE_URL));
-            $annotation_url = strip_tags(filter_var($annotation_url, FILTER_SANITIZE_URL));
+            // These are printed as the addresses of links and images, and may come from
+            // another site: keep them only if they are http or https addresses.
+            $owner_url = \Idno\Core\UrlValidator::httpUrl(strip_tags((string) filter_var($owner_url, FILTER_SANITIZE_URL)));
+            $owner_image = \Idno\Core\UrlValidator::httpUrl(strip_tags((string) filter_var($owner_image, FILTER_SANITIZE_URL)));
+            $annotation_url = \Idno\Core\UrlValidator::httpUrl(strip_tags((string) filter_var($annotation_url, FILTER_SANITIZE_URL)));
             $owner_name = strip_tags($owner_name);
             $title = strip_tags($title);
 

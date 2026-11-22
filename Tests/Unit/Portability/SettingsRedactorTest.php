@@ -14,7 +14,7 @@ final class SettingsRedactorTest extends TestCase
      */
     public static function secrets(): array
     {
-        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'sessiontoken'];
+        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'sessiontoken', 'dbstring', 'proxy_string', 'passcode'];
 
         return array_combine($keys, array_map(static fn (string $key): array => [$key], $keys));
     }

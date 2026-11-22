@@ -131,7 +131,8 @@ namespace Idno\Pages\File {
             // is for administrators only, whoever has its address. It fails closed: the key being there
             // restricts, whatever it holds, and without an administrator's session the answer is 403, before
             // anything of the file is read or sent.
-            $adminOnly = is_array($object->file) && array_key_exists('restricted', $object->file);
+            // `site_export` is the mark an earlier 2.0 development build put on an archive: it restricts the same way.
+            $adminOnly = is_array($object->file) && (array_key_exists('restricted', $object->file) || array_key_exists('site_export', $object->file));
             // An archive made by an earlier release has no mark: the one the settings record is an archive, and
             // restricted all the same (the setting is the request's own, loaded from the database, not an entity).
             if (!$adminOnly) {
@@ -140,6 +141,8 @@ namespace Idno\Pages\File {
             }
             if ($adminOnly && !\Idno\Core\Idno::site()->session()->isAdmin()) {
                 $this->setResponse(403);
+                // Not even the refusal may be kept by a cache
+                header('Cache-Control: private, no-store');
                 echo '';
                 return;
             }
