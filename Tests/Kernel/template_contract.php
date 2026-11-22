@@ -398,6 +398,21 @@ switch ($case) {
         $result['drawsAfter'] = $t->draw('only-core');
         break;
 
+    case 'exception-with-a-buffer-that-cannot-be-removed':
+        set_time_limit(10); // a loop that never ends fails the case instead of hanging it
+        $register('core');
+        $t = $template();
+        $before = ob_get_level();
+        try {
+            $t->draw('stuck');
+            $result = ['thrown' => false];
+        } catch (\Throwable $e) {
+            $result = ['thrown' => [get_class($e), $e->getMessage()]];
+        }
+        // The render's own buffer and the removable one below the stuck one cannot be reached: they stay, with the stuck one.
+        $result['levelsLeaked'] = ob_get_level() - $before;
+        break;
+
     case 'clone-of-the-template-object':
         $register('core');
         $t = $template();

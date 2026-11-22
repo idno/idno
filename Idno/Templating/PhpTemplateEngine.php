@@ -35,9 +35,7 @@ final class PhpTemplateEngine implements TemplateEngine
             return $render($template->path, $vars, $context);
         } catch (\Throwable $e) {
             // End the buffer this render opened (and any the template left open), discarding what it held, and no other
-            while (ob_get_level() > $level) {
-                ob_end_clean();
-            }
+            OutputBuffers::endDownTo($level);
 
             throw $e;
         }

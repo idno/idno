@@ -81,7 +81,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry and the renderer are wired below (the renderer's Twig engine stays unset until it exists).
-        'Templating' => ['LocatedTemplate.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TypeChain.php'],
+        'Templating' => ['LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TypeChain.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

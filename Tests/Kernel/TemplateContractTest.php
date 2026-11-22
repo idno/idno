@@ -360,6 +360,18 @@ final class TemplateContractTest extends TestCase
         $this->assertSame('var=null prop=null|after="assigned"|', $result['unset']);
     }
 
+    /**
+     * A buffer a template opened that PHP cannot remove ends the closing: what is above it is closed, it and what is below it
+     * stay, and the template's own exception is the one that propagates (no notice replaces it, nothing loops).
+     */
+    public function testAnExceptionWithABufferThatCannotBeRemovedPropagatesTheOriginalAndStops(): void
+    {
+        $this->assertSame(
+            ['thrown' => ['RuntimeException', 'thrown in a template'], 'levelsLeaked' => 3],
+            $this->runCase('exception-with-a-buffer-that-cannot-be-removed')
+        );
+    }
+
     public function testACloneOfTheTemplateObjectKeepsItsExtensionsAndVariablesToItself(): void
     {
         $result = $this->runCase('clone-of-the-template-object');

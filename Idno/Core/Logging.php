@@ -391,9 +391,7 @@ namespace Idno\Core {
                 }
             } catch (\Throwable $e) {
                 // A template that threw leaves its output buffer open: close it, discarding what it drew.
-                while (ob_get_level() > $bufferLevel) {
-                    ob_end_clean();
-                }
+                \Idno\Templating\OutputBuffers::endDownTo($bufferLevel);
                 try {
                     \Idno\Core\Idno::site()->logging()->error('Could not send the alert: ' . get_class($e));
                 } catch (\Throwable $ignored) {

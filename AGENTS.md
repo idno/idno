@@ -2519,7 +2519,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   engine has ended the buffer(s) its render opened (what they held is discarded; buffers opened before the render are left
   alone), so a draw nested any depth leaves the buffer level as it found it
   (`TemplateContractTest::testAnExceptionInATemplateLeavesNoOutputBufferOpen`, `testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen`).
-  `Logging::oopsAlert()` still closes any buffer a failing template left open: that stays as a defence.
+  `Idno\Templating\OutputBuffers::endDownTo($level)` does the closing (the engine and `Logging::oopsAlert()`, which stays as a defence, use it): a buffer PHP cannot remove (a handler without the removable or cleanable flags) stops it, with what is below it left as it is, and nothing is thrown or raised, so the exception being handled is never replaced and nothing loops (`Tests/Unit/Templating/OutputBuffersTest`, `TemplateContractTest::testAnExceptionWithABufferThatCannotBeRemovedPropagatesTheOriginalAndStops`). `View::endOutputBuffers()` already stops at a buffer it cannot end.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s
