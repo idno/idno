@@ -36,13 +36,14 @@ namespace Idno\Pages\Admin {
                     $report .= "Basic checks on installation discovered no problems.\n\n";
                 }
 
-                $config                       = \Idno\Core\Idno::site()->config();
-                $config->config['dbpass']     = '** REDACTED **';
-                $config->ini_config['dbpass'] = '** REDACTED **';
-                $config->config['site_secret']     = '** REDACTED **';
-                $config->config['smtp_password']   = '** REDACTED **';
+                // Secrets are left out by the rule the site export uses, see Config::redactSecrets()
+                $config = \Idno\Core\Idno::site()->config();
+                $running = [
+                    'config'     => \Idno\Core\Config::redactSecrets((array) $config->config),
+                    'ini_config' => \Idno\Core\Config::redactSecrets((array) $config->ini_config),
+                ];
 
-                $report .= "\nRunning config:\n---------------\n" . json_encode($config, JSON_PRETTY_PRINT) . "\n\n";
+                $report .= "\nRunning config:\n---------------\n" . json_encode($running, JSON_PRETTY_PRINT) . "\n\n";
                 $report .= "\$_SESSION:\n----------\n" . json_encode($_SESSION, JSON_PRETTY_PRINT) . "\n\n";
                 $report .= "\$_SERVER:\n---------\n" . json_encode($_SERVER, JSON_PRETTY_PRINT) . "\n\n";
 

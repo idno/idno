@@ -15,6 +15,31 @@ namespace Idno\Pages\Admin\Export {
             $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/export/');
         }
 
+        /**
+         * Store an export archive in the site's file storage, marked as an export. The mark
+         * (`site_export` in the file's metadata) is what makes the file page serve it to
+         * administrators only: see \Idno\Pages\File\View::isSiteExport().
+         *
+         * @param  string $path     Full local path to the archive
+         * @param  string $filename The name to store it under
+         * @return string|false The ID of the stored file
+         */
+        static function storeArchive($path, $filename)
+        {
+            $fs = \Idno\Core\Idno::site()->filesystem();
+            if (empty($fs) || empty($filename) || !file_exists($path)) {
+                return false;
+            }
+
+            $metadata = [
+                'filename'    => $filename,
+                'mime_type'   => 'application/octet-stream',
+                'site_export' => true,
+            ];
+
+            return $fs->storeFile($path, $metadata, $metadata);
+        }
+
         function postContent()
         {
 
@@ -67,7 +92,7 @@ namespace Idno\Pages\Admin\Export {
                                     }
                                     fclose($fp);*/
 
-                if ($file = File::createFromFile($path, $filename)) {
+                if ($file = static::storeArchive($path, $filename)) {
                     @unlink($path);
                     \Idno\Core\Idno::site()->config()->export_filename    = $filename;
                     \Idno\Core\Idno::site()->config()->export_file_id     = $file;

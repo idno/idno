@@ -79,8 +79,13 @@ namespace Idno\Core {
                 )
             );
 
-            // We now also want to output the current loaded config
-            file_put_contents($dir . $name . DIRECTORY_SEPARATOR . 'config.json', json_encode(\Idno\Core\Idno::site()->config(), JSON_PRETTY_PRINT));
+            // The settings saved in the database, without the secrets among them. Never the
+            // loaded configuration: that also holds what the site's configuration file and
+            // environment say (the database password, access keys of storage services).
+            file_put_contents(
+                $dir . $name . DIRECTORY_SEPARATOR . 'config.json',
+                json_encode(Config::redactSecrets(Idno::site()->config()->getStoredSettings()), JSON_PRETTY_PRINT)
+            );
 
             // Let's export everything.
             $fields = array();

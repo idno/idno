@@ -286,6 +286,27 @@ Each content plugin has an `Entry.php` entity class that defines
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
   files (e.g. Photo thumbnails) override `getAttachedFileIDs()`. Custom filesystems
   must implement `updateMetadata()` for this to apply.
+- Site export archive: `Idno\Pages\Admin\Export\Generate` builds an archive of the whole
+  site (`Migration::createCompressedArchive()`) and stores it with `Generate::storeArchive()`,
+  which marks the file `site_export` in its metadata. `Idno\Pages\File\View` serves a file
+  with that mark, or the file named by the `export_file_id` setting (archives stored before
+  the mark existed), to a logged-in administrator only, with
+  `Cache-Control: private, no-store`; everyone else gets 403. Don't store an archive with
+  `File::createFromFile()`. The archive's record dump is a full copy of the site and holds
+  the users' password hashes and the ActivityPub private keys, so the archive is as
+  sensitive as the database.
+- Showing or exporting the configuration: pass settings through
+  `\Idno\Core\Config::redactSecrets()` first. It replaces the value of every setting whose
+  name says it is a secret (`Config::isSecretSetting()`: "pass", "secret", "token", "key",
+  "salt", "credential", "private", "signature", `dbstring`, `proxy_string`) and the user
+  name and password inside any address. The diagnostics report and the export's
+  `config.json` both use it; never `json_encode()` the `Config` object itself, which holds
+  the database password and everything else from `config.ini`. `config.json` holds
+  `Config::getStoredSettings()` only: the saved settings, minus the ones that describe the
+  server (`Config::SERVER_SETTINGS`: database, paths, sessions, proxy) and whatever
+  `config.ini` or the environment sets. A plugin that stores a secret in the configuration must give the
+  setting a name the rule recognises. `Tests/Pages/Admin/ExportArchiveTest.php` checks all
+  of this.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to

@@ -51,6 +51,89 @@ namespace Idno\Core {
 
         public $ini_config = array();
 
+        /// What a secret is replaced with when the configuration is shown or exported
+        const REDACTED = '** REDACTED **';
+
+        /**
+         * A copy of some settings with the secrets among them replaced by self::REDACTED, for
+         * showing or exporting the configuration (the diagnostics report, the site export).
+         *
+         * A setting is taken to be a secret when its name says so: see isSecretSetting().
+         * A secret that is empty is left as it is, so that it can be seen that it is not set.
+         * Any other text that is an address with a user name and password in it
+         * (scheme://user:password@host) has those replaced. Lists of settings are gone
+         * through at every depth.
+         *
+         * @param  array $settings Settings by name
+         * @return array
+         */
+        static function redactSecrets(array $settings)
+        {
+            foreach ($settings as $name => $value) {
+                if (is_string($name) && static::isSecretSetting($name)) {
+                    if (!empty($value)) {
+                        $settings[$name] = static::REDACTED;
+                    }
+                } else if (is_array($value)) {
+                    $settings[$name] = static::redactSecrets($value);
+                } else if (is_string($value)) {
+                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/@\s]+@#i', '$1' . static::REDACTED . '@', $value);
+                }
+            }
+
+            return $settings;
+        }
+
+        /**
+         * Does the name of a setting say that its value is a secret? True for a name that
+         * contains "pass", "secret", "token", "key", "salt", "credential", "private" or
+         * "signature", and for the database connection string and the proxy string, which
+         * can hold a password. A name that ends in "expiry" or "lifetime" says how long a
+         * secret lasts, and is not one. A plugin that stores a secret in the configuration
+         * should give the setting such a name.
+         *
+         * @param  string $name
+         * @return bool
+         */
+        static function isSecretSetting($name)
+        {
+            if (preg_match('/(expiry|lifetime)$/i', (string) $name)) {
+                return false;
+            }
+
+            return (bool) preg_match('/pass|secret|token|key|salt|credential|private|signature|^dbstring$|^proxy_string$/i', (string) $name);
+        }
+
+        /// Settings that describe the server the site runs on (its database, paths, sessions,
+        /// outbound proxy) and not the site. They belong to the configuration file or the
+        /// environment, though save() can leave a copy of some of them in the database.
+        const SERVER_SETTINGS = [
+            'database', 'dbname', 'dbuser', 'dbpass', 'dbhost', 'dbport', 'dbstring', 'dbauthsrc',
+            'path', 'url', 'host', 'feed', 'uploadpath', 'upload_tmp_dir',
+            'session_path', 'session_hash_function', 'sessions_database', 'sessions_storage',
+            'cookie_jar', 'proxy_string', 'proxy_type', 'disable_ssl_verify',
+            'antiplugins', 'alwaysplugins', 'bypass_fulltext_search',
+        ];
+
+        /**
+         * The settings that were saved in the database by the site itself: the stored
+         * configuration record, without the settings that describe the server
+         * (self::SERVER_SETTINGS) and without anything that the site's configuration file or
+         * environment sets. (The record holds a copy of most of those values too, because
+         * save() writes the loaded configuration back.)
+         *
+         * @return array
+         */
+        function getStoredSettings()
+        {
+            $stored = \Idno\Core\Idno::site()->db()->getAnyRecord('config');
+            if (!is_array($stored)) {
+                return [];
+            }
+
+            return array_diff_key($stored, (array) $this->ini_config, array_flip(static::SERVER_SETTINGS));
+        }
+
         /**
          * We're overloading the "get" method for the configuration
          * class, so you can simply check $config->property to get

@@ -24,6 +24,16 @@ namespace Idno\Pages\File {
                 $this->noContent();
             }
 
+            // A site export holds everything on the site: administrators only, and no cache
+            // may keep it
+            $export = static::isSiteExport($object, $this->arguments[0]);
+            if ($export && !\Idno\Core\Idno::site()->session()->isAdmin()) {
+                $this->setResponse(403);
+                header('Cache-Control: private, no-store');
+                echo '';
+                return;
+            }
+
             // Enforce access control: if file is attached to an entity, check canRead()
             $restricted = false;
             if (!empty($object->file['attached_entity'])) {
@@ -59,7 +69,9 @@ namespace Idno\Pages\File {
 
             $this->lastModifiedGatekeeper($upload_ts); // 304 if we've not updated the object
 
-            if ($restricted) {
+            if ($export) {
+                header("Cache-Control: private, no-store");
+            } else if ($restricted) {
                 // Never let shared caches keep a copy of a file with restricted access
                 header("Cache-Control: private, no-cache");
             } else {
@@ -143,6 +155,27 @@ namespace Idno\Pages\File {
                     }
                 }
             }
+        }
+
+        /**
+         * Is this stored file an archive made by the site export (see
+         * \Idno\Pages\Admin\Export\Generate)? It is when its metadata says so, and also when
+         * it is the file the site remembers as its current export: archives stored by earlier
+         * versions carry no mark.
+         *
+         * @param  object $file The stored file
+         * @param  string $id   Its ID
+         * @return bool
+         */
+        static function isSiteExport($file, $id)
+        {
+            if (!empty($file->file['site_export'])) {
+                return true;
+            }
+
+            $current = \Idno\Core\Idno::site()->config()->export_file_id;
+
+            return !empty($current) && is_scalar($current) && (string) $current === (string) $id;
         }
 
         /**
