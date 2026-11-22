@@ -10,6 +10,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
     "tailwindcss": "^4.0.0",
+    "terser": "^5.51.4",
     "vite": "^8.3.8"
   },
   "dependencies": {
