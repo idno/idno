@@ -23,7 +23,8 @@
                     <?php
                         $value = "";
                     if (empty($vars['url'])) {
-                        $value = $vars['object']->inreplyto;
+                        // One address; an RSVP saved by an earlier version can hold a list
+                        $value = (string) current($vars['object']->getEventURLs());
                     } else {
                         $value = $vars['url'];
                     } ?>

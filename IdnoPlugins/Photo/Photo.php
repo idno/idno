@@ -279,14 +279,16 @@ namespace IdnoPlugins\Photo {
                 'mainEntityOfPage' => $this->getUrl(),
             ];
 
-            $attachments = $this->getAttachments();
-            $attachment = $attachments[0];
+            // A photo post can be without its file (the file was removed, for example)
+            if ($attachments = $this->getAttachments()) {
+                $attachment = $attachments[0];
 
-            $mainsrc = $attachment['url'];
-            $mainsrc = preg_replace('/^(https?:\/\/\/)/', \Idno\Core\Idno::site()->config()->getDisplayURL(), $mainsrc);
-            $mainsrc = \Idno\Core\Idno::site()->config()->sanitizeAttachmentURL($mainsrc);
+                $mainsrc = $attachment['url'];
+                $mainsrc = preg_replace('/^(https?:\/\/\/)/', \Idno\Core\Idno::site()->config()->getDisplayURL(), $mainsrc);
+                $mainsrc = \Idno\Core\Idno::site()->config()->sanitizeAttachmentURL($mainsrc);
 
-            $json['image'] = $mainsrc;
+                $json['image'] = $mainsrc;
+            }
 
             return $json;
         }
