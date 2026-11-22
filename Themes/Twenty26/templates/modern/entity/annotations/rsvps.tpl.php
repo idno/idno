@@ -10,15 +10,17 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
     $rsvps_by_response = ['yes' => '', 'maybe' => '', 'no' => '', 'etc' => ''];
 
     foreach ($vars['annotations'] as $locallink => $annotation) {
-        $permalink = !empty($annotation['permalink']) ? $annotation['permalink'] : $locallink;
+        // The addresses come from whoever sent the annotation: only http and https ones are printed
+        $permalink = \Idno\Core\UrlValidator::httpUrl(!empty($annotation['permalink']) ? $annotation['permalink'] : $locallink);
+        $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         $rsvp = !empty($annotation['rsvp']) ? strtolower(trim($annotation['rsvp'])) : 'etc';
 
         ob_start();
 ?>
             <div class="idno-annotation">
-                <?php if (!empty($annotation['owner_image'])) { ?>
+                <?php if ($owner_image !== '') { ?>
                 <img class="idno-annotation-avatar"
-                     src="<?= htmlspecialchars($annotation['owner_image']) ?>"
+                     src="<?= htmlspecialchars($owner_image) ?>"
                      alt="<?= htmlspecialchars($annotation['owner_name']) ?>" />
                 <?php } ?>
                 <div class="idno-annotation-content">
@@ -26,7 +28,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                     <br>
                     <span class="idno-entry-meta">
                         <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= date('M j, Y', $annotation['time']) ?></a>
-                        on <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= parse_url($permalink, PHP_URL_HOST) ?></a>
+                        on <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a>
                     </span>
                 </div>
                 <?php

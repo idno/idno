@@ -6,7 +6,10 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         }
     );
     foreach ($vars['annotations'] as $locallink => $annotation) {
-        $permalink = $annotation['permalink'] ? $annotation['permalink'] : $locallink;
+        // The addresses come from whoever sent the annotation: only http and https ones are printed
+        $permalink = \Idno\Core\UrlValidator::httpUrl($annotation['permalink'] ? $annotation['permalink'] : $locallink);
+        $owner_url = \Idno\Core\UrlValidator::httpUrl($annotation['owner_url']);
+        $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         // Anchor ID for this annotation, derived from the local link hash
         $anchorId = 'annotation-' . basename(parse_url($locallink, PHP_URL_PATH));
         // For direct comments (permalink is a local annotation URL), link to the anchor;
@@ -15,16 +18,16 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         $dateHref = $isLocalAnnotation ? '#' . $anchorId : $permalink;
 ?>
     <div class="idno-annotation h-cite" id="<?= htmlspecialchars($anchorId) ?>">
-        <?php if (!empty($annotation['owner_image'])) { ?>
-        <a href="<?= htmlspecialchars($annotation['owner_url']) ?>" class="u-url">
+        <?php if ($owner_image !== '') { ?>
+        <a href="<?= htmlspecialchars($owner_url) ?>" class="u-url">
             <img class="idno-annotation-avatar u-photo"
-                 src="<?= htmlspecialchars($annotation['owner_image']) ?>"
+                 src="<?= htmlspecialchars($owner_image) ?>"
                  alt="<?= htmlspecialchars($annotation['owner_name']) ?>" />
         </a>
         <?php } ?>
         <div class="idno-annotation-content">
             <div>
-                <a href="<?= htmlspecialchars($annotation['owner_url']) ?>" class="p-name u-url p-author h-card" rel="nofollow" style="font-weight:600;color:var(--color-text-strong)">
+                <a href="<?= htmlspecialchars($owner_url) ?>" class="p-name u-url p-author h-card" rel="nofollow" style="font-weight:600;color:var(--color-text-strong)">
                     <?= htmlspecialchars($annotation['owner_name']) ?>
                 </a>
                 <span class="idno-entry-meta">
@@ -43,7 +46,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
             <?php if (!empty($permalink) && !$isLocalAnnotation) { ?>
             <div class="idno-annotation-source">
                 via <a href="<?= htmlspecialchars($permalink) ?>" class="u-url" rel="nofollow">
-                    <?= parse_url($permalink, PHP_URL_HOST) ?>
+                    <?= htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?>
                 </a>
             </div>
             <?php } ?>

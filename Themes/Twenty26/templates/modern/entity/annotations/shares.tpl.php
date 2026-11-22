@@ -7,17 +7,20 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         }
     );
     foreach ($vars['annotations'] as $locallink => $annotation) {
-        $permalink = $annotation['permalink'] ? $annotation['permalink'] : $locallink;
+        // The addresses come from whoever sent the annotation: only http and https ones are printed
+        $permalink = \Idno\Core\UrlValidator::httpUrl($annotation['permalink'] ? $annotation['permalink'] : $locallink);
+        $owner_url = \Idno\Core\UrlValidator::httpUrl($annotation['owner_url']);
+        $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
 ?>
         <div class="idno-annotation">
-            <?php if (!empty($annotation['owner_image'])) { ?>
+            <?php if ($owner_image !== '') { ?>
             <img class="idno-annotation-avatar"
-                 src="<?= htmlspecialchars($annotation['owner_image']) ?>"
+                 src="<?= htmlspecialchars($owner_image) ?>"
                  alt="<?= htmlspecialchars($annotation['owner_name']) ?>" />
             <?php } ?>
             <div class="idno-annotation-content">
                 <span>
-                    <a href="<?= htmlspecialchars($annotation['owner_url']) ?>" rel="nofollow">
+                    <a href="<?= htmlspecialchars($owner_url) ?>" rel="nofollow">
                         <?= htmlentities($annotation['owner_name'], ENT_QUOTES, 'UTF-8') ?>
                     </a>
                     <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow">
@@ -27,7 +30,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                 <br>
                 <span class="idno-entry-meta">
                     <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= date('M j, Y', $annotation['time']) ?></a>
-                    on <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= parse_url($permalink, PHP_URL_HOST) ?></a>
+                    on <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a>
                 </span>
             </div>
             <?php
