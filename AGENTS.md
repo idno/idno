@@ -2473,7 +2473,7 @@ The container's services and the legacy filesystem:
   `Idno\Files\FileSystem` and `File` remain the bases.
 - The file page (`Idno\Pages\File\View`) positions a stream for a range request with
   `View::seekTo()`, which reads and discards up to the offset when the stream cannot seek (S3), and
-  reads the range's bytes (both positions inclusive) with `View::readRange()`, which stops at the end of the stream or on an empty or
+  streams the range's bytes (both positions inclusive) to the output 8 KiB at a time with `View::streamRange()` (a range of any size is never held in memory: `Tests/Pages/File/LargeRangeStreamingTest`, 64 MiB under `memory_limit=32M`), which stops at the end of the stream or on an empty or
   failed read (a stream shorter than the stored size never makes the page wait).
   The cache pool (see "The cache"), the Purifier cache and the Twig cache never use an `s3://` upload path as a
   directory: the Purifier and Twig caches use the temporary directory instead.
@@ -3122,7 +3122,7 @@ the CLI installer no longer writes one.
   (one range of bytes: `first-last`, `first-` or `-suffix`, both positions inclusive; any
   other header is ignored and the whole file is sent; a range with no byte in the file is
   answered 416 with `Content-Range: bytes */<size>`), and the answer holds exactly the bytes
-  its `Content-Length` and `Content-Range` name (`View::seekTo()`, then `View::readRange()`).
+  its `Content-Length` and `Content-Range` name (`View::seekTo()`, then `View::streamRange()`).
   `Tests/Pages/File/RangeRequestTest.php` and `Tests/Characterisation/FileServingTest` check this.
 - WebSub: `Pages\Pubsubhubbub\Callback` answers the hub's challenge, which comes from the
   request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML.

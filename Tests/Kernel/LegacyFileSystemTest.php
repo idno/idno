@@ -489,8 +489,19 @@ final class LegacyFileSystemTest extends IdnoTestCase
         // Both positions of a range are inclusive: bytes 2 to 5 are four bytes, the number the response's
         // Content-Length announces. The file page used to read $end bytes (five here) and rely on the
         // client cutting the body, and announced one byte too few.
-        $this->assertSame('2345', View::readRange($stream, 2, 5));
+        $this->assertSame('2345', $this->streamed($stream, 2, 5));
         fclose($stream);
+    }
+
+    /** The bytes View::streamRange() writes for a range, collected. */
+    private function streamed($stream, int $start, int $end): string
+    {
+        $out = '';
+        View::streamRange($stream, $start, $end, function (string $chunk) use (&$out): void {
+            $out .= $chunk;
+        });
+
+        return $out;
     }
 
     public function testARangeReadStopsWhenTheStreamEndsEarly(): void
@@ -502,7 +513,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
         View::seekTo($stream, 4);
 
         $started = microtime(true);
-        $this->assertSame('456789', View::readRange($stream, 4, 2000));
+        $this->assertSame('456789', $this->streamed($stream, 4, 2000));
         $this->assertLessThan(5.0, microtime(true) - $started);
         fclose($stream);
     }

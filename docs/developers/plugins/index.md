@@ -57,10 +57,10 @@ specifying a minimum version of those plugins):
 The requirements section may also define a minimum PHP version and
 Idno core version.
 
-    php =               8.3
+    php =               8.4
     known =              1.6
 
-This plugin requires PHP >= 8.3 or higher and Idno >= 1.6.
+This plugin requires PHP >= 8.4 or higher and Idno >= 1.6.
 
 You can also further refine the known requirements by specifying a build version.
 

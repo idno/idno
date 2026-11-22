@@ -36,29 +36,36 @@ namespace Idno\Pages\File {
         }
 
         /**
-         * Read the bytes of a range from a stream positioned at its first byte (seekTo()): the bytes from
-         * $start to $end, both positions inclusive, so exactly as many as the response's Content-Length
-         * announces; fewer when the stream ends first, or a read returns nothing or fails: it never waits
-         * for bytes that do not come.
+         * Write the bytes of a range from a stream positioned at its first byte (seekTo()) to the output,
+         * 8 KiB at a time, so that a range of any size is never held in memory: the bytes from $start to
+         * $end, both positions inclusive, so exactly as many as the response's Content-Length announces;
+         * fewer when the stream ends first, or a read returns nothing or fails: it never waits for bytes
+         * that do not come.
          *
-         * @param  resource $stream
-         * @param  int      $start
-         * @param  int      $end
-         * @return string
+         * @param  resource      $stream
+         * @param  int           $start
+         * @param  int           $end
+         * @param  callable|null $write  Called with each piece; null echoes it
+         * @return int The number of bytes written
          */
-        public static function readRange($stream, $start, $end)
+        public static function streamRange($stream, $start, $end, $write = null)
         {
-            $length = $end - $start + 1;
-            $buffer = '';
-            while (strlen($buffer) < $length) {
-                $chunk = fread($stream, min(8192, $length - strlen($buffer)));
+            $length  = $end - $start + 1;
+            $written = 0;
+            while ($written < $length) {
+                $chunk = fread($stream, min(8192, $length - $written));
                 if ($chunk === false || $chunk === '') {
                     break;
                 }
-                $buffer .= $chunk;
+                if ($write === null) {
+                    echo $chunk;
+                } else {
+                    $write($chunk);
+                }
+                $written += strlen($chunk);
             }
 
-            return $buffer;
+            return $written;
         }
 
         // Handle GET requests to the entity
@@ -165,7 +172,7 @@ namespace Idno\Pages\File {
                 if ($stream = $object->getResource()) {
                     self::seekTo($stream, $c_start);
 
-                    echo self::readRange($stream, $c_start, $c_end);
+                    self::streamRange($stream, $c_start, $c_end);
                 } else {
                     \Idno\Core\Idno::site()->logging()->error('Could not open stream.');
                 }
