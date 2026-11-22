@@ -32,7 +32,7 @@ is bad.
 
 ## Naming conventions
 
-* Namespaces should be UpperCamelCase, with a matching /UpperCamelCase/ file path
+* Namespaces should be UpperCamelCase, with a matching /UpperCamelCase/ file path. Code in a plugin or theme uses the braced form, `namespace IdnoPlugins\Foo { ... }`.
 * Classes should use UpperCamelCase, with a matching UpperCamelCase.php file.
 * All method names should use lower camelCase 
 * All variable names should use snake_case.
@@ -67,11 +67,11 @@ switch ($var) {
 ## Variables
 
 * You should try and make use of [type hinting](https://www.php.net/manual/en/functions.arguments.php#functions.arguments.type-declaration) in your function arguments.
-* Since Idno now no longer supports PHP < 7, you should also try and make use of return type hinting where appropriate (advanced warning, in future we will turn on strict type checking for this!)
+* Since Idno requires PHP 8.3 or later, you should also try and make use of return type hinting where appropriate (advanced warning, in future we will turn on strict type checking for this!)
 
 ## Error handling
 
-* Notice errors are errors, please develop your code with ```pedantic_mode = true;``` set in your config.ini
+* Notice errors are errors, please develop your code with ```pedantic_mode = true``` set in your config.ini (PHP notices and warnings then throw exceptions)
 * Unless there's a VERY good reason you can explain (and should explain) in comments, never use the '@' error suppression operator.
 
 ## Fetching URLs
@@ -101,7 +101,7 @@ Use [phpDocumentor blocks](http://docs.phpdoc.org/references/phpdoc/basic-syntax
 ## PHP Files
 
 * Use Unix line endings
-* End your file with a single blank line
+* End your file with a single newline (`.editorconfig` sets both of these)
 * You should never end your .php file with ```?>```, as this leads to fragile code.
 
 ## PHP tags

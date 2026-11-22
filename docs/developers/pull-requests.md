@@ -1,6 +1,6 @@
 # Pull Requests
 
-Once you're ready to send code back to the Idno project, you need to submit a pull request to the [core GitHub repository](https://github.com/idno/idno).
+Once you're ready to send code back to the Idno project, you need to submit a pull request to the [core GitHub repository](https://github.com/idno/idno), against the `dev` branch. The pull request template includes a checklist; please work through it before asking for a review.
 
 ## Branch names
 
@@ -12,7 +12,7 @@ Please see [advice on writing commit messages](commit-messages.md), which equall
 
 ## Reviews
 
-Every pull request, including those by Idno's core developers, needs to be reviewed by another developer. We recommend using [GitHub Hub](https://github.com/github/hub) to make this easier from the command line. For example, to submit a pull-request with `benwerd` as the reviewer, you would just enter `github pull-request -r benwerd`.
+Every pull request, including those by Idno's core developers, needs to be reviewed by another developer. We recommend using the [GitHub CLI](https://cli.github.com/) to make this easier from the command line. For example, to submit a pull request with `benwerd` as the reviewer, you would just enter `gh pr create --reviewer benwerd`.
 
 Please note that even if there is a review requested from a particular individual, anyone is free to give a review! Reviews from the wider community are very much appreciated. GitHub makes it easy to reject, request changes to, or approve a pull request through a code review.
 

@@ -9,10 +9,12 @@ we welcome contributions. See [the open source community](../community/index.md)
 * [Coding standards](standards.md)
 * [Commit messages](commit-messages.md)
 * [Submitting a pull request](pull-requests.md)
+* [Testing](testing.md)
 
 ## Idno components
 
 * [Plugins](plugins/index.md)
 * [Templating](templating/index.md)
 * [Themes](themes/index.md)
+* [Translating Idno](languages/index.md)
 * [API](plugins/api.md)

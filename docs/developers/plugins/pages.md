@@ -12,12 +12,14 @@ process when the plugin is loaded.
         // Page handling code goes here
     }
 
-There are two main methods to define new page routes. In each case, a regular expression is used to define the URL route
-itself, and the name of a class that inherits `\Idno\Common\Page` that will handle the route is supplied.
+There are two main methods to define new page routes. In each case, a pattern is used to define the URL route
+itself, and the name of a class that inherits `\Idno\Common\Page` that will handle the route is supplied. The class must
+exist when the route is registered; otherwise the route is skipped and an error is logged.
 
 !!! note "Note"
-    * Page route regular expressions start with a preceding slash ("/"), and should be agnostic about whether they end with a slash (i.e. end your regexp with "/?").
-    * All page classes must extend `\Idno\Common\Page` and be stored in the `/Pages/` subfolder of your plugin.
+    * Page route patterns start with a preceding slash ("/"), and should be agnostic about whether they end with a slash (i.e. end your pattern with "/?").
+    * Patterns are regular expressions, and may also contain these tokens, which match part of the URL and pass it to your page in `$this->arguments`: `:id` (letters, numbers and hyphens), `:alpha` (letters, numbers, hyphens and underscores), `:string` (letters only) and `:number` (digits only).
+    * All page classes must extend `\Idno\Common\Page`. By convention they are stored in the `/Pages/` subfolder of your plugin.
 
 ### Defining a new page route
 
@@ -34,7 +36,7 @@ Here, your page class should be stored in the `/Pages/` subfolder of your plugin
 ### Overriding an existing page route
 
 Sometimes you want to override a page route that is provided by the core framework or another plugin. While you can use
-`addPageHandler()` here too, it's not guaranteed to take control of the route. Instead, you should use
+`addRoute()` here too, it's not guaranteed to take control of the route. Instead, you should use
 `\Idno\Core\Idno::site()->routes()->hijackRoute($route, $class)`.
 
 The syntax is the same:
@@ -49,7 +51,7 @@ The syntax is the same:
 By default, pages are hidden behind an authentication wall if the site has been configured to be a walled garden.
 However, you may wish to show it anyway, for example to host an "about" page or create a way to apply to join.
 
-In these cases, simply add a third parameter to `addPageHandler()` and `hijackPageHandler()`, set to `true`. For the
+In these cases, simply add a third parameter to `addRoute()` and `hijackRoute()`, set to `true`. For the
 examples used above, this would look like:
 
     function registerPages()
@@ -60,7 +62,7 @@ examples used above, this would look like:
 
 ## Handling page loads
 
-Once a page route has been defined, an object with the class specified in `addPageHandler()` or `hijackPageHandler()` is
+Once a page route has been defined, an object with the class specified in `addRoute()` or `hijackRoute()` is
 instantiated. This _must_ extend `\Idno\Common\Page`. For example:
 
     namespace IdnoPlugins\MyPluginName\Pages {
@@ -69,7 +71,7 @@ instantiated. This _must_ extend `\Idno\Common\Page`. For example:
         }
     }
 
-This file is autoloaded, and _must_ be stored with the filename `Pages/MyPage.php` relative to your plugin's root
+This file is autoloaded, so its path must match its namespace: by convention, `Pages/MyPage.php` relative to your plugin's root
 folder.
 
 GET and POST requests are handled using methods, as described below.
@@ -82,7 +84,7 @@ a simple [template](../templating/index.md), you could use:
     function getContent()
     {
         $t = \Idno\Core\Idno::site()->template();
-        $t->body  = $t->draw('template/name/');
+        $t->body  = $t->draw('template/name');
         $t->title = 'Title of your page';
         $t->drawPage();
     }
@@ -94,19 +96,19 @@ Handling a POST request is very similar to handling GET requests. You just call 
     function postContent()
     {
         $t = \Idno\Core\Idno::site()->template();
-        $t->body  = $t->draw('template/name/');
+        $t->body  = $t->draw('template/name');
         $t->title = 'Title of your page';
         $t->drawPage();
     }
 
 !!! warning "Warning"
-    You can't simply call a POST request in Idno. You need to [sign your requests](forms.md) otherwise Idno will reject your content.
+    You can't simply call a POST request in Idno. You need to [sign your requests](forms.md) or authenticate them as [API calls](api.md), otherwise Idno will reject your content.
 
 Because POST requests [can accept JSON or POST data](forms.md) via an API call or a standard form submission, every
 page in Idno that accepts POST requests is also an API endpoint.
 
-If your POST request is being submitted via JSON, the response template will automatically be set to JSON, and any
-response data will come back to the user as structured JSON.
+If your request asks for JSON (with an `Accept: application/json` header, or `_t=json`) or is authenticated as an API call, the response template will automatically be set to JSON, and any
+response data will come back to the user as structured JSON. A JSON request body is parsed for you, and its values are available through `getInput()`.
 
 !!! note "Note" 
     Browser-based POST requests will automatically forward the user to the homepage after execution unless the user is forwarded elsewhere first.
@@ -119,7 +121,7 @@ control access, or otherwise add logical nuance to your pages?
 #### Accept input
 
 To take input from the user, use the `$this->getInput($name)` method. This will retrieve GET data in a GET request
-and POST or JSON data in a POST request.
+and POST or JSON data in a POST request. You can pass a default value as a second argument: `$this->getInput($name, $default)`.
 
 For example, to retrieve an ID in a GET request:
 
@@ -127,6 +129,11 @@ For example, to retrieve an ID in a GET request:
     {
         $id = $this->getInput('id');
     }
+
+#### Route arguments
+
+Any parts of the URL matched by your route pattern are available, in order, in `$this->arguments`. For example, for
+a route registered as `/status/edit/:id/?`, the ID is in `$this->arguments[0]`.
 
 #### Forward the page
 
@@ -137,13 +144,13 @@ For example, to forward the user to `/some/arbitrary/page`:
 
     function getContent()
     {
-        $this->forward(\Idno\Core\Idno::site()->getDisplayURL() . 'some/arbitrary/page/');
+        $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'some/arbitrary/page/');
     }
 
 #### Require authentication
 
-Use `$this->gatekeeper()` to require authentication. If the user isn't logged in, they will be asked to authenticate
-before proceeding, and then brought back to the page. For example:
+Use `$this->gatekeeper()` to require authentication. If the user isn't logged in, they will see the "access denied"
+page and the response code will be 403. For example:
 
     function getContent()
     {
@@ -154,8 +161,10 @@ There are a number of variants on this function:
 
 * `$this->createGatekeeper()` checks to ensure the user is logged in and can create content
 * `$this->adminGatekeeper()` checks to ensure the user is logged in and is a site administrator
-* `$this->reverseGatekeeper()` checks to ensure the user is logged _out_ and otherwise forwards them to the homepage
-* `$this->sslGatekeeper()` checks to ensure the page is being accessed via SSL/TLS
+* `$this->reverseGatekeeper()` checks to ensure the user is logged _out_ and otherwise shows the "access denied" page
+* `$this->sslGatekeeper()` redirects the request to HTTPS if the page is being accessed without SSL/TLS and the site is configured for SSL
+* `$this->xhrGatekeeper()` denies access unless the request was made by XMLHttpRequest
+* `$this->tokenGatekeeper()` denies access unless the request carries a valid [form token](forms.md)
 
 #### Set the HTTP response code
 
@@ -168,11 +177,11 @@ Use `$this->setResponse($code)` to set the HTTP response code. For example, to s
 
 #### Get the page URL
 
-Use `$this->currentURL()` to retrieve the full current page URL.
+Use `$this->currentUrl()` to retrieve the full current page URL.
 
     function getContent()
     {
-        $url = $this->currentURL();
+        $url = $this->currentUrl();
     }
 
 #### Deny access or declare content missing

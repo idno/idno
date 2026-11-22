@@ -33,12 +33,12 @@ php idno.php build-lang theme:Cherwell
 php idno.php build-lang all
 ```
 
-This will parse all PHP files in the target and extract translatable strings into the appropriate ```.pot``` file.
+This will parse all PHP files in the target and extract translatable strings into the appropriate ```.pot``` file: ```languages/source/idno.pot``` for core, and ```languages/DOMAIN.pot``` inside the plugin or theme, where the domain is the lower-case plugin or theme name.
 
 The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all ```->_()``` and ```->esc_()``` method calls.
 
 !!! note "Note"
-    You can also run ```grunt build-lang``` from the project root or from any plugin/theme directory, which will invoke the same command.
+    You can also run ```npm run grunt -- build-lang``` from the project root, which runs ```php idno.php build-lang all```. A plugin can include its own Gruntfile with a `build-lang` task, as `IdnoPlugins/Status/Gruntfile.js` does.
 
 !!! note "Note"
     If you have added a new translation string to Idno's core code or templates, run ```php idno.php build-lang core``` to update the ```idno.pot``` file.
@@ -80,6 +80,8 @@ E.g.
 ```
 echo \Idno\Core\Idno::site()->language()->_('This is the string to translate');
 ```
+
+To substitute values into the string, pass them as an array; they are applied with `vsprintf`, e.g. `_('Hello %s', [$name])`. Use `esc_()` instead of `_()` to get the result HTML-escaped.
 
 
 ## Adding a translation for a language (alternative)

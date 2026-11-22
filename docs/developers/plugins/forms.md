@@ -21,7 +21,7 @@ To do this, simply include form signing code with a unique, relative URL for you
 
     <?= \Idno\Core\Idno::site()->actions()->signForm('your/form/url') ?>
 
-The `postContent()` method in [the page handler class](pages.md) will seamlessly validate this token.
+The `postContent()` method in [the page handler class](pages.md) will seamlessly validate this token. Tokens expire after the number of seconds set by `form_token_expiry` in the site configuration (3600 by default).
 
 An example of a complete form might be:
 
@@ -46,14 +46,16 @@ You can create a link to submit a properly-signed POST request using
 For example, the code for the logout button is as follows:
 
     <?= \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/logout',
-                                                 'Sign out')); ?>
+                                                 \Idno\Core\Idno::site()->language()->_('Sign out'), null, ['class' => '']); ?>
 
 `$data_to_include` is an optional array of key => value pairs that will be sent with the POST request.
-`$extra_configuration` is an optional array of options that help Idno decide how to style the link. These include:
+`$extra_configuration` is an optional array of options that help Idno decide how to build the link. These include:
 
 * `class`: a CSS class to apply
-* `confirm`: if true, will prompt the user to confirm their action before submitting the POST request
+* `title`: a title attribute for the link
+* `confirm`: if true, will prompt the user to confirm their action before submitting the request
 * `confirm-text`: a custom text label for use with `confirm`
+* `method`: the HTTP method to use (`GET`, `POST`, `PUT` or `DELETE`; `POST` by default)
 
 ## API form submission
 
@@ -83,9 +85,11 @@ First, let's reproduce our form from above, which sends the contents of a URL fi
 Next, let's make sure that our [plugin class](class.md) in `/IdnoPlugins/MyPlugin/Main.php` handles that page
 appropriately:
 
-    namespace \IdnoPlugins\MyPlugin {
-        function registerPages() {
-            \Idno\Core\Idno::site()->routes()->addRoute('/myplugin/custompage/?', '\IdnoPlugins\MyPlugin\Pages\CustomPage');
+    namespace IdnoPlugins\MyPlugin {
+        class Main extends \Idno\Common\Plugin {
+            function registerPages() {
+                \Idno\Core\Idno::site()->routes()->addRoute('/myplugin/custompage/?', '\IdnoPlugins\MyPlugin\Pages\CustomPage');
+            }
         }
     }
 
@@ -94,7 +98,7 @@ input appropriately.
 
 First, we set up [the page class](pages.md):
 
-    namespace \IdnoPlugins\MyPlugin\Pages {
+    namespace IdnoPlugins\MyPlugin\Pages {
         class CustomPage extends \Idno\Common\Page {
             function getContent() { /* We won't use this for now */ }
             function postContent() {
@@ -108,7 +112,7 @@ simply need to call `$this->getInput('my_url');`.
 
 For example, to output the contents of the field to the screen:
 
-    namespace \IdnoPlugins\MyPlugin\Pages {
+    namespace IdnoPlugins\MyPlugin\Pages {
         class CustomPage extends \Idno\Common\Page {
             function getContent() { /* We won't use this for now */ }
             function postContent()
@@ -122,9 +126,9 @@ For example, to output the contents of the field to the screen:
 
 We could also send the `my_url` variable to the page handler in a link:
 
-<?= \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'myplugin/custompage',
-                                                 'This link sends a pre-defined value to the page',
-                                                 array('my_url' => 'http://some/predefined/url'))); ?>
+    <?= \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'myplugin/custompage',
+                                                     'This link sends a pre-defined value to the page',
+                                                     array('my_url' => 'http://some/predefined/url')); ?>
 
 The page handler doesn't need to be modified in any way.
 
