@@ -275,6 +275,18 @@ Each content plugin has an `Entry.php` entity class that defines
   sent it is destroyed when the request ends. In particular, don't decide what a request is
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
+- Account pages are closed to API requests: a page registered for a route under
+  `/account/` (settings, password, API key, access tokens, and what plugins put there)
+  answers 403 to any request for which `Session::isAPIRequest()` is true by the time the
+  page is dispatched, that is, one signed with `X-IDNO-USERNAME` / `X-IDNO-SIGNATURE`. An
+  API key or token is a credential for publishing, and must not be enough to change the
+  password or email address or to read the key. `PageHandler` records the page classes
+  when `addRoute()` / `hijackRoute()` is called with such a pattern
+  (`PageHandler::isAccountPage()`), and `PageHandler::serve()` refuses them in a
+  `before_handler` hook; the decision is made from how the page was registered, never
+  from the address of the request. Put a page that manages credentials under `/account/`.
+  Everywhere else a signed request acts as its user with no form token, and is never an
+  admin (`User::isAdmin()`). `Tests/API/AccountPagesTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with

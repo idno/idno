@@ -18,6 +18,63 @@ namespace Idno\Core {
         private $routes = [];
         private $public_routes = [];
 
+        /// Page classes registered under /account/, as lower-case class names without a leading backslash
+        private $account_pages = [];
+
+        /**
+         * Is this pattern for a page under /account/? Those are the account pages: where a
+         * user's password, email address, API key and access tokens are managed.
+         *
+         * @param  string $pattern A route pattern, as it is given to addRoute()
+         * @return bool
+         */
+        static function isAccountPattern(string $pattern) : bool
+        {
+            return (bool) preg_match('#^/?account(/|$)#i', $pattern);
+        }
+
+        /**
+         * Is this the class of an account page: one that was registered for a route under
+         * /account/? Decided by how the page was registered, not by the address of the
+         * current request.
+         *
+         * @param  string|object $class
+         * @return bool
+         */
+        function isAccountPage($class) : bool
+        {
+            if (is_object($class)) {
+                $class = get_class($class);
+            }
+
+            return is_string($class) && isset($this->account_pages[strtolower(ltrim($class, '\\'))]);
+        }
+
+        /**
+         * Serve the current request. An API request (one authenticated by an API signature
+         * or an access token rather than by a browser session) is refused on account pages,
+         * so that an API key or token is not enough to take the account over.
+         *
+         * @param array $routes
+         */
+        public static function serve($routes)
+        {
+            static::hook(
+                'before_handler', function ($params = array()) {
+                    $site = \Idno\Core\Idno::site();
+                    $handler = $params['discovered_handler'] ?? null;
+                    if ($site->session()->isAPIRequest() && $site->routes()->isAccountPage($handler)) {
+                        $site->logging()->warning('API request to an account page refused: ' . ltrim((string) $handler, '\\'));
+                        $site->template()->autodetectTemplateType();
+                        $site->session()->addErrorMessage($site->language()->_('Account pages are not available to API requests.'));
+                        (new \Idno\Pages\Homepage())->deniedContent();
+                    }
+                }
+            );
+
+            parent::serve($routes);
+        }
+
         function routeTokens()
         {
             return array(
@@ -38,6 +95,9 @@ namespace Idno\Core {
          */
         function addRoute(string $pattern, string $handler, bool $public = false)
         {
+            if (static::isAccountPattern($pattern) && class_exists($handler)) {
+                $this->account_pages[strtolower(ltrim($handler, '\\'))] = true;
+            }
             if (defined('IDNO_SUBDIRECTORY')) {
                 if (substr($pattern, 0, 1) != '/') {
                     $pattern = '/' . $pattern;
@@ -65,6 +125,9 @@ namespace Idno\Core {
          */
         function hijackRoute(string $pattern, string $handler, bool $public = false)
         {
+            if (static::isAccountPattern($pattern) && class_exists($handler)) {
+                $this->account_pages[strtolower(ltrim($handler, '\\'))] = true;
+            }
             $pattern = strtr($pattern, $this->routeTokens());
             if (class_exists($handler)) {
                 unset($this->routes[$pattern]);
