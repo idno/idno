@@ -27,7 +27,7 @@ if (!empty($vars['object']->pageTitle)) {
     if (empty($vars['feed_view'])) {
 
         ?>
-            <h2 class="idno-bookmark"><?php echo $icon?><a href="<?php echo $vars['object']->body; ?>" class="<?php echo $class ?> p-name"
+            <h2 class="idno-bookmark"><?php echo $icon?><a href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->body)); ?>" class="<?php echo $class ?> p-name"
                 target="_blank"><?php echo $this->parseURLs(htmlentities(strip_tags($body))) ?></a>
             </h2>
         <?php

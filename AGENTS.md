@@ -276,6 +276,15 @@ Each content plugin has an `Entry.php` entity class that defines
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
+- Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
+  that a person or another site supplied with `htmlspecialchars()`, in text and inside an
+  attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe
+  inside an attribute, because both keep the double quote. An address that goes into
+  `href` or `src` must also be an http or https one, or a browser runs it
+  (`javascript:`): pass it through `\Idno\Core\UrlValidator::httpUrl()`, which returns
+  the address or an empty string, and then through `htmlspecialchars()`. Do this where the
+  value is printed even if it was checked when it was stored, because values stored
+  before the check are not rewritten. `Tests/Core/UrlValidatorTest.php` checks `httpUrl()`.
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
   `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with
@@ -343,6 +352,10 @@ Each content plugin has an `Entry.php` entity class that defines
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+- `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
+  that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
+  only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`
+  checks this for bookmarks, check-in place names and images embedded from a post's text.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never

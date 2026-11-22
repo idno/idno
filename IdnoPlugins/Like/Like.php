@@ -137,7 +137,12 @@ namespace IdnoPlugins\Like {
                 }
             }
 
-            $body = trim($body);
+            // The address is printed as a link, so only an http or https one is accepted
+            // (FILTER_VALIDATE_URL, below, also accepts "javascript://...")
+            $body = \Idno\Core\UrlValidator::httpUrl($body);
+            $bookmarkof = \Idno\Core\UrlValidator::httpUrl($bookmarkof);
+            $likeof = \Idno\Core\UrlValidator::httpUrl($likeof);
+            $repostof = \Idno\Core\UrlValidator::httpUrl($repostof);
             if (filter_var($body, FILTER_VALIDATE_URL) || filter_var($bookmarkof, FILTER_VALIDATE_URL) || filter_var($likeof, FILTER_VALIDATE_URL) || filter_var($repostof, FILTER_VALIDATE_URL)) {
                 if (!empty($body) || !empty($bookmarkof) || !empty($likeof) || !empty($repostof)) {
                     $this->body = $body;
