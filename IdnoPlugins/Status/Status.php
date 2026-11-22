@@ -19,7 +19,8 @@ namespace IdnoPlugins\Status {
                 return new Reply();
             }
 
-            if ($body[0] == '@') {
+            // An empty or missing body is an ordinary new status
+            if (is_string($body) && substr($body, 0, 1) == '@') {
                 return new Reply();
             }
 

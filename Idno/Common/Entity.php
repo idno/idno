@@ -1891,14 +1891,18 @@ namespace Idno\Common {
         }
 
         /**
-         * Get the URL of the object this entity is in reply to
+         * Get the URLs of the objects this entity is in reply to.
+         *
+         * This only reads: the entity keeps the value in the form it has (some entities,
+         * an RSVP for example, hold a single URL as a string and expect to find it so).
+         *
          * @return array|bool
          */
         function getReplyToURLs()
         {
             if (!empty($this->inreplyto)) {
                 if (!is_array($this->inreplyto)) {
-                    $this->inreplyto = [$this->inreplyto];
+                    return [$this->inreplyto];
                 }
 
                 return $this->inreplyto;
