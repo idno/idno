@@ -399,6 +399,10 @@ Each content plugin has an `Entry.php` entity class that defines
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+- `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
+  that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
+  only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`
+  checks this for bookmarks, check-in place names and images embedded from a post's text.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
