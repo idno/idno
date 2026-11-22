@@ -18,13 +18,23 @@ final class TemplateRenderer
      */
     public static $trace = null;
 
+    /** Shared by every copy of the renderer (withSlots() copies it for each draw of a template object): whether the deprecation was logged. */
+    private readonly \stdClass $deprecated;
+
+    /**
+     * @param \Closure|null $logger gives the logger (a closure: the logger needs the legacy application, which is not built when the
+     *                              renderer is), for the deprecation of a `modern` file
+     */
     public function __construct(
         private readonly TemplateLocator $locator,
         private SlotRegistry $slots,
         private readonly PhpTemplateEngine $php,
         private readonly ?TemplateEngine $twig = null,
+        private readonly ?\Closure $logger = null,
     )
     {
+        $this->deprecated = new \stdClass();
+        $this->deprecated->logged = false;
     }
 
     /**
@@ -139,6 +149,9 @@ final class TemplateRenderer
         if ($located === null) {
             return null;
         }
+        if ($located->type === 'modern') {
+            $this->logModernDeprecation($located);
+        }
         if ($located->engine === 'twig') {
             if ($this->twig === null) {
                 throw new \LogicException('A Twig template was found but this renderer has no Twig engine');
@@ -148,6 +161,24 @@ final class TemplateRenderer
         }
 
         return $this->php->render($located, $this->value($vars), $context);
+    }
+
+    /**
+     * A `modern` template directory (a third-party plugin's, written for the Twenty26 theme) still wins on web pages for one
+     * release. The first such file a process draws logs one line naming it: a request is a process, so it is one line a request.
+     */
+    private function logModernDeprecation(LocatedTemplate $located): void
+    {
+        if ($this->deprecated->logged || $this->logger === null) {
+            return;
+        }
+        $this->deprecated->logged = true;
+        $path = (string) preg_replace('/[[:cntrl:]]+/', ' ', $located->path);
+        try {
+            ($this->logger)()->warning('Deprecated: the template ' . $path . ' is in a `modern` template directory. The `modern` template type is retired and its directories are read for this release only: move the file to templates/default/.');
+        } catch (\Throwable) {
+            // A page is never refused because a line could not be logged
+        }
     }
 
     private function value(mixed $value): mixed

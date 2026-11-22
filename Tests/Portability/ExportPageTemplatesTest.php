@@ -37,7 +37,7 @@ final class ExportPageTemplatesTest extends PortabilityTestCase
      */
     public static function types(): array
     {
-        return ['default' => ['default'], 'the theme\'s' => ['modern']];
+        return ['default' => ['default']];
     }
 
     /**

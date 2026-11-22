@@ -1,1 +1,9 @@
-<li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/activitypub/')) echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/activitypub/"><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub'); ?></a></li>
+<?php
+    $page = \Idno\Core\Idno::site()->currentPage();
+    $baseUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+?>
+<a href="<?= $baseUrl ?>admin/activitypub/"
+   class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/activitypub/')) echo ' active'; ?>">
+    <?= $this->__(['icon' => 'globe'])->draw('shell/icon') ?>
+    <span><?= \Idno\Core\Idno::site()->language()->_('ActivityPub') ?></span>
+</a>

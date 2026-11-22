@@ -17,18 +17,16 @@ if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink(
     $tags = "";
 if (!empty($vars['object']->tags)) {
     $tags = $this->__(['tags' => $vars['object']->tags])->draw('forms/output/tags');
-
 }
 if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']->getTitle() != 'Untitled') {
-
     ?>
-    <h2 class="photo-title p-name"><a
-                href="<?php echo $vars['object']->getDisplayURL(); ?>"><?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?></a>
+    <h2 class="idno-entry-title p-name"><a
+                href="<?= $vars['object']->getDisplayURL() ?>"><?= htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8') ?></a>
     </h2>
 <?php } ?>
 
-<div class="e-content entry-content <?php if ($multiple) echo "multiple-images"; ?>"
-     data-num-pics="<?php echo $num_pics; ?>">
+<div class="idno-entry-body e-content entry-content <?php if ($multiple) echo "multiple-images"; ?>"
+     data-num-pics="<?= $num_pics ?>">
 
     <?php
     if (!empty($attachments)) {
@@ -37,8 +35,8 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
             if (!empty($currentPage) && !\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
                 if ($photoCount == 5 && $num_pics > $photoCount) {
                     ?>
-                    <div class="photo-view photo-view-more">
-                        <a href="<?php echo $vars['object']->getDisplayURL(); ?>"><?php echo \Idno\Core\Idno::site()->language()->_('%d more...', [($num_pics - $photoCount)]); ?></a>
+                    <div class="idno-photo-view idno-photo-view-more">
+                        <a href="<?= $vars['object']->getDisplayURL() ?>"><?= \Idno\Core\Idno::site()->language()->_('%d more...', [($num_pics - $photoCount)]) ?></a>
                     </div>
 
                     <?php
@@ -47,7 +45,6 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
                     break;
                 }
             }
-            //$mainsrc= \Idno\Core\Idno::site()->config()->getDisplayURL() . 'file/' . $attachment['_id'];
             $mainsrc = $attachment['url'];
 
             $filename = "";
@@ -55,16 +52,15 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
                 $filename = $attachment['filename'];
             if (!empty($vars['object']->thumbs_large) && !empty($vars['object']->thumbs_large[$filename])) {
                 $src = $vars['object']->thumbs_large[$filename]['url'];
-                // Old style
             } else if (!empty($vars['object']->thumbnail_large)) {
                 $src = $vars['object']->thumbnail_large;
-            } else if (!empty($vars['object']->thumbnail)) { // Backwards compatibility
+            } else if (!empty($vars['object']->thumbnail)) {
                 $src = $vars['object']->thumbnail;
             } else {
                 $src = $mainsrc;
             }
 
-            // Patch to correct certain broken URLs caused by https://github.com/idno/known/issues/526
+            // Patch to correct certain broken URLs
             $src = preg_replace('/^(https?:\/\/\/)/', \Idno\Core\Idno::site()->config()->getDisplayURL(), $src);
             $mainsrc = preg_replace('/^(https?:\/\/\/)/', \Idno\Core\Idno::site()->config()->getDisplayURL(), $mainsrc);
 
@@ -72,20 +68,20 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
             $mainsrc = \Idno\Core\Idno::site()->config()->sanitizeAttachmentURL($mainsrc);
 
             ?>
-            <div class="photo-view">
-                <a href="<?php echo (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) ? $this->makeDisplayURL($mainsrc) : $vars['object']->getDisplayURL(); ?>"
-                   data-gallery="<?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?>"
-                   data-original-img="<?php echo $this->makeDisplayURL($mainsrc) ?>"
-                   data-title="<?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?>"
-                   data-footer="<?php echo htmlentities(strip_tags($vars['object']->body), ENT_QUOTES, 'UTF-8'); ?>"><img
+            <div class="idno-photo-view">
+                <a href="<?= (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) ? $this->makeDisplayURL($mainsrc) : $vars['object']->getDisplayURL() ?>"
+                   data-gallery="<?= htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8') ?>"
+                   data-original-img="<?= $this->makeDisplayURL($mainsrc) ?>"
+                   data-title="<?= htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8') ?>"
+                   data-footer="<?= htmlentities(strip_tags($vars['object']->body), ENT_QUOTES, 'UTF-8') ?>"><img
                 loading="lazy"
-                            src="<?php echo $this->makeDisplayURL($src) ?>" class="u-photo"
-                            alt="<?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?>"/></a>
+                            src="<?= $this->makeDisplayURL($src) ?>" class="u-photo"
+                            alt="<?= htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8') ?>"/></a>
             </div>
             <?php
             $photoCount++;
         }
     } ?>
-    <?php echo $this->autop($this->parseHashtags($this->parseURLs($vars['object']->body, $rel))) . $tags ?>
+    <?= $this->autop($this->parseHashtags($this->parseURLs($vars['object']->body, $rel))) . $tags ?>
 
 </div>

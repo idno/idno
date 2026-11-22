@@ -38,6 +38,24 @@ final class OutputBuffersTest extends TestCase
         $this->assertSame('left=2', trim((string) end($lines)));
     }
 
+    /**
+     * `ob_end_clean()` needs a buffer to be removable and nothing more: a buffer opened with the flag REMOVABLE alone (not
+     * cleanable, not flushable) is ended, and one with CLEANABLE alone is not.
+     */
+    public function testABufferThatIsRemovableButNotCleanableIsEnded(): void
+    {
+        $lines = $this->run_('$base = ob_get_level(); ob_start(); ob_start(fn ($b) => $b, 0, PHP_OUTPUT_HANDLER_REMOVABLE); ob_start(); \\Idno\\Templating\\OutputBuffers::endDownTo($base); echo "\\nleft=", ob_get_level() - $base, "\\n";');
+
+        $this->assertSame('left=0', trim((string) end($lines)));
+    }
+
+    public function testABufferThatIsCleanableButNotRemovableStopsTheClosing(): void
+    {
+        $lines = $this->run_('$base = ob_get_level(); ob_start(); ob_start(fn ($b) => $b, 0, PHP_OUTPUT_HANDLER_CLEANABLE); ob_start(); \\Idno\\Templating\\OutputBuffers::endDownTo($base); echo "\\nleft=", ob_get_level() - $base, "\\n";');
+
+        $this->assertSame('left=2', trim((string) end($lines)));
+    }
+
     public function testAnErrorHandlerThatThrowsDoesNotEscape(): void
     {
         $lines = $this->run_('set_error_handler(function ($no, $str) { throw new \\ErrorException($str); }); $base = ob_get_level(); ob_start(fn ($b) => $b, 0, 0); \\Idno\\Templating\\OutputBuffers::endDownTo($base); echo "\\nreturned\\n";');

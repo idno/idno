@@ -1,7 +1,7 @@
 <?php
     /*
-     * The body of /admin/legacytables (Idno\Pages\Admin\LegacyTables), shared by the default and the
-     * Twenty26 templates. Everything that comes from the database (table names, uuids, reasons) is
+     * The body of /admin/legacytables (Idno\Pages\Admin\LegacyTables), shared by the `default` and the
+     * `classic` templates of the page. Everything that comes from the database (table names, uuids, reasons) is
      * escaped here.
      */
     $language = \Idno\Core\Idno::site()->language();

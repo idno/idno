@@ -107,7 +107,8 @@ final class PageNormaliserTest extends TestCase
             '<script src="{site}/js/{built}/idno.min.js"></script><link href="{site}/css/{built}/idno.min.css" rel="stylesheet">',
             $this->normalise('<script src="http://127.0.0.1:55438/js/1794616379/idno.min.js"></script><link href="http://127.0.0.1:55438/css/1794616379/idno.min.css" rel="stylesheet">')
         );
-        $this->assertSame('Themes/Twenty26/dist/modern.min.js', $this->normalise('Themes/Twenty26/dist/modern.min.js'));
+        $this->assertSame('js/idno-2026.min.js', $this->normalise('js/idno-2026.min.js'));
+        $this->assertSame('css/idno-2026.min.css', $this->normalise('css/idno-2026.min.css'));
         $this->assertSame('/js/vendor/1.2.3/x.js', $this->normalise('/js/vendor/1.2.3/x.js'));
     }
 

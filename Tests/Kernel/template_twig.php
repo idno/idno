@@ -296,6 +296,10 @@ switch ($case) {
 
     case 'at-core-through-the-real-container':
         $register('core');
+        // A probe left by a run that was killed would be a file of core's: remove it first
+        foreach (glob(dirname(__DIR__, 2) . '/templates/default/zz-core-probe-*') ?: [] as $stale) {
+            unlink($stale);
+        }
         $probe = dirname(__DIR__, 2) . '/templates/default/zz-core-probe-' . bin2hex(random_bytes(4)) . '.html.twig';
         $name = '@core/default/' . basename($probe);
         file_put_contents($probe, '<p>{% block body %}core{% endblock %}</p>');

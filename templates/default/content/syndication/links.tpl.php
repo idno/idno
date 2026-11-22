@@ -3,11 +3,8 @@
 if ($posse = $vars['object']->getPosseLinks()) {
 
     ?>
-<div class="posse">
-    <a name="posse"></a>
-
-    <p>
-        Also on:
+<div class="idno-syndication-links">
+    <span class="idno-entry-meta"><?= \Idno\Core\Idno::site()->language()->_('Also on:') ?></span>
     <?php
 
     foreach ($posse as $service => $posse_links) {
@@ -15,11 +12,11 @@ if ($posse = $vars['object']->getPosseLinks()) {
             $posse_links = [['url' => $posse_links, 'identifier' => $service]];
         }
 
-        foreach($posse_links as $element) {
+        foreach ($posse_links as $element) {
             $human_icon = $this->__(
                 [
-                'username' => isset($element['account_id']) ? $element['account_id'] : false,
-                'details'  => $element,
+                    'username' => isset($element['account_id']) ? $element['account_id'] : false,
+                    'details'  => $element,
                 ]
             )->draw('content/syndication/icon/' . $service);
 
@@ -32,12 +29,11 @@ if ($posse = $vars['object']->getPosseLinks()) {
                 $rel_syndication = ' rel="syndication"';
             }
 
-            echo "<a href=\"{$element['url']}\"$rel_syndication class=\"u-syndication $service\">$human_icon {$element['identifier']}</a>";
+            echo "<a href=\"{$element['url']}\"$rel_syndication class=\"u-syndication\">$human_icon {$element['identifier']}</a>";
         }
     }
 
     ?>
-    </p>
 </div>
     <?php
 

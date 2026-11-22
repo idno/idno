@@ -1,4 +1,4 @@
-<?php echo $this->draw('entity/edit/header');?>
+<?php echo $this->draw('entity/edit/header'); ?>
 <?php
 
 if (!empty($vars['object']->inreplyto)) {
@@ -13,25 +13,20 @@ if (!empty($vars['url'])) {
 }
 
 ?>
-<form action="<?php echo $vars['object']->getURL() ?>" method="post">
+<form action="<?= $vars['object']->getURL() ?>" method="post">
 
-    <div class="row">
+    <div class="idno-editor">
 
-        <div class="col-md-8 col-md-offset-2 edit-pane">
-
-            <p id="counter" style="display:none" class="pull-right">
-                <span class="count"></span>
-            </p>
-
-            <h4>
+            <h4 class="idno-editor-heading">
                 <?php
-
                 if (empty($vars['object']->_id)) {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Status Update'); ?><?php
+                    echo \Idno\Core\Idno::site()->language()->_('New Status Update');
                 } else {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Status Update'); ?><?php
+                    echo \Idno\Core\Idno::site()->language()->_('Edit Status Update');
                 }
-
+                if (!empty($vars['object']->_id) && $vars['object']->getPublishStatus() === 'draft') {
+                    echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
+                }
                 ?>
             </h4>
 
@@ -42,15 +37,20 @@ if (!empty($vars['url'])) {
             } else {
                 $body = $vars['object']->body;
             } ?>
-            <?php echo $this->__([
-                'unique_id' => 'body',
-                'name' => 'body',
-                'placeholder' => \Idno\Core\Idno::site()->language()->_("Share a quick note or comment. You can use links and #hashtags."),
-                'required' => true,
-                'class' => 'content-entry ctrl-enter-submit',
-                'value' => $body,
-                'height' => 140
-            ])->draw('forms/input/longtext'); ?>
+            <div class="idno-form-field" style="position:relative">
+                <?= $this->__([
+                    'unique_id' => 'body',
+                    'name' => 'body',
+                    'placeholder' => \Idno\Core\Idno::site()->language()->_("Share a quick note or comment. You can use links and #hashtags."),
+                    'required' => true,
+                    'class' => 'idno-textarea ctrl-enter-submit',
+                    'value' => $body,
+                    'height' => 140
+                ])->draw('forms/input/longtext') ?>
+                <span id="counter" style="display:none;position:absolute;bottom:0.5rem;right:0.75rem;font-size:var(--font-size-sm);color:var(--color-text-muted);pointer-events:none">
+                    <span class="count"></span>
+                </span>
+            </div>
             <?php
 
                 echo $this->draw('entity/tags/input');
@@ -59,105 +59,74 @@ if (!empty($vars['url'])) {
             if (\Idno\Core\Idno::site()->currentPage()->getInput('share_url')) {
                 ?>
             <script>
-                $(document).ready(function(){
-                    var content = $('#body').val();
-                    var len = content.length;
-                    var element = $('#body');
-
-                    $('#body').focus(function(){
-                        $(this).prop('selectionStart', len);
-                    });
-                    $('#body').focus();
+                document.addEventListener('DOMContentLoaded', function(){
+                    var el = document.getElementById('body');
+                    if (el) {
+                        var len = el.value.length;
+                        el.focus();
+                        el.setSelectionRange(len, len);
+                    }
                 });
             </script>
                 <?php
             }
             ?>
 
-            <p>
-                <small><a id="inreplyto-add" href="#"
-                          onclick="$('#inreplyto').append('<span><input required type=&quot;url&quot; name=&quot;inreplyto[]&quot; value=&quot;&quot; placeholder=&quot;<?php echo addslashes(\Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to')); ?>&quot; class=&quot;form-control&quot; onchange=&quot;adjust_content(this.value)&quot; /> <small><a href=&quot;#&quot; onclick=&quot;$(this).parent().parent().remove(); return false;&quot;><icon class=&quot;fa fa-times&quot;></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;"><i class="fa fa-reply"></i>
-                        <?php echo \Idno\Core\Idno::site()->language()->_('Reply to a site'); ?></a></small>
-            </p>
-
-
-            <div id="inreplyto">
-                <?php
-                if (!empty($vars['object']->inreplyto)) {
-                    foreach ($vars['object']->inreplyto as $inreplyto) {
-                        ?>
-                            <p>
-                                <input type="url" name="inreplyto[]"
-                                       placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to'); ?>"
-                                       class="form-control inreplyto" value="<?php echo htmlspecialchars($inreplyto) ?>" onchange="adjust_content(this.value)"/>
-                                <small><a href="#"
-                                          onclick="$(this).parent().parent().remove(); return false;"><i class="fa fa-times"></i>
-                                      <?php echo \Idno\Core\Idno::site()->language()->_('Remove URL'); ?></a></small>
-                            </p>
-                        <?php
-                    }
-                }
-                ?>
+            <?php $hasReplyTo = !empty($vars['object']->inreplyto); ?>
+            <div class="idno-reply-section" x-data="{ open: <?= $hasReplyTo ? 'true' : 'false' ?> }">
+                <button type="button" class="idno-reply-toggle" x-on:click="open = !open" :class="{ 'active': open }">
+                    <?= $this->__(['icon' => 'reply', 'class' => 'idno-reply-toggle-icon'])->draw('shell/icon') ?>
+                    <?= \Idno\Core\Idno::site()->language()->_('Reply to a site') ?>
+                </button>
+                <div class="idno-reply-input" x-show="open" x-cloak>
+                    <input type="url" name="inreplyto[]"
+                           placeholder="<?= \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to') ?>"
+                           class="idno-input"
+                           value="<?= !empty($vars['object']->inreplyto) ? htmlspecialchars(is_array($vars['object']->inreplyto) ? $vars['object']->inreplyto[0] : $vars['object']->inreplyto) : '' ?>"/>
+                </div>
             </div>
 
             <?php if (empty($vars['object']->_id)) {
                 echo $this->__(['name' => 'forward-to', 'value' => \Idno\Core\Idno::site()->config()->getDisplayURL() . 'content/all/'])->draw('forms/input/hidden');
             } ?>
-            <?php echo $this->drawSyndication('note', $vars['object']->getPosseLinks()); ?>
-            <?php echo $this->draw('content/extra'); ?>
-            <?php echo $this->draw('content/access'); ?>
+            <?= $this->drawSyndication('note', $vars['object']->getPosseLinks()) ?>
+            <?= $this->draw('content/extra') ?>
+            <?= $this->draw('content/access') ?>
 
-            <p class="button-bar">
-                <?php echo \Idno\Core\Idno::site()->actions()->signForm('/status/edit') ?>
-                <input type="button" class="btn btn-cancel" value="<?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?>" onclick="hideContentCreateForm();"/>
-                <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Publish'); ?>"/>
-            </p>
-        </div>
-        <div class="col-md-2">
-            <p id="counter" style="display:none">
-                <span class="count"></span>
-            </p>
-        </div>
+            <?= \Idno\Core\Idno::site()->actions()->signForm('/status/edit') ?>
 
+            <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                    <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
+                </button>
+                <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                    <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                </button>
+                <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
+                    <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>
+                </a>
+            </div>
 
     </div>
 </form>
-<script src="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL()?>IdnoPlugins/Status/external/brevity-js/brevity.js"></script>
+<script src="<?= \Idno\Core\Idno::site()->config()->getStaticURL() ?>IdnoPlugins/Status/external/brevity-js/brevity.js"></script>
 <script>
-    function adjust_content(url) {
-        var username = url.match(/https?:\/\/([a-z]+\.)?twitter\.com\/(#!\/)?@?([^\/]*)/)[3];
-        if (username != null) {
-            if ($('#body').val().search('@' + username) == -1) {
-                $('#body').val('@' + username + ' ' + $('#body').val());
-                count_chars();
-            }
-        }
-    }
-
     function count_chars() {
-        var len = brevity.tweetLength($('#body').val());
-
+        var bodyEl = document.getElementById('body');
+        var counterEl = document.getElementById('counter');
+        if (!bodyEl || !counterEl || typeof brevity === 'undefined') return;
+        var len = brevity.tweetLength(bodyEl.value);
         if (len > 0) {
-            if (!$('#counter').is(":visible")) {
-                $('#counter').fadeIn();
-            }
+            counterEl.style.display = '';
         }
-
-        $('#counter .count').text(len);
+        counterEl.querySelector('.count').textContent = len;
     }
 
-    $(document).ready(function () {
-        $('#body').keyup(function () {
-            count_chars();
-        });
-
-        // Make in reply to a little less painful
-        $("#inreplyto-add").on('dragenter', function(e) {
-            var placeholder = '<?php echo addslashes(\Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to')); ?>';
-            e.stopPropagation();
-            e.preventDefault();
-            $('#inreplyto').append('<span><input required type="url" name="inreplyto[]" value="" placeholder="' + placeholder + '" class="form-control" onchange="adjust_content(this.value)" /> <small><a href="#" onclick="$(this).parent().parent().remove(); return false;"><icon class="fa fa-times"></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;
-        });
+    document.addEventListener('DOMContentLoaded', function () {
+        var bodyEl = document.getElementById('body');
+        if (bodyEl) {
+            bodyEl.addEventListener('keyup', count_chars);
+        }
     });
 </script>
 <?php echo $this->draw('entity/edit/footer');

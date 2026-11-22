@@ -23,10 +23,8 @@ namespace IdnoPlugins\Event\Tests {
         public static function setUpBeforeClass(): void
         {
             parent::setUpBeforeClass();
-            // The Event plugin need not be enabled for its templates to be drawn here;
-            // Twenty26 only has templates of the "modern" type.
+            // The Event plugin need not be enabled for its templates to be drawn here.
             \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/IdnoPlugins/Event');
-            \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/Themes/Twenty26');
         }
 
         public function setUp(): void
@@ -49,8 +47,7 @@ namespace IdnoPlugins\Event\Tests {
         public static function lookProvider(): array
         {
             return [
-                'no theme' => ['default'],
-                'Twenty26' => ['modern'],
+                'Idno 2026' => ['default'],
             ];
         }
 

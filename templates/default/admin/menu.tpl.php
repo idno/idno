@@ -1,19 +1,68 @@
-<ul class="nav">
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/"><?php echo \Idno\Core\Idno::site()->language()->_('Site configuration'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/plugins/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/plugins/"><?php echo \Idno\Core\Idno::site()->language()->_('Plugins'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/themes/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/themes/"><?php echo \Idno\Core\Idno::site()->language()->_('Themes'); ?></a></li>
-            <?php echo $this->draw('admin/menu/items')?>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/homepage/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/homepage/" ><?php echo \Idno\Core\Idno::site()->language()->_('Homepage'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/email/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/email/" ><?php echo \Idno\Core\Idno::site()->language()->_('Email'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/users/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/users/" ><?php echo \Idno\Core\Idno::site()->language()->_('Users'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/export/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/export/" ><?php echo \Idno\Core\Idno::site()->language()->_('Export'); ?></a></li>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/import/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/import/" ><?php echo \Idno\Core\Idno::site()->language()->_('Import'); ?></a></li>
-    <?php if (\Idno\Pages\Admin\LegacyTables::showInMenu()) { ?>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/legacytables/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/legacytables/"><?php echo \Idno\Core\Idno::site()->language()->_('Legacy tables'); ?></a></li>
-    <?php } ?>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/diagnostics/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/diagnostics/"><?php echo \Idno\Core\Idno::site()->language()->_('Diagnostics'); ?></a></li>
+<?php
+    /* Admin navigation menu for the dark sidebar.
+     * Preserves admin/menu/items extension point for plugin-added menu items.
+     */
+    $baseUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+    $page = \Idno\Core\Idno::site()->currentPage();
+?>
+<nav class="idno-admin-nav">
+    <a href="<?= $baseUrl ?>admin/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'layout-dashboard'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Dashboard') ?></span>
+    </a>
+    <a href="<?= $baseUrl ?>admin/themes/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/themes/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'palette'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Themes') ?></span>
+    </a>
+    <a href="<?= $baseUrl ?>admin/plugins/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/plugins/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'puzzle'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Plugins') ?></span>
+    </a>
+    <a href="<?= $baseUrl ?>admin/users/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/users/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'users'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Users') ?></span>
+    </a>
+    <a href="<?= $baseUrl ?>admin/email/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/email/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'mail'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Email') ?></span>
+    </a>
+
+    <?= $this->draw('admin/menu/items') ?>
+
+    <div class="idno-admin-nav-divider"></div>
+
+    <a href="<?= $baseUrl ?>admin/statistics/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/statistics/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'bar-chart-3'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Statistics') ?></span>
+    </a>
     <?php if (!empty(\Idno\Core\Idno::site()->config()->capture_logs) && \Idno\Core\Idno::site()->config()->capture_logs) { ?>
-    <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/logs/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/logs/"><?php echo \Idno\Core\Idno::site()->language()->_('Captured Logs'); ?></a></li>
+    <a href="<?= $baseUrl ?>admin/logs/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/logs/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'scroll-text'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Logs') ?></span>
+    </a>
     <?php } ?>
-  <li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/about/')) echo 'class="active"'; ?> role="presentation"><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/about/"><?php echo \Idno\Core\Idno::site()->language()->_('About'); ?></a></li>
-</ul>
+    <?php if (\Idno\Pages\Admin\LegacyTables::showInMenu()) { ?>
+    <a href="<?= $baseUrl ?>admin/legacytables/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/legacytables/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'box'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Legacy tables') ?></span>
+    </a>
+    <?php } ?>
+    <a href="<?= $baseUrl ?>admin/import/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/import/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'upload'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Import') ?></span>
+    </a>
+    <a href="<?= $baseUrl ?>admin/export/"
+       class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/export/')) echo ' active'; ?>">
+        <?= $this->__(['icon' => 'download'])->draw('shell/icon') ?>
+        <span><?= \Idno\Core\Idno::site()->language()->_('Export') ?></span>
+    </a>
+</nav>

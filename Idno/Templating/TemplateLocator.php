@@ -11,7 +11,9 @@ namespace Idno\Templating;
  * The order is the type, then the directory, then the format: a plugin's or theme's `.tpl.php` override of a template
  * still wins over core's Twig file of the same name and type, and a Twig file beats a `.tpl.php` file of the same name,
  * type and directory. Only the types that are web pages and mail have Twig templates (`.html.twig` for `default` and
- * `email`, `.txt.twig` for `email-text`); the feed, JSON, ActivityPub and KML types are `.tpl.php` files only.
+ * `email`, `.txt.twig` for `email-text`); the feed, JSON, ActivityPub and KML types are `.tpl.php` files only. A plain-text mail
+ * (`email-text`) draws `.txt.twig` in every directory of its chain, `classic` and `default` included, and never an
+ * `.html.twig` file, which would escape its text as HTML.
  */
 final class TemplateLocator
 {
@@ -63,8 +65,9 @@ final class TemplateLocator
         $types = $fallbackToDefault ? TypeChain::for($type) : [$type];
         foreach ($types as $candidate) {
             foreach ($this->cascade->bases() as $base) {
-                if (isset(self::TWIG_EXTENSIONS[$candidate])) {
-                    $twig = $candidate . '/' . $name . '.' . self::TWIG_EXTENSIONS[$candidate];
+                $extension = $type === 'email-text' ? 'txt.twig' : (self::TWIG_EXTENSIONS[$candidate] ?? null);
+                if ($extension !== null) {
+                    $twig = $candidate . '/' . $name . '.' . $extension;
                     // Only a name the Twig loader accepts is offered to it (the one predicate): a name with a leading or doubled
                     // slash, which the file system resolves, is a .tpl.php name only, and a Twig file of it is not found
                     if (CascadeTwigLoader::isLogicalName($twig) && file_exists($base . '/templates/' . $twig)) {

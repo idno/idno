@@ -66,7 +66,7 @@ mkdir -p "$STAGE/app" "$STAGE/out"
 tar -C "$ROOT" \
     --exclude=./.git --exclude=./vendor --exclude=./var/cache --exclude=./configuration --exclude=./.env \
     --exclude='./data/*.sqlite*' --exclude=./Tests/rig/.mode --exclude=./Tests/rig/.server.pid \
-    --exclude=./Tests/rig/.server.log --exclude=./node_modules --exclude=./Themes/Twenty26/node_modules \
+    --exclude=./Tests/rig/.server.log --exclude=./node_modules --exclude=./frontend/node_modules \
     --exclude=./.superpowers --exclude=./.claude \
     -cf - . | tar -C "$STAGE/app" -xf -
 

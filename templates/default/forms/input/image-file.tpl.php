@@ -47,12 +47,12 @@ if (!empty($vars['hide-existing'])) {
                 $src = \Idno\Core\Idno::site()->config()->sanitizeAttachmentURL($src);
                 $mainsrc = \Idno\Core\Idno::site()->config()->sanitizeAttachmentURL($mainsrc);
                 ?>
-                <div class="existing-photo">
+                <div class="idno-image-existing">
                     <?php if ($vars['object']->canEdit() && empty($vars['hide-delete'])) { ?>
-                    <span class="delete-control">
+                    <span class="idno-image-delete delete-control">
                         <?php echo \Idno\Core\Idno::site()->actions()->createLink(
                             \Idno\Core\Idno::site()->config()->getDisplayURL() . 'attachment/' . $vars['object']->getId() . '/' . $attachment['_id'] . '/',
-                            '<i class="fa fa-trash-o"></i>',
+                            '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
                             [],
                             [
                                     'method' => 'POST',
@@ -74,8 +74,8 @@ if (!empty($vars['hide-existing'])) {
         <img id="<?php echo $vars['id']; ?>_img" src="" class="preview" style="display:none; width: 400px;" />
     </div>
     <p>
-        <span class="btn btn-primary btn-file">
-            <i class="fa fa-camera"></i> 
+        <label class="idno-btn idno-btn-ghost" for="<?php echo $vars['id']; ?>" style="width:100%;justify-content:center;cursor:pointer">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             <span class="photo-filename" data-nexttext="<?php echo \Idno\Core\Idno::site()->language()->_('Choose different photo'); ?>">
                 <?php
                 if (empty($vars['object']->_id)) {
@@ -88,7 +88,7 @@ if (!empty($vars['hide-existing'])) {
                     }
                 }
                 ?>
-            </span> 
+            </span>
             <?php echo
             $this->__(
                 [
@@ -96,9 +96,9 @@ if (!empty($vars['hide-existing'])) {
                 'id' => $vars['id'],
                 'accept' => 'image/*',
                 'onchange' => 'Template.activateImagePreview(this)',
-                'class' => 'input-file form-control col-md-9']
+                'class' => 'input-file']
             )->draw('forms/input/file');
             ?>
-        </span>
+        </label>
     </p>
 </div>

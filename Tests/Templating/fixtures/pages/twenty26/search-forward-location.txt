@@ -1,1 +1,1 @@
-{site}/?q=hello&_t=modern
+{site}/?q=hello

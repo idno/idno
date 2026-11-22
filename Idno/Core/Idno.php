@@ -213,6 +213,11 @@ namespace Idno\Core {
             $this->routes()->addRoute('/autosave/?', '\Idno\Pages\Entity\Autosave');
 
             /**
+             * The member's drafts
+            */
+            $this->routes()->addRoute('/drafts/?', '\Idno\Pages\Drafts');
+
+            /**
              * Installation / first use
             */
             $this->routes()->addRoute('/begin/?', '\Idno\Pages\Onboarding\Begin', true);

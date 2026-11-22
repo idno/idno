@@ -315,6 +315,60 @@ final class TemplateRendererTest extends TestCase
         $this->assertSame('', $this->renderer->drawSlot('nothing', [], 'default', $this->context));
     }
 
+    /**
+     * A file of a `modern` directory (a third-party plugin's, written for the retired Twenty26 theme) still wins on a web
+     * page; the first one a process draws logs one line that names it, however many are drawn and by however many copies
+     * of the renderer (a template object draws through a copy of its own).
+     */
+    public function testTheFirstModernFileDrawnLogsOneDeprecationNamingIt(): void
+    {
+        $plugin = dirname($this->core) . '/plugin';
+        mkdir($plugin . '/templates/modern', 0700, true);
+        file_put_contents($plugin . '/templates/modern/x.tpl.php', 'modern/x|');
+        file_put_contents($plugin . '/templates/modern/e.tpl.php', 'modern/e|');
+        $cascade = new TemplateCascade($this->core);
+        $cascade->addBase($plugin);
+        $lines = [];
+        $logger = new class ($lines) extends \Psr\Log\AbstractLogger {
+            public function __construct(public array &$lines)
+            {
+            }
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->lines[] = $level . ': ' . $message;
+            }
+        };
+        $renderer = new TemplateRenderer(new TemplateLocator($cascade), $this->slots, new PhpTemplateEngine(), null, static fn () => $logger);
+
+        $this->assertSame('modern/x|', $renderer->draw('x', [], 'default', $this->context), 'the modern file wins on a web page');
+        $this->assertSame('modern/e|', $renderer->withSlots(new SlotRegistry())->draw('e', [], 'default', $this->context), 'a copy of the renderer');
+        $this->assertSame('default/p1|', $renderer->draw('p1', [], 'default', $this->context), 'a default file logs nothing');
+
+        $this->assertCount(1, $lines);
+        $this->assertStringStartsWith('warning: Deprecated: ', $lines[0]);
+        $this->assertStringContainsString($plugin . '/templates/modern/x.tpl.php', $lines[0], 'it names the file');
+    }
+
+    public function testNothingIsLoggedForAFeedOrWithoutALogger(): void
+    {
+        $plugin = dirname($this->core) . '/plugin';
+        mkdir($plugin . '/templates/modern', 0700, true);
+        file_put_contents($plugin . '/templates/modern/x.tpl.php', 'modern/x|');
+        $cascade = new TemplateCascade($this->core);
+        $cascade->addBase($plugin);
+        $calls = 0;
+        $renderer = new TemplateRenderer(new TemplateLocator($cascade), $this->slots, new PhpTemplateEngine(), null, static function () use (&$calls) {
+            ++$calls;
+
+            return new \Psr\Log\NullLogger();
+        });
+
+        $this->assertSame('default/x|', $renderer->draw('x', [], 'rss', $this->context), 'a feed never draws a modern file');
+        $this->assertSame(0, $calls);
+        $this->assertSame('modern/x|', (new TemplateRenderer(new TemplateLocator($cascade), $this->slots, new PhpTemplateEngine()))->draw('x', [], 'default', $this->context), 'no logger, no line, no error');
+    }
+
     public function testATwigFileWithNoTwigEngineIsAnErrorNotPhp(): void
     {
         $twig = $this->core . '/templates/default/t.html.twig';

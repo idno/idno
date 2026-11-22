@@ -1,156 +1,99 @@
-<div class="container col-md-11 col-md-offset-1">
-    <div class="row beforecontent">
-        <h1><?php echo \Idno\Core\Idno::site()->language()->_('Edit your profile'); ?></h1>
+<?php
+    /* @var \Idno\Core\Template $this */
 
-        <p>
-            <?php echo \Idno\Core\Idno::site()->language()->_("Your profile is how other users see you across the site. It's up to you how much or how little information you choose to provide."); ?>
-        </p>
-    </div>
-
-    <form class="form-horizontal" role="form" action="<?php echo $vars['user']->getDisplayURL() ?>" method="post"
-          enctype="multipart/form-data">
-        <div class="row">
-            <!-- left column -->
-            <div class="col-md-3">
-                <div class="text-center">
-
-                    <div id="photo-preview"><img src="<?php echo \Idno\Core\Idno::site()->session()->currentUser()->getIcon() ?>"
-                                                 class="avatar img-circle"
-                                                 alt="avatar" style="width: 100px"></div>
-
-                        <span class="btn btn-primary btn-file">
-                            <i class="fa fa-camera"></i> 
-                        <span id="photo-filename"><?php echo \Idno\Core\Idno::site()->language()->_('Select a user picture'); ?></span>
-                            <input type="file" name="avatar" id="photo"
-                                   class="form-control"
-                                   accept="image/*"
-                                   onchange="photoPreview(this)"/>
-
-                        </span>
-                </div>
-            </div>
-
-            <!-- edit form column -->
-            <div class="col-md-8 personal-info">
-
-                <div class="form-group">
-                    <label class="control-label" for="name"><?php echo \Idno\Core\Idno::site()->language()->_('Your name'); ?></label>
-                    <input class="form-control" type="text" id="name" name="name"
-                           value="<?php echo htmlspecialchars($vars['user']->getTitle()) ?>">
-                </div>
-
-                <!--<div class="form-group">
-                    <label class="control-label" for="tagline">Short description</label>
-                    <input class="form-control" type="text" id="tagline" name="profile[tagline]"
-                           value="<?php echo htmlspecialchars($vars['user']->getShortDescription()) ?>">
-                </div>-->
-
-                <div class="form-group">
-                    <label class="control-label" for="body"><?php echo \Idno\Core\Idno::site()->language()->_('About you'); ?></label><br>
-
-                    <textarea name="profile[description]" id="body"
-                              class="form-control bodyInput"><?php echo htmlspecialchars($vars['user']->getDescription()) ?></textarea>
-
-
-                </div>
-
-                <div class="form-group">
-                    <p>
-                        <label for="website"><?php echo \Idno\Core\Idno::site()->language()->_('Your websites'); ?></label><br>
-                        <small><?php echo \Idno\Core\Idno::site()->language()->_('Other places on the web where people can find you.'); ?></small>
-                    </p>
-                    <div id="websitelist">
-                        <?php
-
-                        if (!empty($vars['user']->profile['url'])) {
-                            if (!is_array($vars['user']->profile['url'])) {
-                                $urls = array($vars['user']->profile['url']);
-                            } else {
-                                $urls = $vars['user']->profile['url'];
-                            }
-                            foreach ($urls as $url) {
-                                if (!empty($url)) {
-                                    ?>
-                                        <div class="form-group">
-                                            <div class="col-md-10"><input type="url" name="profile[url][]" id="website"
-                                                                          value="<?php echo htmlspecialchars($this->fixURL($url)) ?>"
-                                                                          placeholder="https://" class="form-control"/>
-                                            </div>
-                                            <div class="col-md-2" style="margin-top: 0.75em">
-                                                <small><a href="#"
-                                                          onclick="$(this).parent().parent().parent().remove(); return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Remove');?></a>
-                                                </small>
-                                            </div>
-                                        </div>
-                                    <?php
-                                }
-                            }
-                        }
-
-                        ?>
-                        <div class="row">
-                            <div class="col-md-10">
-                                <input type="url" name="profile[url][]" id="title" value="" placeholder="https://"
-                                       class="form-control"/></div>
-                            <div class="col-md-2" style="margin-top: 0.75em">
-                                <small >
-                                    <a href="#" onclick="$(this).parent().parent().parent().remove(); return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Remove'); ?></a>
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                    <p>
-                        <small><a href="#"
-                                  onclick="$('#websitelist').append($('#form-website-template').html()); return false;">+
-                                <?php echo \Idno\Core\Idno::site()->language()->_('Add more'); ?></a></small>
-                    </p>
-                </div>
-
-                <div class="form-group">
-                    <p>
-                        <?php echo \Idno\Core\Idno::site()->actions()->signForm('/profile/' . $vars['user']->getHandle()) ?>
-                        <input type="button" class="btn btn-cancel" value="<?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?>" onclick="hideContentCreateForm();"/>
-                        <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Save Changes'); ?>"/>
-                    </p>
-
-
-                </div>
-            </div>
-        </div>
-
-
-    </form>
-    <div id="form-website-template" style="display:none">
-        <div class="row">
-            <div class="col-md-10">
-                <input type="text" name="profile[url][]" id="title" value="" placeholder="http://"
-                       class="form-control"/></div>
-            <div class="col-md-2" style="margin-top: 0.75em">
-                <small>
-                    <a href="#" onclick="$(this).parent().parent().parent().remove(); return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Remove'); ?></a>
-                </small>
-            </div>
-        </div>
-    </div>
-</div>
-
-
-<script>
-    //if (typeof photoPreview !== function) {
-    function photoPreview(input) {
-
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();
-
-            reader.onload = function (e) {
-                $('#photo-preview').html('<img src="" id="photopreview" style="width: 100px">');
-                $('#photo-filename').html('Choose different user picture');
-                $('#photopreview').attr('src', e.target.result);
-                $('#photopreview').show();
-            }
-
-            reader.readAsDataURL(input.files[0]);
-        }
+    // Build URLs array from user profile data
+    if (!empty($vars['user']->profile['url'])) {
+        $urls = is_array($vars['user']->profile['url'])
+            ? $vars['user']->profile['url']
+            : [$vars['user']->profile['url']];
+        $urls = array_values(array_filter(array_map(function($u) {
+            return !empty($u) ? $this->fixURL($u) : '';
+        }, $urls)));
     }
-    //}
-</script>
+    if (empty($urls)) {
+        $urls = [''];
+    }
+
+    // Pre-escape icon URL for safe Alpine.js embedding
+    $icon_url = htmlspecialchars(json_encode($vars['user']->getIcon()), ENT_QUOTES, 'UTF-8');
+?>
+
+<form action="<?php echo $vars['user']->getDisplayURL(); ?>" method="post" enctype="multipart/form-data">
+
+    <div class="idno-editor">
+
+        <h4 class="idno-editor-heading"><?php echo \Idno\Core\Idno::site()->language()->_('Edit your profile'); ?></h4>
+
+        <!-- Avatar section -->
+        <div class="idno-form-field" x-data="{ preview: null, icon: <?php echo $icon_url; ?> }" x-cloak>
+            <div style="display:flex;align-items:center;gap:1rem">
+                <img :src="preview || icon"
+                     alt="<?php echo \Idno\Core\Idno::site()->language()->_('Profile photo'); ?>"
+                     style="width:80px;height:80px;border-radius:50%;object-fit:cover">
+                <div>
+                    <label for="avatar" class="idno-btn idno-btn-ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:0.375rem">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                        <?php echo \Idno\Core\Idno::site()->language()->_('Change photo'); ?>
+                    </label>
+                    <input type="file" name="avatar" id="avatar" accept="image/*" style="display:none"
+                           @change="if ($event.target.files[0]) { const r = new FileReader(); r.onload = e => preview = e.target.result; r.readAsDataURL($event.target.files[0]); }">
+                    <p class="idno-form-help"><?php echo \Idno\Core\Idno::site()->language()->_('JPG, PNG or GIF'); ?></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Name field -->
+        <div class="idno-form-field">
+            <label class="idno-label" for="name"><?php echo \Idno\Core\Idno::site()->language()->_('Your name'); ?></label>
+            <input class="idno-input" type="text" id="name" name="name"
+                   value="<?php echo htmlspecialchars($vars['user']->getTitle()); ?>">
+        </div>
+
+        <!-- Bio field -->
+        <div class="idno-form-field">
+            <label class="idno-label" for="body"><?php echo \Idno\Core\Idno::site()->language()->_('About you'); ?></label>
+            <textarea class="idno-textarea" name="profile[description]" id="body"
+                      placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Tell people about yourself...'); ?>"
+            ><?php echo htmlspecialchars($vars['user']->getDescription()); ?></textarea>
+        </div>
+
+        <!-- Websites section -->
+        <div class="idno-form-field" x-data="{ urls: <?php echo htmlspecialchars(json_encode($urls), ENT_QUOTES, 'UTF-8'); ?> }" x-cloak>
+            <label class="idno-label"><?php echo \Idno\Core\Idno::site()->language()->_('Your websites'); ?></label>
+            <p class="idno-form-help" style="margin-bottom:0.5rem"><?php echo \Idno\Core\Idno::site()->language()->_('Other places on the web where people can find you.'); ?></p>
+
+            <template x-for="(url, index) in urls" :key="index">
+                <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+                    <input type="url" name="profile[url][]" class="idno-input"
+                           x-model="urls[index]" placeholder="https://">
+                    <button type="button" @click="urls.splice(index, 1)" x-show="urls.length > 1"
+                            style="background:none;border:none;cursor:pointer;color:var(--color-text-muted);padding:0.25rem;flex-shrink:0"
+                            title="<?php echo \Idno\Core\Idno::site()->language()->_('Remove'); ?>">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                </div>
+            </template>
+
+            <button type="button" @click="urls.push('')"
+                    style="background:none;border:none;cursor:pointer;color:var(--color-accent);font-size:var(--font-size-sm);display:inline-flex;align-items:center;gap:0.25rem;padding:0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <?php echo \Idno\Core\Idno::site()->language()->_('Add another website'); ?>
+            </button>
+        </div>
+
+        <!-- CSRF token -->
+        <?php echo \Idno\Core\Idno::site()->actions()->signForm('/profile/' . $vars['user']->getHandle()); ?>
+
+        <!-- Action buttons -->
+        <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+            <button type="submit" class="idno-btn idno-btn-primary">
+                <?php echo \Idno\Core\Idno::site()->language()->_('Save Changes'); ?>
+            </button>
+            <a href="<?php echo $vars['user']->getDisplayURL(); ?>" class="idno-btn idno-btn-ghost">
+                <?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?>
+            </a>
+        </div>
+
+    </div>
+
+</form>

@@ -10,90 +10,90 @@ if ($user instanceof \Idno\Entities\User) {
         } else {
             $display_handle = $handle;
         }
-        /* @var \Idno\Entities\User $user */
+        $isSelf = ($user->getUUID() == \Idno\Core\Idno::site()->session()->currentUserUUID());
         ?>
 
-    <div class="row <?php echo strtolower(str_replace('\\', '-', get_class($user))); ?>">
-        <div class="col-sm-4 col-xs-12">
-        <p class="user-tbl">
-            <img src="<?php echo $user->getIcon() ?>">
-            <a href="<?php echo $user->getDisplayURL() ?>"><?php echo htmlentities($user->getTitle()) ?></a>
-            (<a href="<?php echo $user->getDisplayURL() ?>"><?php echo $display_handle ?></a>)<br>
-            <small><?php echo $user->email ?></small>
-        </p>
+    <div class="idno-user-row <?= strtolower(str_replace('\\', '-', get_class($user))) ?>">
+        <div class="idno-user-info">
+            <img src="<?= $user->getIcon() ?>" alt="" class="idno-user-avatar">
+            <div class="idno-user-details">
+                <a href="<?= $user->getDisplayURL() ?>" class="idno-user-name"><?= htmlentities($user->getTitle()) ?></a>
+                <span class="idno-user-handle"><?= $display_handle ?></span>
+                <span class="idno-user-email"><?= $user->email ?></span>
+            </div>
         </div>
-        <div class="col-sm-2 col-xs-6">
-        <p class="user-tbl">
-            <small><strong><?php echo \Idno\Core\Idno::site()->language()->_('Joined'); ?></strong><br>
-            <time datetime="<?php echo date('r', $user->created) ?>"
-                  class="dt-published"><?php echo date('r', $user->created) ?></time>
-            </small>
-        </p>
-        </div>
-        <div class="col-sm-2 col-xs-6">
-        <p class="user-tbl">
-            <small><strong><?php echo \Idno\Core\Idno::site()->language()->_('Last update posted'); ?></strong>
-            <br>
-            <?php
-            $feed = \Idno\Common\Entity::getFromX(null, ['owner' => $user->getUUID()], array(), 1, 0);
-            if (!empty($feed) && is_array($feed)) {
-                ?>
-                <time datetime="<?php echo date('r', $feed[0]->updated) ?>"
-                      class="dt-published"><?php echo date('r', $feed[0]->updated) ?></time>
-            <?php } else {
-                ?>
-                <?php echo \Idno\Core\Idno::site()->language()->_('Never'); ?>
-            <?php }
-            ?>
-            </small>
-        </p>
-        </div>
-        <div class="col-sm-2 col-xs-6">
-        <p class="user-tbl">
-            <small>
-            <?php
-            if ($user instanceof \Idno\Entities\RemoteUser) {
-                ?>
-                <?php echo \Idno\Core\Idno::site()->language()->_('Remote member'); ?>
+        <div class="idno-user-meta">
+            <div class="idno-user-meta-item">
+                <strong><?= \Idno\Core\Idno::site()->language()->_('Joined') ?></strong>
+                <time datetime="<?= date('c', $user->created) ?>"><?= date('M j, Y', $user->created) ?></time>
+            </div>
+            <div class="idno-user-meta-item">
+                <strong><?= \Idno\Core\Idno::site()->language()->_('Last post') ?></strong>
                 <?php
-            } else {
-                if ($user->isAdmin()) {
+                $feed = \Idno\Common\Entity::getFromX(null, ['owner' => $user->getUUID()], array(), 1, 0);
+                if (!empty($feed) && is_array($feed)) {
                     ?>
-                <strong><?php echo \Idno\Core\Idno::site()->language()->_('Administrator'); ?></strong><br>
-                    <?php
-                    if ($user->getUUID() != \Idno\Core\Idno::site()->session()->currentUserUUID()) {
-                        echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', \Idno\Core\Idno::site()->language()->_('Remove rights'), array('user' => $user->getUUID(), 'action' => 'remove_rights'), array('class' => ''));
-                    } else {
-                        echo \Idno\Core\Idno::site()->language()->_('Yes');
-                    }
+                    <time datetime="<?= date('c', $feed[0]->updated) ?>"><?= date('M j, Y', $feed[0]->updated) ?></time>
+                <?php } else { ?>
+                    <span><?= \Idno\Core\Idno::site()->language()->_('Never') ?></span>
+                <?php } ?>
+            </div>
+            <div class="idno-user-meta-item">
+                <?php
+                if ($user instanceof \Idno\Entities\RemoteUser) {
+                    echo '<span>' . \Idno\Core\Idno::site()->language()->_('Remote member') . '</span>';
+                } else if ($user->isAdmin()) {
+                    echo '<strong>' . \Idno\Core\Idno::site()->language()->_('Administrator') . '</strong>';
                 } else {
-                    ?>
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Standard member'); ?><br>
-                    <?php echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', \Idno\Core\Idno::site()->language()->_('Make admin'), array('user' => $user->getUUID(), 'action' => 'add_rights'), array('class' => '')); ?>
-                    <?php
+                    echo '<span>' . \Idno\Core\Idno::site()->language()->_('Member') . '</span>';
                 }
-            }
-            ?>
-            </small>
-        </p>
+                ?>
+            </div>
         </div>
-        <div class="col-sm-2 col-xs-6">
-        <p class="user-tbl">
-            <small>
-            <?php
-            if ($user->getUUID() != \Idno\Core\Idno::site()->session()->currentUserUUID()) {
-                if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
-                    echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-check-circle-o"></i> ' . \Idno\Core\Idno::site()->language()->_('Clear'), array('blocked_emails' => $user->email, 'action' => 'unblock_emails'), array('class' => '', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? The user will be able to log in and post again.'))) . '<br>';
-                } else {
-                    echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-ban"></i> ' . \Idno\Core\Idno::site()->language()->_('Block'), array('blocked_emails' => $user->email, 'action' => 'block_emails'), array('class' => '', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? The user will be logged out and will no longer be able to log in or post.'))) . '<br>';
+        <div class="idno-user-actions">
+            <?php if (!$isSelf) {
+                // Admin toggle
+                if (!($user instanceof \Idno\Entities\RemoteUser)) {
+                    if ($user->isAdmin()) {
+                        echo \Idno\Core\Idno::site()->actions()->createLink(
+                            \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users',
+                            \Idno\Core\Idno::site()->language()->_('Remove admin'),
+                            array('user' => $user->getUUID(), 'action' => 'remove_rights'),
+                            array('class' => 'idno-user-action-link')
+                        );
+                    } else {
+                        echo \Idno\Core\Idno::site()->actions()->createLink(
+                            \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users',
+                            \Idno\Core\Idno::site()->language()->_('Make admin'),
+                            array('user' => $user->getUUID(), 'action' => 'add_rights'),
+                            array('class' => 'idno-user-action-link')
+                        );
+                    }
                 }
-                echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-times"></i> ' . \Idno\Core\Idno::site()->language()->_('Delete'), array('user' => $user->getUUID(), 'action' => 'delete'), array('class' => '', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? This will delete this user and all their content.')));
-            } else {
-                echo '&nbsp';
-            }
-            ?>
-            </small>
-        </p>
+                // Block/unblock
+                if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+                    echo \Idno\Core\Idno::site()->actions()->createLink(
+                        \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users',
+                        \Idno\Core\Idno::site()->language()->_('Unblock'),
+                        array('blocked_emails' => $user->email, 'action' => 'unblock_emails'),
+                        array('class' => 'idno-user-action-link', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? The user will be able to log in and post again.'))
+                    );
+                } else {
+                    echo \Idno\Core\Idno::site()->actions()->createLink(
+                        \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users',
+                        \Idno\Core\Idno::site()->language()->_('Block'),
+                        array('blocked_emails' => $user->email, 'action' => 'block_emails'),
+                        array('class' => 'idno-user-action-link idno-user-action-danger', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? The user will be logged out and will no longer be able to log in or post.'))
+                    );
+                }
+                // Delete
+                echo \Idno\Core\Idno::site()->actions()->createLink(
+                    \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users',
+                    \Idno\Core\Idno::site()->language()->_('Delete'),
+                    array('user' => $user->getUUID(), 'action' => 'delete'),
+                    array('class' => 'idno-user-action-link idno-user-action-danger', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? This will delete this user and all their content.'))
+                );
+            } ?>
         </div>
     </div>
 

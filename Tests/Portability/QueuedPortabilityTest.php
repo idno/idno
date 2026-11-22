@@ -181,6 +181,6 @@ final class QueuedPortabilityTest extends AsyncSiteTestCase
         $this->assertSame([], $this->failedEvents());
         $page = $this->site()->request('GET', 'admin/export/', ['Cookie' => $this->cookie]);
         $this->assertStringNotContainsString('is being created', $page->body, 'the flag is cleared');
-        $this->assertStringContainsString('value="Create archive"', $page->body, 'and another can be asked for');
+        $this->assertStringContainsString('>Create archive</button>', $page->body, 'and another can be asked for');
     }
 }

@@ -5,99 +5,84 @@
 if ($object) {
     if ($owner = $object->getOwner()) {
         ?>
-            <div class="row idno-entry idno-entry-<?php
-            if (preg_match('@\\\\([\w]+)$@', get_class($object), $matches)) {
-                echo strtolower($matches[1]);
-            }?> <?php echo $object->getMicroformats2ObjectType() ?> idno-<?php echo $object->getContentTypeCategorySlug() ?> idno-object"
-            <?php echo $this->getDataHTMLAttributesForObjectType($object->getActivityStreamsObjectType()); ?>>
+        <article class="idno-entry <?= $object->getMicroformats2ObjectType() ?> idno-<?= $object->getContentTypeCategorySlug() ?>"
+            <?= $this->getDataHTMLAttributesForObjectType($object->getActivityStreamsObjectType()) ?>>
 
-                <div class="col-md-1 col-md-offset-1 owner p-author h-card visible-md visible-lg">
-                    <p>
-                        <a href="<?php echo $owner->getDisplayURL() ?>" class="u-url icon-container">
-                            <img class="u-photo" src="<?php echo $owner->getIcon() ?>" alt="<?php echo htmlentities($owner->getName()); ?>"/></a><br/>
-                        <a href="<?php echo $owner->getDisplayURL() ?>" class="p-name u-url fn"><?php echo htmlentities(strip_tags($owner->getTitle()), ENT_QUOTES, 'UTF-8'); ?></a>
-                    </p>
+            <?php if ($object->getPublishStatus() === 'draft') { ?>
+            <div class="idno-draft-banner">
+                <?= $this->__(['icon' => 'file-edit', 'class' => 'idno-draft-banner-icon'])->draw('shell/icon') ?>
+                <?= \Idno\Core\Idno::site()->language()->_('Draft') ?>
+                <span class="idno-draft-banner-hint">&mdash; <?= \Idno\Core\Idno::site()->language()->_('only visible to you') ?></span>
+            </div>
+            <?php } ?>
+
+            <div class="idno-entry-header p-author h-card">
+                <a href="<?= $owner->getDisplayURL() ?>" class="u-url">
+                    <img class="idno-entry-avatar u-photo" src="<?= $owner->getIcon() ?>"
+                         alt="<?= htmlentities($owner->getName()) ?>" />
+                </a>
+                <div>
+                    <a href="<?= $owner->getDisplayURL() ?>" class="idno-entry-author p-name u-url">
+                        <?= htmlentities(strip_tags($owner->getTitle()), ENT_QUOTES, 'UTF-8') ?>
+                    </a>
                 </div>
-
-                <div class="col-md-8 idno-content">
-                    <!--<div class="visible-xs">
-                        <p class="p-author author h-card vcard">
-                            <a href="<?php echo $owner->getDisplayURL() ?>" class="icon-container"><img
-                                    class="u-logo logo u-photo photo" src="<?php echo $owner->getIcon() ?>" alt="<?php echo htmlentities($owner->getName()); ?>"/></a>
-                            <a class="p-name fn u-url url" href="<?php echo $owner->getDisplayURL() ?>"><?php echo htmlentities(strip_tags($owner->getTitle()), ENT_QUOTES, 'UTF-8') ?></a>
-                            <a class="u-url" href="<?php echo $owner->getDisplayURL() ?>">
-                                </a>
-                        </p>
-                    </div>-->
-                    <?php
-                    if ($object->inreplyto) {
-                        ?>
-                            <div class="reply-text">
-                            <?php
-
-                            if (($object->replycontext)) {
-                            } else {
-
-                                if (!is_array($object->inreplyto)) {
-                                    $inreplyto = array($object->inreplyto);
-                                } else {
-                                    $inreplyto = $object->inreplyto;
-                                }
-
-                                if (!empty($inreplyto)) {
-                                    ?>
-
-                                            <p>
-                                                <i class="fa fa-reply"></i> Replied to
-                                        <?php
-
-                                            $replies = 0;
-                                        foreach ($inreplyto as $inreplytolink) {
-                                            if ($replies > 0) {
-                                                if (sizeof($inreplyto) > 2 && $replies < sizeof($inreplyto) - 1) {
-                                                    echo ', ';
-                                                } else {
-                                                    echo ' and ';
-                                                }
-                                            }
-                                            ?>
-                                                    <a href="<?php echo $inreplytolink ?>" rel="in-reply-to"
-                                                       class="u-in-reply-to">a post on
-                                                        <strong><?php echo parse_url($inreplytolink, PHP_URL_HOST); ?></strong>
-                                                        </a><?php
-                                                        $replies++;
-                                        }
-
-                                        ?>:
-                                            </p>
-
-                                        <?php
-                                }
-
-                            }
-
-                            ?>
-                            </div>
-                        <?php
-                    }
-
-                    ?>
-                    <div class="idno-body">
-                  <?php
-                    if (!empty($vars['body'])) {
-                        echo $vars['body'];
-                    } else if (!empty($object)) {
-                            echo $object->draw();
-                    }
-                    ?>
-                    </div>
-                    <div class="footer">
-                        <?php echo $this->draw('content/end') ?>
-                    </div>
-                </div>
-
             </div>
 
+            <?php
+            if ($object->inreplyto) {
+                if (!is_array($object->inreplyto)) {
+                    $inreplyto = array($object->inreplyto);
+                } else {
+                    $inreplyto = $object->inreplyto;
+                }
+                if (!empty($inreplyto)) {
+                    ?>
+                    <div class="idno-entry-meta" style="margin-bottom:var(--spacing-gap)">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:0.875rem;height:0.875rem;display:inline;vertical-align:middle"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                        <?= \Idno\Core\Idno::site()->language()->_('Replied to') ?>
+                        <?php
+                        $replies = 0;
+                        foreach ($inreplyto as $inreplytolink) {
+                            if ($replies > 0) {
+                                echo (sizeof($inreplyto) > 2 && $replies < sizeof($inreplyto) - 1) ? ', ' : ' and ';
+                            }
+                            $linkText = parse_url($inreplytolink, PHP_URL_HOST);
+                            if (\Idno\Common\Entity::isLocalUUID($inreplytolink)) {
+                                if ($replyTarget = \Idno\Common\Entity::getByURL($inreplytolink)) {
+                                    $targetTitle = $replyTarget->getTitle();
+                                    if (!empty($targetTitle)) {
+                                        $linkText = $targetTitle;
+                                    }
+                                }
+                            }
+                            ?>
+                            <a href="<?= htmlspecialchars($inreplytolink) ?>" rel="in-reply-to" class="u-in-reply-to">
+                                <?= htmlspecialchars($linkText) ?>
+                            </a>
+                            <?php
+                            $replies++;
+                        }
+                        ?>
+                    </div>
+                    <?php
+                }
+            }
+            ?>
+
+            <div class="idno-entry-body">
+                <?php
+                if (!empty($vars['body'])) {
+                    echo $vars['body'];
+                } else if (!empty($object)) {
+                    echo $object->draw();
+                }
+                ?>
+            </div>
+
+            <footer class="idno-entry-footer">
+                <?= $this->draw('content/end') ?>
+            </footer>
+        </article>
         <?php
     }
 }

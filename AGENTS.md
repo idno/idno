@@ -218,10 +218,11 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
   process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
   types a request may choose, and the `?_t[]=` defect, marked incomplete) and by golden pages,
-  `Tests/Templating/fixtures/pages/` (`twenty26/`, `no-theme/`, `logged-in/` (Twenty26, the administrator),
-  `logged-in-no-theme/` and `non-html/`, which every look must render identically: RSS, JSON Feed, JSON, JSONP, the
+  `Tests/Templating/fixtures/pages/` (`twenty26/`: Idno 2026, the look of every site, for a visitor; `logged-in/`: the
+  administrator; and `non-html/`: RSS, JSON Feed, JSON, JSONP, the
   ActivityPub actor, KML, the JSON of each content type's permalink and the password reset mail's two parts), made by
-  `RenderedPagesTest` (`IDNO_THEME=Twenty26`) and `RenderedPagesNoThemeTest` (no theme: the variable unset) on private
+  `RenderedPagesTest` (`IDNO_THEME=Twenty26`: the name the look had as a theme, resolved to the built-in look) and
+  `RenderedPagesNoThemeTest` (no theme: the variable unset; the same goldens) on private
   synchronous sites (`RenderedSiteTestCase`: fixed handles, entity ids, user uuids, slugs, `created` and `updated`, a
   fixed public key, one post of each bundled content type and enough public notes for a second page; the page's own
   ids are the only variable things). A page is compared after `Tests\Templating\PageNormaliser`, which replaces only
@@ -234,13 +235,19 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   (so a capture is never a green run), is refused when `CI` is set, and also fails if two looks render a shared golden
   differently. Goldens are captured from the code they pin, are the same on SQLite, MySQL and MariaDB, and a change to one
   is made on purpose, in a commit that says which page and why. `*.json` is gitignored, so JSON output is saved as
-  `.txt`. `Tests/Templating/fixtures/fallback-trace.php` has `traced`: for each type that is not a web page, the `default`
-  files it reaches by fallback that a `modern` file shadows, derived from a real traced run; and `shadowed`: every `default`
-  file of core and the bundled plugins that a `modern` file shadows, computed from the file system and asserted. With
+  `.txt`. `Tests/Templating/fixtures/fallback-trace.php` has `traced`: for each type that is not a web page, the `classic`
+  files it draws, derived from a real traced run; and `classic`: every file under `templates/classic/` of core and the
+  bundled plugins, computed from the file system and asserted (`Tests/Unit/Templating/ClassicTemplatesTest`: each has a `default`
+  file of the same name beside it, only `.tpl.php`, and the recorded list is the file system's). With
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
   (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
-  only when the variable names a file; nothing is called or written otherwise. Twig templates in the cascade are pinned by
+  only when the variable names a file; nothing is called or written otherwise. `Tests/Kernel/BuiltInLookTest` is the built-in look
+  on private sites: no theme, a stored `Twenty26` (resolved, never saved or announced) and a retired theme (saved as no theme and
+  announced once), a pinned theme, `?_t=modern` (the default type), `?_t=classic` and traversal types (refused, in any letter case: on a file
+  system that ignores case `CLASSIC` is the directory), a third-party plugin's `templates/modern/` file (still wins; one deprecation
+  line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author, the drafts page
+  and that no template refers to `Themes/Twenty26`. Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
   `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".
@@ -374,13 +381,19 @@ var/                           The compiled container (var/cache/); must be writ
                                deny-all .htaccess; none of them may be served (see Code Style)
 data/                          Where an SQLite site's database file lives (data/idno.sqlite): only its
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
-templates/                     Legacy templates (.tpl.php), one directory per template type
+templates/                     Templates (.tpl.php and Twig), one directory per template type: `default` is Idno 2026, the built-in
+                               look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
+                               feeds, JSON, ActivityPub, KML and mail still draw (never selectable); `rss`, `json`, ...
+frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
+                               files; built into css/idno-2026.min.css and js/idno-2026.min.js (committed, `npm --prefix frontend run
+                               build`); denied over HTTP like config/ (see Code Style)
 IdnoPlugins/                   First-party content & feature plugins
 ConsolePlugins/                CLI service plugins (BuildLanguage, Example, Export, GhostExport; third-party console plugins load from here too)
-Themes/                        Visual themes; Twenty26 (Idno 2026) is the only bundled theme. A site
-                               configured with a retired theme (Themes::RETIRED) is resolved to Twenty26
-                               at load; the setting is saved, and the admin told, when an admin next
-                               loads a page (Themes::announceRetiredTheme()); a theme pinned in
+Themes/                        Third-party themes only (a directory of template overrides with a theme.ini): Idno 2026 is
+                               built in, not a theme. The `theme` setting `Twenty26` (Themes::BUILT_IN) and a retired name
+                               (Themes::RETIRED) are resolved to no theme at load (Themes::resolve()); a retired name is
+                               saved as no theme, and the admin told, when an admin next loads a page
+                               (Themes::announceRetiredTheme()); `Twenty26` is never saved or announced; a theme pinned in
                                config.ini or the environment is never saved or announced, only resolved. Plugins and themes
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
@@ -1125,7 +1138,7 @@ other new code may.
     tables and no complete upgrade on record costs more (the 1.x version is read), and so do the
     closed states that tell the owner to remove tables (the catalog read again once). Pinned by
     `UpgradeEndToEndTest::testTheHomepageStatementsArePinned` (the DBAL statements of a homepage
-    request: the catalog, the probe, then the legacy application's, 13 on the fixture site, the same
+    request: the catalog, the probe, then the legacy application's, 12 on the fixture site (Idno 2026 draws one lookup fewer than the look it replaced did), the same
     after a completed upgrade, with its `legacy_` tables deleted, with 1.x tables recreated, with
     another application's `legacy_config`).
   New code never calls `db()`: inject `EntityRepository` (entities) or `RecordStore` (records).
@@ -2039,7 +2052,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
 - `/admin/legacytables` (`Idno\Pages\Admin\LegacyTables`, a LEGACY page: it needs the admin
   gatekeeper and the CSRF check of `Page::post()`, which controllers do not have; route in
   `Idno\Core\Admin::registerPages()`; templates `templates/default/admin/legacytables.tpl.php`,
-  `Themes/Twenty26/templates/modern/admin/legacytables.tpl.php` and the shared
+  `templates/classic/admin/legacytables.tpl.php` and the shared
   `admin/legacytables/body`, which escapes every value from the database): GET (admins) changes
   nothing and lists the tables with their approximate counts (with the 1.x `entities` tables back
   beside the upgrade: no delete form, and the gate's message instead; the gate is closed then, so the
@@ -2048,7 +2061,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   `Page::post()`'s token check, `adminGatekeeper()`, then only `confirm` exactly `delete` with a
   complete upgrade calls `drop()`; every outcome is a session message (what was deleted, or why
   nothing was) and a redirect to the page. The admin menu entry (both menus:
-  `templates/default/admin/menu.tpl.php`, `Themes/Twenty26/templates/modern/admin/menu.tpl.php`) is
+  `templates/default/admin/menu.tpl.php`, `templates/classic/admin/menu.tpl.php`) is
   `LegacyTables::showInMenu()`: false without a statement unless a logged-in admin is viewing (the
   admin shell also draws the menu on the 403 page of an `/admin` URL); else `worthShowing()`, once
   per request. On an SQLite site (or one whose database is not SQL) the route exists, the entry never appears, and the page
@@ -2066,7 +2079,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   statement costs, the drop rules), `Tests/Characterisation/AdminLegacyTablesTest` (the rig site: who
   gets the page, its empty state, no menu entry, POSTs without a token or the confirmation; it logs in
   over HTTP), `UpgradeEndToEndTest::testTheAdminReviewsAndDeletesTheLegacyTables` (an upgraded site
-  in Twenty26: the entry, the list, escaping, the delete) and
+  in the Idno 2026 look: the entry, the list, escaping, the delete) and
   `testTheConsoleDeletesTheLegacyTablesOnlyWhenToldTo`, `Tests/Kernel/UpgradeCommandTest`; the guard
   beside a restored 1.x site in `LegacyTablesTest::testDropRefusesWhenTheOneXEntitiesTablesAreBackBesideACompletedUpgrade`
   and, through every entry point and the console's `--drop-legacy`,
@@ -2494,8 +2507,18 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
   holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
   (`TemplateName::isSafe()` is the check without the strip). The pattern ends in `$`, so a trailing newline passes (it names no file).
-- `TypeChain::for($type)`: `default` is `['default']`, any other type `[$type, 'default']` (`modern` on a Twenty26 site
-  included); `selectable($type)` is true for every type.
+- `TypeChain::for($type)`: `default` and `modern` (in any letter case) are `['modern', 'default']`; any other type is `[$type, 'classic',
+  'default']`. No core or bundled directory has a `modern` type: it is there so that a third-party plugin's or theme's `templates/modern/`
+  files (written for the Twenty26 theme, whose `modern` type Idno 2026 replaced) still win on web pages for one release; the first
+  `modern` file a process draws logs ONE `warning` line, `Deprecated: the template <path> is in a `modern` template directory...`
+  (`TemplateRenderer`, with the logger as a closure: the site's logger needs the legacy application; the "already logged" state is
+  shared by the copies `withSlots()` makes), so one line a request; removed in 3.0. `classic` holds the entity templates of the look
+  Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, ActivityPub, KML and mail reach them by falling back
+  from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `selectable($type)` is
+  false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
+  `Templates::setTemplateType()` and the `?_t=` check both refuse it); `setTemplateType('modern')` sets `default`, so `?_t=modern` is the
+  default type. A third-party plugin's `default/<entity template>` override no longer changes a feed or a mail for a name `classic` has: `classic` is
+  tried before every directory's `default`.
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
   puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
   `generation()` (changes with each directory added).
@@ -2512,8 +2535,11 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   type and format (measured: the Twig check alone made a locate about twice as slow; remembered, a repeat costs a fraction of a microsecond).
   The Twig candidate is offered only when `CascadeTwigLoader::isLogicalName()` (the one predicate) accepts its logical name: a name with a
   leading or doubled slash (`TemplateName` accepts it, the file system resolves it) is a `.tpl.php` name only, and a Twig file of it alone is not found.
-  The memo holds at most `TemplateLocator::REMEMBER_LIMIT` answers and is emptied when it passes (names come from requests). Known limit: the
-  `email-text` chain falls back to `default`, so a plain-text mail can draw `default/<name>.html.twig`, which autoescapes as HTML, until the type chain changes.
+  The memo holds at most `TemplateLocator::REMEMBER_LIMIT` answers and is emptied when it passes (names come from requests). A plain-text mail
+  (`email-text`) looks for `.txt.twig` in EVERY directory of its chain (its own, `classic`, `default`) and never for `.html.twig`, which would
+  escape its text as HTML: it draws `.txt.twig` or `.tpl.php` files only (`TemplateLocatorTest::testEmailTextNeverDrawsAnHtmlTwigFile`). The
+  feed, JSON and KML types still find a `default/<name>.html.twig` by fallback (no core template is Twig yet); a template of those types that
+  is Twig must be a `.tpl.php` file in the type's own directory or in `classic`.
   `typeExists($type)`: some base has a `templates/<type>/` directory.
 - `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
   record (`extend`, `prepend`, `replace`, `extendWithContent`; `extensions()`, `prepends()`, `replacement()`, `content()`
@@ -2541,7 +2567,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   engine has ended the buffer(s) its render opened (what they held is discarded; buffers opened before the render are left
   alone), so a draw nested any depth leaves the buffer level as it found it
   (`TemplateContractTest::testAnExceptionInATemplateLeavesNoOutputBufferOpen`, `testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen`).
-  `Idno\Templating\OutputBuffers::endDownTo($level)` does the closing (the engine and `Logging::oopsAlert()`, which stays as a defence, use it): a buffer PHP cannot remove (a handler without the removable or cleanable flags) stops it, with what is below it left as it is, and nothing is thrown or raised, so the exception being handled is never replaced and nothing loops (`Tests/Unit/Templating/OutputBuffersTest`, `TemplateContractTest::testAnExceptionWithABufferThatCannotBeRemovedPropagatesTheOriginalAndStops`). `View::endOutputBuffers()` already stops at a buffer it cannot end.
+  `Idno\Templating\OutputBuffers::endDownTo($level)` does the closing (the engine and `Logging::oopsAlert()`, which stays as a defence, use it): a buffer PHP cannot remove (one opened without the flag `PHP_OUTPUT_HANDLER_REMOVABLE`, which is all `ob_end_clean()` needs: a removable buffer that is not cleanable is ended) stops it, with what is below it left as it is, and nothing is thrown or raised, so the exception being handled is never replaced and nothing loops (`Tests/Unit/Templating/OutputBuffersTest`, `TemplateContractTest::testAnExceptionWithABufferThatCannotBeRemovedPropagatesTheOriginalAndStops`). `View::endOutputBuffers()` already stops at a buffer it cannot end.
 - **Twig** (`symfony/twig-bundle`, `config/packages/twig.php`) is the second engine. Twig's cache is `%kernel.cache_dir%/twig` (compiled
   templates are PHP files that get included: they are trusted exactly as the compiled container is, and never go in the upload path or a
   shared temporary directory; `TemplateCachesTest`, `TwigEngineTest::testCompiledTemplatesLiveInTheKernelCacheDir`); `strict_variables` is
@@ -2579,15 +2605,25 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
     bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
     `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`.
-    No core template is a Twig file yet, so no golden page changes.
+    No core template is a Twig file yet, so no golden page changes. The `@core` real-container case writes a probe file in `templates/default/`
+    (`zz-core-probe-*`, gitignored) and removes any left by a killed run when it starts.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s
   per-class lookup (`object/<Class>` never matched) are gone. A `_t` request value that is not a string asks for no type.
 - `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
   (never the upload path; with no writable directory the definition cache is off).
-- Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
-  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
+- Idno 2026, the built-in look (`templates/default/`, `IdnoPlugins/<P>/templates/default/`, `css/idno-2026.min.css`, `js/idno-2026.min.js`, and
+  `Idno\Pages\Drafts`, the member's drafts page, a legacy page registered in `Idno::init()`), was the Twenty26 theme: its templates were in a
+  `modern` type that the theme's controller set. It is core's: a site's template type is `default`, `Themes::resolve()` maps the stored `theme`
+  `Twenty26` and every retired name to no theme, and `Themes/` holds third-party themes only (a theme's `default/` templates override core's,
+  its `theme.ini` `[extensions]` apply, as before). The sources of the style sheet and script are in `frontend/` (not served); the built files
+  are committed, and `npm --prefix frontend run build` writes them from Tailwind's scan of `templates/default/` and the bundled plugins'
+  `default/` templates (a rebuild is not byte-identical to the committed files: a newer terser, and the old build scanned its own output;
+  it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). The rest of
+  `default` (a Bootstrap-era template with no Idno 2026 one) still draws, as it did on a Twenty26 site.
+- Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
+  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
 
@@ -3360,7 +3396,7 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
   script meant to be run from the command line, needs
   deny rules in the root `.htaccess`, every sample config in `warmup/webserver-configs/`,
   `docker/caddy/Caddyfile`, `Tests/rig/router.php` and `Tests/build/router.php` (and a
-  `Require all denied` `.htaccess` in the directory, as `var/`, `config/`, `bin/` and
+  `Require all denied` `.htaccess` in the directory, as `var/`, `config/`, `bin/`, `frontend/` and
   `Tests/` have), plus a SAPI guard at the top of each command-line script: under any SAPI
   but `cli`/`phpdbg`, `http_response_code(404)` and `exit` before loading anything (see
   `bin/console`). Scripts for PHP's built-in web server (routers) allow `cli-server` only.
@@ -3509,7 +3545,7 @@ the CLI installer no longer writes one.
   sent it is destroyed when the request ends. In particular, don't decide what a request is
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
-- Command-line scripts, `var/`, `config/`, `bin/`, `Tests/`, `docs/` and `warmup/CLI/` are
+- Command-line scripts, `var/`, `config/`, `bin/`, `frontend/`, `Tests/`, `docs/` and `warmup/CLI/` are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - Account pages are closed to API requests: a page registered for a route under
   `/account/` (settings, password, API key, access tokens, the account's own export of its
@@ -3615,8 +3651,8 @@ the CLI installer no longer writes one.
   webmentions): `Entity::addAnnotation()` keeps the owner's address, the owner's image and
   the annotation's address only when `UrlValidator::httpUrl()` accepts them, and stores an
   empty string otherwise (for the annotation's address, an address of its own on this
-  site). The annotation templates of both looks (`templates/default/entity/annotations/`,
-  `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
+  site). The annotation templates of the web page look (`templates/default/entity/annotations/`, Idno 2026) and of the
+  `classic` one (`templates/classic/entity/annotations/`, which a feed or JSON would draw) check and escape them again.
   `Tests/Common/AnnotationOutputTest.php` checks this.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
@@ -3713,8 +3749,9 @@ the CLI installer no longer writes one.
 - WebSub: `Pages\Pubsubhubbub\Callback` answers the hub's challenge, which comes from the
   request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML.
   `Tests/Pages/Pubsubhubbub/CallbackTest.php` checks this.
-- Content Security Policy headers via template system (and, on the upgrade page, a strict
-  per-response nonce policy: `UpgradePage::contentSecurityPolicy()`)
+- No Content Security Policy header is sent by the site: only the upgrade page has one (a strict per-response
+  nonce policy, `UpgradePage::contentSecurityPolicy()`), and no template sends one. Output escaping, above, is what
+  keeps a value from becoming markup.
 - Deleting a site's data from the web: only `/admin/legacytables`, a legacy page (admin gatekeeper,
   CSRF token, and the field `confirm` exactly `delete`), and only the `legacy_` tables of a completed
   upgrade; never the rejects. Its template escapes every value read from the database. The console

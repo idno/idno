@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Tests\Templating;
 
 /**
- * What a site with the Twenty26 theme renders (IDNO_THEME=Twenty26), for a visitor and for the logged-in
- * administrator, and the output that is not a web page (the same golden files as RenderedPagesNoThemeTest
- * compares: a feed, JSON, the actor document, KML and the mail are the same whichever theme the site has). The
+ * What a site that names the theme `Twenty26` (IDNO_THEME=Twenty26: the name Idno 2026 had as a theme, which is
+ * resolved to the built-in look) renders, for a visitor and for the logged-in administrator, and the output that is
+ * not a web page (the same golden files as RenderedPagesNoThemeTest compares, whose site names no theme). The
  * golden files are Tests/Templating/fixtures/pages/twenty26/, logged-in/ and non-html/.
  *
  * The site traces every template draw (IDNO_TEST_TEMPLATE_TRACE): the draws of the non-HTML output that reach
- * a core or plugin `default` file which a `modern` file of the same name shadows are pinned in
- * fixtures/fallback-trace.php (see FallbackTrace).
+ * a `classic` file (the entity templates of the look Idno 2026 replaced, which feeds and mail still draw) are pinned
+ * in fixtures/fallback-trace.php (see FallbackTrace).
  */
 final class RenderedPagesTest extends RenderedSiteTestCase
 {
@@ -44,7 +44,7 @@ final class RenderedPagesTest extends RenderedSiteTestCase
         $cookie = $this->loginAsAdmin();
 
         $this->visitorPages('twenty26', $paths);
-        $this->assertContains('shell/pagination', FallbackTrace::draws((string) file_get_contents($this->traceFile))['modern'] ?? [], 'the home page\'s second page draws the pagination');
+        $this->assertContains('shell/pagination', FallbackTrace::draws((string) file_get_contents($this->traceFile))['default'] ?? [], 'the home page\'s second page draws the pagination');
 
         file_put_contents($this->traceFile, '');
         $this->nonHtmlPages($paths, $cookie);
@@ -63,15 +63,15 @@ final class RenderedPagesTest extends RenderedSiteTestCase
     private function assertFallbackTrace(array $derived): void
     {
         $file = __DIR__ . '/fixtures/fallback-trace.php';
-        $shadowed = FallbackTrace::shadowed(dirname(__DIR__, 2));
+        $classic = FallbackTrace::classic(dirname(__DIR__, 2));
         if (self::capturing()) {
-            FallbackTrace::write($file, $derived, $shadowed);
+            FallbackTrace::write($file, $derived, $classic);
             $this->written('fixtures/fallback-trace.php');
 
             return;
         }
         $expected = require $file;
-        $this->assertSame($expected['traced'], $derived, 'the files the non-HTML output reaches by falling back to `default` changed');
-        $this->assertSame($expected['shadowed'], $shadowed, 'the `default` files that a `modern` file shadows changed');
+        $this->assertSame($expected['traced'], $derived, 'the `classic` files the non-HTML output draws changed');
+        $this->assertSame($expected['classic'], $classic, 'the `classic` files changed');
     }
 }

@@ -361,7 +361,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Templating\TemplateLocator::class)->public();
     $services->set(\Idno\Templating\PhpTemplateEngine::class)->public();
     $services->set(\Idno\Templating\TemplateRenderer::class)
-        ->args([service(\Idno\Templating\TemplateLocator::class), service(\Idno\Templating\SlotRegistry::class), service(\Idno\Templating\PhpTemplateEngine::class), service(\Idno\Templating\TwigTemplateEngine::class)])
+        ->args([service(\Idno\Templating\TemplateLocator::class), service(\Idno\Templating\SlotRegistry::class), service(\Idno\Templating\PhpTemplateEngine::class), service(\Idno\Templating\TwigTemplateEngine::class), service_closure(\Psr\Log\LoggerInterface::class)])
         ->autowire(false)
         ->autoconfigure(false)
         ->public();

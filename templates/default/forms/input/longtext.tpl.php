@@ -31,9 +31,8 @@ if (!empty($vars['required'])) {
 }
 ?>
 
-<br class="clearall">
 <textarea name="<?php echo $vars['name']?>"  placeholder="<?php echo htmlspecialchars($placeholder);?>" style="height:<?php echo $height?>px"
-          class="bodyInput mentionable form-control <?php echo $class?>" id="<?php echo $unique_id?>" <?php echo $required; ?>><?php echo (htmlspecialchars($value)) ?></textarea>
+          class="bodyInput mentionable idno-textarea <?php echo $class?>" id="<?php echo $unique_id?>" <?php echo $required; ?>><?php echo (htmlspecialchars($value)) ?></textarea>
 <?php
 
 // Expose this control to the api

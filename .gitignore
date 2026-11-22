@@ -46,10 +46,12 @@ test.php
 
 config.ini
 *.json
-!Themes/Twenty26/package.json
-!Themes/Twenty26/package-lock.json
+!frontend/package.json
+!frontend/package-lock.json
 
-Themes/Twenty26/node_modules/
+# Directories the template tests make and remove
+/templates/default/zz-core-probe-*
+/Themes/Zz*
 tests/_output/*
 *-ori.*
 

@@ -9,7 +9,7 @@ use IdnoPlugins\Status\Status;
 /**
  * The owner's address, the owner's image and the address of an annotation come from
  * whoever sent the webmention. They must be stored only when they are http or https
- * addresses, and the annotation templates of both looks (the core one and Twenty26)
+ * addresses, and the annotation templates of the web page look
  * must print them escaped, and must not print one with another scheme even when it
  * is already stored.
  */
@@ -25,9 +25,6 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
-        // Twenty26 only has templates of the "modern" type, so this changes nothing
-        // for the tests that draw the default type.
-        \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/Themes/Twenty26');
     }
 
     public function setUp(): void
@@ -51,8 +48,7 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
     public static function lookProvider(): array
     {
         return [
-            'no theme' => ['default'],
-            'Twenty26' => ['modern'],
+            'Idno 2026' => ['default'],
         ];
     }
 

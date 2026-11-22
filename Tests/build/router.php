@@ -23,7 +23,7 @@ $path = rawurldecode((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_
 // Never expose things the .htaccess file denies (directories case-insensitively, as on a
 // case-insensitive filesystem)
 if (preg_match('#^/(\.git|\.github|Uploads|configuration)(/|$)#', $path)
-    || preg_match('#^/((var|config|bin|tests|docs|data|warmup/cli)(/|$)|(idno|known)\.php$)#i', $path)
+    || preg_match('#^/((var|config|bin|tests|docs|data|frontend|warmup/cli)(/|$)|(idno|known)\.php$)#i', $path)
     || preg_match('#\.(dist|ini|yml|bak|lock)$#', $path)
     || preg_match('#\.(sqlite|sqlite-wal|sqlite-shm)$#i', $path)
     || (preg_match('#(\.xml|/composer\.json|/package\.json)$#', $path) && is_file($root . $path))

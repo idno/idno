@@ -149,7 +149,7 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
         // Derived from the filesystem and the configuration, not hard-coded: the test rig and
         // CI (Tests/build/config_*.ini) configure their own plugin lists.
         $this->assertSame($this->pluginsUnderTheProjectRoot(), $web['plugins_stored']);
-        $this->assertSame(['', 'Twenty26'], $web['themes_stored']);
+        $this->assertSame([''], $web['themes_stored'], 'no theme is installed: Idno 2026 is built in');
 
         $configured = (array) \Idno\Core\Idno::site()->config()->plugins;
         $expectedLoaded = array_values(array_intersect(array_unique($configured), $web['plugins_stored']));
@@ -192,17 +192,43 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
      */
     public function testConfiguredThemeLoadsOnlyForRequestsWithAHostHeader(): void
     {
-        $web = $this->probe('web');
-        $this->assertSame('Twenty26', $web['theme']);
-        $this->assertSame(['Twenty26'], $web['themes_loaded']);
-        $this->assertSame('modern', $web['template_type'], 'the theme controller switches the template type');
-        $this->assertSame(1, $web['drafts_routes'], 'the theme controller registers its route');
+        $theme = dirname(__DIR__, 2) . '/Themes/ZzProbeTheme';
+        mkdir($theme, 0777, true);
+        try {
+            file_put_contents($theme . '/theme.ini', "[Theme description]\nname = 'Zz probe'\nversion = '1.0'\n");
+            file_put_contents($theme . '/Controller.php', "<?php\nnamespace Themes\\ZzProbeTheme {\n    class Controller extends \\Idno\\Common\\Theme\n    {\n        function init()\n        {\n            \\Idno\\Core\\Idno::site()->routes()->addRoute('/zz-probe/?', '\\Idno\\Pages\\Homepage');\n        }\n    }\n}\n");
 
-        $console = $this->probe('console');
-        $this->assertSame('Twenty26', $console['theme']);
-        $this->assertSame([], $console['themes_loaded']);
-        $this->assertSame('default', $console['template_type']);
-        $this->assertSame(0, $console['drafts_routes']);
+            $web = $this->probe('web');
+            $this->assertSame('ZzProbeTheme', $web['theme']);
+            $this->assertSame(['ZzProbeTheme'], $web['themes_loaded']);
+            $this->assertSame('default', $web['template_type'], 'no theme sets another template type');
+            $this->assertSame(1, $web['probe_routes'], 'the theme controller registers its route');
+
+            $console = $this->probe('console');
+            $this->assertSame('ZzProbeTheme', $console['theme']);
+            $this->assertSame([], $console['themes_loaded']);
+            $this->assertSame('default', $console['template_type']);
+            $this->assertSame(0, $console['probe_routes']);
+        } finally {
+            foreach (['/theme.ini', '/Controller.php'] as $file) {
+                if (is_file($theme . $file)) {
+                    unlink($theme . $file);
+                }
+            }
+            rmdir($theme);
+        }
+    }
+
+    /**
+     * The name Idno 2026 had as a theme loads no theme: it is the built-in look.
+     */
+    public function testTheNameTheBuiltInLookHadAsAThemeLoadsNoTheme(): void
+    {
+        $web = $this->probe('web', 'www.Probe-Host.test', 'Twenty26');
+
+        $this->assertSame('', $web['theme']);
+        $this->assertSame([], $web['themes_loaded']);
+        $this->assertSame('default', $web['template_type']);
     }
 
     public function testHomepageIsRenderedWithoutAThemeWhenNoneIsConfigured(): void

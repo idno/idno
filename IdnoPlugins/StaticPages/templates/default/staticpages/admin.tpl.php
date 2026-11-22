@@ -1,271 +1,202 @@
-<style>
-    .home-icon {
-        display: block;
-        width: 100%;
-        height: 100%;
-        text-align: center;
+<?php
+    $baseUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+    $categories = [];
+?>
+
+<div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('Pages') ?></h1>
+    <a href="<?= $baseUrl ?>staticpages/edit/" class="idno-btn idno-btn-primary">
+        + <?= \Idno\Core\Idno::site()->language()->_('Add new page') ?>
+    </a>
+</div>
+<p class="idno-admin-description">
+    <?= \Idno\Core\Idno::site()->language()->_('Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.') ?>
+</p>
+
+<?php if (!empty($vars['pages'])) {
+    foreach ($vars['pages'] as $category => $pages) {
+        $categories[$category] = count($pages);
     }
+    ?>
 
-    .home-icon:hover .no-hover,
-    .home-icon .hover {
-        display: none;
-    }
-
-    .home-icon:hover .hover,
-    .home-icon .no-hover {
-        display: inline;
-    }
-    .home-icon:hover {
-        text-decoration: none;
-    }
-</style>
-
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-        <?php echo $this->draw('admin/menu') ?>
-        <h1>
-            <?php echo \Idno\Core\Idno::site()->language()->_('Pages'); ?>
-        </h1>
-
-        <p class="explanation">
-            <?php echo \Idno\Core\Idno::site()->language()->_('Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates.  Common examples of pages include an about page, a contact page, or a resume.'); ?>
-        </p>
-
-    </div>
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('All Pages') ?></h2>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+                <th style="width:30px;padding:0.5rem;"></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Title') ?></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Category') ?></th>
+                <th style="text-align:right;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Actions') ?></th>
+            </tr>
+        </thead>
+        <?php foreach ($vars['pages'] as $category => $pages) {
+            if (!empty($pages)) { ?>
+        <tbody class="sortable-pages" data-category="<?= htmlspecialchars($category) ?>">
+                <?php foreach ($pages as $page) { ?>
+            <tr draggable="true" data-page-id="<?= $page->getID() ?>" style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.pageId); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handlePageDrop(event, this);">
+                <td style="padding:0.5rem;color:var(--color-muted,#9ca3af);cursor:grab;">⋮⋮</td>
+                <td style="padding:0.5rem;">
+                    <a href="<?= $page->getURL() ?>"><?= htmlspecialchars($page->getTitle()) ?></a>
+                </td>
+                <td style="padding:0.5rem;font-size:0.875rem;color:var(--color-muted,#6b7280);"><?= htmlspecialchars($category) ?></td>
+                <td style="padding:0.5rem;text-align:right;font-size:0.875rem;white-space:nowrap;">
+                    <?php if ($page->isHomepage()) {
+                        echo \Idno\Core\Idno::site()->actions()->createLink(
+                            $page->getClearHomepageURL(),
+                            '🏠',
+                            [],
+                            ['method' => 'POST', 'title' => \Idno\Core\Idno::site()->language()->_('Remove as homepage'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to remove this page from your homepage?')]
+                        );
+                    } else { ?>
+                        <span style="opacity:0.3;">
+                        <?php echo \Idno\Core\Idno::site()->actions()->createLink(
+                            $page->getSetAsHomepageURL(),
+                            '🏠',
+                            [],
+                            ['method' => 'POST', 'title' => \Idno\Core\Idno::site()->language()->_('Make homepage'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to make this page your homepage?')]
+                        ); ?>
+                        </span>
+                    <?php } ?>
+                    <a href="<?= $baseUrl ?>staticpage/edit/<?= $page->_id ?>" style="margin-left:0.5rem;" title="<?= \Idno\Core\Idno::site()->language()->_('Edit page') ?>">
+                        <?= $this->__(['icon' => 'pencil'])->draw('shell/icon') ?>
+                    </a>
+                    <span style="margin-left:0.5rem;color:var(--color-danger,#dc2626);">
+                    <?= \Idno\Core\Idno::site()->actions()->createLink(
+                        $page->getDeleteURL(),
+                        $this->__(['icon' => 'trash-2'])->draw('shell/icon'),
+                        [],
+                        ['method' => 'POST', 'title' => \Idno\Core\Idno::site()->language()->_('Delete page'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to permanently delete this page?')]
+                    ) ?>
+                    </span>
+                </td>
+            </tr>
+                <?php } ?>
+        </tbody>
+            <?php }
+        } ?>
+    </table>
 </div>
 
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-        <p class="pages">
-            <a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>staticpages/edit/"
-               class="btn btn-primary btn-add"><?php echo \Idno\Core\Idno::site()->language()->_('Add new page'); ?></a>
-        </p>
+<?php } ?>
+
+<!-- Categories Section -->
+<div class="idno-admin-card" x-data="{ showAddCategory: false }">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Categories') ?></h2>
+        <button type="button" @click="showAddCategory = !showAddCategory" class="idno-btn" style="font-size:0.875rem;">
+            + <?= \Idno\Core\Idno::site()->language()->_('Add category') ?>
+        </button>
     </div>
-</div>
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-        <?php
+    <p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
+        <?= \Idno\Core\Idno::site()->language()->_('If you plan on adding many pages, you may want to group them under categories. However, you don\'t have to assign a page to a category.') ?>
+    </p>
 
-        if (!empty($vars['pages'])) {
-
-            ?>
-                <table style="width: 100%; margin-bottom: 3em">
-                    <thead>
-                        <tr class="pages">
-                            <td class="pages" width="30%"><?php echo \Idno\Core\Idno::site()->language()->_('Title'); ?></td>
-                            <td class="pages" width="30%"><?php echo \Idno\Core\Idno::site()->language()->_('Category'); ?></td>
-                            <td class="pages" width="10%">&nbsp;</td>
-                            <td class="pages" width="15%">&nbsp;</td>
-                            <td class="pages" width="15%">&nbsp;</td>
-                        </tr>
-                    </thead>
-                    <?php
-
-                    $categories = [];
-                    foreach ($vars['pages'] as $category => $pages) {
-
-                        $categories[$category] = count($pages);
-
-
-                        if (!empty($pages)) {
-                            ?>
-                                <tbody class="sortable-pages" data-value="<?php echo $category ?>">
-                                    <?php
-                                    foreach ($pages as $page) {
-
-                                        ?>
-                                        <tr class="items" data-value="<?php echo $page->getID() ?>">
-                                            <td>
-                                                <a href="<?php echo $page->getURL() ?>"><?php echo htmlspecialchars($page->getTitle()) ?></a>
-                                            </td>
-                                            <td>
-                                                <?php echo $category ?>
-                                            </td>
-
-                                            <td>
-                                                <?php
-                                                if ($page->isHomepage()) {
-
-                                                    echo  \Idno\Core\Idno::site()->actions()->createLink($page->getClearHomepageURL(), '<icon class="fa fa-home no-hover"></icon><icon class="fa fa-times hover"></icon>', array(), array('method' => 'POST', 'class' => 'home-icon', 'title' => \Idno\Core\Idno::site()->language()->_('Remove as homepage'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to remove this page from your homepage?')));
-
-                                                } else {
-
-                                                    echo  \Idno\Core\Idno::site()->actions()->createLink($page->getSetAsHomepageURL(), '<icon class="fa fa-home hover"></icon><div class="no-hover">&nbsp</div>', array(), array('method' => 'POST', 'class' => 'home-icon', 'title' => \Idno\Core\Idno::site()->language()->_('Make homepage'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to make this page your homepage?')));
-
-                                                }
-
-                                                ?>
-                                            </td>
-                                            <td>
-                                                <a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>staticpage/edit/<?php echo $page->_id ?>" title="<?php echo \Idno\Core\Idno::site()->language()->_('Edit page'); ?>"><icon class="fa fa-pencil"></icon><?php echo \Idno\Core\Idno::site()->language()->_('Edit'); ?></a>
-                                            </td>
-                                            <td>
-                                                <?php echo  \Idno\Core\Idno::site()->actions()->createLink($page->getDeleteURL(), '<icon class="fa fa-trash-o"></icon>' . \Idno\Core\Idno::site()->language()->_('Delete'), array(), array('method' => 'POST', 'class' => 'edit', 'title' => \Idno\Core\Idno::site()->language()->_('Delete page'), 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to permanently delete this page?')));?>
-                                            </td>
-                                        </tr>
-                                        <?php
-
-                                    }
-
-                                    ?>
-                                </tbody>
-                            <?php
-
-                        }
-
-                    }
-
-                    ?>
-                </table>
-            <?php
-
-
-        }
-
-        ?>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-        <h2>
-            <?php echo \Idno\Core\Idno::site()->language()->_('Categories'); ?>
-        </h2>
-
-        <p class="explanation">
-            <?php echo \Idno\Core\Idno::site()->language()->_('If you plan on adding many pages, you may want to group them under categories.  However, you don’t have to assign a page to a category.'); ?>
-        </p>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-
-        <p class="pages" id="add-category-button">
-            <a href="#" class="btn btn-primary btn-add" onclick="$('#add-category-button').hide(); $('#add-category').show(); return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Add new category'); ?></a>
-        </p>
-    </div>
-</div>
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-
-        <div id="add-category" style="display:none">
-
-            <form class="form-inline" action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL(); ?>admin/staticpages/add/" method="post">
-                <input id="pages-add" class="form-control" type="text" name="category" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Name of category to add'); ?>">
-                <input type="submit" class="btn btn-primary btn-page" value="<?php echo \Idno\Core\Idno::site()->language()->_('Add'); ?>">
-                <?php echo \Idno\Core\Idno::site()->actions()->signForm('/admin/staticpages/add') ?>
-            </form>
-
-        </div>
-
-        <?php
-
-        if (!empty($categories)) {
-
-            ?>
-                <table style="width: 100%; margin-bottom: 3em">
-                    <thead>
-                        <tr class="pages">
-                            <td width="35%"><?php echo \Idno\Core\Idno::site()->language()->_('Category Name'); ?></td>
-                            <td width="35%"><?php echo \Idno\Core\Idno::site()->language()->_('Count'); ?></td>
-                            <td width="15%">&nbsp;</td>
-                            <td width="15%">&nbsp;</td>
-                        </tr>
-                    </thead><tbody class="sortable-categories">
-                    <?php
-
-                    foreach ($categories as $category => $count) {
-
-                        $unique_id = md5($category . rand(0, 999));
-
-                        ?>
-                            <tr class="items <?php
-                            if ($category == 'No Category') {
-                                echo 'pages-no-category';
-                            } ?>" <?php
-if ($category != 'No Category') {
-    echo ' data-value="'.$category.'"';
-} ?>>
-                                <td>
-                                    <div id="category-name-<?php echo $unique_id?>"><?php echo $category ?></div>
-                                    <div id="edit-category-<?php echo $unique_id?>" style="display: none">
-                                        <form class="form-inline" action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/staticpages/edit/" method="post">
-                                            <input class="form-control" type="text" name="new_category" value="<?php echo htmlspecialchars($category)?>">
-                                            <input type="submit" value="Save" class="btn btn-primary btn-page">
-                                            <input class="form-control" type="hidden" name="category" value="<?php echo htmlspecialchars($category)?>">
-                                            <?php echo \Idno\Core\Idno::site()->actions()->signForm('/admin/staticpages/edit') ?>
-                                        </form>
-                                    </div>
-                                </td>
-                                <td>
-                                    <?php echo $count ?>
-                                </td>
-                                <td>
-                                    <?php
-
-                                    if ($category != 'No Category') {
-
-                                        ?>
-                                            <i class="fa fa-pencil"></i>
-                                            <a href="#" onclick="$('#category-name-<?php echo $unique_id?>').hide(); $('#edit-category-<?php echo $unique_id?>').show(); return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Edit'); ?></a>
-                                        <?php
-
-                                    }
-
-                                    ?>
-                                </td>
-                                <td>
-                                    <?php
-
-                                    if ($category != 'No Category') {
-
-                                        ?><i class="fa fa-trash-o"></i>
-                                        <?php echo  \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/staticpages/delete/', \Idno\Core\Idno::site()->language()->_('Delete'), array('category' => $category), array('method' => 'POST', 'class' => 'edit', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to permanently delete this category?')));?>
-                                        <?php
-
-                                    }
-
-                                    ?>
-                                </td>
-                            </tr>
-                        <?php
-
-                    }
-
-                    ?></tbody>
-                </table>
-            <?php
-
-        }
-
-        ?>
-        <script type="text/javascript" src="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>IdnoPlugins/StaticPages/external/html5sortable/html.sortable.min.js"></script>
-        <script type="text/javascript">
-            $('.sortable-categories').sortable({
-                items: '[data-value]',
-                placeholder: '<tr style="border:1px dotted #999;"><td colspan="4">&nbsp;</td></tr>'
-            }).bind('sortstop', function (evt, ui) {
-                $.post("<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/staticpages/reorder/", {
-                    category: ui.item.data('value'),
-                    position: $('.sortable-categories [data-value]').index(ui.item)
-                });
-                var pageGroups = $('.sortable-pages');
-                var container = pageGroups.parent();
-                pageGroups.detach();
-                container.append(pageGroups.filter('[data-value="No Category"]'));
-                $('#sortable-categories [data-value]').each(function () {
-                    container.append(pageGroups.filter('[data-value="'+$(this).data('value')+'"]'));
-                });
-            });
-            $('.sortable-pages').sortable({
-                items: '[data-value]',
-                placeholder: '<tr style="border:1px dotted #999;"><td colspan="4">&nbsp;</td></tr>'
-            }).bind('sortstop', function (evt, ui) {
-                $.post("<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/staticpages/reorder/page", {
-                    page: ui.item.data('value'),
-                    position: ui.item.parent().children('[data-value]').index(ui.item)
-                });
-            });
-        </script>
+    <div x-show="showAddCategory" x-cloak style="margin-top:0.75rem;">
+        <form action="<?= $baseUrl ?>admin/staticpages/add/" method="post" style="display:flex;gap:0.5rem;align-items:start;">
+            <input type="text" name="category" placeholder="<?= \Idno\Core\Idno::site()->language()->_('Name of category to add') ?>" class="idno-input" style="max-width:20rem;" required>
+            <button type="submit" class="idno-btn idno-btn-primary"><?= \Idno\Core\Idno::site()->language()->_('Add') ?></button>
+            <?= \Idno\Core\Idno::site()->actions()->signForm('/admin/staticpages/add') ?>
+        </form>
     </div>
 
+    <?php if (!empty($categories)) { ?>
+    <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+                <th style="width:30px;padding:0.5rem;"></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Category Name') ?></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Pages') ?></th>
+                <th style="text-align:right;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Actions') ?></th>
+            </tr>
+        </thead>
+        <tbody id="sortable-categories">
+            <?php foreach ($categories as $category => $count) {
+                $uniqueId = md5($category . rand(0, 999));
+                $isNoCategory = ($category === 'No Category');
+                ?>
+            <tr <?php
+            if (!$isNoCategory) {
+                ?>draggable="true" data-category="<?= htmlspecialchars($category) ?>"
+                style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.category); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handleCategoryDrop(event, this);"<?php
+            } else {
+                ?>style="border-bottom:1px solid var(--color-border,#e5e7eb);"<?php
+            } ?>
+                x-data="{ editing: false }">
+                <td style="padding:0.5rem;color:var(--color-muted,#9ca3af);"><?php if (!$isNoCategory) echo '⋮⋮'; ?></td>
+                <td style="padding:0.5rem;">
+                    <span x-show="!editing"><?= htmlspecialchars($category) ?></span>
+                    <?php if (!$isNoCategory) { ?>
+                    <form x-show="editing" x-cloak action="<?= $baseUrl ?>admin/staticpages/edit/" method="post" style="display:flex;gap:0.5rem;">
+                        <input type="text" name="new_category" value="<?= htmlspecialchars($category) ?>" class="idno-input" style="width:auto;">
+                        <input type="hidden" name="category" value="<?= htmlspecialchars($category) ?>">
+                        <button type="submit" class="idno-btn idno-btn-primary" style="font-size:0.75rem;"><?= \Idno\Core\Idno::site()->language()->_('Save') ?></button>
+                        <button type="button" @click="editing = false" class="idno-btn" style="font-size:0.75rem;"><?= \Idno\Core\Idno::site()->language()->_('Cancel') ?></button>
+                        <?= \Idno\Core\Idno::site()->actions()->signForm('/admin/staticpages/edit') ?>
+                    </form>
+                    <?php } ?>
+                </td>
+                <td style="padding:0.5rem;"><?= $count ?></td>
+                <td style="padding:0.5rem;text-align:right;font-size:0.875rem;">
+                    <?php if (!$isNoCategory) { ?>
+                        <a href="#" @click.prevent="editing = true" style="margin-right:0.5rem;">
+                            <?= $this->__(['icon' => 'pencil'])->draw('shell/icon') ?>
+                        </a>
+                        <span style="color:var(--color-danger,#dc2626);">
+                        <?= \Idno\Core\Idno::site()->actions()->createLink(
+                            $baseUrl . 'admin/staticpages/delete/',
+                            $this->__(['icon' => 'trash-2'])->draw('shell/icon'),
+                            ['category' => $category],
+                            ['method' => 'POST', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure you want to permanently delete this category?')]
+                        ) ?>
+                        </span>
+                    <?php } ?>
+                </td>
+            </tr>
+            <?php } ?>
+        </tbody>
+    </table>
+    <?php } ?>
 </div>
+
+<script>
+function handlePageDrop(event, targetRow) {
+    var draggedId = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-page-id="' + draggedId + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-page-id]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('<?= $baseUrl ?>admin/staticpages/reorder/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ page: draggedId, position: newIndex })
+    });
+}
+
+function handleCategoryDrop(event, targetRow) {
+    var draggedCategory = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-category="' + draggedCategory + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-category]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('<?= $baseUrl ?>admin/staticpages/reorder/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ category: draggedCategory, position: newIndex })
+    });
+}
+</script>

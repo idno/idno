@@ -1,37 +1,35 @@
-<div class="row">
-    <div class="col-md-10 col-md-offset-1">
-        <?php echo $this->draw('admin/menu') ?>
-        <h1><?php echo \Idno\Core\Idno::site()->language()->_('Log capture'); ?></h1>
+<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('Logs') ?></h1>
+    <p class="idno-admin-description">
+        <?= \Idno\Core\Idno::site()->language()->_('This page provides you with captured PHP logs. These contain sensitive information, so be very careful how you disclose the information and to whom.') ?>
+    </p>
 
-
-        <div class="explanation">
-            <p>
-                <?php echo \Idno\Core\Idno::site()->language()->_('This page provides you with captured PHP logs. These contain sensitive information, so be very careful how you disclose the information and to whom.'); ?>
-            </p>
+    <div class="idno-admin-card">
+        <div id="logs-report" style="display:none">
+            <pre class="idno-admin-log-viewer" style="max-height:600px;overflow:auto;font-size:0.8125rem"></pre>
         </div>
-        
-    
-        <div id="logs-report" style="display: none; ">
-            <small><pre style="height: 600px; overflow:auto;">
-                </pre></small>
-        </div>
-
-        <span class="btn btn-primary" id="logs-report-run"><?php echo \Idno\Core\Idno::site()->language()->_('Refresh...'); ?></span>
-
+        <button class="idno-btn idno-btn-primary" id="logs-report-run"><?= \Idno\Core\Idno::site()->language()->_('Refresh...') ?></button>
     </div>
 
-</div>
-
 <script>
-    $(document).ready(function(){
-        $('#logs-report pre').load('<?php echo \Idno\Core\Idno::site()->currentPage()->currentUrl(); ?>', function(){
-                $('#logs-report').fadeIn();
-            });
-            
-        $('#logs-report-run').click(function(){
-            
-            $('#logs-report pre').load('<?php echo \Idno\Core\Idno::site()->currentPage()->currentUrl(); ?>', function(){
-            });
+    document.addEventListener('DOMContentLoaded', function() {
+        var logPre = document.querySelector('#logs-report pre');
+        var logDiv = document.getElementById('logs-report');
+        var logBtn = document.getElementById('logs-report-run');
+        var logUrl = '<?= \Idno\Core\Idno::site()->currentPage()->currentUrl() ?>';
+
+        function loadLogs() {
+            fetch(logUrl)
+                .then(function(r) { return r.text(); })
+                .then(function(data) {
+                    logPre.textContent = data;
+                    logDiv.style.display = '';
+                });
+        }
+
+        loadLogs();
+
+        logBtn.addEventListener('click', function() {
+            loadLogs();
         });
     });
 </script>

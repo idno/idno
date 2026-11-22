@@ -29,6 +29,17 @@ If you've made JS or CSS changes, you can check your code using ```npm run grunt
 
 To get your javascript or css changes to be used by Idno, you'll need to build minified versions of them. Do this by running ```npm run grunt -- build-js``` (or the default grunt task, ```npm run grunt```, which builds everything).
 
+## Building the Idno 2026 front end
+
+The built-in look, Idno 2026, has its own style sheet and script, `css/idno-2026.min.css` and `js/idno-2026.min.js` (with `js/idno-2026.min.js.map`). They are built with Vite and Tailwind CSS from the sources in `frontend/`, and the built files are committed, so a site never needs to build them. To change them:
+
+```
+npm --prefix frontend ci
+npm --prefix frontend run build
+```
+
+`npm --prefix frontend run dev` rebuilds when a source changes. The build reads the classes the templates use (`templates/default/` and `IdnoPlugins/*/templates/default/`), and writes straight into the project's `css/` and `js/` directories (Vite warns that its output directory is the parent of its root: that is intended, and nothing is emptied). `frontend/` is not served by a web server.
+
 ## Building SASS/CSS
 
 Idno uses SCSS to define the main style sheets, and as such you will need to build new stylesheets by running ```npm run grunt -- build-css``` (or the default task).

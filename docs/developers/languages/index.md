@@ -28,7 +28,7 @@ php bin/console build-lang core
 php bin/console build-lang plugin:Status
 
 # Extract strings for a specific theme
-php bin/console build-lang theme:Twenty26
+php bin/console build-lang theme:MyTheme
 
 # Extract strings for everything (core + all plugins + all themes)
 php bin/console build-lang all

@@ -66,13 +66,13 @@ foreach ($fields_and_defaults as $field => $default) {
     }
 }
 ?>
-    class="form-control input <?php echo isset($vars['class']) ? $vars['class'] : 'input-' . (isset($vars['type']) ? $vars['type'] : 'text'); ?>"
+    class="idno-input <?php echo isset($vars['class']) ? $vars['class'] : 'input-' . (isset($vars['type']) ? $vars['type'] : 'text'); ?>"
 <?php if (isset($vars['placeholder'])) { ?>placeholder="<?php echo htmlentities($vars['placeholder'], ENT_QUOTES, 'UTF-8'); ?>" <?php
 } // Placeholder is a special case ?>
 <?php if (isset($vars['alt'])) { ?>alt="<?php echo htmlentities($vars['alt'], ENT_QUOTES, 'UTF-8'); ?>" <?php
 } // Alt is a special case ?>
     value="<?php if (isset($vars['value'])) echo htmlentities($vars['value'], ENT_QUOTES, 'UTF-8'); ?>"
-    /> 
+    />
 <?php
 // Ensure this is documented in the api get
 if (!empty($published['alt'])) {

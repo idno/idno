@@ -7,22 +7,22 @@
     if (empty($vars['method']) || !in_array($vars['method'], array('GET','POST','PUT','DELETE'))) $vars['method'] = 'POST';
 
 ?>
-<a data-form-id="<?php echo $uniqueID; ?>" <?php if (!empty($vars['class'])) { ?> class="<?php echo $vars['class'];?>" <?php
-} ?> <?php if (!empty($vars['title'])) { ?> title="<?php echo $vars['title'];?>" <?php
-} ?> href="<?php echo ($vars['url'])?>" onclick="<?php
+<a data-form-id="<?= $uniqueID ?>" <?php if (!empty($vars['class'])) { ?> class="<?= $vars['class'] ?>" <?php
+} ?> <?php if (!empty($vars['title'])) { ?> title="<?= $vars['title'] ?>" <?php
+} ?> href="<?= $vars['url'] ?>" onclick="<?php
 if ($vars['confirm']) {
-    ?>if (confirm('<?php echo addslashes($vars['confirm-text']); ?>')) { $('#<?php echo $uniqueID?>').submit(); return false; } else { return false; } <?php
+    ?>if (confirm('<?= addslashes($vars['confirm-text']) ?>')) { document.getElementById('<?= $uniqueID ?>').submit(); return false; } else { return false; } <?php
 } else {
-    ?>$('#<?php echo $uniqueID?>').submit(); return false; <?php
-} ?>"><?php echo ($vars['label'])?></a>
+    ?>document.getElementById('<?= $uniqueID ?>').submit(); return false; <?php
+} ?>"><?= $vars['label'] ?></a>
 <?php
 
     ob_start();
 
 ?>
-<form action="<?php echo ($vars['url'])?>" style="display: none; margin: 0; padding: 0" id="<?php echo $uniqueID?>" method="<?php echo $vars['method']?>">
-    <textarea name="json"><?php echo htmlspecialchars(json_encode($vars['data']))?></textarea>
-    <?php echo  \Idno\Core\Idno::site()->actions()->signForm($vars['url']);?>
+<form action="<?= $vars['url'] ?>" style="display: none; margin: 0; padding: 0" id="<?= $uniqueID ?>" method="<?= $vars['method'] ?>">
+    <textarea name="json"><?= htmlspecialchars(json_encode($vars['data'])) ?></textarea>
+    <?= \Idno\Core\Idno::site()->actions()->signForm($vars['url']) ?>
 </form>
 <?php
 

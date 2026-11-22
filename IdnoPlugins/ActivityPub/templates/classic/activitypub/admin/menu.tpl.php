@@ -1,0 +1,1 @@
+<li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/activitypub/')) echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/activitypub/"><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub'); ?></a></li>

@@ -2,7 +2,7 @@
 
 if (!empty($vars['items'])) {
 
-    foreach($vars['items'] as $entry) {
+    foreach ($vars['items'] as $entry) {
         if ($entry instanceof \Idno\Common\Entity) {
             echo $this->__(['object' => $entry])->draw('entity/shell');
         }

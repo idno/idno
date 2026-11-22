@@ -16,7 +16,7 @@ namespace Idno\Pages\Session {
         {
 
             // If we're somehow here but logged in, move to the front page if we're viewing with an HTML template
-            if (\Idno\Core\Idno::site()->session()->isLoggedOn() && in_array(\Idno\Core\Idno::site()->template()->getTemplateType(), ['default', 'modern'])) {
+            if (\Idno\Core\Idno::site()->session()->isLoggedOn() && \Idno\Core\Idno::site()->template()->getTemplateType() === 'default') {
 
                 $fwd = $this->getInput('fwd'); // Forward to a new page?
                 if (empty($fwd)) {

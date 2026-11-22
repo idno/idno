@@ -88,7 +88,7 @@ foreach ($fields_and_defaults as $field => $default) {
     }
 }
 ?>
-    class="input <?php echo isset($vars['class']) ? $vars['class'] : 'input-select'; ?>">
+    class="idno-select <?php echo isset($vars['class']) ? $vars['class'] : ''; ?>">
     <?php if (!empty($vars['blank-default'])) { ?>
     <option></option>
     <?php } ?>
@@ -99,7 +99,7 @@ foreach ($fields_and_defaults as $field => $default) {
         <?php
     }
     ?>
-</select>    
+</select>
 <?php
 // Ensure this is documented in the api get
 if (!empty($published['placeholder'])) {

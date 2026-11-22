@@ -9,23 +9,23 @@
 
 <div>
 
-    <h2 class="p-name">
+    <h2 class="idno-entry-title p-name">
         <?php if (empty($vars['feed_view'])) { ?>
-            <a href="<?php echo $object->getURL() ?>"><?php echo htmlspecialchars($object->getTitle()) ?></a>
+            <a href="<?= $object->getURL() ?>"><?= htmlspecialchars($object->getTitle()) ?></a>
         <?php } ?>
     </h2>
 
     <span class="p-location u-checkin h-card">
-        <data class="p-name" value="<?php echo htmlspecialchars((string) $object->placename) ?>"></data>
-        <data class="p-latitude" value="<?php echo $object->lat() ?>"></data>
-        <data class="p-longitude" value="<?php echo $object->long() ?>"></data>
+        <data class="p-name" value="<?= htmlspecialchars((string) $object->placename) ?>"></data>
+        <data class="p-latitude" value="<?= $object->lat() ?>"></data>
+        <data class="p-longitude" value="<?= $object->long() ?>"></data>
     </span>
 
     <?php if (empty($vars['feed_view'])) { ?>
-        <div id="map_<?php echo $object->_id ?>" style="height: 250px"></div>
+        <div id="map_<?= $object->_id ?>" style="height: 250px; border-radius: var(--radius-sm); overflow: hidden; margin: var(--spacing-gap) 0;"></div>
     <?php } ?>
 
-    <div class="e-content entry-content">
+    <div class="idno-entry-body e-content entry-content">
         <?php
         if (!empty($object->body)) {
             echo $this->autop($this->parseURLs($this->parseHashtags($object->body)));
@@ -40,13 +40,13 @@
 <?php if (empty($vars['feed_view'])) { ?>
         <script>
             (function () {
-                var map = L.map('map_<?php echo $object->_id?>', {
+                var map = L.map('map_<?= $object->_id ?>', {
                     touchZoom: false,
                     scrollWheelZoom: false
-                }).setView([<?php echo $object->lat() ?>, <?php echo $object->long() ?>], 16);
+                }).setView([<?= $object->lat() ?>, <?= $object->long() ?>], 16);
                 var layer = new L.StamenTileLayer("toner-lite");
                 map.addLayer(layer);
-                var marker = L.marker([<?php echo $object->lat()?>, <?php echo $object->long()?>]);
+                var marker = L.marker([<?= $object->lat() ?>, <?= $object->long() ?>]);
                 marker.addTo(map);
                 map.scrollWheelZoom.disable();
                 map.touchZoom.disable();

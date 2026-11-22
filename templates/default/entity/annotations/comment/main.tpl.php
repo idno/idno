@@ -5,28 +5,28 @@
 
 if (!empty($user) && !empty($object)) {
 
-    ?>
-    <div class="row annotation-add">
-        <div class="col-md-2 owner h-card visible-md visible-lg">
-            <a href="<?php echo $user->getDisplayURL() ?>" class="u-url icon-container"><img class="u-photo"
-                                                                                      src="<?php echo $user->getIcon() ?>"
-                                                                                      alt="<?php echo htmlspecialchars($user->getTitle()) ?>" /></a>
-        </div>
-        <div class="col-md-10 idno-comment-container">
-            <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>annotation/post" method="post">
-                <textarea name="body" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Add a comment ...'); ?>" class="form-control mentionable ctrl-enter-submit"></textarea>
-                <p style="text-align: right">
-                <?php echo \Idno\Core\Idno::site()->actions()->signForm('annotation/post') ?>
-                    <input type="hidden" name="object" value="<?php echo $object->getUUID()?>">
-                    <input type="hidden" name="type" value="reply">
-                    <input type="submit" class="btn btn-save" value="<?php echo \Idno\Core\Idno::site()->language()->_('Leave Comment'); ?>">
-                </p>
-            </form>
-        </div>
+?>
+    <div class="idno-comment-form">
+        <a href="<?= $user->getDisplayURL() ?>" class="u-url">
+            <img class="idno-annotation-avatar u-photo"
+                 src="<?= $user->getIcon() ?>"
+                 alt="<?= htmlspecialchars($user->getTitle()) ?>" />
+        </a>
+        <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>annotation/post" method="post">
+            <textarea name="body"
+                      placeholder="<?= \Idno\Core\Idno::site()->language()->_('Add a comment ...') ?>"
+                      class="idno-textarea mentionable ctrl-enter-submit"></textarea>
+            <?= \Idno\Core\Idno::site()->actions()->signForm('annotation/post') ?>
+            <input type="hidden" name="object" value="<?= $object->getUUID() ?>">
+            <input type="hidden" name="type" value="reply">
+            <div class="idno-comment-form-actions">
+                <button type="submit" class="idno-btn idno-btn-primary idno-btn-sm">
+                    <?= \Idno\Core\Idno::site()->language()->_('Comment') ?>
+                </button>
+            </div>
+        </form>
     </div>
-    <?php
+<?php
 
-    // Prevent scope pollution
     unset($this->vars['action']);
 }
-

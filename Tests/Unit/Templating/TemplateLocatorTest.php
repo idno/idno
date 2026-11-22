@@ -132,7 +132,54 @@ final class TemplateLocatorTest extends TestCase
         }
         $this->assertNull($locator->locate('y', 'default'), 'default has .html.twig files only');
         $this->assertNull($locator->locate('y', 'email'), 'email has .html.twig files only');
-        $this->assertNull($locator->locate('y', 'email-text'), 'email-text has .txt.twig files only');
+        $this->assertSame('default/y.txt.twig', $locator->locate('y', 'email-text')?->logicalName, 'email-text draws .txt.twig files of every directory of its chain, and never an .html.twig one');
+    }
+
+    /**
+     * A plain-text mail autoescapes nothing, so it must never draw a Twig file that autoescapes HTML: whatever directory of the
+     * chain (its own type, `classic`, `default`) a file is in, `email-text` draws `.txt.twig` or `.tpl.php` and never `.html.twig`.
+     */
+    public function testEmailTextNeverDrawsAnHtmlTwigFile(): void
+    {
+        $core = $this->twigBase('core', 'default/h.html.twig', 'classic/h2.html.twig', 'email-text/h3.html.twig', 'default/t.txt.twig', 'classic/t2.txt.twig', 'default/p.html.twig', 'default/p.tpl.php');
+        $locator = new TemplateLocator(new TemplateCascade($core));
+
+        $this->assertNull($locator->locate('h', 'email-text'), 'default\'s html.twig is not a plain-text template');
+        $this->assertNull($locator->locate('h2', 'email-text'), 'nor classic\'s');
+        $this->assertNull($locator->locate('h3', 'email-text'), 'nor its own');
+        $this->assertSame('default/t.txt.twig', $locator->locate('t', 'email-text')?->logicalName, 'a .txt.twig of the fallback directory is');
+        $this->assertSame('classic/t2.txt.twig', $locator->locate('t2', 'email-text')?->logicalName);
+        $this->assertSame('default/p.tpl.php', $locator->locate('p', 'email-text')?->logicalName, 'a .tpl.php file is found when only the HTML Twig file would have been');
+        $this->assertSame('default/h.html.twig', $locator->locate('h', 'email')?->logicalName, 'an HTML mail draws it');
+        $this->assertSame('default/h.html.twig', $locator->locate('h', 'default')?->logicalName);
+    }
+
+    public function testTheChainReachesClassicBeforeDefaultForTheOtherTypes(): void
+    {
+        $core = $this->base('core', 'classic/a', 'default/a', 'default/b', 'classic/c', 'rss/d', 'classic/d', 'default/d');
+        $locator = new TemplateLocator(new TemplateCascade($core));
+
+        $this->assertSame('classic/a.tpl.php', $locator->locate('a', 'rss')?->logicalName, 'classic before default');
+        $this->assertSame('default/a.tpl.php', $locator->locate('a', 'default')?->logicalName, 'a web page never draws classic');
+        $this->assertSame('default/b.tpl.php', $locator->locate('b', 'json')?->logicalName);
+        $this->assertSame('classic/c.tpl.php', $locator->locate('c', 'kml')?->logicalName);
+        $this->assertNull($locator->locate('c', 'default'));
+        $this->assertSame('rss/d.tpl.php', $locator->locate('d', 'rss')?->logicalName, 'its own type first');
+        $this->assertNull($locator->locate('c', 'rss', false), 'no fallback tries the type alone');
+    }
+
+    public function testAModernFileWinsForAWebPageOnly(): void
+    {
+        $core = $this->base('core', 'default/x', 'default/y');
+        $plugin = $this->base('plugin', 'modern/x');
+        $cascade = new TemplateCascade($core);
+        $cascade->addBase($plugin);
+        $locator = new TemplateLocator($cascade);
+
+        $this->assertSame('modern/x.tpl.php', $locator->locate('x', 'default')?->logicalName);
+        $this->assertSame('modern/x.tpl.php', $locator->locate('x', 'modern')?->logicalName);
+        $this->assertSame('default/y.tpl.php', $locator->locate('y', 'default')?->logicalName);
+        $this->assertSame('default/x.tpl.php', $locator->locate('x', 'rss')?->logicalName, 'a feed never looks in modern');
     }
 
     public function testTheOrderIsTypeThenDirectoryThenFormat(): void

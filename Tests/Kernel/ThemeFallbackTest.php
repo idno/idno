@@ -38,9 +38,9 @@ final class ThemeFallbackTest extends IdnoTestCase
     }
 
     /** @dataProvider retired */
-    public function testRetiredThemeResolvesToTwenty26(string $name): void
+    public function testRetiredThemeResolvesToTheBuiltInLook(string $name): void
     {
-        $this->assertSame('Twenty26', Themes::resolve($name));
+        $this->assertSame('', Themes::resolve($name), 'no theme is loaded: the look is the built-in one');
     }
 
     public function testEightThemesAreRetired(): void
@@ -48,9 +48,10 @@ final class ThemeFallbackTest extends IdnoTestCase
         $this->assertSame(['Black', 'Cherwell', 'ElkinsPark', 'Fauvists', 'Green', 'Kandinsky', 'MarketStreet', 'Solo'], Themes::RETIRED);
     }
 
-    public function testCurrentThemeIsKept(): void
+    public function testTheNameTheBuiltInLookHadAsAThemeResolvesToTheBuiltInLook(): void
     {
-        $this->assertSame('Twenty26', Themes::resolve('Twenty26'));
+        $this->assertSame('Twenty26', Themes::BUILT_IN);
+        $this->assertSame('', Themes::resolve('Twenty26'));
     }
 
     public function testNoThemeStaysNoTheme(): void
@@ -74,7 +75,7 @@ final class ThemeFallbackTest extends IdnoTestCase
         foreach (Themes::RETIRED as $name) {
             $this->assertDirectoryDoesNotExist($root . '/Themes/' . $name);
         }
-        $this->assertDirectoryExists($root . '/Themes/Twenty26');
+        $this->assertDirectoryDoesNotExist($root . '/Themes/Twenty26', 'Idno 2026 is built in: it is not a theme directory');
     }
 
     /**
@@ -110,14 +111,13 @@ final class ThemeFallbackTest extends IdnoTestCase
         return $decoded;
     }
 
-    public function testRetiredThemeRendersAsTwenty26ForWebRequests(): void
+    public function testRetiredThemeRendersAsTheBuiltInLookForWebRequests(): void
     {
         $result = $this->probe('Solo', 'anonymous');
 
-        $this->assertSame('Twenty26', $result['theme']);
-        $this->assertSame(['Twenty26'], $result['themes_loaded']);
-        $this->assertSame('modern', $result['template_type']);
-        $this->assertSame(1, $result['drafts_routes'], 'the theme controller registers its route');
+        $this->assertSame('', $result['theme']);
+        $this->assertSame([], $result['themes_loaded'], 'no theme is loaded');
+        $this->assertSame('default', $result['template_type'], 'the web page type: no theme sets another');
     }
 
     public function testNothingIsSavedOrAnnouncedForAnonymousVisitors(): void
@@ -139,8 +139,9 @@ final class ThemeFallbackTest extends IdnoTestCase
         $result = $this->probe('Solo', 'admin');
 
         $this->assertSame('', $result['stored_before']);
-        $this->assertSame('Twenty26', $result['stored_after_first']);
-        $this->assertSame('Twenty26', $result['config_theme_after']);
+        $this->assertSame('', $result['stored_after_first'], 'saved as no theme: the built-in look');
+        $this->assertTrue($result['stored_key_after_first'], 'the setting was written');
+        $this->assertSame('', $result['config_theme_after']);
         $this->assertSame(['The Solo theme has been retired. Your site now uses Idno 2026.'], $result['messages_first']);
         $this->assertSame($result['messages_first'], $result['messages_second'], 'a second load adds no further message');
     }
@@ -164,8 +165,9 @@ final class ThemeFallbackTest extends IdnoTestCase
         $this->admin();
         $result = $this->probe('Solo', 'admin', 'pinned');
 
-        $this->assertSame('Twenty26', $result['theme']);
-        $this->assertSame(['Twenty26'], $result['themes_loaded']);
+        $this->assertSame('', $result['theme']);
+        $this->assertSame([], $result['themes_loaded']);
+        $this->assertSame($result['stored_key_before'], $result['stored_key_after_first'], 'nothing was saved');
         $this->assertSame('', $result['stored_after_first'], 'nothing was saved');
         $this->assertSame([], $result['messages_first']);
         $this->assertSame([], $result['messages_second'], 'two consecutive loads announce nothing');

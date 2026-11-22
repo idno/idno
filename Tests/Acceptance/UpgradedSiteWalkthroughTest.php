@@ -160,13 +160,14 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
         $this->assertSame(0, substr_count($none['stderr'], 'setting (FilesystemCache)'), 'and none for one that did not use it');
 
         // ------------------------------------------------------------ 4 translation
-        $french = $client->request('GET', 'content/all/', ['Accept-Language' => 'fr']);
+        // Idno 2026 shows the name of each content type (the Event plugin's catalogue has `Event`) in the compose dialog of a signed-in member
+        $french = $client->request('GET', 'content/all/', ['Accept-Language' => 'fr', 'Cookie' => $admin]);
         $this->assertSame(200, $french->status);
-        $this->assertStringContainsString('Evenements', $french->body);
-        $english = $client->request('GET', 'content/all/');
+        $this->assertStringContainsString('Évènement', $french->body);
+        $english = $client->request('GET', 'content/all/', ['Cookie' => $admin]);
         $this->assertSame(200, $english->status);
-        $this->assertStringNotContainsString('Evenements', $english->body);
-        $this->assertStringContainsString('Events', $english->body);
+        $this->assertStringNotContainsString('Évènement', $english->body);
+        $this->assertStringContainsString('Event</div>', $english->body);
 
         $this->assertSame(1, substr_count($this->serverLogContents(), $warning), 'and no other request of the walkthrough added one');
         $this->assertStringNotContainsString('FilesystemCache', preg_replace('/The "cache" setting[^\n]*/', '', $this->serverLogContents()) ?? '', 'nothing else in the log names the retired cache');

@@ -29,12 +29,12 @@ $storedTheme = static function () use ($site): string {
 
     return (string)($record['theme'] ?? '');
 };
-$messages = static fn (): array => array_column($_SESSION['messages'] ?? [], 'message');
-$routeCount = static function () use ($site): int {
-    $routes = (new ReflectionProperty($site->routes(), 'routes'))->getValue($site->routes());
+$storedThemeKey = static function () use ($site): bool {
+    $record = $site->db()->getAnyRecord('config');
 
-    return count(array_filter(array_keys($routes), static fn ($pattern) => str_contains((string)$pattern, 'drafts')));
+    return is_array($record) && array_key_exists('theme', $record);
 };
+$messages = static fn (): array => array_column($_SESSION['messages'] ?? [], 'message');
 
 $_SESSION['messages'] = [];
 $site->config()->theme = $configured;
@@ -50,18 +50,21 @@ if ($who === 'admin') {
 }
 
 $stored_before = $storedTheme();
+$key_before = $storedThemeKey();
 $themes->announceRetiredTheme();
 $messages_first = $messages();
 $stored_after_first = $storedTheme();
+$key_after_first = $storedThemeKey();
 $themes->announceRetiredTheme();
 
 echo json_encode([
     'theme'              => $themes->get(),
     'themes_loaded'      => array_keys($themes->themes),
     'template_type'      => $site->template()->getTemplateType(),
-    'drafts_routes'      => $routeCount(),
     'stored_before'      => $stored_before,
     'stored_after_first' => $stored_after_first,
+    'stored_key_before'     => $key_before,
+    'stored_key_after_first' => $key_after_first,
     'config_theme_after' => $site->config()->theme,
     'messages_first'     => $messages_first,
     'messages_second'    => $messages(),

@@ -1,6 +1,8 @@
 # Getting started writing Idno themes
 
-Themes allow you to easily extend, or provide alternatives to, Idno's look and feel.
+Idno comes with a look of its own, Idno 2026, which is built in: it is what a site with no theme draws. A theme is a
+directory of template overrides on top of it, a lightweight way to extend, or provide an alternative to, Idno's look and
+feel.
 
 While plugins can also extend or replace Idno's UI, in conjunction with extending or replacing its internal logic,
 themes are a lightweight alternative. Whereas multiple plugins can be installed, only one theme can be enabled at any
@@ -9,7 +11,7 @@ one time.
 Themes use standard [Idno templates](../templating/index.md). It's a good idea to be familiar with the
 core Idno template concepts.
 
-Themes are selected from the `Themes` section of the administration panel.
+Themes are selected from the `Themes` section of the administration panel, which lists "Idno 2026 (built in)" and the themes installed in `/Themes`.
 
 ## Layout
 
@@ -20,7 +22,7 @@ Each theme must have at least two things:
 * theme.ini: a configuration file that provides information about the theme in the admin panel
 * A set of templates under the theme's `templates` subfolder
 
-Themes should also have a preview.png, a screenshot of the theme for use in the administration panel. A theme may also have a `Controller.php` containing a class named `Controller` in the `Themes\ThemeName` namespace, which extends `\Idno\Common\Theme` (for example, to [register translations](../languages/index.md)); see `Themes/Solo/Controller.php`.
+Themes should also have a preview.png, a screenshot of the theme for use in the administration panel. A theme may also have a `Controller.php` containing a class named `Controller` in the `Themes\ThemeName` namespace, which extends `\Idno\Common\Theme` (for example, to [register translations](../languages/index.md)).
 
 ## Structure of theme.ini
 
@@ -47,7 +49,7 @@ In addition, you can extend templates with entries in a special `[Extensions]` s
 
 Here, any calls to `template/one` will also call `mytheme/template/one` with the same variables.
 
-A `[Prepend Extensions]` section works the same way, but draws the extra template before the original, as the Cherwell theme does for `admin/menu/items`.
+A `[Prepend Extensions]` section works the same way, but draws the extra template before the original.
 
 A theme's templates may be Twig templates (`.html.twig`) as well as PHP ones: see [Twig templates](../templating/index.md#twig-templates). A theme can change one block of a core Twig template with `{% extends '@core/default/<name>.html.twig' %}`.
 
@@ -80,6 +82,10 @@ Finally, you'd create a normal static CSS file in `/Themes/PDXCarpet/css/default
 !!! note "Note"
     While it's not required, it is recommended to create a minified version of your CSS file and link to that, e.g. ```yui-compressor default.css > default.min.css```
 
-## Reference themes
+## Templates of the `modern` type
 
-Idno ships with one theme, `Twenty26` (Idno 2026). We recommend you take a look at it to see how a theme is put together. The older themes (`Black`, `Cherwell`, `ElkinsPark`, `Fauvists`, `Green`, `Kandinsky`, `MarketStreet` and `Solo`) were removed in 2.0.
+Idno 2026 used to be a theme, `Twenty26`, whose templates were in a `modern` template type. They are core's own `default` templates now, and a theme or plugin overrides them in `templates/default/` like any other. The `modern` type still works for one release, so that a third-party plugin or theme written for that theme keeps working: a file in `templates/modern/` is drawn before the `default` one on web pages, and the first one drawn in a request logs one deprecation line that names it. Move such files to `templates/default/`; the `modern` type is removed in 3.0. `?_t=modern` is the same as the default type.
+
+## The built-in look
+
+The older themes (`Black`, `Cherwell`, `ElkinsPark`, `Fauvists`, `Green`, `Kandinsky`, `MarketStreet` and `Solo`) were removed in 2.0, as was the `Twenty26` theme: a site that still has one of those names as its theme draws Idno 2026. Look at `templates/default/` in Idno itself to see how the built-in look is put together, and at [Building the front end](../build.md#building-the-idno-2026-front-end) for its style sheet and script.

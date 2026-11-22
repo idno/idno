@@ -6,9 +6,9 @@ namespace Tests\Templating;
 
 /**
  * Reads a template trace (Tests\Fixtures\TemplateTrace: `type`, `name`, `file`, tab separated, one line a draw)
- * of the draws of the output that is not a web page, and keeps for each such type the `default` files of core
- * and of the plugins that a `modern` file of the same name shadows: what a site with the Twenty26 theme would
- * draw differently if the type fell back to the theme's own files. It is what fixtures/fallback-trace.php holds.
+ * of the draws of the output that is not a web page, and keeps for each such type the `classic` files of core and of
+ * the bundled plugins it drew: the entity templates of the look Idno 2026 replaced, which a feed, JSON, ActivityPub, KML
+ * and mail still draw (a web page never does). It is what fixtures/fallback-trace.php holds.
  */
 final class FallbackTrace
 {
@@ -27,7 +27,7 @@ final class FallbackTrace
                 continue;
             }
             [$type, $name, $file] = $parts;
-            if (preg_match('#^(?:IdnoPlugins/[^/]+/)?templates/default/#', $file) !== 1 || !self::isShadowedByModern($name, $projectDirectory)) {
+            if (preg_match('#^(?:IdnoPlugins/[^/]+/)?templates/classic/#', $file) !== 1) {
                 continue;
             }
             $found[$type][$name . "\t" . $file] = [$name, $file];
@@ -42,7 +42,7 @@ final class FallbackTrace
     }
 
     /**
-     * Every template name drawn per type, whether or not a `modern` file shadows its `default` one.
+     * Every template name drawn per type, whichever file it was found in.
      *
      * @return array<string, list<string>> type => sorted names
      */
@@ -67,34 +67,25 @@ final class FallbackTrace
     }
 
     /**
-     * Every `default` template file of core and of the bundled plugins that a `modern` file of the same name shadows
-     * (Twenty26's, or a plugin's): [name, file], sorted. Computed from the file system.
+     * Every `.tpl.php` file under `templates/classic/` of core and of the bundled plugins: [name, file], sorted. Computed
+     * from the file system.
      *
      * @return list<array{string, string}>
      */
-    public static function shadowed(string $projectDirectory): array
+    public static function classic(string $projectDirectory): array
     {
-        $bases = array_merge([$projectDirectory], glob($projectDirectory . '/IdnoPlugins/*', GLOB_ONLYDIR) ?: [], glob($projectDirectory . '/Themes/*', GLOB_ONLYDIR) ?: []);
-        $modern = [];
+        $bases = array_merge([$projectDirectory], glob($projectDirectory . '/IdnoPlugins/*', GLOB_ONLYDIR) ?: []);
+        $found = [];
         foreach ($bases as $base) {
-            $directory = $base . '/templates/modern';
+            $directory = $base . '/templates/classic';
             if (!is_dir($directory)) {
                 continue;
             }
             foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
                 if ($file->isFile() && str_ends_with($file->getFilename(), '.tpl.php')) {
-                    $modern[substr($file->getPathname(), strlen($directory) + 1, -strlen('.tpl.php'))] = true;
-                }
-            }
-        }
-        $found = [];
-        foreach ($bases as $base) {
-            if (str_contains($base, '/Themes/')) {
-                continue;
-            }
-            foreach (array_keys($modern) as $name) {
-                if (is_file($base . '/templates/default/' . $name . '.tpl.php')) {
-                    $found[$name . "\t" . ltrim(substr($base, strlen($projectDirectory)) . '/', '/') . 'templates/default/' . $name . '.tpl.php'] = [$name, ltrim(substr($base, strlen($projectDirectory)) . '/', '/') . 'templates/default/' . $name . '.tpl.php'];
+                    $name = substr($file->getPathname(), strlen($directory) + 1, -strlen('.tpl.php'));
+                    $relative = substr($file->getPathname(), strlen($projectDirectory) + 1);
+                    $found[$name . "\t" . $relative] = [$name, $relative];
                 }
             }
         }
@@ -107,20 +98,18 @@ final class FallbackTrace
      * Writes the arrays as a PHP file.
      *
      * @param array<string, list<array{string, string}>> $derived
-     * @param list<array{string, string}>                 $shadowed
+     * @param list<array{string, string}>                 $classic
      */
-    public static function write(string $file, array $derived, array $shadowed): void
+    public static function write(string $file, array $derived, array $classic): void
     {
         $text = "<?php\n\ndeclare(strict_types=1);\n\n"
             . "/*\n"
-            . " * The template files the output that is not a web page reaches by falling back from its own template type to `default`,\n"
-            . " * where a `modern` file of the same name exists (Twenty26's, or a plugin's): for each type, [name, file] pairs, sorted.\n"
-            . " * Today a feed or a mail draws core's and the plugins' `default` entity templates even on a Twenty26 site; `traced` is\n"
-            . " * the list of files whose place in the template chain decides that. `shadowed` is every `default` file of core and of the\n"
-            . " * bundled plugins that a `modern` file of the same name shadows, whether or not a traced page reaches it (computed from\n"
-            . " * the file system, and asserted by the test).\n"
+            . " * The `classic` template files: the entity templates of the look Idno 2026 replaced, which the output that is not a web page\n"
+            . " * (feeds, JSON, ActivityPub, KML, mail) still draws, by falling back from its own template type to `classic` before `default`.\n"
+            . " * `traced` is, for each type, the `classic` files a real run of the test site drew. `classic` is every file under\n"
+            . " * `templates/classic/` of core and of the bundled plugins (computed from the file system, and asserted by the test).\n"
             . " *\n"
-            . " * Derived from a real traced run, not written by hand. To regenerate it (only when a draw that reaches `default` is\n"
+            . " * Derived from a real traced run, not written by hand. To regenerate it (only when a draw that reaches `classic` is\n"
             . " * added or removed on purpose): IDNO_TEST_CAPTURE_GOLDENS=1 composer test -- Tests/Templating/RenderedPagesTest.php\n"
             . " * (the same run rewrites the golden pages: review `git diff` of both).\n"
             . " */\n"
@@ -132,22 +121,10 @@ final class FallbackTrace
             }
             $text .= "        ],\n";
         }
-        $text .= "    ],\n    'shadowed' => [\n";
-        foreach ($shadowed as [$name, $path]) {
+        $text .= "    ],\n    'classic' => [\n";
+        foreach ($classic as [$name, $path]) {
             $text .= "        ['" . $name . "', '" . $path . "'],\n";
         }
         file_put_contents($file, $text . "    ],\n];\n");
-    }
-
-    private static function isShadowedByModern(string $name, string $projectDirectory): bool
-    {
-        $bases = array_merge([$projectDirectory], glob($projectDirectory . '/IdnoPlugins/*', GLOB_ONLYDIR) ?: [], glob($projectDirectory . '/Themes/*', GLOB_ONLYDIR) ?: []);
-        foreach ($bases as $base) {
-            if (is_file($base . '/templates/modern/' . $name . '.tpl.php')) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

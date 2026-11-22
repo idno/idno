@@ -195,7 +195,7 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $this->assertSame(2, substr_count($page->body, 'name="allposts"'), 'one "include private posts" box for each form');
         // The archive: a button that makes one, and what it holds said plainly next to it.
         $this->assertStringContainsString('action="' . $this->site()->baseUrl() . 'admin/export/generate/"', $page->body);
-        $this->assertStringContainsString('value="Create archive"', $page->body);
+        $this->assertStringContainsString('>Create archive</button>', $page->body);
         $this->assertStringContainsString("every account's password hash", $page->body);
         $this->assertStringContainsString('as carefully as a database backup', $page->body);
         $this->assertStringContainsString('after a week', $page->body);
@@ -217,7 +217,7 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
 
         $this->assertStringContainsString('file/abcdefabcdefabcdefabcdefabcdefab/example_zip_name.zip', $page->body);
         $this->assertStringContainsString('admin/export/generate', $page->body);
-        $this->assertStringContainsString('value="Re-archive your data"', $page->body);
+        $this->assertStringContainsString('>Re-archive your data</button>', $page->body);
     }
 
     public function testWhileAnExportRunsThePageSaysSoAndOffersNoSecondOne(): void
@@ -470,7 +470,7 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $page = $this->site()->request('GET', 'account/export/', ['Cookie' => $cookie]);
         $token = $this->formToken($page->body, 'account/export/rss');
 
-        // The box of the default theme's template (the rig serves it) sends 1 when ticked, as Twenty26's does.
+        // The box of the template (the rig serves it) sends 1 when ticked.
         $this->assertSame(2, preg_match_all('~<input type="checkbox"[^>]* name="allposts"[^>]* value="1"~', $page->body), 'the box of the RSS form and the box of the WXR form');
         $ticked = $this->site()->request('POST', 'account/export/rss', ['Cookie' => $cookie], $token + ['allposts' => '1']);
         $unticked = $this->site()->request('POST', 'account/export/rss', ['Cookie' => $cookie], $token);

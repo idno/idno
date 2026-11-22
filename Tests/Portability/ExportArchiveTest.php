@@ -219,8 +219,8 @@ final class ExportArchiveTest extends PortabilityTestCase
         $html = (string) file_get_contents($path . '/html/' . $this->article->getID() . '.html');
         $this->assertStringContainsString('Archived: tide pools', $html);
         $this->assertStringContainsString('<strong>6:12</strong>', $html);
-        $this->assertStringContainsString('class="p-name"', $html, 'with its microformats');
-        $this->assertStringContainsString('class="e-content entry-content"', $html);
+        $this->assertMatchesRegularExpression('/class="([^"]* )?p-name( [^"]*)?"/', $html, 'with its microformats');
+        $this->assertMatchesRegularExpression('/class="([^"]* )?e-content entry-content( [^"]*)?"/', $html);
     }
 
     public function testAPrivateEntityIsInTheArchiveToo(): void

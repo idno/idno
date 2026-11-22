@@ -1,1 +1,9 @@
-<li <?php if ($_SERVER['REQUEST_URI'] == '/admin/styles/') echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/styles/"><?php echo \Idno\Core\Idno::site()->language()->_('Custom CSS'); ?></a></li>
+<?php
+    $page = \Idno\Core\Idno::site()->currentPage();
+    $baseUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+?>
+<a href="<?= $baseUrl ?>admin/styles/"
+   class="idno-admin-nav-item<?php if ($page->doesPathMatch('/admin/styles/')) echo ' active'; ?>">
+    <?= $this->__(['icon' => 'paintbrush'])->draw('shell/icon') ?>
+    <span><?= \Idno\Core\Idno::site()->language()->_('Custom CSS') ?></span>
+</a>

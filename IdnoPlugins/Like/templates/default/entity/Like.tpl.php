@@ -21,30 +21,26 @@ if (!empty($vars['object']->pageTitle)) {
 }
 
 ?>
-<div class="known-bookmark">
+<div class="idno-bookmark">
     <?php
 
     if (empty($vars['feed_view'])) {
 
         ?>
-            <h2 class="idno-bookmark"><?php echo $icon?><a href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->body)); ?>" class="<?php echo $class ?> p-name"
-                target="_blank"><?php echo $this->parseURLs(htmlentities(strip_tags($body))) ?></a>
+            <h2 class="idno-entry-title"><?= $icon ?><a href="<?= htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->body)) ?>" class="<?= $class ?> p-name"
+                target="_blank"><?= $this->parseURLs(htmlentities(strip_tags($body))) ?></a>
             </h2>
         <?php
 
     }
 
     if (!empty($vars['object']->description)) {
-        echo '<div class="e-content">';
+        echo '<div class="idno-entry-body e-content">';
             echo $this->__(['value' => $vars['object']->description, 'object' => $vars['object']])->draw('forms/output/richtext');
         echo '</div>';
-
     }
 
-
-
     if (!empty($vars['object']->tags)) {
-
         echo $this->__(['tags' => $vars['object']->tags])->draw('forms/output/tags');
     }
 

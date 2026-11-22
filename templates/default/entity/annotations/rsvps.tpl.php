@@ -9,34 +9,42 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
 
     $rsvps_by_response = ['yes' => '', 'maybe' => '', 'no' => '', 'etc' => ''];
 
-    foreach($vars['annotations'] as $locallink => $annotation) {
+    foreach ($vars['annotations'] as $locallink => $annotation) {
         // The addresses come from whoever sent the annotation: only http and https ones are printed
         $permalink = \Idno\Core\UrlValidator::httpUrl(!empty($annotation['permalink']) ? $annotation['permalink'] : $locallink);
+        $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         $rsvp = !empty($annotation['rsvp']) ? strtolower(trim($annotation['rsvp'])) : 'etc';
 
         ob_start();
-        ?>
-            <div class="idno-annotation row">
-                <div class="idno-annotation-image col-md-1 hidden-sm">
-                    <p>
-                        <?php echo $this->__(['annotation' => $annotation])->draw('entity/annotations/image'); ?>
-                    </p>
+?>
+            <div class="idno-annotation">
+                <?php if ($owner_image !== '') { ?>
+                <img class="idno-annotation-avatar"
+                     src="<?= htmlspecialchars($owner_image) ?>"
+                     alt="<?= htmlspecialchars($annotation['owner_name']) ?>" />
+                <?php } ?>
+                <div class="idno-annotation-content">
+                    <span><strong><?= strip_tags($annotation['content']) ?></strong></span>
+                    <br>
+                    <span class="idno-entry-meta">
+                        <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= date('M j, Y', $annotation['time']) ?></a>
+                        on <a href="<?= htmlspecialchars($permalink) ?>" rel="nofollow"><?= htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a>
+                    </span>
                 </div>
-                <div class="idno-annotation-content col-md-6">
-                    <p>
-                        <strong><?php echo strip_tags($annotation['content']); ?></strong>
-                    </p>
-                    <p><small><a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo date('M d Y', $annotation['time']);?></a> on <a href="<?php echo htmlspecialchars($permalink) ?>" rel="nofollow"><?php echo htmlspecialchars((string) parse_url($permalink, PHP_URL_HOST)) ?></a></small></p>
-                </div>
+                <?php
+                $this->annotation_permalink = $locallink;
+                if ($vars['object']->canEditAnnotation($annotation)) {
+                    echo $this->draw('content/annotation/edit');
+                }
+                ?>
             </div>
-        <?php
+<?php
         $rsvps_by_response[$rsvp] .= ob_get_clean();
     }
 
-    foreach($rsvps_by_response as $rsvp => $list) {
-
+    foreach ($rsvps_by_response as $rsvp => $list) {
         if (!empty($list)) {
-            switch($rsvp) {
+            switch ($rsvp) {
                 case 'yes':
                     $title = \Idno\Core\Idno::site()->language()->_('Attending');
                     break;
@@ -50,18 +58,12 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                     $title = \Idno\Core\Idno::site()->language()->_('Other responses');
                     break;
             }
-
-            ?>
-                    <div class="row">
-                        <div class="col-md-7">
-                            <p>
-                                <strong><?php echo $title;?></strong>
-                            </p>
-                        </div>
-                    </div>
-                <?php
-                echo $list;
+?>
+            <div class="idno-annotation-section">
+                <h4><?= $title ?></h4>
+            </div>
+<?php
+            echo $list;
         }
-
     }
 }

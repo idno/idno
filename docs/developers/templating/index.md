@@ -30,6 +30,8 @@ On a page, Idno picks the template type from the `_t` request variable (e.g. `?_
 
 Each template type contains its own set of templates. However, templates always fall back to the "default" template type, so that if you try to draw, for example, `page/navigation` in the `rss` template type, and it doesn't exist, `page/navigation` in the `default` template type will be called instead (if it exists).
 
+Two more types are not ones you choose. `classic` holds the entity templates of the look that Idno 2026 replaced, which a feed, JSON, ActivityPub, KML and mail still draw: every type other than `default` tries its own folder, then `classic`, then `default`, and a web page never draws `classic` (`?_t=classic` is refused). `modern` is deprecated: it was the type of the Twenty26 theme's templates. A `templates/modern/` folder of a plugin or theme is still drawn before `default` on web pages for one release (the first file drawn in a request logs a deprecation line); move its files to `templates/default/`. `?_t=modern` is the `default` type. A plain-text mail (`email-text`) draws `.txt.twig` and `.tpl.php` files only, in every type of its chain, never an `.html.twig` one.
+
 ## Template locations
 
 Idno's templates are PHP scripts with the extension `.tpl.php`. The filename corresponds to the template name, such that:

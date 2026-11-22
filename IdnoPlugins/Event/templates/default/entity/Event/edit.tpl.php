@@ -1,117 +1,132 @@
-<?php echo $this->draw('entity/edit/header');?>
-<form action="<?php echo $vars['object']->getURL()?>" method="post">
+<?php echo $this->draw('entity/edit/header'); ?>
+<form action="<?= $vars['object']->getURL() ?>" method="post">
 
-    <div class="row">
-        <div class="col-md-8 col-md-offset-2 edit-pane">
-                            <h4>
-                                <?php
+    <div class="idno-editor">
 
-                                if (empty($vars['object']->_id)) {
-                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Event'); ?><?php
-                                } else {
-                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Event'); ?><?php
-                                }
-                                ?>
-            </h4></div>
+        <h4 class="idno-editor-heading">
+            <?php
+            if (empty($vars['object']->_id)) {
+                echo \Idno\Core\Idno::site()->language()->_('New Event');
+            } else {
+                echo \Idno\Core\Idno::site()->language()->_('Edit Event');
+                if ($vars['object']->getPublishStatus() === 'draft') {
+                    echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
+                }
+            }
+            ?>
+        </h4>
 
-        <div class="col-md-8 col-md-offset-2">
-        
-            <div class="content-form">
-                <label for="title">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Event name'); ?></label>
-                    <?php echo $this->__([
-                            'name' => 'title',
-                            'id' => 'title',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Give it a name'),
-                            'value' => $vars['object']->title,
-                    'class' => 'form-control'])->draw('forms/input/input'); ?>
-
-            </div>
+        <div class="idno-form-field">
+            <label class="idno-label" for="title">
+                <?= \Idno\Core\Idno::site()->language()->_('Event name') ?></label>
+            <?= $this->__([
+                'name' => 'title',
+                'id' => 'title',
+                'placeholder' => \Idno\Core\Idno::site()->language()->_('Give it a name'),
+                'value' => $vars['object']->title,
+                'class' => 'idno-input'
+            ])->draw('forms/input/input') ?>
         </div>
-            
-        <div class="col-md-4 col-md-offset-2">
-            <div class="content-form">
-                <label for="location">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Location'); ?>                                            <?php echo $this->__([
-                            'name' => 'location',
-                            'id' => 'location',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Where will it take place?'),
-                            'value' => $vars['object']->location,
-                    'class' => 'form-control'])->draw('forms/input/input'); ?>
 
-            </div>
-            <div class="content-form">
-                <label for="starttime">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Start day and time'); ?></label>
-                <?php echo $this->__([
-                            'name' => 'starttime',
-                            'id' => 'starttime',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the start day and time?'),
-                            'value' => $vars['object']->starttime,
-                'class' => 'form-control'])->draw('forms/input/datetime-local'); ?>
-            </div>
-            <div class="content-form">
-                <label for="endtime">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('End day and time'); ?></label>
-                <?php echo $this->__([
-                            'name' => 'endtime',
-                            'id' => 'endtime',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the end day and time'),
-                            'value' => $vars['object']->endtime,
-                'class' => 'form-control'])->draw('forms/input/datetime-local'); ?>
-                    
-            </div>
-            <div class="content-form">
-                <label for="timezone">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Time zone'); ?></label>
-                <?php echo $this->__([
-                            'name' => 'timezone',
-                            'id' => 'timezone',
-                            'required' => true,
-                            'value' => empty($vars['object']->timezone) ? \Idno\Core\Idno::site()->session()->currentUser()->getTimezone() : $vars['object']->timezone,
-                'class' => 'form-control'])->draw('forms/input/timezones'); ?>
-                    
-            </div>
-            <?php echo $this->drawSyndication('event', $vars['object']->getPosseLinks()); ?>
+        <div style="display:flex;gap:var(--spacing-gap);flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+                <div class="idno-form-field">
+                    <label class="idno-label" for="location">
+                        <?= \Idno\Core\Idno::site()->language()->_('Location') ?></label>
+                    <?= $this->__([
+                        'name' => 'location',
+                        'id' => 'location',
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Where will it take place?'),
+                        'value' => $vars['object']->location,
+                        'class' => 'idno-input'
+                    ])->draw('forms/input/input') ?>
+                </div>
 
-        </div>
-        <div class="col-md-4 ">
-            
-            <div class="content-form">
-                <label for="summary">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Brief summary'); ?></label>
-                    <?php echo $this->__([
-                            'name' => 'summary',
-                            'id' => 'summary',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_("What's this about?"),
-                            'value' => $vars['object']->summary,
-                    'class' => 'form-control'])->draw('forms/input/input'); ?>
+                <div class="idno-form-field">
+                    <label class="idno-label" for="starttime">
+                        <?= \Idno\Core\Idno::site()->language()->_('Start day and time') ?></label>
+                    <?= $this->__([
+                        'name' => 'starttime',
+                        'id' => 'starttime',
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the start day and time?'),
+                        'value' => $vars['object']->starttime,
+                        'class' => 'idno-input'
+                    ])->draw('forms/input/datetime-local') ?>
+                </div>
 
+                <div class="idno-form-field">
+                    <label class="idno-label" for="endtime">
+                        <?= \Idno\Core\Idno::site()->language()->_('End day and time') ?></label>
+                    <?= $this->__([
+                        'name' => 'endtime',
+                        'id' => 'endtime',
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the end day and time'),
+                        'value' => $vars['object']->endtime,
+                        'class' => 'idno-input'
+                    ])->draw('forms/input/datetime-local') ?>
+                </div>
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="timezone">
+                        <?= \Idno\Core\Idno::site()->language()->_('Time zone') ?></label>
+                    <?= $this->__([
+                        'name' => 'timezone',
+                        'id' => 'timezone',
+                        'required' => true,
+                        'value' => empty($vars['object']->timezone) ? \Idno\Core\Idno::site()->session()->currentUser()->getTimezone() : $vars['object']->timezone,
+                        'class' => 'idno-input'
+                    ])->draw('forms/input/timezones') ?>
+                </div>
+
+                <?= $this->drawSyndication('event', $vars['object']->getPosseLinks()) ?>
             </div>
 
-            <div class="content-form">
-                <label for="body">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Description'); ?></label>
-                    <?php echo $this->__([
+            <div style="flex:1;min-width:200px">
+                <div class="idno-form-field">
+                    <label class="idno-label" for="summary">
+                        <?= \Idno\Core\Idno::site()->language()->_('Brief summary') ?></label>
+                    <?= $this->__([
+                        'name' => 'summary',
+                        'id' => 'summary',
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_("What's this about?"),
+                        'value' => $vars['object']->summary,
+                        'class' => 'idno-input'
+                    ])->draw('forms/input/input') ?>
+                </div>
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="body">
+                        <?= \Idno\Core\Idno::site()->language()->_('Description') ?></label>
+                    <?= $this->__([
                         'height' => '100', 'name' => 'body', 'value' => $vars['object']->body, 'required' => true
-                    ])->draw('forms/input/richtext');?>
+                    ])->draw('forms/input/richtext') ?>
+                </div>
+
+                <?= $this->draw('entity/tags/input') ?>
             </div>
-            <?php echo $this->draw('entity/tags/input');?>
-            <?php if (empty($vars['object']->_id)) {
-                echo $this->__(['name' => 'forward-to', 'value' => \Idno\Core\Idno::site()->config()->getDisplayURL() . 'content/all/'])->draw('forms/input/hidden');
-            } ?>
         </div>
 
-        <div class="col-md-8 col-md-offset-2">
-            <?php echo $this->draw('content/extra'); ?>
-            <?php echo $this->draw('content/access'); ?>
-            <p class="button-bar">
-                <?php echo \Idno\Core\Idno::site()->actions()->signForm('/event/edit') ?>
-                <input type="button" class="btn btn-cancel" value="<?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?>" onclick="hideContentCreateForm();" />
-                <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Save'); ?>" />
+        <?php if (empty($vars['object']->_id)) {
+            echo $this->__(['name' => 'forward-to', 'value' => \Idno\Core\Idno::site()->config()->getDisplayURL() . 'content/all/'])->draw('forms/input/hidden');
+        } ?>
 
-            </p>
+        <?= $this->draw('content/extra') ?>
+        <?= $this->draw('content/access') ?>
+
+        <?= \Idno\Core\Idno::site()->actions()->signForm('/event/edit') ?>
+
+        <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+            <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
+            </button>
+            <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+            </button>
+            <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
+                <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>
+            </a>
         </div>
+
     </div>
 </form>
 <script>

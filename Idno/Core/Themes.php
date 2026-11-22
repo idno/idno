@@ -16,21 +16,27 @@ namespace Idno\Core {
         public $themes = array(); // Array containing instantiated theme controllers
 
         /**
-         * Themes that are no longer bundled; a site configured to use one uses Twenty26 instead.
+         * The name the look that is built into Idno 2026 had when it was a theme. A site whose stored `theme` setting is
+         * this name renders the built-in look and loads no theme.
+         */
+        public const BUILT_IN = 'Twenty26';
+
+        /**
+         * Themes that are no longer bundled; a site configured to use one uses the built-in look instead.
          */
         public const RETIRED = ['Black', 'Cherwell', 'ElkinsPark', 'Fauvists', 'Green', 'Kandinsky', 'MarketStreet', 'Solo'];
 
         /**
-         * The theme to load for a configured theme name: Twenty26 for a retired theme, otherwise
-         * the name unchanged (including the empty string, meaning no theme, and the name of a
-         * theme that is merely missing).
+         * The theme to load for a configured theme name: the empty string (no theme: the built-in look) for the built-in
+         * look's old name and for a retired theme, otherwise the name unchanged (including the name of a theme that is
+         * merely missing).
          *
          * @param  string $configured
          * @return string
          */
         public static function resolve(string $configured): string
         {
-            return in_array($configured, self::RETIRED, true) ? 'Twenty26' : $configured;
+            return $configured === self::BUILT_IN || in_array($configured, self::RETIRED, true) ? '' : $configured;
         }
 
         /**
@@ -42,7 +48,7 @@ namespace Idno\Core {
 
             if (!empty(site()->config()->theme)) {
                 $this->theme = self::resolve(site()->config()->theme);
-                if ($this->requestHasHostHeader()) {
+                if ($this->theme !== '' && $this->requestHasHostHeader()) {
                     if (file_exists(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini')) {
                         \Idno\Core\Bonita\Main::additionalPath(site()->config()->path . '/Themes/' . $this->theme);
                         $config = parse_ini_file(\Idno\Core\Idno::site()->config()->path . '/Themes/' . $this->theme . '/theme.ini', true);
@@ -80,8 +86,9 @@ namespace Idno\Core {
         }
 
         /**
-         * If the configured theme is a retired one, saves the replacement in the site
-         * configuration and tells the administrator, once. Does nothing unless the current
+         * If the configured theme is a retired one, saves the replacement (no theme: the built-in
+         * look) in the site configuration and tells the administrator, once. The built-in look's old
+         * name is resolved on load and never saved or announced: it renders the same. Does nothing unless the current
          * user is an admin on a web request, so visitors never write the configuration and
          * see no message. It runs after the user is authenticated (Idno::__construct), which
          * is after init(): the session user is not known when this class is built.
@@ -157,12 +164,12 @@ namespace Idno\Core {
 
             $themes[''] = array(
                 'Theme description' => array(
-                    'name'         => 'Default theme',
+                    'name'         => 'Idno 2026 (built in)',
                     'version'      => '0.1',
                     'author'       => "Idno",
                     'author_email' => "hello@idno.co",
                     'author_url'   => "https://idno.co",
-                    'description'  => 'The default Idno theme, built to be used as a basis for your designs.'
+                    'description'  => 'The look Idno comes with. An installed theme overrides its templates.'
                 )
             );
 

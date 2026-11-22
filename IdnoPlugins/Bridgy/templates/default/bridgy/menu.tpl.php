@@ -1,1 +1,9 @@
-<li <?php if ($_SERVER['REQUEST_URI'] == '/account/bridgy/') echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>account/bridgy/"><?php echo \Idno\Core\Idno::site()->language()->_('Interactions'); ?></a></li>
+<?php
+    $page = \Idno\Core\Idno::site()->currentPage();
+    $baseUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
+?>
+<a href="<?= $baseUrl ?>account/bridgy/"
+   class="idno-account-nav-item<?php if ($page->doesPathMatch('/account/bridgy/')) echo ' active'; ?>">
+    <?= $this->__(['icon' => 'share-2'])->draw('shell/icon') ?>
+    <span><?= \Idno\Core\Idno::site()->language()->_('Interactions') ?></span>
+</a>

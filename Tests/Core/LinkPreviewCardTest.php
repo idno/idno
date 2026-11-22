@@ -19,8 +19,6 @@ class LinkPreviewCardTest extends \Tests\IdnoTestCase
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
-        // Twenty26 only has templates of the "modern" type
-        \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/Themes/Twenty26');
     }
 
     public function setUp(): void
@@ -36,8 +34,7 @@ class LinkPreviewCardTest extends \Tests\IdnoTestCase
     public static function lookProvider(): array
     {
         return [
-            'no theme' => ['default'],
-            'Twenty26' => ['modern'],
+            'Idno 2026' => ['default'],
         ];
     }
 

@@ -21,10 +21,9 @@ if (!empty($vars['object'])) {
 } else {
     $object = false;
 }
-    $unique_id = 'body'.rand(0, 9999);
+    $unique_id = 'body' . rand(0, 9999);
 
     /* @var \Idno\Core\Template $this */
-
 ?>
 <?php
 if (!empty($vars['object']->inreplyto)) {
@@ -38,145 +37,107 @@ if (!empty($vars['url'])) {
     $vars['object']->inreplyto = array($vars['url']);
 }
 ?>
-    <form action="<?php echo $vars['object']->getURL() ?>" method="post">
+    <form action="<?= $vars['object']->getURL() ?>" method="post">
 
-        <div class="row">
+        <div class="idno-editor">
 
-            <div class="col-md-8 col-md-offset-2 edit-pane">
+                <h4 class="idno-editor-heading">
+                    <?php if (empty($vars['object']->_id)) { ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('New Post') ?>
+                    <?php } else { ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('Edit Post') ?>
+                        <?php if ($vars['object']->getPublishStatus() === 'draft') { ?>
+                            <span class="idno-badge-draft"><?= \Idno\Core\Idno::site()->language()->_('Draft') ?></span>
+                        <?php } ?>
+                    <?php } ?>
+                </h4>
 
-
-                <?php
-
-                if (empty($vars['object']->_id)) {
-
-                    ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('New Post'); ?></h4>
-                    <?php
-
-                } else {
-
-                    ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('Edit Post'); ?></h4>
-                    <?php
-
-                }
-
-                ?>
-
-                <div class="content-form">
-                    <label for="title"><?php echo \Idno\Core\Idno::site()->language()->_('Title'); ?></label>
-                    <?php echo $this->__(['name' => 'title', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Give it a title'), 'id' => 'title', 'value' => $title, 'required' => true, 'class' => 'form-control'])->draw('forms/input/input'); ?>
-                </div>
-                        
-                <div class="content-form">
-                    <label for="subtitle"><?php echo \Idno\Core\Idno::site()->language()->_('Subtitle'); ?></label>
-                    <?php echo $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional sub title for this post'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'form-control'])->draw('forms/input/input'); ?>
+                <div class="idno-form-field">
+                    <label class="idno-label" for="title"><?= \Idno\Core\Idno::site()->language()->_('Title') ?></label>
+                    <?= $this->__(['name' => 'title', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Give it a title'), 'id' => 'title', 'value' => $title, 'required' => true, 'class' => 'idno-input idno-editor-title'])->draw('forms/input/input') ?>
                 </div>
 
-                <?php echo $this->__([
+                <div class="idno-form-field">
+                    <label class="idno-label" for="subtitle"><?= \Idno\Core\Idno::site()->language()->_('Subtitle') ?></label>
+                    <?= $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional sub title for this post'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'idno-input idno-editor-subtitle'])->draw('forms/input/input') ?>
+                </div>
+
+                <?= $this->__([
                     'name' => 'body',
                     'unique_id' => $unique_id,
                     'value' => $body,
                     'object' => $object,
                     'wordcount' => true,
                     'required' => true
-                ])->draw('forms/input/richtext')?>
-                <?php echo $this->draw('entity/tags/input'); ?>
-                    <?php echo $this->draw('content/unfurl');
+                ])->draw('forms/input/richtext') ?>
 
-                    // Set focus so you can start typing straight away (on shares)
-                    if (\Idno\Core\Idno::site()->currentPage()->getInput('share_url')) {
-                        ?>
-            <script>
-                $(document).ready(function(){
-                    var content = $('#title').val();
-                    var len = content.length;
-                    var element = $('#title');
-                    $('#title').focus(function(){
-                        $(this).prop('selectionStart', len);
-                    });
-                    $('#title').focus();
-                });
-            </script>
-                        <?php
-                    }
-                    ?>
+                <?= $this->draw('entity/tags/input') ?>
+                <?= $this->draw('content/unfurl') ?>
 
-            <p>
-                <small><a id="inreplyto-add" href="#"
-                          onclick="$('#inreplyto').append('<span><input required type=&quot;url&quot; name=&quot;inreplyto[]&quot; value=&quot;&quot; placeholder=&quot;<?php echo addslashes(\Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to')); ?>&quot; class=&quot;form-control&quot; onchange=&quot;adjust_content(this.value)&quot; /> <small><a href=&quot;#&quot; onclick=&quot;$(this).parent().parent().remove(); return false;&quot;><icon class=&quot;fa fa-times&quot;></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;"><i class="fa fa-reply"></i>
-                        <?php echo \Idno\Core\Idno::site()->language()->_('Reply to a site'); ?></a></small>
-            </p>
-
-
-            <div id="inreplyto">
                 <?php
-                if (!empty($vars['object']->inreplyto)) {
-                    foreach ($vars['object']->inreplyto as $inreplyto) {
-                        ?>
-                            <p>
-                                <input type="url" name="inreplyto[]"
-                                       placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to'); ?>"
-                                       class="form-control inreplyto" value="<?php echo htmlspecialchars($inreplyto) ?>" onchange="adjust_content(this.value)"/>
-                                <small><a href="#"
-                                          onclick="$(this).parent().parent().remove(); return false;"><i class="fa fa-times"></i>
-                                      <?php echo \Idno\Core\Idno::site()->language()->_('Remove URL'); ?></a></small>
-                            </p>
-                        <?php
-                    }
+                // Set focus so you can start typing straight away (on shares)
+                if (\Idno\Core\Idno::site()->currentPage()->getInput('share_url')) {
+                    ?>
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function(){
+                            var el = document.getElementById('title');
+                            if (el) {
+                                var len = el.value.length;
+                                el.focus();
+                                el.setSelectionRange(len, len);
+                            }
+                        });
+                    </script>
+                    <?php
                 }
                 ?>
+
+                <?php $hasReplyTo = !empty($vars['object']->inreplyto); ?>
+                <div class="idno-reply-section" x-data="{ open: <?= $hasReplyTo ? 'true' : 'false' ?> }">
+                    <button type="button" class="idno-reply-toggle" x-on:click="open = !open" :class="{ 'active': open }">
+                        <?= $this->__(['icon' => 'reply', 'class' => 'idno-reply-toggle-icon'])->draw('shell/icon') ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('Reply to a site') ?>
+                    </button>
+                    <div class="idno-reply-input" x-show="open" x-cloak>
+                        <input type="url" name="inreplyto[]"
+                               placeholder="<?= \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to') ?>"
+                               class="idno-input"
+                               value="<?= !empty($vars['object']->inreplyto) ? htmlspecialchars(is_array($vars['object']->inreplyto) ? $vars['object']->inreplyto[0] : $vars['object']->inreplyto) : '' ?>"/>
+                    </div>
                 </div>
 
-                <?php echo $this->drawSyndication('article', $vars['object']->getPosseLinks()); ?>
+                <?= $this->drawSyndication('article', $vars['object']->getPosseLinks()) ?>
                 <?php if (empty($vars['object']->_id)) {
                     echo $this->__(['name' => 'forward-to', 'value' => \Idno\Core\Idno::site()->config()->getDisplayURL() . 'content/all/'])->draw('forms/input/hidden');
                 } ?>
 
-                <?php echo $this->draw('content/extra'); ?>
-                <?php echo $this->draw('content/access'); ?>
+                <?= $this->draw('content/extra') ?>
+                <?= $this->draw('content/access') ?>
 
-                <p class="button-bar ">
+                <?= \Idno\Core\Idno::site()->actions()->signForm('/entry/edit') ?>
 
-                    <?php echo \Idno\Core\Idno::site()->actions()->signForm('/entry/edit') ?>
-                    <input type="button" class="btn btn-cancel" value="<?php echo \Idno\Core\Idno::site()->language()->_('Cancel'); ?>" onclick="tinymce.EditorManager.execCommand('mceRemoveEditor',true, 'body'); hideContentCreateForm();"/>
-                    <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Publish'); ?>"/>
-
-                </p>
-
-            </div>
+                <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                    <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                        <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
+                    </button>
+                    <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                        <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                    </button>
+                    <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
+                        <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>
+                    </a>
+                </div>
 
         </div>
     </form>
 <?php echo $this->draw('entity/edit/footer'); ?>
 <script>
-
-    function adjust_content(url) {
-        var username = url.match(/https?:\/\/([a-z]+\.)?twitter\.com\/(#!\/)?@?([^\/]*)/)[3];
-        if (username != null) {
-            if ($('#title').val().search('@' + username) == -1) {
-                $('#title').val('@' + username + ' ' + $('#title').val());
-                //count_chars();
-            }
-        }
-    }
-
-    $(document).ready(function () {
-
-        // Make in reply to a little less painful
-        $("#inreplyto-add").on('dragenter', function(e) {
-            var placeholder = '<?php echo addslashes(\Idno\Core\Idno::site()->language()->esc_('Add the URL that you\'re replying to')); ?>';
-            e.stopPropagation();
-            e.preventDefault();
-            $('#inreplyto').append('<span><input required type="url" name="inreplyto[]" value="" placeholder="' + placeholder + '" class="form-control" onchange="adjust_content(this.value)" /> <small><a href="#" onclick="$(this).parent().parent().remove(); return false;"><icon class="fa fa-times"></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;
-        });
-    });
-
-    $(document).ready(function(){
+    document.addEventListener('DOMContentLoaded', function () {
         // Autosave the title & body
-        autoSave('entry', ['title', 'body'], {
-          'body': '#<?php echo $unique_id?>',
-        });
+        if (typeof autoSave === 'function') {
+            autoSave('entry', ['title', 'body'], {
+              'body': '#<?= $unique_id ?>',
+            });
+        }
     });
-
 </script>

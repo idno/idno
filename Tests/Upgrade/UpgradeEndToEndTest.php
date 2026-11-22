@@ -50,7 +50,7 @@ final class UpgradeEndToEndTest extends TestCase
      * The DBAL statements of an anonymous homepage request on the fixture site once upgraded (see
      * testTheHomepageStatementsArePinned): the catalog, the gate's probe, and the legacy application's.
      */
-    private const HOMEPAGE_STATEMENTS = 13;
+    private const HOMEPAGE_STATEMENTS = 12;
 
     /** The most steps a whole upgrade of the fixture may take. */
     private const MAX_STEPS = 100;
