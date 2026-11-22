@@ -306,6 +306,10 @@ Each content plugin has an `Entry.php` entity class that defines
   the address or an empty string, and then through `htmlspecialchars()`. Do this where the
   value is printed even if it was checked when it was stored, because values stored
   before the check are not rewritten. `Tests/Core/UrlValidatorTest.php` checks `httpUrl()`.
+  Its pattern is a nowdoc (`UrlValidator::HTTP_URL_PATTERN`). Write a regular expression
+  that holds backslashes that way: in a quoted PHP string `\\` is one backslash, which
+  once turned a `\s` into "a backslash or the letter s" and refused every host that
+  begins with "s".
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
   `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with

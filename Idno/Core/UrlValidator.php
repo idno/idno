@@ -13,6 +13,25 @@ namespace Idno\Core;
 class UrlValidator
 {
     /**
+     * What httpUrl() accepts: "http://", "https://" or "//", then a host that does not
+     * begin with a slash or a backslash, and no character anywhere that a URL cannot
+     * contain.
+     *
+     * This is a nowdoc, so the regular expression engine reads exactly what is written
+     * here: each backslash below is one backslash of the expression. (In a quoted PHP
+     * string "\\" is a single backslash. Written that way, a "\s" in this pattern once
+     * reached the engine as a backslash and the letter s, and every host that begins
+     * with "s" was refused.)
+     *
+     *   (?![/\\])           the host does not begin with a slash or a backslash
+     *   ["<>`]              a double quote, an angle bracket, a backtick
+     *   [\x00-\x20\x7f]     white space and control characters
+     */
+    private const HTTP_URL_PATTERN = <<<'PATTERN'
+~^(?:https?:)?//(?![/\\])[^"<>`\x00-\x20\x7f]+$~iD
+PATTERN;
+
+    /**
      * Check whether a URL is safe for server-side fetching.
      * Blocks non-HTTP schemes, embedded credentials, and any host that is,
      * or resolves to, a loopback, private, link-local or reserved address.
@@ -36,7 +55,9 @@ class UrlValidator
      * page, a post): a browser runs a "javascript:" address when it is followed. Only
      * http and https addresses are accepted (and "//host/..." ones, which take the
      * scheme of the page), and none that holds white space, a control character, a
-     * double quote, an angle bracket or a backtick, which a URL cannot contain.
+     * double quote, an angle bracket or a backtick, which a URL cannot contain. The
+     * host cannot begin with a slash or a backslash (browsers read "\" as "/" there,
+     * so there would be no host).
      *
      * This does not escape anything: print the result with htmlspecialchars(). And it
      * does not make the URL safe to fetch: see isSafeUrl().
@@ -50,7 +71,7 @@ class UrlValidator
             return '';
         }
         $url = trim($url);
-        if (preg_match('~^(https?:)?//[^/\\\s"<>`\x00-\x20\x7f][^\s"<>`\x00-\x20\x7f]*$~iD', $url) !== 1) {
+        if (preg_match(self::HTTP_URL_PATTERN, $url) !== 1) {
             return '';
         }
 
