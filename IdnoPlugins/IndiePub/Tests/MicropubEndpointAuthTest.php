@@ -159,8 +159,15 @@ namespace IdnoPlugins\IndiePub\Tests {
             // The approval page is an ordinary form, so a POST that lacks its token must not
             // hand a client an authorization code
             $this->logIn();
+
+            // "me" must be on the site's host as the web server knows it, which is not always
+            // the name the tests reach it by. Find it as a client does, from the Link header.
+            $page = $this->request('GET', 'session/login');
+            $this->assertMatchesRegularExpression('#^Link: <([^>]+)indieauth/auth>; rel="authorization_endpoint"#mi', $page['headers'], 'The site should advertise its authorization endpoint.');
+            preg_match('#^Link: <([^>]+)indieauth/auth>; rel="authorization_endpoint"#mi', $page['headers'], $match);
+
             $fields = [
-                'me' => Idno::site()->config()->getURL(),
+                'me' => $match[1],
                 'client_id' => 'http://client.example.com/',
                 'redirect_uri' => 'http://client.example.com/callback',
                 'state' => $this->marker(),
