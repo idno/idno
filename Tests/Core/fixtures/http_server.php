@@ -19,6 +19,7 @@
  *     /chain/<n>                           redirect to /chain/<n-1> (a relative Location) until /chain/0
  *     /advertise?endpoint=<url>            a page that names <url> as its webmention endpoint
  *     /actor                               a minimal ActivityPub actor document
+ *     /actor?key=<base64url PEM>           the same, for the requested address, with that public key
  *     /log                                 JSON list of the requests seen so far ("METHOD target")
  *     /reset                               forget the requests seen so far
  *     anything else                        200, body "landed <METHOD> <path>"
@@ -135,14 +136,22 @@ while (time() < $stopAt) {
             $body = '<html><body>A page that accepts webmentions</body></html>';
         } else if ($path === '/actor') {
             $headers = ['Content-Type: application/activity+json'];
-            $body = json_encode(
-                [
-                    'id' => 'http://203.0.113.10/actor',
-                    'type' => 'Person',
-                    'preferredUsername' => 'fixture',
-                    'inbox' => 'http://203.0.113.10/inbox',
-                ]
-            );
+            $actor = [
+                'id' => 'http://203.0.113.10/actor',
+                'type' => 'Person',
+                'preferredUsername' => 'fixture',
+                'inbox' => 'http://203.0.113.10/inbox',
+            ];
+            if (!empty($query['key'])) {
+                // The actor is whoever was asked for, and signs with the key in the address
+                $actor['id'] = $target;
+                $actor['publicKey'] = [
+                    'id' => $target . '#main-key',
+                    'owner' => $target,
+                    'publicKeyPem' => base64_decode(strtr($query['key'], '-_', '+/')),
+                ];
+            }
+            $body = json_encode($actor);
         }
     }
 
