@@ -739,10 +739,11 @@ namespace Idno\Common {
             }
 
             // Adding when this entity was created (if it's new) & updated
+            $now = time();
             if (empty($this->created)) {
-                $this->created = time();
+                $this->created = $now;
             }
-            $this->updated = time();
+            $this->updated = $now;
 
             // Set published status if not already set
             if (empty($this->publish_status)) {

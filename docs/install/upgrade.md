@@ -598,6 +598,13 @@ The import and export pages use bounded services in `Idno\Portability`, which th
 
 A queue worker now has the site's host (the host of the `url` in `config.ini`): it was empty, so the worker's upload directory, which is named after the host, was not the one the pages use.
 
+### What Idno sends to other servers
+
+What a site sends to other servers may change when the change is an improvement that stays compatible with ActivityPub. These changes are deliberate:
+
+* **An ActivityPub `Create` is published when its post was.** The activity's `published` used to be the moment the activity was built, a second or more after the post's own `published` (and, for the outbox, the moment the outbox was asked for, so it changed on every request). It is now the post's creation time, the same value as the object's `published`, so a `Create` built again, or listed in the outbox, is the same each time. Remote servers read the object's `published`, which is unchanged.
+* **An ActivityPub `Update` says when the post was last changed.** Its `published` is the post's last-saved time (the object's `updated`), or the time the post was published when it was never edited, where it used to be the moment the activity was built. The object's `updated` is now sent only when it is later than `published` (a post saved for the first time sent one when the clock ticked during the save). `Delete` and the acceptance of a quote request still carry the moment they are built, and the follow `Accept` still carries no time. Activity ids, addressing, the `@context` and signatures are unchanged.
+
 ### What behaves differently
 
 On a MySQL, MariaDB or SQLite site, `db()` and the entity finders behave differently from the old

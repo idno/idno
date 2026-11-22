@@ -27,6 +27,8 @@ The Composer scripts that run PHPUnit or the rig (`test`, `test:unit`, `test:up`
 
 How long it takes, roughly, on a laptop: `composer test:unit` a few seconds; `composer test` about a minute on SQLite and two to four minutes on MySQL or MariaDB (the upgrade tests build private 1.x databases and run web servers of their own); `composer test:up:mysql` from nothing ten to thirty seconds, most of it waiting for the database server to start (longer the first time, while Docker downloads the image).
 
+A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range.
+
 `composer test` runs PHPUnit with `IDNO_DOMAIN=127.0.0.1` and `IDNO_PORT=8089`. If you run `vendor/bin/phpunit` yourself, set those two environment variables to the same values, and run PHP with `-d error_reporting=22527` (everything except deprecation and strict notices, as in a stock production `php.ini`). Idno's `pedantic_mode`, which the test configuration turns on, throws an exception for every reported error, so reported deprecations would otherwise stop the suite. Extra PHPUnit arguments can be passed after `--`, for example `composer test -- IdnoPlugins/ActivityPub/Tests/`.
 
 ## The two rig modes

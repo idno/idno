@@ -209,6 +209,9 @@ namespace Tests\Characterisation {
                 ['canQuote' => ['automaticApproval' => ['https://www.w3.org/ns/activitystreams#Public']]],
                 $item['object']['interactionPolicy']
             );
+            // A Create is published when its post was, not when the outbox was asked for.
+            $this->assertSame($status->created, strtotime($item['object']['published']));
+            $this->assertSame($item['object']['published'], $item['published']);
         }
 
         public function testOutboxItemContext(): void

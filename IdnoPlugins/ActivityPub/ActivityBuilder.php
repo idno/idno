@@ -102,8 +102,8 @@ class ActivityBuilder
             $object['content'] = $entity->getFormattedContent();
         }
 
-        // Updated time
-        if ($entity->updated && $entity->updated !== $entity->created) {
+        // Updated time: only for a post changed after it was published
+        if ($entity->updated && $entity->updated > $entity->created) {
             $object['updated'] = date(\DateTime::RFC3339, $entity->updated);
         }
 
@@ -158,6 +158,9 @@ class ActivityBuilder
     /**
      * Build a Create activity wrapping an entity.
      *
+     * The activity is published when its post was: its `published` is the object's `published`, the
+     * post's creation time, so a Create built again (for the outbox, or sent again) is the same.
+     *
      * @param Entity $entity The entity being created
      * @return array ActivityPub Create activity
      */
@@ -166,11 +169,15 @@ class ActivityBuilder
         $object = self::buildObject($entity);
         $owner = $entity->getOwner();
 
-        return self::wrapActivity('Create', $owner, $object, $entity->getUUID() . '#create');
+        return self::wrapActivity('Create', $owner, $object, $entity->getUUID() . '#create', $object['published']);
     }
 
     /**
      * Build an Update activity wrapping an entity.
+     *
+     * The activity is published when the post was last changed, the object's `updated`; a post that
+     * was never changed since it was published has no `updated`, and the activity carries the time
+     * the post was published.
      *
      * @param Entity $entity The entity being updated
      * @return array ActivityPub Update activity
@@ -180,7 +187,7 @@ class ActivityBuilder
         $object = self::buildObject($entity);
         $owner = $entity->getOwner();
 
-        return self::wrapActivity('Update', $owner, $object, $entity->getUUID() . '#update-' . time());
+        return self::wrapActivity('Update', $owner, $object, $entity->getUUID() . '#update-' . time(), $object['updated'] ?? $object['published']);
     }
 
     /**
@@ -317,9 +324,10 @@ class ActivityBuilder
      * @param User|null $actor  The actor performing the activity
      * @param array     $object The object of the activity
      * @param string    $id     Activity ID
+     * @param string    $published When the activity was published, as RFC 3339; the time of the call when empty
      * @return array ActivityPub activity
      */
-    public static function wrapActivity(string $type, ?User $actor, array $object, string $id = ''): array
+    public static function wrapActivity(string $type, ?User $actor, array $object, string $id = '', string $published = ''): array
     {
         $actorId = $actor ? $actor->getActivityPubActorID() : '';
 
@@ -328,7 +336,7 @@ class ActivityBuilder
             'id'        => $id ?: ($actorId . '#activity-' . md5(time() . mt_rand())),
             'type'      => $type,
             'actor'     => $actorId,
-            'published' => date(\DateTime::RFC3339),
+            'published' => $published !== '' ? $published : date(\DateTime::RFC3339),
             'object'    => $object,
         ];
 

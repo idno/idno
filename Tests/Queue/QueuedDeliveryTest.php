@@ -111,6 +111,13 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         $objectId = $activity['object']['id'];
         $this->assertMatchesRegularExpression('#^' . preg_quote($this->baseUrl(), '#') . 'view/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$#', $objectId);
         $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/', $activity['published']);
+        // A Create is published when its post was: the post's creation time as the site stored it. Nothing here
+        // compares two times that were generated separately.
+        $created = $this->runInSite('return \Idno\Common\Entity::getByUUID(' . $this->literal($objectId) . ')->created;');
+        $this->assertIsInt($created);
+        $published = gmdate('Y-m-d\TH:i:s', $created) . '+00:00';
+        $this->assertSame($published, $activity['object']['published'], 'the Note is published when its post was created');
+        $this->assertSame($published, $activity['published'], 'and so is the Create');
         $public = 'https://www.w3.org/ns/activitystreams#Public';
         $followers = $this->baseUrl() . 'actor/alice/followers';
         $this->assertSame([
@@ -118,13 +125,13 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             'id' => $objectId . '#create',
             'type' => 'Create',
             'actor' => $this->baseUrl() . 'actor/alice',
-            'published' => $activity['published'],
+            'published' => $published,
             'object' => [
                 'id' => $objectId,
                 'type' => 'Note',
                 'url' => $permalink,
                 'attributedTo' => $this->baseUrl() . 'actor/alice',
-                'published' => $activity['published'],
+                'published' => $published,
                 'to' => [$public],
                 'cc' => [$followers],
                 'content' => '<p>Hello queue</p>',

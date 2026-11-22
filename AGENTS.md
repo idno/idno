@@ -254,7 +254,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   with `Tests/rig/mongo-import-check.php` that the end-to-end test ran). Tests must not assume a
   particular site URL (use the site's configured URL, e.g. `$this->site()->baseUrl()`), plugin list
   or stored content beyond what both the rig's and CI's configurations provide; derive expectations
-  from the configuration or the filesystem. Both load the same plugins: keep `alwaysplugins[]` in
+  from the configuration or the filesystem. A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range. Both load the same plugins: keep `alwaysplugins[]` in
   `Tests/rig/config.ini`, `Tests/rig/config.sqlite.ini` and `Tests/build/config_mysql.ini` in step
   (`Tests/Kernel/RigScriptsTest` checks the rig's two and the CI copy, and that it is the only
   `Tests/build/config_*.ini`). Every test that touches the database runs on MySQL and SQLite (the
@@ -3174,6 +3174,15 @@ Each content plugin has an `Entry.php` entity class that defines
 1. **Outgoing**: When an entity is saved/updated/deleted, `Main.php` hooks build
    the activity via `ActivityBuilder` and call `Delivery::deliverToFollowers()`
    which enqueues signed POSTs to each follower's inbox.
+   The times an activity carries are the post's own, so the same activity is built every time:
+   a `Create`'s `published` is its object's `published` (the post's creation time, equal by
+   construction, also in the outbox); an `Update`'s `published` is the object's `updated` (the
+   time the post was last saved, which `Entity::save()` sets from the same clock reading as
+   `created` on a first save, so a new post has no `updated`) and, for a post never edited, the
+   time it was published; a `Delete` and the `Accept` of a quote request are events of the
+   moment they are built and carry that time; the follow `Accept` carries none. The object has
+   `updated` only when it is later than `created`. A test never compares two separately
+   generated times (`ActivityTimesTest`, `QueuedDeliveryTest`).
 2. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
 3. **Quote posts (FEP-044f)**: All outgoing notes include
