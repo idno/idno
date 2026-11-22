@@ -15,12 +15,12 @@ final class MailTransportDsnTest extends TestCase
      */
     public static function plainSettings(): iterable
     {
-        // The port is always in the DSN: 25, or 465 with ssl, when none is set. Nothing is encrypted
+        // The port is always in the DSN: smtp_port, or 25 when none is set (with ssl too, as SwiftMailer did). Nothing is encrypted
         // unless smtp_secure says so (auto_tls=false: no STARTTLS even when the server offers it).
         yield 'no host is the local mail server' => [['smtp_host' => ''], 'smtp://localhost:25?auto_tls=false'];
         yield 'nothing set at all' => [[], 'smtp://localhost:25?auto_tls=false'];
         yield 'no host still takes the port' => [['smtp_host' => '', 'smtp_port' => 587], 'smtp://localhost:587?auto_tls=false'];
-        yield 'no host still takes the security' => [['smtp_host' => '', 'smtp_secure' => 'ssl'], 'smtps://localhost:465'];
+        yield 'no host still takes the security' => [['smtp_host' => '', 'smtp_secure' => 'ssl'], 'smtps://localhost:25'];
         yield 'a host alone is port 25' => [['smtp_host' => 'mail.example.com'], 'smtp://mail.example.com:25?auto_tls=false'];
         yield 'a host and a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587?auto_tls=false'];
         yield 'a port as text, as the admin form saves it' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '2525'], 'smtp://mail.example.com:2525?auto_tls=false'];
@@ -28,7 +28,7 @@ final class MailTransportDsnTest extends TestCase
         yield 'port 0' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 0], 'smtp://mail.example.com:25?auto_tls=false'];
         yield 'port "0"' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '0'], 'smtp://mail.example.com:25?auto_tls=false'];
         yield 'ssl is implicit tls' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 465, 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:465'];
-        yield 'ssl without a port is 465' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:465'];
+        yield 'ssl without a port is port 25, as it always was' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:25'];
         yield 'ssl on another port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 2465, 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:2465'];
         yield 'tls requires starttls, port 25 by default' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com:25?require_tls=true'];
         yield 'tls with a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587, 'smtp_secure' => 'tls'], 'smtp://mail.example.com:587?require_tls=true'];
@@ -37,10 +37,12 @@ final class MailTransportDsnTest extends TestCase
         yield 'an IPv4 address' => [['smtp_host' => '192.0.2.10', 'smtp_port' => 25], 'smtp://192.0.2.10:25?auto_tls=false'];
         yield 'an IPv6 address is bracketed' => [['smtp_host' => '2001:db8::1', 'smtp_port' => 25], 'smtp://[2001:db8::1]:25?auto_tls=false'];
         yield 'a password without a username is not used' => [['smtp_host' => 'mail.example.com', 'smtp_password' => 'x'], 'smtp://mail.example.com:25?auto_tls=false'];
-        yield 'ssl:// in the host is the host with implicit tls' => [['smtp_host' => 'ssl://mail.example.com'], 'smtps://mail.example.com:465'];
+        yield 'ssl:// in the host is the host with implicit tls' => [['smtp_host' => 'ssl://mail.example.com'], 'smtps://mail.example.com:25'];
         yield 'ssl:// in the host with a port' => [['smtp_host' => 'SSL://mail.example.com', 'smtp_port' => 2465], 'smtps://mail.example.com:2465'];
-        yield 'tls:// in the host is the host with starttls required' => [['smtp_host' => 'tls://mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587?require_tls=true'];
-        yield 'smtp_secure wins over a scheme in the host' => [['smtp_host' => 'ssl://mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com:25?require_tls=true'];
+        yield 'tls:// in the host is implicit tls too (the tls:// stream scheme of PHP)' => [['smtp_host' => 'tls://mail.example.com', 'smtp_port' => 465], 'smtps://mail.example.com:465'];
+        yield 'tls:// in the host without a port' => [['smtp_host' => 'tls://mail.example.com'], 'smtps://mail.example.com:25'];
+        yield 'credentials of an empty host are not used' => [['smtp_host' => '', 'smtp_username' => 'me', 'smtp_password' => 'x'], 'smtp://localhost:25?auto_tls=false'];
+        yield 'smtp_secure wins over a scheme in the host (SwiftMailer never delivered with both)' => [['smtp_host' => 'ssl://mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com:25?require_tls=true'];
     }
 
     /**

@@ -87,10 +87,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->share(false)
         ->autowire(false)->autoconfigure(false)->public();
 
-    // No test sends mail: the transport factory MailerFactory is given records each message to a file
-    // (Tests\Fixtures\RecordingMailTransport; /_test/mail/log reads it) from the DSN the settings give.
+    // No test sends mail to a real server: the transport factory MailerFactory is given records each message to a
+    // file (Tests\Fixtures\RecordingMailTransport; /_test/mail/log reads it) from the DSN the settings give,
+    // unless IDNO_TEST_MAIL_DELIVER is host:port, when it builds the production SMTP transport and connects it
+    // to that address instead (Tests\Fixtures\TestMailTransportFactory; inert otherwise).
     $container->services()
-        ->set('idno.mail.transport_factory', \Tests\Fixtures\RecordingMailTransportFactory::class)
+        ->set('idno.mail.transport_factory', \Tests\Fixtures\TestMailTransportFactory::class)
         ->autowire(false)->autoconfigure(false)->public();
 
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.

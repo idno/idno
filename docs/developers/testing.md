@@ -70,6 +70,25 @@ The tests of the upgrade from Idno 1.x build a 1.x database on a private MySQL o
 
 The rig's site runs the synchronous queue, so nothing queued is left for a worker. A test that needs the asynchronous queue extends `Tests\Queue\AsyncSiteTestCase`: each test starts PHP's built-in web server (four workers, on a free port, never 8089) on a private database of its own (a private database of the rig's MySQL or MariaDB server, or a file in a temporary directory on an SQLite rig; the schema comes from `idno:upgrade`) with `IDNO_EVENT_QUEUE=AsynchronousQueue`, its own `IDNO_URL` and `IDNO_TEST_HTTP_ALLOW` naming its own origin, and stops the server and drops the database afterwards, whatever the outcome. The test reaches the site with `site()` (the characterisation client), registers and logs in users over HTTP (`registerUser()`, `publishStatus()`), runs the worker (`runWorkerOnce()`: `bin/console service-event-queue --once` with the same environment), reads the requests the site sent to a sink (`sink()`), the messages waiting in the queue or failed (`queuedEvents()`, `failedEvents()`) and, for what only the entity classes can do (a follower record, a record of the previous queue), runs PHP code with the site booted (`runInSite()`). `Tests/Queue/QueuedDeliveryTest` pins what the queue delivers: a signed ActivityPub delivery to a follower's inbox, a webmention, who an event runs as, what a failing event does, and the worker's output and exit codes; `QueuedDeliveryBehindTlsTest` pins that the URLs of a delivery are those of a web request presented as TLS.
 
+## Testing mail
+
+Mail is tested on the wire. `Tests\Fixtures\Smtp\ScriptedSmtpServer` is a real SMTP server in a subprocess on
+127.0.0.1 and a free port (plain, STARTTLS, implicit TLS, logins, and chosen failures, including a server that
+hangs); it records every line, and every message it accepts. Certificates are made per test class with the
+openssl extension (`TestPki`); the client trusts the test authority only where a test says so, and verifies
+certificates as it always does. In the test container a switch delivers mail to such a server instead of
+recording it (`IDNO_TEST_MAIL_DELIVER=host:port`, and `IDNO_TEST_MAIL_CAFILE`); it replaces only the address the
+production transport connects to, because the ports a site names (25, 465, 587) cannot be bound in a test. Which
+port a setting MEANS is read from the transport the production factory built.
+
+`Tests/Mail/SwiftMailerParityTest` proves that existing mail settings connect as they did under SwiftMailer. The
+reference, `Tests/Mail/fixtures/swiftmailer-transcripts.php`, was captured once with SwiftMailer 6.3.0 against the
+same server by `Tests/Mail/fixtures/capture-swiftmailer.php` (which installs SwiftMailer with Composer into a
+temporary directory; it needs network access once, and the revision `9c7f3f8c2` of the repository); the test suite
+only reads the fixture. `composer test:mail` delivers the site's mails to three Mailpit servers in Docker (plain,
+STARTTLS, implicit TLS) and reads them back through Mailpit's API. Before a release, also send the admin's test
+mail (Admin, Email) with the site's real provider's settings once.
+
 ## The unit tier
 
 `composer test:unit` runs `Tests/Unit/` alone (`phpunit.unit.xml`), with nothing but PHP and the extensions `composer.json` requires: no rig, no database server, no configuration. It includes the record storage contract against the in-memory store and against SQLite in memory.

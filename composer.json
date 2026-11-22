@@ -129,6 +129,7 @@
         "console": "php -d error_reporting=22527 bin/console",
         "test:unit": ["Composer\\Config::disableProcessTimeout", "php -d error_reporting=22527 vendor/bin/phpunit -c phpunit.unit.xml"],
         "test": ["Composer\\Config::disableProcessTimeout", "IDNO_DOMAIN=127.0.0.1 IDNO_PORT=8089 php -d error_reporting=22527 vendor/bin/phpunit"],
-        "test:mongo-import": ["Composer\\Config::disableProcessTimeout", "Tests/rig/mongo-import.sh"]
+        "test:mongo-import": ["Composer\\Config::disableProcessTimeout", "Tests/rig/mongo-import.sh"],
+        "test:mail": ["Composer\\Config::disableProcessTimeout", "Tests/rig/mail.sh"]
     }
 }

@@ -31,6 +31,9 @@ composer test:unit
 # but Docker; see "Importing a MongoDB site")
 composer test:mongo-import
 
+# The mail delivery test (Tests/Mail/MailpitDeliveryTest) against real Mailpit servers, in Docker (see "Mail")
+composer test:mail
+
 # Run one directory or file (a plugin's tests, the kernel tests, ...)
 composer test -- IdnoPlugins/ActivityPub/Tests/
 composer test -- Tests/Kernel
@@ -264,7 +267,7 @@ Idno/
                                check of the site's address (WorkerSiteUrl). See "The queue of
                                events"
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
-                               settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory and InvalidMailSetting. See "Mail"
+                               settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting. See "Mail"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -1712,7 +1715,8 @@ name in `config/services.php`).
 - Test hooks of the test environment (`config/services_test.php`, inert unless their environment
   variable is set): `IDNO_TEST_UPGRADE_STEP_SECONDS` (above) and `Tests\Fixtures\FailFirstConnection`
   (a `doctrine.middleware`: with `IDNO_TEST_FAIL_FIRST_CONNECTION=1` the first connection attempt
-  fails, as a server refusing one connection would).
+  fails, as a server refusing one connection would), `IDNO_TEST_MAIL_DELIVER` and `IDNO_TEST_MAIL_CAFILE`
+  (deliver mail to a scripted SMTP server instead of recording it: see "Mail").
 - Tests: `Tests/Unit/Upgrade/` (`SchemaStateTest` with the evidence rule, the version rule and the
   MongoDB case, `SchemaStatusTest` (every status decided), `UpgradeRunnerTest` on SQLite files,
   `UpgradeGateListenerTest`, `UpgradeControllerTest`, `UpgradePageTest`,
@@ -2258,26 +2262,37 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   next mail, and a worker never keeps an old password. Like the storage services it needs the legacy
   application (the settings are in the database), so it must not be fetched while the kernel boots.
   Nothing from the settings is compiled into the container. `Idno/Mail/` is in
-  `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php`, `InvalidMailSetting.php` and
+  `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php`, `InvalidMailSetting.php`, `CramMd5Authenticator.php` and
   `SmtpTransportFactory.php` (wired by hand) are in the `$excludes`.
-- `Idno\Mail\MailTransportDsn::fromSettings(array)` is pure and keeps what the settings meant under
-  SwiftMailer (read `git show 9c7f3f8c2:Idno/Core/Email.php`): the DSN ALWAYS carries a port, `smtp_port`
-  when it is a positive integer (also as numeric text), else 25, or 465 for `ssl` (Symfony's own default
-  for a DSN with no port is 465 with implicit TLS for any host but localhost: never rely on it); an empty
-  host is `localhost`, and the port and security still apply to it (as the old default transport did);
+- `Idno\Mail\MailTransportDsn::fromSettings(array)` is pure and keeps what the settings did under
+  SwiftMailer (read `git show 9c7f3f8c2:Idno/Core/Email.php`; the proof is `Tests/Mail/SwiftMailerParityTest`,
+  below): the DSN ALWAYS carries a port, `smtp_port` when it is a positive integer (also as numeric text),
+  else 25, WHATEVER the security (`ssl` with no port connected to port 25, encrypted from the start, so a
+  site that set it keeps working; the docs say to set the port, usually 465; Symfony's own default for a DSN
+  with no port is 465 with implicit TLS: never rely on it); an empty host is `localhost`, and the port and
+  security still apply to it, but a user name and password do NOT (SwiftMailer ignored them without a host);
   `smtp_secure`, compared exactly, `ssl` is `smtps://` (implicit TLS), `tls` adds `?require_tls=true`
   (STARTTLS, mandatory), anything else is `?auto_tls=false` (sent in the clear, no STARTTLS even if the
-  server offers it: the old code did that); a host written `ssl://host` or `tls://host` is that host with
-  that security unless `smtp_secure` is `ssl` or `tls` itself, any other scheme is refused; the user name
-  and password are percent-encoded and used only with a user name. A host that is not a host name or an IP
+  server offers it: the old code did that); a host written `ssl://host` OR `tls://host` is that host with
+  implicit TLS (PHP's `tls://` stream scheme is TLS from the first byte, so that is what SwiftMailer did),
+  unless `smtp_secure` is `ssl` or `tls` itself, which decides (SwiftMailer built an address that could not
+  connect in every such combination: it never delivered), any other scheme is refused; the user name
+  and password are percent-encoded; a user name with no password is used as it is (SwiftMailer logged in
+  with an empty password), a password only with a user name. A host that is not a host name or an IP
   address or a port that is not 1 to 65535 throws `Idno\Mail\InvalidMailSetting` (an
   `\InvalidArgumentException`; `setting()` and the message name the setting, never its value).
 - `Idno\Mail\SmtpTransportFactory` (the container's `idno.mail.transport_factory`, public) builds the SMTP
   transport and does exactly what the DSN says: Symfony's `EsmtpTransportFactory` would choose implicit TLS
   for port 465 whatever the DSN asks for (so `tls` on 465 would change from STARTTLS to implicit TLS, as
   SwiftMailer's `tls` was STARTTLS on a plain connection) and try STARTTLS on every server that offers it.
-  Pinned, without connecting, by `Tests/Unit/Mail/SmtpTransportFactoryTest` (host, port, implicit TLS,
-  auto-TLS and require-TLS of the transport for the whole table) and, for the production container,
+  It bounds the connection and every read at `SmtpTransportFactory::TIMEOUT_SECONDS` (30, SwiftMailer's own
+  default; Symfony's is PHP's `default_socket_timeout`, 60) through the stream's `setTimeout()`, and the
+  constructor takes another bound for a test of a server that hangs (production uses the default). It
+  replaces Symfony's CRAM-MD5 authenticator with `Idno\Mail\CramMd5Authenticator`, which accepts an empty
+  password. Certificates are always verified: nothing in the settings or the DSN reads a `cafile` or any
+  verification option (pinned by `testNoVerificationOptionIsReadFromTheDsn`). Pinned, without connecting,
+  by `Tests/Unit/Mail/SmtpTransportFactoryTest` (host, port, implicit TLS, auto-TLS and require-TLS of the
+  transport for the whole table, the timeout, the authenticators) and, for the production container,
   `Tests/Kernel/MailServicesTest`.
 - `Idno\Core\Email` stays as the adapter for legacy callers (the password reset, invitations, the admin test
   mail, the import and export mails, `Logging::oopsAlert()`), with the same methods. Its `message` is a
@@ -2304,16 +2319,64 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   line, an exception message that reaches a page (the exceptions of `MailTransportDsn` name settings
   only) or the compiled container.
 - No test sends real mail. In the test environment `config/services_test.php` replaces
-  `idno.mail.transport_factory` with `Tests\Fixtures\RecordingMailTransportFactory`, whose transport,
-  `RecordingMailTransport`, sends nothing and appends each message (From, To, Bcc, Reply-To, subject, text
-  and HTML bodies, the prepared headers, the envelope's recipients and the transport's DSN WITHOUT the
+  `idno.mail.transport_factory` with `Tests\Fixtures\TestMailTransportFactory`. By default it builds
+  `RecordingMailTransport`, which sends nothing and appends each message (From, To, Bcc, Reply-To, subject,
+  text and HTML bodies, the prepared headers, the envelope's recipients and the transport's DSN WITHOUT the
   password) as one JSON line to `<sys_get_temp_dir()>/idno-test-mail-<first 12 hex digits of the SHA-256
   of the checkout's real path>/mail.jsonl`, made on demand (CI's servers do not use the rig's directory),
   under `LOCK_EX`. The PHPUnit process and the rig's web server both append to it: a test reads it with
   `RecordingMailTransport::drain()` (which empties it) or, for mail the web server sent, over HTTP from
   `/_test/mail/log` (`Tests\Fixtures\MailLogController`, which also empties it). A test that sends mail
   drains the file in `setUp()` and `tearDown()`.
-- Tests: `Tests/Unit/Mail/MailTransportDsnTest`, `SmtpTransportFactoryTest`, `Tests/Kernel/MailServicesTest`, `Tests/Kernel/EmailAdapterTest`, and
+- Test hooks for delivering to a real (scripted) server, inert unless set, read at each transport built from
+  `$_SERVER` then the process environment, and live only in `Tests/` and `config/services_test.php`:
+  `IDNO_TEST_MAIL_DELIVER=host:port` makes `TestMailTransportFactory` build the PRODUCTION transport
+  (`SmtpTransportFactory`, from the DSN the settings give) and replace only its host and port with that
+  address (so the port the settings mean, 25, 465 or 587, which a test cannot bind, is read from what the
+  factory built: `TestMailTransportFactory::built()`, `forget()`), and `IDNO_TEST_MAIL_CAFILE=<PEM file>`
+  gives the TLS stream that authority as its `cafile` (the way a test trusts its own certificate authority;
+  `SSL_CERT_FILE` does not work where PHP names a default `openssl.cafile`). The rig's web server never has
+  them; a test of the web path starts a site of its own (`AdminEmailTestPageTest` extends
+  `Tests\Queue\AsyncSiteTestCase` and passes them in `siteEnvironment()`). A hung server is tested with the
+  production factory's constructor argument (`new SmtpTransportFactory(timeout: 1.0)`), not a switch.
+- `Tests\Fixtures\Smtp\ScriptedSmtpServer::start(array)` is a real SMTP server in a subprocess
+  (`Tests/Fixtures/Smtp/server.php`) on 127.0.0.1 and a free port: plain, STARTTLS, implicit TLS, AUTH PLAIN,
+  LOGIN and CRAM-MD5, failure points (`connect`, `auth`, `rcpt`, `data`, `hang`, `hangAtStartTls`). Options
+  `implicitTls`, `offerStartTls`, `certificate` (`valid-for-localhost`, signed by the test authority of the
+  `pki` option, or `self-signed`), `auth`, `failAt`. `port()`, `transcript()` (decrypted lines, AUTH credentials
+  decoded), `connections()` (per connection: TLS first or not, STARTTLS sent, AUTH mechanism, MAIL FROM, RCPT
+  TO, accepted), `messages()` and `stop()` (always in `tearDown()`: a moment's wait, then SIGKILL; it also ends
+  when its parent has gone and after ten minutes). `Tests\Fixtures\Smtp\TestPki` makes the authority and the
+  certificates with ext-openssl in a temporary directory, once per test class. `Tests/Mail/MailTestSupport`
+  is the trait the mail tests share.
+- Parity with SwiftMailer. `Tests/Mail/SettingsMatrix` lists the settings rows (each with the server it is
+  meant for); `Tests/Mail/fixtures/swiftmailer-transcripts.php` is what SwiftMailer 6.3.0 did with each, captured
+  ONCE by `Tests/Mail/fixtures/capture-swiftmailer.php` (it installs `swiftmailer/swiftmailer` 6.3.0 with
+  Composer into a temporary directory outside the repository, and drives the transport-building code of
+  `git show 9c7f3f8c2:Idno/Core/Email.php`; it cannot be regenerated once that revision is gone, and the test
+  suite only reads the fixture). `Tests/Mail/SwiftMailerParityTest` sends each row through the production
+  wiring and compares the port the settings mean, whether the connection began with a TLS handshake, whether
+  STARTTLS was sent, MAIL FROM, RCPT TO and delivered or not; its allow-list of differences holds only `tls`
+  against a server that does not offer STARTTLS (SwiftMailer sent the command anyway; both fail, nothing in
+  clear), and eight rows with a scheme in the host AND `smtp_secure` that SwiftMailer never delivered.
+  The old `Email::setFrom()`, `addTo()` and `setReplyTo()` passed a NAME as `addFrom([name => email])`, which
+  SwiftMailer 6.3.0 throws a `TypeError` for on PHP 8.5: named addresses never worked there; they are delivered now.
+- `Tests/Mail/SmtpWireTest` (the behaviour beyond parity on the wire: no STARTTLS when `smtp_secure` is
+  empty even if offered, `tls` needs STARTTLS, certificates verified, special-character passwords, refused
+  logins logging neither user nor password, refused recipients, a server that hangs given up on within the
+  bound, the headers and parts as built, an injected header never reaching the wire, and every call site: the
+  password reset, the invitation, the admin test mail, `oopsAlert`, the import and export results) and
+  `Tests/Mail/AdminEmailTestPageTest` (the test mail page over HTTP: success, a refused setting named, a
+  plain error for a failing transport) run in `composer test`.
+- `composer test:mail` (`Tests/rig/mail.sh`, in Docker; CI job `mail`) runs `Tests/Mail/MailpitDeliveryTest`
+  against three `axllent/mailpit` containers (plain 1025, STARTTLS 587, implicit TLS 465, each with a login) on
+  a network of their own, no port published on the host, in a PHP 8.4 container built from a COPY of the
+  checkout (`Tests/rig/mail.Dockerfile`, `mail-container.sh`); the certificates are made by `TestPki` in a
+  throwaway container; the four mails are read back through Mailpit's API (subject, both bodies, From, To,
+  Reply-To). The test skips without `IDNO_TEST_MAILPIT_SMTP` and `IDNO_TEST_MAILPIT_API`, and
+  `Tests/rig/mail-check.php` fails a run in which it skipped. For a release, also send the admin's test mail
+  (Admin, Email) against the site's real provider once.
+- Other tests: `Tests/Unit/Mail/MailTransportDsnTest`, `SmtpTransportFactoryTest`, `Tests/Kernel/MailServicesTest`, `Tests/Kernel/EmailAdapterTest`, and
   `Tests/Characterisation/MailFlowsTest` (what each mail carries: the password reset, the invitation, the
   admin test mail and `oopsAlert`: recipients, From, Reply-To, subject, the HTML part in the email shell, the
   text part and the link; and a password reset sent by the web server and read from `/_test/mail/log`).

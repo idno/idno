@@ -299,7 +299,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $config->config['smtp_username'] = '';
         $config->config['smtp_secure'] = 'ssl';
         $this->simple()->send();
-        $this->assertSame(['scheme' => 'smtps', 'host' => 'localhost', 'port' => 465, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
+        $this->assertSame(['scheme' => 'smtps', 'host' => 'localhost', 'port' => 25, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
     }
 
     public function testThePasswordNeverReachesTheRecorder(): void
@@ -355,11 +355,12 @@ final class EmailAdapterTest extends IdnoTestCase
         Idno::site()->config()->config['smtp_host'] = 'ssl://smtp.example.test';
         Idno::site()->config()->config['smtp_port'] = '';
         $this->assertSame(1, $this->simple()->send());
-        $this->assertSame(['scheme' => 'smtps', 'host' => 'smtp.example.test', 'port' => 465, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
+        $this->assertSame(['scheme' => 'smtps', 'host' => 'smtp.example.test', 'port' => 25, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
 
         Idno::site()->config()->config['smtp_host'] = 'tls://smtp.example.test';
         $this->assertSame(1, $this->simple()->send());
-        $this->assertSame(['scheme' => 'smtp', 'host' => 'smtp.example.test', 'port' => 25, 'user' => null, 'require_tls' => true], RecordingMailTransport::drain()[0]['transport']);
+        // PHP's tls:// stream scheme is TLS from the first byte, so SwiftMailer connected that way (see SwiftMailerParityTest).
+        $this->assertSame(['scheme' => 'smtps', 'host' => 'smtp.example.test', 'port' => 25, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
     }
 
     public function testLastFailureSaysWhyInAFixedVocabulary(): void

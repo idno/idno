@@ -57,11 +57,15 @@ has credentials of its own); no plugin is needed.
 Configuration for the SMTP server.  Without these set (here or in the UI)
 it will be impossible to send password recovery emails: `from_email` is the address mail is sent from.
 * `smtp_host` is a host name or an IP address; empty means the mail server on the same machine (`localhost`).
-  It may be written `ssl://host` or `tls://host`, which means that host with that `smtp_secure` value; any other
-  scheme is refused.
-* `smtp_port` is a port number. When it is empty (or 0) the port is 25, or 465 when `smtp_secure` is `ssl`.
+  It may be written `ssl://host` or `tls://host`; both mean the connection is encrypted from the start, as they
+  always have (PHP's `tls://` is not STARTTLS: use `smtp_secure` `tls` for that). Any other scheme is refused.
+  With `smtp_secure` set to `ssl` or `tls` as well, `smtp_secure` decides.
+* `smtp_port` is a port number. When it is empty (or 0) the port is 25, **whatever `smtp_secure` is**. With `ssl`
+  set the port (usually 465): an empty port means port 25, encrypted from the start, as it always has.
   The port and `smtp_secure` apply to `localhost` too.
-* `smtp_username` and `smtp_password` are used to log in; the password is used only when there is a username.
+* `smtp_username` and `smtp_password` are used to log in, with a host set (they are ignored when `smtp_host` is
+  empty); the password is used only when there is a username, and a username with no password logs in with an
+  empty password.
 * `smtp_secure` is one of:
   * `ssl` - the connection is encrypted from the start (SMTPS, usually port 465);
   * `tls` - the connection is upgraded with STARTTLS (usually port 587), and mail is not sent if the server will not.

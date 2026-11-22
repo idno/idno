@@ -11,7 +11,6 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Mailer\Mailer;
 use Symfony\Component\Mailer\Transport\Dsn;
 use Symfony\Component\Mailer\Transport\Smtp\EsmtpTransport;
-use Tests\Fixtures\RecordingMailTransportFactory;
 
 /**
  * The mail wiring as the container builds it, in the production environment and in the test one
@@ -101,11 +100,11 @@ final class MailServicesTest extends TestCase
         $this->assertTrue($transport->isTlsRequired());
     }
 
-    public function testTheTestContainerRecordsInsteadOfSending(): void
+    public function testTheTestContainerRecordsInsteadOfSendingUnlessToldWhereToDeliver(): void
     {
         $cache = null;
         try {
-            $this->assertInstanceOf(RecordingMailTransportFactory::class, self::container('test', $cache)->get('idno.mail.transport_factory'));
+            $this->assertInstanceOf(\Tests\Fixtures\TestMailTransportFactory::class, self::container('test', $cache)->get('idno.mail.transport_factory'));
         } finally {
             $cache === null || self::remove($cache);
         }

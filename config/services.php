@@ -73,7 +73,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Queue' => ['EventTrigger.php', 'EntityCache.php', 'KeepFailedMessage.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php', 'WorkerSiteUrl.php'],
         // MailTransportDsn is a pure function of the settings, InvalidMailSetting an exception; MailerFactory and
         // the transport factory are wired below.
-        'Mail' => ['InvalidMailSetting.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
+        'Mail' => ['CramMd5Authenticator.php', 'InvalidMailSetting.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

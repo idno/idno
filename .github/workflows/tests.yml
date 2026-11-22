@@ -205,6 +205,20 @@ jobs:
           tail -n 200 Tests/rig/.server.log 2>/dev/null || true
           tail -n 200 "${{ github.workspace }}/php-server.log" 2>/dev/null || true
 
+  mail:
+    # The mail delivery test (Tests/Mail/MailpitDeliveryTest) against three real Mailpit servers (plain,
+    # STARTTLS, implicit TLS): the same script a developer runs with composer test:mail. The servers need
+    # certificates the script makes and copies in, which a service container could not be given, so the
+    # script starts them itself, in Docker, on a network of its own. It fails when the test was skipped.
+    name: Mail delivery (PHP 8.4)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the mail delivery test
+        run: Tests/rig/mail.sh
+
   phpunit:
     name: PHPUnit (PHP ${{ matrix.php }} / mysql)
     runs-on: ubuntu-latest
