@@ -504,6 +504,34 @@ final class LegacyFileSystemTest extends IdnoTestCase
         return $out;
     }
 
+    public function testTheWholeFileIsWrittenInPiecesAndStopsOnAnEmptyRead(): void
+    {
+        $data = str_repeat('abcdefgh', 3000); // more than one 8 KiB piece
+        $stream = fopen('php://temp', 'w+b');
+        fwrite($stream, $data);
+        rewind($stream);
+        $out = '';
+        $this->assertSame(strlen($data), View::streamAll($stream, function (string $chunk) use (&$out): void {
+            $out .= $chunk;
+        }));
+        $this->assertSame($data, $out);
+        fclose($stream);
+
+        // A stream that never reaches its end but answers every read with nothing (a failed read) must not spin.
+        stream_wrapper_register('idnostall', StalledStream::class);
+        try {
+            $stalled = fopen('idnostall://x', 'rb');
+            $started = microtime(true);
+            $this->assertSame(0, View::streamAll($stalled, function (string $chunk): void {
+                $this->fail('nothing was read');
+            }));
+            $this->assertLessThan(5.0, microtime(true) - $started);
+            fclose($stalled);
+        } finally {
+            stream_wrapper_unregister('idnostall');
+        }
+    }
+
     public function testARangeReadStopsWhenTheStreamEndsEarly(): void
     {
         // A stream shorter than the stored size says: the read must end, not wait for bytes that never come.
@@ -596,6 +624,32 @@ final class NonSeekableStream
      * @return array<string, int>
      */
     public function stream_stat(): array
+    {
+        return [];
+    }
+}
+
+/** A stream whose end is never reached and whose reads return nothing. */
+final class StalledStream
+{
+    public $context;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$opened): bool
+    {
+        return true;
+    }
+
+    public function stream_read(int $count): string|false
+    {
+        return '';
+    }
+
+    public function stream_eof(): bool
+    {
+        return false;
+    }
+
+    public function stream_stat(): array|false
     {
         return [];
     }

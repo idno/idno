@@ -73,7 +73,11 @@ final class CacheDirResolver
         return is_writable($dir);
     }
 
-    private static function usableAndPrivate(string $dir): bool
+    /**
+     * Whether $dir is a directory only this user can write: created 0700 when missing, not a symbolic
+     * link, writable, owned by the current user and not writable by group or others.
+     */
+    public static function usableAndPrivate(string $dir): bool
     {
         if (!file_exists($dir) && !is_link($dir)) {
             // The predictable path may be created by someone else between the check and mkdir;

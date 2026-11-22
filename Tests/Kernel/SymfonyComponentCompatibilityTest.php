@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler;
 
 /**
  * Exercises the legacy call sites of the Symfony components bumped to 8.x
- * (event-dispatcher, http-foundation; cache is covered by Tests/Cache/FilesystemCacheTest) that the characterisation suite does not reach.
+ * (event-dispatcher, http-foundation; cache is covered by Tests/Unit/Cache and Tests/Kernel/CacheAdapterTest) that the characterisation suite does not reach.
  */
 final class SymfonyComponentCompatibilityTest extends TestCase
 {

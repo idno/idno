@@ -118,4 +118,25 @@ final class CacheAdapterTest extends TestCase
             @unlink($log);
         }
     }
+
+    public function testADisabledCacheIsAWarningAndAnEmptyCache(): void
+    {
+        $log = tempnam(sys_get_temp_dir(), 'idno-cache-log');
+        $previousLog = ini_set('error_log', $log);
+        try {
+            $factory = new LegacyServiceFactory();
+            $pool = $factory->warnWhenDisabled(new \Symfony\Component\Cache\Adapter\NullAdapter());
+            $cache = new PersistentCache(static fn () => $pool);
+
+            $this->assertTrue($cache->store('k', 'v'));
+            $this->assertNull($cache->load('k'));
+            $this->assertSame(1, substr_count((string) file_get_contents($log), 'the cache is disabled'));
+
+            $factory->warnWhenDisabled(new ArrayAdapter());
+            $this->assertSame(1, substr_count((string) file_get_contents($log), 'the cache is disabled'), 'a working pool says nothing');
+        } finally {
+            ini_set('error_log', (string) $previousLog);
+            @unlink($log);
+        }
+    }
 }

@@ -68,6 +68,33 @@ namespace Idno\Pages\File {
             return $written;
         }
 
+        /**
+         * Write a whole stream to the output, 8 KiB at a time. It stops at the end of the stream, or on an
+         * empty or failed read, as streamRange() does: it never spins, and never writes `false`.
+         *
+         * @param  resource      $stream
+         * @param  callable|null $write  Called with each piece; null echoes it
+         * @return int The number of bytes written
+         */
+        public static function streamAll($stream, $write = null)
+        {
+            $written = 0;
+            while (!feof($stream)) {
+                $chunk = fread($stream, 8192);
+                if ($chunk === false || $chunk === '') {
+                    break;
+                }
+                if ($write === null) {
+                    echo $chunk;
+                } else {
+                    $write($chunk);
+                }
+                $written += strlen($chunk);
+            }
+
+            return $written;
+        }
+
         // Handle GET requests to the entity
 
         function getContent()
@@ -185,9 +212,7 @@ namespace Idno\Pages\File {
                     $object->passThroughBytes();
                 } else {
                     if ($stream = $object->getResource()) {
-                        while (!feof($stream)) {
-                            echo fread($stream, 8192);
-                        }
+                        self::streamAll($stream);
                     }
                 }
             }

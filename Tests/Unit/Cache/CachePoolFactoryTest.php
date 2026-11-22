@@ -75,8 +75,11 @@ final class CachePoolFactoryTest extends TestCase
         $locked = $this->tempDir();
         chmod($locked, 0500);
 
-        $this->assertSame(sys_get_temp_dir(), CachePoolFactory::directory(['cachepath' => $locked . '/sub'], $locked . '/base'));
-        $this->assertSame(sys_get_temp_dir(), CachePoolFactory::directory([], $locked . '/base'));
+        $tmp = $this->tempDir();
+        $private = CachePoolFactory::temporaryDirectory($locked . '/base', $tmp);
+        $this->assertSame($private, CachePoolFactory::directory(['cachepath' => $locked . '/sub'], $locked . '/base', $tmp));
+        $this->assertSame($private, CachePoolFactory::directory([], $locked . '/base', $tmp));
+        $this->assertSame('0700', substr(sprintf('%o', fileperms($private)), -4), 'created private');
         // The unusable cachepath falls through to the cache base, when that is usable.
         $base = $this->tempDir();
         $this->assertSame($base . '/pool', CachePoolFactory::directory(['cachepath' => $locked . '/sub'], $base));
@@ -90,7 +93,8 @@ final class CachePoolFactoryTest extends TestCase
         // Not by default, and not when a configured directory lies inside it.
         $this->assertSame($elsewhere . '/pool', CachePoolFactory::directory(['uploadpath' => $uploads . '/'], $elsewhere));
         $this->assertSame($elsewhere . '/pool', CachePoolFactory::directory(['uploadpath' => $uploads . '/', 'cachepath' => $uploads . '/cache'], $elsewhere));
-        $this->assertSame(sys_get_temp_dir(), CachePoolFactory::directory(['uploadpath' => $uploads . '/'], $uploads));
+        $tmp = $this->tempDir();
+        $this->assertSame(CachePoolFactory::temporaryDirectory($uploads, $tmp), CachePoolFactory::directory(['uploadpath' => $uploads . '/'], $uploads, $tmp));
 
         $pool = CachePoolFactory::create(['uploadpath' => $uploads . '/'], $elsewhere, 'example.com');
         $pool->save($pool->getItem('k')->set('v'));
@@ -139,5 +143,49 @@ final class CachePoolFactoryTest extends TestCase
         $this->assertSame(0, $code, implode("\n", $output));
         $this->assertSame('written here', implode("\n", $output));
         $this->assertSame('written there', $pool->getItem('back')->get());
+    }
+
+    public function testAWorldOrGroupWritableTemporaryDirectoryIsRefused(): void
+    {
+        $tmp = $this->tempDir();
+        $unusableBase = $tmp . '/no/such/base/' . str_repeat('x', 300);
+        $candidate = CachePoolFactory::temporaryDirectory($unusableBase, $tmp);
+
+        foreach ([0777, 0770, 0757] as $mode) {
+            mkdir($candidate, 0700);
+            chmod($candidate, $mode);
+            $this->assertNull(CachePoolFactory::directory([], $unusableBase, $tmp), sprintf('mode %o is refused', $mode));
+            rmdir($candidate);
+        }
+    }
+
+    public function testAPrivateTemporaryDirectoryOwnedByTheUserIsUsed(): void
+    {
+        $tmp = $this->tempDir();
+        $unusableBase = $tmp . '/no/such/base/' . str_repeat('x', 300);
+        $candidate = CachePoolFactory::temporaryDirectory($unusableBase, $tmp);
+        mkdir($candidate, 0700);
+
+        $this->assertSame($candidate, CachePoolFactory::directory([], $unusableBase, $tmp));
+    }
+
+    public function testAnotherUsersDirectoryIsRefused(): void
+    {
+        if (!function_exists('posix_geteuid') || posix_geteuid() !== 0) {
+            $this->markTestSkipped('needs root to create a directory owned by someone else');
+        }
+        $tmp = $this->tempDir();
+        $candidate = CachePoolFactory::temporaryDirectory('/nonexistent-base/x', $tmp);
+        mkdir($candidate, 0700);
+        chown($candidate, 12345);
+
+        $this->assertNull(CachePoolFactory::directory([], '/nonexistent-base/x', $tmp));
+    }
+
+    public function testWithNothingUsableThePoolIsANullPool(): void
+    {
+        $pool = CachePoolFactory::create(['cachepath' => '/proc/nonexistent/x'], '/proc/nonexistent/y', 'example.com', '/proc/nonexistent/z');
+
+        $this->assertInstanceOf(\Symfony\Component\Cache\Adapter\NullAdapter::class, $pool);
     }
 }

@@ -252,11 +252,25 @@ final class LegacyServiceFactory
      */
     public function cachePool(BootConfig $bootConfig, string $projectDir): \Psr\Cache\CacheItemPoolInterface
     {
-        return \Idno\Cache\CachePoolFactory::create(
+        $pool = \Idno\Cache\CachePoolFactory::create(
             $bootConfig->all(),
             \Idno\Kernel\CacheDirResolver::fromEnvironment($projectDir),
             (string) Idno::site()->config()->host
         );
+
+        return $this->warnWhenDisabled($pool);
+    }
+
+    /**
+     * Says, once (the pool is a shared service), that the cache is disabled because no directory was usable.
+     */
+    public function warnWhenDisabled(\Psr\Cache\CacheItemPoolInterface $pool): \Psr\Cache\CacheItemPoolInterface
+    {
+        if ($pool instanceof \Symfony\Component\Cache\Adapter\NullAdapter) {
+            Idno::site()->logging()->warning('No usable directory for the cache: the cache is disabled. Set "cachepath" to a directory only the web server user can write to.');
+        }
+
+        return $pool;
     }
 
     /**

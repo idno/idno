@@ -326,8 +326,8 @@ namespace Idno\Core {
                 self::logFailure($url, $error);
             }
 
-            // See if we have a HSTS header and store
-            static::checkForHSTSHeader($endpoint, $header);
+            // HSTS state comes from the final response only, and speaks for the host that sent it
+            static::checkForHSTSHeader($url, (string) end($blocks));
 
             self::$lastResponse = $content;
 
@@ -828,20 +828,27 @@ namespace Idno\Core {
 
                 if ($status = $cache->load($domain)) {
 
-                    if (is_string($status) && ($status = unserialize($status, ['allowed_classes' => false])) && is_array($status)) {
+                    $stored = is_string($status) ? unserialize($status, ['allowed_classes' => false]) : false;
+                    if (!is_array($stored) || !isset($stored['stored_ts'], $stored['max-age'])) {
+                        // Not an entry this code wrote: forget it
+                        $cache->delete($domain);
 
-                        \Idno\Core\Idno::site()->logging()->debug("$domain has previously had HSTS");
-
-                        $return = true;
-
-                        // Check max-age
-                        if (time() > ($status['stored_ts'] + $status['max-age'])) {
-                            \Idno\Core\Idno::site()->logging()->debug("HSTS header has expired");
-                            $return = false;
-                        }
-
-                        return $return;
+                        return false;
                     }
+
+                    $status = $stored;
+
+                    \Idno\Core\Idno::site()->logging()->debug("$domain has previously had HSTS");
+
+                    $return = true;
+
+                    // Check max-age
+                    if (time() > ($status['stored_ts'] + $status['max-age'])) {
+                        \Idno\Core\Idno::site()->logging()->debug("HSTS header has expired");
+                        $return = false;
+                    }
+
+                    return $return;
 
                 }
 
@@ -852,6 +859,9 @@ namespace Idno\Core {
 
         /**
          * Parse out HSTS headers, and if a url has HSTS headers, that status is cached.
+         * Only the header block of the final response of a request counts, and only when its URL is https
+         * (RFC 6797, 8.1: a header received over plain http is ignored); the state is recorded for that
+         * URL's host. A header with no valid max-age is ignored; max-age=0 removes the host's entry.
          *
          * @param string       $url     The endpoint url
          * @param string|array $headers
@@ -860,6 +870,10 @@ namespace Idno\Core {
         {
 
             \Idno\Core\Idno::site()->logging()->debug("Checking for HSTS headers");
+
+            if (strtolower((string) parse_url((string) $url, PHP_URL_SCHEME)) !== 'https') {
+                return;
+            }
 
             if (!is_array($headers)) {
                 $headers = explode("\n", $headers);
@@ -875,10 +889,11 @@ namespace Idno\Core {
 
                         \Idno\Core\Idno::site()->logging()->debug("HSTS headers found in response");
 
-                        $max_age = 0;
-                        if (preg_match('/max-age=([0-9]+)/', $line, $matches)) {
-                            $max_age = (int)$matches[1];
+                        // Without a max-age (or with one that is not a number) the header is invalid: ignored
+                        if (!preg_match('/max-age\s*=\s*"?([0-9]+)"?/i', $line, $matches)) {
+                            continue;
                         }
+                        $max_age = (int)$matches[1];
 
                         $includesubdomains = false;
                         if (stripos($line, 'includeSubDomains')!==false) {

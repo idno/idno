@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno\Caching;
 
 use Psr\Cache\CacheItemPoolInterface;
+use Symfony\Component\Cache\PruneableInterface;
 
 /**
  * What Idno::site()->cache() returns: the site's one cache pool behind the old cache API
@@ -14,6 +15,15 @@ use Psr\Cache\CacheItemPoolInterface;
  * Any string is a key. PSR-6 refuses keys with the characters `{}()/\@:` (and a length limit),
  * so such a key, an empty one, or a long one is replaced by a hash of it. The pool is fetched
  * at first use, because the adapter is built before the services the pool needs exist.
+ *
+ * What a caller can rely on: load() returns null on a miss, and returns what was stored otherwise,
+ * so a stored false, 0, 0.0, '' and [] come back as they went in; a stored null cannot be told from a
+ * miss (it is null either way). isset(), isset($cache[$k]) and offsetExists() are true only for a value
+ * that is truthy, as in the cache classes this replaces. Entries are removed when they expire; a pool
+ * that can prune is pruned in about one store in 500, so expired entries of keys never read again do
+ * not pile up.
+ *
+ * This is no longer an Idno\Common\Component, and has no size() or getCacheEngine().
  */
 final class PersistentCache implements \ArrayAccess
 {
@@ -22,9 +32,10 @@ final class PersistentCache implements \ArrayAccess
     private ?CacheItemPoolInterface $pool = null;
 
     /**
-     * @param \Closure(): CacheItemPoolInterface $pool
+     * @param \Closure(): CacheItemPoolInterface $source     the pool, fetched at first use
+     * @param (\Closure(): bool)|null            $shouldPrune says whether this store also prunes; null: one in 500
      */
-    public function __construct(private readonly \Closure $source)
+    public function __construct(private readonly \Closure $source, private readonly ?\Closure $shouldPrune = null)
     {
     }
 
@@ -47,7 +58,14 @@ final class PersistentCache implements \ArrayAccess
         $item->set($value);
         $item->expiresAfter($ttl);
 
-        return $this->pool()->save($item);
+        $saved = $this->pool()->save($item);
+
+        $pool = $this->pool();
+        if ($pool instanceof PruneableInterface && ($this->shouldPrune !== null ? ($this->shouldPrune)() : random_int(1, 500) === 1)) {
+            $pool->prune();
+        }
+
+        return $saved;
     }
 
     public function delete(mixed $key): bool

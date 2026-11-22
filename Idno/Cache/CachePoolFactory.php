@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Idno\Cache;
 
 use Symfony\Component\Cache\Adapter\AdapterInterface;
+use Idno\Kernel\CacheDirResolver;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\Adapter\NullAdapter;
 
 /**
  * Builds the site's one cache pool: a Symfony Cache FilesystemAdapter whose namespace is the
@@ -13,7 +15,7 @@ use Symfony\Component\Cache\Adapter\FilesystemAdapter;
  *
  * The directory is the first usable of: the boot configuration's `cachepath`; `<cache base>/pool`
  * (the base is where the compiled container lives, without its per-build directory, so a deploy
- * does not empty the pool); the system temporary directory. A directory inside the upload path is
+ * does not empty the pool); a private directory under the system temporary directory. A directory inside the upload path is
  * never used: a cache does not belong in the uploads.
  */
 final class CachePoolFactory
@@ -23,15 +25,25 @@ final class CachePoolFactory
      * @param string               $cacheBase  the compiled cache's base directory (`IDNO_CACHE_DIR`, else `var/cache`)
      * @param string               $host       the site's host name
      */
-    public static function create(array $bootConfig, string $cacheBase, string $host): AdapterInterface
+    public static function create(array $bootConfig, string $cacheBase, string $host, ?string $temporaryDirectory = null): AdapterInterface
     {
-        return new FilesystemAdapter(md5($host), 0, self::directory($bootConfig, $cacheBase));
+        $directory = self::directory($bootConfig, $cacheBase, $temporaryDirectory);
+
+        return $directory === null ? new NullAdapter() : new FilesystemAdapter(md5($host), 0, $directory);
+    }
+
+    /**
+     * The directory under the temporary directory the last-resort pool uses (one per cache base).
+     */
+    public static function temporaryDirectory(string $cacheBase, ?string $temporaryDirectory = null): string
+    {
+        return rtrim($temporaryDirectory ?? sys_get_temp_dir(), '/') . '/idno-pool-' . substr(sha1($cacheBase), 0, 12);
     }
 
     /**
      * @param array<string, mixed> $bootConfig
      */
-    public static function directory(array $bootConfig, string $cacheBase): string
+    public static function directory(array $bootConfig, string $cacheBase, ?string $temporaryDirectory = null): ?string
     {
         $uploadPath = $bootConfig['uploadpath'] ?? '';
         $uploadPath = is_string($uploadPath) && $uploadPath !== '' && !str_starts_with($uploadPath, 's3://') ? $uploadPath : '';
@@ -51,7 +63,9 @@ final class CachePoolFactory
             }
         }
 
-        return sys_get_temp_dir();
+        $fallback = self::temporaryDirectory($cacheBase, $temporaryDirectory);
+
+        return !self::insideUploads($fallback, $uploadPath) && CacheDirResolver::usableAndPrivate($fallback) ? $fallback : null;
     }
 
     private static function usable(string $dir): bool

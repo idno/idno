@@ -133,4 +133,69 @@ final class PersistentCacheTest extends TestCase
         $cache->store('x', 1);
         $this->assertSame(1, $fetched);
     }
+
+    public function testFalseZeroAndTheEmptyStringComeBackAsStoredAndNullIsAMissThatCountsAsNone(): void
+    {
+        $cache = $this->cache();
+        foreach ([false, 0, '', 0.0, '0', []] as $i => $value) {
+            $cache->store('v' . $i, $value);
+            $this->assertSame($value, $cache->load('v' . $i));
+        }
+
+        $cache->store('nothing', null);
+        $this->assertNull($cache->load('nothing'));
+        $this->assertFalse(isset($cache['nothing']));
+        $this->assertFalse(isset($cache['v0']), 'isset() is false for a stored false, as before');
+    }
+
+    public function testStoringPrunesAnExpiredEntryOnlyWhenTheSeamSaysSo(): void
+    {
+        $pool = new class extends ArrayAdapter implements \Symfony\Component\Cache\PruneableInterface {
+            public int $pruned = 0;
+
+            public function prune(): bool
+            {
+                $this->pruned++;
+
+                return true;
+            }
+        };
+
+        $never = new PersistentCache(static fn () => $pool, static fn (): bool => false);
+        $never->store('a', 1);
+        $this->assertSame(0, $pool->pruned);
+
+        $always = new PersistentCache(static fn () => $pool, static fn (): bool => true);
+        $always->store('a', 1);
+        $always->store('b', 1);
+        $this->assertSame(2, $pool->pruned);
+    }
+
+    public function testAPoolThatCannotPruneIsFine(): void
+    {
+        $cache = new PersistentCache(static fn () => new ArrayAdapter(), static fn (): bool => true);
+
+        $this->assertTrue($cache->store('a', 1));
+    }
+
+    public function testTheDefaultSeamPrunesAboutOnceIn500Stores(): void
+    {
+        $pool = new class extends ArrayAdapter implements \Symfony\Component\Cache\PruneableInterface {
+            public int $pruned = 0;
+
+            public function prune(): bool
+            {
+                $this->pruned++;
+
+                return true;
+            }
+        };
+        $cache = new PersistentCache(static fn () => $pool);
+        for ($i = 0; $i < 5000; $i++) {
+            $cache->store('k', $i);
+        }
+
+        $this->assertGreaterThan(0, $pool->pruned);
+        $this->assertLessThan(60, $pool->pruned);
+    }
 }

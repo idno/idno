@@ -266,6 +266,9 @@ Idno/
                                between messages (EntityCache, StopWhenQueueIsEmpty, KeepFailedMessage) and the
                                check of the site's address (WorkerSiteUrl). See "The queue of
                                events"
+  Cache/                       CachePoolFactory, the site's one cache pool (a static helper; see "The cache")
+  Caching/                     PersistentCache, the old cache API (`Idno::site()->cache()`) over that pool,
+                               for third-party plugins (legacy style)
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
                                settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting. See "Mail"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
@@ -2402,6 +2405,16 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
 (web workers, the queue worker) share the pool (`FilesystemAdapter` is safe for that; pinned in
 `Tests/Unit/Cache/CachePoolFactoryTest`).
 
+- Directories. The pool's files are unserialized, so a directory another local user could write must never be
+  used. `cachepath` and `<cache base>/pool` are trusted exactly as far as `CacheDirResolver` trusts the cache base
+  (it includes the compiled container from there): they need only be writable (checked: it does not require
+  more of `var/cache`, so one that is group-writable for a deploy user keeps working). The last resort,
+  `<system temporary directory>/idno-pool-<12 hex of sha1(cache base)>`, is REQUIRED to pass
+  `CacheDirResolver::usableAndPrivate()` (created 0700; owned by the current user; not a link; not writable by
+  group or others). When no candidate is usable, `CachePoolFactory::create()` returns a `NullAdapter`: the cache
+  is disabled (`load()` is null, `store()` succeeds and keeps nothing) and `LegacyServiceFactory::warnWhenDisabled()`
+  logs one warning when the pool is first built. Two installs with the same host name on one cache base share a
+  pool; give one a `cachepath`.
 - `Idno::site()->cache()` is `Idno\Caching\PersistentCache` (final, legacy-side API for third-party plugins; new code
   injects the pool): `load($key)` (null on a miss), `store($key, $value, ?int $ttl = null)`, `delete($key)`,
   `ArrayAccess` and magic properties, over the pool. Any string is a key: PSR-6 refuses `{}()/\@:` and has a length
@@ -2412,16 +2425,23 @@ local `uploadpath` is skipped: a cache never goes in the uploads. Nothing is com
   `cache` setting are gone. A site that still has a `cache` setting gets ONE warning, written the first time the
   cache is used (the logger does not exist when the adapter is built), and the setting is ignored. Entries the old
   `FilesystemCache` wrote under `uploadpath` are neither read nor deleted.
+- `store()` also prunes the pool (`prune()`, expired files) in about one call in 500 (`random_int`, a seam in the
+  constructor), so entries of hosts never asked again do not pile up. A stored `false`, `0`, `''`, `[]` come back
+  as stored; a stored `null` is a miss.
+- HSTS state comes only from the header block of the FINAL response of a `Webservice` request, only when its URL
+  is https, and is recorded under THAT URL's host (RFC 6797): a header on a redirect hop, on a plain-http
+  response, or from another host changes nothing. A header with no valid `max-age` is ignored; only an explicit
+  `max-age=0` removes the entry. `isHSTS()` treats a stored value that is not an array with `stored_ts` and
+  `max-age` as no entry and deletes it.
 - The only thing Idno keeps in the cache is per-host HSTS state (`Webservice::isHSTS()` and `checkForHSTSHeader()`),
   keyed by the bare host name, the value `serialize(['stored_ts', 'max-age', 'includeSubDomains'])` as before. The
   entry is stored with a pool TTL of its `max-age` (at most a year), and `isHSTS()` still compares `stored_ts + max-age`
   on every read (an entry that outlives its max-age upgrades nothing). A header with `max-age=0` deletes the host's
   entry (RFC 6797, 6.1.1; before, it stored an entry that was valid for the rest of the second it was stored in).
-  The headers of a response are parsed even when the host is already known, so that such a header can remove it; a
-  known host's valid entry is otherwise not rewritten.
+  A known host's valid entry is otherwise not rewritten.
 - Tests: `Tests/Unit/Cache/` (`CachePoolFactoryTest`, `PersistentCacheTest`, on a `MockClock` and temporary
-  directories), `Tests/Kernel/CacheAdapterTest` (the container's pool, the adapter, the ignored setting),
-  `Tests/API/HSTSTest`.
+  directories), `Tests/Kernel/CacheAdapterTest` (the container's pool, the adapter, the ignored setting, the
+  disabled cache), `Tests/Kernel/WebserviceHstsTest` (what a response may teach), `Tests/API/HSTSTest`.
 
 #### The file store
 

@@ -324,7 +324,7 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertNotEmpty($cache, 'the test site has a cache');
         $host = 'hsts-adapter.example.invalid';
         try {
-            Webservice::checkForHSTSHeader('http://' . $host . '/', ["HTTP/1.1 200 OK", 'Strict-Transport-Security: max-age=31536000']);
+            Webservice::checkForHSTSHeader('https://' . $host . '/', ["HTTP/1.1 200 OK", 'Strict-Transport-Security: max-age=31536000']);
             $this->assertTrue(Webservice::isHSTS('http://' . $host . '/'));
             Webservice::useClient($this->client([new MockResponse('secure', ['http_code' => 200])]));
 

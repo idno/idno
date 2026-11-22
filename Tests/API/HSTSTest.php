@@ -43,7 +43,7 @@ namespace Tests\API {
         {
             // Feed a synthetic Strict-Transport-Security header
             \Idno\Core\Webservice::checkForHSTSHeader(
-                'http://example.com',
+                'https://example.com',
                 ["HTTP/1.1 200 OK", "Strict-Transport-Security: max-age=31536000; includeSubDomains"]
             );
 
@@ -74,14 +74,14 @@ namespace Tests\API {
          */
         function testAnHstsEntryIsStoredWithItsMaxAgeAsTtl()
         {
-            \Idno\Core\Webservice::checkForHSTSHeader('http://example.com', ["Strict-Transport-Security: max-age=600"]);
+            \Idno\Core\Webservice::checkForHSTSHeader('https://example.com', ["Strict-Transport-Security: max-age=600"]);
             $expiry = $this->poolExpiry('example.com');
             $this->assertNotNull($expiry);
             $this->assertGreaterThan(0, $expiry, 'the entry must expire');
             $this->assertEqualsWithDelta(time() + 600, $expiry, 5);
 
             \Idno\Core\Idno::site()->cache()->delete('example.com');
-            \Idno\Core\Webservice::checkForHSTSHeader('http://example.com', ["Strict-Transport-Security: max-age=999999999999"]);
+            \Idno\Core\Webservice::checkForHSTSHeader('https://example.com', ["Strict-Transport-Security: max-age=999999999999"]);
             $this->assertEqualsWithDelta(time() + 31536000, $this->poolExpiry('example.com'), 5);
         }
 
@@ -102,14 +102,14 @@ namespace Tests\API {
          */
         function testMaxAgeZeroRemovesTheEntry()
         {
-            \Idno\Core\Webservice::checkForHSTSHeader('http://example.com', ["Strict-Transport-Security: max-age=31536000"]);
+            \Idno\Core\Webservice::checkForHSTSHeader('https://example.com', ["Strict-Transport-Security: max-age=31536000"]);
             $this->assertTrue(\Idno\Core\Webservice::isHSTS('http://example.com'));
 
-            \Idno\Core\Webservice::checkForHSTSHeader('http://example.com', ["Strict-Transport-Security: max-age=0"]);
+            \Idno\Core\Webservice::checkForHSTSHeader('https://example.com', ["Strict-Transport-Security: max-age=0"]);
             $this->assertFalse(\Idno\Core\Webservice::isHSTS('http://example.com'));
             $this->assertNull(\Idno\Core\Idno::site()->cache()->load('example.com'));
 
-            \Idno\Core\Webservice::checkForHSTSHeader('http://localhost', ["Strict-Transport-Security: max-age=0"]);
+            \Idno\Core\Webservice::checkForHSTSHeader('https://localhost', ["Strict-Transport-Security: max-age=0"]);
             $this->assertFalse(\Idno\Core\Webservice::isHSTS('http://localhost'));
             $this->assertNull(\Idno\Core\Idno::site()->cache()->load('localhost'));
         }

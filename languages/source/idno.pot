@@ -1,4 +1,3 @@
-#: ./Idno/Caching/FilesystemCache.php:19
 msgid "No domain specified for cache"
 msgstr ""
 
