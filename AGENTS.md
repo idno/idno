@@ -254,6 +254,19 @@ Each content plugin has an `Entry.php` entity class that defines
   IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
   on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
   over HTTP with a logged-in browser.
+- Access tokens count at one page: an IndieAuth access token (and the first administrator's
+  API key, which the plugin also takes as one) authenticates a request only where
+  `\IdnoPlugins\IndiePub\Main::authenticate()` is called, and that is the Micropub endpoint's
+  `get()` and `post()`. On every other page a request that carries a token is treated as
+  if it carried none: it is anonymous, or it has its browser session and needs a form
+  token. Don't call `authenticate()` from an event listener or anywhere else that runs for
+  every request; a plugin that wants to accept tokens calls it in its own page. The token
+  endpoint (`GET /indieauth/token`) looks a token up to describe it and logs nobody in.
+  The scope stored with a token is not enforced. The core signed API (`X-IDNO-USERNAME` /
+  `X-IDNO-SIGNATURE`, made with the user's API key) is a separate, general credential: it
+  authenticates a request to any page, and `User::isAdmin()` is false for every API
+  request, so neither credential passes `adminGatekeeper()`.
+  `IdnoPlugins/IndiePub/Tests/AccessTokenReachTest.php` checks this over HTTP.
 - A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
   overrides `post()` itself and authenticates the request another way. Never get the same
   effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a

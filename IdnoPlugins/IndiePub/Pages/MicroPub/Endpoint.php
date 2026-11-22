@@ -55,6 +55,8 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
 
         function get($params = array())
         {
+            // An access token counts here and at no other page
+            \IdnoPlugins\IndiePub\Main::authenticate();
             $this->gatekeeper();
             if ($query = trim($this->getInput('q'))) {
                 $account_strings = \Idno\Core\Idno::site()->syndication()->getServiceAccountStrings();
@@ -100,6 +102,8 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             // A POST here has no form token, so it must carry its own credentials: an access
             // token (or a signed API request). The session cookie of a logged-in browser is not
             // enough, because a browser also sends it with requests made by other sites.
+            // An access token counts here and at no other page.
+            \IdnoPlugins\IndiePub\Main::authenticate();
             if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {
                 $this->error(401, 'unauthorized', 'A valid access token is required');
             }

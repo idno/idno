@@ -37,7 +37,7 @@ curl -s \
 ## Authenticated requests
 
 Almost all requests that you make will require some sort of access credentials, and so must be signed. 
-The default method for doing this is through HTTP header variables. The bundled IndiePub plugin also provides IndieAuth and a Micropub endpoint (```/micropub/endpoint```) for clients that use bearer tokens.
+The default method for doing this is through HTTP header variables. The bundled IndiePub plugin also provides IndieAuth and a Micropub endpoint (```/micropub/endpoint```) for clients that use bearer tokens. Those tokens work at the Micropub endpoint only: on any other page a bearer token is ignored.
 
 The headers are:
 
