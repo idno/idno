@@ -26,6 +26,11 @@ namespace Idno\Core {
         private $refused = false;
 
         /**
+         * @var string|null Why the last send() failed, in a fixed vocabulary (see lastFailure())
+         */
+        private $lastFailure = null;
+
+        /**
          * @var \Symfony\Component\Mailer\MailerInterface|null A mailer to use instead of the container's (tests)
          */
         private static $mailer = null;
@@ -36,6 +41,20 @@ namespace Idno\Core {
         public static function useMailer(?MailerInterface $mailer): void
         {
             self::$mailer = $mailer;
+        }
+
+        /**
+         * Why the last send() returned 0, in a fixed vocabulary that is safe to show an admin (never an
+         * exception's text): `settings: <name>` (a mail setting cannot be used, e.g. `settings: smtp_host`),
+         * `message` (an address or name of the message was refused, or there is no sender or body),
+         * `transport` (anything else: the mail could not be delivered). Null after a send that worked,
+         * or before any.
+         *
+         * @return string|null
+         */
+        function lastFailure()
+        {
+            return $this->lastFailure;
         }
 
         function init()
@@ -187,6 +206,7 @@ namespace Idno\Core {
          */
         function send()
         {
+            $this->lastFailure = null;
             try {
                 if ($this->refused) {
                     throw new \InvalidArgumentException('An address or name of the message was refused.');
@@ -208,6 +228,13 @@ namespace Idno\Core {
                 return count($message->getTo()) + count($message->getBcc());
 
             } catch (\Throwable $e) {
+                if ($e instanceof \Idno\Mail\InvalidMailSetting) {
+                    $this->lastFailure = 'settings: ' . $e->setting();
+                } elseif ($this->refused || $e instanceof \Symfony\Component\Mime\Exception\ExceptionInterface) {
+                    $this->lastFailure = 'message';
+                } else {
+                    $this->lastFailure = 'transport';
+                }
                 // Lets log errors rather than silently drop them. Only the class: the message of a
                 // transport's exception can quote the DSN, and with it the SMTP password. This runs in
                 // error handlers, so a logger that is not there must not make it worse.

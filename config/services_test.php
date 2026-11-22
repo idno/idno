@@ -91,7 +91,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // (Tests\Fixtures\RecordingMailTransport; /_test/mail/log reads it) from the DSN the settings give.
     $container->services()
         ->set('idno.mail.transport_factory', \Tests\Fixtures\RecordingMailTransportFactory::class)
-        ->autowire(false)->autoconfigure(false);
+        ->autowire(false)->autoconfigure(false)->public();
 
     // "logger" and "monolog.logger" are private; these public aliases let a test check them.
     $container->services()->alias('idno.test.framework_logger', 'logger')->public();

@@ -40,7 +40,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $this->errorLog = (string) tempnam(sys_get_temp_dir(), 'idno-email-log');
         $this->previousErrorLog = (string) ini_set('error_log', $this->errorLog);
         $this->previousRequestUri = $_SERVER['REQUEST_URI'] ?? null;
-        $_SERVER['REQUEST_URI'] = '/';
+        unset($_SERVER['REQUEST_URI']); // as in a console process
 
         $config = Idno::site()->config();
         foreach (self::SETTINGS as $key) {
@@ -71,6 +71,7 @@ final class EmailAdapterTest extends IdnoTestCase
             }
         }
         RecordingMailTransport::drain();
+        unset($_SERVER['HTTP_USER_AGENT']);
         if ($this->previousRequestUri === null) {
             unset($_SERVER['REQUEST_URI']);
         } else {
@@ -195,7 +196,7 @@ final class EmailAdapterTest extends IdnoTestCase
 
         $this->assertSame(0, $this->simple()->send());
 
-        $this->assertStringContainsString('Error sending mail: InvalidArgumentException', $this->log());
+        $this->assertStringContainsString('Error sending mail: ' . \Idno\Mail\InvalidMailSetting::class, $this->log());
         $this->assertStringNotContainsString('evil', $this->log());
         $this->assertSame([], RecordingMailTransport::drain());
     }
@@ -298,7 +299,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $config->config['smtp_username'] = '';
         $config->config['smtp_secure'] = 'ssl';
         $this->simple()->send();
-        $this->assertSame(['scheme' => 'smtp', 'host' => 'localhost', 'port' => 25, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
+        $this->assertSame(['scheme' => 'smtps', 'host' => 'localhost', 'port' => 465, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
     }
 
     public function testThePasswordNeverReachesTheRecorder(): void
@@ -347,5 +348,80 @@ final class EmailAdapterTest extends IdnoTestCase
 
         $this->assertStringContainsString('Error sending mail: LogicException', $this->log());
         $this->assertStringNotContainsString('the container is not there', $this->log());
+    }
+
+    public function testASchemeInTheHostIsReadAsThatSecurity(): void
+    {
+        Idno::site()->config()->config['smtp_host'] = 'ssl://smtp.example.test';
+        Idno::site()->config()->config['smtp_port'] = '';
+        $this->assertSame(1, $this->simple()->send());
+        $this->assertSame(['scheme' => 'smtps', 'host' => 'smtp.example.test', 'port' => 465, 'user' => null, 'require_tls' => false], RecordingMailTransport::drain()[0]['transport']);
+
+        Idno::site()->config()->config['smtp_host'] = 'tls://smtp.example.test';
+        $this->assertSame(1, $this->simple()->send());
+        $this->assertSame(['scheme' => 'smtp', 'host' => 'smtp.example.test', 'port' => 25, 'user' => null, 'require_tls' => true], RecordingMailTransport::drain()[0]['transport']);
+    }
+
+    public function testLastFailureSaysWhyInAFixedVocabulary(): void
+    {
+        $email = $this->simple();
+        $this->assertNull($email->lastFailure());
+        $this->assertSame(1, $email->send());
+        $this->assertNull($email->lastFailure());
+
+        $config = Idno::site()->config();
+        $config->config['smtp_host'] = 'http://smtp.example.test';
+        $this->assertSame(0, $email->send());
+        $this->assertSame('settings: smtp_host', $email->lastFailure());
+
+        $config->config['smtp_host'] = 'smtp.example.test';
+        $config->config['smtp_port'] = 'abc';
+        $this->assertSame(0, $email->send());
+        $this->assertSame('settings: smtp_port', $email->lastFailure());
+
+        $config->config['smtp_port'] = 25;
+        $this->assertSame(1, $email->send(), 'the next send starts clean');
+        $this->assertNull($email->lastFailure());
+
+        $bad = $this->simple("bad\r\n@example.net");
+        $this->assertSame(0, $bad->send());
+        $this->assertSame('message', $bad->lastFailure());
+
+        Email::useMailer(new class () implements MailerInterface {
+            public function send(\Symfony\Component\Mime\RawMessage $message, ?\Symfony\Component\Mailer\Envelope $envelope = null): void
+            {
+                throw new TransportException('secret-host.example.test refused');
+            }
+        });
+        $failing = $this->simple();
+        $this->assertSame(0, $failing->send());
+        $this->assertSame('transport', $failing->lastFailure());
+        $this->assertStringNotContainsString('secret-host', (string) $failing->lastFailure());
+    }
+
+    public function testOopsAlertSendsOnTheConsolePathWithNoRequestUri(): void
+    {
+        $this->assertArrayNotHasKey('REQUEST_URI', $_SERVER);
+        Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
+
+        \Idno\Core\Logging::oopsAlert('It broke', 'Oh no');
+
+        $recorded = RecordingMailTransport::drain();
+        $this->assertCount(1, $recorded);
+        $this->assertStringContainsString('<html lang="en">', $recorded[0]['html']);
+        $this->assertSame('', $this->log(), 'the shell warned about nothing');
+    }
+
+    public function testOopsAlertReturnsWithoutThrowingWhenATemplateThrows(): void
+    {
+        Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
+        // The user agent is drawn by the template: a value that cannot be printed makes it throw (the
+        // test site turns every PHP error into an exception).
+        $_SERVER['HTTP_USER_AGENT'] = ['not', 'a', 'string'];
+
+        \Idno\Core\Logging::oopsAlert('It broke', 'Oh no');
+
+        $this->assertSame([], RecordingMailTransport::drain());
+        $this->assertStringContainsString('Could not send the alert: ', $this->log());
     }
 }

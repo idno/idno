@@ -264,7 +264,7 @@ Idno/
                                check of the site's address (WorkerSiteUrl). See "The queue of
                                events"
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
-                               settings) and MailTransportDsn (the settings as a DSN). See "Mail"
+                               settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory and InvalidMailSetting. See "Mail"
   Upgrade/                     The schema gate and the upgrade (modern style; runs while the legacy
                                application is NOT booted): SchemaState (what the database is: a
                                SchemaStatus), SchemaGate (whether the legacy application may boot),
@@ -2253,18 +2253,32 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   configuration. `Idno\Mail\MailerFactory` reads them through `Idno\Config\SiteSettings` (so `Idno\Mail`
   depends on neither `Idno\Legacy` nor `Idno::site()`) at each `create()`, and builds a `Mailer` over the
   transport the injected `TransportFactoryInterface` makes from the DSN
-  (`idno.mail.transport_factory`, `EsmtpTransportFactory` in `config/services.php`). The container service
+  (`idno.mail.transport_factory`, `SmtpTransportFactory`, below, in `config/services.php`). The container service
   `Symfony\Component\Mailer\MailerInterface` is public and NOT shared: an admin's change applies to the
   next mail, and a worker never keeps an old password. Like the storage services it needs the legacy
   application (the settings are in the database), so it must not be fetched while the kernel boots.
   Nothing from the settings is compiled into the container. `Idno/Mail/` is in
-  `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php` is in the `$excludes`.
-- `Idno\Mail\MailTransportDsn::fromSettings(array)` is pure: an empty host is `smtp://localhost:25`; a host
-  without a port leaves the port to the transport; `smtp_secure` `ssl` is `smtps://`, `tls` adds
-  `?require_tls=true`, anything else is Symfony's opportunistic STARTTLS; the user name and password are
-  percent-encoded and used only with a user name. A host that is not a host name or an IP address (a
-  scheme, a slash, a line break, an `@`) or a port that is not 1 to 65535 throws an
-  `\InvalidArgumentException` that names the setting and never its value.
+  `CodeFingerprint::SERVICE_DIRECTORIES`; `MailTransportDsn.php`, `InvalidMailSetting.php` and
+  `SmtpTransportFactory.php` (wired by hand) are in the `$excludes`.
+- `Idno\Mail\MailTransportDsn::fromSettings(array)` is pure and keeps what the settings meant under
+  SwiftMailer (read `git show 9c7f3f8c2:Idno/Core/Email.php`): the DSN ALWAYS carries a port, `smtp_port`
+  when it is a positive integer (also as numeric text), else 25, or 465 for `ssl` (Symfony's own default
+  for a DSN with no port is 465 with implicit TLS for any host but localhost: never rely on it); an empty
+  host is `localhost`, and the port and security still apply to it (as the old default transport did);
+  `smtp_secure`, compared exactly, `ssl` is `smtps://` (implicit TLS), `tls` adds `?require_tls=true`
+  (STARTTLS, mandatory), anything else is `?auto_tls=false` (sent in the clear, no STARTTLS even if the
+  server offers it: the old code did that); a host written `ssl://host` or `tls://host` is that host with
+  that security unless `smtp_secure` is `ssl` or `tls` itself, any other scheme is refused; the user name
+  and password are percent-encoded and used only with a user name. A host that is not a host name or an IP
+  address or a port that is not 1 to 65535 throws `Idno\Mail\InvalidMailSetting` (an
+  `\InvalidArgumentException`; `setting()` and the message name the setting, never its value).
+- `Idno\Mail\SmtpTransportFactory` (the container's `idno.mail.transport_factory`, public) builds the SMTP
+  transport and does exactly what the DSN says: Symfony's `EsmtpTransportFactory` would choose implicit TLS
+  for port 465 whatever the DSN asks for (so `tls` on 465 would change from STARTTLS to implicit TLS, as
+  SwiftMailer's `tls` was STARTTLS on a plain connection) and try STARTTLS on every server that offers it.
+  Pinned, without connecting, by `Tests/Unit/Mail/SmtpTransportFactoryTest` (host, port, implicit TLS,
+  auto-TLS and require-TLS of the transport for the whole table) and, for the production container,
+  `Tests/Kernel/MailServicesTest`.
 - `Idno\Core\Email` stays as the adapter for legacy callers (the password reset, invitations, the admin test
   mail, the import and export mails, `Logging::oopsAlert()`), with the same methods. Its `message` is a
   `Symfony\Component\Mime\Email`. A setter that is given an address or name the message refuses (a line
@@ -2277,7 +2291,15 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   while building or sending), logs ONE line `Error sending mail: <exception class>` (the exception's message
   can quote the DSN, so it is never logged, and a failing logger changes nothing) and returns 0. This is
   what lets `Logging::oopsAlert()` call it from an error handler: with no container or no legacy
-  application it returns 0 quietly. `Email::useMailer(?MailerInterface)` replaces the mailer for tests.
+  application it returns 0 quietly. `Email::lastFailure()` says why the last send returned 0 in a fixed
+  vocabulary, never exception text: `settings: <name>` (an `InvalidMailSetting`), `message` (an address or
+  name refused, or no sender or body) or `transport`; the admin test mail page (`Idno\Pages\Admin\EmailTest`)
+  uses it to name a bad setting. `Email::useMailer(?MailerInterface)` replaces the mailer for tests.
+  `Logging::oopsAlert()` is called from the exception handler and the fatal-error shutdown function, so
+  everything in it after its early returns is in a `try`/`catch (\Throwable)`: it closes any output buffer
+  a failing template left open, writes one line `Could not send the alert: <class>` through the logger if
+  there is one, and otherwise does nothing. The email shell does not need `REQUEST_URI` (a console process
+  has none).
 - Secrets: `smtp_password` is in the DSN given to the transport factory and nowhere else: never in a log
   line, an exception message that reaches a page (the exceptions of `MailTransportDsn` name settings
   only) or the compiled container.
@@ -2291,7 +2313,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `RecordingMailTransport::drain()` (which empties it) or, for mail the web server sent, over HTTP from
   `/_test/mail/log` (`Tests\Fixtures\MailLogController`, which also empties it). A test that sends mail
   drains the file in `setUp()` and `tearDown()`.
-- Tests: `Tests/Unit/Mail/MailTransportDsnTest`, `Tests/Kernel/EmailAdapterTest`, and
+- Tests: `Tests/Unit/Mail/MailTransportDsnTest`, `SmtpTransportFactoryTest`, `Tests/Kernel/MailServicesTest`, `Tests/Kernel/EmailAdapterTest`, and
   `Tests/Characterisation/MailFlowsTest` (what each mail carries: the password reset, the invitation, the
   admin test mail and `oopsAlert`: recipients, From, Reply-To, subject, the HTML part in the email shell, the
   text part and the link; and a password reset sent by the web server and read from `/_test/mail/log`).

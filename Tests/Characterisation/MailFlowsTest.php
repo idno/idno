@@ -27,7 +27,6 @@ final class MailFlowsTest extends CharacterisationTestCase
 
     private string $errorLog = '';
     private string $previousErrorLog = '';
-    private ?string $previousRequestUri = null;
 
     /** @var array<string, mixed> */
     private array $savedSettings = [];
@@ -55,10 +54,6 @@ final class MailFlowsTest extends CharacterisationTestCase
         $config->config['title'] = 'Pinned Site';
         $config->config['oops_notify'] = '';
 
-        // The email shell reads the request's path, which a command line process has none of.
-        $this->previousRequestUri = $_SERVER['REQUEST_URI'] ?? null;
-        $_SERVER['REQUEST_URI'] = '/account/password/';
-
         self::$caught = [];
         RecordingMailTransport::drain();
         if (!self::$listening) {
@@ -78,11 +73,6 @@ final class MailFlowsTest extends CharacterisationTestCase
             } else {
                 $config->config[$key] = $value;
             }
-        }
-        if ($this->previousRequestUri === null) {
-            unset($_SERVER['REQUEST_URI']);
-        } else {
-            $_SERVER['REQUEST_URI'] = $this->previousRequestUri;
         }
         RecordingMailTransport::drain();
         ini_set('error_log', $this->previousErrorLog);

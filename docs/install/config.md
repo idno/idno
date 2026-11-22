@@ -55,17 +55,24 @@ has credentials of its own); no plugin is needed.
 
 **smtp_host, smtp_port, smtp_username, smtp_password, smtp_secure, from_email**<br>
 Configuration for the SMTP server.  Without these set (here or in the UI)
-it will be impossible to send password recovery emails: `from_email` is the address mail is sent from, and an empty
-`smtp_host` means the mail server on the same machine (`localhost`, port 25). `smtp_host` is a host name or an IP
-address and nothing else (no scheme, no path); `smtp_port` is a port number, and when it is empty the port is the
-usual one for `smtp_secure`. The password is used only when there is a username.
-`smtp_secure` is one of:
-* `ssl` - the connection is encrypted from the start (SMTPS, usually port 465);
-* `tls` - the connection is upgraded with STARTTLS (usually port 587), and mail is not sent if the server will not;
-* empty - STARTTLS is used when the server offers it, and mail is sent unencrypted when it does not.
+it will be impossible to send password recovery emails: `from_email` is the address mail is sent from.
+* `smtp_host` is a host name or an IP address; empty means the mail server on the same machine (`localhost`).
+  It may be written `ssl://host` or `tls://host`, which means that host with that `smtp_secure` value; any other
+  scheme is refused.
+* `smtp_port` is a port number. When it is empty (or 0) the port is 25, or 465 when `smtp_secure` is `ssl`.
+  The port and `smtp_secure` apply to `localhost` too.
+* `smtp_username` and `smtp_password` are used to log in; the password is used only when there is a username.
+* `smtp_secure` is one of:
+  * `ssl` - the connection is encrypted from the start (SMTPS, usually port 465);
+  * `tls` - the connection is upgraded with STARTTLS (usually port 587), and mail is not sent if the server will not.
+    This is recommended whenever your server supports it;
+  * empty (or anything else) - the mail is sent without encryption, as it always has been, and the server's
+    certificate is never involved. Your SMTP password is then sent without protection: use `tls` or `ssl`
+    unless the server is on the same machine or a trusted network.
 
-These can be changed in the admin pages: the next mail sent uses the new values. Idno writes a line to the log when
-mail cannot be sent (it names the kind of error only, never the server or the password).
+The next mail sent uses the settings as you last saved them. The admin page that sends a test mail says when it
+could not, and names a setting that cannot be used (never its value). Idno writes a line to the log when mail
+cannot be sent; it names the kind of error only, never the server or the password.
 
 **loglevel**<br>
 Log levels to show:

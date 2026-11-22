@@ -15,21 +15,32 @@ final class MailTransportDsnTest extends TestCase
      */
     public static function plainSettings(): iterable
     {
-        yield 'no host is the local mail server' => [['smtp_host' => ''], 'smtp://localhost:25'];
-        yield 'nothing set at all' => [[], 'smtp://localhost:25'];
-        yield 'a port without a host is not used' => [['smtp_host' => '', 'smtp_port' => 587], 'smtp://localhost:25'];
-        yield 'a host leaves the port to the transport' => [['smtp_host' => 'mail.example.com'], 'smtp://mail.example.com'];
-        yield 'a host and a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587'];
-        yield 'a port as text, as the admin form saves it' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '2525'], 'smtp://mail.example.com:2525'];
-        yield 'an empty port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => ''], 'smtp://mail.example.com'];
+        // The port is always in the DSN: 25, or 465 with ssl, when none is set. Nothing is encrypted
+        // unless smtp_secure says so (auto_tls=false: no STARTTLS even when the server offers it).
+        yield 'no host is the local mail server' => [['smtp_host' => ''], 'smtp://localhost:25?auto_tls=false'];
+        yield 'nothing set at all' => [[], 'smtp://localhost:25?auto_tls=false'];
+        yield 'no host still takes the port' => [['smtp_host' => '', 'smtp_port' => 587], 'smtp://localhost:587?auto_tls=false'];
+        yield 'no host still takes the security' => [['smtp_host' => '', 'smtp_secure' => 'ssl'], 'smtps://localhost:465'];
+        yield 'a host alone is port 25' => [['smtp_host' => 'mail.example.com'], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'a host and a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587?auto_tls=false'];
+        yield 'a port as text, as the admin form saves it' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '2525'], 'smtp://mail.example.com:2525?auto_tls=false'];
+        yield 'an empty port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => ''], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'port 0' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 0], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'port "0"' => [['smtp_host' => 'mail.example.com', 'smtp_port' => '0'], 'smtp://mail.example.com:25?auto_tls=false'];
         yield 'ssl is implicit tls' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 465, 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:465'];
-        yield 'ssl without a port' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'ssl'], 'smtps://mail.example.com'];
-        yield 'tls requires starttls' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com?require_tls=true'];
+        yield 'ssl without a port is 465' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:465'];
+        yield 'ssl on another port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 2465, 'smtp_secure' => 'ssl'], 'smtps://mail.example.com:2465'];
+        yield 'tls requires starttls, port 25 by default' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com:25?require_tls=true'];
         yield 'tls with a port' => [['smtp_host' => 'mail.example.com', 'smtp_port' => 587, 'smtp_secure' => 'tls'], 'smtp://mail.example.com:587?require_tls=true'];
-        yield 'any other secure value is opportunistic' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'starttls'], 'smtp://mail.example.com'];
-        yield 'an IPv4 address' => [['smtp_host' => '192.0.2.10', 'smtp_port' => 25], 'smtp://192.0.2.10:25'];
-        yield 'an IPv6 address is bracketed' => [['smtp_host' => '2001:db8::1', 'smtp_port' => 25], 'smtp://[2001:db8::1]:25'];
-        yield 'a password without a username is not used' => [['smtp_host' => 'mail.example.com', 'smtp_password' => 'x'], 'smtp://mail.example.com'];
+        yield 'any other secure value is not encrypted' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'starttls'], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'secure is compared exactly' => [['smtp_host' => 'mail.example.com', 'smtp_secure' => 'SSL'], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'an IPv4 address' => [['smtp_host' => '192.0.2.10', 'smtp_port' => 25], 'smtp://192.0.2.10:25?auto_tls=false'];
+        yield 'an IPv6 address is bracketed' => [['smtp_host' => '2001:db8::1', 'smtp_port' => 25], 'smtp://[2001:db8::1]:25?auto_tls=false'];
+        yield 'a password without a username is not used' => [['smtp_host' => 'mail.example.com', 'smtp_password' => 'x'], 'smtp://mail.example.com:25?auto_tls=false'];
+        yield 'ssl:// in the host is the host with implicit tls' => [['smtp_host' => 'ssl://mail.example.com'], 'smtps://mail.example.com:465'];
+        yield 'ssl:// in the host with a port' => [['smtp_host' => 'SSL://mail.example.com', 'smtp_port' => 2465], 'smtps://mail.example.com:2465'];
+        yield 'tls:// in the host is the host with starttls required' => [['smtp_host' => 'tls://mail.example.com', 'smtp_port' => 587], 'smtp://mail.example.com:587?require_tls=true'];
+        yield 'smtp_secure wins over a scheme in the host' => [['smtp_host' => 'ssl://mail.example.com', 'smtp_secure' => 'tls'], 'smtp://mail.example.com:25?require_tls=true'];
     }
 
     /**
@@ -85,7 +96,8 @@ final class MailTransportDsnTest extends TestCase
     {
         yield 'a newline in the host' => [['smtp_host' => "evil\nhost"], 'smtp_host'];
         yield 'a slash in the host' => [['smtp_host' => 'evil.example/path'], 'smtp_host'];
-        yield 'a scheme in the host' => [['smtp_host' => 'ssl://mail.example.com'], 'smtp_host'];
+        yield 'another scheme in the host' => [['smtp_host' => 'http://mail.example.com'], 'smtp_host'];
+        yield 'a scheme with nothing after it' => [['smtp_host' => 'ssl://'], 'smtp_host'];
         yield 'an at sign in the host' => [['smtp_host' => 'user@mail.example.com'], 'smtp_host'];
         yield 'a space in the host' => [['smtp_host' => 'mail example.com'], 'smtp_host'];
         yield 'a query in the host' => [['smtp_host' => 'mail.example.com?x=1'], 'smtp_host'];
@@ -107,6 +119,8 @@ final class MailTransportDsnTest extends TestCase
             MailTransportDsn::fromSettings($settings);
             $this->fail('Expected an InvalidArgumentException.');
         } catch (\InvalidArgumentException $e) {
+            $this->assertInstanceOf(\Idno\Mail\InvalidMailSetting::class, $e);
+            $this->assertSame($setting, $e->setting());
             $this->assertStringContainsString($setting, $e->getMessage());
             $value = $settings[$setting];
             if (is_string($value)) {

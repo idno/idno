@@ -71,8 +71,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // The message is a value object; the two interfaces are implemented by Idno\Legacy adapters, aliased below;
         // ResilientTransport decorates the idno transport (below).
         'Queue' => ['EventTrigger.php', 'EntityCache.php', 'KeepFailedMessage.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php', 'WorkerSiteUrl.php'],
-        // MailTransportDsn is a pure function of the settings; MailerFactory is wired below.
-        'Mail' => ['MailTransportDsn.php'],
+        // MailTransportDsn is a pure function of the settings, InvalidMailSetting an exception; MailerFactory and
+        // the transport factory are wired below.
+        'Mail' => ['InvalidMailSetting.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -356,11 +357,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // Mail (Idno\Mail). The mailer is built at each fetch from the stored mail settings, read through
     // SiteSettings, so it needs the legacy application, is not shared (an admin's change applies to the
-    // next mail) and has nothing compiled in. The transport factory is the SMTP one; the test
+    // next mail) and has nothing compiled in. The transport factory is Idno's SMTP one (it does exactly what the DSN says); the test
     // environment replaces it with a recorder (config/services_test.php).
-    $services->set('idno.mail.transport_factory', \Symfony\Component\Mailer\Transport\Smtp\EsmtpTransportFactory::class)
+    $services->set('idno.mail.transport_factory', \Idno\Mail\SmtpTransportFactory::class)
         ->autowire(false)
-        ->autoconfigure(false);
+        ->autoconfigure(false)
+        ->public();
     $services->set(\Idno\Mail\MailerFactory::class)
         ->args([service(SiteSettings::class), service('idno.mail.transport_factory')])
         ->autowire(false)

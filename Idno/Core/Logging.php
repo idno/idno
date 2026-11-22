@@ -330,58 +330,73 @@ namespace Idno\Core {
          */
         public static function oopsAlert($message, $title = "")
         {
+            // Called from the exception handler and the fatal-error shutdown function: whatever goes wrong
+            // here (a template, the mailer, a missing service) must not escape into a handler that is
+            // already handling an error.
+            $bufferLevel = ob_get_level();
+            try {
 
-            $config = \Idno\Core\idno::site()->config();
+                $config = \Idno\Core\idno::site()->config();
 
-            if (!empty($config) && !empty($config->oops_notify)) {
+                if (!empty($config) && !empty($config->oops_notify)) {
 
-                $notify = $config->oops_notify;
-                if (!is_array($notify)) {
-                    $notify = [$notify];
-                }
-
-                $title = $config->host . ": $title";
-
-                foreach ($notify as $emailaddress) {
-                    if (!empty($emailaddress) && filter_var($emailaddress, FILTER_VALIDATE_EMAIL)) {
-
-                        $vars = [
-                            'site' => $config->getDisplayURL(),
-                            'message' => $message,
-                            'user' => 'UNKNOWN',
-
-                            'agent' => '',
-                            'qs' => '',
-                            'referrer' => '',
-                        ];
-
-                        $uuid = \Idno\Core\Idno::site()->session()->currentUserUUID();
-                        if (!empty($uuid)) {
-                            $vars['user'] = \Idno\Core\Idno::site()->session()->currentUserUUID();
-                        }
-
-                        if (!empty($_SERVER['HTTP_USER_AGENT'])) {
-                            $vars['agent'] = $_SERVER['HTTP_USER_AGENT'];
-                        }
-
-                        if (!empty($_SERVER['QUERY_STRING'])) {
-                            $vars['qs'] = $_SERVER['QUERY_STRING'];
-                        }
-
-                        if (!empty($_SERVER['HTTP_REFERER'])) {
-                            $vars['referrer'] = $_SERVER['HTTP_REFERER'];
-                        }
-
-                        $email = new Email();
-                        if (!empty($title)) {
-                            $email->setSubject($title);
-                        }
-                        $email->setHTMLBodyFromTemplate('admin/oops', $vars);
-                        $email->setTextBodyFromTemplate('admin/oops', $vars);
-                        $email->addTo($emailaddress);
-                        $email->send();
-
+                    $notify = $config->oops_notify;
+                    if (!is_array($notify)) {
+                        $notify = [$notify];
                     }
+
+                    $title = $config->host . ": $title";
+
+                    foreach ($notify as $emailaddress) {
+                        if (!empty($emailaddress) && filter_var($emailaddress, FILTER_VALIDATE_EMAIL)) {
+
+                            $vars = [
+                                'site' => $config->getDisplayURL(),
+                                'message' => $message,
+                                'user' => 'UNKNOWN',
+
+                                'agent' => '',
+                                'qs' => '',
+                                'referrer' => '',
+                            ];
+
+                            $uuid = \Idno\Core\Idno::site()->session()->currentUserUUID();
+                            if (!empty($uuid)) {
+                                $vars['user'] = \Idno\Core\Idno::site()->session()->currentUserUUID();
+                            }
+
+                            if (!empty($_SERVER['HTTP_USER_AGENT'])) {
+                                $vars['agent'] = $_SERVER['HTTP_USER_AGENT'];
+                            }
+
+                            if (!empty($_SERVER['QUERY_STRING'])) {
+                                $vars['qs'] = $_SERVER['QUERY_STRING'];
+                            }
+
+                            if (!empty($_SERVER['HTTP_REFERER'])) {
+                                $vars['referrer'] = $_SERVER['HTTP_REFERER'];
+                            }
+
+                            $email = new Email();
+                            if (!empty($title)) {
+                                $email->setSubject($title);
+                            }
+                            $email->setHTMLBodyFromTemplate('admin/oops', $vars);
+                            $email->setTextBodyFromTemplate('admin/oops', $vars);
+                            $email->addTo($emailaddress);
+                            $email->send();
+
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                // A template that threw leaves its output buffer open: close it, discarding what it drew.
+                while (ob_get_level() > $bufferLevel) {
+                    ob_end_clean();
+                }
+                try {
+                    \Idno\Core\Idno::site()->logging()->error('Could not send the alert: ' . get_class($e));
+                } catch (\Throwable $ignored) {
                 }
             }
         }
