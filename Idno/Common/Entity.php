@@ -927,17 +927,41 @@ namespace Idno\Common {
         }
 
         /**
-         * Retrieve a single record by its URL slug
+         * Retrieve a single record by its URL slug.
+         *
+         * Slugs are stored percent-encoded (see prepareSlug()), but the slug taken from a request
+         * may be percent-encoded, with hex digits in either case, or already decoded, depending
+         * on the web server. It is looked up as given and then, if nothing was found, in the
+         * form prepareSlug() stores.
+         *
          * @param $slug
          * @return bool|Entity
          */
         static function getBySlug($slug)
         {
-            if (empty($slug)) {
+            if (empty($slug) || !is_string($slug)) {
                 return false;
             }
 
-            return static::getOneFromAll(array('slug' => $slug));
+            // No slug is anything but UTF-8, and a database may refuse to compare other bytes
+            if (!mb_check_encoding($slug, 'UTF-8')) {
+                return false;
+            }
+
+            if ($entity = static::getOneFromAll(array('slug' => $slug))) {
+                return $entity;
+            }
+
+            $decoded = rawurldecode($slug);
+            if (!mb_check_encoding($decoded, 'UTF-8')) {
+                return false;
+            }
+            $stored = rawurlencode($decoded);
+            if ($stored === $slug) {
+                return false;
+            }
+
+            return static::getOneFromAll(array('slug' => $stored));
         }
 
         /**
@@ -2231,7 +2255,9 @@ namespace Idno\Common {
                     case ':id':
                         return '([A-Za-z0-9]+)';
                     case ':slug':
-                        return '([\%A-Za-z0-9\-\_]+)';
+                        // Any one path segment: the path may arrive percent-encoded or decoded
+                        // (see getBySlug()). No dot, so that file names are never slugs.
+                        return '([^/.]+)';
                     case ':year':
                         return '[0-9]{4}';
                     case ':month':

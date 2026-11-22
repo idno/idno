@@ -61,6 +61,15 @@ Tests/                         Core unit tests
 - **Page routing**: Toro-style regex routing. Routes registered via
   `Idno::site()->routes()->addRoute($pattern, $handlerClass)`. Page handlers
   extend `Idno\Common\Page` with `getContent()` / `postContent()` methods.
+- **Slugs in URLs**: `Entity::prepareSlug()` stores a slug percent-encoded (the title
+  `Café notes` gives `caf%C3%A9-notes`), and `getURL()` prints it that way. A web server
+  may hand the router the path as sent (percent-encoded, hex digits in either case) or
+  decoded, so a route that takes a slug matches any one path segment without a dot
+  (`([^/.]+)`: the `:slug` part of `Entity::getPermalinkRoute()`, and `/pages/` in
+  StaticPages), and `Entity::getBySlug()` looks the value up as given and then as
+  `rawurlencode(rawurldecode($slug))`. Don't write a slug route as a list of ASCII
+  characters, and only ever pass the slug to the database as a query value.
+  `Tests/Pages/NonAsciiPermalinkTest.php` checks this over HTTP.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
 - **Async queue**: Events can be processed asynchronously via
