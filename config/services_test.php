@@ -49,6 +49,14 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->tag('doctrine.middleware');
 
+    // When the environment variable IDNO_TEST_TEMPLATE_TRACE names a file, every template draw of a request appends
+    // a line to it (type, name, the file found): see Tests\Fixtures\TemplateTrace. Inert otherwise.
+    $container->services()
+        ->set(\Tests\Fixtures\TemplateTrace::class)
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->tag('kernel.event_listener', ['event' => 'kernel.request', 'priority' => 1000]);
+
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
     // test environment; no request can set it.

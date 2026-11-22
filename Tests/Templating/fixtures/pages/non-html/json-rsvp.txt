@@ -1,0 +1,40 @@
+{
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000017",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000017",
+        "content": "I will be there.",
+        "formattedContent": "\n<p><data class=\"p-rsvp\" value=\"yes\"><a href=\"https:\/\/example.org\/event\/1\" class=\"u-in-reply-to\"><\/a>I will be there.<\/data><\/p>\n",
+        "displayName": "Yes: I will be there.",
+        "objectType": "rsvp",
+        "published": "2026-03-07T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/i-will-be-there",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
+    "title": "Yes: I will be there.",
+    "description": "I will be there.",
+    "messages": []
+}

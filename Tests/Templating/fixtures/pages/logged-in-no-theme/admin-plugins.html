@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Plugins</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" /><!-- We need jQuery at the top of the page -->
+<script src="{site}/vendor/npm-asset/jquery/dist/jquery.min.js"></script>
+<!-- Le styles -->
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap.min.css"
+    rel="stylesheet"/>
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap-theme.min.css"/>
+<script
+    src="{site}/vendor/twbs/bootstrap/dist/js/bootstrap.min.js"></script>
+<!-- Accessibility -->
+<link rel="stylesheet"
+      href="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/css/bootstrap-accessibility.css">
+<script
+    src="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/js/bootstrap-accessibility.min.js"></script>
+<!-- Fonts -->
+<link rel="stylesheet"
+          href="{site}/vendor/forkawesome/fork-awesome/css/fork-awesome.min.css">
+<style>
+    body {
+        padding-top: 100px; /* 60px to make the container go all the way to the bottom of the topbar */
+    }
+</style>
+<script>
+    var idno = {"session":{"loggedIn":true,"admin":true},"config":{"displayUrl":"{site}\/","staticUrl":"{site}\/","debug":true},"page":{"currentUrl":"{site}\/admin\/plugins\/","currentUrlFragments":{"scheme":"http","host":"127.0.0.1","port":{site-port},"path":"\/admin\/plugins\/"}}};
+    var known = idno; // Backwards compatibility alias
+</script>
+<script
+    src="{site}/js/modernizr/modernizr-custom.js"></script>
+<!-- Default Idno JavaScript -->
+<script src="{site}/js/{built}/idno.min.js"></script>
+<script
+    src="{site}/vendor/npm-asset/bootstrap-toggle/js/bootstrap-toggle.js"></script>
+<script
+    src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
+<link href="{site}/css/{built}/idno.min.css" rel="stylesheet">
+<link
+    href="{site}/vendor/npm-asset/bootstrap-toggle/css/bootstrap-toggle.min.css"
+    rel="stylesheet"/>
+<!-- Mention styles -->
+<link rel="stylesheet" type="text/css"
+      href="{site}/vendor/idno/mentionjs/recommended-styles.css">
+</head>
+<body class="settings-template">
+<nav class="navbar navbar-default navbar-fixed-top col-lg-12 col-12 ">
+<!-- Brand and toggle get grouped for better mobile display -->
+<div class="navbar-header">
+<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse">
+<span class="sr-only">Toggle navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+</button>
+<a class="navbar-brand" tabindex="1" href="{site}/">Fixture Site</a>
+</div>
+<!-- Collect the nav links, forms, and other content for toggling -->
+<div class="collapse navbar-collapse" id="navbar-collapse">
+<ul class="nav navbar-nav navbar-right">
+<li class="">
+<a href="{site}/account/settings/"><i class="fa fa-cog"></i>Account Settings</a>
+</li>
+<li class="active">
+<a href="{site}/admin/"><i class="fa fa-cogs"></i>Site Configuration</a>
+</li>
+<li>
+<a href="{site}/profile/ada"><img class="u-photo" src="{site}/gfx/users/default-04.png" alt="Ada Admin" /></a>
+</li>
+</ul>
+</div><!-- /.navbar-collapse -->
+</nav>
+<div class="col-lg-12 col-12">
+<div class="settings-sidebar col-lg-2 col-md-2 col-sm-2 col-2">
+<ul class="nav">
+<li  role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li class="active" role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li  role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+</div>
+<div class="settings-content col-lg-10 col-md-10 col-sm-10 col-10">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<ul class="nav">
+<li  role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li class="active" role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li  role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+<h1>Plugins</h1>
+<div class="explanation">
+<p>
+                Plugins allow you to add features to your site. These include new kinds of content, options to syndicate content to different sites, and features to change the way Idno behaves. To enable or disable a plugin, just click its enable or disable button.            </p>
+</div>
+<div class="well well-large" id="plugin-activitypub">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>ActivityPub</strong> 0.1.0<br/>
+<small>
+                    by <a href="https://withknown.com">Known</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>ActivityPub federation support. Allows profiles to be followed from Mastodon and other compatible platforms, and delivers posts to followers.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-media">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Audio</strong> 1.0.2<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Upload audio or music and turn your site into a podcast.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-like">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Bookmark</strong> 1.0.2<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Bookmark a page in Idno.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-bridgy">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Bridgy</strong> 1.0.1<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Receive comments from external services on your Idno site.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-checkin">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Checkin</strong> 1.1.3<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>An easy way to check into a geographic location.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-styles">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Custom CSS</strong> 1.0.0<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label">Disabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>A custom CSS stylesheet editor to modify the visual style of your site.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+<form action="{site}/admin/plugins/"
+                          method="post">
+<p>
+<input type="hidden" name="plugin" value="Styles"/>
+<input type="hidden" name="container" value="plugin-styles"/>
+<input type="hidden" name="plugin_action" value="install"/>
+<input class="btn btn-default plugin-button" type="submit" value="Enable"/>
+</p>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-event">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Events</strong> 1.0.2<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>A lightweight way to post or reply to events.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-indiepub">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>IndiePub</strong> 0.10<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Support IndieAuth and Micropub for single-user Idno sites. Must be used with a single-user theme.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-photo">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Photos</strong> 1.0.4<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Simple photo uploader for Idno.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-standardsitesync">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>StandardSiteSync</strong> 0.1.0<br/>
+<small>
+                    by <a href="https://withknown.com">Known</a>
+</small>
+<br/>
+<span class="label">Disabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Sync your writing to standard.site records on an AT Protocol PDS. Supports OAuth authentication, automatic sync of new content, and one-click backfill of existing posts.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+<form action="{site}/admin/plugins/"
+                          method="post">
+<p>
+<input type="hidden" name="plugin" value="StandardSiteSync"/>
+<input type="hidden" name="container" value="plugin-standardsitesync"/>
+<input type="hidden" name="plugin_action" value="install"/>
+<input class="btn btn-default plugin-button" type="submit" value="Enable"/>
+</p>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-staticpages">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Static pages</strong> 1.0.1<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Host static pages in Idno.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-status">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Status updates</strong> 1.0.6<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Simple status updates for Idno.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-text">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Text posts</strong> 1.0.9<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>A lightweight blogging engine.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+<div class="well well-large" id="plugin-webhooks">
+<div class="row">
+<div class="col-md-2">
+<p>
+<strong>Webhooks</strong> 1.0.1<br/>
+<small>
+                    by <a href="https://idno.co">Idno</a>
+</small>
+<br/>
+<span class="label label-success">Enabled</span>
+</p>
+</div>
+<div class="col-md-5">
+<p>Syndicate via Webhooks.</p>
+<div class="requirements">
+</div>
+</div>
+<div class="col-md-1 col-md-offset-1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+    var pluginFunction = function(e) {
+        e.preventDefault();
+        var form = $(this).closest('form');
+        var formData = {};
+        form.serializeArray().map(function(x){formData[x.name] = x.value;});
+        $.ajax(form.attr('action'), {
+            method: 'POST',
+            dataType: 'html',
+            data: formData
+        })
+            .done(function(data, status, xhr) {
+                $.ajax(form.attr('action'))
+                    .done(function(data) {
+                        var div = '#' + formData.container;
+                        var result = $(data).find(div);
+                        $(div).html(result.html());
+                        $(div + ' .plugin-button').on('click', pluginFunction);
+                    });
+            });
+    };
+
+    $('.plugin-button').on('click', pluginFunction);
+</script>
+</div>
+<!-- Placed at the end of the document so the pages load faster -->
+<!-- WYSIWYG editor -->
+<script
+            src="{site}/vendor/tinymce/tinymce/tinymce.min.js"
+            type="text/javascript"></script>
+<script
+            src="{site}/vendor/npm-asset/tinymce--tinymce-jquery/dist/tinymce-jquery.min.js"
+            type="text/javascript"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/jquery.timeago.js"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/locales/jquery.timeago.en.js"></script>
+<script src="{site}/vendor/npm-asset/underscore/underscore-min.js"
+        type="text/javascript"></script>
+<!--<script src="{site}/vendor/idno/mentionjs/bootstrap-typeahead.js"
+        type="text/javascript"></script>
+<script src="{site}/vendor/idno/mentionjs/mention.js"
+        type="text/javascript"></script> -->
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><!-- Begin asset javascript -->
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+<!-- End asset javascript -->
+<div class="blank-footer">
+</div>
+</body>
+</html>

@@ -19,6 +19,14 @@ namespace Idno\Core\Bonita {
         public $vars = array();     // Template variables
 
         /**
+         * Test hook: when set (only in the test environment, by Tests\Fixtures\TemplateTrace), called as
+         * ($templateType, $templateName, $path) for each draw, $path being the file the draw found or '-'.
+         *
+         * @var callable|null
+         */
+        public static $trace = null;
+
+        /**
          * Constructor allows copying; we're shunning use of clone here
          * You can also just instantiate Templates with a list of variables
          */
@@ -121,6 +129,9 @@ namespace Idno\Core\Bonita {
                     foreach ($paths as $basepath) {
                         $path = $basepath . '/templates/' . $templateType . '/' . $templateName . '.tpl.php';
                         if (file_exists($path)) {
+                            if (self::$trace !== null) {
+                                call_user_func(self::$trace, $this->getTemplateType(), $templateName, $path);
+                            }
                             // create an anonymous function for scoping
                             $fn = (function ($path, $vars, $t) {
                                 // dump the variables into the local scope
@@ -137,6 +148,9 @@ namespace Idno\Core\Bonita {
                 }
             }
             // If we've got here, just return a blank string; the template doesn't exist
+            if (self::$trace !== null) {
+                call_user_func(self::$trace, $this->getTemplateType(), $templateName, '-');
+            }
             if ($returnBlank) {
                 return '';
             }

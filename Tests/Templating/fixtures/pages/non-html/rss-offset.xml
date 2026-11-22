@@ -1,0 +1,60 @@
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Fixture Site</title>
+    <itunes:author>Fixture Site</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/?offset=10</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://withknown.superfeedr.com/" rel="hub"/>
+    <atom:link href="{site}/?_t=rss&amp;offset=10" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+    <item>
+      <title>An older note, number 4, for the ...</title>
+      <link>{site}/2026/an-older-note-number-4-for-the-second-page</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000034</guid>
+      <pubDate>Wed, 04 Feb 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">An older note, number 4, for the second page.</p>
+]]></description>
+    </item>
+    <item>
+      <title>An older note, number 3, for the ...</title>
+      <link>{site}/2026/an-older-note-number-3-for-the-second-page</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000033</guid>
+      <pubDate>Tue, 03 Feb 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">An older note, number 3, for the second page.</p>
+]]></description>
+    </item>
+    <item>
+      <title>An older note, number 2, for the ...</title>
+      <link>{site}/2026/an-older-note-number-2-for-the-second-page</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000032</guid>
+      <pubDate>Mon, 02 Feb 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">An older note, number 2, for the second page.</p>
+]]></description>
+    </item>
+    <item>
+      <title>An older note, number 1, for the ...</title>
+      <link>{site}/2026/an-older-note-number-1-for-the-second-page</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000031</guid>
+      <pubDate>Sun, 01 Feb 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">An older note, number 1, for the second page.</p>
+]]></description>
+    </item>
+  </channel>
+</rss>

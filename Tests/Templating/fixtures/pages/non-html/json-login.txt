@@ -1,0 +1,13 @@
+{
+    "fwd": "{site}\/",
+    "csrf": [
+        {
+            "tid": "tid{id}",
+            "action": "\/session\/login",
+            "time": {token-time},
+            "token": "{token}"
+        }
+    ],
+    "title": "Sign in",
+    "messages": []
+}

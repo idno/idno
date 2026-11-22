@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Edit page</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/users/default-04.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/users/default-04.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon" href="{site}/gfx/users/default-04.png">
+<!-- <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black"> -->
+<!-- Android -->
+<link rel="manifest" href="{site}/chrome/manifest.json">
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Edit page" />
+<meta property="og:site_name" content="Fixture Site" />
+<meta property="og:image" content="{site}/gfx/users/default-04.png" />
+<!-- JSON+LD Structured Data -->
+<script type="application/ld+json">
+    {
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "url": "{site}/staticpages/edit/",
+    "name": "Edit page",
+    "description": "",
+    "publisher": "Fixture Site",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "{site}/content/all/?q={search_term}",
+        "query-input": "required name=search_term"
+    },
+    "author": {
+        "@type": "Person",
+        "name": "Ada Admin"
+    }
+}    
+</script>
+<!-- Dublin Core -->
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.title" content="Edit page">
+<meta name="DC.description" content=""><link rel="stylesheet" href="{site}/Themes/Twenty26/dist/modern.min.css" />
+<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<!-- To silo is human, to syndicate divine -->
+<link rel="alternate" type="application/rss+xml" title="Edit page"
+      href="{site}/staticpages/edit/?_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="Edit page"
+      href="{site}/staticpages/edit/?_t=rss"/>
+<link rel="alternate feed" type="application/rss+xml"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss"/>
+<link rel="alternate" type="application/json"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss" />
+<link rel="feed" type="text/html" title="Fixture Site"
+      href="{site}/content/all"/>
+<!-- Webmention endpoint -->
+<link href="{site}/webmention/" rel="http://webmention.org/"/>
+<link href="{site}/webmention/" rel="webmention"/>
+<!-- Pubsubhubbub -->
+<link href="https://withknown.superfeedr.com/" rel="hub"/>
+<link rel="openid.delegate" href="{site}/" />
+<link rel="openid.server" href="https://indieauth.com/openid" />
+<link rel="authorization_endpoint" href="{site}/indieauth/auth">
+<link rel="token_endpoint" href="{site}/indieauth/token">
+<link rel="micropub" href="{site}/micropub/endpoint"><link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.css"/>
+<!--[if lte IE 8]>
+<link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.ie.css"/>
+<![endif]-->
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
+<script src="{site}/IdnoPlugins/Media/external/wavesurfer/dist/wavesurfer.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body class="idnoplugins_staticpages_pages_edit page-staticpages page-staticpages-edit logged-in">
+<div class="idno-shell">
+<nav class="idno-nav-sidebar" aria-label="Main navigation">
+<a href="{site}/" class="idno-nav-logo">
+        Fixture Site    </a>
+<ul class="idno-nav-items">
+<li>
+<a href="{site}/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+<span class="idno-nav-label">Home</span>
+</a>
+</li>
+<li>
+<a href="{site}/profile/ada" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+<span class="idno-nav-label">Profile</span>
+</a>
+</li>
+<li>
+<button type="button" class="idno-nav-item" x-data x-on:click="$dispatch('open-search')">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+<span class="idno-nav-label">Search</span>
+</button>
+</li>
+<li>
+<a href="{site}/drafts/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+<span class="idno-nav-label">Drafts</span>
+</a>
+</li>
+<li>
+<a href="{site}/account/settings/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+<span class="idno-nav-label">Settings</span>
+</a>
+</li>
+<li>
+<a href="{site}/admin/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+<span class="idno-nav-label">Admin</span>
+</a>
+</li>
+<li>
+<a data-form-id="{form-1}"  class="idno-nav-item"   href="{site}/session/logout" onclick="document.getElementById('{form-1}').submit(); return false; "><svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="idno-nav-label">Log out</span></a>
+</li>
+</ul>
+<button class="idno-nav-btn" x-data x-on:click="$dispatch('open-compose')">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1.25rem;height:1.25rem"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+<span class="idno-nav-label">New Post</span>
+</button>
+</nav>
+<main class="idno-main">
+<div class="idno-feed h-feed">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<form action="{site}/staticpage/edit" method="post">
+<div class="row">
+<div class="col-md-8 col-md-offset-2 edit-pane">
+<h4>New Page</h4>
+<p>
+<label for="title">
+                        Title</label>
+<input type="text" name="title" id="title" placeholder="Give it a title"
+                           value="" class="form-control"/>
+</p>
+<div class="idno-editor" x-data="tiptapEditor('editor-{1}')">
+<div class="idno-editor-toolbar">
+<button type="button" class="idno-editor-toolbar-btn" title="Bold" x-on:click="editor.chain().focus().toggleBold().run()" :class="{ 'active': editor?.isActive('bold') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Italic" x-on:click="editor.chain().focus().toggleItalic().run()" :class="{ 'active': editor?.isActive('italic') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Strikethrough" x-on:click="editor.chain().focus().toggleStrike().run()" :class="{ 'active': editor?.isActive('strike') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" x2="20" y1="12" y2="12"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Inline code" x-on:click="editor.chain().focus().toggleCode().run()" :class="{ 'active': editor?.isActive('code') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<!-- Paragraph style dropdown -->
+<select class="idno-editor-toolbar-btn" style="width:auto;padding:0 0.5rem;font-size:var(--font-size-sm)"
+                x-on:change="setHeading($event.target.value)" x-ref="headingSelect">
+<option value="paragraph">Paragraph</option>
+<option value="1">Heading 1</option>
+<option value="2">Heading 2</option>
+<option value="3">Heading 3</option>
+</select>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Link" x-on:click="toggleLink()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Image" x-on:click="addImage()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Blockquote" x-on:click="editor.chain().focus().toggleBlockquote().run()" :class="{ 'active': editor?.isActive('blockquote') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/><path d="M3 12v6"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Bullet list" x-on:click="editor.chain().focus().toggleBulletList().run()" :class="{ 'active': editor?.isActive('bulletList') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Numbered list" x-on:click="editor.chain().focus().toggleOrderedList().run()" :class="{ 'active': editor?.isActive('orderedList') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Code block" x-on:click="editor.chain().focus().toggleCodeBlock().run()" :class="{ 'active': editor?.isActive('codeBlock') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Horizontal rule" x-on:click="editor.chain().focus().setHorizontalRule().run()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>
+</button>
+</div>
+<div class="idno-editor-content" id="editor-{1}-editor"></div>
+<textarea name="body" id="editor-{1}" style="display:none" ></textarea>
+</div>
+<div class="page-cat">
+<label>
+                        Parent category</label><br>
+<select name="category" class="selectpicker">
+<option >No Category                        </option>
+</select>
+</div>
+<p id="show-options">
+<small><a href="#" onclick="$('#moreoptions').toggle(); $('#show-options').hide(); return false;"><i
+                                class="fa fa-plus"></i>
+                            Show advanced options</a></small>
+</p>
+<div id="moreoptions"                         style="display:none"
+                    >
+<p id="hide-options">
+<small><a href="#"
+                                  onclick="$('#moreoptions').toggle(); $('#show-options').show(); return false;"><i
+                                    class="fa fa-minus"></i>
+                                Hide advanced options</a></small>
+</p>
+<div>
+<p>
+<label for="forward_url">
+                                Forward URL</label>
+<input type="text" name="forward_url" id="forward_url"
+                                   placeholder="Website to forward users to"
+                                   value="" class="form-control"/>
+<small>Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content.</small>
+</p>
+</div>
+<p style="margin-bottom: 20px">
+<strong>Show the page title as a heading?</strong><br>
+<label class="radio-inline">
+<input type="radio" name="hide_title" id="title-heading" value="0" checked>
+                            Yes
+                        </label>
+<label class="radio-inline">
+<input type="radio" name="hide_title" id="title-heading" value="1" >
+                            No
+                        </label>
+</p>
+<div class="page-cat">
+</div>
+</div>
+<div class="access-control-block">
+<input type="hidden" name="access" id="access-control-id-acl-{id-1}" value="PUBLIC"/>
+<div class="idno-access-dropdown" x-data="{&quot;open&quot;:false,&quot;selected&quot;:&quot;PUBLIC&quot;,&quot;label&quot;:&quot;Public&quot;,&quot;icon&quot;:&quot;globe&quot;}">
+<button type="button" class="idno-access-trigger" @click="open = !open">
+<template x-if="icon === 'globe'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+</template>
+<template x-if="icon === 'users'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+</template>
+<template x-if="icon === 'lock'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+</template>
+<template x-if="icon === 'cog'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</template>
+<span x-text="label"></span>
+<svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+</button>
+<div class="idno-access-menu" x-show="open" @click.outside="open = false" x-cloak>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;PUBLIC&quot; }"
+                            @click="selected = &quot;PUBLIC&quot;; label = &quot;Public&quot;; icon = &quot;globe&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;PUBLIC&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                                Public                        <svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;SITE&quot; }"
+                            @click="selected = &quot;SITE&quot;; label = &quot;Members only&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;SITE&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                                Members only                        <svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot; }"
+                            @click="selected = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; label = &quot;Private&quot;; icon = &quot;lock&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                                Private                        <svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+</div>
+</div>
+</div>
+<p class="button-bar " style="text-align: right">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/staticpages/edit" />
+<input type="button" class="btn btn-cancel" value="Cancel" onclick="hideContentCreateForm();"/>
+<input type="submit" class="btn btn-primary" value="Publish"/>
+</p>
+</div>
+</div>
+</form>
+<script>
+
+        /*function postForm() {
+         var content = $('textarea[name="body"]').html($('#body').html());
+         console.log(content);
+         return content;
+         }*/
+
+        $(document).ready(function () {
+            makeRich('#body');
+        })
+        ;
+
+        function makeRich(container) {
+            $(container).tinymce({
+                selector: 'textarea',
+                theme: 'modern',
+                skin: 'light',
+                statusbar: false,
+                menubar: false,
+                toolbar: 'styleselect | bold italic | link image | blockquote bullist numlist | alignleft aligncenter alignright | code',
+                plugins: 'code link image autoresize',
+                relative_urls: false,
+                remove_script_host: false,
+                convert_urls: true,
+                file_picker_callback: function (callback, value, meta) {
+                    filePickerDialog(callback, value, meta);
+                }
+            });
+        }
+
+        function filePickerDialog(callback, value, meta) {
+            tinymce.activeEditor.windowManager.open({
+                title: 'File Manager',
+                url: '{site}/filepicker/?type=' + meta.filetype,
+                width: 650,
+                height: 550
+            }, {
+                oninsert: function (url) {
+                    callback(url);
+                }
+            });
+        }
+
+        //$('.selectpicker').selectpicker();
+
+    </script>
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><script>
+    /* Handle submit button */
+    $(document).ready(function() {
+        $('div.page-body form').submit(function() {
+            
+            var richrequiredcomplete = true;
+            
+            $(this).find('textarea.validation-required').each(function(){
+                if ($(this).val().length == 0) {
+                    richrequiredcomplete = false;
+                }
+            });
+            
+            
+            // Fudge rich text completion for now.
+            if (richrequiredcomplete == true) {
+                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                $('.btn-cancel').hide();
+                $('#submit-spinner').show();
+            }
+        });
+    });
+</script>
+<div id="submit-spinner" class="spinner wysiwyg" style="display:none">
+<div class="bounce1"></div>
+<div class="bounce2"></div>
+<div class="bounce3"></div>
+</div>
+</div>
+</main>
+<div class="idno-spacer" aria-hidden="true"></div>
+</div>
+<div x-data="{ open: false, query: '' }"
+     x-show="open"
+     x-cloak
+     x-on:open-search.window="open = true; $nextTick(() => $refs.searchInput.focus())"
+     x-on:keydown.escape.window="open = false"
+     class="idno-modal-overlay">
+<div class="idno-modal" style="max-width:32rem" x-on:click.outside="open = false">
+<div class="idno-modal-header">
+<h3 class="idno-modal-title">Search</h3>
+<button type="button" class="idno-modal-close" x-on:click="open = false">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+<div class="idno-modal-body">
+<form x-on:submit.prevent="if (query.trim()) window.location.href = '/?q=' + encodeURIComponent(query.trim())"
+                  style="display:flex;gap:0.5rem">
+<input type="search" x-model="query" x-ref="searchInput"
+                       class="idno-input" style="flex:1"
+                       aria-label="Search"
+                       placeholder="Search posts...">
+<button type="submit" class="idno-btn idno-btn-primary">
+                    Search                </button>
+</form>
+</div>
+</div>
+</div>
+<div x-data="composeModal" x-show="open" x-cloak class="idno-modal-overlay" x-on:keydown.escape.window="close()">
+<div class="idno-modal idno-modal-lg" x-on:click.outside="close()">
+<!-- Content Type Picker -->
+<template x-if="step === 'picker'">
+<div>
+<div class="idno-modal-header">
+<h2 class="idno-modal-title">New Post</h2>
+<button class="idno-modal-close" x-on:click="close()" type="button">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+<div class="idno-modal-body">
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--spacing-gap)">
+<a href="{site}/status/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Status update</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Short update</div>
+</div>
+</a>
+<a href="{site}/entry/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2m0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Post</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Long-form post</div>
+</div>
+</a>
+<a href="{site}/photo/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Photo</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Image post</div>
+</div>
+</a>
+<a href="{site}/like/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Bookmark</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Save a link</div>
+</div>
+</a>
+<a href="{site}/checkin/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Location</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Share location</div>
+</div>
+</a>
+<a href="{site}/media/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Audio</div>
+</div>
+</a>
+<a href="{site}/event/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Event</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Date &amp; location</div>
+</div>
+</a>
+<a href="{site}/rsvp/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">RSVP</div>
+</div>
+</a>
+</div>
+</div>
+</div>
+</template>
+</div>
+</div>
+<!-- Flexible media player -->
+<script
+    src="{site}/vendor/npm-asset/mediaelement/build/mediaelement-and-player.min.js"></script>
+<link rel="stylesheet"
+      href="{site}/vendor/npm-asset/mediaelement/build/mediaelementplayer.min.css"/>
+<!-- Video shim -->
+<script src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
+<script src="{site}/Themes/Twenty26/dist/modern.min.js" defer></script>
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+<script>
+        $('audio').mediaelementplayer({
+        features: ['playpause','progress','current','tracks','volume','fullscreen'],
+        alwaysShowControls: false,
+        pauseOtherPlayers: true,
+        enableAutosize: false,
+        mediaWidth: -1,
+        mediaHeight: -1
+    });
+</script>
+<style>
+    .known-media-element {
+        width: 100%;
+        height: 100%;
+    }
+</style><div class="blank-footer">
+</div><form action="{site}/session/logout" style="display: none; margin: 0; padding: 0" id="{form-1}" method="POST">
+<textarea name="json">[]</textarea>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/session/logout" />
+</form>
+</body>
+</html>

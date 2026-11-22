@@ -1,0 +1,28 @@
+{
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000023",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000023",
+        "content": "This is the static page about the site.",
+        "formattedContent": "<p>This is the static page about the site.<\/p>",
+        "displayName": "About this site",
+        "objectType": "article",
+        "published": "2026-03-13T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/pages\/about-this-site",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "title": "About this site",
+    "description": "This is the static page about the site.",
+    "messages": []
+}

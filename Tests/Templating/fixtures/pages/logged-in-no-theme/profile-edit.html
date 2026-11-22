@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Edit profile: Ada Admin</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon" href="{site}/gfx/logos/logo_k.png">
+<!-- <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black"> -->
+<!-- Android -->
+<link rel="manifest" href="{site}/chrome/manifest.json">
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Edit profile: Ada Admin" />
+<meta property="og:site_name" content="Fixture Site" />
+<meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
+<!-- JSON+LD Structured Data -->
+<script type="application/ld+json">
+    {
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "url": "{site}/profile/ada/edit",
+    "name": "Edit profile: Ada Admin",
+    "description": "",
+    "publisher": "Fixture Site",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "{site}/content/all/?q={search_term}",
+        "query-input": "required name=search_term"
+    }
+}    
+</script>
+<!-- Dublin Core -->
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.title" content="Edit profile: Ada Admin">
+<meta name="DC.description" content=""><!-- We need jQuery at the top of the page -->
+<script src="{site}/vendor/npm-asset/jquery/dist/jquery.min.js"></script>
+<!-- Le styles -->
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap.min.css"
+    rel="stylesheet"/>
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap-theme.min.css"/>
+<script
+    src="{site}/vendor/twbs/bootstrap/dist/js/bootstrap.min.js"></script>
+<!-- Accessibility -->
+<link rel="stylesheet"
+    href="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/css/bootstrap-accessibility.css">
+<script
+    src="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/js/bootstrap-accessibility.min.js"></script>
+<!-- Fonts -->
+<link rel="stylesheet"
+    href="{site}/vendor/forkawesome/fork-awesome/css/fork-awesome.min.css">
+<link rel="stylesheet"
+    href="{site}/vendor/forkawesome/fork-awesome/css/v5-compat.min.css">
+<style>
+    body {
+        padding-top: 100px; /* 60px to make the container go all the way to the bottom of the topbar */
+    }
+</style>
+<script>
+    var idno = {"session":{"loggedIn":true,"admin":true},"config":{"displayUrl":"{site}\/","staticUrl":"{site}\/","debug":true},"page":{"currentUrl":"{site}\/profile\/ada\/edit","currentUrlFragments":{"scheme":"http","host":"127.0.0.1","port":{site-port},"path":"\/profile\/ada\/edit"}}};
+    var known = idno; // Backwards compatibility alias
+</script>
+<script
+    src="{site}/js/modernizr/modernizr-custom.js"></script>
+<!-- Default Idno JavaScript -->
+<script src="{site}/js/{built}/idno.min.js"></script>
+<script
+    src="{site}/vendor/npm-asset/bootstrap-toggle/js/bootstrap-toggle.js"></script>
+<link href="{site}/css/{built}/idno.min.css" rel="stylesheet">
+<!-- Syndication -->
+<link
+    href="{site}/vendor/npm-asset/bootstrap-toggle/css/bootstrap-toggle.min.css"
+    rel="stylesheet"/>
+<!-- Mention styles -->
+<link rel="stylesheet" type="text/css"
+      href="{site}/vendor/idno/mentionjs/recommended-styles.css">
+<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<!-- To silo is human, to syndicate divine -->
+<link rel="alternate" type="application/rss+xml" title="Edit profile: Ada Admin"
+      href="{site}/profile/ada/edit?_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="Edit profile: Ada Admin"
+      href="{site}/profile/ada/edit?_t=rss"/>
+<link rel="alternate feed" type="application/rss+xml"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss"/>
+<link rel="alternate" type="application/json"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss" />
+<link rel="feed" type="text/html" title="Fixture Site"
+      href="{site}/content/all"/>
+<!-- Webmention endpoint -->
+<link href="{site}/webmention/" rel="http://webmention.org/"/>
+<link href="{site}/webmention/" rel="webmention"/>
+<!-- Pubsubhubbub -->
+<link href="https://withknown.superfeedr.com/" rel="hub"/>
+<link rel="openid.delegate" href="{site}/" />
+<link rel="openid.server" href="https://indieauth.com/openid" />
+<link rel="authorization_endpoint" href="{site}/indieauth/auth">
+<link rel="token_endpoint" href="{site}/indieauth/token">
+<link rel="micropub" href="{site}/micropub/endpoint"><link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.css"/>
+<!--[if lte IE 8]>
+<link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.ie.css"/>
+<![endif]-->
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
+<script src="{site}/IdnoPlugins/Media/external/wavesurfer/dist/wavesurfer.min.js"></script>
+</head>
+<body class="idno_pages_user_edit page-profile page-profile-ada page-profile-ada-edit logged-in">
+<a href="#maincontent" style="display:none">Skip to main content</a>
+<nav class="navbar navbar-default navbar-fixed-top">
+<div class="container">
+<!-- Brand and toggle get grouped for better mobile display -->
+<div class="navbar-header">
+<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse">
+<span class="sr-only">Toggle navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+</button>
+<a class="navbar-brand" tabindex="1" href="{site}/">Fixture Site</a>
+</div>
+<!-- Collect the nav links, forms, and other content for toggling -->
+<div class="collapse navbar-collapse" id="navbar-collapse">
+<form class="navbar-form navbar-left" action="{site}/content/all/" method="get" role="search">
+<div class="form-group">
+<input type="search" class="search-query form-control" name="q" placeholder="Search" tabindex="2" value="">
+</div>
+</form>
+<ul class="nav navbar-nav">
+<li class="dropdown" tabindex="3">
+<a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">
+                Filter content                    <span class="caret"></span>
+</a>
+<ul class="dropdown-menu" role="menu">
+<li>
+<a href="{site}/">
+<span class="dropdown-menu-icon">&nbsp;</span>
+        Default content    </a>
+</li>
+<li>
+<a href="{site}/content/all/">
+<span class="dropdown-menu-icon">&nbsp;</span>
+        All content    </a>
+</li>
+<li>
+<a href="{site}/content/statusupdates/">
+<span class="dropdown-menu-icon"><i class="fa fa-comment"></i></span>
+        Status updates    </a>
+</li>
+<li>
+<a href="{site}/content/posts/">
+<span class="dropdown-menu-icon"><i class="fa fa-align-left"></i>
+</span>
+        Posts    </a>
+</li>
+<li>
+<a href="{site}/content/photos/">
+<span class="dropdown-menu-icon"><i class="fa fa-image"></i>
+</span>
+        Photos    </a>
+</li>
+<li>
+<a href="{site}/content/bookmarkedpages/">
+<span class="dropdown-menu-icon"><i class="fa fa-bookmark"></i>
+</span>
+        Bookmarked pages    </a>
+</li>
+<li>
+<a href="{site}/content/locations/">
+<span class="dropdown-menu-icon"><i class="fa fa-map-marker"></i>
+</span>
+        Locations    </a>
+</li>
+<li>
+<a href="{site}/content/audio/">
+<span class="dropdown-menu-icon"><i class="fa fa-microphone"></i>
+</span>
+        Audio    </a>
+</li>
+<li>
+<a href="{site}/content/events/">
+<span class="dropdown-menu-icon"><i class="fa fa-calendar"></i>
+</span>
+        Events    </a>
+</li>
+<li>
+<a href="{site}/content/rsvp/">
+<span class="dropdown-menu-icon"><i class="fa fa-calendar-check-o"></i>
+</span>
+        RSVP    </a>
+</li>
+</ul>
+</li>
+</ul>
+<ul class="nav navbar-nav navbar-right">
+<li>
+<ul class="nav">
+<li>
+<a href="{site}/pages/about-this-site">About this site</a>
+</li>
+</ul>
+</li>
+<!--<ul class="nav navbar-nav">-->
+<li class="dropdown">
+<a class="dropdown-toggle" data-toggle="dropdown" href="">
+<img class="u-photo" src="{site}/gfx/users/default-04.png" 
+             alt="Ada Admin" />
+        Ada Admin        <span class="caret"></span>
+</a>
+<ul class="dropdown-menu">
+<li><a href="{site}/profile/ada">Profile</a></li>
+<li><a href="{site}/account/settings/">Account Settings</a></li>
+<li><a href="{site}/admin/">Site Configuration</a></li>
+<li><a href="{site}/account/settings/feedback/" ><i class="fa fa-heart" title="Leave feedback"></i> Feedback</a></li>
+<li><a data-form-id="{form-1}"   href="{site}/session/logout" onclick="$('#{form-1}').submit(); return false; ">Sign out</a>
+</li>
+</ul>
+</li>
+<!--</ul>-->
+</ul>
+</div><!-- /.navbar-collapse -->
+</div><!-- /.container-fluid -->
+</nav>
+<div class="page-container">
+<div class="container page-body">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<div class="container col-md-11 col-md-offset-1">
+<div class="row beforecontent">
+<h1>Edit your profile</h1>
+<p>
+            Your profile is how other users see you across the site. It's up to you how much or how little information you choose to provide.        </p>
+</div>
+<form class="form-horizontal" role="form" action="{site}/profile/ada" method="post"
+          enctype="multipart/form-data">
+<div class="row">
+<!-- left column -->
+<div class="col-md-3">
+<div class="text-center">
+<div id="photo-preview"><img src="{site}/gfx/users/default-04.png"
+                                                 class="avatar img-circle"
+                                                 alt="avatar" style="width: 100px"></div>
+<span class="btn btn-primary btn-file">
+<i class="fa fa-camera"></i>
+<span id="photo-filename">Select a user picture</span>
+<input type="file" name="avatar" id="photo"
+                                   class="form-control"
+                                   accept="image/*"
+                                   onchange="photoPreview(this)"/>
+</span>
+</div>
+</div>
+<!-- edit form column -->
+<div class="col-md-8 personal-info">
+<div class="form-group">
+<label class="control-label" for="name">Your name</label>
+<input class="form-control" type="text" id="name" name="name"
+                           value="Ada Admin">
+</div>
+<!--<div class="form-group">
+<label class="control-label" for="tagline">Short description</label>
+<input class="form-control" type="text" id="tagline" name="profile[tagline]"
+                           value="Ada writes about computers, gardens and the open web.">
+</div>-->
+<div class="form-group">
+<label class="control-label" for="body">About you</label><br>
+<textarea name="profile[description]" id="body"
+                              class="form-control bodyInput">Ada writes about computers, gardens and the open web.</textarea>
+</div>
+<div class="form-group">
+<p>
+<label for="website">Your websites</label><br>
+<small>Other places on the web where people can find you.</small>
+</p>
+<div id="websitelist">
+<div class="row">
+<div class="col-md-10">
+<input type="url" name="profile[url][]" id="title" value="" placeholder="https://"
+                                       class="form-control"/></div>
+<div class="col-md-2" style="margin-top: 0.75em">
+<small >
+<a href="#" onclick="$(this).parent().parent().parent().remove(); return false;">Remove</a>
+</small>
+</div>
+</div>
+</div>
+<p>
+<small><a href="#"
+                                  onclick="$('#websitelist').append($('#form-website-template').html()); return false;">+
+                                Add more</a></small>
+</p>
+</div>
+<div class="form-group">
+<p>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/profile/ada" />
+<input type="button" class="btn btn-cancel" value="Cancel" onclick="hideContentCreateForm();"/>
+<input type="submit" class="btn btn-primary" value="Save Changes"/>
+</p>
+</div>
+</div>
+</div>
+</form>
+<div id="form-website-template" style="display:none">
+<div class="row">
+<div class="col-md-10">
+<input type="text" name="profile[url][]" id="title" value="" placeholder="http://"
+                       class="form-control"/></div>
+<div class="col-md-2" style="margin-top: 0.75em">
+<small>
+<a href="#" onclick="$(this).parent().parent().parent().remove(); return false;">Remove</a>
+</small>
+</div>
+</div>
+</div>
+</div>
+<script>
+    //if (typeof photoPreview !== function) {
+    function photoPreview(input) {
+
+        if (input.files && input.files[0]) {
+            var reader = new FileReader();
+
+            reader.onload = function (e) {
+                $('#photo-preview').html('<img src="" id="photopreview" style="width: 100px">');
+                $('#photo-filename').html('Choose different user picture');
+                $('#photopreview').attr('src', e.target.result);
+                $('#photopreview').show();
+            }
+
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+    //}
+</script>
+</div>
+</div>
+<!-- Flexible media player -->
+<script
+    src="{site}/vendor/npm-asset/mediaelement/build/mediaelement-and-player.min.js"></script>
+<link rel="stylesheet"
+      href="{site}/vendor/npm-asset/mediaelement/build/mediaelementplayer.min.css"/>
+<!-- Video shim -->
+<script src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
+<!-- Placed at the end of the document so the pages load faster -->
+<!-- WYSIWYG editor -->
+<script
+            src="{site}/vendor/tinymce/tinymce/tinymce.min.js"
+            type="text/javascript"></script>
+<script
+            src="{site}/vendor/npm-asset/tinymce--tinymce-jquery/dist/tinymce-jquery.min.js"
+            type="text/javascript"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/jquery.timeago.js"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/locales/jquery.timeago.en.js"></script>
+<script src="{site}/vendor/npm-asset/underscore/underscore-min.js"
+        type="text/javascript"></script>
+<!--<script src="{site}/vendor/idno/mentionjs/bootstrap-typeahead.js"
+        type="text/javascript"></script>
+<script src="{site}/vendor/idno/mentionjs/mention.js"
+        type="text/javascript"></script> -->
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><!-- Begin asset javascript -->
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+<!-- End asset javascript --><script>
+        $('audio').mediaelementplayer({
+        features: ['playpause','progress','current','tracks','volume','fullscreen'],
+        alwaysShowControls: false,
+        pauseOtherPlayers: true,
+        enableAutosize: false,
+        mediaWidth: -1,
+        mediaHeight: -1
+    });
+</script>
+<style>
+    .known-media-element {
+        width: 100%;
+        height: 100%;
+    }
+</style><div class="blank-footer">
+</div><form action="{site}/session/logout" style="display: none; margin: 0; padding: 0" id="{form-1}" method="POST">
+<textarea name="json">null</textarea>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/session/logout" />
+</form>
+</body>
+</html>

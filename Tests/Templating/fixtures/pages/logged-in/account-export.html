@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fixture Site — Account</title>
+<link rel="stylesheet" href="{site}/Themes/Twenty26/dist/modern.min.css">
+</head>
+<body class="account-template">
+<div class="idno-account-shell">
+<nav class="idno-account-sidebar">
+<div class="idno-account-header">Account</div>
+<div class="idno-account-nav">
+<a href="{site}/account/settings/"
+       class="idno-account-nav-item">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+<span>Settings</span>
+</a>
+<a href="{site}/account/settings/tools/"
+       class="idno-account-nav-item">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+<span>Tools & Apps</span>
+</a>
+<a href="{site}/account/indiepub/"
+   class="idno-account-nav-item">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>
+<span>IndiePub</span>
+</a>
+<a href="{site}/account/bridgy/"
+   class="idno-account-nav-item">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>
+<span>Interactions</span>
+</a>
+<a href="{site}/account/export/"
+       class="idno-account-nav-item active">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+<span>Export Data</span>
+</a>
+</div>
+<div class="idno-account-back">
+<a href="{site}/" class="idno-account-nav-item">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+<span>Back to site</span>
+</a>
+</div>
+</nav>
+<main class="idno-account-main">
+<div class="idno-account-content">
+<div id="page-messages">
+</div>
+<h1 class="idno-admin-page-title">
+    Export your data</h1>
+<div class="idno-admin-card">
+<form action="{site}/account/export/rss" method="post">
+<h2>Export as RSS</h2>
+<p class="idno-admin-description">
+            You can download an RSS version of everything you've posted on this site. This file is suitable for importing into content management systems like WordPress, or another Idno site.        </p>
+<div class="idno-form-group">
+<label>
+<input type="checkbox" name="allposts" id="allposts" value="1">
+                Include private posts?            </label>
+<p class="idno-form-help">Platforms like WordPress may assume that all your posts should be displayed publicly. In order to protect your privacy, you may wish to just download your public posts.</p>
+</div>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn-primary">Download RSS Feed</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/export/rss" />
+</form>
+</div>
+<div class="idno-admin-card" style="margin-top: 1.5rem;">
+<form action="{site}/account/export/wxr" method="post">
+<h2>Export as WordPress (WXR)</h2>
+<p class="idno-admin-description">
+            Download a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress.        </p>
+<div class="idno-form-group">
+<label>
+<input type="checkbox" name="allposts" id="allposts_wxr" value="1">
+                Include private posts?            </label>
+<p class="idno-form-help">Platforms like WordPress may assume that all your posts should be displayed publicly. In order to protect your privacy, you may wish to just download your public posts.</p>
+</div>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn-primary">Download WXR File</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/export/wxr" />
+</form>
+</div>
+</div>
+</main>
+</div>
+<script src="{site}/Themes/Twenty26/dist/modern.min.js" defer></script>
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+</body>
+</html>

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Administration</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" /><!-- We need jQuery at the top of the page -->
+<script src="{site}/vendor/npm-asset/jquery/dist/jquery.min.js"></script>
+<!-- Le styles -->
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap.min.css"
+    rel="stylesheet"/>
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap-theme.min.css"/>
+<script
+    src="{site}/vendor/twbs/bootstrap/dist/js/bootstrap.min.js"></script>
+<!-- Accessibility -->
+<link rel="stylesheet"
+      href="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/css/bootstrap-accessibility.css">
+<script
+    src="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/js/bootstrap-accessibility.min.js"></script>
+<!-- Fonts -->
+<link rel="stylesheet"
+          href="{site}/vendor/forkawesome/fork-awesome/css/fork-awesome.min.css">
+<style>
+    body {
+        padding-top: 100px; /* 60px to make the container go all the way to the bottom of the topbar */
+    }
+</style>
+<script>
+    var idno = {"session":{"loggedIn":true,"admin":true},"config":{"displayUrl":"{site}\/","staticUrl":"{site}\/","debug":true},"page":{"currentUrl":"{site}\/admin\/","currentUrlFragments":{"scheme":"http","host":"127.0.0.1","port":{site-port},"path":"\/admin\/"}}};
+    var known = idno; // Backwards compatibility alias
+</script>
+<script
+    src="{site}/js/modernizr/modernizr-custom.js"></script>
+<!-- Default Idno JavaScript -->
+<script src="{site}/js/{built}/idno.min.js"></script>
+<script
+    src="{site}/vendor/npm-asset/bootstrap-toggle/js/bootstrap-toggle.js"></script>
+<script
+    src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
+<link href="{site}/css/{built}/idno.min.css" rel="stylesheet">
+<link
+    href="{site}/vendor/npm-asset/bootstrap-toggle/css/bootstrap-toggle.min.css"
+    rel="stylesheet"/>
+<!-- Mention styles -->
+<link rel="stylesheet" type="text/css"
+      href="{site}/vendor/idno/mentionjs/recommended-styles.css">
+</head>
+<body class="settings-template">
+<nav class="navbar navbar-default navbar-fixed-top col-lg-12 col-12 ">
+<!-- Brand and toggle get grouped for better mobile display -->
+<div class="navbar-header">
+<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse">
+<span class="sr-only">Toggle navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+</button>
+<a class="navbar-brand" tabindex="1" href="{site}/">Fixture Site</a>
+</div>
+<!-- Collect the nav links, forms, and other content for toggling -->
+<div class="collapse navbar-collapse" id="navbar-collapse">
+<ul class="nav navbar-nav navbar-right">
+<li class="">
+<a href="{site}/account/settings/"><i class="fa fa-cog"></i>Account Settings</a>
+</li>
+<li class="active">
+<a href="{site}/admin/"><i class="fa fa-cogs"></i>Site Configuration</a>
+</li>
+<li>
+<a href="{site}/profile/ada"><img class="u-photo" src="{site}/gfx/users/default-04.png" alt="Ada Admin" /></a>
+</li>
+</ul>
+</div><!-- /.navbar-collapse -->
+</nav>
+<div class="col-lg-12 col-12">
+<div class="settings-sidebar col-lg-2 col-md-2 col-sm-2 col-2">
+<ul class="nav">
+<li class="active" role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li  role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li  role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+</div>
+<div class="settings-content col-lg-10 col-md-10 col-sm-10 col-10">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<ul class="nav">
+<li class="active" role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li  role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li  role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+<h1>
+    Site configuration</h1>
+<div class="explanation">
+<p>On this page you can change the basic settings for your site, like the site name and the number of posts visible on each page.    </p>
+</div>
+</div>
+</div>
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<form action="{site}/admin/" class="admin" method="post">
+<div class="row">
+<div class="col-md-10">
+<h3>Site Details</h3>
+</div>
+</div>
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="name"><strong>Site name</strong></label></p>
+</div>
+<div class="col-md-4">
+<input type="text" id="name" placeholder="Site name" class="input col-md-4 form-control" name="title"
+                           value="Fixture Site">
+</div>
+<div class="col-md-6">
+<p class="config-desc">Give your site a name!</p>
+</div>
+</div>
+<!-------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="description"><strong>Site summary</strong></label></p>
+</div>
+<div class="col-md-4">
+<input type="text" id="name" placeholder="Site description" class="input col-md-4 form-control" name="description"
+                           value="A social website powered by Idno">
+</div>
+<div class="col-md-6">
+<p class="config-desc">What's your site about?</p>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="homepage-title"><strong>Homepage title</strong></label></p>
+</div>
+<div class="col-md-4">
+<input type="text" id="homepage-title" placeholder="Homepage title" class="input col-md-4 form-control" name="homepagetitle"
+                           value="">
+</div>
+<div class="col-md-6">
+<p class="config-desc">What should the browser display as the title on your homepage?<br>By default this is just your site title.</p>
+</div>
+</div>
+<!-------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="items_per_page"><strong>Items per page</strong></label></p>
+</div>
+<div class="col-md-4">
+<input type="text" id="items_per_page" placeholder="10" class="input col-md-4 form-control" name="items_per_page"
+                           value="10">
+</div>
+<div class="col-md-6"><p class="config-desc">This is the number of content posts displayed on each page.</p>
+</div>
+</div>
+<!-------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="single_user"><strong>Single user</strong></label>
+</p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                           value="true" id="single_user"
+                           name="single_user" checked>
+</div>
+<div class="col-md-6"><p class="config-desc">
+                        Is this a single-user site? If so, your profile information will be shown at the top of the homepage.                    </p>
+</div>
+</div>
+<!-------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="permalink_structure"><strong>Permalink Structure</strong></label></p>
+</div>
+<div class="col-md-4">
+<div class="radio">
+<label>
+<input type="radio" name="permalink_structure" value="/:year/:slug"
+                                                                                          checked />
+                                                                                          /:year/:slug <strong>(default)</strong>
+</label>
+</div>
+<div class="radio">
+<label>
+<input type="radio" name="permalink_structure" value="/:year/:month/:slug"
+                                                                                           />
+                                                                                          /:year/:month/:slug                            </label>
+</div>
+<div class="radio">
+<label>
+<input type="radio" name="permalink_structure" value="/:year/:month/:day/:slug"
+                                                                                           />
+                                                                                          /:year/:month/:day/:slug                            </label>
+</div>
+</div>
+<div class="col-md-6"><p class="config-desc">How permalinks for individual posts are constructed.</p>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-10">
+<h3>Registration and privacy</h3>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="open_registration"><strong>Allow registration</strong></label></p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                           name="open_registration"
+                           value="true" checked>
+</div>
+<div class="col-md-6">
+<p class="config-desc">Allow registration if you want others to sign up for your site.</p>
+</div>
+</div>
+<!---------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="walled_garden"><strong>Make site private</strong></label></p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                                   name="walled_garden" id="walled_garden"
+                                   value="true" >
+</div>
+<div class="col-md-6"><p class="config-desc">Content on a private site is only visible if you're logged in.</p>
+</div>
+</div>
+<!---------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="show_privacy"><strong>Per-post privacy</strong></label>
+</p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                                   name="show_privacy" id="show_privacy"
+                                   value="true" checked>
+</div>
+<div class="col-md-6"><p class="config-desc">
+                            Show per-post privacy settings.                            </p>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-10">
+<h3>Technical Settings</h3>
+</div>
+</div>
+<!---------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="hub"><strong>PubSubHubbub hub</strong></label></p>
+</div>
+<div class="col-md-4">
+<input type="url" id="hub" placeholder="PubSubHubbub hub address" class="input col-md-4 form-control" name="hub"
+                           value="https://withknown.superfeedr.com/">
+</div>
+<div class="col-md-6">
+<p class="config-desc">You can probably leave this as is.                        <a href="https://code.google.com/p/pubsubhubbub/" target="_blank">Learn more about PuSH</a>.
+
+                    </p>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="user_avatar_favicons"><strong>Avatar as icon</strong></label>
+</p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                           value="true" id="user_avatar_favicons"
+                           name="user_avatar_favicons" checked>
+</div>
+<div class="col-md-6"><p class="config-desc">
+                        This uses members' avatar images as the site favicon.                    </p>
+</div>
+</div>
+<!----------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="share_backup_url"><strong>Backup share image</strong></label>
+</p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="url" id="share_backup_url" placeholder="Backup share image URL" class="input col-md-4 form-control" name="share_backup_url"
+                           value="">
+</div>
+<div class="col-md-6"><p class="config-desc">
+                        Specify the URL of an image to use as your default social share image.                    </p>
+</div>
+</div>
+<!---------->
+<div class="row">
+<div class="col-md-2">
+<p><label class="control-label" for="include_permalinks"><strong>Include permalinks</strong></label></p>
+</div>
+<div class="config-toggle col-md-4">
+<input type="checkbox" data-toggle="toggle" data-onstyle="info"
+                           data-on="Yes"
+                           data-off="No"
+                           name="indieweb_reference" id="include_permalinks"
+                           value="true" >
+</div>
+<div class="col-md-6"><p class="config-desc">Always add a link back to your site when you syndicate to external networks.</p>
+</div>
+</div>
+<!---------->
+<div class="controls-save">
+<button type="submit" class="btn btn-primary">Save updates</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/" />
+</form>
+</div>
+</div>
+<script>
+    /**
+     * Trigger service calls
+     */
+    $(document).ready(function(){
+
+       /* Optimise DB */
+       $.get(wwwroot() + 'service/db/optimise');
+
+       /* Vendor messages */
+       $.get(wwwroot() + 'service/vendor/messages', function(data, textstatus, xhr){
+           addMessage(data);
+       })
+
+    });
+</script>
+</div>
+<!-- Placed at the end of the document so the pages load faster -->
+<!-- WYSIWYG editor -->
+<script
+            src="{site}/vendor/tinymce/tinymce/tinymce.min.js"
+            type="text/javascript"></script>
+<script
+            src="{site}/vendor/npm-asset/tinymce--tinymce-jquery/dist/tinymce-jquery.min.js"
+            type="text/javascript"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/jquery.timeago.js"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/locales/jquery.timeago.en.js"></script>
+<script src="{site}/vendor/npm-asset/underscore/underscore-min.js"
+        type="text/javascript"></script>
+<!--<script src="{site}/vendor/idno/mentionjs/bootstrap-typeahead.js"
+        type="text/javascript"></script>
+<script src="{site}/vendor/idno/mentionjs/mention.js"
+        type="text/javascript"></script> -->
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><!-- Begin asset javascript -->
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+<!-- End asset javascript -->
+<div class="blank-footer">
+</div>
+</body>
+</html>

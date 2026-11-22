@@ -1,0 +1,201 @@
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Fixture Site</title>
+    <itunes:author>Fixture Site</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/feed.xml</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://withknown.superfeedr.com/" rel="hub"/>
+    <atom:link href="{site}/feed.xml" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+    <item>
+      <title>A fixture recording</title>
+      <link>{site}/2026/a-fixture-recording</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000022</guid>
+      <pubDate>Thu, 12 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<div class="e-content">
+
+<p>Listen to the recording.</p>
+</div>
+
+]]></description>
+      <enclosure url="{site}/file/00000000000040008000000000000022/sound.mp3" type="audio/mpeg" length="19"/>
+    </item>
+    <item>
+      <title>Checked into The Library</title>
+      <link>{site}/2026/checked-into-the-library</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000021</guid>
+      <pubDate>Wed, 11 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[
+<div>
+
+    <h2 class="p-name">
+            </h2>
+
+    <span class="p-location u-checkin h-card">
+        <data class="p-name" value="The Library"></data>
+        <data class="p-latitude" value="51.5072"></data>
+        <data class="p-longitude" value="-0.1276"></data>
+    </span>
+
+    
+    <div class="e-content entry-content">
+        
+<p>A quiet afternoon with a book.</p>
+        <i class="fa fa-tag"></i><a href="{site}/tag/%23books" class="p-category" rel="tag">#books</a>
+            </div>
+
+</div>
+]]></description>
+      <geo:lat>51.5072</geo:lat>
+      <geo:long>-0.1276</geo:long>
+      <category>#books</category>
+    </item>
+    <item>
+      <title>Bob says hello from the other account.</title>
+      <link>{site}/2026/bob-says-hello-from-the-other-account</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000018</guid>
+      <pubDate>Sun, 08 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Bob Member</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">Bob says hello from the other account.</p>
+]]></description>
+    </item>
+    <item>
+      <title>Yes: I will be there.</title>
+      <link>{site}/2026/i-will-be-there</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000017</guid>
+      <pubDate>Sat, 07 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content"><data class="p-rsvp" value="yes"><strong>Yes:</strong> I will be there.</data></p>
+]]></description>
+    </item>
+    <item>
+      <title>A reply to something elsewhere.</title>
+      <link>{site}/2026/a-reply-to-something-elsewhere</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000016</guid>
+      <pubDate>Fri, 06 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">A reply to something elsewhere.</p>
+]]></description>
+    </item>
+    <item>
+      <title>Fixture meetup</title>
+      <link>{site}/2026/fixture-meetup</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000015</guid>
+      <pubDate>Thu, 05 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<div class="well">
+    <p class="p-summary">
+        <strong>A meetup</strong>
+    </p>
+    <p>
+        Location: <span
+                class="p-location">The Library, Springfield</span>
+    </p>
+            <p>
+            <time class="dt-start"
+                  datetime="2026-04-10T18:00:00+00:00">Friday, 10th April 2026 06:00 PM</time>
+            - <time class="dt-end"
+                  datetime="2026-04-10T20:00:00+00:00">08:00 PM</time>        </p>
+                    <p>
+        Time Zone:
+        <span class="timezone" data-timezone="UTC" data-timezone-offset="0">UTC 
+    
+                </span>    </p>
+    </div>
+<div class="e-content">
+    
+<p>We meet and say hello.</p>
+</div>
+]]></description>
+    </item>
+    <item>
+      <title>An interesting page</title>
+      <link>{site}/2026/interesting</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000014</guid>
+      <pubDate>Wed, 04 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<div class="known-bookmark">
+    <div class="e-content">
+<p>Worth reading, hello.</p>
+</div></div>
+]]></description>
+    </item>
+    <item>
+      <title>A fixture photo</title>
+      <link>{site}/2026/a-fixture-photo</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000013</guid>
+      <pubDate>Tue, 03 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[
+<div class="e-content entry-content "
+     data-num-pics="1">
+
+                <div class="photo-view">
+                <a href="{site}/2026/a-fixture-photo"
+                   data-gallery="A fixture photo"
+                   data-original-img="{site}/file/00000000000040008000000000000013/photo.png"
+                   data-title="A fixture photo"
+                   data-footer="The caption of the photo."><img
+                loading="lazy"
+                            src="{site}/file/00000000000040008000000000000013/photo.png" class="u-photo"
+                            alt="A fixture photo"/></a>
+            </div>
+                
+<p>The caption of the photo.</p>
+
+</div>
+]]></description>
+      <enclosure url="{site}/file/00000000000040008000000000000013/photo.png" type="image/png" length="1234"/>
+    </item>
+    <item>
+      <title>A longer article about templates</title>
+      <link>{site}/2026/a-longer-article-about-templates</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000012</guid>
+      <pubDate>Mon, 02 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[
+<div class="e-content entry-content">
+<p>Templates draw pages. <strong>Hello</strong> again.</p><p>A second paragraph.</p>        <i class="fa fa-tag"></i><a href="{site}/tag/%23templates+%23idno" class="p-category" rel="tag">#templates #idno</a>
+        </div>
+]]></description>
+      <category>#templates</category>
+      <category>#idno</category>
+    </item>
+    <item>
+      <title>Hello world: a note about gardens, with ...</title>
+      <link>{site}/2026/hello-world-a-note-about-gardens-with-a-link-to</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000011</guid>
+      <pubDate>Sun, 01 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">Hello world: a note about gardens, with a link to <a href="https://example.org/garden" target="_blank" >https://<wbr />example.org/<wbr />garden</a> in it.</p>
+]]></description>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Import data</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" /><!-- We need jQuery at the top of the page -->
+<script src="{site}/vendor/npm-asset/jquery/dist/jquery.min.js"></script>
+<!-- Le styles -->
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap.min.css"
+    rel="stylesheet"/>
+<link
+    href="{site}/vendor/twbs/bootstrap/dist/css/bootstrap-theme.min.css"/>
+<script
+    src="{site}/vendor/twbs/bootstrap/dist/js/bootstrap.min.js"></script>
+<!-- Accessibility -->
+<link rel="stylesheet"
+      href="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/css/bootstrap-accessibility.css">
+<script
+    src="{site}/vendor/npm-asset/bootstrap-accessibility-plugin/plugins/js/bootstrap-accessibility.min.js"></script>
+<!-- Fonts -->
+<link rel="stylesheet"
+          href="{site}/vendor/forkawesome/fork-awesome/css/fork-awesome.min.css">
+<style>
+    body {
+        padding-top: 100px; /* 60px to make the container go all the way to the bottom of the topbar */
+    }
+</style>
+<script>
+    var idno = {"session":{"loggedIn":true,"admin":true},"config":{"displayUrl":"{site}\/","staticUrl":"{site}\/","debug":true},"page":{"currentUrl":"{site}\/admin\/import\/","currentUrlFragments":{"scheme":"http","host":"127.0.0.1","port":{site-port},"path":"\/admin\/import\/"}}};
+    var known = idno; // Backwards compatibility alias
+</script>
+<script
+    src="{site}/js/modernizr/modernizr-custom.js"></script>
+<!-- Default Idno JavaScript -->
+<script src="{site}/js/{built}/idno.min.js"></script>
+<script
+    src="{site}/vendor/npm-asset/bootstrap-toggle/js/bootstrap-toggle.js"></script>
+<script
+    src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
+<link href="{site}/css/{built}/idno.min.css" rel="stylesheet">
+<link
+    href="{site}/vendor/npm-asset/bootstrap-toggle/css/bootstrap-toggle.min.css"
+    rel="stylesheet"/>
+<!-- Mention styles -->
+<link rel="stylesheet" type="text/css"
+      href="{site}/vendor/idno/mentionjs/recommended-styles.css">
+</head>
+<body class="settings-template">
+<nav class="navbar navbar-default navbar-fixed-top col-lg-12 col-12 ">
+<!-- Brand and toggle get grouped for better mobile display -->
+<div class="navbar-header">
+<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse">
+<span class="sr-only">Toggle navigation</span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+<span class="icon-bar"></span>
+</button>
+<a class="navbar-brand" tabindex="1" href="{site}/">Fixture Site</a>
+</div>
+<!-- Collect the nav links, forms, and other content for toggling -->
+<div class="collapse navbar-collapse" id="navbar-collapse">
+<ul class="nav navbar-nav navbar-right">
+<li class="">
+<a href="{site}/account/settings/"><i class="fa fa-cog"></i>Account Settings</a>
+</li>
+<li class="active">
+<a href="{site}/admin/"><i class="fa fa-cogs"></i>Site Configuration</a>
+</li>
+<li>
+<a href="{site}/profile/ada"><img class="u-photo" src="{site}/gfx/users/default-04.png" alt="Ada Admin" /></a>
+</li>
+</ul>
+</div><!-- /.navbar-collapse -->
+</nav>
+<div class="col-lg-12 col-12">
+<div class="settings-sidebar col-lg-2 col-md-2 col-sm-2 col-2">
+<ul class="nav">
+<li  role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li  role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li class="active" role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+</div>
+<div class="settings-content col-lg-10 col-md-10 col-sm-10 col-10">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<ul class="nav">
+<li  role="presentation"><a href="{site}/admin/">Site configuration</a></li>
+<li  role="presentation"><a href="{site}/admin/plugins/">Plugins</a></li>
+<li  role="presentation"><a href="{site}/admin/themes/">Themes</a></li>
+<li ><a href="{site}/admin/activitypub/">ActivityPub</a></li>
+<li ><a href="{site}/admin/staticpages/">Pages</a></li><li ><a href="{site}/admin/webhooks/">Webhooks</a></li>
+<li  role="presentation"><a href="{site}/admin/homepage/" >Homepage</a></li>
+<li  role="presentation"><a href="{site}/admin/email/" >Email</a></li>
+<li  role="presentation"><a href="{site}/admin/users/" >Users</a></li>
+<li  role="presentation"><a href="{site}/admin/export/" >Export</a></li>
+<li class="active" role="presentation"><a href="{site}/admin/import/" >Import</a></li>
+<li  role="presentation"><a href="{site}/admin/diagnostics/">Diagnostics</a></li>
+<li  role="presentation"><a href="{site}/admin/about/">About</a></li>
+</ul>
+<h1>
+            Import content        </h1>
+<p class="explanation">
+            Import your content from other sites into Idno. All imported content will be treated as a post, with a title and body content. Posts that are private or drafts at their source stay private or drafts here, and nothing you import is announced to your followers.        </p>
+<p class="explanation">
+            Importing the same file twice creates the posts twice.        </p>
+</div>
+</div>
+<div class="row import">
+<div class="col-md-1 col-md-offset-1">
+<img src="{site}/gfx/other/wordpress.png" alt="WordPress" class="img-responsive">
+</div>
+<div class="col-md-9">
+<form action="{site}/admin/import/" method="post" enctype="multipart/form-data">
+<h3>
+                WordPress            </h3>
+<p>
+                Upload a WordPress XML file and turn it into Idno posts. An RSS file exported from another Idno site can be imported here too.                <a href="#" onclick="$('#wordpress-explanation').show(); return false;">How do I get my WordPress XML file?</a>
+</p>
+<div id="wordpress-explanation" class="well" style="display:none">
+<p>
+                    To get your WordPress XML file:
+                </p>
+<ol>
+<li>Log into your WordPress site</li>
+<li>Click on Tools</li>
+<li>Click on Export</li>
+<li>Click to export posts</li>
+<li>Click <em>Download Export File</em></li>
+</ol>
+</div>
+<p>
+<label>
+<span class="btn btn-primary btn-file" id="wordpress-filename-wrapper">
+<span id="wordpress-filename">Select WordPress export file</span>
+<input type="file" name="import" id="wordpress-file" accept=".xml,.atom,.rss" onchange="$('#wordpress-filename').html($('#wordpress-file').val()); $('#wordpress-filename-wrapper').css('background-color','#aaa'); $('#wordpress-filename-wrapper').css('border','0'); $('#wordpress-submit').show(); $('#wordpress-submit').addClass('btn-primary')"/>
+</span>
+</label>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/import" />
+<input type="hidden" name="import_type" value="WordPress">
+<input type="submit" class="btn " id="wordpress-submit" value="Import your data" style="display:none"><br>
+</p>
+</form>
+</div>
+</div>
+<div class="row import">
+<div class="col-md-1 col-md-offset-1">
+<img src="{site}/gfx/other/blogger.png" alt="Blogger" class="img-responsive">
+</div>
+<div class="col-md-9">
+<form action="{site}/admin/import/" method="post" enctype="multipart/form-data">
+<h3>
+                Blogger            </h3>
+<p>
+                Upload a Blogger XML file and turn it into Idno posts. <a href="#" onclick="$('#blogger-explanation').show(); return false;">How do I get my Blogger XML file?</a>
+</p>
+<div id="blogger-explanation" class="well" style="display:none">
+<p>
+                    To get your Blogger XML file:
+                </p>
+<ol>
+<li>Log into Blogger, and click on your blog title</li>
+<li>Click on Settings</li>
+<li>Click on Other</li>
+<li>Click on Export Posts at the top of your page</li>
+<li>Click on Export Blog</li>
+</ol>
+</div>
+<p>
+<label>
+<span class="btn btn-primary btn-file" id="blogger-filename-wrapper">
+<span id="blogger-filename">Select Blogger export file</span>
+<input type="file" name="import" id="blogger-file"
+                                                                                                           accept=".xml,.atom"
+                                                                                                           onchange="$('#blogger-filename').html($('#blogger-file').val()); $('#blogger-filename-wrapper').css('background-color','#aaa'); $('#blogger-filename-wrapper').css('border','0'); $('#blogger-submit').show(); $('#blogger-submit').addClass('btn-primary')"/>
+</span>
+</label>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/import" />
+<input type="hidden" name="import_type" value="Blogger">
+<input type="submit" class="btn " id="blogger-submit" value="Import your data" style="display:none">
+</p>
+</form>
+</div>
+</div>
+</div>
+<!-- Placed at the end of the document so the pages load faster -->
+<!-- WYSIWYG editor -->
+<script
+            src="{site}/vendor/tinymce/tinymce/tinymce.min.js"
+            type="text/javascript"></script>
+<script
+            src="{site}/vendor/npm-asset/tinymce--tinymce-jquery/dist/tinymce-jquery.min.js"
+            type="text/javascript"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/jquery.timeago.js"></script>
+<script
+    src="{site}/vendor/rmm5t/jquery-timeago/locales/jquery.timeago.en.js"></script>
+<script src="{site}/vendor/npm-asset/underscore/underscore-min.js"
+        type="text/javascript"></script>
+<!--<script src="{site}/vendor/idno/mentionjs/bootstrap-typeahead.js"
+        type="text/javascript"></script>
+<script src="{site}/vendor/idno/mentionjs/mention.js"
+        type="text/javascript"></script> -->
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><!-- Begin asset javascript -->
+<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
+<!-- End asset javascript -->
+<div class="blank-footer">
+</div>
+</body>
+</html>

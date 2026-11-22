@@ -169,18 +169,20 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
     (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
     missing directory on SQLite); the characterisation suite runs in full on both.
+- A test that needs a site of its own extends `Tests\Support\PrivateSiteTestCase` (abstract): each test starts
+  `php -S` (four workers, a free port, never 8089) on a private database (a private database of the rig's MySQL or
+  MariaDB server, or an SQLite file in a temporary directory; the schema from `idno:upgrade`), with its own
+  `IDNO_URL`, `IDNO_TEST_HTTP_ALLOW` naming itself and an upload directory (`IDNO_UPLOADPATH`, removed in
+  `tearDown()`, with an assertion that the rig's shared upload directory gained no file), and stops it and drops the
+  database in `tearDown()`. The site is SYNCHRONOUS. It gives `site()`, `baseUrl()`, `console()`, `runInSite()`,
+  `registerUser()`/`publishStatus()` (over HTTP), `sessionCookie()`, `formToken()`, `serverLog()`, and a subclass
+  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches).
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
-  `Tests\Queue\AsyncSiteTestCase`: each test starts `php -S` (four workers, a free port, never 8089)
-  on a private database (a private database of the rig's MySQL or MariaDB server, or an SQLite file in
-  a temporary directory; the schema from `idno:upgrade`) with `IDNO_EVENT_QUEUE=AsynchronousQueue`, its
-  own `IDNO_URL` and `IDNO_TEST_HTTP_ALLOW` naming itself, and stops it and drops the database in
-  `tearDown()`. It gives `site()`, `registerUser()`/`publishStatus()` (over HTTP), `runWorkerOnce()`
+  `Tests\Queue\AsyncSiteTestCase`, a `PrivateSiteTestCase` that sets `IDNO_EVENT_QUEUE=AsynchronousQueue` (through
+  `additionalEnvironment()`; `siteEnvironment()` stays the test class's) and adds `runWorkerOnce()`
   (`bin/console service-event-queue --once`, same environment), `sink()`, `queuedEvents()` and
-  `failedEvents()` (the messages waiting in, and failed from, the `idno_messages` table),
-  `markTakenAgo()` and `runInSite()` (PHP code with the site booted, for entity writes only the classes
-  can do). Each site's files go to an upload directory of its own (`IDNO_UPLOADPATH`, removed in `tearDown()`), and
-  a test fails when the rig's shared upload directory gained a file (archives and uploads hold test password
-  hashes and nothing sweeps them there). `Tests/Queue/QueuedDeliveryTest` and `QueuedDeliveryBehindTlsTest` pin what queued events
+  `failedEvents()` (the messages waiting in, and failed from, the `idno_messages` table), `markTakenAgo()`,
+  `addFollower()` and `storeQueuedEvent()`. `Tests/Queue/QueuedDeliveryTest` and `QueuedDeliveryBehindTlsTest` pin what queued events
   deliver (the signed ActivityPub delivery, webmentions, who an event runs as, failing events, the
   worker's output), `QueueWorkCommandTest` the worker command and `QueueSettingSiteTest` (and its
   synchronous twin) what the `event_queue` setting means to the code that asks; they do not run in the
@@ -212,6 +214,33 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
   with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
   `docs/developers/release-checklist.md`.
+- Template rendering is pinned by `Tests/Kernel/TemplateContractTest` (the cascade as `DefaultTemplate` keeps it, on
+  the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
+  process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
+  types a request may choose, and the `?_t[]=` defect, marked incomplete) and by golden pages,
+  `Tests/Templating/fixtures/pages/` (`twenty26/`, `no-theme/`, `logged-in/` (Twenty26, the administrator),
+  `logged-in-no-theme/` and `non-html/`, which every look must render identically: RSS, JSON Feed, JSON, JSONP, the
+  ActivityPub actor, KML, the JSON of each content type's permalink and the password reset mail's two parts), made by
+  `RenderedPagesTest` (`IDNO_THEME=Twenty26`) and `RenderedPagesNoThemeTest` (no theme: the variable unset) on private
+  synchronous sites (`RenderedSiteTestCase`: fixed handles, entity ids, user uuids, slugs, `created` and `updated`, a
+  fixed public key, one post of each bundled content type and enough public notes for a second page; the page's own
+  ids are the only variable things). A page is compared after `Tests\Templating\PageNormaliser`, which replaces only
+  the site's address, the form token and its time (only a value of the token's shape), ids made by `uniqid()`,
+  `md5(rand())` and `rand()` (numbered by first appearance), the base64 address in an annotation's delete link, the
+  built assets' modification-time cache-buster and the password reset code, and, for an HTML page only, collapses
+  white space between tags outside `<pre>` and `<textarea>`; every replacement is in
+  `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there.
+  A golden is written, not compared, when `IDNO_TEST_CAPTURE_GOLDENS=1`: that run always FAILS, naming the files it wrote
+  (so a capture is never a green run), is refused when `CI` is set, and also fails if two looks render a shared golden
+  differently. Goldens are captured from the code they pin, are the same on SQLite, MySQL and MariaDB, and a change to one
+  is made on purpose, in a commit that says which page and why. `*.json` is gitignored, so JSON output is saved as
+  `.txt`. `Tests/Templating/fixtures/fallback-trace.php` has `traced`: for each type that is not a web page, the `default`
+  files it reaches by fallback that a `modern` file shadows, derived from a real traced run; and `shadowed`: every `default`
+  file of core and the bundled plugins that a `modern` file shadows, computed from the file system and asserted. With
+  `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
+  (file relative to the project, or `-`) to the file, through `Idno\Core\Bonita\Templates::$trace`, a static hook that
+  only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
+  only when the variable names a file; nothing is called or written otherwise.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
   (`composer test:unit`, no services); the SQLite job, which uses the rig exactly as a developer does
@@ -348,7 +377,8 @@ Themes/                        Visual themes; Twenty26 (Idno 2026) is the only b
                                config.ini or the environment is never saved or announced, only resolved. Plugins and themes
                                are discovered only in IdnoPlugins/ and Themes/ under the project root
                                (no per-host directories)
-Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel), storage (Tests/Storage,
+Tests/                         Unit (Tests/Unit, dependency-free), kernel (Tests/Kernel), Support (Tests/Support: PrivateSiteTestCase),
+                               Templating (Tests/Templating: the golden pages), storage (Tests/Storage,
                                with the contracts in Tests/Storage/Contract), upgrade (Tests/Upgrade, on
                                private 1.x databases), the MongoDB import (Tests/Import, with its fixture captured
                                from the removed MongoDB backend and the importer's contract) and black-box characterisation tests;

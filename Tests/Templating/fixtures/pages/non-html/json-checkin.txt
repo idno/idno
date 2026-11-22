@@ -1,0 +1,45 @@
+{
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000021",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000021",
+        "content": "A quiet afternoon with a book.",
+        "formattedContent": "\n<p>A quiet afternoon with a book.<\/p>\n",
+        "displayName": "Checked into The Library",
+        "objectType": "place",
+        "published": "2026-03-11T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/checked-into-the-library",
+        "latitude": "51.5072",
+        "longitude": "-0.1276",
+        "placeName": "The Library",
+        "address": "1 Library Road, Springfield",
+        "tags": "#books",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
+    "title": "Checked into The Library",
+    "description": "A quiet afternoon with a book.",
+    "messages": []
+}
