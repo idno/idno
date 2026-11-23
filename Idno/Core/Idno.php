@@ -36,7 +36,6 @@ namespace Idno\Core {
         /* @var \Psr\Container\ContainerInterface $container */
         private static $container;
         private $currentPage;
-        private $helper_robot;
         private $reader;
         private $cache;
         private $statistics;
@@ -89,7 +88,6 @@ namespace Idno\Core {
             $this->language()->register(new GetTextTranslation()); // Register the core translations (domain idno)
             $this->syndication  = self::container()->get(Syndication::class);
             $this->reader       = self::container()->get(Reader::class);
-            $this->helper_robot = self::container()->get(HelperRobot::class);
             $this->queue        = self::container()->get(EventQueue::class);
             $this->statistics   = self::container()->get(\Idno\Stats\StatisticsCollector::class);
 

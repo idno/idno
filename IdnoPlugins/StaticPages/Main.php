@@ -47,7 +47,6 @@ namespace IdnoPlugins\StaticPages {
             }
 
             \Idno\Core\Idno::site()->template()->extendTemplate('admin/menu/items', 'staticpages/admin/menu');
-            \Idno\Core\Idno::site()->template()->prependTemplate('shell/toolbar/links', 'staticpages/toolbar', true);
         }
 
         /**

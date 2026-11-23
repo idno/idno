@@ -35,6 +35,8 @@ class LinkPreviewCardTest extends \Tests\IdnoTestCase
     {
         return [
             'Idno 2026' => ['default'],
+            // What a feed draws: the `classic` copy, reached by the rss type's fallback (never selected)
+            'classic, through the rss chain' => ['rss'],
         ];
     }
 

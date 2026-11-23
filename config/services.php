@@ -144,7 +144,6 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         \Idno\Core\Language::class => 'language',
         \Idno\Core\Syndication::class => 'syndication',
         \Idno\Core\Reader::class => 'reader',
-        \Idno\Core\HelperRobot::class => 'helperRobot',
         \Idno\Core\EventQueue::class => 'queue',
         \Idno\Stats\StatisticsCollector::class => 'statistics',
         \Idno\Caching\PersistentCache::class => 'cache',

@@ -370,14 +370,44 @@
     "count": 15,
     "subject": null,
     "content": [],
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000012",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000012",
+        "content": "Templates draw pages. Hello again.A second paragraph.",
+        "formattedContent": "<p>Templates draw pages. <strong>Hello<\/strong> again.<\/p><p>A second paragraph.<\/p>",
+        "displayName": "A longer article about templates",
+        "objectType": "article",
+        "published": "2026-03-02T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/a-longer-article-about-templates",
+        "tags": "#templates #idno",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
     "title": "Fixture Site",
     "csrf": [
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/robot\/remove",
-            "time": {token-time},
-            "token": "{token}"
-        },
         {
             "tid": "tid{id}",
             "action": "{site}\/media\/delete\/00000000-0000-4000-8000-000000000022",
@@ -499,42 +529,6 @@
             "token": "{token}"
         }
     ],
-    "object": {
-        "id": "00000000-0000-4000-8000-000000000012",
-        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000012",
-        "content": "Templates draw pages. Hello again.A second paragraph.",
-        "formattedContent": "<p>Templates draw pages. <strong>Hello<\/strong> again.<\/p><p>A second paragraph.<\/p>",
-        "displayName": "A longer article about templates",
-        "objectType": "article",
-        "published": "2026-03-02T12:00:00+00:00",
-        "updated": "2026-03-20T12:00:00+00:00",
-        "url": "{site}\/2026\/a-longer-article-about-templates",
-        "tags": "#templates #idno",
-        "actor": {
-            "id": "00000000-0000-4000-8000-000000000001",
-            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
-            "content": "Ada writes about computers, gardens and the open web.",
-            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
-            "displayName": "Ada Admin",
-            "objectType": "person",
-            "url": "{site}\/profile\/ada",
-            "image": {
-                "url": "{site}\/gfx\/users\/default-04.png"
-            }
-        }
-    },
-    "user": {
-        "id": "00000000-0000-4000-8000-000000000001",
-        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
-        "content": "Ada writes about computers, gardens and the open web.",
-        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
-        "displayName": "Ada Admin",
-        "objectType": "person",
-        "url": "{site}\/profile\/ada",
-        "image": {
-            "url": "{site}\/gfx\/users\/default-04.png"
-        }
-    },
     "items_per_page": 10,
     "description": "A social website powered by Idno",
     "messages": []

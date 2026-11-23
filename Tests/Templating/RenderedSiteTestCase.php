@@ -75,7 +75,6 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
             $user->setAdmin($admin);
             // A uuid that is not made from the site's address: the default avatar is chosen by the hash of it.
             $user->uuid = 'https://fixture.example/view/' . $id($n);
-            $user->robot_state = '1';
             $user->created = $at('2026-01-02 09:00:00');
             $user->profile = ['description' => $description];
             $user->publicKeyPem = %KEY%;

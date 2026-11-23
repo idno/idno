@@ -53,13 +53,6 @@ final class LegacyServicesTest extends TestCase
         $this->assertSame(Idno::container()->get($id), Idno::site()->$accessor());
     }
 
-    public function testHelperRobotIsContainerService(): void
-    {
-        $property = new \ReflectionProperty(Idno::class, 'helper_robot');
-
-        $this->assertSame(Idno::container()->get(\Idno\Core\HelperRobot::class), $property->getValue(Idno::site()));
-    }
-
     public function testBootIsIdempotent(): void
     {
         $site = Idno::site();

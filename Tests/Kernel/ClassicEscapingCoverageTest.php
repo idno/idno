@@ -17,7 +17,7 @@ final class ClassicEscapingCoverageTest extends IdnoTestCase
     /** @return array<string, array{string}> */
     public static function drawnWithClassic(): array
     {
-        return ['annotations' => ['content/end/annotations'], 'like' => ['entity/Like'], 'checkin' => ['entity/Checkin'], 'rsvp' => ['entity/RSVP']];
+        return ['annotations' => ['content/end/annotations'], 'like' => ['entity/Like'], 'checkin' => ['entity/Checkin'], 'rsvp' => ['entity/RSVP'], 'link preview card' => ['entity/LinkPreviewCard'], 'embed' => ['content/embed']];
     }
 
     /** @dataProvider drawnWithClassic */
@@ -27,19 +27,5 @@ final class ClassicEscapingCoverageTest extends IdnoTestCase
 
         $this->assertSame('classic', $locator->locate($name, 'rss')?->type);
         $this->assertSame('default', $locator->locate($name, 'default')?->type);
-    }
-
-    /** @return array<string, array{string}> */
-    public static function drawnWithoutClassic(): array
-    {
-        return ['link preview card' => ['entity/LinkPreviewCard'], 'embed' => ['content/embed']];
-    }
-
-    /** @dataProvider drawnWithoutClassic */
-    public function testTheNameHasNoClassicFileSoItsEscapingIsCoveredOnce(string $name): void
-    {
-        $locator = \Idno\Core\Idno::container()->get(TemplateLocator::class);
-
-        $this->assertNotSame('classic', $locator->locate($name, 'rss')?->type, 'it has one: add the classic case to its escaping test');
     }
 }

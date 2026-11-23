@@ -109,7 +109,6 @@ namespace Idno\Pages\Account {
                     $user->setTitle($name);
                     if (!\Idno\Entities\User::get()) {
                         $user->setAdmin(true);
-                        $user->robot_state = '1';
                         if (\Idno\Core\Idno::site()->config()->title == 'New Idno site') {
                             if (!empty($set_name)) {
                                 \Idno\Core\Idno::site()->config()->title = $set_name;

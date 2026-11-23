@@ -172,13 +172,16 @@ namespace Idno\Core {
          */
         function drawPage($echo = true, $shell = 'shell')
         {
-            // Detect page, and see if we need to use a different shell
-            foreach ($this->url_shell_overrides as $url => $page_shell) {
+            // Detect page, and see if we need to use a different shell. The override is for web pages: a feed, JSON or any other
+            // type has the shell of its own type.
+            if ($this->getTemplateType() === 'default') {
+                foreach ($this->url_shell_overrides as $url => $page_shell) {
 
-                if (strpos(\Idno\Core\Idno::site()->currentPage()->currentUrl(), \Idno\Core\Idno::site()->config()->getDisplayURL() . $url.'/') === 0) {
-                    $shell = $page_shell;
+                    if (strpos(\Idno\Core\Idno::site()->currentPage()->currentUrl(), \Idno\Core\Idno::site()->config()->getDisplayURL() . $url.'/') === 0) {
+                        $shell = $page_shell;
+                    }
+
                 }
-
             }
 
             // Get messages and flush session

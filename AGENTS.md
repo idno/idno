@@ -383,7 +383,7 @@ data/                          Where an SQLite site's database file lives (data/
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Templates (.tpl.php and Twig), one directory per template type: `default` is Idno 2026, the built-in
                                look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
-                               feeds, JSON, ActivityPub, KML and mail still draw (never selectable); `rss`, `json`, ...
+                               feeds, JSON, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
 frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
                                files; built into css/idno-2026.min.css and js/idno-2026.min.js (committed, `npm --prefix frontend run
                                build`); denied over HTTP like config/ (see Code Style)
@@ -2521,7 +2521,14 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   shared by the copies `withSlots()` makes), so one line a request; removed in 3.0 (the registration line below has a flag of its own, so neither
   hides the other). `classic` holds the entity templates of the look
   Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, ActivityPub, KML and mail reach them by falling back
-  from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `selectable($type)` is
+  from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `classic` also holds a
+  copy of every `default` file those types reach by name from there (the syndication buttons, `forms/token`, `forms/action`, the annotation
+  and profile partials, `pages/home/nocontent`, the output of a few form controls, the entity templates of Media and StaticPages): the
+  original in `default` is the web page's and may be changed or ported, the copy is what a feed draws. `Tests/Unit/Templating/NonHtmlReachTest`
+  works out the closure of names each non-HTML type reaches from the file system and keeps it true: no file under a `default` directory is
+  reachable from those types, and no `classic` file is unreachable. The URL shell overrides (`/admin/` and `/account/` draw `settings-shell`)
+  apply to web pages (the `default` type) only, so `?_t=json` on those pages draws the JSON shell
+  (`Tests/Characterisation/SettingsPagesJsonTest`). `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
   `Templates::setTemplateType()` and the `?_t=` check both refuse it) and for anything that is not one segment; `requestable($type)` is
   `selectable()` less `email` and `email-text` (any letter case): a REQUEST (`?_t=`, in `Page::init()` and

@@ -223,11 +223,6 @@ final class LegacyServiceFactory
         return new \Idno\Core\Reader();
     }
 
-    public function helperRobot(): \Idno\Core\HelperRobot
-    {
-        return new \Idno\Core\HelperRobot();
-    }
-
     public function queue(): ?\Idno\Core\EventQueue
     {
         // The adapter over Messenger, whatever `event_queue` says: the setting only decides, at each
