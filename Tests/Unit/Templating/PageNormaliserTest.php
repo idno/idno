@@ -151,7 +151,48 @@ final class PageNormaliserTest extends TestCase
     public function testWhiteSpaceBetweenTagsOfAnHtmlPageIsOneLineBreak(): void
     {
         $this->assertSame("<ul>\n<li>one  two</li>\n<li>three</li>\n</ul>", PageNormaliser::normalise("<ul>\n      <li>one  two</li>   <li>three</li>\r\n\t</ul>", self::BASE, true));
-        $this->assertSame('<b>a</b> text <i>b</i>', PageNormaliser::normalise('<b>a</b> text <i>b</i>', self::BASE, true), 'white space beside text is the page\'s content');
+        $this->assertSame("<b>a</b>\ntext\n<i>b</i>", PageNormaliser::normalise('<b>a</b> text <i>b</i>', self::BASE, true), 'white space beside a tag is one line break, whatever is on its other side');
+    }
+
+    public function testWhiteSpaceTouchingATagBecomesOneNewline(): void
+    {
+        $this->assertSame("x\n<b>", $this->html('x  <b>'));
+        $this->assertSame("<p>\nHi", $this->html("<p>\n  Hi"));
+        $this->assertSame("<p>\nHi\t there\n</p>", $this->html("<p> \r\n Hi\t there\n\n</p>"), 'inside the text the page\'s own white space stays');
+        $this->assertSame('a  b', $this->html('a  b'), 'white space between two words is the text');
+        $this->assertSame("<p>a  b\n</p>", $this->html('<p>a  b </p>'));
+        $this->assertSame("<p title=\"a  b\">\nx", $this->html("<p title=\"a  b\">  x"), 'white space inside a tag is the tag\'s');
+        $this->assertSame("<p>\n<!-- a  b -->\nx", $this->html("<p> <!-- a  b --> x"), 'a comment\'s own text is a tag\'s');
+    }
+
+    public function testAmpersandApostropheAndTextQuoteFormsAreOne(): void
+    {
+        $this->assertSame('<p>a & b</p>', $this->html('<p>a &amp; b</p>'));
+        $this->assertSame('<a href="?a=1&b=2">', $this->html('<a href="?a=1&amp;b=2">'), 'in an attribute too');
+        $this->assertSame("<p>it's it's it's</p>", $this->html('<p>it&#039;s it&#39;s it&apos;s</p>'));
+        $this->assertSame('<p>say "hi" "hi"</p>', $this->html('<p>say &quot;hi&quot; &#34;hi&#34;</p>'), 'a quote in text');
+        $this->assertSame('<p>&lt;b&gt; &amp;lt; &nbsp;</p>', $this->html('<p>&lt;b&gt; &amp;lt; &nbsp;</p>'), 'a double-escaped entity stays distinguishable from a single one; other entities are kept');
+        $this->assertSame('<a title="a&quot;b" alt="c&#34;d">', $this->html('<a title="a&quot;b" alt="c&#34;d">'), 'a quote inside a tag would end the attribute: kept');
+        $this->assertSame('<p>&amp;copy;</p>', $this->html('<p>&amp;copy;</p>'), 'an ampersand that begins what reads as an entity is kept (a double escape is a difference)');
+    }
+
+    public function testScriptStylePreAndTextareaAreUntouched(): void
+    {
+        $script = '<script>{"a":"&quot;", "b": "&amp;  x", "c": "&#039;"}</script>';
+        $this->assertSame($script, $this->html($script));
+        $style = "<style>\n  a  >  b { content: '&amp;' }\n</style>";
+        $this->assertSame($style, $this->html($style));
+        $pre = "<pre>\n  &quot;a&quot;  &amp;\n</pre>";
+        $this->assertSame($pre, $this->html($pre));
+        $textarea = '<textarea>  &#039;x&#039;  </textarea>';
+        $this->assertSame($textarea, $this->html($textarea));
+        $this->assertSame("<script src=\"a?b&c\">\n</script>\n<b>&</b>", $this->html("<script src=\"a?b&amp;c\">\n</script>  <b>&amp;</b>"), 'the tag that opens one is a tag; what follows it is not');
+        $this->assertSame('&amp; &quot; "', PageNormaliser::normalise('&amp; &quot; "', self::BASE, false), 'only an HTML page is widened');
+    }
+
+    private function html(string $body): string
+    {
+        return PageNormaliser::normalise($body, self::BASE, true);
     }
 
     public function testWhiteSpaceInsidePreAndTextareaStays(): void

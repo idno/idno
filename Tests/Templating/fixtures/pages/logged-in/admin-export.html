@@ -10,7 +10,8 @@
 <div class="idno-admin-shell">
 <aside class="idno-admin-sidebar">
 <a href="{site}/admin/" class="idno-admin-logo">
-                Fixture Site            </a>
+Fixture Site
+</a>
 <nav class="idno-admin-nav">
 <a href="{site}/admin/"
        class="idno-admin-nav-item">
@@ -82,7 +83,8 @@
 </div>
 <h1 class="idno-admin-page-title">Export</h1>
 <p class="idno-admin-description">
-        Export your published Idno content as an RSS file. You can import this file into WordPress, or into another Idno site by choosing WordPress on the import page.    </p>
+Export your published Idno content as an RSS file. You can import this file into WordPress, or into another Idno site by choosing WordPress on the import page.
+</p>
 <div class="idno-admin-card">
 <h2 class="idno-admin-card-title">Generate RSS file</h2>
 <form action="{site}/admin/export/rss" method="post">
@@ -105,7 +107,8 @@
 <div class="idno-admin-card">
 <h2 class="idno-admin-card-title">Generate WordPress (WXR) file</h2>
 <p>
-            Export your content as a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress.        </p>
+Export your content as a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress.
+</p>
 <form action="{site}/admin/export/wxr" method="post">
 <div class="idno-form-group">
 <div class="idno-checkbox-group">
@@ -126,10 +129,12 @@
 <div class="idno-admin-card">
 <h2 class="idno-admin-card-title">Full archive</h2>
 <p>
-            A complete copy of your site as one zip file: every post and its files, the settings, and the records of the database. It is what you restore your site from.        </p>
+A complete copy of your site as one zip file: every post and its files, the settings, and the records of the database. It is what you restore your site from.
+</p>
 <p class="idno-form-help" role="alert">
 <strong>Keep it as carefully as a database backup.</strong>
-            The archive contains every account's password hash and the private keys that sign each user's posts to the fediverse: whoever has the archive can sign as any user. It also holds every private post. Only administrators can download it, and it is removed from the site when you make a new one and after a week. The settings in it (config.json) are left out by the name of the setting: review config.json before you share the archive.        </p>
+The archive contains every account's password hash and the private keys that sign each user's posts to the fediverse: whoever has the archive can sign as any user. It also holds every private post. Only administrators can download it, and it is removed from the site when you make a new one and after a week. The settings in it (config.json) are left out by the name of the setting: review config.json before you share the archive.
+</p>
 <form action="{site}/admin/export/generate/" method="post">
 <div class="idno-form-group">
 <button type="submit" class="idno-btn idno-btn-primary">Create archive</button>
@@ -140,7 +145,8 @@
 <input type="hidden" name="__bTa" value="{site}/admin/export/generate" />
 </form>
 <p class="idno-form-help">
-                It may take a while to generate your archive. You can leave this page while it's working. Once the archive is complete we will email you, and you'll be able to download it right here.            </p>
+It may take a while to generate your archive. You can leave this page while it's working. Once the archive is complete we will email you, and you'll be able to download it right here.
+</p>
 </div>
 </div>
 </main>

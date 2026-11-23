@@ -10,7 +10,8 @@
 <div class="idno-admin-shell">
 <aside class="idno-admin-sidebar">
 <a href="{site}/admin/" class="idno-admin-logo">
-                Fixture Site            </a>
+Fixture Site
+</a>
 <nav class="idno-admin-nav">
 <a href="{site}/admin/"
        class="idno-admin-nav-item">
@@ -83,10 +84,11 @@
 <div style="display:flex;justify-content:space-between;align-items:center;">
 <h1 class="idno-admin-page-title">Pages</h1>
 <a href="{site}/staticpages/edit/" class="idno-btn idno-btn-primary">
-        + Add new page    </a>
++ Add new page
+</a>
 </div>
 <p class="idno-admin-description">
-    Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.</p>
+Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.</p>
 <div class="idno-admin-card">
 <h2 class="idno-admin-card-title">All Pages</h2>
 <table style="width:100%;border-collapse:collapse;">
@@ -131,10 +133,12 @@
 <div style="display:flex;justify-content:space-between;align-items:center;">
 <h2 class="idno-admin-card-title">Categories</h2>
 <button type="button" @click="showAddCategory = !showAddCategory" class="idno-btn" style="font-size:0.875rem;">
-            + Add category        </button>
++ Add category
+</button>
 </div>
 <p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
-        If you plan on adding many pages, you may want to group them under categories. However, you don't have to assign a page to a category.    </p>
+If you plan on adding many pages, you may want to group them under categories. However, you don't have to assign a page to a category.
+</p>
 <div x-show="showAddCategory" x-cloak style="margin-top:0.75rem;">
 <form action="{site}/admin/staticpages/add/" method="post" style="display:flex;gap:0.5rem;align-items:start;">
 <input type="text" name="category" placeholder="Name of category to add" class="idno-input" style="max-width:20rem;" required>

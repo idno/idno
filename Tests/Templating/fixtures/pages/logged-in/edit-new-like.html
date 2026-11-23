@@ -20,7 +20,8 @@
 <!-- Make this an "app" when saved to an ios device's home screen -->
 <link rel="apple-touch-icon" href="{site}/gfx/users/default-04.png">
 <!-- <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black"> -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+-->
 <!-- Android -->
 <link rel="manifest" href="{site}/chrome/manifest.json">
 <meta property="og:type" content="website" />
@@ -87,7 +88,8 @@
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
 <a href="{site}/" class="idno-nav-logo">
-        Fixture Site    </a>
+Fixture Site
+</a>
 <ul class="idno-nav-items">
 <li>
 <a href="{site}/" class="idno-nav-item">
@@ -142,10 +144,11 @@
 <form action="{site}/like/edit/" method="post">
 <div class="idno-editor">
 <h4 class="idno-editor-heading">
-            New Bookmark        </h4>
+New Bookmark
+</h4>
 <div class="idno-form-field">
 <label class="idno-label" for="body">
-                Link Address</label>
+Link Address</label>
 <input
 type="url" name="body" id="body" required     class="idno-input idno-input bookmark-url"
 placeholder="https://...."     value=""
@@ -161,7 +164,8 @@ placeholder="https://...."     value=""
 <div class="bookmark-title-container idno-form-field"
                 style="display:none">
 <label class="idno-label" for="title">
-                Title            </label>
+Title
+</label>
 <input
 type="text" name="title" id="title" required     class="idno-input idno-input bookmark-title"
 placeholder="Page name"     value=""
@@ -247,21 +251,24 @@ placeholder="Add notes to your bookmark..."     value="{site}/content/all/"
                             :class="{ 'active': selected === &quot;PUBLIC&quot; }"
                             @click="selected = &quot;PUBLIC&quot;; label = &quot;Public&quot;; icon = &quot;globe&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;PUBLIC&quot;; open = false">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                                                Public                        <svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+Public
+<svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
 </button>
 <button type="button"
                             class="idno-access-option"
                             :class="{ 'active': selected === &quot;SITE&quot; }"
                             @click="selected = &quot;SITE&quot;; label = &quot;Members only&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;SITE&quot;; open = false">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                                                Members only                        <svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+Members only
+<svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
 </button>
 <button type="button"
                             class="idno-access-option"
                             :class="{ 'active': selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot; }"
                             @click="selected = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; label = &quot;Private&quot;; icon = &quot;lock&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; open = false">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                                                Private                        <svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+Private
+<svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
 </button>
 </div>
 </div>
@@ -272,11 +279,14 @@ placeholder="Add notes to your bookmark..."     value="{site}/content/all/"
 <input type="hidden" name="__bTa" value="/like/edit" />
 <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
 <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
-                Publish            </button>
+Publish
+</button>
 <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                Save as Draft            </button>
+Save as Draft
+</button>
 <a href="{site}/" class="idno-btn idno-btn-ghost">
-                Cancel            </a>
+Cancel
+</a>
 </div>
 </div>
 </form>
@@ -379,7 +389,8 @@ placeholder="Add notes to your bookmark..."     value="{site}/content/all/"
                        aria-label="Search"
                        placeholder="Search posts...">
 <button type="submit" class="idno-btn idno-btn-primary">
-                    Search                </button>
+Search
+</button>
 </form>
 </div>
 </div>
@@ -442,7 +453,7 @@ placeholder="Add notes to your bookmark..."     value="{site}/content/all/"
 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
 <div>
 <div style="font-weight:600;color:var(--color-text-strong)">Event</div>
-<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Date &amp; location</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Date & location</div>
 </div>
 </a>
 <a href="{site}/rsvp/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">

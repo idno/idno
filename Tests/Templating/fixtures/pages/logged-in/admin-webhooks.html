@@ -10,7 +10,8 @@
 <div class="idno-admin-shell">
 <aside class="idno-admin-sidebar">
 <a href="{site}/admin/" class="idno-admin-logo">
-                Fixture Site            </a>
+Fixture Site
+</a>
 <nav class="idno-admin-nav">
 <a href="{site}/admin/"
        class="idno-admin-nav-item">
@@ -82,7 +83,7 @@
 </div>
 <h1 class="idno-admin-page-title">Webhooks</h1>
 <p class="idno-admin-description">
-    Webhooks let you syndicate content to external applications very simply. The content of your post is sent to an external URL. Services like Slack, Wufoo, and Mailchimp all use Webhooks.</p>
+Webhooks let you syndicate content to external applications very simply. The content of your post is sent to an external URL. Services like Slack, Wufoo, and Mailchimp all use Webhooks.</p>
 <div class="idno-admin-card">
 <h2 class="idno-admin-card-title">About Webhooks</h2>
 <p>When content is syndicated via Webhooks, the external URL is sent the following data:</p>
@@ -111,13 +112,14 @@
 <button type="button" @click="webhooks.splice(index, 1)" class="idno-btn"
                         style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);flex-shrink:0;"
                         x-show="webhooks.length > 1">
-                    ✕
-                </button>
+✕
+</button>
 </div>
 </template>
 <p style="margin-top:0.5rem;">
 <a href="#" @click.prevent="webhooks.push({title:'', url:''})" style="font-size:0.875rem;">
-                + Add another Webhook            </a>
++ Add another Webhook
+</a>
 </p>
 <div class="idno-form-actions" style="margin-top:1rem;">
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>

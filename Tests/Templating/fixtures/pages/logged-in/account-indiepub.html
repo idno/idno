@@ -50,14 +50,15 @@
 </div>
 <h1 class="idno-admin-page-title">Micropub Accounts</h1>
 <p class="idno-admin-description">
-    Manage third-party apps authorized to post to your site via Micropub.</p>
+Manage third-party apps authorized to post to your site via Micropub.</p>
 <div class="idno-admin-card">
 <p>There are currently no micropub accounts associated with this site.</p>
 </div>
 <div x-data="{ showAddForm: false }">
 <p style="margin-top:1rem;">
 <a href="#" @click.prevent="showAddForm = !showAddForm" style="font-size:0.875rem;">
-            Add Micropub Account        </a>
+Add Micropub Account
+</a>
 </p>
 <div class="idno-admin-card" x-show="showAddForm" x-cloak style="margin-top:0.75rem;">
 <h2 class="idno-admin-card-title">Add Micropub Account</h2>

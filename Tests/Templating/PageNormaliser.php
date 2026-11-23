@@ -12,7 +12,7 @@ namespace Tests\Templating;
 final class PageNormaliser
 {
     /**
-     * @param bool $html whether the body is an HTML document: only then is the white space between tags collapsed
+     * @param bool $html whether the body is an HTML document: only then is the white space that touches a tag collapsed and the character forms made one
      */
     public static function normalise(string $body, string $baseUrl, bool $html = false): string
     {
@@ -99,8 +99,72 @@ final class PageNormaliser
             return $body;
         }
 
-        // White space between a tag and the next is one line break, except inside <pre> and <textarea>: how a template
-        // is indented is not what it renders, but the text of a pre-formatted block is.
-        return preg_replace_callback('#(<(pre|textarea)\b.*?</\2>)(\s+(?=<))?|>\s+(?=<)#is', static fn (array $m): string => ($m[1] ?? '') !== '' ? $m[1] . (($m[3] ?? '') !== '' ? "\n" : '') : ">\n", $body) ?? $body;
+        return self::html($body);
+    }
+
+    /**
+     * What a template port may change in an HTML page and nothing else: white space that touches a tag is one line break
+     * (how a template is indented is not what it renders), and the several ways to write the same character are one
+     * (`&amp;` and `&`, `&#039;`, `&#39;`, `&apos;` and `'`; in text, `&quot;` and `&#34;` and `"`). The contents of
+     * `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched (a comment is not: its tags are tags). A quote written as an entity inside a tag is kept (it is
+     * what keeps the attribute whole), and so is an ampersand that begins what reads as an entity (`&amp;lt;` is a double
+     * escape, not the same as `&lt;`).
+     */
+    private static function html(string $body): string
+    {
+        $attributes = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*';
+        $pattern = '~(?<raw><(?<name>script|style|pre|textarea)\b' . $attributes . '>)(?<content>.*?)(?<close></\k<name>\s*>)'
+            . '|(?<tag><(?:/?[A-Za-z][^\s>/]*|!)' . $attributes . '>)~is';
+        $tokens = [];
+        $position = 0;
+        preg_match_all($pattern, $body, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        foreach ($matches as $match) {
+            [$whole, $offset] = $match[0];
+            if ($offset > $position) {
+                $tokens[] = ['text', substr($body, $position, $offset - $position)];
+            }
+            if (($match['raw'][0] ?? '') !== '') {
+                $tokens[] = ['tag', $match['raw'][0]];
+                if ($match['content'][0] !== '') {
+                    $tokens[] = ['raw', $match['content'][0]];
+                }
+                $tokens[] = ['tag', $match['close'][0]];
+            } else {
+                $tokens[] = ['tag', $whole];
+            }
+            $position = $offset + strlen($whole);
+        }
+        if ($position < strlen($body)) {
+            $tokens[] = ['text', substr($body, $position)];
+        }
+
+        $last = count($tokens) - 1;
+        $out = '';
+        foreach ($tokens as $i => [$kind, $value]) {
+            if ($kind === 'text') {
+                $value = self::characters($value, true);
+                if ($i > 0) {
+                    $value = preg_replace('/^\s+/', "\n", $value) ?? $value;
+                }
+                if ($i < $last) {
+                    $value = preg_replace('/\s+$/', "\n", $value) ?? $value;
+                }
+            } elseif ($kind === 'tag') {
+                $value = self::characters($value, false);
+            }
+            $out .= $value;
+        }
+
+        return $out;
+    }
+
+    private static function characters(string $value, bool $text): string
+    {
+        $value = preg_replace('/&(?:#0*39|apos);/', "'", $value) ?? $value;
+        if ($text) {
+            $value = preg_replace('/&(?:quot|#0*34);/', '"', $value) ?? $value;
+        }
+
+        return preg_replace('/&amp;(?![A-Za-z0-9#]+;)/', '&', $value) ?? $value;
     }
 }
