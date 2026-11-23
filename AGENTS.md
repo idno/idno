@@ -3589,6 +3589,13 @@ the CLI installer no longer writes one.
   message names). Everywhere else a signed request acts as its user with no form token, and
   is never an admin (`User::isAdmin()`). `Tests/API/AccountPagesTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
+- Template variables and the included file: `Idno\Templating\PhpTemplateEngine` keeps the located
+  `.tpl.php` path on a private static stack (pushed before the render, popped in a `finally`) and reads
+  it for the `include` after the variables are extracted, so no template variable (`path`, `vars`, `t`,
+  `k`, `v`...) can change which file is included. A template still sees the caller's own `$path`
+  variable. Never `include` a path held in a local variable of a scope that variables from outside are
+  written into. `Tests/Core/TemplateIncludeTest.php` and the contract case in
+  `Tests/Kernel/TemplateContractTest` check this.
 - Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
   that a person or another site supplied with `htmlspecialchars()`, in text and inside an
   attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe
