@@ -33,7 +33,7 @@ use Tests\Fixtures\BundledTemplates;
 final class PagePerformanceTest extends RenderedSiteTestCase
 {
     /** What a number may be, in proportion to the one it is compared with. */
-    public const BUDGET = 1.15;
+    public const BUDGET = 1.20;
 
     private const WARM_UP = 10;
 

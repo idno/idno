@@ -22,7 +22,6 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service_closure;
 
@@ -375,7 +374,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->public();
     $services->set(\Idno\Templating\CascadeTwigLoader::class)
-        ->args([service(\Idno\Templating\TemplateCascade::class), param('kernel.debug')])
+        ->args([service(\Idno\Templating\TemplateCascade::class)])
         ->autowire(false)
         ->autoconfigure(false)
         ->public()

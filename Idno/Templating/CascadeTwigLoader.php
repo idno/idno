@@ -35,12 +35,7 @@ final class CascadeTwigLoader implements LoaderInterface
 
     private int $resolvedForgotten = -1;
 
-    /**
-     * @param bool $debug the kernel's debug flag: outside it a template of core's own directory is not looked at on the disk to see whether it is
-     *                    fresh (core's templates change with a release, which moves the compiled templates' directory; the templates of a plugin or a
-     *                    theme are updated in place and are always looked at)
-     */
-    public function __construct(private readonly TemplateCascade $cascade, private readonly bool $debug = true)
+    public function __construct(private readonly TemplateCascade $cascade)
     {
     }
 
@@ -71,10 +66,6 @@ final class CascadeTwigLoader implements LoaderInterface
     public function isFresh(string $name, int $time): bool
     {
         $path = $this->resolve($name);
-
-        if (!$this->debug && $path !== null && str_starts_with($path, $this->cascade->coreDir() . '/templates/')) {
-            return true;
-        }
 
         // The disk itself, not the remembered answer: a file deleted while a long-lived process runs (a worker after a deploy) is not fresh
         return $path !== null && is_file($path) && (int) filemtime($path) <= $time;
