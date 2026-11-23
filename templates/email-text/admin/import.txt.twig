@@ -1,0 +1,9 @@
+Your data import is done!
+===================
+
+We've taken the data you uploaded and turned it into Idno posts. Enjoy!
+{% if imported -%}
+{{ imported|to_int }} posts were imported{% if skipped %}, and {{ skipped|to_int }} items in the file were not (pages, attachments, other types, or items that could not be imported){% endif %}.
+{% endif %}
+
+Visit your site: {{ site_url() -}}

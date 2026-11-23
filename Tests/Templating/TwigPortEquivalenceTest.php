@@ -92,6 +92,8 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['default', 'shell/pagination', ['count' => '45xyz', 'offset' => 'abc', 'items_per_page' => 'abc']],
         ['default', 'shell/pagination', ['count' => 45, 'offset' => 20, 'items_per_page' => 10, 'control-id' => 'c', 'source-url' => '/s?a=1&b=2']],
         ['default', 'shell/simple', ['title' => 'Welcome', 'description' => 'A <b>fresh</b> site', 'body' => '<p>Hello</p>']],
+        ['email', 'shell', ['body' => '<p>Hello</p>']],
+        ['email', 'shell', ['body' => '<p>Hello</p>', 'title' => 'Password reset', 'preheader' => 'A preview line']],
         ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
     ];
 

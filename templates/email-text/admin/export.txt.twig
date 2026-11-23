@@ -1,0 +1,10 @@
+Your data export is ready!
+===================
+
+We've gathered all your site content and placed it in an archive for you. To download it, click the following link:
+
+{% if unrendered -%}
+{{ unrendered|to_int }} entries could not be rendered and are included as data only.
+
+{% endif -%}
+Get your data: {{ site_url() }}admin/export/

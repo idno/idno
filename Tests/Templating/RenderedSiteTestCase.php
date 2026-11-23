@@ -43,6 +43,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      */
     protected const MAIL_CASES = [
         'invite' => ['account/invite', ['inviter' => 'Ada Admin', 'email' => 'new.member@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
+        'invite-hostile' => ['account/invite', ['inviter' => '<b>Ada</b> & "Co" \'x\'', 'email' => 'new+member@example.com', 'code' => 'a b&c']],
         'password' => ['account/password', ['email' => 'ada@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
         'emailtest' => ['admin/emailtest', []],
         'export' => ['admin/export', ['unrendered' => 3]],
@@ -54,6 +55,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         'import-failure' => ['admin/import_failure', ['imported' => 4, 'stopped' => true]],
         'import-failure-started-before' => ['admin/import_failure', ['startedBefore' => true]],
         'import-failure-nothing' => ['admin/import_failure', []],
+        'oops-hostile' => ['admin/oops', ['site' => 'https://example.org/', 'message' => '<script>x()</script>', 'user' => 'a&b', 'agent' => '<a href=//evil>x</a>', 'qs' => 'a=<i>&b="x"', 'referrer' => 'https://evil.example/"><b>']],
         'oops' => ['admin/oops', ['site' => 'https://example.org/', 'message' => 'Unexpected token < in <b>index.php</b> on line 7 & more', 'user' => 'ada', 'agent' => 'Mozilla/5.0 (X11; Linux)', 'qs' => 'a=1&b=2', 'referrer' => 'https://example.org/from?x=1']],
     ];
 

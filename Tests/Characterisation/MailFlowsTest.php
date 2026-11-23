@@ -120,6 +120,35 @@ final class MailFlowsTest extends CharacterisationTestCase
         $this->assertStringNotContainsString('<html', $mail['text']);
     }
 
+    /**
+     * The shell's footer says Idno and links to its home page: no postal address of a company, and no tracking link built from the path
+     * of the request (a queue worker has no request, and the link must not depend on one).
+     */
+    public function testTheMailShellHasNoPostalAddressAndNoRequestPath(): void
+    {
+        $previous = $_SERVER['REQUEST_URI'] ?? null;
+        $_SERVER['REQUEST_URI'] = '/account/password/?x=1';
+        try {
+            $t = clone Idno::site()->template();
+            $t->setTemplateType('email');
+            $html = (string) $t->__(['body' => '<p>Hello</p>'])->draw('shell');
+        } finally {
+            if ($previous === null) {
+                unset($_SERVER['REQUEST_URI']);
+            } else {
+                $_SERVER['REQUEST_URI'] = $previous;
+            }
+        }
+
+        $this->assertStringContainsString('<p>Hello</p>', $html);
+        $this->assertStringContainsString('<a href="https://idno.co/" style="color: #4c93cb; text-decoration: none;">Idno</a>', $html);
+        $this->assertStringNotContainsString('utm_', $html);
+        $this->assertStringNotContainsString('account_password', $html);
+        $this->assertStringNotContainsString('Bryant', $html);
+        $this->assertStringNotContainsString('San Francisco', $html);
+        $this->assertStringNotContainsString('Idno, Inc.', $html);
+    }
+
     public function testThePasswordResetMail(): void
     {
         // As Idno\Pages\Account\Password::postContent() builds it.

@@ -2500,6 +2500,18 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   a failing template left open, writes one line `Could not send the alert: <class>` through the logger if
   there is one, and otherwise does nothing. The email shell does not need `REQUEST_URI` (a console process
   has none).
+  The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig` and the nine bodies) and
+  `templates/email-text/**/*.txt.twig`, drawn as every ported template is (a third-party `.tpl.php` mail template still wins,
+  and its HTML is placed in core's shell as `body`). A `.txt.twig` is never escaped and never holds HTML: it controls its
+  newlines with `{%-`/`-%}` and is compared with its original byte for byte (a `{{ }}` does not eat the newline that follows
+  it, as PHP's `?>` does, so a text template has one newline fewer than the original source where an echo ended a line). The HTML
+  parts escape every value from outside. The shell has no footer address and no request-derived tracking link; the mail
+  templates use only `site_url()`, `site_title()`, `setting('from_email')`, `t()`/`t_html()` and the pure filters, so they
+  draw in a console process with no request, no session and no logged-in user (`TemplateEscapingTest` draws them in a
+  console subprocess). Pinned by `TemplateEscapingTest::testTheOopsMailEscapesRequestValues`, `testAnInviteEscapesTheInvitersName`,
+  `testATextMailIsNeverHtmlEscaped` and `MailFlowsTest::testTheMailShellHasNoPostalAddressAndNoRequestPath`;
+  `EmailAdapterTest::testOopsAlertReturnsWithoutThrowingWhenATemplateThrows` pins that a mail template that throws is logged and
+  never escapes `oopsAlert()`.
 - Secrets: `smtp_password` is in the DSN given to the transport factory and nowhere else: never in a log
   line, an exception message that reaches a page (the exceptions of `MailTransportDsn` name settings
   only) or the compiled container.

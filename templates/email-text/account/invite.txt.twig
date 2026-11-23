@@ -1,0 +1,16 @@
+{%- set joinus = t('Join us!') -%}
+{{ joinus }}
+{% if joinus|length > 1 %}{% for u in 2..(joinus|length) %}={% endfor %}{% endif %}
+
+
+{{ t('Hi there! Your friend *%s* has invited you to join %s', [inviter, site_title()]) }}: {{ site_url() }}.
+
+
+{{ t('You can use this space to publish your stories, share things that interest you, and discuss things that matter.') }}
+
+{{ t('Get started with *%s* by setting up your account', [site_title()]) }}.
+
+
+{{ t('Sign up now') }}: {{ site_url() }}account/register/?email={{ email|form_urlencode }}&code={{ code|form_urlencode }}
+
+{{ t('If you have any questions at all, please don\'t hesitate to contact us by sending an email to %s', [setting('from_email')]) -}}

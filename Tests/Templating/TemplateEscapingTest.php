@@ -1108,6 +1108,111 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * Draws a mail template in the site, as the mail adapter does: the HTML part (inside the email shell or not) and the plain text.
+     * The site has no request (the queue worker has none either) unless $uri is given.
+     *
+     * @param  array<string, mixed> $vars
+     * @return array{html: string, text: string}
+     */
+    private function drawMailInSite(string $template, array $vars, string $title = 'Fixture Site'): array
+    {
+        $this->seedSite();
+        $code = <<<'PHP'
+        \Idno\Core\Idno::site()->config()->title = %TITLE%;
+        \Idno\Core\Idno::site()->config()->from_email = 'site@example.com';
+        $draw = static function (string $type) {
+            $template = clone \Idno\Core\Idno::site()->template();
+            $template->setTemplateType($type);
+
+            return (string) $template->__(json_decode(%VARS%, true))->draw(%NAME%);
+        };
+
+        return ['html' => $draw('email'), 'text' => $draw('email-text')];
+        PHP;
+        $drawn = $this->runInSite(str_replace(
+            ['%TITLE%', '%VARS%', '%NAME%'],
+            [$this->literal($title), $this->literal(json_encode($vars, JSON_THROW_ON_ERROR)), $this->literal($template)],
+            $code
+        ), true);
+        $this->assertIsArray($drawn);
+
+        return $drawn;
+    }
+
+    /**
+     * The error mail shows what the failing request supplied (its user agent, query string and referrer, the message): as text in the HTML
+     * part, and as it is in the plain text part.
+     */
+    public function testTheOopsMailEscapesRequestValues(): void
+    {
+        $vars = [
+            'site' => 'https://example.org/', 'message' => 'Failed <b>hard</b> & more', 'user' => 'ada',
+            'agent' => '<a href=//evil>x</a>', 'qs' => 'a="><script>x()</script>', 'referrer' => 'https://evil.example/"><a href=//evil>go</a>',
+        ];
+
+        $mail = $this->drawMailInSite('admin/oops', $vars);
+
+        $this->assertStringNotContainsString('<a href=//evil', $mail['html']);
+        $this->assertSame(0, substr_count($mail['html'], '<a '), 'no link is made of a value');
+        $this->assertStringNotContainsString('<script', $mail['html']);
+        $this->assertStringNotContainsString('<b>hard</b>', $mail['html']);
+        $this->assertStringContainsString('&lt;a href=//evil&gt;x&lt;/a&gt;', $mail['html']);
+        $this->assertStringContainsString('Referrer: https://evil.example/&quot;&gt;&lt;a href=//evil&gt;go&lt;/a&gt;', $mail['html']);
+        $this->assertStringContainsString('Agent: <a href=//evil>x</a>', $mail['text'], 'the text part has the values as they are');
+        $this->assertStringContainsString('QS: a="><script>x()</script>', $mail['text']);
+        $this->assertStringContainsString('Referrer: https://evil.example/"><a href=//evil>go</a>', $mail['text']);
+        $this->assertStringContainsString('Failed <b>hard</b> & more', $mail['text']);
+    }
+
+    /**
+     * The inviter's name is a member's word: text in the HTML part (which also prints its title, "Join us!"), verbatim in the text part.
+     */
+    public function testAnInviteEscapesTheInvitersName(): void
+    {
+        $mail = $this->drawMailInSite('account/invite', ['inviter' => '<b>x', 'email' => 'friend@example.org', 'code' => 'abc']);
+
+        $this->assertStringContainsString('<strong>&lt;b&gt;x</strong>', $mail['html']);
+        $this->assertStringNotContainsString('<b>x', $mail['html']);
+        $this->assertStringContainsString('Join us!', $mail['html'], 'the title the template always meant to print');
+        $this->assertStringContainsString('Your friend *<b>x* has invited you', $mail['text']);
+        $this->assertStringStartsWith("Join us!\n", $mail['text']);
+    }
+
+    /**
+     * The site's title with an ampersand and apostrophes (and a tag) is escaped in the HTML parts and appears as it is in every plain
+     * text part: a text mail is never HTML, so nothing in it is an entity.
+     */
+    public function testATextMailIsNeverHtmlEscaped(): void
+    {
+        $title = 'Fish & \'Chips\' <Co>';
+        $this->seedSite();
+        $cases = [
+            'account/invite' => ['inviter' => 'A & B', 'email' => 'f@example.org', 'code' => 'abc'],
+            'account/password' => ['email' => 'f@example.org', 'code' => 'abc'],
+            'admin/emailtest' => [],
+            'admin/export' => ['unrendered' => 2],
+            'admin/export_failure' => [],
+            'admin/import' => ['imported' => 3, 'skipped' => 1],
+            'admin/import_failure' => ['stopped' => true, 'imported' => 2],
+            'admin/oops' => ['site' => 'https://example.org/?a=1&b=2', 'message' => "It's <b>&</b>", 'user' => 'a&b', 'agent' => "A'B", 'qs' => 'a=1&b=2', 'referrer' => ''],
+        ];
+        foreach ($cases as $name => $vars) {
+            $mail = $this->drawMailInSite($name, $vars, $title);
+            $this->assertDoesNotMatchRegularExpression('/&(amp|lt|gt|quot|#0?39|#039);/', $mail['text'], $name . ': an entity in a text part');
+            $this->assertStringNotContainsString('<html', $mail['text'], $name);
+            $this->assertStringNotContainsString('<div', $mail['text'], $name);
+        }
+        $invite = $this->drawMailInSite('account/invite', $cases['account/invite'], $title);
+        $this->assertStringContainsString('Your friend *A & B* has invited you to join ' . $title . ':', $invite['text']);
+        $this->assertStringContainsString('Get started with *' . $title . '* by setting up your account.', $invite['text']);
+        $this->assertStringContainsString('join <a href=', $invite['html']);
+        $this->assertStringContainsString('Fish &amp; &#039;Chips&#039; &lt;Co&gt;</a>', $invite['html'], 'the HTML part escapes the title');
+        $oops = $this->drawMailInSite('admin/oops', $cases['admin/oops'], $title);
+        $this->assertStringContainsString("It's <b>&</b>", $oops['text']);
+        $this->assertStringContainsString('https://example.org/?a=1&b=2', $oops['text']);
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

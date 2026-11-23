@@ -112,6 +112,17 @@ final class PortReportChecker
         'templates/default/shell/structured-data.html.twig',
         'templates/default/shell/syndication.html.twig',
         'templates/default/stream/home.html.twig',
+        'templates/email-text/account/invite.txt.twig',
+        'templates/email-text/admin/export.txt.twig',
+        'templates/email-text/admin/import.txt.twig',
+        'templates/email-text/admin/import_failure.txt.twig',
+        'templates/email-text/admin/oops.txt.twig',
+        'templates/email/account/invite.html.twig',
+        'templates/email/admin/export.html.twig',
+        'templates/email/admin/import.html.twig',
+        'templates/email/admin/import_failure.html.twig',
+        'templates/email/admin/oops.html.twig',
+        'templates/email/shell.html.twig',
     ];
 
     /**
