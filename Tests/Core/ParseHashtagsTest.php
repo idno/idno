@@ -122,7 +122,7 @@ class ParseHashtagsTest extends \Tests\IdnoTestCase
 
     public function testHashtagsAreNotLinkedInsideAttributes()
     {
-        $html = '<p><a href="#top" title="#nope">#yes</a> <span style="color: #ff0000">x</span> #123 #abcdef</p>';
+        $html = '<p><a href="#top" title="#nope">#no</a> #yes <span style="color: #ff0000">x</span> #123 #abcdef</p>';
         $out = Idno::site()->template()->parseHashtags($html);
 
         $this->assertStringContainsString('href="#top"', $out);

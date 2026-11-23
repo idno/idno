@@ -352,6 +352,13 @@ Each content plugin has an `Entry.php` entity class that defines
   backtick, in any spelling (named, decimal, hex, leading zeros, either case of `x`): decoding one
   would end an attribute the sanitizer wrote with `&quot;`. Don't `html_entity_decode()` text that
   is going to be printed as HTML. `Tests/Core/ParseHashtagsTest.php` checks this.
+- Linking in sanitized HTML: `parseURLs()`, `parseHashtags()` and `parseUsers()` run on HTML that
+  has already been sanitized or escaped, or on plain text. They go through
+  `Parsing::mapTextOutsideTags()`, which changes only text: never the inside of a tag (an
+  attribute value such as `alt="see http://x/..."` is not text), a comment, the content of an
+  existing `<a>`, or `<script>`, `<style>` and `<textarea>` content. Don't run a regular
+  expression over the whole of a piece of HTML. `Tests/Core/ParseLinksOutsideTagsTest.php`
+  checks this.
 - `Actions::createLink()` (`forms/link` in both looks) prints the address (only if
   `UrlValidator::httpUrl()` accepts it), class, title and confirmation text escaped; the
   confirmation text goes into the handler as one JSON string. The label is markup by design and is
