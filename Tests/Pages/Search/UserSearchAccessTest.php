@@ -115,7 +115,7 @@ namespace Tests\Pages\Search {
 
         public function testAdministratorStillGetsTheFullRows()
         {
-            $result = $this->search(static::$admin, static::$other->getHandle());
+            $result = $this->search(static::$admin, "");
 
             $this->assertEquals(200, $result['status']);
             $json = json_decode($result['body'], true);
