@@ -2949,7 +2949,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     so a JSON request draws those; the others a non-HTML request can reach leave nothing on the page's template (`NonHtmlReachTest`, whose pattern now covers every `default` file of
     the plugins). Differences, on purpose, each in `port-exceptions.php` and pinned in `TemplateEscapingTest`: the scripts of the Bridgy, static pages and custom CSS pages
     write their addresses and label with `e('js')`; the Bridgy key is escaped; the IndiePub account page and the authorization page's Cancel link print only http(s) addresses;
-    `bridgy/twitter` (nothing draws it) printed a fatal error and now prints the site's address. The equivalence test enables Styles (with a stylesheet) and StandardSiteSync
+    The equivalence test enables Styles (with a stylesheet) and StandardSiteSync
     in its site (they are not on in the rig or in CI), so the whole admin menu changes with it: the exception hashes of the admin pages that draw the menu (`admin/homepage`,
     `admin/diagnostics`) depend on which plugins' entries the menu holds.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
@@ -2982,8 +2982,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   its `theme.ini` `[extensions]` apply, as before). The sources of the style sheet and script are in `frontend/` (not served); the built files
   are committed, and `npm --prefix frontend run build` writes them from Tailwind's scan of `templates/default/` and the bundled plugins'
   `default/` templates (a rebuild is not byte-identical to the committed files: a newer terser, and the old build scanned its own output;
-  it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). The rest of
-  `default` (a Bootstrap-era template with no Idno 2026 one) still draws, as it did on a Twenty26 site.
+  it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default` in core
+  and the bundled plugins is a Twig file now; the `.tpl.php` files beside them are the frozen originals, drawn only by the equivalence harness and the bypass of the performance test.
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
   `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the

@@ -42,7 +42,6 @@ final class PortReportChecker
         'IdnoPlugins/StaticPages/templates/default/entity/StaticPage.html.twig',
         'IdnoPlugins/StaticPages/templates/default/entity/StaticPage/edit.html.twig',
         'IdnoPlugins/StaticPages/templates/default/staticpages/admin.html.twig',
-        'IdnoPlugins/StaticPages/templates/default/staticpages/admin/categories.html.twig',
         'IdnoPlugins/StaticPages/templates/default/staticpages/admin/menu.html.twig',
         'IdnoPlugins/StaticPages/templates/default/staticpages/page.html.twig',
         'IdnoPlugins/Status/templates/default/entity/Status.html.twig',

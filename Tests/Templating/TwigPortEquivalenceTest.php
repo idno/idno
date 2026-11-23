@@ -100,8 +100,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['email', 'shell', ['body' => '<p>Hello</p>']],
         ['email', 'shell', ['body' => '<p>Hello</p>', 'title' => 'Password reset', 'preheader' => 'A preview line']],
         ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
-        ['default', 'bridgy/facebook', []],
-        ['default', 'bridgy/twitter', []],
     ];
 
     protected bool $compareGoldens = false;
@@ -1312,7 +1310,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
             $out['static pages admin, ' . $label] = $draw('staticpages/admin', ['pages' => $pages, 'categories' => array_keys($pages), 'category_counts' => $counts]);
         }
         $config->staticPages = $was;
-        $out['static pages categories'] = $draw('staticpages/admin/categories', ['categories' => ['Docs', 'News']]) . $draw('staticpages/admin/categories', ['categories' => []]) . $draw('staticpages/admin/categories', ['categories' => [$hostile]]);
         $out['static page'] = $draw('staticpages/page', ['object' => $about]) . $draw('staticpages/page', ['object' => 'not a page']) . $draw('staticpages/page', []);
 
         foreach (['' => '', 'some' => "body {\n  color: #123;\n}", 'hostile' => '</textarea><script>alert(1)</script>'] as $label => $css) {

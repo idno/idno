@@ -516,11 +516,4 @@ return [
             'fa120bd00771650327acd58eeb131913293470a7a76f52b5467efb79ea4fabff',
         ],
     ],
-    'IdnoPlugins/Bridgy/templates/default/bridgy/twitter.html.twig' => [
-        'reason' => 'the original called `Idno::site()->getDisplayURL()`, which does not exist, and raised an Error (nothing draws the template: it is a leftover of the Twitter connection); the port prints the site\'s address, as the Facebook template beside it does',
-        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheBridgyTwitterTemplateNamesTheSitesAddress',
-        'differences' => [
-            '6563c9b9345faefa3f934961a0de602905cca179236a7a5e470f8186f5744c12',
-        ],
-    ],
 ];

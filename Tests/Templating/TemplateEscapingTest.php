@@ -1491,7 +1491,6 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             'standard.site sync' => $draw('standardsitesync/account/settings', ['sync_enabled' => true, 'connected' => true, 'did' => $hostile, 'pds' => $hostile]),
             'standard.site sync head' => $draw('standardsitesync/head', ['object' => $entity]),
             'static pages' => $draw('staticpages/admin', ['pages' => [$hostile => [$docs]], 'categories' => [$hostile], 'category_counts' => [$hostile => 1]]),
-            'static page categories' => $draw('staticpages/admin/categories', ['categories' => [$hostile]]),
             'styles' => $draw('styles/admin', ['css' => '</textarea><script>alert(1)</script>']),
             'webhooks' => $draw('webhooks/admin/home', ['webhooks' => $site->config()->webhook_syndication]),
         ];
@@ -1513,24 +1512,6 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertStringContainsString('<a href="" target="_blank">javascript:alert(2)</a>', $out['micropub accounts']);
         $this->assertStringContainsString('class="btn btn-cancel"' . "\n" . '                       href=""', $out['authorization'], 'a cancel address that is not http is not linked');
         $this->assertStringContainsString('&lt;/textarea&gt;&lt;script&gt;', $out['styles'], 'a stylesheet cannot end its text area');
-    }
-
-    /**
-     * The Bridgy page was drawn for Twitter with `Idno::site()->getDisplayURL()`, which does not exist: its original raised an Error
-     * (nothing draws the template). The port prints the site's address, as the Facebook one beside it does.
-     */
-    public function testTheBridgyTwitterTemplateNamesTheSitesAddress(): void
-    {
-        $this->seedSite();
-
-        $drawn = (string) $this->runInSite($this->pageCode('/account/bridgy/') . <<<'PHP'
-        $template = clone \Idno\Core\Idno::site()->template();
-
-        return $template->draw('bridgy/twitter');
-        PHP);
-
-        $this->assertStringContainsString('user_url=' . urlencode($this->baseUrl()) . '"', $drawn);
-        $this->assertStringContainsString('callback=' . urlencode($this->baseUrl() . 'account/twitter/') . '&amp;', $drawn);
     }
 
     /**
