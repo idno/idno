@@ -7,15 +7,6 @@ namespace Idno\Core {
 
         protected $purifier;
 
-        // What the purified output depends on besides the text: the library's version and the allowed iframes
-        private string $configKey = '';
-
-        // The outputs of this request, by key (bounded: a queue worker is one process for many messages)
-        private array $memo = [];
-
-        /** How long a purified text is kept in the cache (the key holds the library's version and the settings, so a change makes new keys) */
-        public const CACHE_SECONDS = 604800;
-
         function init()
         {
             $allowedIframes = [
@@ -38,25 +29,6 @@ namespace Idno\Core {
             $config->set('HTML.SafeIframe', true);
             $config->set('URI.SafeIframeRegexp', '%^https?://('.implode('|', $allowedIframes).')%');
             $this->purifier = new \HTMLPurifier($config);
-            $this->configKey = sha1(\HTMLPurifier::VERSION . "\0" . $config->get('URI.SafeIframeRegexp'));
-        }
-
-        /**
-         * The cache key of a text's purified output. Purifying a text costs about 100 microseconds, and the same text is purified in every
-         * request that shows it.
-         *
-         * @param string $html
-         * @param bool   $basic_html
-         * @return string
-         */
-        public function cacheKey($html, $basic_html = false)
-        {
-            return 'purify_' . hash('sha256', ($basic_html ? $this->basicConfigKey() : $this->configKey) . "\0" . $html);
-        }
-
-        private function basicConfigKey()
-        {
-            return 'basic' . sha1(\HTMLPurifier::VERSION);
         }
 
         /**
@@ -104,41 +76,6 @@ namespace Idno\Core {
          * @return string Purified HTML
          */
         function purify($html, $basic_html = false)
-        {
-            if (!is_string($html) || $html === '') {
-                return $this->purifyNow($html, $basic_html);
-            }
-            $key = $this->cacheKey($html, $basic_html);
-            if (isset($this->memo[$key])) {
-                return $this->memo[$key];
-            }
-            try {
-                $cache = \Idno\Core\Idno::site()->cache();
-                $found = $cache->load($key);
-            } catch (\Throwable) {
-                $cache = null;
-                $found = null;
-            }
-            if (is_string($found)) {
-                $output = $found;
-            } else {
-                $output = $this->purifyNow($html, $basic_html);
-                if ($cache !== null && is_string($output)) {
-                    try {
-                        $cache->store($key, $output, self::CACHE_SECONDS);
-                    } catch (\Throwable) {
-                        // A page is never refused because a purified text could not be kept
-                    }
-                }
-            }
-            if (count($this->memo) >= 500) {
-                $this->memo = [];
-            }
-
-            return $this->memo[$key] = $output;
-        }
-
-        private function purifyNow($html, $basic_html)
         {
             if ($basic_html) {
                 $config = \HTMLPurifier_Config::createDefault();

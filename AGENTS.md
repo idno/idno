@@ -2958,10 +2958,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   per-class lookup (`object/<Class>` never matched) are gone. A `_t` request value that is not a string asks for no type.
 - `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
   (never the upload path; with no writable directory the definition cache is off).
-  `Purifier::purify()` keeps the OUTPUT of each text in the site's cache pool (key `purify_` + SHA-256 of the library's version and the allowed-iframes setting, the basic or
-  full mode, and the text; kept `Purifier::CACHE_SECONDS`, a week; the key changes with the library or the setting) and in a memo of 500 outputs for the request:
-  purifying a post's body costs about 100 microseconds and every request that shows the post did it again (a home page of ten posts: 0.5 ms). A pool that cannot be
-  read or written is a miss (`Tests/Core/PurifierCacheTest`). Output only: what is purified is never read from anywhere but the cache of the same text.
+  `Purifier::purify()` keeps nothing: no output in the cache pool (a private post's body would stay on disk) and no memo (the site's template object, which holds the
+  purifier, lives as long as the container: in the queue worker, for many messages). `Tests/Core/PurifierKeepsNothingTest`.
 - No template sends an HTTP header, and a template draw leaves nothing on the site's template object. Headers: `shell/headers` has no core file
   but the shells (`shell`, `admin-shell`, `account-shell`) still draw it, so the NAME is an extension point (a plugin extension that calls `header()`
   still runs); `DefaultTemplate::sendShellHeaders()` sends `Content-type: text/html` and `Access-Control-Allow-Origin: *` for the `default` type, called
