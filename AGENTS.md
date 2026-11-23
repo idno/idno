@@ -297,6 +297,12 @@ Each content plugin has an `Entry.php` entity class that defines
   Everywhere else a signed request acts as its user with no form token, and is never an
   admin (`User::isAdmin()`). `Tests/API/AccountPagesTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
+- Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
+  located `.tpl.php` path onto a private static stack and the scoping closure pops it in the
+  `include` statement itself, after `extract($vars)` has run, so no template variable (`path`,
+  `vars`, `t`...) can change which file is included. A template still sees the caller's own
+  `$path` variable. Never `include` a path held in a local variable of a scope that variables
+  from outside are written into. `Tests/Core/TemplateIncludeTest.php` checks this.
 - Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
   that a person or another site supplied with `htmlspecialchars()`, in text and inside an
   attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe

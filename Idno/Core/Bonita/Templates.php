@@ -17,6 +17,7 @@ namespace Idno\Core\Bonita {
         public $templateType = 'default';  // Which template are we using?
         public $fallbackToDefault = true;  // Fallback to
         public $vars = array();     // Template variables
+        private static $includeStack = array(); // Template files about to be included
 
         /**
          * Constructor allows copying; we're shunning use of clone here
@@ -121,17 +122,22 @@ namespace Idno\Core\Bonita {
                     foreach ($paths as $basepath) {
                         $path = $basepath . '/templates/' . $templateType . '/' . $templateName . '.tpl.php';
                         if (file_exists($path)) {
+                            // The file to include is kept in a static stack, not in a local variable:
+                            // a template variable named "path" would otherwise
+                            // overwrite the local that holds it and decide which file is included.
+                            self::$includeStack[] = $path;
                             // create an anonymous function for scoping
-                            $fn = (function ($path, $vars, $t) {
-                                // dump the variables into the local scope
-                                foreach ($vars as $k => $v) {
-                                    ${$k} = $v;
-                                }
+                            $fn = (function ($vars, $t) {
+                                // dump the variables into the local scope (extract() has no loop
+                                // variables of its own that a template variable could overwrite)
+                                extract($vars);
                                 ob_start();
-                                include $path;
+                                // Nothing in the template's scope can write to this; it is popped
+                                // here, so a nested draw or a template that throws leaves it balanced
+                                include array_pop(self::$includeStack);
                                 return ob_get_clean();
                             });
-                            return $fn($path, $this->vars, $this);
+                            return $fn($this->vars, $this);
                         }
                     }
                 }
