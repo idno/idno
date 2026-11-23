@@ -9,7 +9,8 @@ namespace Idno\Pages\Search {
         {
             \Idno\Core\Idno::site()->template()->setTemplateType('json');
 
-            $this->gatekeeper();
+            // The rows hold each member's email address and the administrator's controls
+            $this->adminGatekeeper();
 
             $limit = $this->getInput('limit', 100);
             $offset = $this->getInput('offset', 0);
