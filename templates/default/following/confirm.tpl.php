@@ -4,7 +4,7 @@
 
         <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>following/confirm/" method="post">
             <h1>
-                Follow <?php echo $vars['feed']->getTitle()?>? <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Follow'); ?>">
+                Follow <?php echo htmlspecialchars($vars['feed']->getTitle())?>? <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Follow'); ?>">
                 <input type="hidden" name="feed" value="<?php echo htmlspecialchars($vars['feed']->getDisplayURL())?>">
                 <?php echo \Idno\Core\Idno::site()->actions()->signForm('following/confirm')?>
             </h1>
