@@ -38,6 +38,8 @@ final class TwigTemplateEngine implements TemplateEngine
     /** The most templates kept: a path is a file of the cascade, so there are as many as there are templates. */
     private const REMEMBER_LIMIT = 2000;
 
+    // The key is the file the locator found, while load() asks Twig for the logical name, which the loader resolves again: the two agree because
+    // the locator and the loader look through the same directories in the same order.
     /** @var array<string, \Twig\Template> the compiled template of each name and file drawn, so that a template drawn again is not looked up again */
     private array $loaded = [];
 

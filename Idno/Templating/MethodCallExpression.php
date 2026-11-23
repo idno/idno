@@ -56,7 +56,9 @@ final class MethodCallExpression extends GetAttrExpression
 
     public function compile(Compiler $compiler): void
     {
-        if (!self::isPlainMethodCall($this, $this->isDefinedTestEnabled())) {
+        // A sandbox checks each method a template calls: with the extension registered the node is Twig's own (the extension set is part of
+        // the compiled class's name, so what is compiled here is what runs)
+        if ($compiler->getEnvironment()->hasExtension(\Twig\Extension\SandboxExtension::class) || !self::isPlainMethodCall($this, $this->isDefinedTestEnabled())) {
             parent::compile($compiler);
 
             return;

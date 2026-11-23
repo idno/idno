@@ -17,7 +17,10 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Twig\Cache\FilesystemCache;
 use Twig\Environment;
 use Twig\Error\LoaderError;
+use Twig\Extension\SandboxExtension;
 use Twig\Loader\ArrayLoader;
+use Twig\Sandbox\SecurityNotAllowedMethodError;
+use Twig\Sandbox\SecurityPolicy;
 use Twig\Source;
 
 /**
@@ -209,8 +212,10 @@ final class EngineCostTest extends TestCase
         $source = new Source('', 'a');
         foreach (['getName', 'getname', 'name', 'isReady', 'ready', 'secret', 'hidden', 'missing', '__invoke'] as $name) {
             foreach ([[], ['x', 2]] as $arguments) {
-                $expected = \Twig\Extension\CoreExtension::getAttribute($twig, $source, $object, $name, $arguments, \Twig\Template::METHOD_CALL, false, true, false, 1);
-                $this->assertSame($expected, $extension->callMethod($object, $name, $arguments, $twig, $source, true, 1), $name . ' on ' . get_debug_type($object));
+                foreach ([true, false] as $ignoreStrictCheck) {
+                    $expected = \Twig\Extension\CoreExtension::getAttribute($twig, $source, $object, $name, $arguments, \Twig\Template::METHOD_CALL, false, $ignoreStrictCheck, false, 1);
+                    $this->assertSame($expected, $extension->callMethod($object, $name, $arguments, $twig, $source, $ignoreStrictCheck, 1), $name . ' on ' . get_debug_type($object));
+                }
             }
         }
     }
@@ -240,6 +245,109 @@ final class EngineCostTest extends TestCase
         $this->assertSame('x 1', $engine->render($located, ['a' => 1], $context));
         $this->assertSame('x 2', $engine->render($located, ['a' => 2], $context));
         $this->assertSame(1, $built, 'the second draw asks Twig for nothing');
+    }
+
+    public function testASandboxKeepsTheMethodChecks(): void
+    {
+        $object = new class {
+            public function hello(): string
+            {
+                return 'hello';
+            }
+        };
+        $sandbox = static fn (): SandboxExtension => new SandboxExtension(new SecurityPolicy([], ['escape'], [], [], ['include']), true);
+        $templates = ['a' => '{{ c.hello() }}', 'outer' => '{{ include("inner", sandboxed = true) }}', 'inner' => '{{ c.hello() }}'];
+
+        $global = new Environment(new ArrayLoader($templates), ['cache' => false]);
+        $global->addExtension($this->extension());
+        $global->addExtension($sandbox());
+        try {
+            $global->render('a', ['c' => $object]);
+            $this->fail('a global sandbox allows no method');
+        } catch (SecurityNotAllowedMethodError) {
+            $this->addToAssertionCount(1);
+        }
+
+        $included = new Environment(new ArrayLoader($templates), ['cache' => false]);
+        $included->addExtension($this->extension());
+        $included->addExtension(new SandboxExtension(new SecurityPolicy([], ['escape'], [], [], ['include']), false));
+        try {
+            $included->render('outer', ['c' => $object]);
+            $this->fail('a sandboxed include allows no method');
+        } catch (SecurityNotAllowedMethodError) {
+            $this->addToAssertionCount(1);
+        }
+
+        $none = new Environment(new ArrayLoader($templates), ['cache' => false]);
+        $none->addExtension($this->extension());
+        $this->assertStringContainsString('callMethod(', $none->compileSource(new Source($templates['a'], 'a')), 'without the sandbox extension the fast path is compiled');
+        $this->assertStringNotContainsString('callMethod(', $global->compileSource(new Source($templates['a'], 'a')), 'with it the node is Twig\'s');
+    }
+
+    public function testOnlyAnExactCasePublicMethodTakesTheFastPath(): void
+    {
+        $getter = new class {
+            public function foobar(): string
+            {
+                return 'method';
+            }
+
+            public function getFooBar(): string
+            {
+                return 'getter';
+            }
+        };
+        $magic = new class {
+            protected function hidden(): string
+            {
+                return 'protected';
+            }
+
+            private function secret(): string
+            {
+                return 'private';
+            }
+
+            public function __call(string $name, array $arguments): never
+            {
+                throw new \BadMethodCallException($name);
+            }
+        };
+        $render = function (string $template, array $vars, bool $strict) {
+            $twig = new Environment(new ArrayLoader(['a' => $template]), ['cache' => false, 'strict_variables' => $strict]);
+            $twig->addExtension($this->extension());
+
+            return $twig->render('a', $vars);
+        };
+
+        $this->assertSame('getter', $render('{{ a.fooBar() }}', ['a' => $getter], false), 'Twig looks the exact name up first, and it is the getter\'s shorthand');
+        $this->assertSame('method', $render('{{ a.foobar() }}', ['a' => $getter], false));
+        $this->assertSame('', $render('{{ m.hidden() }}{{ m.secret() }}{{ m.HIDDEN() }}', ['m' => $magic], false), '__call() failing is Twig\'s null when variables are not strict');
+        $this->expectException(\Twig\Error\RuntimeError::class);
+        $render('{{ m.hidden() }}', ['m' => $magic], true);
+    }
+
+    public function testAPrivateMethodOfTheExtensionIsNotCalledByATemplateThatHoldsIt(): void
+    {
+        $extension = $this->extension();
+        $twig = new Environment(new ArrayLoader(['a' => '{{ e.templateContext() }}{{ e.variablesOf() }}']), ['cache' => false]);
+        $twig->addExtension($extension);
+
+        $this->assertSame('', $twig->render('a', ['e' => $extension]), 'a private or static helper of the extension is no template method');
+    }
+
+    public function testTheCaseOfAMethodNameIsKept(): void
+    {
+        $object = new class {
+            public function getName(): string
+            {
+                return 'x';
+            }
+        };
+        $twig = new Environment(new ArrayLoader(['a' => '{{ o.GETNAME() }}|{{ o.getname() }}|{{ o.getName() }}']), ['cache' => false]);
+        $twig->addExtension($this->extension());
+
+        $this->assertSame('x|x|x', $twig->render('a', ['o' => $object]));
     }
 
     private static function initialised(Environment $twig): bool

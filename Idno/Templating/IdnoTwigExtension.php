@@ -158,6 +158,30 @@ final class IdnoTwigExtension extends AbstractExtension
         return [new MethodCallNodeVisitor()];
     }
 
+    /** @var array<class-string, array<string, bool>> whether a class has a PUBLIC method of exactly a name (class definitions do not change in a process) */
+    private static array $fastMethods = [];
+
+    /**
+     * Whether the class declares a public method whose name is exactly $name (PHP matches method names without regard to case, Twig looks the
+     * exact name up first and that name can be a getter's shorthand). Anything else is Twig's to answer.
+     *
+     * @param class-string $class
+     */
+    private static function isPublicMethodNamed(string $class, string $name): bool
+    {
+        if (!method_exists($class, $name)) {
+            return false;
+        }
+        try {
+            $method = new \ReflectionMethod($class, $name);
+        } catch (\ReflectionException) {
+            // `Closure::__invoke()`, which Twig adds for a closure and PHP does not declare
+            return false;
+        }
+
+        return $method->isPublic() && $method->getName() === $name;
+    }
+
     /**
      * `object.name(arguments)` of a template (see MethodCallExpression): a public method of the object is called, and anything else is
      * what Twig's attribute access makes of it (a method by its shorthand name or in another letter case, `__call()`, a value that is not
@@ -167,7 +191,7 @@ final class IdnoTwigExtension extends AbstractExtension
      */
     public function callMethod(mixed $object, string $name, array $arguments, Environment $environment, \Twig\Source $source, bool $ignoreStrictCheck, int $line): mixed
     {
-        if (is_object($object) && !$object instanceof \Twig\Template && method_exists($object, $name) && is_callable([$object, $name])) {
+        if (is_object($object) && !$object instanceof \Twig\Template && (self::$fastMethods[$object::class][$name] ??= self::isPublicMethodNamed($object::class, $name))) {
             return $object->$name(...$arguments);
         }
 

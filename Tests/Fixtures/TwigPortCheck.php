@@ -253,9 +253,20 @@ final class TwigPortCheck implements TemplateEngine
         return $replaced === 1 && $original !== null && is_file($original) ? $original : null;
     }
 
+    /**
+     * The process environment's value of a variable, read once: `$_SERVER` is asked at each render (a test sets and unsets it between
+     * renders), the environment of the process is not changed by anything (a `getenv()` is a system call for each Twig file drawn).
+     */
+    private static function processEnvironment(string $name): string|false
+    {
+        static $values = [];
+
+        return $values[$name] ??= getenv($name);
+    }
+
     private static function bypass(): bool
     {
-        return ($_SERVER['IDNO_TEST_TWIG_BYPASS'] ?? getenv('IDNO_TEST_TWIG_BYPASS')) === '1';
+        return ($_SERVER['IDNO_TEST_TWIG_BYPASS'] ?? self::processEnvironment('IDNO_TEST_TWIG_BYPASS')) === '1';
     }
 
     private function relative(string $path): string
@@ -267,7 +278,7 @@ final class TwigPortCheck implements TemplateEngine
 
     private static function reportFile(): string
     {
-        $file = $_SERVER['IDNO_TEST_TWIG_PORT_REPORT'] ?? getenv('IDNO_TEST_TWIG_PORT_REPORT');
+        $file = $_SERVER['IDNO_TEST_TWIG_PORT_REPORT'] ?? self::processEnvironment('IDNO_TEST_TWIG_PORT_REPORT');
 
         return is_string($file) ? $file : '';
     }
