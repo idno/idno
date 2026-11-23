@@ -180,7 +180,7 @@ function handlePageDrop(event, targetRow) {
     tbody.insertBefore(draggedRow, targetRow);
     var rows = tbody.querySelectorAll('[data-page-id]');
     var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
-    fetch('{site}/admin/staticpages/reorder/page', {
+    fetch('{site}\/admin\/staticpages\/reorder\/page', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ page: draggedId, position: newIndex })
@@ -195,7 +195,7 @@ function handleCategoryDrop(event, targetRow) {
     tbody.insertBefore(draggedRow, targetRow);
     var rows = tbody.querySelectorAll('[data-category]');
     var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
-    fetch('{site}/admin/staticpages/reorder/', {
+    fetch('{site}\/admin\/staticpages\/reorder\/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ category: draggedCategory, position: newIndex })

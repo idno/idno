@@ -1,0 +1,5 @@
+{% set base_url = setting('url') ?: '/' %}<link rel="openid.delegate" href="{{ base_url }}" />
+<link rel="openid.server" href="https://indieauth.com/openid" />
+<link rel="authorization_endpoint" href="{{ base_url }}indieauth/auth">
+<link rel="token_endpoint" href="{{ base_url }}indieauth/token">
+<link rel="micropub" href="{{ base_url }}micropub/endpoint">

@@ -71,7 +71,7 @@ final class EmailAdapterTest extends IdnoTestCase
             }
         }
         RecordingMailTransport::drain();
-        unset($_SERVER['HTTP_USER_AGENT']);
+        unset($_SERVER['HTTP_USER_AGENT'], $_SERVER['QUERY_STRING']);
         if ($this->previousRequestUri === null) {
             unset($_SERVER['REQUEST_URI']);
         } else {
@@ -422,7 +422,28 @@ final class EmailAdapterTest extends IdnoTestCase
 
         \Idno\Core\Logging::oopsAlert('It broke', 'Oh no');
 
-        $this->assertSame([], RecordingMailTransport::drain());
-        $this->assertStringContainsString('Could not send the alert: ', $this->log());
+        $this->assertCount(1, RecordingMailTransport::drain(), 'the alert is sent as plain text');
+        $this->assertStringContainsString('Could not draw the alert: ', $this->log());
+    }
+
+    /**
+     * When drawing the alert fails (a broken engine, an unloadable template) the owner still gets a short plain text alert built without
+     * the templates, and the failure is logged by its class alone.
+     */
+    public function testOopsAlertSendsAPlainTextAlertWhenTheTemplatesCannotBeDrawn(): void
+    {
+        Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
+        $_SERVER['HTTP_USER_AGENT'] = ['not', 'a', 'string'];
+        $_SERVER['QUERY_STRING'] = 'secret=request-value';
+
+        \Idno\Core\Logging::oopsAlert('It broke [/a/file.php:12]', 'Oh no');
+
+        $recorded = RecordingMailTransport::drain();
+        $this->assertCount(1, $recorded, 'the fallback alert is sent');
+        $this->assertStringContainsString('It broke [/a/file.php:12]', $recorded[0]['text']);
+        $this->assertStringContainsString(Idno::site()->config()->getDisplayURL(), $recorded[0]['text']);
+        $this->assertStringNotContainsString('request-value', $recorded[0]['text'], 'nothing of the request is in the fallback');
+        $this->assertStringContainsString('Could not draw the alert: ', $this->log());
+        $this->assertStringNotContainsString('Could not send the alert', $this->log());
     }
 }

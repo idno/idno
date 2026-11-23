@@ -13,7 +13,10 @@ namespace IdnoPlugins\Webhooks\Pages
 
             $this->adminGatekeeper();
             $t = \Idno\Core\Idno::site()->template();
-            $body = $t->draw('webhooks/admin/home');
+            // The addresses of the webhooks are secrets (the path of one is the key of the service): they go to the body's own draw, on a copy
+            // of the page's template, so they are never a variable of the page (the JSON output of a page prints every variable of it).
+            $webhooks = \Idno\Core\Idno::site()->config()->webhook_syndication;
+            $body = $t->withVars(array_merge($t->vars, ['webhooks' => is_array($webhooks) ? $webhooks : []]))->draw('webhooks/admin/home');
             $t->__(array('title' => \Idno\Core\Idno::site()->language()->_('Webhooks'), 'body' => $body))->drawPage();
 
         }

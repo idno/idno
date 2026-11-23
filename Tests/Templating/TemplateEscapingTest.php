@@ -1417,6 +1417,153 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * The scripts of the bundled plugins' admin and account pages write the site's address (and, on the custom CSS page, a label) as one
+     * JavaScript string: the old templates printed them as they were. The same strings, written for a script.
+     */
+    public function testThePluginPagesWriteTheirAddressesForAScript(): void
+    {
+        $this->seedSite();
+        $this->enableOptionalPlugins();
+
+        $out = $this->runInSite($this->pageCode('/admin/staticpages/?a="</script><script>alert(1)</script>') . <<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $draw = static function (string $name, array $vars = []) use ($site): string {
+            $template = clone $site->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+
+        return [
+            'bridgy' => $draw('bridgy/account', ['twitter_enabled' => false]),
+            'bridgy key' => $draw('bridgy/account', ['twitter_enabled' => true, 'twitter_key' => '"><b>key</b>']),
+            'static pages' => $draw('staticpages/admin', ['pages' => [], 'categories' => [], 'category_counts' => []]),
+            'styles' => $draw('styles/admin', ['css' => '']),
+        ];
+        PHP);
+        $this->assertIsArray($out);
+
+        $this->assertStringContainsString("fetch('http\\u003A\\/\\/", $out['bridgy'], 'the address of the check is one JavaScript string');
+        $this->assertStringContainsString('account\\/bridgy\\/check\\/', $out['bridgy']);
+        $this->assertSame(1, substr_count($out['bridgy'], '<script'));
+        $this->assertStringContainsString('name="key" value="&quot;&gt;&lt;b&gt;key&lt;/b&gt;"', $out['bridgy key'], 'the key cannot end its attribute');
+        $this->assertStringContainsString("fetch('http\\u003A\\/\\/", $out['static pages']);
+        $this->assertStringContainsString('admin\\/staticpages\\/reorder\\/page', $out['static pages']);
+        $this->assertStringContainsString("'Upload\\u0020a\\u0020stylesheet'", $out['styles'], 'the label the script sets is one JavaScript string');
+    }
+
+    /**
+     * What a member, a remote server or an administrator typed, and the bundled plugins' pages print: ActivityPub's user names, a Bridgy
+     * key, the Micropub accounts' client addresses and scopes, an authorization request's own parameters, a stored AT Protocol identity,
+     * a post's recorded sync address, the static pages' titles and categories, the stylesheet in its text area and the webhooks. Each is
+     * escaped, and an address that is not http or https is not made a link.
+     */
+    public function testThePluginPagesEscapeWhatTheyPrint(): void
+    {
+        $this->seedSite();
+        $this->enableOptionalPlugins();
+
+        $out = $this->runInSite($this->pageCode('/admin/') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $site = \Idno\Core\Idno::site();
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $site->session()->logUserOn($ada);
+        $draw = static function (string $name, array $vars = []) use ($site): string {
+            $template = clone $site->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+        $docs = new \IdnoPlugins\StaticPages\StaticPage();
+        $docs->_id = '0000000000004000800000000000aa01';
+        $docs->title = $hostile;
+        $docs->category = $hostile;
+        $ada->indieauth_tokens = [$hostile => ['client_id' => $hostile, 'redirect_uri' => $hostile, 'scope' => $hostile, 'issued_at' => 0], 'tok' => ['client_id' => 'javascript:alert(2)', 'redirect_uri' => 'x', 'scope' => 'y', 'issued_at' => 0]];
+        $site->config()->webhook_syndication = [['title' => $hostile, 'url' => $hostile]];
+        $entity = clone \IdnoPlugins\Status\Status::get([], [], 1)[0];
+        $entity->standardsitesync_uri = $hostile;
+
+        $out = [
+            'activitypub' => $draw('activitypub/admin', ['queue_ok' => true, 'total_users' => 1, 'total_followers' => 1, 'user_stats' => [['handle' => $hostile, 'name' => $hostile, 'followers' => 0, 'has_keys' => true]]]),
+            'bridgy' => $draw('bridgy/account', ['twitter_enabled' => true, 'twitter_key' => $hostile]),
+            'micropub accounts' => $draw('account/indiepub', ['tokens' => $ada->indieauth_tokens]),
+            'authorization' => $draw('indiepub/auth', ['me' => $hostile, 'client_id' => $hostile, 'redirect_uri' => 'javascript:alert(3)', 'scope' => $hostile, 'state' => $hostile]),
+            'standard.site sync' => $draw('standardsitesync/account/settings', ['sync_enabled' => true, 'connected' => true, 'did' => $hostile, 'pds' => $hostile]),
+            'standard.site sync head' => $draw('standardsitesync/head', ['object' => $entity]),
+            'static pages' => $draw('staticpages/admin', ['pages' => [$hostile => [$docs]], 'categories' => [$hostile], 'category_counts' => [$hostile => 1]]),
+            'static page categories' => $draw('staticpages/admin/categories', ['categories' => [$hostile]]),
+            'styles' => $draw('styles/admin', ['css' => '</textarea><script>alert(1)</script>']),
+            'webhooks' => $draw('webhooks/admin/home', ['webhooks' => $site->config()->webhook_syndication]),
+        ];
+        $site->session()->logUserOff();
+
+        return $out;
+        PHP);
+        $this->assertIsArray($out);
+
+        foreach ($out as $page => $html) {
+            $this->assertStringNotContainsString('<script>alert(', $html, $page . ': a script element a value opened');
+            $this->assertStringNotContainsString('"><script', $html, $page . ': a value that ended its attribute');
+            $this->assertStringNotContainsString("'><script", $html, $page . ': a value that ended its attribute');
+            $this->assertDoesNotMatchRegularExpression('/href="\s*javascript:/i', $html, $page . ': a link that runs a script');
+        }
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $out['activitypub']);
+        $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $out['micropub accounts']);
+        $this->assertStringContainsString('javascript:alert(2)</a>', $out['micropub accounts'], 'the address is shown as text');
+        $this->assertStringContainsString('<a href="" target="_blank">javascript:alert(2)</a>', $out['micropub accounts']);
+        $this->assertStringContainsString('class="btn btn-cancel"' . "\n" . '                       href=""', $out['authorization'], 'a cancel address that is not http is not linked');
+        $this->assertStringContainsString('&lt;/textarea&gt;&lt;script&gt;', $out['styles'], 'a stylesheet cannot end its text area');
+    }
+
+    /**
+     * The Bridgy page was drawn for Twitter with `Idno::site()->getDisplayURL()`, which does not exist: its original raised an Error
+     * (nothing draws the template). The port prints the site's address, as the Facebook one beside it does.
+     */
+    public function testTheBridgyTwitterTemplateNamesTheSitesAddress(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/account/bridgy/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->draw('bridgy/twitter');
+        PHP);
+
+        $this->assertStringContainsString('user_url=' . urlencode($this->baseUrl()) . '"', $drawn);
+        $this->assertStringContainsString('callback=' . urlencode($this->baseUrl() . 'account/twitter/') . '&amp;', $drawn);
+    }
+
+    /**
+     * The webhooks (the path of a webhook address is its key), the Micropub access tokens and the Bridgy key are printed once, in the
+     * administrator's or member's own page, and are no variable of the page: the JSON output of a page prints every variable of its
+     * template.
+     */
+    public function testThePluginPagesPrintTheirSecretsOnlyInTheBodyAndNeverAsAVariableOfThePage(): void
+    {
+        $this->seedSite();
+        $admin = $this->loginAsAdmin();
+        $this->runInSite(<<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $site->config()->webhook_syndication = [['title' => 'Chat room', 'url' => 'https://hooks.example/services/T000/key-hook-8812']];
+        $site->config()->save();
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $ada->indieauth_tokens = ['token-secret-6620' => ['client_id' => 'https://client.example/', 'redirect_uri' => 'https://client.example/cb', 'scope' => 'create', 'issued_at' => 1773000000]];
+        $ada->bridgy = ['twitter' => ['status' => 'enabled', 'user' => 'ada', 'key' => 'bridgy-key-4471']];
+        $ada->save(true);
+
+        return true;
+        PHP);
+
+        foreach ([['admin/webhooks/', 'key-hook-8812', 'x-data="{ webhooks: ['], ['account/indiepub/', 'token-secret-6620', 'name="token" type="hidden" value="token-secret-6620"'], ['account/bridgy/', 'bridgy-key-4471', 'name="key" value="bridgy-key-4471"']] as [$path, $secret, $where]) {
+            $html = $this->site()->request('GET', $path, ['Cookie' => $admin])->body;
+            $this->assertSame(1, substr_count($html, $secret), $path . ': the secret is printed once');
+            $this->assertStringContainsString($where, $html, $path . ': in its place');
+            $json = $this->site()->request('GET', $path . '?_t=json', ['Cookie' => $admin]);
+            $this->assertStringStartsWith('application/json', (string) $json->header('Content-Type'));
+            $this->assertStringContainsString('"title"', $json->body, $path . ': the JSON output is the page\'s variables: the test is looking at them');
+            $this->assertStringNotContainsString($secret, $json->body, $path . ': the JSON output of the page has no secret');
+        }
+    }
+
+    /**
      * The address of a picture is printed only when it is http or https: the old template turned the scheme of any address into
      * http (`javascript:alert(1)` became `http:alert(1)`).
      */
@@ -1522,6 +1669,19 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
+    /**
+     * Styles and StandardSiteSync are not on in the rig or in CI: enabled here, in a process of their own, so that the next draw finds them.
+     */
+    private function enableOptionalPlugins(): void
+    {
+        $this->assertTrue($this->runInSite(<<<'PHP'
+        \Idno\Core\Idno::site()->plugins()->enable('Styles');
+        \Idno\Core\Idno::site()->plugins()->enable('StandardSiteSync');
+
+        return true;
+        PHP));
+    }
+
     private function pageCode(string $uri): string
     {
         $uri = $this->literal($uri);

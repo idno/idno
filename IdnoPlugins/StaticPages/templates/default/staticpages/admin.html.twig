@@ -1,0 +1,166 @@
+
+<div style="display:flex;justify-content:space-between;align-items:center;">
+    <h1 class="idno-admin-page-title">{{ t('Pages') }}</h1>
+    <a href="{{ site_url() }}staticpages/edit/" class="idno-btn idno-btn-primary">
+        + {{ t('Add new page') }}
+    </a>
+</div>
+<p class="idno-admin-description">
+    {{ t('Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.') -}}
+</p>
+
+{% if pages %}
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title">{{ t('All Pages') }}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+                <th style="width:30px;padding:0.5rem;"></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;">{{ t('Title') }}</th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;">{{ t('Category') }}</th>
+                <th style="text-align:right;padding:0.5rem;font-weight:600;">{{ t('Actions') }}</th>
+            </tr>
+        </thead>
+        {% for category, category_pages in pages %}
+            {% if category_pages %}
+        <tbody class="sortable-pages" data-category="{{ category }}">
+                {% for page in category_pages %}
+            <tr draggable="true" data-page-id="{{ page.getID() }}" style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.pageId); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handlePageDrop(event, this);">
+                <td style="padding:0.5rem;color:var(--color-muted,#9ca3af);cursor:grab;">⋮⋮</td>
+                <td style="padding:0.5rem;">
+                    <a href="{{ page.getURL() }}">{{ page.getTitle() }}</a>
+                </td>
+                <td style="padding:0.5rem;font-size:0.875rem;color:var(--color-muted,#6b7280);">{{ category }}</td>
+                <td style="padding:0.5rem;text-align:right;font-size:0.875rem;white-space:nowrap;">
+                    {% if page.isHomepage() %}
+                        {{ action_link(page.getClearHomepageURL(), '🏠', {}, {method: 'POST', title: t('Remove as homepage'), confirm: true, 'confirm-text': t('Are you sure you want to remove this page from your homepage?')}) }}
+                    {% else %}
+                        <span style="opacity:0.3;">
+                        {{ action_link(page.getSetAsHomepageURL(), '🏠', {}, {method: 'POST', title: t('Make homepage'), confirm: true, 'confirm-text': t('Are you sure you want to make this page your homepage?')}) }}
+                        </span>
+                    {% endif %}
+                    <a href="{{ site_url() }}staticpage/edit/{{ entity_value(page, '_id') }}" style="margin-left:0.5rem;" title="{{ t('Edit page') }}">
+                        {{ idno_include('shell/icon', {icon: 'pencil'}) }}
+                    </a>
+                    <span style="margin-left:0.5rem;color:var(--color-danger,#dc2626);">
+                    {{ action_link(page.getDeleteURL(), idno_include('shell/icon', {icon: 'trash-2'}), {}, {method: 'POST', title: t('Delete page'), confirm: true, 'confirm-text': t('Are you sure you want to permanently delete this page?')}) }}
+                    </span>
+                </td>
+            </tr>
+                {% endfor %}
+        </tbody>
+            {% endif %}
+        {% endfor %}
+    </table>
+</div>
+
+{% endif %}
+
+<!-- Categories Section -->
+<div class="idno-admin-card" x-data="{ showAddCategory: false }">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+        <h2 class="idno-admin-card-title">{{ t('Categories') }}</h2>
+        <button type="button" @click="showAddCategory = !showAddCategory" class="idno-btn" style="font-size:0.875rem;">
+            + {{ t('Add category') }}
+        </button>
+    </div>
+    <p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
+        {{ t("If you plan on adding many pages, you may want to group them under categories. However, you don't have to assign a page to a category.") }}
+    </p>
+
+    <div x-show="showAddCategory" x-cloak style="margin-top:0.75rem;">
+        <form action="{{ site_url() }}admin/staticpages/add/" method="post" style="display:flex;gap:0.5rem;align-items:start;">
+            <input type="text" name="category" placeholder="{{ t('Name of category to add') }}" class="idno-input" style="max-width:20rem;" required>
+            <button type="submit" class="idno-btn idno-btn-primary">{{ t('Add') }}</button>
+            {{ form_token('/admin/staticpages/add') }}
+        </form>
+    </div>
+
+    {% if category_counts %}
+    <table style="width:100%;border-collapse:collapse;margin-top:1rem;">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+                <th style="width:30px;padding:0.5rem;"></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;">{{ t('Category Name') }}</th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;">{{ t('Pages') }}</th>
+                <th style="text-align:right;padding:0.5rem;font-weight:600;">{{ t('Actions') }}</th>
+            </tr>
+        </thead>
+        <tbody id="sortable-categories">
+            {% for category, count in category_counts %}
+                {% set is_no_category = category is same as('No Category') %}
+            <tr {% if not is_no_category %}draggable="true" data-category="{{ category }}"
+                style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.category); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handleCategoryDrop(event, this);"{% else %}style="border-bottom:1px solid var(--color-border,#e5e7eb);"{% endif %}                x-data="{ editing: false }">
+                <td style="padding:0.5rem;color:var(--color-muted,#9ca3af);">{% if not is_no_category %}⋮⋮{% endif %}</td>
+                <td style="padding:0.5rem;">
+                    <span x-show="!editing">{{ category }}</span>
+                    {% if not is_no_category %}
+                    <form x-show="editing" x-cloak action="{{ site_url() }}admin/staticpages/edit/" method="post" style="display:flex;gap:0.5rem;">
+                        <input type="text" name="new_category" value="{{ category }}" class="idno-input" style="width:auto;">
+                        <input type="hidden" name="category" value="{{ category }}">
+                        <button type="submit" class="idno-btn idno-btn-primary" style="font-size:0.75rem;">{{ t('Save') }}</button>
+                        <button type="button" @click="editing = false" class="idno-btn" style="font-size:0.75rem;">{{ t('Cancel') }}</button>
+                        {{ form_token('/admin/staticpages/edit') }}
+                    </form>
+                    {% endif %}
+                </td>
+                <td style="padding:0.5rem;">{{ count }}</td>
+                <td style="padding:0.5rem;text-align:right;font-size:0.875rem;">
+                    {% if not is_no_category %}
+                        <a href="#" @click.prevent="editing = true" style="margin-right:0.5rem;">
+                            {{ idno_include('shell/icon', {icon: 'pencil'}) }}
+                        </a>
+                        <span style="color:var(--color-danger,#dc2626);">
+                        {{ action_link(site_url() ~ 'admin/staticpages/delete/', idno_include('shell/icon', {icon: 'trash-2'}), {category: category}, {method: 'POST', confirm: true, 'confirm-text': t('Are you sure you want to permanently delete this category?')}) }}
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+<script>
+function handlePageDrop(event, targetRow) {
+    var draggedId = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-page-id="' + draggedId + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-page-id]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{{ (site_url() ~ 'admin/staticpages/reorder/page')|e('js') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ page: draggedId, position: newIndex })
+    });
+}
+
+function handleCategoryDrop(event, targetRow) {
+    var draggedCategory = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-category="' + draggedCategory + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-category]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{{ (site_url() ~ 'admin/staticpages/reorder/')|e('js') }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ category: draggedCategory, position: newIndex })
+    });
+}
+</script>

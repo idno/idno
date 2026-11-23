@@ -1,0 +1,61 @@
+<h1 class="idno-admin-page-title">{{ t('Webhooks') }}</h1>
+<p class="idno-admin-description">
+    {{ t('Webhooks let you syndicate content to external applications very simply. The content of your post is sent to an external URL. Services like Slack, Wufoo, and Mailchimp all use Webhooks.') -}}
+</p>
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title">{{ t('About Webhooks') }}</h2>
+    <p>{{ t('When content is syndicated via Webhooks, the external URL is sent the following data') }}:</p>
+    <ul style="margin-top:0.5rem;padding-left:1.25rem;font-size:0.875rem;">
+        <li><strong>{{ t('text') }}</strong>: {{ t('the text of the update') }}</li>
+        <li><strong>{{ t('username') }}</strong>: {{ t('the username of the account-holder') }}</li>
+        <li><strong>icon_url</strong>: {{ t("the URL of the user's icon") }}</li>
+        <li><strong>content_type</strong>: {{ t('the type of content being sent') }}</li>
+    </ul>
+</div>
+
+{# A row for each webhook with a title or an address, and always at least one row. #}
+{% set existing = [] %}
+{% for webhook in webhooks %}
+    {% if webhook.title or webhook.url %}
+        {% set existing = existing|merge([{title: webhook.title ?? '', url: webhook.url ?? ''}]) %}
+    {% endif %}
+{% endfor %}
+{% if not existing %}{% set existing = [{title: '', url: ''}] %}{% endif %}
+
+<div class="idno-admin-card" x-data="{ webhooks: {{ existing|json_encode }} }">
+    <h2 class="idno-admin-card-title">{{ t('Your Webhooks') }}</h2>
+
+    <form action="" method="post">
+        <template x-for="(wh, index) in webhooks" :key="index">
+            <div style="display:flex;gap:0.5rem;align-items:start;margin-bottom:0.75rem;">
+                <div style="flex:1;">
+                    <input type="text" :name="'titles[]'" x-model="wh.title"
+                           placeholder="{{ t('Name of this webhook') }}"
+                           class="idno-input" style="width:100%;">
+                </div>
+                <div style="flex:2;">
+                    <input type="text" :name="'webhooks[]'" x-model="wh.url"
+                           placeholder="{{ t('Webhook URL') }}"
+                           class="idno-input" style="width:100%;">
+                </div>
+                <button type="button" @click="webhooks.splice(index, 1)" class="idno-btn"
+                        style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);flex-shrink:0;"
+                        x-show="webhooks.length > 1">
+                    ✕
+                </button>
+            </div>
+        </template>
+
+        <p style="margin-top:0.5rem;">
+            <a href="#" @click.prevent="webhooks.push({title:'', url:''})" style="font-size:0.875rem;">
+                + {{ t('Add another Webhook') }}
+            </a>
+        </p>
+
+        <div class="idno-form-actions" style="margin-top:1rem;">
+            {{ form_token('/admin/webhooks/') }}
+            <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save Webhooks') }}</button>
+        </div>
+    </form>
+</div>

@@ -64,6 +64,11 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['admin', 'account/export/'],
         ['admin', 'account/bridgy/'],
         ['admin', 'account/indiepub/'],
+        ['admin', 'admin/styles/'],
+        ['admin', 'admin/standardsitesync/'],
+        ['admin', 'account/settings/standardsitesync/'],
+        ['admin', 'indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&scope=create'],
+        ['admin', 'indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1'],
         ['admin', 'following/'],
         ['admin', 'following/add/'],
         ['admin', 'stream/'],
@@ -95,6 +100,8 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['email', 'shell', ['body' => '<p>Hello</p>']],
         ['email', 'shell', ['body' => '<p>Hello</p>', 'title' => 'Password reset', 'preheader' => 'A preview line']],
         ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
+        ['default', 'bridgy/facebook', []],
+        ['default', 'bridgy/twitter', []],
     ];
 
     protected bool $compareGoldens = false;
@@ -125,6 +132,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
     {
         $paths = $this->seedSite();
         $admin = $this->loginAsAdmin();
+        $this->enablePluginsTheSiteDoesNotHaveOn();
 
         $this->visitorPages('twenty26', $paths);
         $this->loggedInPages('logged-in', $paths, $admin, true);
@@ -213,6 +221,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawFalsyValueCases();
         $this->drawAccountCases();
         $this->drawAdminCases();
+        $this->drawPluginPageCases();
         if (self::DRAWS === []) {
             return;
         }
@@ -1174,6 +1183,151 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertStringContainsString('value="https://example.org/came-from?x=1&amp;y=&quot;2&quot;"', (string) $out['login, open, only a referrer']);
         $this->assertStringNotContainsString('Revoke', (string) $out['tools, no key']);
         $this->assertStringContainsString('Revoke', (string) $out['tools, a key']);
+    }
+
+    /**
+     * Styles and StandardSiteSync are not on in the rig or in CI: the pages and the head and menu templates they add are compared with
+     * them enabled (Styles with a stylesheet, which is what makes it add its link to the head), and one post carries the address a
+     * sync records, so that the head of its page holds the link.
+     */
+    private function enablePluginsTheSiteDoesNotHaveOn(): void
+    {
+        $code = <<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        foreach (\IdnoPlugins\Status\Status::get([], [], 50) as $candidate) {
+            if ($candidate->getOwnerID() === $ada->getUUID() && $candidate->publish_status !== 'draft') {
+                $candidate->standardsitesync_uri = 'at://did:plc:example/site.standard.document/3k"x';
+                $candidate->save(true);
+                break;
+            }
+        }
+        $site->config()->styles = ['css' => 'body { color: #123456; }'];
+        $site->config()->save();
+        $site->plugins()->enable('Styles');
+        $site->plugins()->enable('StandardSiteSync');
+
+        return true;
+        PHP;
+        $this->assertTrue($this->runInSite($code));
+    }
+
+    /**
+     * The branches of the bundled plugins' admin and account pages that the visits do not reach: ActivityPub's page with and without the
+     * queue, users and keys; the Bridgy page connected and not; the Micropub accounts with and without tokens (and a hostile one); the
+     * authorization page asking for a scope and not; both StandardSiteSync pages (off, on, connected); the static pages with categories
+     * and a homepage; the categories form; the custom CSS page; the webhooks with none, some and a hostile one.
+     */
+    private function drawPluginPageCases(): void
+    {
+        $code = $this->siteDrawPrelude('/admin/webhooks/') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $config = $site->config();
+
+        foreach ([
+            'no queue, no users' => ['queue_ok' => false, 'total_users' => 0, 'total_followers' => 0, 'user_stats' => []],
+            'a queue, users' => ['queue_ok' => true, 'total_users' => 3, 'total_followers' => 5, 'user_stats' => [['handle' => 'ada', 'name' => 'Ada', 'followers' => 5, 'has_keys' => true], ['handle' => 'bob', 'name' => 'Bob', 'followers' => 0, 'has_keys' => false], ['handle' => $hostile, 'name' => $hostile, 'followers' => 0, 'has_keys' => true]]],
+        ] as $label => $vars) {
+            $out['activitypub, ' . $label] = $draw('activitypub/admin', $vars);
+        }
+
+        foreach ([
+            'not connected' => ['twitter_enabled' => false],
+            'connected' => ['twitter_enabled' => true, 'twitter_user' => 'ada', 'twitter_key' => 'key-123'],
+            'connected, hostile key' => ['twitter_enabled' => true, 'twitter_key' => $hostile],
+        ] as $label => $vars) {
+            $out['bridgy, ' . $label] = $draw('bridgy/account', $vars);
+        }
+
+        $site->session()->logUserOn($ada);
+        $tokens = [
+            'none' => [],
+            'two' => ['tok-aaaa' => ['client_id' => 'https://client.example/', 'redirect_uri' => 'https://client.example/cb', 'scope' => 'create update', 'issued_at' => 1773000000], 'tok-bbbb' => ['client_id' => 'https://other.example/app', 'redirect_uri' => 'https://other.example/cb', 'scope' => '', 'issued_at' => 1700000000]],
+            'hostile' => [$hostile => ['client_id' => $hostile, 'redirect_uri' => $hostile, 'scope' => $hostile, 'issued_at' => 0]],
+            'an address that is not http' => ['tok-cccc' => ['client_id' => 'javascript:alert(1)', 'redirect_uri' => 'https://client.example/cb', 'scope' => 'create', 'issued_at' => 1773000000]],
+        ];
+        foreach ($tokens as $label => $stored) {
+            $site->session()->currentUser()->indieauth_tokens = $stored;
+            $out['micropub accounts, ' . $label] = $draw('account/indiepub', ['tokens' => $stored]);
+        }
+        $site->session()->currentUser()->indieauth_tokens = [];
+        $request = ['me' => 'http://127.0.0.1/', 'client_id' => 'https://client.example/', 'pretty_id' => 'client.example/', 'redirect_uri' => 'https://client.example/cb', 'state' => 's1', 'code_challenge' => 'abc', 'code_challenge_method' => 'S256'];
+        $out['authorization, a scope'] = $draw('indiepub/auth', $request + ['scope' => 'create update']);
+        $out['authorization, no scope'] = $draw('indiepub/auth', $request + ['scope' => '']);
+        $out['authorization, hostile'] = $draw('indiepub/auth', ['me' => $hostile, 'client_id' => $hostile, 'redirect_uri' => 'javascript:alert(1)', 'scope' => $hostile, 'state' => $hostile]);
+        $out['authorization, nothing'] = $draw('indiepub/auth', []);
+        $site->session()->logUserOff();
+
+        foreach ([
+            'off' => ['sync_enabled' => false],
+            'on, not connected' => ['sync_enabled' => true, 'connected' => false],
+            'connected' => ['sync_enabled' => true, 'connected' => true, 'did' => 'did:plc:abc123', 'pds' => 'https://pds.example'],
+            'connected, hostile' => ['sync_enabled' => true, 'connected' => true, 'did' => $hostile, 'pds' => $hostile],
+        ] as $label => $vars) {
+            $out['standard.site sync account, ' . $label] = $draw('standardsitesync/account/settings', $vars);
+        }
+        $out['standard.site sync admin, off'] = $draw('standardsitesync/admin/settings', ['sync_enabled' => false]);
+        $out['standard.site sync admin, on'] = $draw('standardsitesync/admin/settings', ['sync_enabled' => true]);
+        $withUri = clone $status;
+        $withUri->standardsitesync_uri = 'at://did:plc:abc/site.standard.document/1';
+        $withHostileUri = clone $status;
+        $withHostileUri->standardsitesync_uri = $hostile;
+        $withoutUri = clone $status;
+        $withoutUri->standardsitesync_uri = '';
+        foreach (['an address' => $withUri, 'a hostile address' => $withHostileUri, 'no address' => $withoutUri] as $label => $object) {
+            $out['standard.site sync head, ' . $label] = $draw('standardsitesync/head', ['object' => $object]);
+        }
+        $out['standard.site sync head, something that is not an entity'] = $draw('standardsitesync/head', ['object' => 'not an entity']);
+        $out['standard.site sync head, no object'] = $draw('standardsitesync/head', []);
+
+        $about = null;
+        foreach (\IdnoPlugins\StaticPages\StaticPage::get([], [], 20) as $candidate) {
+            $about = $about ?? $candidate;
+        }
+        $docs = new \IdnoPlugins\StaticPages\StaticPage();
+        $docs->_id = '0000000000004000800000000000aa01';
+        $docs->uuid = $site->config()->getDisplayURL() . 'staticpage/0000000000004000800000000000aa01';
+        $docs->title = 'A <b>hostile</b> "page"';
+        $docs->category = 'Docs';
+        $was = $config->staticPages;
+        foreach ([
+            'one page, no homepage' => [['No Category' => [$about]], null],
+            'a homepage and categories' => [['No Category' => [$about], 'Docs' => [$docs], 'News' => []], $about->getID()],
+            'the second page is the homepage' => [['No Category' => [$about], 'Docs' => [$docs]], $docs->getID()],
+            'categories without pages' => [['No Category' => [], 'Docs' => []], null],
+            'a hostile category' => [[$hostile => [$docs], 'No Category' => []], null],
+            'no pages' => [[], null],
+        ] as $label => [$pages, $homepage]) {
+            $config->staticPages = ['homepage' => $homepage, 'categories' => ''];
+            $counts = [];
+            foreach ($pages as $category => $inCategory) {
+                $counts[$category] = count($inCategory);
+            }
+            $out['static pages admin, ' . $label] = $draw('staticpages/admin', ['pages' => $pages, 'categories' => array_keys($pages), 'category_counts' => $counts]);
+        }
+        $config->staticPages = $was;
+        $out['static pages categories'] = $draw('staticpages/admin/categories', ['categories' => ['Docs', 'News']]) . $draw('staticpages/admin/categories', ['categories' => []]) . $draw('staticpages/admin/categories', ['categories' => [$hostile]]);
+        $out['static page'] = $draw('staticpages/page', ['object' => $about]) . $draw('staticpages/page', ['object' => 'not a page']) . $draw('staticpages/page', []);
+
+        foreach (['' => '', 'some' => "body {\n  color: #123;\n}", 'hostile' => '</textarea><script>alert(1)</script>'] as $label => $css) {
+            $out['styles admin, ' . ($label === '' ? 'empty' : $label)] = $draw('styles/admin', ['css' => $css]);
+        }
+
+        $stored = [['title' => 'Chat', 'url' => 'https://hooks.example/services/T000/B000/secret'], ['title' => '', 'url' => 'https://hooks.example/two'], ['title' => 'No address', 'url' => ''], ['title' => '', 'url' => ''], ['title' => $hostile, 'url' => $hostile], ['url' => 'https://hooks.example/untitled']];
+        $was = $config->webhook_syndication;
+        foreach (['none' => [], 'some' => $stored, 'empty rows only' => [['title' => '', 'url' => '']], 'not a list' => false] as $label => $hooks) {
+            $config->webhook_syndication = $hooks;
+            $out['webhooks, ' . $label] = $draw('webhooks/admin/home', ['webhooks' => is_array($hooks) ? $hooks : []]);
+        }
+        $config->webhook_syndication = $was;
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('hooks.example\/services\/T000\/B000\/secret', (string) $out['webhooks, some']);
+        $this->assertStringContainsString('tok-aaaa', (string) $out['micropub accounts, two']);
+        $this->assertStringContainsString('key-123', (string) $out['bridgy, connected']);
     }
 
     /**

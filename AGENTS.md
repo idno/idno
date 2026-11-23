@@ -293,8 +293,11 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   and every page's own show, the shells, `shell/nav`, `shell/compose`, `shell/opengraph`, ...) (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
   the pages are visited, not compared with goldens). Its self-test, `Tests/Unit/Templating/TwigPortCheckTest`, proves the check can fail.
   `Tests/Templating/fixtures/unported.php` lists every web and mail `.tpl.php` (types `default`, `email`, `email-text`; core and
-  the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted), and
-  `raw-allowlist.php` every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`: also `autoescape false`, `filter raw`, `apply raw`, `|raw()` and `source()`).
+  the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted). The port is finished:
+  the list is `[]` (`PortProgressTest::testNothingIsLeftToPort`) and `testTheLocatorResolvesNoCoreOrBundledTplPhpForWebAndMailTypes` finds a
+  locator over core and every bundled plugin resolving a Twig file for every name that has a file under `default`, `email` or `email-text`; the
+  frozen `.tpl.php` originals stay beside their Twig files until they are deleted.
+  `raw-allowlist.php` lists every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`: also `autoescape false`, `filter raw`, `apply raw`, `|raw()` and `source()`).
   `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record`, `compare` or `ratio`) serves the
   fixture site from servers of the test (`PrivateSiteTestCase::startExtraServer()`: test environment, debug off, opcache on, checked
   through `/_test/server`; an outbound request fails at once), warms each page with 10 requests and times it in 5 blocks of 40
@@ -440,7 +443,7 @@ var/                           The compiled container (var/cache/); must be writ
                                deny-all .htaccess; none of them may be served (see Code Style)
 data/                          Where an SQLite site's database file lives (data/idno.sqlite): only its
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
-templates/                     Templates (.tpl.php and Twig), one directory per template type: `default` is Idno 2026, the built-in
+templates/                     Templates (Twig for web pages and mail, `.tpl.php` for the other types), one directory per template type: `default` is Idno 2026, the built-in
                                look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
                                feeds, JSON, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
 frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
@@ -1505,7 +1508,7 @@ other new code may.
   `registerPages()`, and content types via `registerContentTypes()`. They hook
   into events (`saved`, `updated`, `deleted`, `syndicate`, etc.) using the
   Symfony EventDispatcher (wrapped by `Idno\Core\EventDispatcher`).
-- **Template system**: templates are `.tpl.php` files (PHP) or Twig files (`.html.twig`, `.txt.twig`), found and drawn by
+- **Template system**: templates are Twig files (`.html.twig`, `.txt.twig`: all of core's and the bundled plugins' web and mail templates) or `.tpl.php` files (PHP: third-party templates, and the feed, JSON, ActivityPub and KML types), found and drawn by
   `Idno\Templating` (one cascade, two engines) and called through `Idno\Core\DefaultTemplate` (`Idno::site()->template()`). See "Templates".
 - **Async queue**: `Idno::site()->queue()` is `Idno\Legacy\MessengerEventQueue`. With
   `event_queue = 'AsynchronousQueue'` an event becomes a message on Symfony Messenger (`Idno\Queue\`,
@@ -2498,9 +2501,11 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `Logging::oopsAlert()` is called from the exception handler and the fatal-error shutdown function, so
   everything in it after its early returns is in a `try`/`catch (\Throwable)`: it closes any output buffer
   a failing template left open, writes one line `Could not send the alert: <class>` through the logger if
-  there is one, and otherwise does nothing. The email shell does not need `REQUEST_URI` (a console process
+  there is one, and otherwise does nothing. When drawing the HTML or text part throws (a broken engine, an unloadable template)
+  it still sends a short plain text alert built in PHP (the site's address and the message, which carries the file and line; nothing
+  from the request) and logs `Could not draw the alert: <class>`; only if sending fails too does it log `Could not send the alert`. The email shell does not need `REQUEST_URI` (a console process
   has none).
-  The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig` and the nine bodies) and
+  The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig` and the eight bodies) and
   `templates/email-text/**/*.txt.twig`, drawn as every ported template is (a third-party `.tpl.php` mail template still wins,
   and its HTML is placed in core's shell as `body`). A `.txt.twig` is never escaped and never holds HTML: it controls its
   newlines with `{%-`/`-%}` and is compared with its original byte for byte (a `{{ }}` does not eat the newline that follows
@@ -2510,8 +2515,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   draw in a console process with no request, no session and no logged-in user (`TemplateEscapingTest` draws them in a
   console subprocess). Pinned by `TemplateEscapingTest::testTheOopsMailEscapesRequestValues`, `testAnInviteEscapesTheInvitersName`,
   `testATextMailIsNeverHtmlEscaped` and `MailFlowsTest::testTheMailShellHasNoPostalAddressAndNoRequestPath`;
-  `EmailAdapterTest::testOopsAlertReturnsWithoutThrowingWhenATemplateThrows` pins that a mail template that throws is logged and
-  never escapes `oopsAlert()`.
+  `EmailAdapterTest::testOopsAlertReturnsWithoutThrowingWhenATemplateThrows` and `testOopsAlertSendsAPlainTextAlertWhenTheTemplatesCannotBeDrawn` pin that a mail
+  template that throws is logged, never escapes `oopsAlert()`, and still sends the plain text alert.
 - Secrets: `smtp_password` is in the DSN given to the transport factory and nowhere else: never in a log
   line, an exception message that reaches a page (the exceptions of `MailTransportDsn` name settings
   only) or the compiled container.
@@ -2655,7 +2660,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   seen only after the cascade changes or the process restarts. A plain-text mail
   (`email-text`) looks for `.txt.twig` in EVERY directory of its chain (its own, `classic`, `default`) and never for `.html.twig`, which would
   escape its text as HTML: it draws `.txt.twig` or `.tpl.php` files only (`TemplateLocatorTest::testEmailTextNeverDrawsAnHtmlTwigFile`). The
-  feed, JSON and KML types still find a `default/<name>.html.twig` by fallback (no core template is Twig yet); a template of those types that
+  feed, JSON and KML types still find a `default/<name>.html.twig` by fallback (they never draw one: `NonHtmlReachTest` pins that every `default` file they reach has a `classic` copy, or is a page body that leaves nothing on the page); a template of those types that
   is Twig must be a `.tpl.php` file in the type's own directory or in `classic`.
   `typeExists($type)`: some base has a `templates/<type>/` directory (a type is one segment: `classic/` is no type).
 - `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
@@ -2822,8 +2827,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
     (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
-    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins and the admin templates are not ported
-    yet). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
+    `drafts`: 58 files beside their frozen `.tpl.php`). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
     by `__()` is gone for the Twig ones, and an HTML page that showed one changes by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
     `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPortedPageBodyANonHtmlTypeCanReachLeavesNothingOnThePageOrHasAClassicCopy` lists the other
@@ -2926,6 +2930,23 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     lines. `forms/output/richtext` no longer ends with a newline (the original did not), so a post's text is followed directly by what the template closes. The
     media, RSVP and static page edit templates have `classic` copies of their originals, because their `__()` calls (and `drawSyndication()`) leave variables on the
     page's template that the JSON of the edit page prints; the icons leave nothing (`NonHtmlReachTest`, which now also looks at the plugins' entity templates).
+  - The bundled plugins' admin, account, menu, head and footer templates (`IdnoPlugins/{ActivityPub,Bridgy,Checkin,IndiePub,Media,StandardSiteSync,StaticPages,Styles,Webhooks}/templates/default/**`,
+    27 files) have Twig files beside their `.tpl.php` originals; with them `unported.php` is `[]`. Menu entries and head links keep their places (they are drawn through
+    `admin/menu/items`, `account/menu/items`, `shell/head`, `shell/head/final` and `shell/footer`: `BuiltInLookTest::testAdminMenuItemsOfBundledPluginsAreListed`), and a menu entry is
+    `path_matches()` and `site_url()`. A lookup only one page's templates need is the page class's: `Pages\Admin` of StaticPages passes `category_counts` (the number of
+    pages in each category; the template used to count them). SECRETS are passed to the draw of the body only, on a copy (`withVars()`), never as a variable of the page, because
+    the JSON output of a page prints every variable of its template: the webhooks of `Webhooks\Pages\Admin` (the path of a webhook address is its key), the Micropub access
+    tokens of `IndiePub\Pages\Account` (a token is printed once, in the hidden field of its revoke form) and the Bridgy key of `Bridgy\Pages\Account`
+    (`TemplateEscapingTest::testThePluginPagesPrintTheirSecretsOnlyInTheBodyAndNeverAsAVariableOfThePage`: each is printed once in the page and is absent from `?_t=json`). The Styles head template
+    prints only a link to `styles/site/`; the stylesheet an administrator typed is printed only in the text area of its admin page, escaped
+    (`testThePluginPagesEscapeWhatTheyPrint`). The StandardSiteSync head link prints the recorded `at://` address escaped and not through `http_url`, which would blank it
+    (a `<link>` runs nothing). The pages of ActivityPub, Bridgy, StaticPages, Styles, StandardSiteSync, Webhooks and IndiePub have `classic` copies already (the Bootstrap-era look),
+    so a JSON request draws those; the others a non-HTML request can reach leave nothing on the page's template (`NonHtmlReachTest`, whose pattern now covers every `default` file of
+    the plugins). Differences, on purpose, each in `port-exceptions.php` and pinned in `TemplateEscapingTest`: the scripts of the Bridgy, static pages and custom CSS pages
+    write their addresses and label with `e('js')`; the Bridgy key is escaped; the IndiePub account page and the authorization page's Cancel link print only http(s) addresses;
+    `bridgy/twitter` (nothing draws it) printed a fatal error and now prints the site's address. The equivalence test enables Styles (with a stylesheet) and StandardSiteSync
+    in its site (they are not on in the rig or in CI), so the whole admin menu changes with it: the exception hashes of the admin pages that draw the menu (`admin/homepage`,
+    `admin/diagnostics`) depend on which plugins' entries the menu holds.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

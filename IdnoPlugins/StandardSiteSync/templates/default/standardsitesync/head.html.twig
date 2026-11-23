@@ -1,0 +1,3 @@
+{% if is_entity(object) and entity_value(object, 'standardsitesync_uri') %}
+    <link rel="site.standard.document" href="{{ entity_value(object, 'standardsitesync_uri') }}" />
+{% endif %}

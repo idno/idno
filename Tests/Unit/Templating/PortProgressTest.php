@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Templating;
 
+use Idno\Templating\TemplateCascade;
+use Idno\Templating\TemplateLocator;
 use PHPUnit\Framework\TestCase;
 use Tests\Fixtures\BundledTemplates;
 
@@ -41,5 +43,46 @@ final class PortProgressTest extends TestCase
         $alone = array_values(array_diff(array_keys(BundledTemplates::twigTemplates($root)), array_keys($templates)));
 
         $this->assertSame([], $alone, 'a Twig file has no `.tpl.php` beside it: its original is kept, in place, so that the equivalence test can compare them');
+    }
+
+    public function testNothingIsLeftToPort(): void
+    {
+        $root = dirname(__DIR__, 3);
+        /** @var list<string> $unported */
+        $unported = require $root . '/Tests/Templating/fixtures/unported.php';
+
+        $this->assertSame([], $unported, 'the port is finished: no web or mail template of core or a bundled plugin is left without a Twig file');
+        $this->assertSame([], array_values(array_diff(array_keys(BundledTemplates::files($root, '.tpl.php')), array_keys(BundledTemplates::twigTemplates($root)))), 'a .tpl.php has no Twig file beside it');
+    }
+
+    public function testTheLocatorResolvesNoCoreOrBundledTplPhpForWebAndMailTypes(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $cascade = new TemplateCascade($root);
+        foreach (BundledTemplates::plugins($root) as $plugin) {
+            $cascade->addBase($root . '/IdnoPlugins/' . $plugin);
+        }
+        $locator = new TemplateLocator($cascade);
+
+        $names = [];
+        foreach ([BundledTemplates::files($root, '.tpl.php'), BundledTemplates::twigTemplates($root)] as $files) {
+            foreach (array_keys($files) as $logical) {
+                [, $rest] = explode(':', $logical, 2);
+                [$type, $name] = explode('/', $rest, 2);
+                $names[$type . "\0" . $name] = [$type, $name];
+            }
+        }
+        $this->assertNotEmpty($names);
+
+        $php = [];
+        foreach ($names as [$type, $name]) {
+            $located = $locator->locate($name, $type);
+            if ($located === null || $located->engine !== 'twig') {
+                $php[] = $type . '/' . $name . ' => ' . ($located === null ? 'nothing' : $located->path);
+            }
+        }
+        sort($php);
+
+        $this->assertSame([], $php);
     }
 }

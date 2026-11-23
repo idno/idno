@@ -120,17 +120,25 @@ final class NonHtmlReachTest extends TestCase
      * The page bodies (and what they draw) that a non-HTML request can reach and that are drawn from a ported `default` file: each is a
      * template that, in its `.tpl.php` original, left nothing on the page's template (no `__()` on `$this`, no `$this->name =`), so
      * drawing it from Twig, on a copy, loses no key of the JSON of the page. A body that left something has a `classic` copy, which is
-     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). The account pages that a JSON request draws (`classic` copies exist for the menu, login, settings, tools and export) leave nothing either: the forms they draw (`forms/token`, the captcha) are drawn on the site's own object by `signForm()`, which is the same call as before. The admin pages that a JSON request draws leave nothing either, but for `dependencies` and `statistics/report`, which have `classic` copies of their originals (the `__()` calls of the originals leave `version`, `extension`, `report` and `level` on the page's template; the menu a body draws is the `classic` one, which leaves nothing). The bundled plugins' icons leave nothing; their media, RSVP and static page edit templates leave variables (`__()`, `drawSyndication()`) and have `classic` copies. A later port that a page body reaches extends the pattern and the list.
+     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). The account pages that a JSON request draws (`classic` copies exist for the menu, login, settings, tools and export) leave nothing either: the forms they draw (`forms/token`, the captcha) are drawn on the site's own object by `signForm()`, which is the same call as before. The admin pages that a JSON request draws leave nothing either, but for `dependencies` and `statistics/report`, which have `classic` copies of their originals (the `__()` calls of the originals leave `version`, `extension`, `report` and `level` on the page's template; the menu a body draws is the `classic` one, which leaves nothing). The bundled plugins' icons leave nothing; their media, RSVP and static page edit templates leave variables (`__()`, `drawSyndication()`) and have `classic` copies. The bundled plugins' head, footer, authorization and static page templates that a feed or JSON request can reach leave nothing too (the others, the admin and account pages and their menus, have `classic` copies, which are found first). Every template that is a page body or a part of one is in the pattern: a template that is added later and reached by such a request is listed here, or has a `classic` copy.
      */
     private const PORTED_BODIES_THAT_LEAVE_NOTHING = [
+        'IdnoPlugins/Checkin/templates/default/checkin/head.tpl.php',
         'IdnoPlugins/Checkin/templates/default/entity/Checkin/icon.tpl.php',
         'IdnoPlugins/Event/templates/default/entity/Event/icon.tpl.php',
         'IdnoPlugins/Event/templates/default/entity/RSVP/icon.tpl.php',
+        'IdnoPlugins/IndiePub/templates/default/indiepub/auth.tpl.php',
+        'IdnoPlugins/IndiePub/templates/default/indiepub/shell/head.tpl.php',
         'IdnoPlugins/Like/templates/default/entity/Like/icon.tpl.php',
         'IdnoPlugins/Media/templates/default/entity/Media/icon.tpl.php',
+        'IdnoPlugins/Media/templates/default/media/shell/footer.tpl.php',
+        'IdnoPlugins/Media/templates/default/media/shell/head.tpl.php',
         'IdnoPlugins/Photo/templates/default/entity/Photo/icon.tpl.php',
+        'IdnoPlugins/StandardSiteSync/templates/default/standardsitesync/head.tpl.php',
+        'IdnoPlugins/StaticPages/templates/default/staticpages/page.tpl.php',
         'IdnoPlugins/Status/templates/default/entity/Reply/icon.tpl.php',
         'IdnoPlugins/Status/templates/default/entity/Status/icon.tpl.php',
+        'IdnoPlugins/Styles/templates/default/styles/shell/head.tpl.php',
         'IdnoPlugins/Text/templates/default/entity/Entry/icon.tpl.php',
         'templates/default/account/password.tpl.php',
         'templates/default/account/password/reset.tpl.php',
@@ -182,7 +190,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)|IdnoPlugins/[^/]+/templates/default/entity/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
+                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
                     $reached[$file] = true;
                 }
             }

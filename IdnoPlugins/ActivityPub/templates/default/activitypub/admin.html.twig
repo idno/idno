@@ -1,0 +1,78 @@
+<h1 class="idno-admin-page-title">{{ t('ActivityPub Federation') }}</h1>
+<p class="idno-admin-description">
+    {{ t('ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms. When users publish content, it is automatically delivered to their followers on the fediverse.') -}}
+</p>
+
+{% if not queue_ok %}
+<div class="idno-admin-card" style="border-left:4px solid var(--color-warning,#eab308);background:var(--color-warning-bg,#fefce8)">
+    <h2 class="idno-admin-card-title">{{ t('Asynchronous queue required') }}</h2>
+    <p>
+        {{ t('ActivityPub needs the asynchronous event queue to deliver posts and accept follows from other platforms.') }}        {{ t_html('Please see the <a href="https://github.com/idno/idno#setting-up-the-async-pipeline">setup instructions</a> in the README to enable it.') }}
+    </p>
+</div>
+{% endif %}
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title">{{ t('Status') }}</h2>
+    <div style="display:flex;gap:2rem;margin-top:0.5rem;">
+        <div class="idno-admin-stat">
+            <div class="idno-admin-stat-value">{{ total_users }}</div>
+            <div class="idno-admin-stat-label">{{ t('Total Users') }}</div>
+        </div>
+        <div class="idno-admin-stat">
+            <div class="idno-admin-stat-value">{{ total_followers }}</div>
+            <div class="idno-admin-stat-label">{{ t('AP Followers') }}</div>
+        </div>
+    </div>
+</div>
+
+{% if user_stats %}
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title">{{ t('Users') }}</h2>
+    <table style="width:100%;border-collapse:collapse;">
+        <thead>
+            <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">{{ t('User') }}</th>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">{{ t('Handle') }}</th>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">{{ t('AP Followers') }}</th>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">{{ t('Keys') }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for stat in user_stats %}
+            <tr style="border-bottom:1px solid var(--color-border,#e5e7eb);">
+                <td style="padding:0.5rem 0.5rem;">{{ stat.name }}</td>
+                <td style="padding:0.5rem 0.5rem;"><code>{{ stat.handle }}</code></td>
+                <td style="padding:0.5rem 0.5rem;">{{ stat.followers }}</td>
+                <td style="padding:0.5rem 0.5rem;">
+                    {% if stat.has_keys %}
+                        <span style="color:var(--color-success,#16a34a);">✓ {{ t('Generated') }}</span>
+                    {% else %}
+                        <span style="color:var(--color-warning,#eab308);">⏳ {{ t('Pending') }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title">{{ t('Configuration') }}</h2>
+    <p>{{ t('ActivityPub is enabled. To disable it, go to the Plugins page and deactivate the ActivityPub plugin.') }}</p>
+    <dl style="margin-top:0.75rem;">
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+            <dt style="font-weight:600;min-width:8rem;">{{ t('WebFinger') }}:</dt>
+            <dd><code>{{ site_url() }}.well-known/webfinger</code></dd>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+            <dt style="font-weight:600;min-width:8rem;">{{ t('Shared Inbox') }}:</dt>
+            <dd><code>{{ site_url() }}inbox</code></dd>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+            <dt style="font-weight:600;min-width:8rem;">{{ t('NodeInfo') }}:</dt>
+            <dd><code>{{ site_url() }}.well-known/nodeinfo</code></dd>
+        </div>
+    </dl>
+</div>

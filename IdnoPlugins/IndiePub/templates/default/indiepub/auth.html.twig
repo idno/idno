@@ -1,0 +1,37 @@
+<div class="row">
+    <div class="span6 offset3 well text-center">
+
+        <h2 class="text-center">
+            {{ scope ? 'Authorize' : 'Authenticate' }}
+        </h2>
+
+        <form action="{{ site_url() }}indieauth/approve" method="post">
+
+            <p>
+                {{ t('You are logged in as %s.', [current_user().getHandle()]) }}
+            </p>
+            <p>
+                {% if not scope %}
+                    {{ t('Authenticate to %s?', [client_id ?? '']) }}
+                {% else %}
+                    {{ t_html('Authorize %s to access this site with the following permission(s)?<br />%s', [client_id ?? '', scope ?? '']) }}
+                {% endif %}
+            </p>
+
+            <div class="control-group">
+                <div class="controls">
+                    <button type="submit" class="btn btn-primary">
+                        {{ scope ? t('Authorize') : t('Authenticate') }}
+                    </button>
+                    <a class="btn btn-cancel"
+                       href="{{ (redirect_uri ?? '')|http_url }}">{{ t('Cancel') }}</a>
+                </div>
+            </div>
+
+            {% for param in ['me', 'client_id', 'redirect_uri', 'scope', 'state', 'code_challenge', 'code_challenge_method'] %}<input type="hidden" name="{{ param }}" value="{{ _context[param] ?? '' }}" />{% endfor %}
+
+            {{ form_token('/indiepub/auth') }}
+        </form>
+
+    </div>
+</div>

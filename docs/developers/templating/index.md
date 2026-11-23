@@ -2,7 +2,7 @@
 
 Idno splits templating into *templates* and *template types*.
 
-Templates are drawn by the site's template object, `\Idno\Core\DefaultTemplate` by default (you can choose another class with the `template` setting in `config.ini`). It finds a template's file in the *cascade* and renders it with `Idno\Templating` (see below). A template is a PHP template (`.tpl.php`) or a Twig template (`.html.twig` or `.txt.twig`); both kinds sit in the same cascade and draw each other. The page shells of Idno (`shell`, `account-shell`, `admin-shell`, `settings-shell` and the partials under `shell/`, the small `js/`, `assets/` and `txt/` templates) and the templates for entities, annotations, content, streams, following, drafts, the file picker, the error pages, the forms, the account pages and the onboarding pages of core are Twig templates; the rest of the templates that ship with Idno and its bundled plugins are PHP templates for now.
+Templates are drawn by the site's template object, `\Idno\Core\DefaultTemplate` by default (you can choose another class with the `template` setting in `config.ini`). It finds a template's file in the *cascade* and renders it with `Idno\Templating` (see below). A template is a PHP template (`.tpl.php`) or a Twig template (`.html.twig` or `.txt.twig`); both kinds sit in the same cascade and draw each other. Every template of Idno and of its bundled plugins is a Twig template: the page shells and their partials, the entity, annotation, content, stream, following, draft, file picker, error, form, account, onboarding and admin templates, the mail templates, and the admin, account, menu, head and footer templates of the bundled plugins. The `.tpl.php` file that a Twig file replaced is kept beside it for now and is not drawn. The templates of the feed, JSON, JSONP, JSON Feed, ActivityPub and KML types are `.tpl.php` files, and so are the `classic` entity templates that those types fall back to.
 
 ## Templates
 
@@ -34,7 +34,7 @@ Two more types are not ones you choose. `classic` holds the entity templates of 
 
 ## Template locations
 
-Idno's templates are PHP scripts with the extension `.tpl.php`. The filename corresponds to the template name, such that:
+A template is a Twig file (`.html.twig`, `.txt.twig`) or a PHP script with the extension `.tpl.php`: core's and the bundled plugins' templates for web pages and mail are Twig, and a plugin or theme may still use either. The filename corresponds to the template name (shown here with `.tpl.php`; a Twig file is the same path with its own extension), such that:
 
 * `shell/footer` would sit in `templates/default/shell/footer.tpl.php` for the `default` template type
 * `shell/footer` would sit in `templates/rss/shell/footer.tpl.php` for the `rss` template type
@@ -81,6 +81,19 @@ Templates are trusted code: a Twig template can read any attribute and call any 
 Everything else a template prints is escaped. Do not use `|raw` on a value that a person or another site supplied (a title, a comment, a URL): it turns the escaping off for that value. Use it only for HTML that Idno or your own code produced (and, for an address that is going into `href` or `src`, check it first with `\Idno\Core\UrlValidator::httpUrl()`). A `.txt.twig` template is not escaped at all, so it must only print text.
 
 A syntax error or a missing template in a Twig file is an exception, not a blank. Visitors see only that something went wrong (Idno hides the messages of library exceptions); the log, and the error page when `debug` is set in the configuration, name the file and line. The variables of a template object are passed to a Twig template as they are when it is drawn (it does not see a variable an included template sets afterwards), and must be an array.
+
+### Converting a template to Twig
+
+If you port a `.tpl.php` file of your own plugin or theme, the rules Idno's own ports follow are these:
+
+* Put the `.html.twig` file beside the original (`templates/<type>/<name>.html.twig`): within one folder it wins. Keep the original until you are sure of the port.
+* `$this->draw('x')` is `{{ idno_include('x') }}`, and `$this->__($vars)->draw('x')` is `{{ idno_include('x', {...}) }}`. A variable that a later template only saw because `__()` left it on the template object is passed explicitly: an included template draws on a copy.
+* `language()->_('s', $subs)` is `{{ t('s', [subs]) }}`; a string that holds markup is `{{ t_html('s', [subs]) }}`, which escapes each value you put into it.
+* Everything printed is escaped. An address that a person or another site supplied goes through `|http_url` in `href` and `src`; a value inside a script is written with `|e('js')`; `|raw` is for HTML that Idno or your own code already built and escaped, and for nothing else.
+* Read a stored attribute of an entity with `entity_value(object, 'name')` and call a method explicitly (`object.getTitle()`).
+* A template calls no static method, reads no superglobal and sends no header: what it needs is a variable its page passes, or one of the functions listed above. A secret (a password, a token, a key) is not a template variable of the page: pass it to the draw of the body only, on a copy (`$template->withVars([...])->draw('x')`), as the admin email page does, because the JSON output of a page prints every variable of its template. `setting()` returns nothing for a secret.
+* Whitespace counts: PHP drops the newline after `?>`, Twig keeps the newline after `}}`. Use `-}}` where the old template had text running into a tag.
+* A page body that a feed or JSON request can draw must leave on the page's template what its `.tpl.php` left (with `__()` on `$this`), or that JSON changes: keep a copy of the original under `templates/classic/`, which those types find first.
 
 ### The page shells
 

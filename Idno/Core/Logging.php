@@ -381,8 +381,24 @@ namespace Idno\Core {
                             if (!empty($title)) {
                                 $email->setSubject($title);
                             }
-                            $email->setHTMLBodyFromTemplate('admin/oops', $vars);
-                            $email->setTextBodyFromTemplate('admin/oops', $vars);
+                            try {
+                                $email->setHTMLBodyFromTemplate('admin/oops', $vars);
+                                $email->setTextBodyFromTemplate('admin/oops', $vars);
+                            } catch (\Throwable $drawing) {
+                                // A broken engine or an unloadable template must not cost the owner the alert: a short plain text
+                                // body is built here, with the facts the text template prints (the site and the message, which
+                                // carries the file and line) and nothing from the request.
+                                \Idno\Templating\OutputBuffers::endDownTo($bufferLevel);
+                                try {
+                                    \Idno\Core\Idno::site()->logging()->error('Could not draw the alert: ' . get_class($drawing));
+                                } catch (\Throwable $ignored) {
+                                }
+                                $email = new Email();
+                                if (!empty($title)) {
+                                    $email->setSubject($title);
+                                }
+                                $email->setTextBody("Ooops!\n======\n\nAn error occured on your Idno site " . $vars['site'] . "!\n\n" . (is_scalar($message) ? (string) $message : '') . "\n");
+                            }
                             $email->addTo($emailaddress);
                             $email->send();
 

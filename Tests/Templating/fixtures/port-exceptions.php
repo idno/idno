@@ -152,21 +152,21 @@ return [
         'reason' => 'the HTML comments that held each content type\'s icon, and the whole copy of the form that was commented out, are not drawn: nothing shows them, and they printed icon markup into the page\'s source',
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheHomepageSettingsHoldNoCommentedOutMarkup',
         'differences' => [
-            'f0a237fd13a5540dabf31121983c50e632a535cdb8b3c525a555aef4475e86a7',
-            '114be580cdb31c2c5f8444508e1f2fc60c1b5b4b68ad0edc91f47e0f85e7a6a5',
-            '6ab2c16c013ad345e451e9792b645337c354e3dae0219663d9526a2778976cc2',
-            'f13338fdf0d9bf887e49d2370dc97534ed8d4e2b34aeb756ee22477f69c64c4f',
+            'b38311e543d8a03d3e6133d92d39c0df77e80ace594e6982c69d1d676fddf834',
+            'da1cebc56d1e7b4d0dddd9564e946d10eb7cdcbcb498de58c5228024b7cd5490',
+            'd85e3633d8a266d000cbed5c5fc61bd318fac71252f03af00dec792637f7410d',
+            'afaeb7581e57d7c4cbe45182202ab35e6f23d1c31aa3c0e43b4cb23e63463fd9',
         ],
     ],
     'templates/default/admin/diagnostics.html.twig' => [
         'reason' => 'the page\'s own address, in the script that loads the detailed report, is written as one JavaScript string (`e(\'js\')`); the old template printed it as it was, so an address with `</script>` in its query (a visitor\'s word) ended the script. The same string value, written differently',
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminScriptsWriteThePagesAddressForAScript',
         'differences' => [
-            '2714d01f5a7fcde444239e142d027e9d807768e4ce924e68cd24b5dbda588ace',
-            '82d291d978dae98389388550d023995f1066aaae28d3ed47e83ab48431a57f29',
-            '7946176d33e15599af18810291503fa2b726146efaf33279a16fb5d48a42e1ef',
-            '5c066d79fc8d14afd19d194de3767c2bbc83c90a9707c36f01b13c59ba7b1cb3',
-            'd11f5627eaddfd7367253fed9a2ec34d6c2438c7a2f6f62816d88f17ac0704e4',
+            'a45f640f7774adec2a73b68688b38f59be7992a75c20e2da28b1cdb3b161b4a1',
+            '9d27cbfcedb57c8438d5d1c9511dcec14851b932924de96852bf3773d7f2082b',
+            '6b1d51232f120d6b896713f61eb5f41fbefad8594cb0af4bff09490259286ad1',
+            'e9888df7973538b96f093131196092b528decb3b97efe86358a39122a419cf26',
+            '23c95232405ffd8dce260ccee97c6675a0372e7a9eb9203b80572d544d04dece',
         ],
     ],
     'templates/default/admin/logs.html.twig' => [
@@ -468,6 +468,59 @@ return [
             '9e6221857229158afb2af587219ce2c9d934ce6cf534da41d2e6a4e6d5cd52b8',
             '6c8f133377ac77dc4ad0c400620ff4f38ba26738f6791efbde2a63d05f4ea0c8',
             '68425aba60848d361ba5628822508a2be8b52e0f2fffa55cf7325cb64ed74d04',
+        ],
+    ],
+    'IdnoPlugins/Bridgy/templates/default/bridgy/account.html.twig' => [
+        'reason' => 'the address of the page\'s own check, in the script that asks whether the connection changed, is written as one JavaScript string (`e(\'js\')`); the old template printed it as it was. The Bridgy key in the form is escaped; the old template printed it as it was, so a key with a quote in it ended its attribute. The same values, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePluginPagesWriteTheirAddressesForAScript',
+        'differences' => [
+            '4badffb832dbe9426efb18bc229cc06f20214f8e531f2a9d869f485da05c7192',
+            'ed430716ef63f006699f55ec4af50cbca6e6a5a450a34743cd00689ec1a3d023',
+            '9542fd4cd1df0aa91d3d656201366a7188722d7f59a308acbecdb7b081382b29',
+        ],
+    ],
+    'IdnoPlugins/StaticPages/templates/default/staticpages/admin.html.twig' => [
+        'reason' => 'the addresses of the two reordering requests, in the page\'s script, are written as one JavaScript string each (`e(\'js\')`); the old template printed them as they were. The same string values, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePluginPagesWriteTheirAddressesForAScript',
+        'differences' => [
+            '8f9e1b2353dfb60961b91ea3bd743186482878e6f821ec894ebcb8d958885ba6',
+            '970cdc7fb511d3e8ec6292be275ebd145fe9fb247c15c5b3ceb9188bb072fb33',
+            'b534c2d66a09f012dbb23c3035f0df7221d206690eca8d677fcb31b294e9c5a1',
+            'c776ddeb3a8bd5c0ce4e6e26371a820958ba07d14282de7e5872117b29724b75',
+            '050014a86cc60c5bd22c24c0b5d28044e59e195f0784c7233c09978131c42d15',
+            'e17b59dd8365c95d548dec5bb52b1ed8664e79608f6d8bc661e5abacb9bbc1e9',
+        ],
+    ],
+    'IdnoPlugins/Styles/templates/default/styles/admin.html.twig' => [
+        'reason' => 'the label the script puts on the file button after a stylesheet is chosen is written as one JavaScript string (`e(\'js\')`); the old template printed the translation as it was, so a translation with a quote in it ended the string. The same string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePluginPagesWriteTheirAddressesForAScript',
+        'differences' => [
+            '0896cf8200e1af47ce46e1ec08a1aedab03ad5cd18998114e0aea50268b51720',
+            '75fb5e77195c406f28f1887b526d8e2690c46b9034290b77b909f272e102dda8',
+            '7f6f168ded005fb9aac0a585426f1640cb4857635cdd20a3e230a04b810fe9bd',
+            '4c568f9949d81b3ba9c4bc8976578cc11bb8a2ae889c9cb672942926e7944c1a',
+        ],
+    ],
+    'IdnoPlugins/IndiePub/templates/default/account/indiepub.html.twig' => [
+        'reason' => 'the address of an access token\'s client is linked only when it is http or https (`http_url`); the old template linked whatever was stored, so a `javascript:` address stored by an authorization request ran when the link was followed. An address that is http or https is as it was',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePluginPagesEscapeWhatTheyPrint',
+        'differences' => [
+            'bd9289b096a717b196a357311cb2201b2917b6c9c8ba2f8d7d690610c5350e26',
+            'dbed4cb5ecec4011b0bdb298857de7a5550bea611e22221be1db998462893d45',
+        ],
+    ],
+    'IdnoPlugins/IndiePub/templates/default/indiepub/auth.html.twig' => [
+        'reason' => 'the cancel link goes to the redirect address of the request only when it is http or https (`http_url`); the old template linked whatever the request carried, so a `javascript:` redirect address ran when a member pressed Cancel. An address that is http or https is as it was',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePluginPagesEscapeWhatTheyPrint',
+        'differences' => [
+            'fa120bd00771650327acd58eeb131913293470a7a76f52b5467efb79ea4fabff',
+        ],
+    ],
+    'IdnoPlugins/Bridgy/templates/default/bridgy/twitter.html.twig' => [
+        'reason' => 'the original called `Idno::site()->getDisplayURL()`, which does not exist, and raised an Error (nothing draws the template: it is a leftover of the Twitter connection); the port prints the site\'s address, as the Facebook template beside it does',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheBridgyTwitterTemplateNamesTheSitesAddress',
+        'differences' => [
+            '6563c9b9345faefa3f934961a0de602905cca179236a7a5e470f8186f5744c12',
         ],
     ],
 ];

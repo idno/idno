@@ -1,0 +1,63 @@
+<h1 class="idno-admin-page-title">{{ t('Micropub Accounts') }}</h1>
+<p class="idno-admin-description">
+    {{ t('Manage third-party apps authorized to post to your site via Micropub.') -}}
+</p>
+
+{% if not tokens %}
+<div class="idno-admin-card">
+    <p>{{ t('There are currently no micropub accounts associated with this site.') }}</p>
+</div>
+{% else %}
+    {% for token, details in tokens %}
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">
+            <a href="{{ details.client_id|http_url }}" target="_blank">{{ details.client_id }}</a>
+        </h2>
+        <p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
+            {{ t('Authorized') }}
+            <strong>{{ details.issued_at|date('Y-m-d') }}</strong>
+            {{ t('with the scope') }}
+            <strong>{{ details.scope }}</strong>
+        </p>
+        <p style="font-size:0.875rem;color:var(--color-muted,#6b7280);margin-top:0.25rem;">
+            {{ t('Redirect URI') }}: {{ details.redirect_uri }}
+        </p>
+        <form action="{{ site_url() }}account/indiepub/revoke" method="POST" style="margin-top:0.75rem;">
+            <input name="token" type="hidden" value="{{ token }}">
+            <button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);"
+                    onclick="return confirm({{ js_string(t('Are you sure you want to revoke this token?')) }});">
+                {{ t('Revoke Access') }}
+            </button>
+            {{ form_token('account/indiepub/revoke') }}
+        </form>
+    </div>
+    {% endfor %}
+{% endif %}
+
+<div x-data="{ showAddForm: false }">
+    <p style="margin-top:1rem;">
+        <a href="#" @click.prevent="showAddForm = !showAddForm" style="font-size:0.875rem;">
+            {{ t('Add Micropub Account') }}
+        </a>
+    </p>
+
+    <div class="idno-admin-card" x-show="showAddForm" x-cloak style="margin-top:0.75rem;">
+        <h2 class="idno-admin-card-title">{{ t('Add Micropub Account') }}</h2>
+        <p>{{ t('To manually add a micropub client account and generate an API token, enter the details below.') }}</p>
+
+        <form action="{{ site_url() }}account/indiepub/add" method="post" style="margin-top:0.75rem;">
+            <div class="idno-form-group">
+                <label class="idno-label" for="indiepub-client-id">{{ t('Client ID') }}</label>
+                <input type="text" id="indiepub-client-id" name="client_id" class="idno-input" required>
+            </div>
+            <div class="idno-form-group">
+                <label class="idno-label" for="indiepub-redirect-uri">{{ t('Redirect URI') }}</label>
+                <input type="text" id="indiepub-redirect-uri" name="redirect_uri" class="idno-input" required>
+            </div>
+            <div class="idno-form-actions">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save') }}</button>
+            </div>
+            {{ form_token('account/indiepub/add') }}
+        </form>
+    </div>
+</div>

@@ -28,8 +28,18 @@ namespace IdnoPlugins\Bridgy\Pages {
                 }
             }
 
+            // The Bridgy keys are secrets: they go to the body's own draw, on a copy of the page's template, so they are never a variable of
+            // the page (the JSON output of a page prints every variable of it).
+            $keys = [];
+            foreach (self::$SERVICES as $service) {
+                if (array_key_exists($service . '_key', $vars)) {
+                    $keys[$service . '_key'] = $vars[$service . '_key'];
+                    unset($vars[$service . '_key']);
+                }
+            }
             $t = \Idno\Core\Idno::site()->template();
-            $t->body = $t->__($vars)->draw('bridgy/account');
+            $t->__($vars);
+            $t->body = $t->withVars(array_merge($t->vars, $keys))->draw('bridgy/account');
             $t->title = \Idno\Core\Idno::site()->language()->_('Interactions');
             $t->drawPage();
         }
