@@ -67,13 +67,21 @@ namespace Idno\Core\Templating {
          */
         function parseHashtags($text)
         {
-            //decode &auml; to ä, but keep < > and & characters
-            $text = html_entity_decode(
-                str_replace(
-                    ['&amp;', '&lt;', '&gt;'],
-                    ['&amp;amp;', '&amp;lt;', '&amp;gt;'],
-                    $text
-                )
+            // Decode &auml; to ä so that #Äpfel links, but leave alone every entity that stands for
+            // < > & " ' or a backtick, in any spelling (named, decimal or hex, any case, leading
+            // zeros): the text has already been sanitized or escaped, and decoding one of those
+            // would turn it back into markup.
+            $text = preg_replace_callback(
+                '/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/',
+                function ($matches) {
+                    $decoded = html_entity_decode($matches[0], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    if ($decoded === $matches[0] || strpbrk($decoded, "<>&\"'`") !== false) {
+                        return $matches[0];
+                    }
+
+                    return html_entity_decode($matches[0]);
+                },
+                $text
             );
             $r    = preg_replace_callback(
                 '/(?<=^|[\>\s\n])(\#[\p{L}0-9\_]+)/u', function ($matches) {

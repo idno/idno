@@ -346,6 +346,17 @@ Each content plugin has an `Entry.php` entity class that defines
   only through `UrlValidator::httpUrl()`. The text part of the mail
   (`templates/email-text/admin/oops.tpl.php`) is not HTML and is not escaped.
   `Tests/Core/RemoteFeedOutputTest.php` checks this.
+- Entities in already-escaped text: `Parsing::parseHashtags()` runs on HTML that has been sanitized
+  or escaped (post bodies, `htmlentities()` output), and decodes named letters such as `&auml;` so
+  that `#Äpfel` links. It never decodes an entity whose character is `<`, `>`, `&`, `"`, `'` or a
+  backtick, in any spelling (named, decimal, hex, leading zeros, either case of `x`): decoding one
+  would end an attribute the sanitizer wrote with `&quot;`. Don't `html_entity_decode()` text that
+  is going to be printed as HTML. `Tests/Core/ParseHashtagsTest.php` checks this.
+- `Actions::createLink()` (`forms/link` in both looks) prints the address (only if
+  `UrlValidator::httpUrl()` accepts it), class, title and confirmation text escaped; the
+  confirmation text goes into the handler as one JSON string. The label is markup by design and is
+  printed as given, so a caller must escape any text it puts in the label.
+  `Tests/Core/CreateLinkOutputTest.php` checks this.
 - TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
   the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or
   `CURLOPT_SSL_VERIFYHOST` anywhere else.
