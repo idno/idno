@@ -19,18 +19,18 @@ return [
         ['expression' => 'shell.body', 'reason' => 'the page\'s body: HTML the page (or the templates it drew) already built and escaped; the shell only places it'],
     ],
     'templates/default/entity/FeedItem.html.twig' => [
-        ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`, which escapes what members and other sites supplied); the page only places it'],
+        ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates (those of the bundled plugins are ported and checked on their own)'],
     ],
     'templates/default/entity/User/profile.html.twig' => [
-        ['expression' => 'user.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`, which escapes what members and other sites supplied); the page only places it'],
-    ],
-    'templates/default/entity/editwrapper.html.twig' => [
+        ['expression' => 'user.draw()', 'reason' => 'HTML an entity has already drawn through its own templates(`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates(those of the bundled plugins are ported and checked on their own)'],
+        ],
+        'templates/default/entity/editwrapper.html.twig' => [
         ['expression' => 'body', 'reason' => 'the page\'s body: the edit form a content type\'s edit page already drew; the wrapper only places it'],
-        ['expression' => 'object.drawEdit()', 'reason' => 'the edit form of the entity, drawn by its own templates (which escape what a member supplied)'],
-    ],
-    'templates/default/entity/shell.html.twig' => [
+        ['expression' => 'object.drawEdit()', 'reason' => 'the edit form of the entity (`Entity::drawEdit()`), drawn by its own templates, which are responsible for escaping what a member supplied'],
+        ],
+        'templates/default/entity/shell.html.twig' => [
         ['expression' => 'body', 'reason' => 'the page\'s body: HTML the page (or the templates it drew) already built and escaped; the shell only places it'],
-        ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`, which escapes what members and other sites supplied); the page only places it'],
+    ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates (those of the bundled plugins are ported and checked on their own)'],
     ],
     'templates/default/file/picker/donejs.html.twig' => [
         ['expression' => '(static_url() ~ \'file/\' ~ entity_value(file, \'file\')._id)|json_encode(constant(\'JSON_HEX_TAG\') b-or constant(\'JSON_HEX_AMP\') b-or constant(\'JSON_HEX_APOS\') b-or constant(\'JSON_HEX_QUOT\'))', 'reason' => 'JSON for a script, encoded with all four JSON_HEX_* flags, so that the id of the file cannot end the script or open a tag'],

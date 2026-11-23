@@ -27,9 +27,9 @@
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:0.875rem;height:0.875rem;display:inline;vertical-align:middle"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
                         {{ t('Replied to') }}
                         {% for inreplytolink in inreplyto %}{% if loop.index0 > 0 %}{{ inreplyto|length > 2 and loop.index0 < inreplyto|length - 1 ? ', ' : ' and ' }}{% endif %}{% set link_text = inreplytolink|url_host %}{% set reply_target = local_entity(inreplytolink) %}{% if reply_target %}{% set target_title = reply_target.getTitle() %}{% if target_title %}{% set link_text = target_title %}{% endif %}{% endif %}
-                            {# The address of the post being replied to is the author's word, or another site's: only http and https ones are linked #}<a href="{{ inreplytolink|http_url }}" rel="in-reply-to" class="u-in-reply-to">
+                            {# The address of the post being replied to is the author's word, or another site's: only an http or https one is linked, and a refused one is text #}{% set reply_href = inreplytolink|http_url %}{% if reply_href %}<a href="{{ reply_href }}" rel="in-reply-to" class="u-in-reply-to">
                                 {{ link_text }}
-                            </a>
+                            </a>{% else %}{{ link_text }}{% endif %}
                             {% endfor %}
                     </div>
                     {% endif %}{% endif %}

@@ -244,6 +244,13 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return null;
     }
 
+    public function visitorMessage(\Throwable $exception): string
+    {
+        $this->note(__FUNCTION__, $exception->getMessage());
+
+        return $exception instanceof \TypeError ? 'Something went wrong.' : $exception->getMessage();
+    }
+
     public function syndicationHas(string $service): bool
     {
         $this->note(__FUNCTION__, $service);

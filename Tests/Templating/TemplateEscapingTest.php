@@ -346,7 +346,8 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         PHP);
 
         $this->assertStringNotContainsString('javascript:', $drawn);
-        $this->assertStringContainsString('<a href="" rel="in-reply-to"', $drawn, 'linked to nothing');
+        $this->assertStringNotContainsString('href=""', $drawn, 'an address that is refused is not linked: an empty href would be the post itself');
+        $this->assertSame(1, substr_count($drawn, 'u-in-reply-to'), 'one link, for the address that is http');
         $this->assertStringContainsString('<a href="https://elsewhere.example/a?x=1&amp;y=2" rel="in-reply-to"', $drawn);
     }
 
@@ -399,9 +400,10 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
 
         $this->assertStringNotContainsString('javascript:', $drawn);
         $this->assertStringNotContainsString('<b>x</b>', $drawn);
-        $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot;</a>', $drawn);
         $this->assertStringContainsString('<a href="https://x.example/?a=1&amp;b=2"', $drawn);
-        $this->assertSame(2, substr_count($drawn, 'class="u-syndication"'));
+        $this->assertSame(1, substr_count($drawn, 'class="u-syndication"'), 'only the http address is a link');
+        $this->assertStringNotContainsString('href=""', $drawn);
+        $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot;', $drawn, 'the identifier of the refused link is still shown, as text');
     }
 
     /**
@@ -477,6 +479,90 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertSame(200, $withPicture->status);
         $this->assertStringStartsWith(rtrim($this->baseUrl(), '/') . '/view/', $link($withPicture->body), 'a real picture leaves no user behind: the link is the post\'s own address');
         $this->assertStringNotContainsString('/actor/ada', $link($withPicture->body));
+    }
+
+    /**
+     * The delete link of an RSVP names the RSVP by its address, as the links of the other annotation lists do: posted by the owner of
+     * the post, it removes that RSVP and no other. (The old list renumbered the RSVPs when it sorted them, so its link named "0", which
+     * the delete page read as no address, and the delete did nothing.)
+     */
+    public function testAnRsvpsDeleteLinkRemovesThatRsvpAndNoOther(): void
+    {
+        $paths = $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+        $id = $this->literal((string) $paths['ids']['event']);
+        $this->runInSite(<<<PHP
+        \$event = \\Idno\\Common\\Entity::getByID($id);
+        \$make = static fn (string \$name, int \$time): array => ['permalink' => 'https://example.org/' . \$name, 'owner_name' => \$name, 'owner_url' => 'https://example.org/' . \$name, 'owner_image' => '', 'content' => \$name . ' will come', 'time' => \$time, 'title' => '', 'rsvp' => 'yes'];
+        \$event->annotations = ['rsvp' => [
+            \$event->getURL() . '/annotations/first' => \$make('first', 1773000100),
+            \$event->getURL() . '/annotations/second' => \$make('second', 1773000200),
+        ]];
+        \$event->save(true);
+
+        return true;
+        PHP);
+
+        $page = $this->site()->request('GET', ltrim($paths['event'], '/'), ['Cookie' => $cookie]);
+        $this->assertSame(200, $page->status);
+        $this->assertSame(2, preg_match_all('#<a data-form-id="[^"]*"[^>]*href="([^"]*/annotation/delete\?permalink=([^"]*))"#', $page->body, $links), 'one delete link for each RSVP');
+        $decoded = array_map(static fn (string $value): string => base64_decode(strtr($value, '-_,', '+/='), true) ?: '', $links[2]);
+        $this->assertStringEndsWith('/annotations/first', $decoded[0]);
+        $this->assertStringEndsWith('/annotations/second', $decoded[1], 'the link names the RSVP by its address');
+
+        $action = substr(html_entity_decode($links[1][1], ENT_QUOTES), strlen(rtrim($this->baseUrl(), '/')) + 1);
+        $response = (new \Tests\Acceptance\Browser($this->site()))->submit(ltrim($paths['event'], '/'), $action, [], $cookie);
+        $this->assertContains($response->status, [200, 302, 303], $this->serverLog());
+
+        $left = $this->runInSite(<<<PHP
+        return array_keys(\\Idno\\Common\\Entity::getByID($id)->getAnnotations('rsvp') ?: []);
+        PHP);
+        $this->assertCount(1, $left, 'one RSVP is left');
+        $this->assertStringEndsWith('/annotations/first', $left[0], 'the other one, not the one deleted');
+    }
+
+    /**
+     * The picture and address of an annotation's author come from whoever sent it: an address that is a script, and a picture with a quote
+     * in it, are not printed in the image link.
+     */
+    public function testAHostileAnnotationImageIsInert(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['annotation' => ['owner_url' => 'javascript:alert(1)', 'owner_image' => 'https://x.example/a.png" onerror="y()', 'owner_name' => '"><script>z()</script>']])->draw('entity/annotations/image');
+        PHP);
+
+        $this->assertStringNotContainsString('javascript:', $drawn);
+        $this->assertStringNotContainsString('onerror', $drawn);
+        $this->assertStringNotContainsString('<script', $drawn);
+        $this->assertSame(1, substr_count($drawn, '<img'), 'one image');
+        $this->assertStringContainsString('src=""', $drawn, 'an address that is not http(s) prints nothing');
+        $this->assertStringContainsString('alt="&quot;&gt;&lt;script&gt;z()&lt;/script&gt;"', $drawn);
+    }
+
+    /**
+     * The onboarding shell's toggle script inserts `data-on` and `data-off` as HTML: the name of a syndication account in them is
+     * HTML-escaped inside the attribute, so what the script inserts is the name as text.
+     */
+    public function testAnAccountNameInASyndicationToggleStaysTextWhenTheToggleInsertsItAsHtml(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/begin/connect/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['service' => 'zz', 'username' => 'u', 'name' => 'Carol <b>"C"</b> & co', 'disabled' => '', 'selected' => false])->draw('content/syndication/account');
+        PHP);
+
+        $this->assertSame(1, preg_match('/data-on="([^"]*)"/', $drawn, $match));
+        $inserted = html_entity_decode($match[1], ENT_QUOTES, 'UTF-8');
+        $this->assertStringNotContainsString('<b>', $inserted, 'what the toggle inserts holds no element made from the name');
+        $this->assertStringContainsString('Carol', $inserted);
+        $this->assertStringContainsString('&lt;b&gt;', $inserted, 'the name, escaped for HTML');
+        $this->assertStringContainsString('<i class="fa fa-share-square-o"></i>', $inserted, 'the icon is the markup it was');
     }
 
     /**

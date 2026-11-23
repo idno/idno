@@ -427,7 +427,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         }
         $out['a body given to the shell'] = $draw('entity/shell', ['object' => $status, 'body' => '<p>The body</p>']);
         $out['the feed of nothing and of entities'] = $draw('entity/feed', ['items' => []]) . $draw('entity/feed', ['items' => [$status, false, 'not an entity'], 'count' => 3]);
-        $out['the edit wrapper'] = $draw('entity/editwrapper', ['body' => '<form>edit</form>']);
+        $out['the edit wrapper'] = $draw('entity/editwrapper', ['body' => '<form>edit</form>']) . $draw('entity/editwrapper', ['object' => $status]);
 
         return $out;
         PHP;
@@ -597,6 +597,11 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $private->access = $user->getUUID();
         $out['access of a private post'] = $draw('content/access', ['object' => $private]);
         $site->config()->show_privacy = false;
+        $rsvpAnnotations = [];
+        foreach ([['yes', 1773000300], ['no', 1773000100], ['yes', 1773000200]] as $i => [$answer, $time]) {
+            $rsvpAnnotations[$status->getURL() . '/annotations/rsvp' . $i] = ['permalink' => 'https://example.org/g' . $i, 'owner_name' => 'Guest ' . $i, 'owner_url' => 'https://example.org/g' . $i, 'owner_image' => '', 'content' => 'Guest ' . $i, 'time' => $time, 'rsvp' => $answer];
+        }
+        $out['rsvps of a member who may delete them'] = $draw('entity/annotations/rsvps', ['annotations' => $rsvpAnnotations, 'object' => $status]);
         $out['the comment form'] = $draw('entity/annotations/comment/main', ['object' => $status]);
         $site->session()->logUserOff();
         $out['the comment form of nobody'] = $draw('entity/annotations/comment/main', ['object' => $status]);

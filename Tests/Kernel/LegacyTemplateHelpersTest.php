@@ -287,6 +287,22 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertFalse((bool) $helpers->syndicationSelected('no-such-service', 'me'));
     }
 
+    public function testVisitorMessageIsFriendlyForAVisitorAndHidesATechnicalOne(): void
+    {
+        $helpers = $this->helpers();
+
+        $this->assertSame('Written for visitors', $helpers->visitorMessage(new \RuntimeException('Written for visitors')));
+        $debug = \Idno\Core\Idno::site()->config()->debug;
+        try {
+            \Idno\Core\Idno::site()->config()->debug = false;
+            $this->assertStringNotContainsString('technical detail', $helpers->visitorMessage(new \TypeError('technical detail')));
+            \Idno\Core\Idno::site()->config()->debug = true;
+            $this->assertStringContainsString('technical detail', $helpers->visitorMessage(new \TypeError('technical detail')), 'in debug the message is shown');
+        } finally {
+            \Idno\Core\Idno::site()->config()->debug = $debug;
+        }
+    }
+
     public function testTheSyndicationAndAttachmentLookups(): void
     {
         $helpers = $this->helpers();

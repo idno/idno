@@ -381,6 +381,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $this->page('non-html/jsonfeed-home.txt', '?_t=jsonfeed', 200, 'application/json');
         $this->page('non-html/jsonfeed-offset.txt', '?_t=jsonfeed&offset=10', 200, 'application/json');
         $this->page('non-html/json-home.txt', '?_t=json', 200, 'application/json');
+        $this->page('non-html/json-profile-ada.txt', 'profile/' . self::ADMIN . '?_t=json', 200, 'application/json');
         $this->page('non-html/json-login.txt', 'session/login?_t=json', 200, 'application/json');
         foreach (['status', 'article', 'photo', 'bookmark', 'event', 'reply', 'rsvp', 'checkin', 'media', 'page'] as $name) {
             $this->page('non-html/json-' . $name . '.txt', $paths[$name] . '?_t=json', 200, 'application/json');

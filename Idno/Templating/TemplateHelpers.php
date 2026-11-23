@@ -157,6 +157,11 @@ interface TemplateHelpers
     public function expandUrls(?object $object, string $text): string;
 
     /**
+     * What a visitor may be told of an exception (`ExceptionMessage::forVisitor()`).
+     */
+    public function visitorMessage(\Throwable $exception): string;
+
+    /**
      * Whether the viewer has the syndication service enabled (the service's own checker answers).
      */
     public function syndicationHas(string $service): bool;

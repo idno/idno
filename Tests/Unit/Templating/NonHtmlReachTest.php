@@ -116,6 +116,51 @@ final class NonHtmlReachTest extends TestCase
         $this->assertSame([], array_map(static fn (array $types): string => implode(', ', $types), $inDefault));
     }
 
+    /**
+     * The page bodies (and what they draw) that a non-HTML request can reach and that are drawn from a ported `default` file: each is a
+     * template that, in its `.tpl.php` original, left nothing on the page's template (no `__()` on `$this`, no `$this->name =`), so
+     * drawing it from Twig, on a copy, loses no key of the JSON of the page. A body that left something has a `classic` copy, which is
+     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). Only the group ported with the
+     * entity templates is listed: a later port that a page body reaches extends the pattern and the list.
+     */
+    private const PORTED_BODIES_THAT_LEAVE_NOTHING = [
+        'templates/default/drafts.tpl.php',
+        'templates/default/entity/User/icon.tpl.php',
+        'templates/default/entity/bookmarklet.tpl.php',
+        'templates/default/entity/edit/footer.tpl.php',
+        'templates/default/entity/edit/header.tpl.php',
+        'templates/default/entity/edit/spinner.tpl.php',
+        'templates/default/entity/editwrapper.tpl.php',
+        'templates/default/entity/share.tpl.php',
+        'templates/default/file/picker/donejs.tpl.php',
+        'templates/default/following/add.tpl.php',
+        'templates/default/following/confirm.tpl.php',
+        'templates/default/following/home.tpl.php',
+        'templates/default/pages/403.tpl.php',
+        'templates/default/pages/404.tpl.php',
+        'templates/default/pages/410.tpl.php',
+        'templates/default/pages/500.tpl.php',
+        'templates/default/pages/webmention.tpl.php',
+        'templates/default/stream/home.tpl.php',
+    ];
+
+    public function testAPortedPageBodyANonHtmlTypeCanReachLeavesNothingOnThePageOrHasAClassicCopy(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $reached = [];
+        foreach (self::reachable($root, true) as $files) {
+            foreach ($files as $file) {
+                if (preg_match('#^templates/default/(?:drafts|(?:entity|content|stream|pages|file|following)/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
+                    $reached[$file] = true;
+                }
+            }
+        }
+        $reached = array_keys($reached);
+        sort($reached);
+
+        $this->assertSame(self::PORTED_BODIES_THAT_LEAVE_NOTHING, $reached, 'a ported page body that a feed or JSON request draws: it needs a classic copy if its original left a variable on the page\'s template, or a place in the list if it left none');
+    }
+
     public function testNoClassicFileIsUnreachable(): void
     {
         $root = dirname(__DIR__, 3);

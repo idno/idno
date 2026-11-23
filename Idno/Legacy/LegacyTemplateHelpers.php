@@ -287,6 +287,11 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return Idno::site()->events()->triggerEvent('syndication/selected/' . $service, $data, false);
     }
 
+    public function visitorMessage(\Throwable $exception): string
+    {
+        return \Idno\Core\ExceptionMessage::forVisitor($exception);
+    }
+
     public function syndicationHas(string $service): bool
     {
         return (bool) Idno::site()->syndication()->has($service);

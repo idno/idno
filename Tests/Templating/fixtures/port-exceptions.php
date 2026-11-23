@@ -13,12 +13,21 @@ declare(strict_types=1);
  * @return array<string, array{reason: string, test: string, differences: list<string>}>
  */
 return [
+    'templates/default/content/syndication/account.html.twig' => [
+        'reason' => 'the name of a syndication account is put in the `data-on` and `data-off` attributes, which the onboarding shell\'s toggle script (bootstrap2-toggle) inserts as HTML: the name is HTML-escaped and then attribute-escaped, so it stays text when the script inserts it; the old template escaped it once, so a name with a tag in it became markup. Names without `&`, `<`, `>` or a quote are as they were',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAnAccountNameInASyndicationToggleStaysTextWhenTheToggleInsertsItAsHtml',
+        'differences' => [
+            '294fd4cf78e64184e8ad4d959637869129512e8002655844fcd2289d48397dfa',
+            '218382e50a7728c235b8682f8f4ef43c286cb5c79615138a9f5e3077534560ca',
+            '4449d1c559f65a60839d78c78d52e274888dd0bddb5ce43a0532b3ce08b2fd57',
+        ],
+    ],
     'templates/default/content/syndication/links.html.twig' => [
-        'reason' => 'a link to where a post was syndicated is made from what a service returned: the address is linked only if it is http or https and the identifier is text; the old template printed both into the markup as they were, so a `javascript:` address was a link and an identifier with a tag was markup',
+        'reason' => 'a link to where a post was syndicated is made from what a service returned: the address is linked only if it is http or https (a refused one is no link at all: its icon and identifier are text) and the identifier is text; the old template printed both into the markup as they were, so a `javascript:` address was a link and an identifier with a tag was markup',
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testASyndicationLinkIsEscapedAndOnlyHttpIsLinked',
         'differences' => [
-            '680df9cf5eac997c1818b30914b70d838b49d70a9f21280610911b197f0c4152',
-            '3715c2a01bc13beede9d229b7fa0c7a06acda9a43c1ff14e374510fb6404606e',
+            'fc1d8056fc3a73dc71b12bc361b0ac3ff5037f101172cbbdfedff3f971a0e532',
+            '045baeb2ff5a9b5fc32af671a785f9e5b0f24c610384b7d5002718639be19b60',
         ],
     ],
     'templates/default/entity/annotations/rsvps.html.twig' => [
@@ -26,13 +35,14 @@ return [
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testAnRsvpWithAnAnswerThatIsNotYesMaybeOrNoIsListedAsOther',
         'differences' => [
             '4b1e85b34227b0356aae3ece62c7bedbcbc88cb729a645a314da69829eae47d4',
+            'b9b04e15a44fbb7de8fbbc9621a523fb8f8fdd0fbabae7f95facec2969fa4353',
         ],
     ],
     'templates/default/entity/shell.html.twig' => [
-        'reason' => 'the address a post replies to is the author\'s word or another site\'s (a webmention or a Micropub post names it): only an http or https address is linked, and the old template printed any address, `javascript:` included, in `href`',
+        'reason' => 'the address a post replies to is the author\'s word or another site\'s (a webmention or a Micropub post names it): only an http or https address is linked, and one that is refused is printed as text, with no link (an empty `href` would be the post itself for a microformats consumer); the old template printed any address, `javascript:` included, in `href`',
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testAnInReplyToAddressThatIsNotHttpIsNotLinked',
         'differences' => [
-            '2e81cd05d17796527dcb5f8112ff884bd964176866c23c13159b61e6a2d389f3',
+            '9c8ac3f8c8ddaec33d9fd409e4e298ea02cbff815b93e00894704f44ec902fb1',
         ],
     ],
     'templates/default/file/picker/donejs.html.twig' => [

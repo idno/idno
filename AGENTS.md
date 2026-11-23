@@ -2811,10 +2811,10 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
     `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins, the account, admin and form templates are not ported
     yet). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
-    by `__()` is gone for the Twig ones, and the pages that showed one change by it, on purpose: the JSON of a page no longer holds the keys `annotation`
-    and `value` that the annotation lists and the profile left behind (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
-    page-body templates `entity/wrapper` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
-    `fixtures/fallback-trace.php`), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
+    by `__()` is gone for the Twig ones, and an HTML page that showed one changes by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
+    page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
+    `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPortedPageBodyANonHtmlTypeCanReachLeavesNothingOnThePageOrHasAClassicCopy` lists the other
+    ported page bodies a non-HTML request can reach, each of which left nothing on the page, and fails for a new one; `non-html/json-profile-ada.txt` pins the profile page's JSON), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
     (`entity/feed` drew each note with `object` left on the template, which the permalink page's head used). Helpers added for them:
     `is_entity`, `random_id` (`md5(mt_rand())`, for the ids the normaliser numbers), `default_avatar(uuid)`, `visitor_message(exception)`
     (`ExceptionMessage::forVisitor()`), `profile_link(address)` (`Idno\Templating\ProfileLink`: the icon, class and text of a profile address; the address

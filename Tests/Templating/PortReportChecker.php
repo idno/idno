@@ -44,6 +44,7 @@ final class PortReportChecker
         'templates/default/entity/annotations/shares.html.twig',
         'templates/default/entity/content/embed.html.twig',
         'templates/default/entity/edit/header.html.twig',
+        'templates/default/entity/editwrapper.html.twig',
         'templates/default/entity/edit/spinner.html.twig',
         'templates/default/entity/feed.html.twig',
         'templates/default/entity/share.html.twig',

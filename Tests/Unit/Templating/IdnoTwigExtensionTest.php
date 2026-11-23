@@ -551,7 +551,14 @@ final class IdnoTwigExtensionTest extends TestCase
         $this->assertSame('abb 1', $this->render("{{ 'a<b>&b \"1\"'|alnum_only }}"), 'ASCII letters, digits and spaces');
         $this->assertSame('YS1iYz8-', $this->render("{{ 'a-bc?>'|base64_url }}"), 'URL-safe base64 as Webservice makes it');
         $this->assertSame('1|0', $this->render("{{ is_entity(e) ? 1 : 0 }}|{{ is_entity(n) ? 1 : 0 }}", ['e' => $this->createMock(\Idno\Common\Entity::class), 'n' => 'not']));
-        $this->assertSame('', $this->render("{{ visitor_message('a string') }}"), 'only an exception has a message');
+    }
+
+    public function testVisitorMessageAsksTheHelpersAboutAnExceptionAndNothingElse(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+
+        $this->assertSame('Shown|Something went wrong.|', $this->render("{{ visitor_message(a) }}|{{ visitor_message(b) }}|{{ visitor_message('a string') }}", ['a' => new \RuntimeException('Shown'), 'b' => new \TypeError('Hidden')], $helpers));
+        $this->assertSame(['visitorMessage', 'visitorMessage'], array_map(static fn (array $call): string => $call[0], $helpers->calls), 'a string is not asked about');
     }
 
     public function testARandomIdIs32HexDigitsAndDiffers(): void

@@ -119,7 +119,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('is_entity', self::isEntity(...)),
             new TwigFunction('random_id', self::randomId(...)),
             new TwigFunction('default_avatar', self::defaultAvatar(...)),
-            new TwigFunction('visitor_message', self::visitorMessage(...)),
+            new TwigFunction('visitor_message', $this->visitorMessage(...)),
             new TwigFunction('profile_link', $this->profileLink(...)),
             new TwigFunction('embeds', self::embeds(...)),
             new TwigFunction('syndication_has', $this->syndicationHas(...)),
@@ -551,12 +551,12 @@ final class IdnoTwigExtension extends AbstractExtension
     }
 
     /**
-     * What a visitor is told of an exception (`ExceptionMessage::forVisitor()`): its message when it was written for visitors,
-     * else that something went wrong, and the message itself only when `debug` is set.
+     * What a visitor is told of an exception (the site's rule: its message when it was written for visitors, else that something went
+     * wrong, and the message itself only when `debug` is set); empty for a value that is not an exception.
      */
-    public static function visitorMessage(mixed $exception): string
+    public function visitorMessage(mixed $exception): string
     {
-        return $exception instanceof \Throwable ? \Idno\Core\ExceptionMessage::forVisitor($exception) : '';
+        return $exception instanceof \Throwable ? $this->helpers->visitorMessage($exception) : '';
     }
 
     /**
