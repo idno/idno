@@ -196,10 +196,11 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         // The archive: a button that makes one, and what it holds said plainly next to it.
         $this->assertStringContainsString('action="' . $this->site()->baseUrl() . 'admin/export/generate/"', $page->body);
         $this->assertStringContainsString('>Create archive</button>', $page->body);
-        $this->assertStringContainsString("every account's password hash", $page->body);
-        $this->assertStringContainsString('as carefully as a database backup', $page->body);
-        $this->assertStringContainsString('after a week', $page->body);
-        $this->assertStringContainsString("includes every member's private posts", $page->body, 'what an administrator\'s export holds');
+        $text = html_entity_decode($page->body, ENT_QUOTES | ENT_HTML5);
+        $this->assertStringContainsString("every account's password hash", $text);
+        $this->assertStringContainsString('as carefully as a database backup', $text);
+        $this->assertStringContainsString('after a week', $text);
+        $this->assertStringContainsString("includes every member's private posts", $text, 'what an administrator\'s export holds');
         $this->assertStringNotContainsString('file/', substr($page->body, strpos($page->body, 'Full archive') ?: 0), 'there is no archive to download yet');
     }
 

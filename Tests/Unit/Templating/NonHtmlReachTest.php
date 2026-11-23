@@ -120,7 +120,7 @@ final class NonHtmlReachTest extends TestCase
      * The page bodies (and what they draw) that a non-HTML request can reach and that are drawn from a ported `default` file: each is a
      * template that, in its `.tpl.php` original, left nothing on the page's template (no `__()` on `$this`, no `$this->name =`), so
      * drawing it from Twig, on a copy, loses no key of the JSON of the page. A body that left something has a `classic` copy, which is
-     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). The account pages that a JSON request draws (`classic` copies exist for the menu, login, settings, tools and export) leave nothing either: the forms they draw (`forms/token`, the captcha) are drawn on the site's own object by `signForm()`, which is the same call as before. A later port that a page body reaches extends the pattern and the list.
+     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). The account pages that a JSON request draws (`classic` copies exist for the menu, login, settings, tools and export) leave nothing either: the forms they draw (`forms/token`, the captcha) are drawn on the site's own object by `signForm()`, which is the same call as before. The admin pages that a JSON request draws leave nothing either, but for `dependencies` and `statistics/report`, which have `classic` copies of their originals (the `__()` calls of the originals leave `version`, `extension`, `report` and `level` on the page's template; the menu a body draws is the `classic` one, which leaves nothing). A later port that a page body reaches extends the pattern and the list.
      */
     private const PORTED_BODIES_THAT_LEAVE_NOTHING = [
         'templates/default/account/password.tpl.php',
@@ -132,6 +132,16 @@ final class NonHtmlReachTest extends TestCase
         'templates/default/account/settings/following.tpl.php',
         'templates/default/account/settings/following/bookmarklet.tpl.php',
         'templates/default/account/settings/following/mf2user.tpl.php',
+        'templates/default/admin/about.tpl.php',
+        'templates/default/admin/dependencies/build.tpl.php',
+        'templates/default/admin/dependencies/extension.tpl.php',
+        'templates/default/admin/dependencies/idno.tpl.php',
+        'templates/default/admin/dependencies/php.tpl.php',
+        'templates/default/admin/dependencies/plugin.tpl.php',
+        'templates/default/admin/diagnostics.tpl.php',
+        'templates/default/admin/home/description.tpl.php',
+        'templates/default/admin/homepage.tpl.php',
+        'templates/default/admin/legacytables/body.tpl.php',
         'templates/default/drafts.tpl.php',
         'templates/default/entity/User/icon.tpl.php',
         'templates/default/entity/bookmarklet.tpl.php',
@@ -163,7 +173,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding)/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
+                if (preg_match('#^templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
                     $reached[$file] = true;
                 }
             }

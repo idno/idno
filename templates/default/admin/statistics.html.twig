@@ -1,0 +1,13 @@
+<h1 class="idno-admin-page-title">{{ t('Statistics') }}</h1>
+    <p class="idno-admin-description">
+        {{ t('This page provides you with information and statistics about your Idno site.') }}
+    </p>
+
+    {% if statistics and statistics is iterable %}
+        {% for tab, report in statistics %}
+        <div class="idno-admin-card">
+            <h2 class="idno-admin-card-title">{{ tab }}</h2>
+            {{ idno_include('admin/statistics/report', {report: report}) }}
+        </div>
+        {% endfor %}
+    {% endif %}

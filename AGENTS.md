@@ -2877,6 +2877,24 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `account/settings/tools` exist, and the other bodies a JSON request can reach left nothing on the page's template (`NonHtmlReachTest`). The golden pages
     of `account/settings/tools` and `account/settings/following` changed only in how the site's address is written inside their scripts.
     `form_urlencode` (`urlencode()`: a tag link writes a space as `+`, as it always did).
+  - The admin pages are Twig too (`templates/default/admin/**`: 25 files beside their frozen `.tpl.php`). A page that needs a lookup only its templates
+    use computes it and passes it as a variable: `Pages\Admin\Plugins` passes `plugins_visible` (the plugins the site does not hide, each with its
+    `shortname`, by name: what the page listed after `isVisible()` and `ksort()`), `Themes` passes `themes_with_preview` (the themes with a
+    `preview.png`: a template does not touch the file system) and `LegacyTables` passes `restored_message`; the JSON of those pages gains those keys. New
+    functions: `system_info()` (`idno`, `build`, `php` and the required `extensions`), `extension_loaded(name)`, `version_compare(a, b)`,
+    `can_make_site_private()` and `legacy_tables_in_menu()` (the admin menu's entry for the tables an upgrade left). The settings page and the menu read
+    stored settings with `setting()`. The email form shows the stored SMTP user name and password, which `setting()` refuses: `Pages\Admin\Email`
+    draws the body on a COPY of the page's template (`withVars()`) that holds exactly those two values, so they are printed once each, in their own fields,
+    and are never a variable of the page, which the JSON and JSONP output of a page prints (`TemplateEscapingTest::testTheEmailFormPrintsTheStoredSecretsOnlyInTheirFieldsAndNeverAsAVariableOfThePage`).
+    `admin/legacytables/body` escapes every database value by autoescape, as its `$e` did (`AdminLegacyTablesTest` is unchanged). A diagnostics message is
+    HTML written by the page and by the listeners of `diagnostics/basics`, so it is the one value printed with `|raw` (`raw-allowlist.php`). Values an
+    administrator or a plugin supplied (a plugin's name in a dependency label, statistics labels and values, an invitation's address, a blocked address) are
+    escaped, and the diagnostics and logs scripts write the page's address with `e('js')` (`port-exceptions.php`, `TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint`,
+    `testTheAdminScriptsWriteThePagesAddressForAScript`). The homepage settings page no longer draws the icon of each content type and a copy of its form inside HTML
+    comments (`testTheHomepageSettingsHoldNoCommentedOutMarkup`; golden `logged-in/admin-homepage.html`). The JSON of these pages is unchanged but for the new keys:
+    `classic` copies of the originals of `admin/dependencies` and `admin/statistics/report` exist (their `__()` calls left `version`, `extension`, `report` and
+    `level` on the page's template), and the other bodies a JSON request can reach left nothing (`NonHtmlReachTest`). `BuiltInLookTest::testAdminMenuItemsOfBundledPluginsAreListed` pins the
+    plugin entries of the menu and their order.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

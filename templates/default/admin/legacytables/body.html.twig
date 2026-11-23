@@ -1,0 +1,99 @@
+{# The body of /admin/legacytables (Idno\Pages\Admin\LegacyTables), shared by the `default` and the `classic` templates of the page. Everything that comes from the database (table names, uuids, reasons) is escaped by autoescape. #}
+{% set url = site_url() ~ 'admin/legacytables/' %}
+{% set tables = tables ?? [] %}
+{% set reappeared = reappeared ?? [] %}
+{% set rejects = rejects ?? [] %}
+{% set rejectCount = (reject_count ?? 0)|to_int %}
+{% set offset = (offset ?? 0)|to_int %}
+{% set pageSize = (page_size ?? 100)|to_int %}
+<p class="explanation idno-admin-description">
+    {{ t('When this site was upgraded from Idno 1.x, the tables of the old database were kept, renamed legacy_ followed by their old name. The site no longer reads them. Keep them until you are sure the upgrade went well; then you can delete them here.') }}</p>
+
+{% if not tables and not reappeared and rejectCount == 0 %}
+<div class="idno-admin-card" id="legacytables-empty">
+    <p>{{ t('There is nothing here: this site has no legacy tables, and no rows were left out by an upgrade.') }}</p>
+</div>
+{% endif %}
+
+{% if tables %}
+<div class="idno-admin-card" id="legacytables-tables">
+    <h2 class="idno-admin-card-title">{{ t('Tables of the Idno 1.x database') }}</h2>
+    <table class="table">
+        <thead>
+            <tr><th>{{ t('Table') }}</th><th>{{ t('Rows (approximate)') }}</th></tr>
+        </thead>
+        <tbody>
+        {% for name, rows in tables %}
+            <tr><td><code>{{ name }}</code></td><td>{{ rows|to_int }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if not deletable and restored %}
+    <p id="legacytables-restored"><strong>{{ t('These tables cannot be deleted now.') }}</strong> {{ restored_message }}</p>
+    {% elseif deletable %}
+    <form action="{{ url }}" method="post">
+        <p>
+            {{ t("The row counts are the database's estimates.") }}            {{ t('Deleting these tables cannot be undone, and afterwards the upgrade can no longer be reversed. Make a backup of the database first if you might want them again. The rows that were not carried over (below) are kept.') }}
+        </p>
+        <p>
+            <label for="legacytables-confirm">{{ t('Type delete to confirm:') }}</label>
+            <input type="text" name="confirm" id="legacytables-confirm" value="" autocomplete="off" class="form-control idno-input">
+        </p>
+        <p>
+            <button type="submit" class="btn btn-danger idno-btn idno-btn-danger">{{ t('Delete the legacy tables') }}</button>
+        </p>
+        {{ form_token(url) }}
+    </form>
+    {% else %}
+    <p>{{ t('The upgrade from Idno 1.x is not complete, so these tables cannot be deleted yet.') }}</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if rejectCount > 0 %}
+<div class="idno-admin-card" id="legacytables-rejects">
+    <h2 class="idno-admin-card-title">{{ t('Rows that were not carried over') }}</h2>
+    <p>
+        {{ t('%d rows of the Idno 1.x database could not be carried into the new database. Each is listed with the reason. Their full contents are kept in the database table idno_upgrade_rejects, which is never deleted (deleting the legacy tables does not delete it).', [rejectCount]) }}
+    </p>
+    <table class="table">
+        <thead>
+            <tr><th>{{ t('Collection') }}</th><th>{{ t('Address (uuid) in 1.x') }}</th><th>{{ t('Reason') }}</th></tr>
+        </thead>
+        <tbody>
+        {% for reject in rejects %}
+            <tr>
+                <td>{{ reject.collection }}</td>
+                <td><code>{{ reject.legacy_uuid }}</code></td>
+                <td>{{ reject.reason }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if rejectCount > pageSize %}
+    <p>
+        {{ t('Showing %d to %d of %d.', [offset + 1, offset + rejects|length, rejectCount]) }}
+        {% if offset > 0 %}
+            <a href="{{ url ~ '?offset=' ~ max(0, offset - pageSize) }}">{{ t('Previous') }}</a>
+        {% endif %}
+        {% if offset + pageSize < rejectCount %}
+            <a href="{{ url ~ '?offset=' ~ (offset + pageSize) }}">{{ t('Next') }}</a>
+        {% endif %}
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if reappeared %}
+<div class="idno-admin-card" id="legacytables-reappeared">
+    <h2 class="idno-admin-card-title">{{ t('Tables created by an old Idno process') }}</h2>
+    <p>
+        {{ t('These tables have the names of the Idno 1.x tables, but they were created after the upgrade, by a process still running the old version of Idno (a queue or cron service, for example). Nothing in them is part of this site, and the site never reads them. Stop that process. These tables are not deleted from here.') }}
+    </p>
+    <ul>
+    {% for name in reappeared %}
+        <li><code>{{ name }}</code></li>
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}

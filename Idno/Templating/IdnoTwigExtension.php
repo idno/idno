@@ -71,6 +71,11 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('setting', $this->setting(...)),
             new TwigFunction('can_write', $this->canWrite(...)),
             new TwigFunction('can_add_users', $this->canAddUsers(...)),
+            new TwigFunction('can_make_site_private', $this->canMakeSitePrivate(...)),
+            new TwigFunction('legacy_tables_in_menu', $this->legacyTablesInMenu(...)),
+            new TwigFunction('system_info', self::systemInfo(...)),
+            new TwigFunction('extension_loaded', self::extensionLoaded(...)),
+            new TwigFunction('version_compare', self::versionCompare(...)),
             new TwigFunction('content_types', $this->contentTypes(...)),
             new TwigFunction('content_type_for_post_type', $this->contentTypeForPostType(...)),
 
@@ -250,6 +255,54 @@ final class IdnoTwigExtension extends AbstractExtension
     public function canAddUsers(): bool
     {
         return $this->helpers->canAddUsers();
+    }
+
+    /**
+     * Whether the administrator may make the site private (the `site/walledgarden/check` event decides, as `Config::canMakeSitePrivate()` does).
+     */
+    public function canMakeSitePrivate(): bool
+    {
+        return $this->helpers->canMakeSitePrivate();
+    }
+
+    /**
+     * Whether the admin menu lists the tables an upgrade from Idno 1.x left.
+     */
+    public function legacyTablesInMenu(): bool
+    {
+        return $this->helpers->legacyTablesInMenu();
+    }
+
+    /**
+     * What the admin's about and dependencies pages say of the software: `idno` (the version), `build`, `php` (the running PHP's version)
+     * and `extensions` (the PHP extensions Idno requires, by name).
+     *
+     * @return array{idno: mixed, build: mixed, php: string, extensions: list<string>}
+     */
+    public static function systemInfo(): array
+    {
+        return [
+            'idno' => \Idno\Core\Version::version(),
+            'build' => \Idno\Core\Version::build(),
+            'php' => phpversion(),
+            'extensions' => array_values(\Idno\Core\Installer::requiredModules()),
+        ];
+    }
+
+    /**
+     * Whether the PHP extension of that name is loaded.
+     */
+    public static function extensionLoaded(mixed $name): bool
+    {
+        return extension_loaded(self::text($name));
+    }
+
+    /**
+     * PHP's `version_compare()` of two version numbers: -1, 0 or 1.
+     */
+    public static function versionCompare(mixed $installed, mixed $required): int
+    {
+        return version_compare(self::text($installed), self::text($required));
     }
 
     /**

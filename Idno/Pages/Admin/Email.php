@@ -13,7 +13,14 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->draw('admin/email');
+            // The form shows the stored SMTP user name and password (an administrator's page, as it always did), and the template function
+            // that reads settings refuses them: they go to the body's own draw, on a copy of the page's template, so they are never a
+            // variable of the page (the JSON and JSONP output of a page prints every variable of its template).
+            $config   = \Idno\Core\Idno::site()->config();
+            $t->body  = $t->withVars(array_merge($t->vars, [
+                'smtp_username' => $config->smtp_username,
+                'smtp_password' => $config->smtp_password,
+            ]))->draw('admin/email');
             $t->title = \Idno\Core\Idno::site()->language()->_('Email');
             $t->drawPage();
 

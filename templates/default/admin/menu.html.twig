@@ -1,0 +1,61 @@
+<nav class="idno-admin-nav">
+    <a href="{{ site_url() }}admin/"
+       class="idno-admin-nav-item{% if path_matches('/admin/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'layout-dashboard'}) }}
+        <span>{{ t('Dashboard') }}</span>
+    </a>
+    <a href="{{ site_url() }}admin/themes/"
+       class="idno-admin-nav-item{% if path_matches('/admin/themes/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'palette'}) }}
+        <span>{{ t('Themes') }}</span>
+    </a>
+    <a href="{{ site_url() }}admin/plugins/"
+       class="idno-admin-nav-item{% if path_matches('/admin/plugins/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'puzzle'}) }}
+        <span>{{ t('Plugins') }}</span>
+    </a>
+    <a href="{{ site_url() }}admin/users/"
+       class="idno-admin-nav-item{% if path_matches('/admin/users/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'users'}) }}
+        <span>{{ t('Users') }}</span>
+    </a>
+    <a href="{{ site_url() }}admin/email/"
+       class="idno-admin-nav-item{% if path_matches('/admin/email/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'mail'}) }}
+        <span>{{ t('Email') }}</span>
+    </a>
+
+    {{ idno_include('admin/menu/items') }}
+
+    <div class="idno-admin-nav-divider"></div>
+
+    <a href="{{ site_url() }}admin/statistics/"
+       class="idno-admin-nav-item{% if path_matches('/admin/statistics/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'bar-chart-3'}) }}
+        <span>{{ t('Statistics') }}</span>
+    </a>
+    {% if setting('capture_logs') %}
+    <a href="{{ site_url() }}admin/logs/"
+       class="idno-admin-nav-item{% if path_matches('/admin/logs/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'scroll-text'}) }}
+        <span>{{ t('Logs') }}</span>
+    </a>
+    {% endif %}
+    {% if legacy_tables_in_menu() %}
+    <a href="{{ site_url() }}admin/legacytables/"
+       class="idno-admin-nav-item{% if path_matches('/admin/legacytables/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'box'}) }}
+        <span>{{ t('Legacy tables') }}</span>
+    </a>
+    {% endif %}
+    <a href="{{ site_url() }}admin/import/"
+       class="idno-admin-nav-item{% if path_matches('/admin/import/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'upload'}) }}
+        <span>{{ t('Import') }}</span>
+    </a>
+    <a href="{{ site_url() }}admin/export/"
+       class="idno-admin-nav-item{% if path_matches('/admin/export/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'download'}) }}
+        <span>{{ t('Export') }}</span>
+    </a>
+</nav>

@@ -15,14 +15,39 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
             $t        = \Idno\Core\Idno::site()->template();
+            $stored   = \Idno\Core\Idno::site()->themes()->getStored();
             $t->body  = $t->__(
                 array(
-                'themes_stored' => \Idno\Core\Idno::site()->themes()->getStored(),
+                'themes_stored' => $stored,
                 'theme'         => \Idno\Core\Idno::site()->themes()->get(),
+                'themes_with_preview' => $this->themesWithPreview($stored),
                 )
             )->draw('admin/themes');
             $t->title = \Idno\Core\Idno::site()->language()->_('Themes');
             $t->drawPage();
+        }
+
+        /**
+         * The themes that have a `preview.png` in their directory (the built-in look, `default`, has its own picture).
+         *
+         * @param  mixed $stored what Themes::getStored() gave
+         * @return array<int, string>
+         */
+        private function themesWithPreview($stored)
+        {
+            $themes = [];
+            if (!empty($stored) && is_array($stored)) {
+                foreach ($stored as $shortname => $theme) {
+                    // As the card names it: the built-in look (no folder) is `default`
+                    $name = empty($shortname) ? 'default' : $shortname;
+                    $path = !empty($theme['Theme description']['path']) ? $theme['Theme description']['path'] : false;
+                    if ($name !== 'default' && file_exists($path . 'preview.png')) {
+                        $themes[] = (string) $name;
+                    }
+                }
+            }
+
+            return $themes;
         }
 
         function postContent()

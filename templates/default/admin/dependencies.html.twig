@@ -1,0 +1,33 @@
+<div class="row">
+
+    <div class="col-md-10 col-md-offset-1">
+        <h1>{{ t('Dependencies') }}</h1>
+        {{ idno_include('admin/menu') }}
+        <div class="explanation">
+            <p>
+                {{ t("The following are system components that are required for Idno to fully run. It's worth checking to make sure that they're all installed. If you need help installing any required packages, ask your web host or system administrator.") }}
+            </p>
+        </div>
+    </div>
+
+</div>
+<div class="row">
+
+    <div class="col-md-5 col-md-offset-1">
+        <h3>{{ t('PHP') }}</h3>
+        <p>
+            {{ t('Version %s or greater', ['7.0']) }}<br />
+            {{ idno_include('admin/dependencies/php', {version: 7.0}) }}
+        </p>
+        <p>
+            {{ t('PHP extensions required') }}<br />
+            <small>{{ t('These extend the way PHP works, and are required for functionality like database storage, webmentions, etc. Click an extension name to learn more about it, including installation instructions.') }}</small><br />
+            {% for extension in system_info().extensions %}{{ idno_include('admin/dependencies/extension', {extension: extension}) }}{% endfor %}
+        </p>
+    </div>
+
+    <div class="col-md-5">
+
+    </div>
+
+</div>

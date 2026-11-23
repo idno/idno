@@ -38,19 +38,20 @@ namespace Idno\Pages\Admin {
             }
 
             $t = \Idno\Core\Idno::site()->template();
-            $t->body = $t->__(
-                [
-                    'available' => $tables->available(),
-                    'tables' => $tables->present(),
-                    'deletable' => $tables->deletable(),
-                    'restored' => $tables->oneXBesideCompletedUpgrade(),
-                    'reappeared' => $tables->reappeared(),
-                    'rejects' => $count > 0 ? $tables->rejects(self::PAGE_SIZE, $offset) : [],
-                    'reject_count' => $count,
-                    'offset' => $offset,
-                    'page_size' => self::PAGE_SIZE,
-                ]
-            )->draw('admin/legacytables');
+            $vars = [
+                'available' => $tables->available(),
+                'tables' => $tables->present(),
+                'deletable' => $tables->deletable(),
+                'restored' => $tables->oneXBesideCompletedUpgrade(),
+                'reappeared' => $tables->reappeared(),
+                'rejects' => $count > 0 ? $tables->rejects(self::PAGE_SIZE, $offset) : [],
+                'reject_count' => $count,
+                'offset' => $offset,
+                'page_size' => self::PAGE_SIZE,
+            ];
+            // The text the template shows beside "these tables cannot be deleted now" (a template does not call a class)
+            $vars['restored_message'] = $vars['restored'] ? \Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text : '';
+            $t->body = $t->__($vars)->draw('admin/legacytables');
             $t->title = \Idno\Core\Idno::site()->language()->_('Legacy tables');
             $t->drawPage();
         }

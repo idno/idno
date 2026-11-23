@@ -1,0 +1,22 @@
+<h1 class="idno-admin-page-title">{{ t('Themes') }}</h1>
+    <p class="idno-admin-description">
+        {{ t('Themes allow you to change the way your site looks. The following themes are installed.') }}
+    </p>
+
+    {% if themes_stored and themes_stored is iterable %}
+        {% set currentTheme = theme ? theme : false %}
+
+        {# Draw active theme first #}
+        {% for shortname, stored in themes_stored %}
+            {% if shortname == currentTheme %}
+                {{ idno_include('admin/themes/theme', {theme: stored|merge({shortname: shortname}), current_theme: theme}) }}
+            {% endif %}
+        {% endfor %}
+
+        {# Draw remaining themes #}
+        {% for shortname, stored in themes_stored %}
+            {% if shortname != currentTheme %}
+                {{ idno_include('admin/themes/theme', {theme: stored|merge({shortname: shortname}), current_theme: theme}) }}
+            {% endif %}
+        {% endfor %}
+    {% endif %}

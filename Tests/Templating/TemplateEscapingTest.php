@@ -950,6 +950,164 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * The diagnostics and logs pages ask for their own address in a script, and the address holds what a visitor typed: it is written as
+     * one JavaScript string, so a query with `</script>` in it opens no tag. (The old templates printed it as it was.)
+     */
+    public function testTheAdminScriptsWriteThePagesAddressForAScript(): void
+    {
+        $this->seedSite();
+        $uri = '/admin/diagnostics/?a=</script><script>alert(1)</script>&b="\'';
+
+        $out = $this->runInSite($this->pageCode($uri) . <<<'PHP'
+        $draw = static function (string $name, array $vars = []): string {
+            $template = clone \Idno\Core\Idno::site()->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+
+        return ['diagnostics' => $draw('admin/diagnostics', ['basics' => ['status' => 'Ok', 'report' => []]]), 'logs' => $draw('admin/logs')];
+        PHP);
+        $this->assertIsArray($out);
+
+        foreach (['diagnostics', 'logs'] as $page) {
+            $this->assertSame(1, substr_count($out[$page], '<script'), $page . ': the page has its one script, and the address did not open another');
+            $this->assertStringNotContainsString('alert(1)</script>', $out[$page]);
+            $this->assertStringContainsString("'http\\u003A\\/\\/", $out[$page], $page . ': the address is one JavaScript string');
+        }
+    }
+
+    /**
+     * What an administrator or a plugin typed and the admin pages print: a plugin's name and version in a dependency label, the labels and
+     * values of the statistics, an invitation's address and a blocked address, a plugin's and a theme's descriptions, the site's title in
+     * the settings, the tables the upgrade left. Each is escaped (the old templates printed the first four as they were). The one value
+     * printed as it comes is a diagnostics message, which is HTML the page and the plugins that listen for `diagnostics/basics` write.
+     */
+    public function testTheAdminPagesEscapeWhatTheyPrint(): void
+    {
+        $this->seedSite();
+        $hostile = '"><script>alert(1)</script>\'';
+
+        $out = $this->runInSite($this->pageCode('/admin/') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $site = \Idno\Core\Idno::site();
+        $draw = static function (string $name, array $vars = []) use ($site): string {
+            $template = clone $site->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+        $config = $site->config();
+        $invitation = new \Idno\Entities\Invitation();
+        $invitation->email = $hostile;
+        $invitation->created = 1773000000;
+        $config->config['blocked_emails'] = [$hostile];
+        $config->config['title'] = $hostile;
+        $config->config['smtp_host'] = $hostile;
+        $out = [];
+        $out['dependency'] = $draw('admin/dependencies/plugin', ['plugin' => $hostile, 'version' => $hostile, 'plugins_stored' => [], 'plugins_loaded' => []]);
+        $out['statistics'] = $draw('admin/statistics', ['statistics' => [$hostile => [$hostile => $hostile, 'Nested' => [$hostile => $hostile]]]]);
+        $out['users'] = $draw('admin/users', ['count' => 1, 'invitations' => [$invitation]]);
+        $out['settings'] = $draw('admin/home');
+        $out['email'] = $draw('admin/email', ['smtp_username' => $hostile, 'smtp_password' => $hostile]);
+        $plugin = ['Plugin description' => ['name' => $hostile, 'version' => $hostile, 'author' => $hostile, 'author_url' => $hostile, 'description' => $hostile], 'shortname' => $hostile];
+        $out['plugins'] = $draw('admin/plugins', ['plugins_loaded' => [], 'plugins_visible' => [$plugin]]);
+        $theme = ['Theme description' => ['name' => $hostile, 'version' => $hostile, 'author' => $hostile, 'author_url' => $hostile, 'description' => $hostile], 'shortname' => $hostile];
+        $out['themes'] = $draw('admin/themes', ['themes_stored' => [$hostile => $theme], 'theme' => '']);
+        $out['legacy tables'] = $draw('admin/legacytables', ['tables' => [$hostile => 3], 'rejects' => [['collection' => $hostile, 'legacy_uuid' => $hostile, 'reason' => $hostile]], 'reject_count' => 1, 'reappeared' => [$hostile], 'restored' => true, 'restored_message' => $hostile]);
+        $out['diagnostics'] = $draw('admin/diagnostics', ['basics' => ['status' => 'Failure', 'report' => ['x' => ['status' => 'Warning', 'message' => 'See <a href="https://example.org/update">the update</a>']]]]);
+
+        return $out;
+        PHP);
+        $this->assertIsArray($out);
+
+        foreach ($out as $page => $html) {
+            $this->assertStringNotContainsString('<script>alert(1)', $html, $page . ': a script element a value opened');
+            $this->assertStringNotContainsString('"><script', $html, $page . ': a value that ended its attribute');
+            if ($page !== 'diagnostics') {
+                $this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html, $page . ': the value is shown as text');
+            }
+        }
+        $this->assertStringContainsString('See <a href="https://example.org/update">the update</a>', $out['diagnostics'], 'a diagnostics message is the HTML its writer made');
+    }
+
+    /**
+     * The homepage settings page drew the icon of each content type inside an HTML comment, and a whole copy of its form inside another: neither
+     * shows, and neither is drawn now.
+     */
+    public function testTheHomepageSettingsHoldNoCommentedOutMarkup(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/admin/homepage/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+        $types = \Idno\Common\ContentType::getRegistered();
+
+        return $template->__(['content_types' => $types, 'default_content_types' => [$types[0]->getEntityClass()]])->draw('admin/homepage');
+        PHP);
+
+        $this->assertStringContainsString('name="default_feed_content[]"', $drawn, 'the page is drawn: the test is looking at it');
+        $this->assertStringContainsString('checked="checked"', $drawn);
+        $this->assertStringNotContainsString('<!--', $drawn);
+    }
+
+    /**
+     * The email form shows the stored SMTP user name and password to the administrator, as it always has, and nowhere else: each is printed
+     * once, in its own field, and neither is a variable of the page, which the JSON and JSONP output of a page prints (JSONP is readable by
+     * another site).
+     */
+    public function testTheEmailFormPrintsTheStoredSecretsOnlyInTheirFieldsAndNeverAsAVariableOfThePage(): void
+    {
+        $this->seedSite();
+        $admin = $this->loginAsAdmin();
+        $this->runInSite(<<<'PHP'
+        $config = \Idno\Core\Idno::site()->config();
+        $config->config['smtp_host'] = 'smtp.example.org';
+        $config->config['smtp_username'] = 'mailer-user-7731';
+        $config->config['smtp_password'] = 'mailer-secret-9142';
+        $config->save();
+
+        return true;
+        PHP);
+
+        $html = $this->site()->request('GET', 'admin/email/', ['Cookie' => $admin])->body;
+
+        $this->assertSame(1, substr_count($html, 'mailer-secret-9142'), 'the password is printed once');
+        $this->assertSame(1, substr_count($html, 'mailer-user-7731'), 'the user name is printed once');
+        $this->assertMatchesRegularExpression('/name="smtp_password"[^>]*value="mailer-secret-9142"/s', $html);
+        $this->assertMatchesRegularExpression('/name="smtp_username"[^>]*value="mailer-user-7731"/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/(data-[a-z-]+|<script)[^>]*mailer-secret-9142/s', $html);
+        $response = $this->site()->request('GET', 'admin/email/?_t=json', ['Cookie' => $admin]);
+        $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'));
+        $this->assertStringContainsString('"title"', $response->body, 'the JSON output is the page\'s variables: the test is looking at them');
+        $this->assertStringNotContainsString('mailer-secret-9142', $response->body, 'the JSON output of the page has no password');
+        $this->assertStringNotContainsString('mailer-user-7731', $response->body, 'the JSON output of the page has no user name');
+    }
+
+    /**
+     * The plugins page lists the plugins the site does not hide, by name.
+     */
+    public function testThePluginsPageListsTheVisiblePluginsByName(): void
+    {
+        $this->seedSite();
+        $admin = $this->loginAsAdmin();
+        $this->runInSite(<<<'PHP'
+        $config = \Idno\Core\Idno::site()->config();
+        $config->config['hiddenplugins'] = ['Status'];
+        $config->save();
+
+        return true;
+        PHP);
+
+        $html = $this->site()->request('GET', 'admin/plugins/', ['Cookie' => $admin])->body;
+
+        $this->assertStringNotContainsString('id="plugin-status"', $html, 'a hidden plugin is not listed');
+        $this->assertGreaterThan(3, preg_match_all('/<div class="idno-plugin-name">\s*([^<]*?)\s*<span/', $html, $names));
+        $names = $names[1];
+        $sorted = $names;
+        sort($sorted);
+        $this->assertSame($sorted, $names, 'the plugins are listed by name');
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

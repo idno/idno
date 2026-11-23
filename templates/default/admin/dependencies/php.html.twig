@@ -1,0 +1,1 @@
+{% set details = t('%s installed', [system_info().php]) %}{% if version_compare(system_info().php, version) < 0 %}{% set label = 'label-danger' %}{% set details = version ~ " - (" ~ details ~ ")" %}{% else %}{% set label = 'label-success' %}{% endif %}<span class="label {{ label }}">{{ details }}</span> 

@@ -101,6 +101,16 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return true;
     }
 
+    public function canMakeSitePrivate(): bool
+    {
+        return true;
+    }
+
+    public function legacyTablesInMenu(): bool
+    {
+        return false;
+    }
+
     public function contentTypes(): array
     {
         return [(object) ['name' => 'note']];

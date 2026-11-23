@@ -47,6 +47,20 @@ final class IdnoTwigExtensionTest extends TestCase
 
     private const SAFE_FILTERS = ['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users'];
 
+    public function testTheSystemFunctionsAnswerWhatTheAdminDependenciesPageChecks(): void
+    {
+        $this->assertSame('1', $this->render("{{ version_compare('1.0', '0.9') }}"));
+        $this->assertSame('-1', $this->render("{{ version_compare('7.4', '8.0') }}"));
+        $this->assertSame('0', $this->render("{{ version_compare('2.0', '2.0') }}"));
+        $this->assertSame('1', $this->render("{{ extension_loaded('json') ? 1 : 0 }}"));
+        $this->assertSame('0', $this->render("{{ extension_loaded('no_such_extension') ? 1 : 0 }}"));
+        $this->assertSame(phpversion(), $this->render('{{ system_info().php }}'));
+        $this->assertSame(\Idno\Core\Version::version(), $this->render('{{ system_info().idno }}'));
+        $this->assertSame((string) \Idno\Core\Version::build(), $this->render('{{ system_info().build }}'));
+        $this->assertSame(implode(',', \Idno\Core\Installer::requiredModules()), $this->render("{{ system_info().extensions|join(',') }}"));
+        $this->assertSame('1|0', $this->render("{{ can_make_site_private() ? 1 : 0 }}|{{ legacy_tables_in_menu() ? 1 : 0 }}"));
+    }
+
     public function testOnlyTheListedFunctionsAreSafe(): void
     {
         $extension = $this->extension();
@@ -83,7 +97,7 @@ final class IdnoTwigExtensionTest extends TestCase
         $extension = $this->extension();
         $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
         $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
-        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'can_add_users', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user', 'is_entity', 'random_id', 'default_avatar', 'visitor_message', 'profile_link', 'embeds', 'syndication_has', 'syndication_accounts', 'js_string', 'next_input_id', 'security_token', 'timezone_options', 'timezone_info', 'email_is_blocked'] as $name) {
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'can_add_users', 'can_make_site_private', 'legacy_tables_in_menu', 'system_info', 'extension_loaded', 'version_compare', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user', 'is_entity', 'random_id', 'default_avatar', 'visitor_message', 'profile_link', 'embeds', 'syndication_has', 'syndication_accounts', 'js_string', 'next_input_id', 'security_token', 'timezone_options', 'timezone_info', 'email_is_blocked'] as $name) {
             $this->assertContains($name, $functions);
         }
         foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text', 'identity_url', 'to_int', 'link_url', 'email_address', 'form_urlencode'] as $name) {

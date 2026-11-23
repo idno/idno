@@ -1,0 +1,94 @@
+<h1 class="idno-admin-page-title">{{ t('Users') }}</h1>
+    <p class="idno-admin-description">
+        {{ t('View the users registered for your site, and invite new users to join.') }}
+    </p>
+
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Manage site users') }}</h2>
+        <p>
+            {{ t('Your site has') }} <strong>{{ count }}</strong>
+            {% if count != 1 %}{{ t('users') }}{% else %}{{ t('user') }}{% endif %}.
+        </p>
+
+        {{ idno_include('forms/usersearch') }}
+    </div>
+
+    {% if can_add_users() %}
+    <div class="idno-admin-card">
+        <form action="{{ site_url() }}admin/users" method="post">
+            <h2 class="idno-admin-card-title">{{ t('Invite new users') }}</h2>
+            <p>
+                {{ t('To invite new users to the site, enter one or more email addresses below.') }}
+            </p>
+            <div class="idno-form-group">
+                <textarea name="invitation_emails" class="idno-input" placeholder="friend@email.com"></textarea>
+            </div>
+            <div class="idno-form-group">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Send invite') }}</button>
+                <input type="hidden" name="action" value="invite_users">
+                {{ form_token('/admin/users') }}
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if invitations %}
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Invitations') }}</h2>
+        {% for invitation in invitations %}
+            <div class="idno-admin-list-item">
+                <div>
+                    <strong>{{ entity_value(invitation, 'email') }}</strong>
+                    <br>
+                    <small>
+                        <strong>{{ t('Sent') }}</strong>
+                        <time datetime="{{ entity_value(invitation, 'created')|date('r') }}"
+                              class="dt-published">{{ entity_value(invitation, 'created')|date('r') }}</time>
+                    </small>
+                </div>
+                <div>
+                    <small>
+                        {{ action_link(site_url() ~ 'admin/users', t('Resend'), {invitation_id: invitation.getID(), action: 'resend_invitation'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': 'Are you sure? The user will receive a second email.'}) }}
+                        {{ action_link(site_url() ~ 'admin/users', t('Remove'), {invitation_id: invitation.getID(), action: 'remove_invitation'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': "Are you sure? The user won't be able to register."}) }}
+                    </small>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="idno-admin-card">
+        <form action="{{ site_url() }}admin/users" method="post">
+            <h2 class="idno-admin-card-title">{{ t('Block email addresses') }}</h2>
+            <p>
+                {{ t('By blocking email addresses, you prevent people using those email addresses from registering on your site. Enter the email addresses you want to block below.') }}
+            </p>
+            <div class="idno-form-group">
+                <textarea name="blocked_emails" class="idno-input" placeholder="user@email.com"></textarea>
+            </div>
+            <div class="idno-form-group">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Block email addresses') }}</button>
+                <input type="hidden" name="action" value="block_emails">
+                {{ form_token('/admin/users') }}
+            </div>
+        </form>
+    </div>
+
+    {% set blocked_emails = setting('blocked_emails') %}
+    {% if blocked_emails %}
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Blocked email addresses') }}</h2>
+        {% for email in blocked_emails %}
+            <div class="idno-admin-list-item">
+                <div>{{ email }}</div>
+                <div>
+                    <small>
+                        {{ action_link(site_url() ~ 'admin/users', t('Remove block'), {blocked_emails: email, action: 'unblock_emails'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': "Are you sure? The user will be able to log in and post again."}) }}
+                    </small>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {{ idno_include('admin/users/extensions') }}

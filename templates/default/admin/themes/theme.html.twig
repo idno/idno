@@ -1,0 +1,45 @@
+{%- set path = false -%}{%- set url = false -%}{%- set shortname = 'default' -%}
+{%- if theme -%}
+    {%- if theme['Theme description']['path'] ?? null -%}{%- set path = theme['Theme description']['path'] -%}{%- endif -%}
+    {%- if theme['Theme description']['url'] ?? null -%}{%- set url = theme['Theme description']['url'] -%}{%- endif -%}
+    {%- if theme['shortname'] ?? null -%}{%- set shortname = theme['shortname'] -%}{%- endif -%}
+{%- endif -%}
+{#- No theme is the built-in look, which is the card named `default` -#}
+{%- set isActive = (current_theme == shortname) or (shortname is same as('default') and (current_theme ?? '') == '') -%}
+{#- Find preview image -#}
+{%- set src = false -%}
+{%- if shortname is not same as('default') and shortname in (themes_with_preview ?? []) -%}
+    {%- set src = url ~ 'preview.png' -%}
+{%- elseif shortname is same as('default') -%}
+    {%- set src = static_url('gfx/themes/default.png') -%}
+{%- endif -%}
+{%- set desc = theme['Theme description'] -%}
+<div class="idno-admin-card">
+    <div class="idno-plugin-row">
+        <div class="idno-plugin-info">
+            <div class="idno-plugin-name">
+                {{ desc['name'] }}
+                <span class="idno-plugin-version">{{ desc['version'] }}</span>
+            </div>
+            <div class="idno-plugin-author">
+                {{ t('by') }}
+                <a href="{{ desc['author_url'] }}">{{ desc['author'] }}</a>
+            </div>
+            {% if desc['description'] ?? null %}
+                <div class="idno-plugin-description">{{ desc['description'] }}</div>
+            {% endif %}
+        </div>
+        <div class="idno-plugin-action">
+            {% if isActive %}
+                <span style="font-size: var(--font-size-sm); color: var(--color-text-secondary); font-weight: 500;">{{ t('Active') }}</span>
+            {% else %}
+                {{ action_link(site_url() ~ 'admin/themes/', t('Enable'), {theme: shortname, action: 'install'}, {class: 'idno-btn-enable'}) }}
+            {% endif %}
+        </div>
+    </div>
+    {% if src %}
+        <div style="margin-top: 0.75rem; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--color-border-subtle);">
+            <img src="{{ src }}" alt="{{ desc['name'] }} preview" style="width: 100%; display: block;">
+        </div>
+    {% endif %}
+</div>

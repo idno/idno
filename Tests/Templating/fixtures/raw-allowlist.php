@@ -18,6 +18,9 @@ return [
     'templates/default/admin-shell.html.twig' => [
         ['expression' => 'shell.body', 'reason' => 'the page\'s body: HTML the page (or the templates it drew) already built and escaped; the shell only places it'],
     ],
+    'templates/default/admin/diagnostics.html.twig' => [
+        ['expression' => 'details.message', 'reason' => 'a diagnostic message is HTML the page class (`Pages\\Admin\\Diagnostics`) and the listeners of `diagnostics/basics` write: a link to the update, a path already passed through `htmlspecialchars()`; the administrator\'s own page only places it'],
+    ],
     'templates/default/entity/FeedItem.html.twig' => [
         ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates (those of the bundled plugins are ported and checked on their own)'],
     ],

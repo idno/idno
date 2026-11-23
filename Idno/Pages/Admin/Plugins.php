@@ -16,14 +16,39 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
             $t        = \Idno\Core\Idno::site()->template();
+            $stored   = \Idno\Core\Idno::site()->plugins()->getStored();
             $t->body  = $t->__(
                 array(
-                'plugins_stored' => \Idno\Core\Idno::site()->plugins()->getStored(),
+                'plugins_stored' => $stored,
                 'plugins_loaded' => \Idno\Core\Idno::site()->plugins()->getLoaded(),
+                'plugins_visible' => $this->visiblePlugins($stored),
                 )
             )->draw('admin/plugins');
             $t->title = \Idno\Core\Idno::site()->language()->_('Plugins');
             $t->drawPage();
+        }
+
+        /**
+         * The plugins the page lists, in the order it lists them: the ones the site does not hide, each with its `shortname`, by name
+         * (two plugins of one name are listed once: the later one).
+         *
+         * @param  mixed $stored what Plugins::getStored() gave
+         * @return array<int, array>
+         */
+        private function visiblePlugins($stored)
+        {
+            $listed = [];
+            if (!empty($stored) && is_array($stored)) {
+                foreach ($stored as $shortname => $plugin) {
+                    if (\Idno\Core\Idno::site()->plugins()->isVisible($shortname)) {
+                        $plugin['shortname'] = $shortname;
+                        $listed[$plugin['Plugin description']['name']] = $plugin;
+                    }
+                }
+            }
+            ksort($listed);
+
+            return array_values($listed);
         }
 
         function postContent()

@@ -82,6 +82,8 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertFalse($helpers->isAdmin());
         $this->assertFalse($helpers->canWrite());
         $this->assertIsBool($helpers->canAddUsers());
+        $this->assertIsBool($helpers->canMakeSitePrivate());
+        $this->assertFalse($helpers->legacyTablesInMenu(), 'nobody is logged in: the menu entry of the legacy tables is not asked');
     }
 
     public function testPageFacts(): void

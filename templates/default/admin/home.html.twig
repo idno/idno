@@ -1,0 +1,145 @@
+<h1 class="idno-admin-page-title">{{ t('Site Settings') }}</h1>
+    {{ idno_include('admin/home/description') }}
+
+    <form action="{{ site_url() }}admin/" class="admin" method="post">
+
+        <div class="idno-admin-card">
+            <h2 class="idno-admin-card-title">{{ t('Site Details') }}</h2>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="name">{{ t('Site name') }}</label>
+                <input type="text" id="name" name="title" class="idno-input"
+                       placeholder="{{ t('Site name') }}"
+                       value="{{ setting('title') }}">
+                <p class="idno-form-help">{{ t('Give your site a name!') }}</p>
+            </div>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="description">{{ t('Site summary') }}</label>
+                <input type="text" id="description" name="description" class="idno-input"
+                       placeholder="{{ t('Site description') }}"
+                       value="{{ setting('description') }}">
+                <p class="idno-form-help">{{ t("What's your site about?") }}</p>
+            </div>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="homepage-title">{{ t('Homepage title') }}</label>
+                <input type="text" id="homepage-title" name="homepagetitle" class="idno-input"
+                       placeholder="{{ t('Homepage title') }}"
+                       value="{{ setting('homepagetitle') }}">
+            </div>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="items_per_page">{{ t('Items per page') }}</label>
+                <input type="text" id="items_per_page" name="items_per_page" class="idno-input"
+                       placeholder="10"
+                       value="{{ setting('items_per_page') }}">
+            </div>
+
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" id="single_user" name="single_user" value="true"
+                           {% if setting('single_user') %}checked{% endif %}>
+                    <label for="single_user">{{ t('Single user site') }}</label>
+                </div>
+                <p class="idno-form-help">{{ t('Show profile info on homepage.') }}</p>
+            </div>
+
+            <div class="idno-form-group">
+                <label class="idno-label">{{ t('Permalink Structure') }}</label>
+                {% for value, label in {
+                    '/:year/:slug': '/:year/:slug (default)',
+                    '/:year/:month/:slug': '/:year/:month/:slug',
+                    '/:year/:month/:day/:slug': '/:year/:month/:day/:slug',
+                } %}
+                    <div class="idno-checkbox-group">
+                        <input type="radio" name="permalink_structure" value="{{ value }}"
+                            {{ (setting('permalink_structure') ?: '/:year/:slug') == value ? 'checked' : '' }}>
+                        <label>{{ label }}</label>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {{ idno_include('admin/home/settings/details') }}
+        </div>
+
+        <div class="idno-admin-card">
+            <h2 class="idno-admin-card-title">{{ t('Registration and privacy') }}</h2>
+
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="open_registration" value="true"
+                           {% if setting('open_registration') %}checked{% endif %}>
+                    <label>{{ t('Allow registration') }}</label>
+                </div>
+            </div>
+
+            {% if setting('walled_garden') or can_make_site_private() %}
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="walled_garden" value="true"
+                           {% if setting('walled_garden') %}checked{% endif %}>
+                    <label>{{ t('Make site private') }}</label>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if setting('show_privacy') or can_make_site_private() %}
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="show_privacy" value="true"
+                           {% if setting('show_privacy') %}checked{% endif %}>
+                    <label>{{ t('Per-post privacy') }}</label>
+                </div>
+            </div>
+            {% endif %}
+
+            {{ idno_include('admin/home/settings/privacy') }}
+        </div>
+
+        <div class="idno-admin-card">
+            <h2 class="idno-admin-card-title">{{ t('Technical Settings') }}</h2>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="hub">{{ t('PubSubHubbub hub') }}</label>
+                <input type="url" id="hub" name="hub" class="idno-input"
+                       value="{{ setting('hub') }}">
+            </div>
+
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="user_avatar_favicons" value="true"
+                           {% if setting('user_avatar_favicons') %}checked{% endif %}>
+                    <label>{{ t('Avatar as favicon') }}</label>
+                </div>
+            </div>
+
+            <div class="idno-form-group">
+                <label class="idno-label" for="share_backup_url">{{ t('Backup share image') }}</label>
+                <input type="url" id="share_backup_url" name="share_backup_url" class="idno-input"
+                       placeholder="{{ t('Backup share image URL') }}"
+                       value="{{ setting('share_backup_url') }}">
+                <p class="idno-form-help">{{ t('Specify the URL of an image to use as your default social share image.') }}</p>
+            </div>
+
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="indieweb_reference" value="true"
+                           {% if setting('indieweb_reference') %}checked{% endif %}>
+                    <label>{{ t('Include permalinks when syndicating') }}</label>
+                </div>
+            </div>
+
+            {{ idno_include('admin/home/settings/technical') }}
+        </div>
+
+        {{ idno_include('admin/home/settings') }}
+
+        <div style="margin-top:var(--spacing-section)">
+            <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save updates') }}</button>
+        </div>
+
+        {{ form_token('/admin/') }}
+        {{ idno_include('admin/home/footer/settings') }}
+
+    </form>

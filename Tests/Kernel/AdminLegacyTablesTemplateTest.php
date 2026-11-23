@@ -54,6 +54,11 @@ final class AdminLegacyTablesTemplateTest extends TestCase
         // A copy, so that these variables never reach another test's templates.
         $template = clone Idno::site()->template();
 
+        // The page adds the text of the gate's message when the 1.x tables are back (a template does not call a class)
+        if (!empty($state['restored'])) {
+            $state += ['restored_message' => PublicMessage::oneXBesideCompletedUpgrade()->text];
+        }
+
         return (string) $template->__($state + [
             'available' => true,
             'tables' => ['legacy_entities' => 3, 'legacy_<b>x</b>' => 1],

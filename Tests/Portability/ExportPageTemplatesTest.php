@@ -48,7 +48,7 @@ final class ExportPageTemplatesTest extends PortabilityTestCase
         $this->logOn($this->admin());
 
         $raw = $this->draw($type, ['zip_available' => true, 'export_in_progress' => false]);
-        $page = strip_tags($raw);
+        $page = html_entity_decode(strip_tags($raw), ENT_QUOTES | ENT_HTML5);
 
         $this->assertStringContainsString("password hash", $page, $type);
         $this->assertStringContainsString('private keys that sign each user\'s posts to the fediverse', $page, $type);

@@ -1,0 +1,52 @@
+{% set plugin_description = plugin['Plugin description'] %}
+{% set shortname = plugin['shortname'] %}
+{% set isEnabled = shortname in plugins_loaded|keys %}
+{% set isAlwaysOn = shortname in (setting('alwaysplugins') ?: []) %}
+<div class="idno-admin-card" id="plugin-{{ shortname|lower }}">
+    <div class="idno-plugin-row">
+        <div class="idno-plugin-info">
+            <div class="idno-plugin-name">
+                {{ plugin_description['name'] }}
+                <span class="idno-plugin-version">{{ plugin_description['version'] }}</span>
+            </div>
+            {% if plugin_description['author'] ?? null %}
+            <div class="idno-plugin-author">
+                {{ t('by') }}
+                {% if plugin_description['author_url'] ?? null %}
+                    <a href="{{ plugin_description['author_url'] }}">{{ plugin_description['author'] }}</a>
+                {% else %}
+                    {{ plugin_description['author'] }}
+                {% endif %}
+            </div>
+            {% endif %}
+            {% if plugin_description['description'] ?? null %}
+            <div class="idno-plugin-description">
+                {{ plugin_description['description'] }}
+            </div>
+            {% endif %}
+        </div>
+        <div class="idno-plugin-action">
+            {% if not isAlwaysOn %}
+                {% if isEnabled %}
+                <form action="{{ site_url() }}admin/plugins/" method="post">
+                    <input type="hidden" name="plugin" value="{{ shortname }}">
+                    <input type="hidden" name="container" value="plugin-{{ shortname|lower }}">
+                    <input type="hidden" name="plugin_action" value="uninstall">
+                    <button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">{{ t('Disable') }}</button>
+                    {{ form_token(site_url() ~ 'admin/plugins/') }}
+                </form>
+                {% else %}
+                <form action="{{ site_url() }}admin/plugins/" method="post">
+                    <input type="hidden" name="plugin" value="{{ shortname }}">
+                    <input type="hidden" name="container" value="plugin-{{ shortname|lower }}">
+                    <input type="hidden" name="plugin_action" value="install">
+                    <button type="submit" class="idno-btn idno-btn-sm idno-btn-enable">{{ t('Enable') }}</button>
+                    {{ form_token(site_url() ~ 'admin/plugins/') }}
+                </form>
+                {% endif %}
+            {% else %}
+                <span class="idno-plugin-always-on">{{ t('Always on') }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>

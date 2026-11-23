@@ -453,6 +453,37 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         $this->assertSame(0, preg_match('#<a data-form-id="[^"]*"[^>]*>(?:(?!</a>).)*</a>\s*<form action="#s', $page->body), 'in the page the forms are the shell\'s, not printed beside their links');
     }
 
+    /**
+     * The admin menu is a Twig template that draws the entries bundled plugins add (the `admin/menu/items` extension point) between its
+     * own links, in the order the plugins registered them: ActivityPub, StaticPages and Webhooks are always on in the test site, and Styles,
+     * which is enabled here, registers after them.
+     */
+    public function testAdminMenuItemsOfBundledPluginsAreListed(): void
+    {
+        $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+
+        $links = function () use ($cookie): array {
+            $page = $this->site()->request('GET', 'admin/', ['Cookie' => $cookie]);
+            $this->assertSame(200, $page->status);
+            $this->assertSame(1, preg_match('#<nav class="idno-admin-nav">(.*?)</nav>#s', $page->body, $menu), 'the page has the admin menu');
+            preg_match_all('#<a href="[^"]*?/admin/([a-z]*)/?"#', $menu[1], $hrefs);
+
+            return $hrefs[1];
+        };
+
+        $before = $links();
+        $this->assertSame(['', 'themes', 'plugins', 'users', 'email', 'activitypub', 'staticpages', 'webhooks', 'statistics', 'import', 'export'], $before);
+
+        $this->runInSite(<<<'PHP'
+        \Idno\Core\Idno::site()->plugins()->enable('Styles');
+
+        return true;
+        PHP);
+
+        $this->assertSame(['', 'themes', 'plugins', 'users', 'email', 'activitypub', 'staticpages', 'webhooks', 'styles', 'statistics', 'import', 'export'], $links());
+    }
+
     public function testDraftsPageIsServedFromCore(): void
     {
         $this->seedSite();

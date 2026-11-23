@@ -78,6 +78,16 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return (bool) Idno::site()->config()->canAddUsers();
     }
 
+    public function canMakeSitePrivate(): bool
+    {
+        return (bool) Idno::site()->config()->canMakeSitePrivate();
+    }
+
+    public function legacyTablesInMenu(): bool
+    {
+        return (bool) \Idno\Pages\Admin\LegacyTables::showInMenu();
+    }
+
     public function contentTypes(): array
     {
         return array_values(ContentType::getRegistered() ?: []);

@@ -51,6 +51,17 @@ interface TemplateHelpers
     public function canAddUsers(): bool;
 
     /**
+     * Whether the administrator may make the site private (the `site/walledgarden/check` event decides, as `Config::canMakeSitePrivate()` does).
+     */
+    public function canMakeSitePrivate(): bool;
+
+    /**
+     * Whether the admin menu lists the page of the tables an upgrade from Idno 1.x left (`Idno\Pages\Admin\LegacyTables::showInMenu()`: no
+     * statement unless a logged-in administrator is viewing).
+     */
+    public function legacyTablesInMenu(): bool;
+
+    /**
      * @return list<object>
      */
     public function contentTypes(): array;

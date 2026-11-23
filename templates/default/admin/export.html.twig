@@ -1,0 +1,80 @@
+<h1 class="idno-admin-page-title">{{ t('Export') }}</h1>
+    <p class="idno-admin-description">
+        {{ t('Export your published Idno content as an RSS file. You can import this file into WordPress, or into another Idno site by choosing WordPress on the import page.') }}
+    </p>
+
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Generate RSS file') }}</h2>
+        <form action="{{ site_url() }}admin/export/rss" method="post">
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="allposts" id="allposts" value="1">
+                    <label for="allposts">{{ t('Include private posts?') }}</label>
+                </div>
+                <p class="idno-form-help">{{ t('Some platforms may assume that your content should be displayed publicly. To protect your privacy, you may wish to only download your public content.') }} {{ t("As an administrator, including private posts includes every member's private posts and drafts too. Private posts and drafts are marked as such in the file.") }}</p>
+            </div>
+            <div class="idno-form-group">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Download file') }}</button>
+            </div>
+            {{ form_token(site_url() ~ 'admin/export/rss') }}
+        </form>
+    </div>
+
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Generate WordPress (WXR) file') }}</h2>
+        <p>
+            {{ t('Export your content as a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress.') }}
+        </p>
+        <form action="{{ site_url() }}admin/export/wxr" method="post">
+            <div class="idno-form-group">
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" name="allposts" id="allposts_wxr" value="1">
+                    <label for="allposts_wxr">{{ t('Include private posts?') }}</label>
+                </div>
+                <p class="idno-form-help">{{ t('Some platforms may assume that your content should be displayed publicly. To protect your privacy, you may wish to only download your public content.') }} {{ t("As an administrator, including private posts includes every member's private posts and drafts too. Private posts and drafts are marked as such in the file.") }}</p>
+            </div>
+            <div class="idno-form-group">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Download WXR file') }}</button>
+            </div>
+            {{ form_token(site_url() ~ 'admin/export/wxr') }}
+        </form>
+    </div>
+
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Full archive') }}</h2>
+        <p>
+            {{ t("A complete copy of your site as one zip file: every post and its files, the settings, and the records of the database. It is what you restore your site from.") }}
+        </p>
+        <p class="idno-form-help" role="alert">
+            <strong>{{ t('Keep it as carefully as a database backup.') }}</strong>
+            {{ t("The archive contains every account's password hash and the private keys that sign each user's posts to the fediverse: whoever has the archive can sign as any user. It also holds every private post. Only administrators can download it, and it is removed from the site when you make a new one and after a week. The settings in it (config.json) are left out by the name of the setting: review config.json before you share the archive.") }}
+        </p>
+        {% if zip_available is not null and not zip_available %}
+            <p class="idno-form-help" role="alert">
+                {{ t("The full archive needs the PHP zip extension, which this server does not have. Ask whoever runs the server to enable it (the zip extension of PHP), then come back to this page.") }}
+            </p>
+        {% elseif export_in_progress %}
+            <p>
+                {{ t('An archive of your data is being created. Please check again in a few minutes: we will email you when it is ready.') }}
+            </p>
+        {% else %}
+            {% if export_file_id %}
+                <p>
+                    <a class="idno-btn idno-btn-primary" href="{{ site_url() }}file/{{ export_file_id|form_urlencode }}/{{ (export_filename ?? 'archive.zip')|form_urlencode }}">{{ t('Download your data') }}</a><br>
+                    <small>{{ t('Generated') }} <time class="dt-published" datetime="{{ export_last_requested|to_int|date('c') }}">{{ export_last_requested|to_int|date('c') }}</time></small>
+                </p>
+                <p>
+                    {{ t('You can also make a new copy of your data archive. It replaces this one.') }}
+                </p>
+            {% endif %}
+            <form action="{{ site_url() }}admin/export/generate/" method="post">
+                <div class="idno-form-group">
+                    <button type="submit" class="idno-btn idno-btn-primary">{{ export_file_id ? t('Re-archive your data') : t('Create archive') }}</button>
+                </div>
+                {{ form_token(site_url() ~ 'admin/export/generate') }}
+            </form>
+            <p class="idno-form-help">
+                {{ t("It may take a while to generate your archive. You can leave this page while it's working. Once the archive is complete we will email you, and you'll be able to download it right here.") }}
+            </p>
+        {% endif %}
+    </div>

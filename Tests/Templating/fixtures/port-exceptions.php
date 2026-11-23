@@ -148,10 +148,71 @@ return [
             'bdab883bc8370fdddac18ef472c26d65c23932ca10d3dedb732cce38986b0112',
         ],
     ],
+    'templates/default/admin/homepage.html.twig' => [
+        'reason' => 'the HTML comments that held each content type\'s icon, and the whole copy of the form that was commented out, are not drawn: nothing shows them, and they printed icon markup into the page\'s source',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheHomepageSettingsHoldNoCommentedOutMarkup',
+        'differences' => [
+            'f0a237fd13a5540dabf31121983c50e632a535cdb8b3c525a555aef4475e86a7',
+            '114be580cdb31c2c5f8444508e1f2fc60c1b5b4b68ad0edc91f47e0f85e7a6a5',
+            '6ab2c16c013ad345e451e9792b645337c354e3dae0219663d9526a2778976cc2',
+            'f13338fdf0d9bf887e49d2370dc97534ed8d4e2b34aeb756ee22477f69c64c4f',
+        ],
+    ],
+    'templates/default/admin/diagnostics.html.twig' => [
+        'reason' => 'the page\'s own address, in the script that loads the detailed report, is written as one JavaScript string (`e(\'js\')`); the old template printed it as it was, so an address with `</script>` in its query (a visitor\'s word) ended the script. The same string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminScriptsWriteThePagesAddressForAScript',
+        'differences' => [
+            '2714d01f5a7fcde444239e142d027e9d807768e4ce924e68cd24b5dbda588ace',
+            '82d291d978dae98389388550d023995f1066aaae28d3ed47e83ab48431a57f29',
+            '7946176d33e15599af18810291503fa2b726146efaf33279a16fb5d48a42e1ef',
+            '5c066d79fc8d14afd19d194de3767c2bbc83c90a9707c36f01b13c59ba7b1cb3',
+            'd11f5627eaddfd7367253fed9a2ec34d6c2438c7a2f6f62816d88f17ac0704e4',
+        ],
+    ],
+    'templates/default/admin/logs.html.twig' => [
+        'reason' => 'the page\'s own address, in the script that loads the logs, is written as one JavaScript string (`e(\'js\')`); the old template printed it as it was, so an address with `</script>` in its query (a visitor\'s word) ended the script. The same string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminScriptsWriteThePagesAddressForAScript',
+        'differences' => [
+            '75d0307c9e633c513000dc6218288f2f00dad01d3a57edc959f5099c36a25043',
+        ],
+    ],
+    'templates/default/admin/dependencies/plugin.html.twig' => [
+        'reason' => 'the name of a plugin and the version it needs are escaped in the label; the old template printed them as they were. Names and versions without `&`, `<`, `>` or a quote are as they were',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint',
+        'differences' => [
+            '8d23b9398a99e097582013ac4214f1f4113a9be0cecbf1062530101adca41c51',
+        ],
+    ],
+    'templates/default/admin/statistics.html.twig' => [
+        'reason' => 'the name of a statistics report, the title of its card, is escaped; the old template printed it as it was',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint',
+        'differences' => [
+            '360dbe9de75cba2f52f842b071a6d79c271d038da4fa09beda95ec3ed479000b',
+        ],
+    ],
+    'templates/default/admin/statistics/report.html.twig' => [
+        'reason' => 'the labels and values of a statistics report (written by plugins) are escaped; the old template printed them as they were. Values without `&`, `<`, `>` or a quote are as they were',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint',
+        'differences' => [
+            '267d4df7a797b3d60db9d7db39fb18349d0fb8ac9e0d1ddee650428c716705c2',
+            '142f8f956a46c81b8537c140567c5145c226683b0f36332cdf36325638b410ee',
+        ],
+    ],
+    'templates/default/admin/users.html.twig' => [
+        'reason' => 'the email address of an invitation and each blocked address are escaped; the old template printed them as they were (a blocked address is whatever an administrator typed)',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint',
+        'differences' => [
+            '1f21bda259115b03dd1d38b24a96ebfbda14f30f11aea22cf4db0800d93c021a',
+            '83b71c9e661dd1df3085852063e576fc9ac3cba6c520b4bcae3381469b76a69f',
+        ],
+    ],
     'templates/default/forms/usersearch.html.twig' => [
         'reason' => 'the id, the class and the name of the search are escaped, and its address and the template it draws are written as JavaScript strings in the attribute that starts it; the old template printed all of them as they were. The search\'s script sends `X-Requested-With: XMLHttpRequest`, so that the results come with the forms of their action links (without it no form arrived and the links did nothing)',
         'test' => 'Tests\\Templating\\UserSearchActionLinksTest::testTheSearchScriptSendsTheHeaderThatMakesItsRequestAnXhrOne',
         'differences' => [
+            'cb7ea49139da4347412b03bf0c7e00faaedfb27ecfd65d51e70a0e41b5b3576c',
+            '5fafeb29d8c769f025dbf8bdf182b92adb949daa73c672767cdc1c034198ba4e',
+            '8ca193a2f609609bb06b4231ab4ef4b1144a2009736d870bc6793262d7914552',
             '15b9f786b7cf1538ae837e41cbc44e9c8e3a1979c685d36635f3fd9f6b573bfe',
             'f37eceb10953dbcfa67225d06058cce1d2c6cfed28b5e092e0b6ca52032a4f09',
             '8e84b43e1e43d3dab1d0c472a01f07b5a976e465831db4398b051dfe0cd1da04',

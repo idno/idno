@@ -208,6 +208,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawFormCases();
         $this->drawFalsyValueCases();
         $this->drawAccountCases();
+        $this->drawAdminCases();
         if (self::DRAWS === []) {
             return;
         }
@@ -912,6 +913,215 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertStringContainsString('value="https://example.org/came-from?x=1&amp;y=&quot;2&quot;"', (string) $out['login, open, only a referrer']);
         $this->assertStringNotContainsString('Revoke', (string) $out['tools, no key']);
         $this->assertStringContainsString('Revoke', (string) $out['tools, a key']);
+    }
+
+    /**
+     * The branches of the admin templates that the visits above do not reach: what the dependency labels say of a version that is met and
+     * one that is not, the diagnostics' every kind of status, the email form with stored settings (a secret among them) and with none, the
+     * export page with and without an archive, and without the zip extension, the settings page with its options on and off, the content
+     * types of the homepage switched off, the tables an upgrade left (and the page's paging), the logs, statistics of every shape, the themes
+     * with an active one and a preview, plugins hidden and always on, and the users page with invitations and blocked addresses.
+     */
+    private function drawAdminCases(): void
+    {
+        $code = $this->siteDrawPrelude('/admin/') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $config = $site->config();
+        $saved = $config->config;
+        $dir = sys_get_temp_dir() . '/idno-admin-theme-' . bin2hex(random_bytes(4)) . '/';
+        mkdir($dir);
+        touch($dir . 'preview.png');
+
+        $out['the about page'] = $draw('admin/about');
+        $out['dependencies'] = $draw('admin/dependencies');
+        foreach (['0.1', '99999.0', '1.0-DEV', ''] as $version) {
+            $out['idno version ' . $version] = $draw('admin/dependencies/idno', ['version' => $version]);
+        }
+        foreach ([1, 99999999999, '7'] as $version) {
+            $out['build version ' . $version] = $draw('admin/dependencies/build', ['version' => $version]);
+        }
+        foreach ([7.0, '99.0', '8.4.1'] as $version) {
+            $out['php version ' . $version] = $draw('admin/dependencies/php', ['version' => $version]);
+        }
+        foreach (['json', 'no_such_extension', 'a/b c'] as $extension) {
+            $out['extension ' . $extension] = $draw('admin/dependencies/extension', ['extension' => $extension]);
+        }
+        $stored = $site->plugins()->getStored();
+        $loaded = $site->plugins()->getLoaded();
+        $notLoaded = array_keys(array_diff_key($stored, $loaded));
+        $withVersion = [];
+        foreach ($stored as $name => $plugin) {
+            if (!empty($plugin['Plugin description']['version'])) {
+                $withVersion[] = $name;
+            }
+        }
+        foreach ([[array_key_first($loaded), ''], [array_key_first($loaded), '0.0.1'], [array_key_first($loaded), '99.0'], [$notLoaded[0] ?? 'Missing', ''], [$notLoaded[0] ?? 'Missing', '99.0'], ['NotAPlugin', ''], ['NotAPlugin', '1.0'], [' ' . $withVersion[0] . ' ', ' 1.0 '], [$hostile, $hostile]] as [$plugin, $version]) {
+            $out['plugin dependency ' . $plugin . ' ' . $version] = $draw('admin/dependencies/plugin', ['plugin' => $plugin, 'version' => $version, 'plugins_stored' => $stored, 'plugins_loaded' => $loaded]);
+        }
+
+        $report = ['Basic' => ['status' => 'Ok']];
+        $ok = ['status' => 'Ok'];
+        foreach ([
+            'ok' => ['status' => 'Ok', 'report' => ['version' => $ok]],
+            'a failure' => ['status' => 'Failure', 'report' => ['version' => ['status' => 'Warning', 'message' => 'Behind. <a href="https://example.org">Update</a>'], 'php' => ['status' => 'Failure', 'message' => 'Too old'], 'fine' => $ok]],
+            'every status' => ['status' => 'Failure', 'report' => ['a' => ['status' => 'fail', 'message' => 'A'], 'b' => ['status' => 'FAILURE', 'message' => 'B'], 'c' => ['status' => 'danger', 'message' => 'C'], 'd' => ['status' => 'Error', 'message' => 'D'], 'e' => ['status' => 'warn', 'message' => 'E'], 'f' => ['status' => 'Warning', 'message' => 'F'], 'g' => ['status' => 'OK', 'message' => 'G'], 'h' => ['status' => 'whatever', 'message' => 'H']]],
+            'a path already escaped' => ['status' => 'Failure', 'report' => ['u' => ['status' => 'Failure', 'message' => 'The upload path /a&amp;b either doesn\'t exist.']]],
+        ] as $label => $basics) {
+            $out['diagnostics, ' . $label] = $draw('admin/diagnostics', ['basics' => $basics]);
+        }
+
+        $secrets = static fn (string $user, string $password): array => ['smtp_username' => $user, 'smtp_password' => $password];
+        $out['email, no settings'] = $draw('admin/email', $secrets('', ''));
+        foreach ([
+            ['smtp_host' => 'smtp.example.org', 'smtp_port' => 587, 'smtp_secure' => 'tls', 'from_email' => 'site@example.org', 'smtp_username' => 'mailer', 'smtp_password' => 'p4ss'],
+            ['smtp_host' => 'smtp.example.org', 'smtp_port' => '465', 'smtp_secure' => 'ssl', 'from_email' => 'site@example.org', 'smtp_username' => '', 'smtp_password' => ''],
+            ['smtp_host' => '', 'smtp_port' => 0, 'smtp_secure' => false, 'from_email' => '', 'smtp_username' => '', 'smtp_password' => ''],
+            ['smtp_host' => '', 'smtp_port' => 'abc', 'smtp_secure' => '', 'from_email' => '', 'smtp_username' => '', 'smtp_password' => ''],
+            ['smtp_host' => $hostile, 'smtp_port' => 25, 'smtp_secure' => 'ssl', 'from_email' => $hostile, 'smtp_username' => $hostile, 'smtp_password' => $hostile],
+        ] as $n => $mail) {
+            foreach ($mail as $key => $value) {
+                $config->config[$key] = $value;
+            }
+            $out['email, settings ' . $n] = $draw('admin/email', $secrets((string) $mail['smtp_username'], (string) $mail['smtp_password']));
+        }
+        $config->config = $saved;
+
+        $archive = ['export_file_id' => 'abc123', 'export_filename' => 'my archive.zip', 'export_last_requested' => 1773000000];
+        foreach ([
+            'no archive' => [],
+            'no zip' => ['zip_available' => false],
+            'zip available' => ['zip_available' => true],
+            'zip unknown, running' => ['zip_available' => null, 'export_in_progress' => true],
+            'running' => ['zip_available' => true, 'export_in_progress' => true],
+            'an archive' => $archive + ['zip_available' => true],
+            'an archive, no name' => ['export_file_id' => 'abc 123/x', 'export_last_requested' => '1773000000'],
+            'an archive, no zip' => $archive + ['zip_available' => false],
+        ] as $label => $vars) {
+            $out['export, ' . $label] = $draw('admin/export', $vars);
+        }
+
+        foreach ([
+            [],
+            ['single_user' => true, 'open_registration' => true, 'walled_garden' => true, 'show_privacy' => false, 'user_avatar_favicons' => false, 'indieweb_reference' => true, 'permalink_structure' => '/:year/:month/:slug', 'title' => 'A title', 'description' => 'About it', 'homepagetitle' => 'Home', 'items_per_page' => 25, 'hub' => 'https://hub.example/', 'share_backup_url' => 'https://example.org/i.png'],
+            ['single_user' => false, 'open_registration' => false, 'walled_garden' => false, 'show_privacy' => true, 'permalink_structure' => '/:year/:month/:day/:slug', 'title' => $hostile, 'description' => $hostile, 'homepagetitle' => $hostile, 'items_per_page' => $hostile, 'hub' => $hostile, 'share_backup_url' => $hostile],
+            ['permalink_structure' => '/something/else', 'walled_garden' => false, 'show_privacy' => false],
+        ] as $n => $settings) {
+            foreach ($settings as $key => $value) {
+                $config->config[$key] = $value;
+            }
+            $out['settings, ' . $n] = $draw('admin/home');
+            $config->config = $saved;
+        }
+
+        $types = \Idno\Common\ContentType::getRegistered();
+        $every = array_map(static fn ($type) => $type->getEntityClass(), $types);
+        $out['homepage, all on'] = $draw('admin/homepage', ['content_types' => $types, 'default_content_types' => $every]);
+        $out['homepage, some off'] = $draw('admin/homepage', ['content_types' => $types, 'default_content_types' => array_slice($every, 0, 2)]);
+        $out['homepage, none'] = $draw('admin/homepage', ['content_types' => [], 'default_content_types' => []]);
+
+        $rejects = [['collection' => 'entities', 'legacy_uuid' => 'https://example.org/a', 'reason' => 'not JSON'], ['collection' => $hostile, 'legacy_uuid' => $hostile, 'reason' => $hostile]];
+        $tables = ['legacy_entities' => 1200, 'legacy_config' => '3', $hostile => 1];
+        $message = \Idno\Upgrade\PublicMessage::oneXBesideCompletedUpgrade()->text;
+        foreach ([
+            'nothing' => [],
+            'tables, deletable' => ['tables' => $tables, 'deletable' => true],
+            'tables, not complete' => ['tables' => $tables, 'deletable' => false, 'restored' => false],
+            'tables, restored' => ['tables' => $tables, 'deletable' => false, 'restored' => true, 'restored_message' => $message],
+            'rejects' => ['tables' => [], 'rejects' => $rejects, 'reject_count' => 2, 'offset' => 0, 'page_size' => 100],
+            'rejects, paged, first' => ['rejects' => $rejects, 'reject_count' => 250, 'offset' => 0, 'page_size' => 2],
+            'rejects, paged, middle' => ['rejects' => $rejects, 'reject_count' => 250, 'offset' => 100, 'page_size' => 100],
+            'rejects, paged, last' => ['rejects' => $rejects, 'reject_count' => 102, 'offset' => 100, 'page_size' => 100],
+            'reappeared' => ['reappeared' => ['entities_search', $hostile]],
+            'everything' => ['tables' => $tables, 'deletable' => true, 'rejects' => $rejects, 'reject_count' => 2, 'reappeared' => ['reader']],
+        ] as $label => $vars) {
+            $out['legacy tables, ' . $label] = $draw('admin/legacytables', $vars);
+        }
+
+        $out['logs'] = $draw('admin/logs');
+        $config->config['capture_logs'] = true;
+        $out['menu, with logs'] = $draw('admin/menu');
+        $config->config = $saved;
+        $out['menu, without logs'] = $draw('admin/menu');
+
+        $visible = static function (array $stored) use ($site) {
+            $method = new \ReflectionMethod(\Idno\Pages\Admin\Plugins::class, 'visiblePlugins');
+
+            return $method->invoke(new \Idno\Pages\Admin\Plugins(), $stored);
+        };
+        $first = array_key_first($loaded);
+        $other = array_key_last($stored);
+        $listings = [
+            'plugins' => [[], []],
+            'plugins, one hidden' => [['hiddenplugins' => [$other]], []],
+            'plugins, two always on' => [[], ['alwaysplugins' => [$first, $other]]],
+        ];
+        foreach ($listings as $label => [$hide, $always]) {
+            foreach ($hide + $always as $key => $value) {
+                $config->config[$key] = $value;
+            }
+            $out[$label] = $draw('admin/plugins', ['plugins_stored' => $stored, 'plugins_loaded' => $loaded, 'plugins_visible' => $visible($stored)]);
+            $config->config = $saved;
+        }
+        $named = ['Zed' => ['Plugin description' => ['name' => 'Zed', 'version' => '1.0', 'author' => $hostile, 'author_url' => 'https://example.org/z', 'description' => $hostile]], 'Ab' => ['Plugin description' => ['name' => 'Ab', 'version' => '2.0']], 'Mid' => ['Plugin description' => ['name' => 'Mid', 'version' => '1', 'author' => 'Someone', 'description' => 'Does things']], 'Twin' => ['Plugin description' => ['name' => 'Mid', 'version' => '9']]];
+        $out['plugins, made up'] = $draw('admin/plugins', ['plugins_stored' => $named, 'plugins_loaded' => ['Zed' => new \stdClass(), 'Twin' => new \stdClass()], 'plugins_visible' => $visible($named)]);
+        $out['plugins, none'] = $draw('admin/plugins', ['plugins_stored' => [], 'plugins_loaded' => [], 'plugins_visible' => $visible([])]);
+
+        $previews = static function (array $stored) {
+            $method = new \ReflectionMethod(\Idno\Pages\Admin\Themes::class, 'themesWithPreview');
+
+            return $method->invoke(new \Idno\Pages\Admin\Themes(), $stored);
+        };
+        $themes = $site->themes()->getStored();
+        $themes['Alpha'] = ['Theme description' => ['name' => 'Alpha', 'version' => '1.0', 'author' => 'A', 'author_url' => 'https://example.org/a', 'description' => 'A theme', 'path' => $dir, 'url' => 'https://example.org/themes/alpha/']];
+        $themes['Beta'] = ['Theme description' => ['name' => $hostile, 'version' => '2', 'author' => $hostile, 'author_url' => 'javascript:alert(1)', 'path' => $dir . 'nowhere/', 'url' => 'https://example.org/themes/beta/']];
+        $was = $site->themes()->theme;
+        foreach (['', 'Alpha', 'Beta', 'Gone'] as $current) {
+            $site->themes()->theme = $current;
+            $out['themes, current ' . $current] = $draw('admin/themes', ['themes_stored' => $themes, 'theme' => $current, 'themes_with_preview' => $previews($themes)]);
+        }
+        $out['themes, none'] = $draw('admin/themes', ['themes_stored' => [], 'theme' => '']);
+        $site->themes()->theme = $was;
+        unlink($dir . 'preview.png');
+        rmdir($dir);
+
+        $statistics = ['Basic' => ['Entities' => 12, 'Users' => ['Total' => 3, 'Admins' => 1, 'Detail' => ['Active' => 2, 'None' => null, 'Off' => false, 'On' => true, 'Ratio' => 1.5]], 'Note' => $hostile, $hostile => 'x', 'Empty' => []], 'Other report' => ['A' => 'b'], $hostile => ['Deep' => ['Deeper' => ['Deepest' => 'x']]]];
+        $out['statistics'] = $draw('admin/statistics', ['statistics' => $statistics, 'tab' => 'Basic']);
+        $out['statistics, none'] = $draw('admin/statistics', ['statistics' => []]);
+        $out['statistics, not a list'] = $draw('admin/statistics', ['statistics' => 'text']);
+        $out['a report'] = $draw('admin/statistics/report', ['report' => $statistics['Basic']]) . $draw('admin/statistics/report', ['report' => null]) . $draw('admin/statistics/report', ['report' => $statistics['Basic'], 'level' => '3']);
+
+        $invitation = new \Idno\Entities\Invitation();
+        $invitation->email = 'friend@example.org';
+        $invitation->created = 1773000000;
+        $hostileInvitation = new \Idno\Entities\Invitation();
+        $hostileInvitation->email = $hostile;
+        $hostileInvitation->created = 1700000000;
+        $was = $config->config;
+        foreach ([
+            'no invitations, no blocks' => [['count' => 1, 'invitations' => []], []],
+            'invitations' => [['count' => 2, 'invitations' => [$invitation, $hostileInvitation]], []],
+            'blocked addresses' => [['count' => 0, 'invitations' => []], ['blocked_emails' => ['spam@example.org', $hostile]]],
+            'everything' => [['count' => 12, 'invitations' => [$invitation]], ['blocked_emails' => ['spam@example.org']]],
+        ] as $label => [$vars, $settings]) {
+            foreach ($settings as $key => $value) {
+                $config->config[$key] = $value;
+            }
+            $out['users, ' . $label] = $draw('admin/users', $vars);
+            $config->config = $saved;
+        }
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('label-danger', (string) $out['idno version 99999.0']);
+        $this->assertStringContainsString('label-success', (string) $out['idno version 0.1']);
+        $this->assertStringContainsString('value="p4ss"', (string) $out['email, settings 0']);
+        $this->assertStringContainsString('Re-archive your data', (string) $out['export, an archive']);
+        $this->assertStringContainsString('id="legacytables-restored"', (string) $out['legacy tables, tables, restored']);
+        $this->assertStringContainsString('idno-plugin-always-on', (string) $out['plugins, two always on']);
+        $this->assertStringContainsString('Active', (string) $out['themes, current Alpha']);
+        $this->assertStringContainsString('friend@example.org', (string) $out['users, invitations']);
     }
 
     /**
