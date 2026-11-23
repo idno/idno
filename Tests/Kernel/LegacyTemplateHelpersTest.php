@@ -104,6 +104,65 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertStringContainsString('logged-out', $helpers->bodyClasses());
     }
 
+    public function testThePartsOfTheAddressAreTheConfiguredOnesWithTheRequestUri(): void
+    {
+        $parts = $this->helpers()->currentUrlPartsFor('/some/page?x=1&y=2');
+
+        $this->assertSame(parse_url((string) Idno::site()->config()->url, PHP_URL_HOST), $parts['host']);
+        $this->assertSame(parse_url((string) Idno::site()->config()->url, PHP_URL_SCHEME), $parts['scheme']);
+        $this->assertSame('/some/page?x=1&y=2', $parts['path']);
+        $this->assertSame(Idno::site()->currentPage()->currentUrl(true), $this->helpers()->currentUrlPartsFor((string) $_SERVER['REQUEST_URI']), 'as the page builds them');
+    }
+
+    public function testAPageIsSecureAsTheRequestSaysAndHasAnIcon(): void
+    {
+        $helpers = $this->helpers();
+        $https = $_SERVER['HTTPS'] ?? null;
+        try {
+            unset($_SERVER['HTTPS']);
+            $this->assertSame(\Idno\Common\Page::isSSL(), $helpers->isSecure());
+            $_SERVER['HTTPS'] = 'on';
+            $this->assertTrue($helpers->isSecure());
+            $_SERVER['HTTPS'] = 'off';
+            $this->assertSame(\Idno\Common\Page::isSSL(), $helpers->isSecure());
+        } finally {
+            if ($https === null) {
+                unset($_SERVER['HTTPS']);
+            } else {
+                $_SERVER['HTTPS'] = $https;
+            }
+        }
+        $this->assertSame((string) Idno::site()->currentPage()->getIcon(), $helpers->pageIcon());
+        $this->assertNotSame('', $helpers->pageIcon());
+    }
+
+    /**
+     * The icon of a page that has an owner who has no picture is the default avatar, drawn on the site's template object, which
+     * leaves its user there: the helper hands that user to the shell. A page with no owner, or whose own user is the same, leaves none.
+     */
+    public function testThePageIconUserIsTheUserAnAvatarWasDrawnFor(): void
+    {
+        $helpers = $this->helpers();
+        $template = Idno::site()->template();
+        $before = $template->vars;
+        $page = new Homepage();
+        try {
+            Idno::site()->setCurrentPage($page);
+            unset($template->vars['user']);
+            $this->assertNull($helpers->pageIconUser(), 'a page with no owner');
+
+            $owner = new \Idno\Entities\User();
+            $owner->handle = 'icon-owner';
+            $page->setOwner($owner);
+            $this->assertSame($owner, $helpers->pageIconUser(), 'the owner the default avatar was drawn for');
+
+            $template->vars['user'] = $owner;
+            $this->assertNull($helpers->pageIconUser(), 'nothing changed: the page already has that user');
+        } finally {
+            $template->vars = $before;
+        }
+    }
+
     public function testUrlsWithAndWithoutAVariable(): void
     {
         $helpers = $this->helpers();

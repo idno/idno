@@ -1,0 +1,11 @@
+{% if messages %}
+        <div class="alerts">
+        {% for message in messages %}
+
+                    <div class="alert {{ message.message_type }}">
+                {{ message.message|raw|autop }}
+                    </div>
+
+                {% endfor %}
+        </div>
+    {% endif %}

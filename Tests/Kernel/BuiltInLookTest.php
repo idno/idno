@@ -39,10 +39,24 @@ final class BuiltInLookTest extends RenderedSiteTestCase
             'testAPinnedRetiredThemeIsRenderedButNeverSavedOrAnnounced' => 'Solo',
             'testAPinnedMissingThemeFallsBackToTheBuiltInLookWithoutError' => 'ZzNoSuchTheme',
             'testAThirdPartyThemeKeepsItsOverridesAndExtensions' => 'ZzFixtureTheme',
+            'testAThemeExtendingTheCoreShellReplacesOneBlock' => 'ZzShellTheme',
+            'testAThirdPartyTplPhpOverrideOfAPortedTemplateStillWins' => 'ZzFooterTheme',
             default => '',
         };
         if ($theme === 'ZzFixtureTheme') {
             $this->makeFixtureTheme();
+        }
+        if ($theme === 'ZzShellTheme') {
+            // A theme that extends core's own shell and replaces one block of it
+            $this->makeTheme($theme, [
+                'templates/default/shell.html.twig' => "{% extends '@core/default/shell.html.twig' %}{% block nav %}THEME NAV{% endblock %}",
+            ]);
+        }
+        if ($theme === 'ZzFooterTheme') {
+            // A theme with a PHP override of a template core now draws from Twig: it is given the page's variables and the template object
+            $this->makeTheme($theme, [
+                'templates/default/shell/footer.tpl.php' => '<!--zz-footer title=<?= htmlspecialchars($vars[\'title\']) ?> class=<?= get_class($this) ?>-->',
+            ]);
         }
 
         return $theme === '' ? [] : ['IDNO_THEME' => $theme];
@@ -231,6 +245,91 @@ final class BuiltInLookTest extends RenderedSiteTestCase
     }
 
     /**
+     * A theme can extend core's own shell (`@core/default/shell.html.twig`) and replace one block of it: here the navigation. The
+     * head, the content and the footer are core's.
+     */
+    public function testAThemeExtendingTheCoreShellReplacesOneBlock(): void
+    {
+        $this->seedSite();
+
+        $response = $this->site()->request('GET', '');
+
+        $this->assertSame(200, $response->status, substr($response->body, 0, 400) . $this->serverLog());
+        $this->assertStringContainsString('THEME NAV', $response->body);
+        $this->assertStringNotContainsString('idno-nav-sidebar', $response->body, 'core\'s navigation is replaced');
+        $this->assertStringContainsString('<div class="idno-feed h-feed">', $response->body, 'the content is core\'s');
+        $this->assertStringContainsString('Hello world', $response->body, 'and so is the page\'s body');
+        $this->assertStringContainsString('<meta charset="utf-8">', $response->body, 'the head is core\'s');
+        $this->assertStringContainsString('<div class="blank-footer">', $response->body, 'the footer is core\'s');
+        $this->assertStringContainsString('js/idno-2026.min.js', $response->body);
+    }
+
+    /**
+     * A `.tpl.php` file of a theme or plugin beats core's Twig file of the same name and type, with the variables of the page and the
+     * template object it always had.
+     */
+    public function testAThirdPartyTplPhpOverrideOfAPortedTemplateStillWins(): void
+    {
+        $this->seedSite();
+
+        $response = $this->site()->request('GET', '');
+
+        $this->assertSame(200, $response->status, substr($response->body, 0, 400) . $this->serverLog());
+        $this->assertSame(1, preg_match('#<title[^>]*>(.*?)</title>#s', $response->body, $title), 'the page has a title');
+        $this->assertStringContainsString('<!--zz-footer title=' . $title[1] . ' class=Idno\\Core\\DefaultTemplate-->', $response->body, 'the override is drawn, with the page\'s title and the template object');
+        $this->assertStringNotContainsString('blank-footer', $response->body, 'core\'s footer is not drawn');
+    }
+
+    /**
+     * What plugins register for a ported shell partial keeps its place, the one `TemplateRenderer::draw()` gives every template: the
+     * prepends, then the extensions, then the template itself, then the added content; and a replacement is drawn in place of the template.
+     */
+    public function testInjectionsOnAPortedShellPartialKeepTheirPlace(): void
+    {
+        $this->seedSite();
+        $plugin = dirname(__DIR__, 2) . '/IdnoPlugins/ZzInjectProbe';
+        $this->made[] = $plugin;
+        mkdir($plugin . '/templates/default/zzinject', 0777, true);
+        file_put_contents($plugin . '/plugin.ini', "[Plugin description]\nname = 'Zz inject probe'\nversion = '1.0'\n");
+        file_put_contents($plugin . '/Main.php', <<<'PHP'
+        <?php
+        namespace IdnoPlugins\ZzInjectProbe {
+            class Main extends \Idno\Common\Plugin
+            {
+                function registerPages()
+                {
+                    $template = \Idno\Core\Idno::site()->template();
+                    $template->prependTemplate('shell/footer', 'zzinject/prepend');
+                    $template->extendTemplate('shell/footer', 'zzinject/extend');
+                    $template->extendTemplateWithContent('shell/footer', '<!--zz-content-->');
+                    $template->replaceTemplate('shell/head', 'zzinject/replacement');
+                }
+            }
+        }
+        PHP);
+        foreach (['prepend' => '<!--zz-prepend-->', 'extend' => '<!--zz-extend-->', 'replacement' => '<!--zz-replaced-head-->'] as $name => $markup) {
+            file_put_contents($plugin . '/templates/default/zzinject/' . $name . '.tpl.php', $markup);
+        }
+        $this->assertTrue($this->runInSite('return \\Idno\\Core\\Idno::site()->plugins()->enable("ZzInjectProbe");'));
+
+        $response = $this->site()->request('GET', '');
+
+        $this->assertSame(200, $response->status, substr($response->body, 0, 400) . $this->serverLog());
+        $positions = [];
+        foreach (['<!--zz-prepend-->', '<!--zz-extend-->', '<div class="blank-footer">', '<!--zz-content-->'] as $marker) {
+            $position = strpos($response->body, $marker);
+            $this->assertNotFalse($position, $marker . ' is drawn');
+            $positions[] = $position;
+        }
+        $sorted = $positions;
+        sort($sorted);
+        $this->assertSame($sorted, $positions, 'the order is the prepend, the extension, core\'s footer, the added content');
+        $this->assertStringContainsString('<!--zz-replaced-head-->', $response->body);
+        $this->assertStringNotContainsString('initial-scale=1" />', $response->body, 'core\'s head partial is replaced');
+        $this->assertStringContainsString('<meta charset="utf-8">', $response->body, 'the other head partials are drawn');
+    }
+
+    /**
      * The webmention's author, its image and its address are whatever the sender wrote. Whatever is stored, the page prints
      * no attribute the value could have opened and no `javascript:` address.
      */
@@ -385,6 +484,28 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         $theme = $this->runInSite('$r = \\Idno\\Core\\Idno::site()->db()->getAnyRecord("config"); return $r["theme"] ?? null;');
 
         return is_string($theme) ? $theme : $unset;
+    }
+
+    /**
+     * Makes a theme under Themes/ (removed in tearDown()) with the given files: path below the theme => contents.
+     *
+     * @param array<string, string> $files
+     */
+    private function makeTheme(string $name, array $files): void
+    {
+        $theme = dirname(__DIR__, 2) . '/Themes/' . $name;
+        if (in_array($theme, $this->made, true)) {
+            return;
+        }
+        $this->made[] = $theme;
+        mkdir($theme, 0777, true);
+        file_put_contents($theme . '/theme.ini', "[Theme description]\nname = '" . $name . "'\nversion = '1.0'\nauthor = 'Test'\n");
+        foreach ($files as $path => $contents) {
+            if (!is_dir(dirname($theme . '/' . $path))) {
+                mkdir(dirname($theme . '/' . $path), 0777, true);
+            }
+            file_put_contents($theme . '/' . $path, $contents);
+        }
     }
 
     private function makeFixtureTheme(): void

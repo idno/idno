@@ -83,7 +83,7 @@ final class IdnoTwigExtensionTest extends TestCase
         $extension = $this->extension();
         $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
         $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
-        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes'] as $name) {
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'page_icon_user', 'twitter_account_of'] as $name) {
             $this->assertContains($name, $functions);
         }
         foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text'] as $name) {
@@ -174,6 +174,49 @@ final class IdnoTwigExtensionTest extends TestCase
         $stack->push(Request::create('https://site.example/a/b?x=1&y=2', 'GET', [], [], [], ['HTTP_REFERER' => 'https://other.example/p']));
 
         $this->assertSame('https://site.example/a/b?x=1&amp;y=2|/a/b|https://other.example/p', $this->render("{{ current_url() }}|{{ current_path() }}|{{ referrer() }}", [], null, $stack));
+    }
+
+    public function testThePartsOfTheAddressAreTheSitesWithTheRequestsUri(): void
+    {
+        $this->assertSame('[]', $this->render("{{ current_url_parts()|json_encode }}"), 'no request');
+        $stack = new RequestStack();
+        $stack->push(new Request([], [], [], [], [], ['REQUEST_URI' => '/a/b?x=1&y=2', 'HTTP_HOST' => 'elsewhere.example']));
+
+        $this->assertSame('{&quot;scheme&quot;:&quot;https&quot;,&quot;host&quot;:&quot;site.example&quot;,&quot;path&quot;:&quot;\/a\/b?x=1&amp;y=2&quot;}', $this->render("{{ current_url_parts()|json_encode }}", [], null, $stack), 'the request\'s URI, and not its host');
+    }
+
+    public function testSecurePageAndIconAnswerFromTheSite(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $icon = new \stdClass();
+        $this->assertSame('no|https://static.example/page.png|none', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ page_icon_user() is null ? 'none' : 'user' }}", [], $helpers));
+        $helpers->secure = true;
+        $helpers->iconUser = $icon;
+        $this->assertSame('yes|https://static.example/page.png|user', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ page_icon_user() is null ? 'none' : 'user' }}", [], $helpers));
+    }
+
+    public function testTheTwitterAccountOfAProfile(): void
+    {
+        $person = static fn (array $urls): object => new class ($urls) {
+            public function __construct(private readonly array $urls)
+            {
+            }
+
+            public function __get(string $name): mixed
+            {
+                return $name === 'profile' ? ['url' => $this->urls] : null;
+            }
+        };
+
+        $this->assertSame('ada_l', IdnoTwigExtension::twitterAccountOf($person(['https://example.org/', '@ada_l'])), 'a handle');
+        $this->assertSame('ada_l', IdnoTwigExtension::twitterAccountOf($person(['https://twitter.com/ada_l'])), 'an address on twitter.com');
+        $this->assertSame('ada_l', IdnoTwigExtension::twitterAccountOf($person(['https://www.twitter.com/#!/@ada_l/status'])), 'with www, the old hash-bang and an at sign');
+        $this->assertSame('', IdnoTwigExtension::twitterAccountOf($person(['https://twitter.com/', 'https://example.org/twitter.com/x', 'https://twitter.com.example.org/x', '@', 'ada', ''])), 'nothing that names an account');
+        $this->assertSame('first', IdnoTwigExtension::twitterAccountOf($person(['@first', 'https://twitter.com/second'])), 'the first');
+        $this->assertSame('', IdnoTwigExtension::twitterAccountOf($person([])), 'no addresses');
+        $this->assertSame('', IdnoTwigExtension::twitterAccountOf(null), 'no person');
+        $this->assertSame('', IdnoTwigExtension::twitterAccountOf(new \stdClass()), 'no profile');
+        $this->assertSame('ada_l', $this->render("{{ twitter_account_of(p) }}", ['p' => ['profile' => ['url' => ['@ada_l']]]]), 'from the template, a person as an array');
     }
 
     /**

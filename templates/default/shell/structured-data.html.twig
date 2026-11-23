@@ -1,0 +1,10 @@
+{% set jsonld = {'@context': 'http://schema.org', '@type': 'WebSite', 'url': current_url(), 'name': title, 'description': description, 'publisher': setting('title'), 'potentialAction': {'@type': 'SearchAction', 'target': site_url() ~ 'content/all/?q={search_term}', 'query-input': 'required name=search_term'}} %}
+{% if page_owner() %}{% set jsonld = jsonld|merge({'author': {'@type': 'Person', 'name': page_owner().getName()}}) %}{% endif %}
+{% if is_permalink() %}{% if user %}{% set serialised = user.jsonLDSerialise() %}{% if serialised is iterable %}{% set jsonld = serialised %}{% endif %}{% endif %}{% if object %}{% set serialised = object.jsonLDSerialise() %}{% if serialised is iterable %}{% set jsonld = serialised %}{% endif %}{% endif %}{% endif %}
+{% if jsonld %}
+
+<!-- JSON+LD Structured Data -->
+<script type="application/ld+json">
+    {{ jsonld|json_encode(constant('JSON_PRETTY_PRINT') b-or constant('JSON_UNESCAPED_SLASHES') b-or constant('JSON_HEX_TAG'))|raw }}    
+</script>
+    {% endif %}

@@ -30,6 +30,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['visitor', 'account/password/reset/?email=ada%40example.com&code=00000000000000000000000000000000'],
         ['visitor', 'account/register/?email=new%40example.com&code=abc'],
         ['visitor', 'pages/about-this-site'],
+        ['visitor', 'robots.txt'],
         ['visitor', 'tag/nothing-is-tagged-with-this'],
         ['visitor', '?q=zzzznothingmatches'],
         ['visitor', 'content/all/?offset=10'],
@@ -82,7 +83,13 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
      *
      * @var list<array{string, string, array<string, mixed>}>
      */
-    public const DRAWS = [];
+    public const DRAWS = [
+        ['default', 'js/idno', []],
+        ['default', 'shell/simple/messages', ['messages' => [['message' => 'Saved. <a href="/x">See it</a>', 'message_type' => 'alert-success'], ['message' => 'Plain text', 'message_type' => 'alert-danger']]]],
+        ['default', 'shell/simple/messages', ['messages' => []]],
+        ['default', 'shell/simple', ['title' => 'Welcome', 'description' => 'A <b>fresh</b> site', 'body' => '<p>Hello</p>']],
+        ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
+    ];
 
     protected bool $compareGoldens = false;
 
@@ -187,10 +194,16 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
     private function drawCases(): void
     {
         $this->assertNotEmpty($this->drawMails());
+        $this->drawIdentityLinks();
         if (self::DRAWS === []) {
             return;
         }
         $code = <<<'PHP'
+        // A page of the site is being served: the templates read its address and the page itself
+        $uri = '/begin/?a=1&b=2';
+        $_SERVER['REQUEST_URI'] = $uri;
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $drawn = [];
         foreach (json_decode(%DRAWS%, true) as [$type, $name, $vars]) {
             \Tests\Fixtures\TwigPortCheck::forget();
@@ -202,5 +215,27 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         return $drawn;
         PHP;
         $this->runInSite(str_replace('%DRAWS%', $this->literal(json_encode(self::DRAWS, JSON_THROW_ON_ERROR)), $code));
+    }
+
+    /**
+     * A member's profile addresses, as the shell links them for rel=me: a plain address, a Twitter handle, an address that is not
+     * http(s), and an empty one. The profile is set in memory only.
+     */
+    private function drawIdentityLinks(): void
+    {
+        $code = <<<'PHP'
+        $uri = '/profile/ada';
+        $_SERVER['REQUEST_URI'] = $uri;
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
+        $user = \Idno\Entities\User::getByHandle('ada');
+        $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'javascript:alert(1)', '']];
+        \Tests\Fixtures\TwigPortCheck::forget();
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return (string) $template->__(['user' => $user])->draw('shell/identities');
+        PHP;
+        $drawn = (string) $this->runInSite($code);
+        $this->assertStringContainsString('https://twitter.com/ada_l', $drawn);
     }
 }

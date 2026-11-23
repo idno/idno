@@ -79,12 +79,16 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('is_admin', $h->isAdmin(...)),
 
             new TwigFunction('current_url', $this->currentUrl(...)),
+            new TwigFunction('current_url_parts', $this->currentUrlParts(...)),
             new TwigFunction('current_path', $this->currentPath(...)),
             new TwigFunction('referrer', $this->referrer(...)),
             new TwigFunction('input', $h->input(...)),
             new TwigFunction('path_matches', $h->pathMatches(...)),
             new TwigFunction('is_permalink', $h->isPermalink(...)),
             new TwigFunction('is_xhr', $h->isXhr(...)),
+            new TwigFunction('is_secure', $h->isSecure(...)),
+            new TwigFunction('page_icon', $h->pageIcon(...)),
+            new TwigFunction('page_icon_user', $h->pageIconUser(...)),
             new TwigFunction('page_assets', $h->pageAssets(...)),
             new TwigFunction('page_owner', $h->pageOwner(...)),
             new TwigFunction('http_status', $h->httpStatus(...)),
@@ -111,6 +115,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('latest_post_of', $h->latestPostOf(...)),
 
             new TwigFunction('entity_value', self::entityValue(...)),
+            new TwigFunction('twitter_account_of', self::twitterAccountOf(...)),
         ];
     }
 
@@ -237,6 +242,18 @@ final class IdnoTwigExtension extends AbstractExtension
         return (string) $request->server->get('REQUEST_URI', '');
     }
 
+    /**
+     * The parts of the page's address (`parse_url()` of the site's configured address, with the request URI as `path`), empty without a request.
+     *
+     * @return array<string, mixed>
+     */
+    public function currentUrlParts(): array
+    {
+        $request = $this->requests->getCurrentRequest();
+
+        return $request === null ? [] : $this->helpers->currentUrlPartsFor(self::requestUri($request));
+    }
+
     public function currentPath(): string
     {
         $request = $this->requests->getCurrentRequest();
@@ -314,6 +331,34 @@ final class IdnoTwigExtension extends AbstractExtension
         }
 
         return null;
+    }
+
+    /**
+     * The Twitter account a person's profile names, without its `@`, or an empty string: the first profile address that is a
+     * handle (`@name`) or an address on twitter.com with a name in it.
+     */
+    public static function twitterAccountOf(mixed $owner): string
+    {
+        $profile = self::entityValue($owner, 'profile');
+        $addresses = is_array($profile) ? ($profile['url'] ?? null) : null;
+        if (!is_array($addresses)) {
+            return '';
+        }
+        foreach ($addresses as $address) {
+            if (!is_string($address) || $address === '') {
+                continue;
+            }
+            if ($address[0] === '@' && preg_match('/\@[a-z0-9_]+/i', $address) === 1) {
+                return str_replace('@', '', $address);
+            }
+            if (str_replace('www.', '', (string) parse_url($address, PHP_URL_HOST)) === 'twitter.com'
+                && preg_match('/https?:\/\/(www\.)?twitter\.com\/(#!\/)?@?([^\/]*)/', $address, $matches) === 1
+                && !empty($matches[3])) {
+                return str_replace('@', '', $matches[3]);
+            }
+        }
+
+        return '';
     }
 
     private static function markup(string|\Stringable $value): string

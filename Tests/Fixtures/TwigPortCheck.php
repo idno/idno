@@ -65,6 +65,8 @@ final class TwigPortCheck implements TemplateEngine
     /**
      * @param array<string, array{reason: string, test: string, differences: list<string>}>|null $exceptions the listed differences
      *                                                                                          (null: Tests/Templating/fixtures/port-exceptions.php)
+     * @param \Closure|null $siteTemplate returns the site's own template object, the one templates register what they add through
+     *                                    (a link registers its form with the shell as `Idno::site()->template()` does); null: there is none
      */
     public function __construct(
         private readonly TemplateEngine $twig,
@@ -72,6 +74,7 @@ final class TwigPortCheck implements TemplateEngine
         private readonly string $siteUrl = 'http://localhost/',
         private readonly ?string $projectDirectory = null,
         private ?array $exceptions = null,
+        private readonly ?\Closure $siteTemplate = null,
     )
     {
     }
@@ -90,7 +93,7 @@ final class TwigPortCheck implements TemplateEngine
 
     public static function forSite(TemplateEngine $twig, PhpTemplateEngine $php, BootConfig $config): self
     {
-        return new self($twig, $php, (string) $config->get('url', 'http://localhost/'));
+        return new self($twig, $php, (string) $config->get('url', 'http://localhost/'), null, null, static fn (): mixed => \Idno\Core\Idno::site()?->template());
     }
 
     public function render(LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string
@@ -102,21 +105,26 @@ final class TwigPortCheck implements TemplateEngine
             return $this->renderOriginal($template, $original, $vars, $context);
         }
 
-        $port = $this->twig->render($template, $vars, $context);
         $report = self::reportFile();
-        if ($report === '' || $original === null || self::$shadowing || !is_array($vars)) {
+        $comparing = $report !== '' && $original !== null && !self::$shadowing && is_array($vars);
+        $registered = $comparing ? $this->registrations() : null;
+        $port = $this->twig->render($template, $vars, $context);
+        if (!$comparing) {
             return $port;
         }
 
         self::$shadowing = true;
         $reason = null;
+        $copy = $context->withVars($vars);
+        $restore = $this->shareRegistrations($copy, $registered);
         try {
-            $drawn = $this->renderOriginal($template, $original, $vars, $context->withVars($vars));
+            $drawn = $this->renderOriginal($template, $original, $vars, $copy);
         } catch (\Throwable $e) {
             $drawn = '[the original threw ' . $e::class . ': ' . $e->getMessage() . ']';
             $reason = 'the original threw ' . $e::class;
         } finally {
             self::$shadowing = false;
+            $restore();
         }
 
         $html = $template->type !== 'email-text';
@@ -172,6 +180,51 @@ final class TwigPortCheck implements TemplateEngine
         file_put_contents($report, json_encode($line, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", FILE_APPEND | LOCK_EX);
 
         return $port;
+    }
+
+    /**
+     * What the site's template object has registered so far (a copy of its registrations), before the port renders: the original renders
+     * from this, not from what the port registered meanwhile (a link's form, which the shell draws at its end).
+     */
+    private function registrations(): ?\Idno\Templating\SlotRegistry
+    {
+        $live = $this->siteTemplate === null ? null : ($this->siteTemplate)();
+        if (!$live instanceof \Idno\Core\DefaultTemplate) {
+            return null;
+        }
+        $registry = (new \ReflectionProperty(\Idno\Core\DefaultTemplate::class, 'slots'))->getValue($live);
+
+        return $registry === null ? null : clone $registry;
+    }
+
+    /**
+     * While the original renders, what it does to the site's template object goes to the copy it draws on, as it goes to the page's own
+     * template in a request that has no shadow: a link's form that the shell draws at its end (registered through `Idno::site()->template()`)
+     * and a variable that a method leaves there (an avatar's `user`, which the partials drawn after it read). The page's template is
+     * untouched by it, and the original's shell sees what its own partials left and not what the port did: the copy and the site's template
+     * object share the registrations as they were before the port rendered, and the copy's variables. Returns what puts the site's
+     * template object back.
+     */
+    private function shareRegistrations(PhpTemplateContext $copy, ?\Idno\Templating\SlotRegistry $registered): \Closure
+    {
+        $live = $this->siteTemplate === null ? null : ($this->siteTemplate)();
+        if (!$live instanceof \Idno\Core\DefaultTemplate || !$copy instanceof \Idno\Core\DefaultTemplate) {
+            return static function (): void {
+            };
+        }
+        $property = new \ReflectionProperty(\Idno\Core\DefaultTemplate::class, 'slots');
+        $before = $property->getValue($live);
+        $variables = $live->vars;
+        $shared = $registered ?? new \Idno\Templating\SlotRegistry();
+        $copy->useSlots($shared);
+        $live->useSlots($shared);
+        $live->vars = &$copy->vars;
+
+        return static function () use ($property, $live, $before, $variables): void {
+            $property->setValue($live, $before);
+            // a new variable of its own, so that the site's template no longer shares the copy's
+            $live->vars = &$variables;
+        };
     }
 
     /**

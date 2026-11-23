@@ -1,0 +1,47 @@
+{% set shell = shell_variables() %}
+{% do idno_include('shell/headers', shell) %}
+<!DOCTYPE html>
+<html lang="{{ shell.lang }}">
+<head>
+{% block head %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ site_title() }} — Account</title>
+    <link rel="stylesheet" href="{{ static_url('css/idno-2026.min.css') }}">
+{% for asset in page_assets('css') %}
+    <link rel="stylesheet" href="{{ asset }}">
+{% endfor %}
+{% endblock %}
+</head>
+<body class="account-template">
+    <div class="idno-account-shell">
+{% block nav %}
+        <nav class="idno-account-sidebar">
+            <div class="idno-account-header">{{ t('Account') }}</div>
+            {{ idno_include('account/menu', shell) }}
+            <div class="idno-account-back">
+                <a href="{{ site_url() }}" class="idno-account-nav-item">
+                    {{ idno_include('shell/icon', {icon: 'arrow-left'}) }}
+                    <span>{{ t('Back to site') }}</span>
+                </a>
+            </div>
+        </nav>
+{% endblock %}
+        <main class="idno-account-main">
+            <div class="idno-account-content">
+{% block content %}
+                {{ idno_include('shell/messages', shell) }}
+                {% if shell.body %}{{ shell.body|raw }}{% endif %}
+{% endblock %}
+            </div>
+        </main>
+    </div>
+{% block footer %}
+    <script src="{{ static_url('js/idno-2026.min.js') }}" defer></script>
+{% for asset in page_assets('javascript') %}
+    <script src="{{ asset }}"></script>
+{% endfor %}
+{{- idno_include('shell/form-data', shell) -}}
+{% endblock %}
+</body>
+</html>

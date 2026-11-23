@@ -1,0 +1,1 @@
+{% if '/admin' in current_url() %}{{ idno_include('admin-shell') }}{% else %}{{ idno_include('account-shell') }}{% endif %}

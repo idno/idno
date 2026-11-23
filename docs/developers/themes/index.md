@@ -51,7 +51,7 @@ Here, any calls to `template/one` will also call `mytheme/template/one` with the
 
 A `[Prepend Extensions]` section works the same way, but draws the extra template before the original.
 
-A theme's templates may be Twig templates (`.html.twig`) as well as PHP ones: see [Twig templates](../templating/index.md#twig-templates). A theme can change one block of a core Twig template with `{% extends '@core/default/<name>.html.twig' %}`.
+A theme's templates may be Twig templates (`.html.twig`) as well as PHP ones: see [Twig templates](../templating/index.md#twig-templates). A theme can change one block of a core Twig template with `{% extends '@core/default/<name>.html.twig' %}`: the page shells (`shell`, `account-shell`, `admin-shell`) have the blocks `head`, `nav`, `content` and `footer` for this (see [The page shells](../templating/index.md#the-page-shells)). A `.tpl.php` file of your theme with the name of a shell partial (the `shell/footer` example below) still replaces core's Twig template of that name.
 
 ## Example
 

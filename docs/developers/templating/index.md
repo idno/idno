@@ -2,7 +2,7 @@
 
 Idno splits templating into *templates* and *template types*.
 
-Templates are drawn by the site's template object, `\Idno\Core\DefaultTemplate` by default (you can choose another class with the `template` setting in `config.ini`). It finds a template's file in the *cascade* and renders it with `Idno\Templating` (see below). A template is a PHP template (`.tpl.php`) or a Twig template (`.html.twig` or `.txt.twig`); both kinds sit in the same cascade and draw each other. The templates that ship with Idno and its bundled plugins and themes are PHP templates today.
+Templates are drawn by the site's template object, `\Idno\Core\DefaultTemplate` by default (you can choose another class with the `template` setting in `config.ini`). It finds a template's file in the *cascade* and renders it with `Idno\Templating` (see below). A template is a PHP template (`.tpl.php`) or a Twig template (`.html.twig` or `.txt.twig`); both kinds sit in the same cascade and draw each other. The page shells of Idno (`shell`, `account-shell`, `admin-shell`, `settings-shell` and the partials under `shell/`, the small `js/`, `assets/` and `txt/` templates) are Twig templates; the rest of the templates that ship with Idno and its bundled plugins are PHP templates for now.
 
 ## Templates
 
@@ -64,11 +64,11 @@ A Twig template has no object for the site. It calls the named functions and fil
 * Text: `t`, `t_html` (*markup*).
 * The site: `site_url(path)`, `static_url(path)`, `site_title()`, `site_icons()`, `setting(name)` (null for a setting that is a secret: a password, key, token and the like), `can_write()`, `content_types()`, `content_type_for_post_type(type)`.
 * The viewer: `current_user()`, `is_logged_in()`, `is_admin()`.
-* The request and page: `current_url()`, `current_path()`, `referrer()` (empty without a request), `input(name, default)`, `path_matches(path)`, `is_permalink()`, `is_xhr()`, `page_assets(type)`, `page_owner()`, `http_status()`, `login_url_for(path)`, `url_with_var(name, value, url)`, `url_without_var(url, name)`, `current_url_without_var(name)`, `body_classes()`.
+* The request and page: `current_url()`, `current_url_parts()` (the parts of the address, as `Page::currentUrl(true)` gives them), `current_path()`, `referrer()` (empty without a request; it is a value from outside, so put it through `|http_url` when it goes into an `href`), `input(name, default)`, `path_matches(path)`, `is_permalink()`, `is_xhr()`, `is_secure()` (the request was made over HTTPS), `page_assets(type)`, `page_owner()`, `page_icon()`, `page_icon_user()` (the user an avatar was drawn for when the page's icon was looked up: the page shell's identity links, ActivityPub link and structured data use it as the page's `user`), `http_status()`, `login_url_for(path)`, `url_with_var(name, value, url)`, `url_without_var(url, name)`, `current_url_without_var(name)`, `body_classes()`.
 * Forms: `form_token(action)` (*markup*: the hidden token fields), `action_link(url, label, data, options)` (*markup*: a link that submits a signed POST; the `url` must be relative to the site or http(s), else nothing is drawn; the `label` is markup only when it is a capture, `{% set label %}<i class="fa fa-trash"></i> {{ t('Delete') }}{% endset %}`, or the output of a safe function such as `t_html()`: any other string is escaped, and `|raw` does not change that), `form_data(html)` (*markup*: registers a form with the shell, or returns it in an XHR request; `html` is a capture, as the label is).
 * Drawing: `shell_variables()`, `pagination(count, per_page, vars)` (*markup*; only `control-id` and `source-url` of `vars` are used, and everything it prints is escaped), `syndication_services(content_type)`, `syndication_selected(service, username)`, `share_types(types)`, `expand_urls(object, text)`.
 * Lookups: `local_entity(url)`, `local_file(url)`, `access_groups_of(owner_uuid)`, `latest_post_of(user)`.
-* Entities: `entity_value(object, name)` reads a stored attribute (`object.name` on an entity would call a method of that name).
+* Entities: `entity_value(object, name)` reads a stored attribute (`object.name` on an entity would call a method of that name); `twitter_account_of(person)` is the Twitter account a person's profile addresses name, without its `@`, or an empty string.
 * Filters: `sanitize_html` (*markup*: the text is purified), `autop`, `parse_urls`, `parse_hashtags`, `parse_users(in_reply_to)` (*markup*: each of these four escapes raw text first, so `{{ text|parse_urls }}` is safe for text a person typed, and HTML that is already safe, or purified with `sanitize_html`, is kept; they link only text, never the inside of a tag, an existing link, a script, a style or a textarea), `http_url` (the address, or an empty string unless it is http or https: use it for every address that came from a person or another site, in `href` and `src`), `display_url`, `fix_url`, `proxied_image(max, transform)`, `sample_text(words)`.
 
 Templates are trusted code: a Twig template can read any attribute and call any method of an entity it is given (`current_user().password`), so a port must print only what the template it replaces printed.
@@ -78,6 +78,15 @@ Templates are trusted code: a Twig template can read any attribute and call any 
 Everything else a template prints is escaped. Do not use `|raw` on a value that a person or another site supplied (a title, a comment, a URL): it turns the escaping off for that value. Use it only for HTML that Idno or your own code produced (and, for an address that is going into `href` or `src`, check it first with `\Idno\Core\UrlValidator::httpUrl()`). A `.txt.twig` template is not escaped at all, so it must only print text.
 
 A syntax error or a missing template in a Twig file is an exception, not a blank. Visitors see only that something went wrong (Idno hides the messages of library exceptions); the log, and the error page when `debug` is set in the configuration, name the file and line. The variables of a template object are passed to a Twig template as they are when it is drawn (it does not see a variable an included template sets afterwards), and must be an array.
+
+### The page shells
+
+`shell.html.twig`, `account-shell.html.twig` and `admin-shell.html.twig` have the same four blocks: `head` (what goes in the `<head>`), `nav` (the navigation), `content` (the messages and the page's body) and `footer` (what follows the page: the search and compose dialogs, the scripts, the forms that links registered). A theme replaces one without copying the rest:
+
+    {% extends '@core/default/shell.html.twig' %}
+    {% block nav %}<nav>My navigation</nav>{% endblock %}
+
+Each shell starts with `{% set shell = shell_variables() %}`, which gives it the variables of the page as the shell has always had them (the page's title with its tag, `lang`, the page's owner, ...), and draws every partial with `idno_include('shell/nav', shell)`, so a partial, a plugin's extension of it and a theme's override of it get them too. The shells do not use `slot()` or extend one another. A theme's `.tpl.php` file for a name core draws from Twig (`shell/footer`, say) still wins, and is given the page's variables and the template object, as it always was. The simple shell (`shell/simple`, the onboarding pages) keeps its own markup. `shell/headers` is a name with no core template: a plugin may extend it (an extension that calls `header()` still runs), and its output is not used.
 
 ### Extending, prepending and replacing
 

@@ -1,0 +1,7 @@
+<!-- Dublin Core -->
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.title" content="{{ title }}">
+<meta name="DC.description" content="{{ description }}">{% if is_permalink() and object %}{% set creator = object.getOwner() %}{% if creator %}
+                <meta name="DC.creator" content="{{ creator.getTitle() }}">{% endif %}{% set created = entity_value(object, 'created') %}{% if created %}
+                <meta name="DC.date" content="{{ created|date('c') }}">{% endif %}{% set identifier = object.getDisplayURL() %}{% if identifier %}
+                <meta name="DC.identifier" content="{{ identifier }}">{% endif %}{% endif %}

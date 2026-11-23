@@ -24,6 +24,14 @@ interface TemplateHelpers
      */
     public function currentUrlFor(string $requestUri): string;
 
+    /**
+     * The parts of the address of a page, as `Page::currentUrl(true)` gives them: what `parse_url()` reads from the site's
+     * configured address, with the request URI (path and query, as the server gave it) as `path`. Never the request's own Host header.
+     *
+     * @return array<string, mixed>
+     */
+    public function currentUrlPartsFor(string $requestUri): array;
+
     public function staticUrl(string $path = ''): string;
 
     public function siteTitle(): string;
@@ -64,6 +72,26 @@ interface TemplateHelpers
     public function isPermalink(): bool;
 
     public function isXhr(): bool;
+
+    /**
+     * Whether the request was made over HTTPS (`Page::isSSL()`: the server's own word, and a proxy's `X-Forwarded-Proto`); a console
+     * process has none, and is secure when the site's configured address is https.
+     */
+    public function isSecure(): bool;
+
+    /**
+     * The icon of the current page (`Page::getIcon()`: the owner's picture or the site's, as plugins may change it); empty
+     * without a page.
+     */
+    public function pageIcon(): string;
+
+    /**
+     * The user the page's icon lookup drew a default avatar for, or null. `Page::getIcon()` draws that avatar on the site's template
+     * object, which keeps the user there as its `user` variable, and the page shell has always drawn what follows its icons (the
+     * identity links, the ActivityPub link, the structured data) with that user as the page's `user`: the shell passes it on, because
+     * a Twig template sees no variable that another template set on the object.
+     */
+    public function pageIconUser(): ?object;
 
     /**
      * @return array<string, string>

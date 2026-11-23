@@ -1,0 +1,19 @@
+{# The environment of Idno, for JavaScript (`idno`, and `known`, its old name). #}{% set environment = {
+    'session': {
+        'loggedIn': is_logged_in(),
+        'admin': is_admin()
+    },
+    'config': {
+        'displayUrl': site_url(),
+        'staticUrl': static_url(),
+        'debug': setting('debug') ? true : false
+    },
+    'page': {
+        'currentUrl': current_url(),
+        'currentUrlFragments': current_url_parts()
+    }
+} %}
+<script>
+    var idno = {{ environment|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }};
+    var known = idno; // Backwards compatibility alias
+</script>

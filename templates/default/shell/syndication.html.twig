@@ -1,0 +1,22 @@
+<!-- To silo is human, to syndicate divine -->
+<link rel="alternate" type="application/rss+xml" title="{{ title }}"
+      href="{{ url_with_var('_t', 'rss') }}"/>
+<link rel="feed" type="application/rss+xml" title="{{ title }}"
+      href="{{ url_with_var('_t', 'rss') }}"/>
+<link rel="alternate feed" type="application/rss+xml"
+      title="{{ site_title() }}: all content"
+      href="{{ site_url() }}content/all?_t=rss"/>
+<link rel="alternate" type="application/json"
+      title="{{ site_title() }}: all content"
+      href="{{ site_url() }}content/all?_t=rss" />
+<link rel="feed" type="text/html" title="{{ site_title() }}"
+      href="{{ site_url() }}content/all"/>
+
+<!-- Webmention endpoint -->
+{% set base_url = setting('url') ?: '/' %}<link href="{{ base_url }}webmention/" rel="http://webmention.org/"/>
+<link href="{{ base_url }}webmention/" rel="webmention"/>
+
+{% if setting('hub') %}
+    <!-- Pubsubhubbub -->
+    <link href="{{ setting('hub') }}" rel="hub"/>
+{% endif %}

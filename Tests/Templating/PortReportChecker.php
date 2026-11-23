@@ -15,7 +15,23 @@ final class PortReportChecker
      * that always saw the same output has not tried the branches the template has. Each port that has such a file adds it.
      */
     public const MUST_VARY = [
+        'templates/default/account-shell.html.twig',
+        'templates/default/admin-shell.html.twig',
+        'templates/default/shell.html.twig',
+        'templates/default/shell/activitypub.html.twig',
+        'templates/default/shell/compose.html.twig',
+        'templates/default/shell/dublincore.html.twig',
+        'templates/default/shell/identities.html.twig',
         'templates/default/shell/messages.html.twig',
+        'templates/default/shell/messages/message.html.twig',
+        'templates/default/shell/metatags.html.twig',
+        'templates/default/shell/nav.html.twig',
+        'templates/default/shell/opengraph.html.twig',
+        'templates/default/shell/pagination.html.twig',
+        'templates/default/shell/simple.html.twig',
+        'templates/default/shell/simple/messages.html.twig',
+        'templates/default/shell/structured-data.html.twig',
+        'templates/default/shell/syndication.html.twig',
     ];
 
     /**

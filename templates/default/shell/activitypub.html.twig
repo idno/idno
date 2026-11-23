@@ -1,0 +1,4 @@
+{% set alt_link = '' %}{% if user %}{% set alt_link = user.getActivityPubActorID() %}{% elseif object %}{% set alt_link = object.getUUID() %}{% endif %}
+{% if alt_link %}
+    <link rel="alternate" type="application/activity+json" href="{{ alt_link }}" />
+    {% endif %}

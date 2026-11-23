@@ -1,0 +1,30 @@
+{% set icons = site_icons() %}{% set page_icon = icons.page %}
+
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon-precomposed" href="{{ page_icon }}">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon" href="{{ page_icon }}">
+<!-- <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black"> -->
+
+<!-- Android -->
+<link rel="manifest" href="{{ site_url() }}chrome/manifest.json">
+
+{% if is_secure() and is_logged_in() %}{% set scope = '/' ~ ((site_url()|split('/', 4))[3] ?? '') %}
+    <script>
+        window.addEventListener('load', function () {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('{{ site_url()|e('js') }}service-worker.min.js', {
+                scope: '{{ scope|e('js') }}'
+            })
+                .then(function (r) {
+                console.log('Registered service worker');
+                })
+                .catch(function (whut) {
+                console.error('Could not register service worker');
+                console.error(whut);
+                });
+        }
+        });
+    </script>
+    {% endif %}

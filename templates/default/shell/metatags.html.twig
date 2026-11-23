@@ -1,0 +1,10 @@
+
+<meta charset="utf-8">
+<title{% if title_className %} class="p-name"{% endif %}>{{ title }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="{{ description|striptags }}">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="{{ lang }}">
+<meta http-equiv="Status" content="{{ http_status() }}"/>
+{% if noindex %}<meta name="robots" content="noindex" />{% endif %}

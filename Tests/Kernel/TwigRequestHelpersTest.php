@@ -27,6 +27,8 @@ final class TwigRequestHelpersTest extends PrivateSiteTestCase
     private function makeProbe(): void
     {
         $this->plugin = dirname(__DIR__, 2) . '/IdnoPlugins/ZzRequestProbe';
+        // A killed run leaves the directory behind, and mkdir() would then fail
+        exec('rm -rf ' . escapeshellarg($this->plugin));
         mkdir($this->plugin . '/Pages', 0777, true);
         mkdir($this->plugin . '/templates/default/zzprobe', 0777, true);
         file_put_contents($this->plugin . '/plugin.ini', "[Plugin description]\nname = 'Zz request probe'\nversion = '1.0'\n");

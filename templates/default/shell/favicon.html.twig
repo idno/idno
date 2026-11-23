@@ -1,0 +1,3 @@
+{% set icons = site_icons() %}{% set page_icon = icons.page %}{% set page_icon_mime = 'image/' ~ (page_icon|split('.')|last) %}
+
+<link rel="shortcut icon" type="{{ page_icon_mime }}" href="{{ page_icon }}">

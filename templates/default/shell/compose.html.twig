@@ -1,0 +1,34 @@
+{% if current_user() %}
+<div x-data="composeModal" x-show="open" x-cloak class="idno-modal-overlay" x-on:keydown.escape.window="close()">
+    <div class="idno-modal idno-modal-lg" x-on:click.outside="close()">
+
+        <!-- Content Type Picker -->
+        <template x-if="step === 'picker'">
+            <div>
+                <div class="idno-modal-header">
+                    <h2 class="idno-modal-title">{{ t('New Post') }}</h2>
+                    <button class="idno-modal-close" x-on:click="close()" type="button">
+                        {{ idno_include('shell/icon', {icon: 'x', class: 'idno-nav-icon'}) }}
+                    </button>
+                </div>
+                <div class="idno-modal-body">
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--spacing-gap)">
+                        {% for contentType in content_types() %}{% if contentType.createable %}{% set type_icon = contentType.getIconName() ?: 'file-text' %}{% set type_description = contentType.getDescription() ?: '' %}
+                        <a href="{{ contentType.getEditURL() }}" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+                            {{ idno_include('shell/icon', {icon: type_icon, class: 'idno-nav-icon'}) }}
+                            <div>
+                                <div style="font-weight:600;color:var(--color-text-strong)">{{ contentType.getTitle() }}</div>
+                                {% if type_description %}
+                                <div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">{{ type_description }}</div>
+                                {% endif %}
+                            </div>
+                        </a>
+                        {% endif %}{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </div>
+</div>
+{% endif %}

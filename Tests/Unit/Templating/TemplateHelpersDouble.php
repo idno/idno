@@ -20,6 +20,10 @@ final class TemplateHelpersDouble implements TemplateHelpers
 
     public bool $xhr = false;
 
+    public bool $secure = false;
+
+    public ?object $iconUser = null;
+
     private function note(string $method, mixed ...$args): void
     {
         $this->calls[] = [$method, $args];
@@ -37,6 +41,28 @@ final class TemplateHelpersDouble implements TemplateHelpers
         $this->note(__FUNCTION__, $requestUri);
 
         return 'https://site.example' . $requestUri;
+    }
+
+    public function currentUrlPartsFor(string $requestUri): array
+    {
+        $this->note(__FUNCTION__, $requestUri);
+
+        return ['scheme' => 'https', 'host' => 'site.example', 'path' => $requestUri];
+    }
+
+    public function isSecure(): bool
+    {
+        return $this->secure;
+    }
+
+    public function pageIcon(): string
+    {
+        return 'https://static.example/page.png';
+    }
+
+    public function pageIconUser(): ?object
+    {
+        return $this->iconUser;
     }
 
     public function staticUrl(string $path = ''): string

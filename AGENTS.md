@@ -276,7 +276,11 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   original (longest first) by its port in that comparison's original (a parent that drew the child), recording `substitutions`; an
   original empty, white space or under 16 bytes is never replaced (the parents then show `unsubstituted` and need entries of their
   own). The shadow render is not isolated: it runs after the port, on a clone of the template object, but shares the session, the site
-  and `header()`, and an original that exits ends the request. With `IDNO_TEST_TWIG_BYPASS=1` in the environment (test wiring only)
+  and `header()`, and an original that exits ends the request. What the original does to the SITE's template object (`Idno::site()->template()`:
+  a link registers its form with `shell/form-data`, an avatar leaves its `user`) is made to land on the clone: while the original renders, the
+  site's template object uses the clone's variables and a copy of the registrations as they were BEFORE the port rendered (put back after, so the
+  port's own are what the page goes on with); without it the original's shell would draw the port's forms and miss its own
+  (`Tests/Kernel/TwigPortCheckSiteTemplateTest`). With `IDNO_TEST_TWIG_BYPASS=1` in the environment (test wiring only)
   a file with an original beside it is drawn from the original and nothing is compared: the old engine alone. `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
   error and empty pages, as visitor, administrator, member and new user) and draws the mails and `DRAWS` (a template no page
   reaches) in the site, and fails (`Tests\Templating\PortReportChecker`, itself tested in `PortReportCheckerTest`) for a difference not listed in
@@ -284,8 +288,8 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `differences`, the hash of each difference the failure prints; an entry covers exactly the differences it lists; a listed hash no
   comparison produced, an entry with no hash and a missing test fail), and for a Twig file with an
   original beside it that nothing compared; a file whose original's output never varied across the comparisons is a notice, and a
-  failure when it is in `PortReportChecker::MUST_VARY` (`shell/messages`: a failed login sets a session message and the next page
-  draws it) (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
+  failure when it is in `PortReportChecker::MUST_VARY` (each port with a branch: `shell/messages`, which a failed login's message
+  and every page's own show, the shells, `shell/nav`, `shell/compose`, `shell/opengraph`, ...) (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
   the pages are visited, not compared with goldens). Its self-test, `Tests/Unit/Templating/TwigPortCheckTest`, proves the check can fail.
   `Tests/Templating/fixtures/unported.php` lists every web and mail `.tpl.php` (types `default`, `email`, `email-text`; core and
   the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted), and
@@ -1202,7 +1206,7 @@ other new code may.
     tables and no complete upgrade on record costs more (the 1.x version is read), and so do the
     closed states that tell the owner to remove tables (the catalog read again once). Pinned by
     `UpgradeEndToEndTest::testTheHomepageStatementsArePinned` (the DBAL statements of a homepage
-    request: the catalog, the probe, then the legacy application's, 12 on the fixture site (Idno 2026 draws one lookup fewer than the look it replaced did), the same
+    request: the catalog, the probe, then the legacy application's, 11 on the fixture site (Idno 2026 draws one lookup fewer than the look it replaced did, and the Twig shell one fewer again: the structured data partial no longer looks up an icon of the page's object that it never used), the same
     after a completed upgrade, with its `legacy_` tables deleted, with 1.x tables recreated, with
     another application's `legacy_config`).
   New code never calls `db()`: inject `EntityRepository` (entities) or `RecordStore` (records).
@@ -2720,14 +2724,21 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `IdnoTwigExtension`, with the interface `Idno\Templating\TemplateHelpers`, one method for each name that needs the site, implemented by
     `Idno\Legacy\LegacyTemplateHelpers` over `Idno::site()`; the adapter holds nothing and reads the application only when a method is called, so
     the environment is built without it). Functions: `t_html`, `site_url`, `static_url`, `site_title`, `site_icons`, `setting`, `can_write`,
-    `content_types`, `content_type_for_post_type`, `current_user`, `is_logged_in`, `is_admin`, `current_url`, `current_path`, `referrer`, `input`,
-    `path_matches`, `is_permalink`, `is_xhr`, `page_assets`, `page_owner`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
+    `content_types`, `content_type_for_post_type`, `current_user`, `is_logged_in`, `is_admin`, `current_url`, `current_url_parts`, `current_path`, `referrer`, `input`,
+    `path_matches`, `is_permalink`, `is_xhr`, `is_secure`, `page_assets`, `page_owner`, `page_icon`, `page_icon_user`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
     `current_url_without_var`, `body_classes`, `form_token`, `action_link`, `form_data`, `shell_variables`, `pagination`, `syndication_services`,
-    `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`;
+    `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`, `twitter_account_of`;
     filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `display_url`, `fix_url`, `proxied_image`,
     `sample_text`. `current_url()`, `current_path()` and `referrer()` come from the `RequestStack` ('' with no request: a legacy page's request is
     not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
     value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
+    `current_url_parts()` is `Page::currentUrl(true)` (`parse_url()` of the configured address with the request URI as `path`; `[]` with no request),
+    `is_secure()` is `Page::isSSL()`, `page_icon()` is `Page::getIcon()`, and `page_icon_user()` is the user `Page::getIcon()` drew a default avatar for, or
+    null: `User::getIcon()` draws that avatar on the SITE's template object, which keeps the user there as its `user` variable, and the old page
+    shell drew everything after its icons (the identity links, the ActivityPub link, the structured data) with that user as the page's `user`
+    (the HTML goldens pin it, and the JSON pages print the same leaked `user`: do not change `User::getIcon()` without changing both). A Twig
+    template cannot see what another template set on the object, so `shell.html.twig` merges that user into `shell` after the metatags.
+    `twitter_account_of(person)` is pure (it needs nothing of the site) and the old Open Graph partial's search of a profile for a Twitter account.
     SAFE for HTML, exactly (pinned by `IdnoTwigExtensionTest::testOnlyTheListedFunctionsAreSafe`): the functions `idno_include`, `slot`, `t_html`
     (the translated text is trusted; each string sub is escaped, a `Twig\Markup` one kept; `|raw` output is not `Markup`), `form_token`, `action_link`, `form_data` and
     `pagination`, and the filters `sanitize_html` (HTMLPurifier through the `text/filter` event) and `autop`, `parse_urls`, `parse_hashtags` and
@@ -2752,8 +2763,22 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
     bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
     `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`, `LegacyTemplateHelpersTest`.
-    No core template is a Twig file yet, so no golden page changes. The `@core` real-container case writes a probe file in `templates/default/`
-    (`zz-core-probe-*`, gitignored) and removes any left by a killed run when it starts.
+    The `@core` real-container case writes a probe file in `templates/default/` (`zz-core-probe-*`, gitignored) and removes any left by a killed
+    run when it starts.
+  - The page shells are Twig (`templates/default/{shell,account-shell,admin-shell,settings-shell}.html.twig`, `shell/**`, `js/*`, `assets/*`,
+    `txt/robots`; each beside its frozen `.tpl.php`). `shell`, `account-shell` and `admin-shell` have the blocks `head`, `nav`, `content` and
+    `footer` (the same names in all three), so a theme can `{% extends '@core/default/shell.html.twig' %}` and replace one
+    (`BuiltInLookTest::testAThemeExtendingTheCoreShellReplacesOneBlock`); they do not extend one another and use no `slot()`. Each reads
+    `{% set shell = shell_variables() %}` and draws every partial with `idno_include(name, shell)` (the partials see the formatted variables, as they
+    did on the one template object), `shell/headers` included: it has no core file, a plugin extends it, and its output is discarded. The page's
+    `body` is printed with `|raw` (the one place that may). Two things to know: (1) a draw of a name keeps the order `TemplateRenderer::draw()`
+    gives it (the prepends, then the replacement and the extensions, then the template itself, then the added content); (2) the site's template
+    object is what code like `User::getIcon()` and a link's form registration reach, so a Twig partial must not expect to see what they leave
+    there (above). `shell/icon` is one `{% if iconName == ... %}` chain of literal SVG. Values from outside are escaped where the old templates
+    printed them as they were: the path in the body's classes, the Open Graph description and address, the Dublin Core and structured data
+    values; `shell/identities` links only http(s) addresses; `js/idno` and the service worker script use JSON_HEX_* / `|e('js')`
+    (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
+    (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

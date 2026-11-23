@@ -37,6 +37,15 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return \Idno\Common\Page::buildUrl($url);
     }
 
+    public function currentUrlPartsFor(string $requestUri): array
+    {
+        $url = parse_url((string) Idno::site()->config()->url);
+        $url = is_array($url) ? $url : [];
+        $url['path'] = $requestUri;
+
+        return $url;
+    }
+
     public function staticUrl(string $path = ''): string
     {
         return Idno::site()->config()->getStaticURL() . $path;
@@ -115,6 +124,32 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         $page = Idno::site()->currentPage();
 
         return $page ? (bool) $page->xhr : false;
+    }
+
+    public function isSecure(): bool
+    {
+        return (bool) \Idno\Common\Page::isSSL();
+    }
+
+    public function pageIcon(): string
+    {
+        $page = Idno::site()->currentPage();
+
+        return $page ? (string) $page->getIcon() : '';
+    }
+
+    public function pageIconUser(): ?object
+    {
+        $page = Idno::site()->currentPage();
+        if (!$page) {
+            return null;
+        }
+        $template = Idno::site()->template();
+        $before = $template->vars['user'] ?? null;
+        $page->getIcon();
+        $after = $template->vars['user'] ?? null;
+
+        return is_object($after) && $after !== $before ? $after : null;
     }
 
     public function pageAssets(string $type): array
