@@ -10,6 +10,13 @@ if (isset($vars['offset']) && !empty($vars['count'])) {
     } else {
         $items_per_page = $vars['items_per_page'];
     }
+    // Escaped for the attributes they are printed in: the control and the address come from the page that asks for pagination
+    $attr = function ($value) {
+        return strtr((string)$value, ['"' => '&quot;', "'" => '&#039;', '<' => '&lt;', '>' => '&gt;']);
+    };
+    $vars['count']  = (int)$vars['count'];
+    $vars['offset'] = (int)$vars['offset'];
+    $items_per_page = (int)$items_per_page;
     $prev_offset = $vars['offset'] - $items_per_page;
     if ($prev_offset < 0) $prev_offset = 0;
     $next_offset = $vars['offset'] + $items_per_page;
@@ -23,10 +30,10 @@ if (isset($vars['offset']) && !empty($vars['count'])) {
             $xhr = true;
         }
 
-        ?>" data-count="<?php echo $vars['count']; ?>" data-limit="<?php echo $items_per_page; ?>" data-offset="<?php echo $vars['offset']; ?>" data-control-id="<?php echo empty($vars['control-id']) ? '' : $vars['control-id'] ?>" data-source-url="<?php echo empty($vars['source-url']) ? '' : htmlspecialchars($vars['source-url']); ?>">
+        ?>" data-count="<?php echo $vars['count']; ?>" data-limit="<?php echo $items_per_page; ?>" data-offset="<?php echo $vars['offset']; ?>" data-control-id="<?php echo empty($vars['control-id']) ? '' : htmlspecialchars((string)$vars['control-id']) ?>" data-source-url="<?php echo empty($vars['source-url']) ? '' : htmlspecialchars($vars['source-url']); ?>">
             <ul>
-                <li class="newer <?php if ($vars['offset'] == 0) echo "pagination-disabled" ?>"><a href="<?php echo !$xhr ? $this->getURLWithVar('offset', $prev_offset) : '#';?>" title="Newer" rel="next"><span>&laquo; <?php echo \Idno\Core\Idno::site()->language()->_('Newer'); ?></span></a></li>
-                <li class="older <?php if ($vars['offset'] > $vars['count'] - $items_per_page) echo "pagination-disabled"?>"><a href="<?php echo !$xhr ? $this->getURLWithVar('offset', $next_offset) : '#'; ?>" title="Older" rel="prev"><span><?php echo \Idno\Core\Idno::site()->language()->_('Older'); ?> &raquo;</span></a></li>
+                <li class="newer <?php if ($vars['offset'] == 0) echo "pagination-disabled" ?>"><a href="<?php echo !$xhr ? $attr($this->getURLWithVar('offset', $prev_offset)) : '#';?>" title="Newer" rel="next"><span>&laquo; <?php echo \Idno\Core\Idno::site()->language()->_('Newer'); ?></span></a></li>
+                <li class="older <?php if ($vars['offset'] > $vars['count'] - $items_per_page) echo "pagination-disabled"?>"><a href="<?php echo !$xhr ? $attr($this->getURLWithVar('offset', $next_offset)) : '#'; ?>" title="Older" rel="prev"><span><?php echo \Idno\Core\Idno::site()->language()->_('Older'); ?> &raquo;</span></a></li>
             </ul>
         </div>
 

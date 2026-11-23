@@ -49,6 +49,49 @@ final class RawUsageTest extends TestCase
         $this->assertSame([], $stale, 'an entry of raw-allowlist.php that matches nothing');
     }
 
+    /**
+     * `t_html()` trusts its first argument as markup (a translation), so it must be a string written in the template: a variable,
+     * a concatenation or an interpolated string could hold something a person supplied.
+     */
+    public function testTheTextOfTHtmlIsAStringLiteralInEveryTemplate(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $offending = [];
+        foreach (self::twigFiles($root) as $relative => $path) {
+            foreach (self::nonLiteralTHtmlArguments((string) file_get_contents($path)) as $argument) {
+                $offending[] = $relative . ': t_html(' . $argument;
+            }
+        }
+
+        $this->assertSame([], $offending, 'the first argument of t_html() must be a string literal');
+    }
+
+    public function testTheLintForTHtmlFindsWhatIsNotALiteral(): void
+    {
+        $this->assertSame([], self::nonLiteralTHtmlArguments("{{ t_html('Posted <b>by</b> %s', [name]) }} {{ t_html(\"Double <i>quoted</i>\") }} {{ t_html(  'spaced'  ,  [x]) }}"), 'literals');
+        $this->assertSame([], self::nonLiteralTHtmlArguments("{{ t_html('It\\'s <b>escaped</b>', [x]) }} {# {{ t_html(variable) }} #} {{ other_t_html(variable) }} {{ x.t_html(variable) }}"), 'an escaped quote; a comment; another function; a method');
+        $this->assertSame(['body'], self::nonLiteralTHtmlArguments('{{ t_html(body) }}'), 'a variable');
+        $this->assertSame(['"a #{body} b"'], self::nonLiteralTHtmlArguments('{{ t_html("a #{body} b") }}'), 'an interpolated string');
+        $this->assertSame(["'a' ~ body"], self::nonLiteralTHtmlArguments("{{ t_html('a' ~ body) }}"), 'a concatenation');
+        $this->assertSame(['entity.title'], self::nonLiteralTHtmlArguments("{{ t_html(\n   entity.title, [x]) }}"), 'a member value, over lines');
+        $this->assertSame(["'a' ? b : c"], self::nonLiteralTHtmlArguments("{% set x = t_html('a' ? b : c) %}"), 'in a statement');
+    }
+
+    /**
+     * @return list<string> the start of the first argument of each `t_html(` call whose first argument is not a plain string literal
+     */
+    private static function nonLiteralTHtmlArguments(string $source): array
+    {
+        $source = preg_replace('/\{#.*?#\}/s', '', $source) ?? $source;
+        $found = [];
+        preg_match_all('/(?<![\w.])t_html\s*+\(\s*+(?!(?:\'(?:[^\'\\\\]|\\\\.)*\'|"(?:[^"\\\\#]|\\\\.|#(?!\{))*")\s*[,)])([^,)]*)/', $source, $matches);
+        foreach ($matches[1] as $argument) {
+            $found[] = trim($argument);
+        }
+
+        return $found;
+    }
+
     public function testTheExpressionBeforeARawIsFound(): void
     {
         $this->assertSame(['body'], self::rawExpressions('<div>{{ body|raw }}</div>'));

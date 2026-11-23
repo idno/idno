@@ -202,6 +202,23 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertSame('', $this->helpers()->pagination(3, 10), 'one page draws nothing');
     }
 
+    public function testPaginationIsSafeMarkupForHostileValues(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/p"onmouseover="alert(1)?a=1&b=\'2\'';
+        $html = $this->helpers()->pagination(100, 10, ['control-id' => 'c" onmouseover="alert(1)', 'source-url' => '/s" onmouseover="alert(1)', 'count' => '5" onclick="x', 'offset' => 'x" onclick="y', 'items_per_page' => 'z" onclick="z', 'unknown' => 'q" onclick="q']);
+
+        $nav = $this->document($html)->getElementsByTagName('nav')->item(0);
+        $this->assertNotNull($nav);
+        $this->assertSame(['class', 'data-count', 'data-limit', 'data-offset', 'data-control-id', 'data-source-url'], array_values(array_map(static fn ($a): string => $a->name, iterator_to_array($nav->attributes))), 'no attribute was added');
+        $this->assertSame('c" onmouseover="alert(1)', $nav->getAttribute('data-control-id'), 'the value is text');
+        $this->assertSame('100', $nav->getAttribute('data-count'), 'the count is the one given');
+        $this->assertSame('10', $nav->getAttribute('data-limit'));
+        foreach ($this->document($html)->getElementsByTagName('a') as $link) {
+            $this->assertSame(['href', 'rel'], array_values(array_map(static fn ($a): string => $a->name, iterator_to_array($link->attributes))), 'no attribute was added to a link');
+        }
+        $this->assertStringNotContainsString('onclick', str_replace('onclick=&quot;', '', $html));
+    }
+
     public function testDrawingLookups(): void
     {
         $helpers = $this->helpers();

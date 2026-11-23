@@ -18,16 +18,11 @@ use Idno\Templating\TemplateHelpers;
  * (`debug:twig`, with the schema gate closed).
  *
  * Where a legacy method this wraps would hand markup to a template that is marked safe, what in the markup came from a member
- * or a remote site is escaped or neutralised here (`parseHashtags()`, `actionLink()`): the notes on those methods.
+ * or a remote site is escaped or neutralised here (`actionLink()`, `pagination()`): the notes on those methods. (The text linkers
+ * are safe in the legacy methods themselves, which the `.tpl.php` templates also call.)
  */
 final class LegacyTemplateHelpers implements TemplateHelpers
 {
-    /**
-     * The entities that mean `& < > " '` in any spelling. A text can hold them in a place where the decoded character is
-     * markup (an attribute of sanitized HTML), so a filter that decodes entities must leave exactly these alone.
-     */
-    private const STRUCTURAL_ENTITY = '/&(?:amp|lt|gt|quot|apos|#0*(?:34|38|39|60|62)|#x0*(?:22|26|27|3c|3e));/i';
-
     public function siteUrl(string $path = ''): string
     {
         return Idno::site()->config()->getDisplayURL() . $path;
@@ -224,9 +219,14 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return $copy->vars;
     }
 
+    /**
+     * Only `control-id` and `source-url` of `$vars` are used (the others are the pagination's own: a value there would replace the
+     * count or the offset); the template escapes what it prints.
+     */
     public function pagination(int $count, ?int $perPage = null, array $vars = []): string
     {
         $template = Idno::site()->template();
+        $vars = array_intersect_key($vars, array_flip(['control-id', 'source-url']));
 
         return (string) $template->withVars($template->vars)->drawPagination($count, $perPage, $vars);
     }
@@ -300,8 +300,8 @@ final class LegacyTemplateHelpers implements TemplateHelpers
     }
 
     /**
-     * The extension escapes raw text before this runs. The links hold the matched address, which is then already escaped
-     * text, and the text of the link is cut from it.
+     * The extension escapes raw text before this runs. Only text is linked: not the inside of a tag (an attribute of
+     * sanitized HTML), a link, a script, a style or a textarea.
      */
     public function parseUrls(string $html): string
     {
@@ -309,24 +309,12 @@ final class LegacyTemplateHelpers implements TemplateHelpers
     }
 
     /**
-     * The legacy method decodes every entity of its input (`&auml;` to `ä`) and keeps `&amp;`, `&lt;` and `&gt;` as they were.
-     * It also decodes `&quot;`, `&#34;`, `&#60;` and the like, which in the attribute of sanitized HTML (`title="a&quot; onmouseover=..."`)
-     * turns an escaped quote or bracket into markup. Here those entities, in every spelling, are set aside before the
-     * decoding and put back after it, so the decoded text only ever gains letters.
+     * Links the hashtags of the text: not inside a tag or a link, and no entity of a markup character is decoded (the legacy
+     * method does both, for every template that calls it).
      */
     public function parseHashtags(string $html): string
     {
-        $kept = [];
-        $nonce = bin2hex(random_bytes(6));
-        $protected = (string) preg_replace_callback(self::STRUCTURAL_ENTITY, static function (array $m) use (&$kept, $nonce): string {
-            $kept[] = $m[0];
-
-            return "\u{E000}" . $nonce . ':' . (count($kept) - 1) . "\u{E001}";
-        }, $html);
-
-        $parsed = (string) Idno::site()->template()->parseHashtags($protected);
-
-        return (string) preg_replace_callback('/\x{E000}' . $nonce . ':(\d+)\x{E001}/u', static fn (array $m): string => $kept[(int) $m[1]] ?? '', $parsed);
+        return (string) Idno::site()->template()->parseHashtags($html);
     }
 
     /**

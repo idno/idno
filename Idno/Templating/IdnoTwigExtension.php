@@ -26,16 +26,19 @@ use Twig\TwigFunction;
  *    prepends, the extensions and the added content), and nothing else. Not escaped again, for the same reason.
  *  - `t(text, subs)`: the site's translation of `text`. Its result is an ordinary string: Twig escapes it as it does any other.
  *    `t_html(text, subs)`: the same for a string that holds markup (the translated text is trusted: it is Idno's own or a
- *    translator's); each string in `subs` is escaped, a `Twig\Markup` one (a `{% set %}` capture, `|raw`) is kept.
+ *    translator's); each string in `subs` is escaped, a `Twig\Markup` one (a `{% set %}` capture, or what a safe function returned) is kept; `|raw` does NOT make a string `Markup`.
  *  - The functions that need the site (the site's address and title, settings, the viewer, the page, forms, lookups) are
  *    `TemplateHelpers`; the request facts (`current_url()`, `current_path()`, `referrer()`) come from the RequestStack, empty
  *    without a request; `entity_value()`, `http_url` and `setting()`'s refusal of secrets are here because they need nothing of the site.
  *
+ * The functions marked safe return `Twig\Markup`, so another function can tell their output from a plain string.
+ *
  * What is marked safe for HTML is exactly: `idno_include`, `slot`, `t_html`, `form_token`, `action_link`, `form_data` and
  * `pagination` (functions); `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags` and `parse_users` (filters). The last
  * four work on text and so ESCAPE their input first (`pre_escape`: raw text is escaped, sanitized HTML and `Markup` are
- * kept). `form_token`, `action_link`, `form_data` and `pagination` answer markup the site built (`action_link`'s label and
- * `form_data`'s argument are markup the calling template built: its `|raw` is reviewed on the allow-list). Nothing else is safe: everything else is escaped by Twig as any string is.
+ * kept). `action_link`'s label and `form_data`'s argument are kept only when they are `Markup` (a capture, or the output of a safe
+ * function) and escaped otherwise, so a plain string can never become markup by passing through them. `action_link` refuses an
+ * address that is not relative to the site or http(s). Nothing else is safe: everything else is escaped by Twig as any string is.
  */
 final class IdnoTwigExtension extends AbstractExtension
 {
@@ -90,12 +93,12 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('current_url_without_var', $h->currentUrlWithoutVar(...)),
             new TwigFunction('body_classes', $h->bodyClasses(...)),
 
-            new TwigFunction('form_token', $h->formToken(...), $html),
+            new TwigFunction('form_token', fn (string $action): Markup => new Markup($h->formToken($action), 'UTF-8'), $html),
             new TwigFunction('action_link', $this->actionLink(...), $html),
             new TwigFunction('form_data', $this->formData(...), $html),
 
             new TwigFunction('shell_variables', $this->shellVariables(...), ['needs_context' => true, 'needs_environment' => true]),
-            new TwigFunction('pagination', $h->pagination(...), $html),
+            new TwigFunction('pagination', fn (int $count, ?int $per_page = null, array $vars = []): Markup => new Markup($h->pagination($count, $per_page, $vars), 'UTF-8'), $html),
             new TwigFunction('syndication_services', $h->syndicationServices(...)),
             new TwigFunction('syndication_selected', $h->syndicationSelected(...)),
             new TwigFunction('share_types', $h->shareTypes(...)),
@@ -132,11 +135,11 @@ final class IdnoTwigExtension extends AbstractExtension
      * @param array<string, mixed> $context the template's variables, as Twig has them
      * @param array<string, mixed> $vars
      */
-    public function includeTemplate(Environment $environment, array $context, string $name, array $vars = []): string
+    public function includeTemplate(Environment $environment, array $context, string $name, array $vars = []): Markup
     {
         $template = self::templateContext($context);
 
-        return (string) $template->withVars(array_merge(self::variablesOf($environment, $context), $vars))->draw($name);
+        return new Markup((string) $template->withVars(array_merge(self::variablesOf($environment, $context), $vars))->draw($name), 'UTF-8');
     }
 
     /**
@@ -171,9 +174,9 @@ final class IdnoTwigExtension extends AbstractExtension
     /**
      * @param array<string, mixed> $context
      */
-    public function slot(array $context, string $name): string
+    public function slot(array $context, string $name): Markup
     {
-        return self::templateContext($context)->drawSlot($name);
+        return new Markup((string) self::templateContext($context)->drawSlot($name), 'UTF-8');
     }
 
     /**
@@ -189,7 +192,7 @@ final class IdnoTwigExtension extends AbstractExtension
      *
      * @param array<int, mixed> $subs
      */
-    public function translateHtml(string $text, array $subs = []): string
+    public function translateHtml(string $text, array $subs = []): Markup
     {
         $escaped = array_map(static function (mixed $sub): mixed {
             if ($sub instanceof Markup) {
@@ -199,7 +202,7 @@ final class IdnoTwigExtension extends AbstractExtension
             return is_string($sub) || $sub instanceof \Stringable ? htmlspecialchars((string) $sub, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : $sub;
         }, $subs);
 
-        return $this->translation->translate($text, $escaped);
+        return new Markup($this->translation->translate($text, $escaped), 'UTF-8');
     }
 
     /**
@@ -238,24 +241,42 @@ final class IdnoTwigExtension extends AbstractExtension
     }
 
     /**
-     * A link that submits a signed POST form. The label is markup (the caller passes `{% set %}` captures or `|raw` HTML that
-     * the template built and escaped: every `|raw` is on the allow-list that a test enforces); the url, class, title and
-     * confirmation text are escaped by the helper.
+     * A link that submits a signed POST form. The label is markup only when it is `Markup` (a capture, the output of a safe
+     * function) and is escaped otherwise; the url must be relative to the site or http(s), else nothing is drawn (the helper
+     * escapes the class, title and confirmation text and the url's characters that end an attribute).
      *
      * @param array<string, mixed> $data
      * @param array<string, mixed> $options
      */
-    public function actionLink(string $url, string|\Stringable $label, array $data = [], array $options = []): string
+    public function actionLink(string $url, string|\Stringable $label, array $data = [], array $options = []): Markup
     {
-        return $this->helpers->actionLink($url, (string) $label, $data, $options);
+        if (!self::isLinkableAddress($url)) {
+            return new Markup('', 'UTF-8');
+        }
+
+        return new Markup($this->helpers->actionLink($url, self::markup($label), $data, $options), 'UTF-8');
     }
 
     /**
-     * Content for the page shell's form area (or, in an XHR request, for the place it is called from): markup the template built.
+     * Content for the page shell's form area (or, in an XHR request, for the place it is called from): markup (a `Markup`);
+     * any other string is escaped.
      */
-    public function formData(string|\Stringable $html): string
+    public function formData(string|\Stringable $html): Markup
     {
-        return $this->helpers->formData((string) $html);
+        return new Markup($this->helpers->formData(self::markup($html)), 'UTF-8');
+    }
+
+    /**
+     * An address a link may point to: http(s) (or scheme-relative `//host`) as `UrlValidator::httpUrl()` reads it, or relative
+     * to the site (a path, a query or a fragment: no scheme, no backslash, no white space or control character, not `//`).
+     */
+    private static function isLinkableAddress(string $url): bool
+    {
+        if (\Idno\Core\UrlValidator::httpUrl($url) !== '') {
+            return true;
+        }
+
+        return preg_match('~^(?![a-zA-Z][a-zA-Z0-9+.\-]*:)(?!//)[^"<>\\\\\x00-\x20\x7f]*$~D', $url) === 1;
     }
 
     /**
@@ -282,6 +303,11 @@ final class IdnoTwigExtension extends AbstractExtension
         }
 
         return null;
+    }
+
+    private static function markup(string|\Stringable $value): string
+    {
+        return $value instanceof Markup ? (string) $value : htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     private static function text(mixed $value): string

@@ -10,6 +10,13 @@ if (isset($vars['offset']) && !empty($vars['count'])) {
     } else {
         $items_per_page = $vars['items_per_page'];
     }
+    // Escaped for the attributes they are printed in: the control and the address come from the page that asks for pagination
+    $attr = function ($value) {
+        return strtr((string)$value, ['"' => '&quot;', "'" => '&#039;', '<' => '&lt;', '>' => '&gt;']);
+    };
+    $vars['count']  = (int)$vars['count'];
+    $vars['offset'] = (int)$vars['offset'];
+    $items_per_page = (int)$items_per_page;
     $prev_offset = $vars['offset'] - $items_per_page;
     if ($prev_offset < 0) $prev_offset = 0;
     $next_offset = $vars['offset'] + $items_per_page;
@@ -23,15 +30,15 @@ if (isset($vars['offset']) && !empty($vars['count'])) {
             $xhr = true;
         }
 
-        ?>" data-count="<?= $vars['count'] ?>" data-limit="<?= $items_per_page ?>" data-offset="<?= $vars['offset'] ?>" data-control-id="<?= empty($vars['control-id']) ? '' : $vars['control-id'] ?>" data-source-url="<?= empty($vars['source-url']) ? '' : htmlspecialchars($vars['source-url']) ?>">
+        ?>" data-count="<?= $vars['count'] ?>" data-limit="<?= $items_per_page ?>" data-offset="<?= $vars['offset'] ?>" data-control-id="<?= empty($vars['control-id']) ? '' : htmlspecialchars((string)$vars['control-id']) ?>" data-source-url="<?= empty($vars['source-url']) ? '' : htmlspecialchars($vars['source-url']) ?>">
             <ul>
                 <li class="newer <?php if ($vars['offset'] == 0) echo "pagination-disabled" ?>">
-                    <a href="<?= !$xhr ? $this->getURLWithVar('offset', $prev_offset) : '#' ?>" rel="next">
+                    <a href="<?= !$xhr ? $attr($this->getURLWithVar('offset', $prev_offset)) : '#' ?>" rel="next">
                         <span>&laquo; <?= \Idno\Core\Idno::site()->language()->_('Newer') ?></span>
                     </a>
                 </li>
                 <li class="older <?php if ($vars['offset'] > $vars['count'] - $items_per_page) echo "pagination-disabled" ?>">
-                    <a href="<?= !$xhr ? $this->getURLWithVar('offset', $next_offset) : '#' ?>" rel="prev">
+                    <a href="<?= !$xhr ? $attr($this->getURLWithVar('offset', $next_offset)) : '#' ?>" rel="prev">
                         <span><?= \Idno\Core\Idno::site()->language()->_('Older') ?> &raquo;</span>
                     </a>
                 </li>

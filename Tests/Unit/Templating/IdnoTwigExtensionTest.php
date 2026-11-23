@@ -114,6 +114,14 @@ final class IdnoTwigExtensionTest extends TestCase
         $this->assertSame('3 items', $this->render("{{ t_html('%d items', [3]) }}"));
     }
 
+    public function testTHtmlEscapesWhatGoesIntoNumberedAndTypedPlaceholders(): void
+    {
+        $this->assertSame('<b>&lt;i&gt;</b> and &quot;x&quot; 5 %', $this->render("{{ t_html('<b>%1\$s</b> and %2\$s %3\$d %%', ['<i>', '\"x\"', 5]) }}"));
+        $this->assertSame('&lt;a&gt; 7 &lt;a&gt;', $this->render("{{ t_html('%1\$s %2\$d %1\$s', ['<a>', 7]) }}"));
+        $this->assertSame('Total: 12', $this->render("{{ t_html('Total: %d', [12]) }}"));
+        $this->assertSame('&lt;/p&gt;&lt;script&gt; items', $this->render("{{ t_html('%s items', ['</p><script>']) }}"));
+    }
+
     public function testTIsStillEscapedWhereTHtmlIsNot(): void
     {
         $this->assertSame('&lt;b&gt;hi&lt;/b&gt;', $this->render("{{ t('<b>hi</b>') }}"));
@@ -188,19 +196,67 @@ final class IdnoTwigExtensionTest extends TestCase
         $helpers = new TemplateHelpersDouble();
         $this->assertSame('<input name="__bTk" value="token-for-/a?b=1&amp;c=2">', $this->render("{{ form_token('/a?b=1&c=2') }}", [], $helpers));
 
-        $this->assertSame('<a href="/x"><b>Go</b></a>', $this->render("{{ action_link('/x', label|raw) }}", ['label' => '<b>Go</b>'], $helpers), 'markup label');
-        $this->assertSame('<a href="/x"><b>Go</b></a>', $this->render("{% set label %}<b>Go</b>{% endset %}{{ action_link('/x', label) }}", [], $helpers), 'a capture');
+        $this->assertSame('<a href="/x"><b>Go</b></a>', $this->render("{% set label %}<b>Go</b>{% endset %}{{ action_link('/x', label) }}", [], $helpers), 'a capture is markup');
+        $this->assertSame('<a href="/x"><b>Go</b> x</a>', $this->render("{{ action_link('/x', t_html('<b>Go</b> %s', ['x'])) }}", [], $helpers), 'so is what a safe function returned');
+        $this->assertSame('<a href="/x">&lt;b&gt;Go&lt;/b&gt;</a>', $this->render("{{ action_link('/x', label) }}", ['label' => '<b>Go</b>'], $helpers), 'a plain string is escaped');
+        $this->assertSame('<a href="/x">&lt;b&gt;Go&lt;/b&gt;</a>', $this->render("{{ action_link('/x', label|raw) }}", ['label' => '<b>Go</b>'], $helpers), '|raw does not make a string markup');
         $helpers->calls = [];
         $this->render("{{ action_link('/x', 'Go', {a: 1}, {class: 'c'}) }}", [], $helpers);
         $this->assertSame([['actionLink', ['/x', 'Go', ['a' => 1], ['class' => 'c']]]], $helpers->calls);
     }
 
+    /**
+     * @return array<string, array{string, bool}>
+     */
+    public static function actionLinkAddresses(): array
+    {
+        return [
+            'a path' => ['/x/y?a=1#f', true],
+            'a relative path' => ['x/y', true],
+            'a query' => ['?offset=20', true],
+            'a path with a colon after the first slash' => ['/a:b', true],
+            'https' => ['https://site.example/x', true],
+            'http' => ['http://site.example/x', true],
+            'scheme-relative' => ['//site.example/x', true],
+            'javascript' => ['javascript:alert(1)', false],
+            'javascript in capitals' => ['JavaScript:alert(1)', false],
+            'javascript after a space' => [' javascript:alert(1)', false],
+            'javascript after a tab' => ["\tjavascript:alert(1)", false],
+            'data' => ['data:text/html,x', false],
+            'vbscript' => ['vbscript:x', false],
+            'mailto' => ['mailto:a@b.example', false],
+            'a backslash host' => ['/\\evil.example', false],
+            'a backslash' => ['\\\\evil.example', false],
+            'a quote' => ['/x"onmouseover="y', false],
+            'a tag' => ['/x<script>', false],
+            'an empty address' => ['', true],
+            'a scheme-relative address with a quote' => ['//a.example/"x', false],
+        ];
+    }
+
+    /**
+     * @dataProvider actionLinkAddresses
+     */
+    public function testActionLinkRefusesAnAddressThatIsNotRelativeOrHttp(string $url, bool $drawn): void
+    {
+        $helpers = new TemplateHelpersDouble();
+
+        $out = $this->render('{{ action_link(url, "Go") }}', ['url' => $url], $helpers);
+
+        $this->assertSame($drawn ? 1 : 0, count($helpers->calls), $url);
+        if (!$drawn) {
+            $this->assertSame('', $out);
+        }
+    }
+
     public function testFormDataIsMarkupBackOnlyInAnXhrRequest(): void
     {
         $helpers = new TemplateHelpersDouble();
-        $this->assertSame('', $this->render("{{ form_data(html|raw) }}", ['html' => '<form></form>'], $helpers));
+        $this->assertSame('', $this->render("{% set html %}<form></form>{% endset %}{{ form_data(html) }}", [], $helpers));
         $helpers->xhr = true;
-        $this->assertSame('<form></form>', $this->render("{{ form_data(html|raw) }}", ['html' => '<form></form>'], $helpers));
+        $this->assertSame('<form></form>', $this->render("{% set html %}<form></form>{% endset %}{{ form_data(html) }}", [], $helpers));
+        $this->assertSame('&lt;form&gt;&lt;/form&gt;', $this->render("{{ form_data(html) }}", ['html' => '<form></form>'], $helpers), 'a plain string is escaped');
+        $this->assertSame('&lt;form&gt;&lt;/form&gt;', $this->render("{{ form_data(html|raw) }}", ['html' => '<form></form>'], $helpers), '|raw does not make a string markup');
     }
 
     public function testDrawingFunctionsPassTheirArgumentsOn(): void

@@ -153,6 +153,33 @@ namespace IdnoPlugins\Event\Tests {
             $this->assertStringContainsString('#dinner</a>', $html);
         }
 
+        /**
+         * The body of an RSVP is sanitized, then its hashtags and addresses are linked: markup the purifier keeps (an escaped
+         * quote in an attribute, an address in an alt) must stay what it was.
+         *
+         * @dataProvider lookProvider
+         */
+        public function testLinkingTheSanitizedBodyAddsNothingToTheMarkup($look)
+        {
+            $rsvp = new RSVP();
+            $rsvp->rsvp = 'yes';
+            $rsvp->body = '<p title="x&quot; onmouseover=&quot;alert(1)">#tag</p><img src="https://example.com/i.png" alt="see http://x.example/onerror=alert(1)//"> and http://ok.example/p';
+            $rsvp->inreplyto = 'https://example.com/event';
+
+            $html = $this->draw($rsvp, $look);
+
+            $this->assertMarkupIsSafe($html);
+            $document = \Dom\HTMLDocument::createFromString('<!DOCTYPE html><body>' . $html, LIBXML_NOERROR);
+            $this->assertSame('x" onmouseover="alert(1)', $document->querySelector('p[title]')?->getAttribute('title'), 'the escaped quote is still part of the title');
+            $this->assertSame('see http://x.example/onerror=alert(1)//', $document->querySelector('img')?->getAttribute('alt'));
+            $this->assertNull($document->querySelector('[onmouseover], [onerror]'));
+            $links = [];
+            foreach ($document->querySelectorAll('a') as $link) {
+                $links[] = $link->getAttribute('href');
+            }
+            $this->assertSame([Idno::site()->config()->getDisplayURL() . 'tag/tag', 'http://ok.example/p'], $links, 'the hashtag and the address in the text are linked, nothing else');
+        }
+
         public static function hostileDescriptionProvider(): array
         {
             return [

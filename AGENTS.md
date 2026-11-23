@@ -2707,19 +2707,25 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
     value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
     SAFE for HTML, exactly (pinned by `IdnoTwigExtensionTest::testOnlyTheListedFunctionsAreSafe`): the functions `idno_include`, `slot`, `t_html`
-    (the translated text is trusted; each string sub is escaped, a `Twig\Markup` one kept), `form_token`, `action_link`, `form_data` and
+    (the translated text is trusted; each string sub is escaped, a `Twig\Markup` one kept; `|raw` output is not `Markup`), `form_token`, `action_link`, `form_data` and
     `pagination`, and the filters `sanitize_html` (HTMLPurifier through the `text/filter` event) and `autop`, `parse_urls`, `parse_hashtags` and
     `parse_users`, which have `pre_escape: html` (raw text is escaped first, sanitized HTML and `Markup` are kept). `action_link`'s label and
-    `form_data`'s argument are markup the calling template built (a runtime string cannot be told from `|raw` output): every `|raw` is on the
-    allow-list. Two legacy methods were not safe to inherit and are fixed in the adapter: `parseHashtags()` decoded `&quot;`, `&#60;` and the other
-    entities that mean a quote, bracket or ampersand (turning an escaped attribute value of sanitized HTML into markup), so they are set aside
-    around the decoding; `Actions::createLink()` printed the url, class and title unescaped and put a confirmation text with `"` into an attribute,
-    so `actionLink()` escapes them, percent-encodes a character that ends an attribute in the url and takes only the options the link template reads.
+    `form_data`'s argument are markup only when they are `Twig\Markup` (a `{% set %}` capture or the output of a safe function: the safe functions
+    return `Markup`; a plain string, and `|raw` output, which is a plain string at run time, are escaped); `action_link` draws nothing for an address that
+    is neither relative to the site nor http(s) (`UrlValidator::httpUrl()` or a relative address: no scheme, backslash, white space or control character).
+    The text linkers are fixed in the LEGACY methods, so the `.tpl.php` templates, the `classic` copies and the filters share one implementation:
+    `DefaultTemplate::parseURLs()`, `parseHashtags()` and `parseUsers()` transform only the TEXT of their input (`Parsing::mapText()`: not the inside of a
+    tag, a comment, an `<a>` element, `<script>`, `<style>` or `<textarea>`; a tag that is never closed ends the transformed part) and `parseHashtags()` never
+    decodes an entity whose character is `<`, `>`, `&`, `"`, `'` or a backtick, in any spelling (`&auml;` still decodes). Before, an address in an `alt` or
+    `title` of sanitized HTML became a link that ended the attribute (a stored XSS), and `&quot;` was decoded to a quote. `Actions::createLink()` still
+    prints the url, class, title and confirmation text unescaped, so `actionLink()` escapes them, percent-encodes a character that ends an attribute in
+    the url and takes only the options the link template reads.
     `form_data()` registers with `shell/form-data` (nothing returned) or, in an XHR request, returns the markup to the template that is drawing
     (the legacy link template appended it to a global that only the user search page read). `shell_variables()` computes what
     `formatShellVariables()` does on a copy of the template object with no variables and returns them (the site's template object is untouched);
-    `pagination()` draws on a copy too. Tests: `IdnoTwigExtensionTest` (a `TemplateHelpersDouble`, no legacy application),
-    `Tests/Kernel/LegacyTemplateHelpersTest` (each adapter method on the rig's site). `Idno\Core\PotGenerator` also reads `.twig` files: the first
+    `pagination()` draws on a copy too and uses only the `control-id` and `source-url` of its variables; `shell/pagination` escapes what it prints (the
+    count, offset and limit as integers, the control, the address of the links). Tests: `IdnoTwigExtensionTest` (a `TemplateHelpersDouble`, no legacy application),
+    `Tests/Kernel/LegacyTemplateHelpersTest` (each adapter method on the rig's site), `Tests/Kernel/TemplateLinkersTest` (the three linkers against the HTML5 parser) and `RawUsageTest` (the first argument of `t_html(` in a core or bundled Twig file is a string literal). `Idno\Core\PotGenerator` also reads `.twig` files: the first
     argument of `t(` and `t_html(` when it is a string literal (Twig's lexer; `PotGeneratorTest::testTwigTranslationCallsAreExtracted`).
   - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
     bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
@@ -3612,6 +3618,10 @@ the CLI installer no longer writes one.
   entities the user has no access to; `EntityRepository::find()` does the same. An empty
   publish status counts as published. Counts (`countObjects()`, `EntityRepository::count()`) do
   NOT apply this rule: drafts the user cannot see are counted.
+- Text linkers (`DefaultTemplate::parseURLs()`, `parseHashtags()`, `parseUsers()`, and the Twig filters over them): they link text only, never inside a tag,
+  a link, a script, a style or a textarea, and `parseHashtags()` never decodes an entity of `< > & " '` or a backtick; an address in an attribute of sanitized HTML
+  is therefore never made into a link. `Tests/Kernel/TemplateLinkersTest` checks this against an HTML5 parser, and
+  `IdnoPlugins/Event/Tests/RSVPOutputTest::testLinkingTheSanitizedBodyAddsNothingToTheMarkup` through a real template.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
   unless its signature covers `(request-target)`, `host` and `date`, and, for any method

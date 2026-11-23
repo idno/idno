@@ -18,42 +18,46 @@ namespace Idno\Core\Templating {
          */
         function parseURLs($text, $code = '', $wbr = true)
         {
-            $r = preg_replace_callback(
-                '/(?<!=)(?<!["\'])((ht|f)tps?:\/\/[^\s<>"\']+)/i', function ($matches) use ($code, $wbr) {
-                    $url  = $matches[1];
-                    $punc = '';
+            $r = static::mapText(
+                $text, function ($text) use ($code, $wbr) {
+                    return preg_replace_callback(
+                        '/(?<!=)(?<!["\'])((ht|f)tps?:\/\/[^\s<>"\']+)/i', function ($matches) use ($code, $wbr) {
+                            $url  = $matches[1];
+                            $punc = '';
 
-                    while ($url) {
-                        $last = substr($url, -1, 1);
-                        if (strstr('.!?,;:(', $last)
-                            // strip ) if there isn't a matching ( earlier in the url
-                            || ($last === ')' && !strstr($url, '('))
-                        ) {
-                            $punc = $last . $punc;
-                            $url  = substr($url, 0, -1);
-                        } else {
-                            break; // found a non-punctuation character
-                        }
-                    }
+                            while ($url) {
+                                $last = substr($url, -1, 1);
+                                if (strstr('.!?,;:(', $last)
+                                // strip ) if there isn't a matching ( earlier in the url
+                                || ($last === ')' && !strstr($url, '('))
+                                ) {
+                                    $punc = $last . $punc;
+                                    $url  = substr($url, 0, -1);
+                                } else {
+                                    break; // found a non-punctuation character
+                                }
+                            }
 
-                    $result = "<a href=\"" . $url ."\"";
-                    if (!\Idno\Common\Entity::isLocalUUID($url)) {
-                        $result .= " target=\"_blank\" ";
-                    }
-                    if ($code) {
-                        $result .= ' ' . str_replace("%URL%", $url, $code);
-                    }
-                    $result .= ">";
-                    if ($wbr) {
-                        $result .= preg_replace('/([\/=]+)/', '${1}<wbr />', static::sampleTextChars($url, 100));
-                    } else {
-                        $result .= preg_replace('/([\/=]+)/', '${1}', static::sampleTextChars($url, 100));
-                    }
-                    $result .= "</a>$punc";
+                            $result = "<a href=\"" . $url ."\"";
+                            if (!\Idno\Common\Entity::isLocalUUID($url)) {
+                                $result .= " target=\"_blank\" ";
+                            }
+                            if ($code) {
+                                $result .= ' ' . str_replace("%URL%", $url, $code);
+                            }
+                            $result .= ">";
+                            if ($wbr) {
+                                $result .= preg_replace('/([\/=]+)/', '${1}<wbr />', static::sampleTextChars($url, 100));
+                            } else {
+                                $result .= preg_replace('/([\/=]+)/', '${1}', static::sampleTextChars($url, 100));
+                            }
+                            $result .= "</a>$punc";
 
-                    return $result;
+                            return $result;
 
-                }, $text
+                        }, $text
+                    );
+                }
             );
 
             return $r;
@@ -67,29 +71,34 @@ namespace Idno\Core\Templating {
          */
         function parseHashtags($text)
         {
-            //decode &auml; to ä, but keep < > and & characters
-            $text = html_entity_decode(
-                str_replace(
-                    ['&amp;', '&lt;', '&gt;'],
-                    ['&amp;amp;', '&amp;lt;', '&amp;gt;'],
-                    $text
-                )
-            );
-            $r    = preg_replace_callback(
-                '/(?<=^|[\>\s\n])(\#[\p{L}0-9\_]+)/u', function ($matches) {
-                    $url = $matches[1];
-                    $tag = str_replace('#', '', $matches[1]);
+            $r = static::mapText(
+                $text, function ($text) {
+                    // decode &auml; to ä, but keep every entity of < > & " ' and ` (in any spelling) as it is
+                    $text = preg_replace_callback(
+                        '/&(?:#[0-9]+|#[xX][0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/', function ($entity) {
+                            $decoded = html_entity_decode($entity[0], ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8');
 
-                    if (preg_match('/\#[0-9]{1,3}$/', $matches[1])) {
-                        return $matches[1];
-                    }
+                            return strpbrk($decoded, '<>&"\'`') === false ? $decoded : $entity[0];
+                        }, $text
+                    );
 
-                    if (preg_match('/\#[A-Fa-f0-9]{6}$/', $matches[1])) {
-                        return $matches[1];
-                    }
+                    return preg_replace_callback(
+                        '/(?<=^|[\>\s\n])(\#[\p{L}0-9\_]+)/u', function ($matches) {
+                            $url = $matches[1];
+                            $tag = str_replace('#', '', $matches[1]);
 
-                    return '<a href="' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'tag/' . urlencode($tag) . '" class="p-category" rel="tag">' . $url . '</a>';
-                }, $text
+                            if (preg_match('/\#[0-9]{1,3}$/', $matches[1])) {
+                                return $matches[1];
+                            }
+
+                            if (preg_match('/\#[A-Fa-f0-9]{6}$/', $matches[1])) {
+                                return $matches[1];
+                            }
+
+                            return '<a href="' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'tag/' . urlencode($tag) . '" class="p-category" rel="tag">' . $url . '</a>';
+                        }, $text
+                    );
+                }
             );
 
             return $r;
@@ -118,50 +127,116 @@ namespace Idno\Core\Templating {
                         $in_reply_to = $in_reply_to[0];
                     }
 
-                    $r = preg_replace_callback(
-                        $usermatch_regex, function ($matches) use ($in_reply_to) {
-                            $url = $matches[1];
+                    $r = static::mapText(
+                        $text, function ($text) use ($usermatch_regex, $in_reply_to) {
+                            return preg_replace_callback(
+                                $usermatch_regex, function ($matches) use ($in_reply_to) {
+                                    $url = $matches[1];
 
-                            // Find and replace twitter
-                            if (strpos($in_reply_to, 'twitter.com') !== false) {
-                                return '<a href="https://twitter.com/' . urlencode(ltrim($matches[1], '@')) . '" target="_blank">' . $url . '</a>';
-                                // Activate github
-                            } else if (strpos($in_reply_to, 'github.com') !== false) {
-                                return '<a href="https://github.com/' . urlencode(ltrim($matches[1], '@')) . '" target="_blank">' . $url . '</a>';
-                            } else {
-                                return \Idno\Core\Idno::site()->events()->triggerEvent(
-                                    "template/parseusers", [
-                                    'in_reply_to' => $in_reply_to,
-                                    'in_reply_to_domain' => parse_url($in_reply_to, PHP_URL_HOST),
-                                    'username' => ltrim($matches[1], '@'),
-                                    'match' => $url
-                                    ], $url
-                                );
-                            }
-                        }, $text
+                                    // Find and replace twitter
+                                    if (strpos($in_reply_to, 'twitter.com') !== false) {
+                                        return '<a href="https://twitter.com/' . urlencode(ltrim($matches[1], '@')) . '" target="_blank">' . $url . '</a>';
+                                        // Activate github
+                                    } else if (strpos($in_reply_to, 'github.com') !== false) {
+                                        return '<a href="https://github.com/' . urlencode(ltrim($matches[1], '@')) . '" target="_blank">' . $url . '</a>';
+                                    } else {
+                                        return \Idno\Core\Idno::site()->events()->triggerEvent(
+                                            "template/parseusers", [
+                                            'in_reply_to' => $in_reply_to,
+                                            'in_reply_to_domain' => parse_url($in_reply_to, PHP_URL_HOST),
+                                            'username' => ltrim($matches[1], '@'),
+                                            'match' => $url
+                                            ], $url
+                                        );
+                                    }
+                                }, $text
+                            );
+                        }
                     );
 
                 }
 
             } else {
                 // No in-reply, so we assume a local user
-                $r = preg_replace_callback(
-                    $usermatch_regex, function ($matches) {
-                        $url = $matches[1];
+                $r = static::mapText(
+                    $text, function ($text) use ($usermatch_regex) {
+                        return preg_replace_callback(
+                            $usermatch_regex, function ($matches) {
+                                $url = $matches[1];
 
-                        $username = ltrim($matches[1], '@');
+                                $username = ltrim($matches[1], '@');
 
-                        if ($user = User::getByHandle($username)) {
-                            return '<a href="' . \Idno\Core\Idno::site()->config()->url . 'profile/' . urlencode($username) . '" >' . $url . '</a>';
-                        } else {
-                            return $url;
-                        }
+                                if ($user = User::getByHandle($username)) {
+                                    return '<a href="' . \Idno\Core\Idno::site()->config()->url . 'profile/' . urlencode($username) . '" >' . $url . '</a>';
+                                } else {
+                                    return $url;
+                                }
 
-                    }, $text
+                            }, $text
+                        );
+                    }
                 );
             }
 
             return $r;
+        }
+
+        /**
+         * Applies a function to the TEXT of a piece of HTML and leaves the rest as it is: the inside of a tag (an attribute value
+         * can hold an address, a hashtag or a mention that is not to be linked, and a link made there would end the attribute), a
+         * comment, an element that already is a link (<a>), and the contents of <script>, <style> and <textarea>. Plain text
+         * (no tags) is all text. Markup that is cut short (a tag that is never closed) is left from there on.
+         *
+         * @param  string   $html
+         * @param  callable $function Gets a piece of text, returns it changed
+         * @return string
+         */
+        private static function mapText($html, callable $function)
+        {
+            $html   = (string)$html;
+            $result = '';
+            $length = strlen($html);
+            $start  = 0;    // where the text that is not yet handled begins
+            $pos    = 0;
+            $links  = 0;
+            $flush  = function ($end) use (&$html, &$result, &$start, &$links, $function) {
+                $text    = substr($html, $start, $end - $start);
+                $result .= $links > 0 || $text === '' ? $text : (string)$function($text);
+            };
+            while (($pos = strpos($html, '<', $pos)) !== false) {
+                if (substr($html, $pos, 4) == '<!--') {
+                    $flush($pos);
+                    $end     = strpos($html, '-->', $pos + 4);
+                    $end     = $end === false ? $length : $end + 3;
+                    $result .= substr($html, $pos, $end - $pos);
+                    $start   = $pos = $end;
+                } else if (preg_match('/\G<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:"[^"]*"|\'[^\']*\'|[^>"\'])*)>/', $html, $tag, 0, $pos)) {
+                    $flush($pos);
+                    $name    = strtolower($tag[2]);
+                    $result .= $tag[0];
+                    $start   = $pos = $pos + strlen($tag[0]);
+                    if ($name == 'a') {
+                        $links = $tag[1] == '/' ? max(0, $links - 1) : $links + 1;
+                    } else if ($tag[1] == '' && in_array($name, ['script', 'style', 'textarea'])) {
+                        // Its contents are not text: leave everything up to its end tag
+                        $end     = stripos($html, '</' . $name, $pos);
+                        $end     = $end === false ? $length : $end;
+                        $result .= substr($html, $pos, $end - $pos);
+                        $start   = $pos = $end;
+                    }
+                } else if (preg_match('/\G<[a-zA-Z\/!?]/', $html, $unfinished, 0, $pos)) {
+                    // A tag that does not end: what is left is inside it
+                    $flush($pos);
+                    $result .= substr($html, $pos);
+                    $start   = $pos = $length;
+                } else {
+                    // A less-than sign that starts no tag is text
+                    $pos++;
+                }
+            }
+            $flush($length);
+
+            return $result;
         }
 
 
