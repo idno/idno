@@ -329,6 +329,104 @@ final class TwigPortCheckTest extends TestCase
     }
 
     /**
+     * Renders `$names` (templates with a listed difference, original => port) at the top level, so the check remembers them.
+     *
+     * @param array<string, array{0: string, 1: string, 2?: string}> $children name => [original, port, the original its listed hash was made from (when an earlier remembered difference changes it)]
+     */
+    private function rememberChildren(array $children): TwigPortCheck
+    {
+        $outputs = [];
+        $exceptions = [];
+        foreach ($children as $name => $child) {
+            [$original, $port] = $child;
+            file_put_contents($this->project . '/templates/default/' . $name . '.tpl.php', $original);
+            file_put_contents($this->project . '/templates/default/' . $name . '.html.twig', '');
+            $outputs[$name] = $port;
+            [$file, $exception] = self::exceptionFor($name, $child[2] ?? $original, $port);
+            $exceptions[$file] = $exception;
+        }
+        $check = $this->check(function (LocatedTemplate $template) use ($outputs): string {
+            foreach ($outputs as $name => $output) {
+                if (str_ends_with($template->path, '/' . $name . '.html.twig')) {
+                    return $output;
+                }
+            }
+
+            return $outputs['__parent'] ?? '';
+        }, $exceptions);
+        foreach (array_keys($children) as $name) {
+            $check->render($this->located($name), [], $this->context());
+        }
+
+        return $check;
+    }
+
+    private function parentWith(string $original, string $port): TwigPortCheck
+    {
+        file_put_contents($this->project . '/templates/default/probe.tpl.php', $original);
+
+        return $this->check($port);
+    }
+
+    public function testTheRememberedDifferencesOfOneDrawDoNotLeakIntoTheNextOnceForgotten(): void
+    {
+        $this->rememberChildren(['other' => ['the original child text', 'the PORT child text!!']]);
+        file_put_contents($this->project . '/templates/default/probe.tpl.php', '<p>the original child text</p>');
+        $check = $this->check('<p>the PORT child text!!</p>');
+
+        $check->render($this->located('probe'), [], $this->context());
+        $this->assertTrue($this->lines()[1]['same'], 'in the same request the body\'s difference is substituted when the shell is compared');
+
+        TwigPortCheck::forget();
+        @unlink($this->report);
+        $check->render($this->located('probe'), [], $this->context());
+        $line = $this->lines()[0];
+        $this->assertFalse($line['same'], 'after forget() (a new draw case) nothing of the earlier draw is substituted: a wrong port is not masked');
+        $this->assertArrayNotHasKey('substitutions', $line);
+    }
+
+    public function testAnOutputThatIsAllDigitsIsAnOrdinaryFragment(): void
+    {
+        $this->rememberChildren(['other' => ['1234567890123456789', 'the number, ported']]);
+
+        $this->parentWith('<p>1234567890123456789</p>', '<p>the number, ported</p>')->render($this->located('probe'), [], $this->context());
+
+        $line = $this->lines()[1];
+        $this->assertTrue($line['same']);
+        $this->assertSame(1, $line['substitutions']);
+    }
+
+    public function testASubstitutedPortIsNotRewrittenByAShorterRememberedOriginal(): void
+    {
+        $this->rememberChildren([
+            'other' => ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb'],
+            'second' => ['bbbbbbbbbbbbbbbb', 'cccccccccccccccc'],
+        ]);
+
+        $this->parentWith('<p>aaaaaaaaaaaaaaaa</p>', '<p>bbbbbbbbbbbbbbbb</p>')->render($this->located('probe'), [], $this->context());
+
+        $this->assertTrue($this->lines()[2]['same'], 'the port\'s text is not itself replaced again');
+    }
+
+    public function testTheSameOriginalRememberedWithTwoPortsKeepsTheFirstAndReportsTheOther(): void
+    {
+        $this->rememberChildren([
+            'other' => ['the shared original', 'the first port text'],
+            'second' => ['the shared original', 'the second port text', 'the first port text'], // the first difference is substituted in it, as in every later draw
+        ]);
+
+        $this->parentWith('<p>the shared original</p>', '<p>the first port text</p>')->render($this->located('probe'), [], $this->context());
+        $first = $this->lines()[2];
+        $this->assertTrue($first['same'], 'the first port is the one substituted');
+
+        @unlink($this->report);
+        $this->parentWith('<p>the shared original</p>', '<p>the second port text</p>')->render($this->located('probe'), [], $this->context());
+        $second = $this->lines()[0];
+        $this->assertFalse($second['same'], 'a second port for the same original is not guessed at');
+        $this->assertSame(1, $second['unsubstituted']);
+    }
+
+    /**
      * The original parent (`$parent`, PHP) draws `other`; `other` has $original as its original and a port.
      */
     private function parentAndChild(string $parent, string $original, string $port): void

@@ -193,6 +193,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $code = <<<'PHP'
         $drawn = [];
         foreach (json_decode(%DRAWS%, true) as [$type, $name, $vars]) {
+            \Tests\Fixtures\TwigPortCheck::forget();
             $template = clone \Idno\Core\Idno::site()->template();
             $template->setTemplateType($type);
             $drawn[] = (string) $template->__($vars)->draw($name);

@@ -56,7 +56,7 @@ final class TwigPortCheck implements TemplateEngine
 
     private static bool $shadowing = false;
 
-    /** @var array<string, string> for the rest of the request: the normalised original and port output of each listed difference */
+    /** @var list<array{string, string}> for the rest of the request: the normalised original and port output of each listed difference */
     private static array $accepted = [];
 
     /** @var int the listed differences of the request whose fragment is too short or empty to be replaced */
@@ -77,7 +77,10 @@ final class TwigPortCheck implements TemplateEngine
     }
 
     /**
-     * Forgets the listed differences remembered for the request (a unit test starts each case clean).
+     * Forgets the listed differences remembered so far. A web request is a new PHP process: nothing to forget (a page's body is drawn
+     * before its shell, and the pairs of the body must still be there when the shell is compared, so the pairs live for the whole
+     * request). A console process that draws several unrelated cases (the test's draw loops through `runInSite()`) calls this between
+     * them, and a unit test before each case.
      */
     public static function forget(): void
     {
@@ -125,14 +128,17 @@ final class TwigPortCheck implements TemplateEngine
         // A difference that is listed for a template it draws is that template's own: its original output is replaced by its
         // port's in this one's original, so that the entry of the child covers the child alone and not every ancestor.
         $substitutions = 0;
-        $fragments = self::$accepted;
-        uksort($fragments, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
-        foreach ($fragments as $fragment => $replacement) {
-            $count = substr_count($before, (string) $fragment);
+        $map = [];
+        foreach (self::$accepted as [$fragment, $replacement]) {
+            $count = substr_count($before, $fragment);
             if ($count > 0) {
-                $before = str_replace((string) $fragment, $replacement, $before);
+                $map[$fragment] = $replacement;
                 $substitutions += $count;
             }
+        }
+        if ($map !== []) {
+            // One pass, longest match first (strtr's own rule): a port's text is never rewritten by a shorter remembered original.
+            $before = strtr($before, $map);
         }
         $same = $before === $after && $reason === null;
         $line = ['file' => $this->relative($template->path), 'same' => $same, 'original_hash' => hash('sha256', $raw)];
@@ -153,7 +159,13 @@ final class TwigPortCheck implements TemplateEngine
                 if (strlen($raw) < self::MINIMUM_FRAGMENT || trim($raw) === '') {
                     ++self::$unsubstituted;
                 } else {
-                    self::$accepted[$raw] = $after;
+                    $known = array_filter(self::$accepted, static fn (array $pair): bool => $pair[0] === $raw);
+                    if ($known === []) {
+                        self::$accepted[] = [$raw, $after];
+                    } elseif (array_values($known)[0][1] !== $after) {
+                        // the same original with another port: the first is kept, the later difference is reported
+                        ++self::$unsubstituted;
+                    }
                 }
             }
         }
