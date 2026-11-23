@@ -28,6 +28,15 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return Idno::site()->config()->getDisplayURL() . $path;
     }
 
+    public function currentUrlFor(string $requestUri): string
+    {
+        $url = parse_url((string) Idno::site()->config()->url);
+        $url = is_array($url) ? $url : [];
+        $url['path'] = $requestUri;
+
+        return \Idno\Common\Page::buildUrl($url);
+    }
+
     public function staticUrl(string $path = ''): string
     {
         return Idno::site()->config()->getStaticURL() . $path;

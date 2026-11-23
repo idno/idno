@@ -607,7 +607,10 @@ pins the SQLite side in the unit tier (a test subclass whose root is a temporary
    pushes the request on the stack before the callback and pops it in a `finally` (a page that `exit`s ends the process instead). Symfony takes the
    request off the stack when `Kernel::handle()` returns, which is before a legacy page runs, so without this the stack is empty while a
    template draws, and the Twig functions `current_url()`, `current_path()` and `referrer()` would answer ''. The page still reads the
-   superglobals; the stack is for the templates (`Tests/Unit/Legacy/LegacyResponseTest`).
+   superglobals; the stack is for the templates (`Tests/Unit/Legacy/LegacyResponseTest`). The request helpers (`current_url()`, `current_path()`, `referrer()`)
+   never ask the request for its host, scheme or full URI: a request Symfony rejected (a malformed Host) is served by the legacy router too, and `getHost()` would
+   throw. `current_url()` is `TemplateHelpers::currentUrlFor($_SERVER['REQUEST_URI'] as the request has it)`: the configured `url`'s scheme, host and port plus the
+   request URI, byte for byte what `Page::currentUrl()` builds (`Tests/Kernel/TwigRequestHelpersTest` over a real page, `IdnoTwigExtensionTest`).
 6. If the page returns rather than exits, `index.php` calls `Kernel::terminate()`. Pages
    that `exit` skip it, so nothing essential may live in a `kernel.terminate` listener.
 
@@ -2697,7 +2700,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `@core/` name), of each `IdnoPlugins/<name>/` and of each `Themes/<name>/` (by its logical name, through the cascade, to which it adds those
     directories for the life of the process; a name an earlier file already has resolves to that file). A core file that does not compile is an
     error; a plugin's or theme's is skipped (the page that draws it shows the error; `lint:twig` checks them). Run it as the web server's user after
-    an update (`docs/install/upgrade.md`). `Tests/Kernel/TwigCacheWarmerTest`.
+    an update (`docs/install/upgrade.md`). It warns (the site's logger when there is one, and standard error: the warmer interface has no output of its own) about each plugin or theme
+    template it skipped, naming the logical name and the error's class, and when the cache directory could not be written (it still returns normally). `Tests/Kernel/TwigCacheWarmerTest`.
   - `TwigTemplateEngine` (`TemplateEngine`): holds a CLOSURE to the `twig` service, so the environment is built when the first Twig file is
     drawn and a page that draws none never builds it (`TwigEngineTest::testTheEnvironmentIsBuiltWhenAFirstTwigFileIsDrawnAndNotBefore`,
     `TwigTrimTest`). It loads `$located->logicalName` through the loader (the file the locator found) and renders it with the variables

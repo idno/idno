@@ -29,7 +29,8 @@ use Twig\TwigFunction;
  *    translator's); each string in `subs` is escaped, a `Twig\Markup` one (a `{% set %}` capture, or what a safe function returned) is kept; `|raw` does NOT make a string `Markup`.
  *  - The functions that need the site (the site's address and title, settings, the viewer, the page, forms, lookups) are
  *    `TemplateHelpers`; the request facts (`current_url()`, `current_path()`, `referrer()`) come from the RequestStack, empty
- *    without a request; `entity_value()`, `http_url` and `setting()`'s refusal of secrets are here because they need nothing of the site.
+ *    without a request, and never ask the request for its host (`current_url()` is the site's configured address plus the request's URI, as
+ *    `Page::currentUrl()` builds it); `entity_value()`, `http_url` and `setting()`'s refusal of secrets are here because they need nothing of the site.
  *
  * The functions marked safe return `Twig\Markup`, so another function can tell their output from a plain string.
  *
@@ -223,14 +224,24 @@ final class IdnoTwigExtension extends AbstractExtension
     {
         $request = $this->requests->getCurrentRequest();
 
-        return $request === null ? '' : $request->getSchemeAndHttpHost() . $request->getRequestUri();
+        return $request === null ? '' : $this->helpers->currentUrlFor(self::requestUri($request));
+    }
+
+    /**
+     * The request's URI exactly as the server gave it (what the legacy code reads from `$_SERVER['REQUEST_URI']`), without
+     * asking the request for its host, scheme or full URI: those validate the Host header, which a request that Symfony rejected
+     * and the legacy router serves anyway has malformed, and they are the visitor's words, never the site's address.
+     */
+    private static function requestUri(\Symfony\Component\HttpFoundation\Request $request): string
+    {
+        return (string) $request->server->get('REQUEST_URI', '');
     }
 
     public function currentPath(): string
     {
         $request = $this->requests->getCurrentRequest();
 
-        return $request === null ? '' : (string) parse_url($request->getRequestUri(), PHP_URL_PATH);
+        return $request === null ? '' : (string) parse_url(self::requestUri($request), PHP_URL_PATH);
     }
 
     public function referrer(): string

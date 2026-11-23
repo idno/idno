@@ -32,6 +32,13 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return 'https://site.example/' . $path;
     }
 
+    public function currentUrlFor(string $requestUri): string
+    {
+        $this->note(__FUNCTION__, $requestUri);
+
+        return 'https://site.example' . $requestUri;
+    }
+
     public function staticUrl(string $path = ''): string
     {
         $this->note(__FUNCTION__, $path);

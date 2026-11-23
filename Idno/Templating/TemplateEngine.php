@@ -11,8 +11,8 @@ interface TemplateEngine
 {
     /**
      * @param array<string, mixed> $vars the template's variables (typed mixed: a template object whose variables were
-     *                                   replaced by something that is no array, through `__(['vars' => ...])`, fails
-     *                                   in the render, as it always did)
+     *                                   set to something that is no array (the public `vars` property assigned directly:
+     *                                   `__()` only writes variables, a name `vars` included) fails in the render, as it always did)
      */
     public function render(LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string;
 }

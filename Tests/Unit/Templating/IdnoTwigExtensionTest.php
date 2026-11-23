@@ -176,6 +176,41 @@ final class IdnoTwigExtensionTest extends TestCase
         $this->assertSame('https://site.example/a/b?x=1&amp;y=2|/a/b|https://other.example/p', $this->render("{{ current_url() }}|{{ current_path() }}|{{ referrer() }}", [], null, $stack));
     }
 
+    /**
+     * The address of the page is the site's configured address plus the request's URI, as `Page::currentUrl()` builds it: never the
+     * Host header or the transport scheme (behind a TLS-terminating proxy Symfony says http; a request may name any host).
+     */
+    public function testCurrentUrlIsTheConfiguredAddressPlusTheRequestUriWhateverTheHostHeaderAndSchemeSay(): void
+    {
+        foreach ([[], ['HTTP_X_FORWARDED_PROTO' => 'https'], ['HTTP_X_FORWARDED_PROTO' => 'http', 'HTTP_X_FORWARDED_HOST' => 'evil.example', 'HTTP_X_FORWARDED_PORT' => '8080']] as $server) {
+            $stack = new RequestStack();
+            $stack->push(Request::create('http://evil.example:81/sub/a%20b/?x=1&y[]=2#frag', 'GET', [], [], [], $server + ['HTTP_REFERER' => 'https://other.example/p']));
+
+            $out = $this->render("{{ current_url()|raw }}|{{ current_path() }}|{{ referrer() }}", [], null, $stack);
+
+            $this->assertSame('https://site.example/sub/a%20b/?x=1&y[]=2|/sub/a%20b/|https://other.example/p', $out, json_encode($server));
+            $this->assertStringNotContainsString('evil.example', $out);
+        }
+    }
+
+    public function testNoRequestHelperTouchesTheHostSoAMalformedHostIsNotAnError(): void
+    {
+        $request = Request::create('/sub/p?x=1', 'GET', [], [], [], ['HTTP_REFERER' => 'https://other.example/p']);
+        $request->headers->set('Host', 'a b');
+        $request->server->set('HTTP_HOST', 'a b');
+        try {
+            $request->getHost();
+            $this->fail('the request is one Symfony rejects');
+        } catch (\Symfony\Component\HttpFoundation\Exception\SuspiciousOperationException) {
+        }
+        $stack = new RequestStack();
+        $stack->push($request);
+
+        $out = $this->render("{{ current_url()|raw }}|{{ current_path() }}|{{ referrer() }}|{{ url_with_var('a', 1) }}|{{ current_url_without_var('a') }}|{{ login_url_for('/x') }}", [], null, $stack);
+
+        $this->assertStringStartsWith('https://site.example/sub/p?x=1|/sub/p|https://other.example/p|', $out);
+    }
+
     public function testSiteAndViewerFunctionsAnswerWhatTheHelpersDo(): void
     {
         $helpers = new TemplateHelpersDouble();

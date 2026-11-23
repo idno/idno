@@ -21,7 +21,7 @@ use Twig\Error\RuntimeError;
  * buffers the render opened are ended; a Twig error (a syntax error, a missing template) is thrown as it is, never
  * swallowed. The variables of a template object are read once for the whole render: a Twig template sees a snapshot, not
  * a variable an included template sets. They must be an array (Twig cannot take another value): a template object whose
- * variables were replaced by something else, through `__(['vars' => ...])`, fails in a Twig render with an
+ * `vars` property was set to something else directly (`__()` writes variables only, so `__(['vars' => ...])` makes a variable named `vars`), fails in a Twig render with an
  * `\UnexpectedValueException`, where a `.tpl.php` render raises a PHP warning for the `foreach`.
  */
 final class TwigTemplateEngine implements TemplateEngine

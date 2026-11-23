@@ -62,7 +62,7 @@ final class TwigCacheWarmerTest extends TestCase
 
         $cascade = new TemplateCascade($this->root . '/project');
         $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new TolerantTwigCache($this->root . '/cache', static fn () => new CollectingLogger()), 'auto_reload' => true]);
-        $warmer = new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig);
+        $warmer = new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => new CollectingLogger());
 
         $this->assertInstanceOf(CacheWarmerInterface::class, $warmer);
         $this->assertTrue($warmer->isOptional(), 'a deploy step, not something every boot does');
@@ -79,7 +79,7 @@ final class TwigCacheWarmerTest extends TestCase
         $cascade = new TemplateCascade($this->root . '/project');
         $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => $this->root . '/cache']);
 
-        $this->assertSame([], (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig))->warmUp($this->root . '/cache'));
+        $this->assertSame([], (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => new CollectingLogger()))->warmUp($this->root . '/cache'));
         $this->assertSame([], $this->compiled());
     }
 
@@ -90,7 +90,8 @@ final class TwigCacheWarmerTest extends TestCase
         $cascade = new TemplateCascade($this->root . '/project');
         $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new TolerantTwigCache($this->root . '/cache', static fn () => new CollectingLogger())]);
 
-        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig))->warmUp($this->root . '/cache');
+        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => new CollectingLogger(), static function (string $line): void {
+        }))->warmUp($this->root . '/cache');
 
         $this->assertCount(1, $this->compiled());
     }
@@ -102,7 +103,46 @@ final class TwigCacheWarmerTest extends TestCase
         $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => $this->root . '/cache']);
 
         $this->expectException(\Twig\Error\SyntaxError::class);
-        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig))->warmUp($this->root . '/cache');
+        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => new CollectingLogger()))->warmUp($this->root . '/cache');
+    }
+
+    public function testAPluginOrThemeTemplateThatDoesNotCompileIsNamedInOneWarning(): void
+    {
+        $this->file('project/templates/default/warm/ok.html.twig', 'ok');
+        $this->file('project/Themes/Broken/templates/default/warm/broken.html.twig', '{% if %}');
+        $cascade = new TemplateCascade($this->root . '/project');
+        $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new TolerantTwigCache($this->root . '/cache', static fn () => new CollectingLogger())]);
+        $logger = new CollectingLogger();
+        $shown = [];
+
+        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => $logger, static function (string $line) use (&$shown): void {
+            $shown[] = $line;
+        }))->warmUp($this->root . '/cache');
+
+        $expected = 'Twig template default/warm/broken.html.twig was not compiled: SyntaxError';
+        $this->assertSame([['warning', $expected]], $logger->lines);
+        $this->assertSame([$expected], $shown);
+    }
+
+    public function testAnUnwritableCacheDirectoryIsWarnedAboutLoudlyAndTheWarmupReturns(): void
+    {
+        $this->file('project/templates/default/warm/ok.html.twig', 'unwritable ' . bin2hex(random_bytes(4)));
+        $this->file('blocker', 'a file: nothing can be made below it');
+        $directory = $this->root . '/blocker/twig';
+        $cascade = new TemplateCascade($this->root . '/project');
+        $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new TolerantTwigCache($directory, static fn () => new CollectingLogger())]);
+        $logger = new CollectingLogger();
+        $shown = [];
+
+        $result = (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => $logger, static function (string $line) use (&$shown): void {
+            $shown[] = $line;
+        }))->warmUp($this->root . '/cache');
+
+        $this->assertSame([], $result, 'it returns normally');
+        $this->assertCount(1, $logger->lines);
+        $this->assertSame('warning', $logger->lines[0][0]);
+        $this->assertStringContainsString('could not write the compiled Twig templates to ' . $directory, $logger->lines[0][1]);
+        $this->assertSame([$logger->lines[0][1]], $shown, 'and the same line is shown to whoever runs the command');
     }
 
     public function testTheContainerRunsItInsteadOfTheBundlesWarmer(): void

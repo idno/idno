@@ -388,7 +388,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->public();
     $services->set(\Idno\Templating\TwigCacheWarmer::class)
-        ->args(['%kernel.project_dir%', service(\Idno\Templating\TemplateCascade::class), service_closure('twig')])
+        ->args(['%kernel.project_dir%', service(\Idno\Templating\TemplateCascade::class), service_closure('twig'), service_closure(\Psr\Log\LoggerInterface::class)])
         ->autowire(false)
         ->autoconfigure(false)
         ->tag('kernel.cache_warmer');

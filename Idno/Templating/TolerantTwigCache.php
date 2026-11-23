@@ -32,6 +32,19 @@ final class TolerantTwigCache implements CacheInterface, RemovableCacheInterface
         $this->files = new FilesystemCache($directory);
     }
 
+    /**
+     * Whether a write has failed in this process (the directory could not be made or written).
+     */
+    public function hasFailedToWrite(): bool
+    {
+        return $this->warned;
+    }
+
+    public function directory(): string
+    {
+        return $this->directory;
+    }
+
     public function generateKey(string $name, string $className): string
     {
         return $this->files->generateKey($name, $className);

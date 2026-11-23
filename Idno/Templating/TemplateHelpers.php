@@ -18,6 +18,12 @@ interface TemplateHelpers
 
     public function siteUrl(string $path = ''): string;
 
+    /**
+     * The address of a page as `Page::currentUrl()` builds it: the scheme, user, host and port of the site's configured address
+     * and then the request URI (path and query, as the server gave it). Never the request's own Host header or scheme.
+     */
+    public function currentUrlFor(string $requestUri): string;
+
     public function staticUrl(string $path = ''): string;
 
     public function siteTitle(): string;

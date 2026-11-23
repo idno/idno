@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Idno\Templating;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\CacheWarmer\CacheWarmerInterface;
 use Twig\Environment;
 use Twig\Error\Error as TwigError;
@@ -28,9 +29,11 @@ final class TwigCacheWarmer implements CacheWarmerInterface
     private const SUFFIXES = ['.html.twig', '.txt.twig'];
 
     /**
-     * @param \Closure(): Environment $twig
+     * @param \Closure(): Environment     $twig
+     * @param \Closure(): LoggerInterface $logger fetched when a line is written (the site's logger needs the legacy application)
+     * @param \Closure(string): void|null $console where a line is shown to whoever runs the command (standard error in a command-line process when null)
      */
-    public function __construct(private readonly string $projectDir, private readonly TemplateCascade $cascade, private readonly \Closure $twig)
+    public function __construct(private readonly string $projectDir, private readonly TemplateCascade $cascade, private readonly \Closure $twig, private readonly \Closure $logger, private readonly ?\Closure $console = null)
     {
     }
 
@@ -60,12 +63,36 @@ final class TwigCacheWarmer implements CacheWarmerInterface
         foreach ($others as $name) {
             try {
                 $twig->load($name);
-            } catch (TwigError) {
-                // drawn, it shows its own error
+            } catch (TwigError $e) {
+                // drawn, it shows its own error; the warm-up says which one it skipped (the class, never the message: it can hold a path)
+                $this->warn('Twig template ' . $name . ' was not compiled: ' . (new \ReflectionClass($e))->getShortName());
             }
+        }
+        $cache = $twig->getCache(false);
+        if ($cache instanceof TolerantTwigCache && $cache->hasFailedToWrite()) {
+            $this->warn('cache:warmup could not write the compiled Twig templates to ' . $cache->directory() . ': nothing was kept. Run it as the web server\'s user, or make the directory writable for it.');
         }
 
         return [];
+    }
+
+    /**
+     * One warning line, through the site's logger, and on standard error in a command-line process: the cache warmer interface has
+     * no output of its own, and this runs at deploy time, where the line must be seen (the logger is not there while the legacy
+     * application is not booted).
+     */
+    private function warn(string $line): void
+    {
+        try {
+            ($this->logger)()->warning($line);
+        } catch (\Throwable) {
+            // no logger in this process
+        }
+        if ($this->console !== null) {
+            ($this->console)($line);
+        } elseif (PHP_SAPI === 'cli') {
+            fwrite(STDERR, $line . "\n");
+        }
     }
 
     /**
