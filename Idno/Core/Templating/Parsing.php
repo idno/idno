@@ -7,6 +7,57 @@ namespace Idno\Core\Templating {
     trait Parsing
     {
 
+        /**
+         * Apply a function to the text of a piece of HTML, and only to the text: never to the
+         * inside of a tag (an attribute value is not text), a comment, the content of an
+         * existing <a> element, or the content of <script>, <style> and <textarea>. Plain
+         * text (no tags) is all text.
+         *
+         * @param  string   $html
+         * @param  callable $fn Takes a string of text, returns the string to put in its place
+         * @return string
+         */
+        protected static function mapTextOutsideTags($html, callable $fn)
+        {
+            $html   = (string) $html;
+            $tokens = preg_split(
+                '/(<!--.*?-->|<\/?[a-zA-Z][^\s>\/]*(?:"[^"]*"|\'[^\']*\'|[^>"\'])*>)/s',
+                $html, -1, PREG_SPLIT_DELIM_CAPTURE
+            );
+            if ($tokens === false) {
+                return $html;
+            }
+
+            $out    = '';
+            $inLink = 0;
+            $rawEnd = null; // the closing tag that ends script / style / textarea content
+            foreach ($tokens as $i => $token) {
+                if ($i % 2 === 0) { // text between tags
+                    $out .= ($inLink > 0 || $rawEnd !== null || $token === '') ? $token : $fn($token);
+                    continue;
+                }
+                $out .= $token;
+                if ($token[1] === '!') {
+                    continue; // a comment
+                }
+                if (!preg_match('/^<(\/?)([a-zA-Z][^\s>\/]*)/', $token, $m)) {
+                    continue;
+                }
+                $name = strtolower($m[2]);
+                if ($rawEnd !== null) {
+                    if ($m[1] === '/' && $name === $rawEnd) {
+                        $rawEnd = null;
+                    }
+                } elseif ($m[1] === '' && in_array($name, ['script', 'style', 'textarea'], true) && substr($token, -2) !== '/>') {
+                    $rawEnd = $name;
+                } elseif ($name === 'a') {
+                    $inLink = $m[1] === '/' ? max(0, $inLink - 1) : $inLink + 1;
+                }
+            }
+
+            return $out;
+        }
+
 
         /**
          * Automatically links URLs embedded in a piece of text
@@ -18,45 +69,45 @@ namespace Idno\Core\Templating {
          */
         function parseURLs($text, $code = '', $wbr = true)
         {
-            $r = preg_replace_callback(
-                '/(?<!=)(?<!["\'])((ht|f)tps?:\/\/[^\s<>"\']+)/i', function ($matches) use ($code, $wbr) {
-                    $url  = $matches[1];
-                    $punc = '';
+            return static::mapTextOutsideTags($text, function ($text) use ($code, $wbr) {
+                return preg_replace_callback(
+                    '/(?<!=)(?<!["\'])((ht|f)tps?:\/\/[^\s<>"\']+)/i', function ($matches) use ($code, $wbr) {
+                        $url  = $matches[1];
+                        $punc = '';
 
-                    while ($url) {
-                        $last = substr($url, -1, 1);
-                        if (strstr('.!?,;:(', $last)
+                        while ($url) {
+                            $last = substr($url, -1, 1);
+                            if (strstr('.!?,;:(', $last)
                             // strip ) if there isn't a matching ( earlier in the url
                             || ($last === ')' && !strstr($url, '('))
-                        ) {
-                            $punc = $last . $punc;
-                            $url  = substr($url, 0, -1);
-                        } else {
-                            break; // found a non-punctuation character
+                            ) {
+                                $punc = $last . $punc;
+                                $url  = substr($url, 0, -1);
+                            } else {
+                                break; // found a non-punctuation character
+                            }
                         }
-                    }
 
-                    $result = "<a href=\"" . $url ."\"";
-                    if (!\Idno\Common\Entity::isLocalUUID($url)) {
-                        $result .= " target=\"_blank\" ";
-                    }
-                    if ($code) {
-                        $result .= ' ' . str_replace("%URL%", $url, $code);
-                    }
-                    $result .= ">";
-                    if ($wbr) {
-                        $result .= preg_replace('/([\/=]+)/', '${1}<wbr />', static::sampleTextChars($url, 100));
-                    } else {
-                        $result .= preg_replace('/([\/=]+)/', '${1}', static::sampleTextChars($url, 100));
-                    }
-                    $result .= "</a>$punc";
+                        $result = "<a href=\"" . $url ."\"";
+                        if (!\Idno\Common\Entity::isLocalUUID($url)) {
+                            $result .= " target=\"_blank\" ";
+                        }
+                        if ($code) {
+                            $result .= ' ' . str_replace("%URL%", $url, $code);
+                        }
+                        $result .= ">";
+                        if ($wbr) {
+                            $result .= preg_replace('/([\/=]+)/', '${1}<wbr />', static::sampleTextChars($url, 100));
+                        } else {
+                            $result .= preg_replace('/([\/=]+)/', '${1}', static::sampleTextChars($url, 100));
+                        }
+                        $result .= "</a>$punc";
 
-                    return $result;
+                        return $result;
 
-                }, $text
-            );
-
-            return $r;
+                    }, $text
+                );
+            });
         }
 
         /**
@@ -83,24 +134,24 @@ namespace Idno\Core\Templating {
                 },
                 $text
             );
-            $r    = preg_replace_callback(
-                '/(?<=^|[\>\s\n])(\#[\p{L}0-9\_]+)/u', function ($matches) {
-                    $url = $matches[1];
-                    $tag = str_replace('#', '', $matches[1]);
+            return static::mapTextOutsideTags($text, function ($text) {
+                return preg_replace_callback(
+                    '/(?<=^|[\>\s\n])(\#[\p{L}0-9\_]+)/u', function ($matches) {
+                        $url = $matches[1];
+                        $tag = str_replace('#', '', $matches[1]);
 
-                    if (preg_match('/\#[0-9]{1,3}$/', $matches[1])) {
-                        return $matches[1];
-                    }
+                        if (preg_match('/\#[0-9]{1,3}$/', $matches[1])) {
+                            return $matches[1];
+                        }
 
-                    if (preg_match('/\#[A-Fa-f0-9]{6}$/', $matches[1])) {
-                        return $matches[1];
-                    }
+                        if (preg_match('/\#[A-Fa-f0-9]{6}$/', $matches[1])) {
+                            return $matches[1];
+                        }
 
-                    return '<a href="' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'tag/' . urlencode($tag) . '" class="p-category" rel="tag">' . $url . '</a>';
-                }, $text
-            );
-
-            return $r;
+                        return '<a href="' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'tag/' . urlencode($tag) . '" class="p-category" rel="tag">' . $url . '</a>';
+                    }, $text
+                );
+            });
         }
 
         /**
@@ -110,6 +161,18 @@ namespace Idno\Core\Templating {
          * @param type $in_reply_to If specified, the function will make a (hopefully) sensible guess as to where the user is located
          */
         function parseUsers($text, $in_reply_to = null)
+        {
+            return static::mapTextOutsideTags(
+                $text, function ($text) use ($in_reply_to) {
+                    return $this->parseUsersInText($text, $in_reply_to);
+                }
+            );
+        }
+
+        /**
+         * parseUsers() for a piece of text that holds no markup
+         */
+        protected function parseUsersInText($text, $in_reply_to = null)
         {
 
             $usermatch_regex = '/(?<=^|[\>\s\n\.])(\@[\w0-9\_]+)/i';
