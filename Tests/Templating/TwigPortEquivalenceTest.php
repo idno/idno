@@ -29,6 +29,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
     public const EXTRA_PAGES = [
         ['visitor', 'account/password/reset/?email=ada%40example.com&code=00000000000000000000000000000000'],
         ['visitor', 'account/register/?email=new%40example.com&code=abc'],
+        ['visitor', 'account/password/'],
         ['visitor', 'pages/about-this-site'],
         ['visitor', 'robots.txt'],
         ['visitor', 'tag/nothing-is-tagged-with-this'],
@@ -37,6 +38,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['member', 'admin/'],
         ['member', 'admin/users/'],
         ['member', 'account/settings/'],
+        ['member', 'begin/profile/'],
         ['admin', 'admin/about/'],
         ['admin', 'admin/dependencies/'],
         ['admin', 'admin/diagnostics/'],
@@ -73,7 +75,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['new', 'begin/'],
         ['new', 'begin/connect/'],
         ['new', 'begin/connect-forwarder/'],
-        ['new', 'begin/profile/'],
         ['new', 'begin/publish/'],
     ];
 
@@ -205,6 +206,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawProfileAndFollowingCases();
         $this->drawEmbedAndFileCases();
         $this->drawFormCases();
+        $this->drawAccountCases();
         if (self::DRAWS === []) {
             return;
         }
@@ -796,6 +798,80 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertStringContainsString('class="idno-input input-text"', (string) $out['text']);
         $this->assertStringContainsString('<option value="g" selected>Green</option>', (string) $out['select']);
         $this->assertStringContainsString('name="__bTk"', (string) $out['a form']);
+    }
+
+    /**
+     * The account and onboarding pages with every branch they have: the login with a forwarding address, with only a referrer and with
+     * neither, with registration open and closed; the tools page with and without an API key; the password reset with values a request
+     * supplied; the cards of the follow bookmarklet (a full card, one address, no photo, a plain email, a hostile card); the onboarding
+     * pages with and without a name to set and a message.
+     */
+    private function drawAccountCases(): void
+    {
+        $code = $this->siteDrawPrelude('/account/settings/tools/') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $push = static function (string $referrer, string $uri = '/session/login'): void {
+            $_SERVER['REQUEST_URI'] = $uri;
+            if ($referrer === '') {
+                unset($_SERVER['HTTP_REFERER']);
+            } else {
+                $_SERVER['HTTP_REFERER'] = $referrer;
+            }
+            \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri] + ($referrer === '' ? [] : ['HTTP_REFERER' => $referrer])));
+        };
+        $was = $site->config()->open_registration;
+        foreach ([true, false] as $open) {
+            $site->config()->open_registration = $open;
+            foreach (['a forwarding address' => ['https://example.org/next?a=1&b=2', ''], 'only a referrer' => ['', 'https://example.org/came-from?x=1&y="2"'], 'neither' => ['', ''], 'a hostile referrer' => ['', 'https://example.org/' . $hostile]] as $label => [$fwd, $referrer]) {
+                $push($referrer);
+                $out['login, ' . ($open ? 'open' : 'closed') . ', ' . $label] = $draw('account/login', $fwd === '' ? [] : ['fwd' => $fwd]);
+            }
+        }
+        $site->config()->open_registration = $was;
+        $push('', '/account/settings/tools/');
+        $out['the password form'] = $draw('account/password');
+        $out['the password mail sent'] = $draw('account/password/sent');
+        $out['the password reset'] = $draw('account/password/reset', ['email' => 'ada@example.com', 'code' => '0123456789abcdef']);
+        $out['the password reset, hostile values'] = $draw('account/password/reset', ['email' => $hostile, 'code' => $hostile]);
+        $out['the registration'] = $draw('account/register', ['email' => 'new@example.com', 'code' => 'abc']) . $draw('account/register', ['email' => $hostile, 'code' => $hostile]);
+
+        $site->session()->logUserOn($ada);
+        foreach ([null, 'a-key'] as $key) {
+            $site->session()->currentUser()->apikey = $key;
+            $out['tools, ' . ($key === null ? 'no key' : 'a key')] = $draw('account/settings/tools');
+        }
+        $out['settings'] = $draw('account/settings');
+        $out['export'] = $draw('account/export');
+        $out['following settings'] = $draw('account/settings/following') . $draw('account/settings/following/bookmarklet');
+        $out['feedback'] = $draw('account/settings/feedback') . $draw('account/settings/feedback/confirm');
+        $site->session()->logUserOff();
+
+        $cards = [
+            'a full card' => ['properties' => ['name' => ['Grace Hopper'], 'photo' => ['https://example.org/grace.png'], 'url' => ['https://example.org/grace', 'https://example.org/grace2', 'https://example.org/grace'], 'email' => ['mailto:grace@example.org'], 'nickname' => ['grace']]],
+            'one address' => ['properties' => ['name' => ['Ada'], 'photo' => ['https://example.org/a.png'], 'url' => ['https://example.org/ada'], 'email' => ['mailto:ada@example.org'], 'nickname' => ['ada']]],
+            'no photo' => ['properties' => ['name' => ['Ada'], 'photo' => [''], 'url' => ['https://example.org/ada'], 'email' => [''], 'nickname' => ['']]],
+            'a plain email' => ['properties' => ['name' => ['Ada'], 'photo' => [''], 'url' => ['https://example.org/ada'], 'email' => ['ada@example.org'], 'nickname' => ['ada']]],
+            'a hostile card' => ['properties' => ['name' => [$hostile], 'photo' => ['javascript:alert(2)'], 'url' => ['javascript:alert(1)', $hostile], 'email' => ['mailto:' . $hostile], 'nickname' => [$hostile]]],
+            'a hostile single address' => ['properties' => ['name' => ['x'], 'photo' => [''], 'url' => ['javascript:alert(1)'], 'email' => [''], 'nickname' => ['']]],
+        ];
+        foreach ($cards as $label => $card) {
+            $out['mf2user, ' . $label] = $draw('account/settings/following/mf2user', ['mf2' => $card]);
+        }
+
+        $out['onboarding begin'] = $draw('onboarding/begin') . $draw('onboarding/begin', ['messages' => [['message' => 'Hello <b>there</b>', 'message_type' => 'alert-info']]]);
+        $out['onboarding connect'] = $draw('onboarding/connect');
+        $out['onboarding register'] = $draw('onboarding/register') . $draw('onboarding/register', ['set_name' => 'Ada Lovelace', 'messages' => [['message' => 'Oops', 'message_type' => 'alert-danger']]]) . $draw('onboarding/register', ['set_name' => $hostile]) . $draw('onboarding/register', ['set_name' => '0']);
+        $out['onboarding profile'] = $draw('onboarding/profile', ['user' => $ada]);
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('Register', (string) $out['login, open, a forwarding address']);
+        $this->assertStringNotContainsString('account/register', (string) $out['login, closed, a forwarding address']);
+        $this->assertStringContainsString('value="https://example.org/came-from?x=1&amp;y=&quot;2&quot;"', (string) $out['login, open, only a referrer']);
+        $this->assertStringNotContainsString('Revoke', (string) $out['tools, no key']);
+        $this->assertStringContainsString('Revoke', (string) $out['tools, a key']);
     }
 
     /**

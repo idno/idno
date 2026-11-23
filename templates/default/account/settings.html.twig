@@ -1,0 +1,47 @@
+{% set user = current_user() %}
+<h1 class="idno-admin-page-title">
+    {{ t('Account Settings') }}</h1>
+
+<p class="idno-admin-description">
+    {{ t_html('Change your user account settings here. You may also want to <a href="%s">edit your profile</a>.', [user.getDisplayURL() ~ '/edit/']) }}</p>
+
+<div class="idno-admin-card">
+    <form action="{{ site_url() }}account/settings/" method="post">
+
+        <div class="idno-form-group">
+            <label for="inputName">{{ t('Your name') }}</label>
+            {{ idno_include('forms/input/text', {id: 'inputName', value: user.getTitle(), class: 'idno-input', name: 'name', placeholder: t('Your name')}) }}
+        </div>
+
+        <div class="idno-form-group">
+            <label for="inputEmail">{{ t('Your email address') }}</label>
+            {{ idno_include('forms/input/email', {id: 'inputEmail', value: entity_value(user, 'email'), class: 'idno-input', name: 'email', placeholder: t('Your email address')}) }}
+            <p class="idno-form-help">{{ t('Used for account recovery and communications.') }}</p>
+        </div>
+
+        <div class="idno-form-group">
+            <label for="inputPassword">{{ t('Your password') }}</label>
+            {{ idno_include('forms/input/password', {id: 'inputPassword', class: 'idno-input', name: 'password', placeholder: t('Password'), autocomplete: 'off', value: ''}) }}
+            <p class="idno-form-help">{{ t("Leave this blank if you don't want to change it.") }}</p>
+        </div>
+
+        <div class="idno-form-group">
+            <label for="inputTimezone">{{ t('Your timezone') }}</label>
+            {{ idno_include('forms/input/timezones', {
+                id: 'inputTimezone',
+                class: 'idno-input',
+                'blank-default': true,
+                name: 'timezone',
+                placeholder: t('Timezone'),
+                value: entity_value(user, 'timezone')
+            }) }}
+            <p class="idno-form-help">{{ t('Specify your timezone.') }}</p>
+        </div>
+
+        <div class="idno-form-actions">
+            <button type="submit" class="idno-btn-primary">{{ t('Save updates') }}</button>
+        </div>
+
+        {{ form_token('/account/settings') }}
+    </form>
+</div>

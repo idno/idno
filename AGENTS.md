@@ -2810,7 +2810,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
     (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
-    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins and the account and admin templates are not ported
+    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins and the admin templates are not ported
     yet). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
     by `__()` is gone for the Twig ones, and an HTML page that showed one changes by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
@@ -2864,6 +2864,18 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     has no `required` attribute (the old one printed `required="Array"` and a PHP warning). `forms/input/timezones` takes its `class` from the caller as it
     did (the template's own default was assigned to a local variable and never used). Helpers added: `js_string`, `next_input_id`, `security_token`,
     `timezone_options`, `timezone_info`, `email_is_blocked`, `forget_variables` and the filters `link_url`, `email_address` (`FILTER_SANITIZE_EMAIL`) and
+  - The account and onboarding pages are Twig too (`templates/default/account/**` and `onboarding/**`: 18 files beside their frozen `.tpl.php`). The
+    follow bookmarklet's card (`account/settings/following/mf2user`) prints a REMOTE page's h-card: the name, nickname and addresses are escaped, the
+    photo and the profile link go through `|http_url`, a photo with an alt text (the parser gives a list with a `value`) is its `value`, and an email
+    loses `mailto:` only when it starts with it (the old template cut the first seven characters of every address). Scripts write the page's address
+    and the site's address with `e('js')` (the tools page's request for the API key, the follow bookmarklet) and the profile page's words likewise
+    (`port-exceptions.php`, `TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript`; `PageNormaliser` reads the site's
+    address in that escaped form). The password reset form escapes the email address and the code a request supplied. The tools page prints no secret
+    (the API key is fetched by a script, and only whether there is one is read, with `entity_value()`); `account/login` reads the forwarding address the
+    page gives it (`Login::sanitizeRedirectUrl()` is applied by the page and its POST, not by the template) and the referrer with `referrer()`, and asks
+    `can_add_users()` for the Register link. The JSON of these pages is unchanged: `classic` copies of `account/{menu,login,settings,export}` and
+    `account/settings/tools` exist, and the other bodies a JSON request can reach left nothing on the page's template (`NonHtmlReachTest`). The golden pages
+    of `account/settings/tools` and `account/settings/following` changed only in how the site's address is written inside their scripts.
     `form_urlencode` (`urlencode()`: a tag link writes a space as `+`, as it always did).
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`

@@ -16,6 +16,10 @@ final class PortReportChecker
      */
     public const MUST_VARY = [
         'templates/default/account-shell.html.twig',
+        'templates/default/account/login.html.twig',
+        'templates/default/account/menu.html.twig',
+        'templates/default/account/settings/following/mf2user.html.twig',
+        'templates/default/account/settings/tools.html.twig',
         'templates/default/admin-shell.html.twig',
         'templates/default/content/access.html.twig',
         'templates/default/content/edit.html.twig',
@@ -65,6 +69,8 @@ final class PortReportChecker
         'templates/default/forms/output/tags.html.twig',
         'templates/default/forms/output/timezones.html.twig',
         'templates/default/forms/output/url.html.twig',
+        'templates/default/onboarding/begin.html.twig',
+        'templates/default/onboarding/register.html.twig',
         'templates/default/pages/403.html.twig',
         'templates/default/pages/500.html.twig',
         'templates/default/pages/home.html.twig',

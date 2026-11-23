@@ -1,0 +1,110 @@
+{%- set properties = mf2.properties -%}
+{%- set name = properties.name[0] -%}
+{%- set urls = [] -%}
+{%- for candidate in properties.url -%}
+    {%- if candidate not in urls -%}
+        {%- set urls = urls|merge([candidate]) -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- set lastUrl = urls|last -%}
+{%- set photo = properties.photo[0] -%}
+{#- a photo with an alt text is a list (`value` and `alt`) -#}
+{%- if photo is iterable -%}
+    {%- set photo = photo.value -%}
+{%- endif -%}
+{%- if photo -%}
+    {%- set photo = (photo|proxied_image(300, 'square'))|http_url -%}
+{%- else -%}
+    {#- No photo URL found, lets fake one for niceness -#}
+    {%- set photo = static_url(default_avatar(properties.url[0])) -%}
+{%- endif -%}
+{%- set email = properties.email[0] -%}
+{%- if email starts with 'mailto:' -%}
+    {%- set email = email|slice(7) -%}
+{%- endif -%}
+{%- set nickname = properties.nickname[0] -%}
+<form action="{{ site_url() }}account/settings/following/bookmarklet" method="post" class="form-horizontal">
+    <div class="row idno-entry following-user">
+
+    <div class="col-md-1 col-md-offset-1 owner h-card hidden-sm">
+        <p>
+        <span class="u-url icon-container"><img class="u-photo" src="{{ photo }}" /></span><br />
+        {{ name }}
+        </p>
+    </div>
+    <div class="col-md-8 idno-object idno-content">
+        <div class="visible-sm">
+        <p class="p-author author h-card vcard">
+            <img class="u-logo logo u-photo photo" src="{{ photo }}" alt="{{ name }}" />
+            <span class="p-name fn">{{ name }}</span>
+        </p>
+        </div>
+        <div class="e-content entry-content">
+        {% for url in urls %}
+            <input type="hidden" name="urls[]" value="{{ url }}" />
+        {% endfor %}
+                <input type="hidden" name="photo" value="{{ photo }}" />
+                
+        <div class="control-group">
+            <label class="control-label" for="inputName">{{ t('Name') }}</label>
+
+            <div class="controls">
+            <input id="inputName" type="text" class="col-md-4" name="name" required
+                   value="{{ name }}">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label" for="inputNickname">{{ t('Nickname') }}</label>
+
+            <div class="controls">
+            <input id="inputNickname" type="text" class="col-md-4" name="nickname" required placeholder="{{ t('Handle (for your reference)') }}"
+                   value="{{ nickname }}">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label" for="inputEmail">{{ t('Email') }}</label>
+
+            <div class="controls">
+            <input id="inputName" type="email" class="col-md-4" name="email" required
+                   value="{{ email }}">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label class="control-label" for="inputUrl">{{ t('Profile URL') }}</label>
+            
+            <div class="controls">
+            {% if urls|length > 1 %}
+            <select name="uuid">
+                {% for url in urls %}
+                <option>{{ url }}</option>
+                {% endfor %}
+            </select>
+            {% else %}
+                <a href="{{ lastUrl|http_url }}" target="_blank">{{ lastUrl }}</a>
+                <input type="hidden" name="uuid" value="{{ lastUrl }}" />
+            {% endif %}
+            </div>
+
+        </div>
+        
+        <div class="control-group">
+            <div class="controls">
+            <button type="submit" class="btn">{{ t('Add as friend...') }}</button>
+            </div>
+        </div>
+        </div>
+        <div class="footer">
+
+        </div>
+
+    </div>
+
+    </div>
+
+
+    {{ form_token('/account/settings/following/bookmarklet') }}
+
+</form>

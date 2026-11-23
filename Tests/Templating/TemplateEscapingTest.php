@@ -690,6 +690,150 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * A remote page's h-card is another site's word: its name, photo and addresses print as text on the follow bookmarklet's page, and a
+     * `javascript:` photo or address is neither an image nor a link. Fetched through the page, from the test route of the hostile card
+     * (the remote client lets the site's own origin through in the test environment).
+     */
+    public function testARemoteHcardIsEscapedOnTheFollowBookmarklet(): void
+    {
+        $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+        $card = $this->baseUrl() . '_test/hostile/hcard';
+
+        $response = $this->site()->request('GET', 'account/settings/following/bookmarklet?u=' . rawurlencode($card), ['Cookie' => $cookie]);
+
+        if ($response->status !== 200) {
+            // The page cannot fetch the route here: the template is drawn with the card the page would give it, so that the escaping is still tested
+            $this->markTestIncomplete('the page answered ' . $response->status . ': ' . substr(trim((string) preg_replace('/\s+/', ' ', strip_tags($response->body))), 0, 300) . $this->serverLog());
+        }
+        $this->assertHostileCardIsInert($response->body);
+    }
+
+    /**
+     * The same card drawn by the template, as the page passes it: the name, a `javascript:` photo, `javascript:` addresses.
+     */
+    public function testAHostileHcardDrawnByTheFollowBookmarkletTemplateIsInert(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/account/settings/following/bookmarklet') . <<<'PHP'
+        $name = \Tests\Fixtures\HostilePageController::NAME;
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['mf2' => ['properties' => ['name' => [$name], 'photo' => ['javascript:alert(2)'], 'url' => ['javascript:alert(1)', 'https://example.org/"><script>y()</script>'], 'email' => ['mailto:a"><script>z()</script>'], 'nickname' => [$name]]]])->draw('account/settings/following/mf2user');
+        PHP);
+
+        $this->assertHostileCardIsInert($drawn);
+        $this->assertStringContainsString('&lt;/h1&gt;&lt;script&gt;x()&lt;/script&gt;', $drawn, 'the name is text');
+
+        // A photo with an alt text is parsed as a list: its address is the photo (the old template printed none)
+        $withAlt = (string) $this->runInSite($this->pageCode('/account/settings/following/bookmarklet') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['mf2' => ['properties' => ['name' => ['Ada'], 'photo' => [['value' => 'https://example.org/ada.png', 'alt' => '']], 'url' => ['https://example.org/ada'], 'email' => [''], 'nickname' => ['']]]])->draw('account/settings/following/mf2user');
+        PHP);
+        $this->assertStringContainsString('src="https://example.org/ada.png"', $withAlt);
+        $this->assertStringNotContainsString('<script', $drawn);
+    }
+
+    private function assertHostileCardIsInert(string $html): void
+    {
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>');
+        libxml_clear_errors();
+        $scripts = [];
+        foreach ($dom->getElementsByTagName('script') as $script) {
+            $scripts[] = $script->textContent;
+        }
+        $this->assertSame([], array_values(array_filter($scripts, static fn (string $text): bool => str_contains($text, 'x()') || str_contains($text, 'y()') || str_contains($text, 'z()'))), 'no script element the card opened');
+        foreach (['src', 'href'] as $attribute) {
+            foreach ($dom->getElementsByTagName('*') as $element) {
+                if ($element->hasAttribute($attribute)) {
+                    $this->assertDoesNotMatchRegularExpression('/^\s*javascript:/i', $element->getAttribute($attribute), 'a ' . $attribute . ' that runs a script');
+                }
+            }
+        }
+    }
+
+    /**
+     * What a request supplied to the password reset form (the email address and the code come from the link) is text in the fields: the old
+     * template printed both as they were, so a value with a quote ended the attribute.
+     */
+    public function testThePasswordResetFormPrintsTheRequestsValuesAsText(): void
+    {
+        $this->seedSite();
+        $hostile = '"><script>alert(1)</script>\'';
+
+        $drawn = (string) $this->runInSite($this->pageCode('/account/password/reset/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['email' => '"><script>alert(1)</script>\'', 'code' => '"><script>alert(1)</script>\''])->draw('account/password/reset');
+        PHP);
+
+        $dom = new \DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $drawn . '</body>');
+        libxml_clear_errors();
+        $this->assertSame(0, $dom->getElementsByTagName('script')->length);
+        $values = [];
+        foreach ($dom->getElementsByTagName('input') as $input) {
+            $values[$input->getAttribute('name')] = $input->getAttribute('value');
+        }
+        $this->assertSame($hostile, $values['email']);
+        $this->assertSame($hostile, $values['code']);
+    }
+
+    /**
+     * An address a remote card gives as its email keeps all its characters: the old template cut the first seven of every address, as if each
+     * began with `mailto:`, so `ada@example.org` became `mple.org`. An address with `mailto:` loses that prefix, as before.
+     */
+    public function testTheFollowBookmarkletKeepsAnEmailThatIsNotAMailtoAddress(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/account/settings/following/bookmarklet') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+        $card = static fn (string $email): array => ['mf2' => ['properties' => ['name' => ['Ada'], 'photo' => [''], 'url' => ['https://example.org/ada'], 'email' => [$email], 'nickname' => ['']]]];
+
+        return json_encode([(string) $template->__($card('ada@example.org'))->draw('account/settings/following/mf2user'), (string) $template->__($card('mailto:ada@example.org'))->draw('account/settings/following/mf2user')]);
+        PHP);
+
+        [$plain, $prefixed] = json_decode($drawn, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertMatchesRegularExpression('/type="email"[^>]*value="ada@example.org"/s', $plain);
+        $this->assertMatchesRegularExpression('/type="email"[^>]*value="ada@example.org"/s', $prefixed);
+    }
+
+    /**
+     * The values the account and onboarding pages write into a script are written for one: the page's own address in the API key's request,
+     * the site's address in the bookmarklet (and in the continue button, which prints it as before), and the translated words of the profile page's preview. The old
+     * templates printed each as it was (the address of a request, which holds what a visitor typed, could end the script).
+     */
+    public function testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript(): void
+    {
+        $this->seedSite();
+        $uri = '/account/settings/tools/?a=</script><script>alert(1)</script>&b="\'';
+
+        $out = $this->runInSite($this->pageCode($uri) . <<<'PHP'
+        $draw = static function (string $name, array $vars = []): string {
+            $template = clone \Idno\Core\Idno::site()->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+
+        return ['tools' => $draw('account/settings/tools'), 'bookmarklet' => $draw('account/settings/following/bookmarklet'), 'connect' => $draw('onboarding/connect'), 'profile' => $draw('onboarding/profile', ['user' => \Idno\Entities\User::getByHandle('ada')])];
+        PHP);
+        $this->assertIsArray($out);
+
+        $this->assertSame(1, substr_count($out['tools'], '<script'), 'the page has its one script, and the address did not open another');
+        $this->assertStringNotContainsString('alert(1)</script>', $out['tools']);
+        $this->assertStringContainsString("fetch('http\\u003A\\/\\/", $out['tools'], 'the address is one JavaScript string');
+        $this->assertStringContainsString("location.href='http\\u003A\\/\\/", $out['bookmarklet']);
+        $this->assertMatchesRegularExpression("#window.location = 'http://[^']*begin/publish'; return false;#", $out['connect'], 'the address of the next step is one JavaScript string in the attribute');
+        $this->assertStringContainsString("html('Choose\\u0020different\\u0020photo')", $out['profile']);
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

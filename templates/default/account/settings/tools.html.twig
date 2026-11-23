@@ -1,0 +1,51 @@
+{% set user = current_user() %}
+<h1 class="idno-admin-page-title">
+    {{ t('Tools and Apps') }}</h1>
+
+<div class="idno-admin-card">
+    <h2>{{ t('Bookmarklet') }}</h2>
+    <p>
+        {{ t('The Idno bookmarklet is the best way to save links, reply to posts, and share articles.') }}
+    </p>
+    <p>
+        {{ t("Just drag the bookmarklet button below into your browser's Bookmark Bar.") }}
+    </p>
+    <p>
+        {{ idno_include('entity/bookmarklet') }}
+    </p>
+</div>
+
+{{ idno_include('account/settings/tools/list') }}
+
+<div class="idno-admin-card" style="margin-top: 1.5rem;">
+    <h2>API</h2>
+
+    <div class="idno-form-group">
+        <label>{{ t('Your API key') }}</label>
+        <form id="apikey_form">{{ form_token('/account/settings/tools/') }}
+            <input type="text" id="apikey" class="idno-input" name="apikey" value="Click to show" readonly>
+        </form>
+        {% if entity_value(user, 'apikey') %}
+            {% set confirmText = t('Revoking this key will mean you must update any applications that use this key!') %}
+            <div style="margin-top: 0.5rem;">{{ action_link(current_url(), t('Revoke'), {_method: 'revoke'}, {method: 'POST', class: 'idno-btn-disable', confirm: true, 'confirm-text': confirmText}) }}</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var input = document.getElementById('apikey');
+        if (!input) return;
+        input.addEventListener('click', function() {
+            var form = document.getElementById('apikey_form');
+            var params = new URLSearchParams(new FormData(form)).toString();
+            fetch('{{ current_url()|e('js') }}?' + params, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                input.value = data;
+            });
+        });
+    });
+</script>

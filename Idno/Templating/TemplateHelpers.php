@@ -48,6 +48,8 @@ interface TemplateHelpers
 
     public function canWrite(): bool;
 
+    public function canAddUsers(): bool;
+
     /**
      * @return list<object>
      */

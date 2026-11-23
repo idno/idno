@@ -70,6 +70,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('site_icons', $this->siteIcons(...)),
             new TwigFunction('setting', $this->setting(...)),
             new TwigFunction('can_write', $this->canWrite(...)),
+            new TwigFunction('can_add_users', $this->canAddUsers(...)),
             new TwigFunction('content_types', $this->contentTypes(...)),
             new TwigFunction('content_type_for_post_type', $this->contentTypeForPostType(...)),
 
@@ -241,6 +242,14 @@ final class IdnoTwigExtension extends AbstractExtension
     public function canWrite(): bool
     {
         return $this->helpers->canWrite();
+    }
+
+    /**
+     * Whether the site takes new users (the `users/add/check` event decides, as `Config::canAddUsers()` does).
+     */
+    public function canAddUsers(): bool
+    {
+        return $this->helpers->canAddUsers();
     }
 
     /**

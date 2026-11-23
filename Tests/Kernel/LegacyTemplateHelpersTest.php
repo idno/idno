@@ -81,6 +81,7 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertFalse($helpers->isLoggedIn());
         $this->assertFalse($helpers->isAdmin());
         $this->assertFalse($helpers->canWrite());
+        $this->assertIsBool($helpers->canAddUsers());
     }
 
     public function testPageFacts(): void

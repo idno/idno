@@ -82,7 +82,7 @@ Just drag the bookmarklet button below into your browser's Bookmark Bar.
         input.addEventListener('click', function() {
             var form = document.getElementById('apikey_form');
             var params = new URLSearchParams(new FormData(form)).toString();
-            fetch('{site}/account/settings/tools/?' + params, {
+            fetch('{site}\/account\/settings\/tools\/?' + params, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
             .then(function(r) { return r.json(); })

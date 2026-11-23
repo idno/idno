@@ -147,4 +147,41 @@ return [
             'bdba23b8824c42de9474630f0e3143b6528b70d1f7b13912ed7fc3af79ef7ff4',
         ],
     ],
+    'templates/default/account/password/reset.html.twig' => [
+        'reason' => 'the email address and the code come from the link a request followed: they are printed as text in their fields; the old template printed both as they were, so a value with a quote ended the attribute',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testThePasswordResetFormPrintsTheRequestsValuesAsText',
+        'differences' => [
+            'c77a353d655e438534999ace68f52e093d3560dae7bbea4d16af131ceafd8792',
+        ],
+    ],
+    'templates/default/account/settings/following/bookmarklet.html.twig' => [
+        'reason' => 'the bookmarklet\'s script is written with the site\'s address as one JavaScript string (`e(\'js\')`: every `/` and `:` an escape); the old template printed the address as it was. The same string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript',
+        'differences' => [
+            '33bc0afb81427b0d43bfcc876d97903ac600c1f2f8127bfb78d305c857334c27',
+        ],
+    ],
+    'templates/default/account/settings/following/mf2user.html.twig' => [
+        'reason' => 'the email of a remote card keeps its characters: the old template cut the first seven of every address as if each began with `mailto:` (`ada@example.org` became `mple.org`); only an address that starts with `mailto:` loses that prefix. A photo with an alt text, which the parser gives as a list, is the list\'s `value` (the old template printed none; not compared, the test draws it)',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheFollowBookmarkletKeepsAnEmailThatIsNotAMailtoAddress',
+        'differences' => [
+            '02ac1ec69ad5d7e457fd797b24092a98d528da1b2cda3d9feea90489673dea15',
+        ],
+    ],
+    'templates/default/account/settings/tools.html.twig' => [
+        'reason' => 'the page\'s own address, in the script that asks for the API key, is written as one JavaScript string (`e(\'js\')`); the old template printed it as it was, so an address with `</script>` in its query (a visitor\'s word) ended the script. The same string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript',
+        'differences' => [
+            'e26952f4b30f6c14b7e1b0294156865c8178c0ae84501276beff298e83333e88',
+            'f4e1a97bf2785a9a95424f402eeaa2a325243581d3a7552d8eb1b679faae535b',
+        ],
+    ],
+    'templates/default/onboarding/profile.html.twig' => [
+        'reason' => 'the words the photo preview puts into its script (`Choose different photo`, translated) are written for a script with `e(\'js\')`, so that a translation with an apostrophe or a tag cannot end the string or the script; the old template printed the translation between single quotes as it was. The same JavaScript string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript',
+        'differences' => [
+            '5b604bcfed66c9d2b983eb564f77628cf35ec9e5cea2c9eab0fbbf53dde71827',
+            '395fa4223bb3ddd2bf7e891bd2714d3e0e2ba4892f1e89e08b8f17e9a000f8a3',
+        ],
+    ],
 ];

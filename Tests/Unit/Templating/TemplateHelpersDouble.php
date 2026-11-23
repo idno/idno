@@ -96,6 +96,11 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return true;
     }
 
+    public function canAddUsers(): bool
+    {
+        return true;
+    }
+
     public function contentTypes(): array
     {
         return [(object) ['name' => 'note']];

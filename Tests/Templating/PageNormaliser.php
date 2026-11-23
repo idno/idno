@@ -18,8 +18,9 @@ final class PageNormaliser
     {
         $origin = rtrim($baseUrl, '/');
         $host = (string) parse_url($baseUrl, PHP_URL_HOST) . ':' . (string) parse_url($baseUrl, PHP_URL_PORT);
-        // The site's address, as it is written in HTML and text, in JSON (`\/`) and percent-encoded in a query.
-        foreach ([$origin, str_replace('/', '\\/', $origin), rawurlencode($origin)] as $variant) {
+        // The site's address, as it is written in HTML and text, in JSON (`\/`), percent-encoded in a query, and escaped for a script by
+        // Twig's `e('js')` (`http\u003A\/\/127.0.0.1\u003A8089`: a template port writes a value in a script that way).
+        foreach ([$origin, str_replace('/', '\\/', $origin), rawurlencode($origin), strtr($origin, [':' => '\\u003A', '/' => '\\/'])] as $variant) {
             $body = str_replace($variant, '{site}', $body);
         }
         $body = str_replace($host, '{site-host}', $body);

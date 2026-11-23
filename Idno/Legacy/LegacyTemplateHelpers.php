@@ -73,6 +73,11 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return (bool) Idno::site()->canWrite();
     }
 
+    public function canAddUsers(): bool
+    {
+        return (bool) Idno::site()->config()->canAddUsers();
+    }
+
     public function contentTypes(): array
     {
         return array_values(ContentType::getRegistered() ?: []);

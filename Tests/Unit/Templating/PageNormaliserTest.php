@@ -26,6 +26,7 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame('<a href="{site}/admin/">', $this->normalise('<a href="http://127.0.0.1:55438/admin/">'), 'in HTML');
         $this->assertSame('"url": "{site}\\/2026\\/post"', $this->normalise('"url": "http:\\/\\/127.0.0.1:55438\\/2026\\/post"'), 'in JSON, where a slash is escaped');
         $this->assertSame('?redirect_to={site}%2Fadmin%2F', $this->normalise('?redirect_to=http%3A%2F%2F127.0.0.1%3A55438%2Fadmin%2F'), 'percent-encoded in a query');
+        $this->assertSame('fetch(\'{site}\\/account\\/x\\/?\')', $this->normalise('fetch(\'http\\u003A\\/\\/127.0.0.1\\u003A55438\\/account\\/x\\/?\')'), 'escaped for a script, as Twig\'s e(\'js\') writes it');
         $this->assertSame('{site-host}', $this->normalise('127.0.0.1:55438'), 'a host with its port, as an actor document or a webfinger names it');
         $this->assertSame('"host":"127.0.0.1","port":{site-port},"path"', $this->normalise('"host":"127.0.0.1","port":55438,"path"'), 'the port a page gives its script: idno.page.currentUrlFragments');
     }
@@ -34,6 +35,7 @@ final class PageNormaliserTest extends TestCase
     {
         $this->assertSame('<a href="https://example.org:55438/">', $this->normalise('<a href="https://example.org:55438/">'));
         $this->assertSame('http://127.0.0.1:55439/', $this->normalise('http://127.0.0.1:55439/'), 'another port is not this site');
+        $this->assertSame('http\\u003A\\/\\/127.0.0.1\\u003A55439\\/', $this->normalise('http\\u003A\\/\\/127.0.0.1\\u003A55439\\/'), 'the same escaped, for another port');
         $this->assertSame('"port":55438', $this->normalise('"port":55438'), 'a port is replaced only beside the host');
     }
 

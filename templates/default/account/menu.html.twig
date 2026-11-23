@@ -1,0 +1,20 @@
+<div class="idno-account-nav">
+    <a href="{{ site_url() }}account/settings/"
+       class="idno-account-nav-item{% if path_matches('/account/settings/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'settings'}) }}
+        <span>{{ t('Settings') }}</span>
+    </a>
+    <a href="{{ site_url() }}account/settings/tools/"
+       class="idno-account-nav-item{% if path_matches('/account/settings/tools/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'box'}) }}
+        <span>{{ t('Tools & Apps') }}</span>
+    </a>
+
+    {{ idno_include('account/menu/items') }}
+
+    <a href="{{ site_url() }}account/export/"
+       class="idno-account-nav-item{% if path_matches('/account/export/') %} active{% endif %}">
+        {{ idno_include('shell/icon', {icon: 'download'}) }}
+        <span>{{ t('Export Data') }}</span>
+    </a>
+</div>
