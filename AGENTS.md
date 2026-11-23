@@ -336,6 +336,16 @@ Each content plugin has an `Entry.php` entity class that defines
   `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them
   again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
   checks this.
+- Following and the error mail: a feed's title and addresses
+  (`templates/default/following/confirm.tpl.php`, `templates/default/entity/Subscription.tpl.php`),
+  an h-card's name, photo and address
+  (`templates/default/account/settings/following/mf2user.tpl.php`) and the User-Agent,
+  query string and referrer of a request (`templates/email/admin/oops.tpl.php`) come from
+  other sites or from the request, and are stored or passed on as they were sent, so the
+  templates escape them with `htmlspecialchars()` and put an address into `href` or `src`
+  only through `UrlValidator::httpUrl()`. The text part of the mail
+  (`templates/email-text/admin/oops.tpl.php`) is not HTML and is not escaped.
+  `Tests/Core/RemoteFeedOutputTest.php` checks this.
 - TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
   the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or
   `CURLOPT_SSL_VERIFYHOST` anywhere else.
