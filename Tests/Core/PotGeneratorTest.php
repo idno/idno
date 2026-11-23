@@ -423,4 +423,51 @@ class PotGeneratorTest extends TestCase
 
         $this->assertEmpty($this->generator->getStrings());
     }
+
+    public function testTwigTranslationCallsAreExtracted(): void
+    {
+        $twig = "<p>{{ t('Hello World') }}</p>\n"
+            . "{{ t_html(\"Posted by <a href=\\\"%s\\\">%s</a>\", [url, name]) }}\n"
+            . "{{ t(\n    'Split over'\n    , [a]\n) }}\n"
+            . "{{ t(variable) }} {{ t('con' ~ 'cat') }} {{ t(\"interp #{x} olated\") }}\n"
+            . "{{ item.t('Method call') }} {{ 'Filtered'|t('x') }} {# {{ t('In a comment') }} #}\n"
+            . "{{ other('Not a translation') }} {{ 'a string with t(\'Inside a string\')' }}\n"
+            . "{% if x %}{{ t('Inside a tag') }}{% endif %}\n";
+
+        $this->generator->extractFromTwigSource($twig, 'x.html.twig');
+        $strings = $this->generator->getStrings();
+
+        $this->assertSame(['Hello World', 'Posted by <a href="%s">%s</a>', 'Split over', 'Inside a tag'], array_keys($strings));
+        $this->assertSame(1, $strings['Hello World'][0]['line']);
+        $this->assertSame(4, $strings['Split over'][0]['line'], 'the line of the string');
+        $this->assertSame('x.html.twig', $strings['Hello World'][0]['file']);
+    }
+
+    public function testATwigFileThatIsNotATemplateAddsNothing(): void
+    {
+        $this->generator->extractFromTwigSource("{{ t('Broken", 'broken.html.twig');
+
+        $this->assertSame([], $this->generator->getStrings());
+    }
+
+    public function testTwigFilesAreReadFromADirectoryAndTheirReferencesAreRelative(): void
+    {
+        $directory = sys_get_temp_dir() . '/pot_test_' . uniqid();
+        mkdir($directory . '/sub', 0777, true);
+        file_put_contents($directory . '/sub/page.html.twig', "{{ t('From twig') }}");
+        file_put_contents($directory . '/page.tpl.php', '<?php $this->_(\'From php\'); ?>');
+        file_put_contents($directory . '/mail.txt.twig', "{{ t_html('From text twig') }}");
+
+        $this->generator->extractFromDirectory($directory);
+        $strings = $this->generator->getStrings();
+
+        unlink($directory . '/sub/page.html.twig');
+        unlink($directory . '/page.tpl.php');
+        unlink($directory . '/mail.txt.twig');
+        rmdir($directory . '/sub');
+        rmdir($directory);
+
+        $this->assertSame(['From text twig', 'From php', 'From twig'], array_keys($strings));
+        $this->assertSame('./sub/page.html.twig', $strings['From twig'][0]['file']);
+    }
 }

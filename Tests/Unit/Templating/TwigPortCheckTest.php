@@ -303,6 +303,10 @@ final class TwigPortCheckTest extends TestCase
         file_put_contents($this->project . '/templates/default/second.tpl.php', 'the second original child');
         file_put_contents($this->project . '/templates/default/second.html.twig', '');
         $check = null;
+        $exceptions = array_column([
+            self::exceptionFor('other', 'the first original child', 'the first PORT child!!'),
+            self::exceptionFor('second', 'the second original child', 'the second PORT child!!'),
+        ], 1, 0);
         $check = $this->check(function (LocatedTemplate $template, mixed $vars, PhpTemplateContext $context) use (&$check): string {
             if (str_contains($template->path, 'other')) {
                 return 'the first PORT child!!';
@@ -312,10 +316,7 @@ final class TwigPortCheckTest extends TestCase
             }
 
             return '<p>' . $check->render($this->located('other'), [], $context) . ' and ' . $check->render($this->located('second'), [], $context) . '</p>';
-        }, array_column([
-            self::exceptionFor('other', 'the first original child', 'the first PORT child!!'),
-            self::exceptionFor('second', 'the second original child', 'the second PORT child!!'),
-        ], 1, 0));
+        }, $exceptions);
         $context = $this->context(fn (PhpTemplateContext $context, string $name): string => $check->render($this->located($name), [], $context));
 
         $check->render($this->located('probe'), [], $context);

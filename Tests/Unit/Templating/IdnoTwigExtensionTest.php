@@ -8,36 +8,256 @@ use Idno\Templating\IdnoTwigExtension;
 use Idno\Templating\PhpTemplateContext;
 use Idno\Templating\TemplateTranslation;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Twig\Environment;
 use Twig\Error\RuntimeError;
 use Twig\Loader\ArrayLoader;
+use Twig\Markup;
 
 final class IdnoTwigExtensionTest extends TestCase
 {
-    private function extension(): IdnoTwigExtension
+    private function extension(?TemplateHelpersDouble $helpers = null, ?RequestStack $requests = null, bool $brackets = true): IdnoTwigExtension
     {
-        return new IdnoTwigExtension(new class () implements TemplateTranslation {
+        return new IdnoTwigExtension(new class ($brackets) implements TemplateTranslation {
+            public function __construct(private readonly bool $brackets)
+            {
+            }
+
             public function translate(string $text, array $subs = []): string
             {
-                return '[' . vsprintf($text, $subs) . ']';
+                return $this->brackets ? '[' . vsprintf($text, $subs) . ']' : vsprintf($text, $subs);
             }
-        });
+        }, $helpers ?? new TemplateHelpersDouble(), $requests ?? new RequestStack());
     }
 
-    public function testOnlyIdnoIncludeAndSlotAreMarkedSafe(): void
+    /**
+     * @param array<string, mixed> $vars
+     */
+    private function render(string $template, array $vars = [], ?TemplateHelpersDouble $helpers = null, ?RequestStack $requests = null, bool $brackets = false): string
+    {
+        $twig = new Environment(new ArrayLoader(['a.html.twig' => $template]), ['cache' => false, 'autoescape' => 'name']);
+        $twig->addExtension($this->extension($helpers, $requests, $brackets));
+
+        return $twig->render('a.html.twig', $vars);
+    }
+
+    /** What the extension marks as safe for HTML: functions, and filters */
+    private const SAFE_FUNCTIONS = ['idno_include', 'slot', 't_html', 'form_token', 'action_link', 'form_data', 'pagination'];
+
+    private const SAFE_FILTERS = ['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users'];
+
+    public function testOnlyTheListedFunctionsAreSafe(): void
     {
         $extension = $this->extension();
-        $safe = [];
+        $functions = [];
         foreach ($extension->getFunctions() as $function) {
-            $safe[$function->getName()] = $function->getSafe(new \Twig\Node\Nodes([]));
+            $functions[$function->getName()] = $function->getSafe(new \Twig\Node\Nodes([]));
+        }
+        $filters = [];
+        foreach ($extension->getFilters() as $filter) {
+            $filters[$filter->getName()] = $filter->getSafe(new \Twig\Node\Nodes([]));
         }
 
-        $this->assertSame(['html'], $safe['idno_include']);
-        $this->assertSame(['html'], $safe['slot']);
-        $this->assertSame([], $safe['t'], 't() is escaped like any string');
-        $this->assertSame(['idno_include', 'slot', 't'], array_keys($safe), 'no other function');
-        $this->assertSame([], $extension->getFilters());
+        $this->assertSame(self::SAFE_FUNCTIONS, array_keys(array_filter($functions, static fn ($safe): bool => $safe === ['html'])), 'exactly these functions print markup');
+        $this->assertSame([], array_filter($functions, static fn ($safe): bool => $safe !== ['html'] && $safe !== [] && $safe !== null), 'and none is safe for anything else');
+        $this->assertSame(self::SAFE_FILTERS, array_keys(array_filter($filters, static fn ($safe): bool => $safe === ['html'])), 'exactly these filters print markup');
+        $this->assertSame([], array_filter($filters, static fn ($safe): bool => $safe !== ['html'] && $safe !== [] && $safe !== null));
+        foreach (['autop', 'parse_urls', 'parse_hashtags', 'parse_users'] as $name) {
+            $filter = null;
+            foreach ($extension->getFilters() as $candidate) {
+                $filter = $candidate->getName() === $name ? $candidate : $filter;
+            }
+            $this->assertSame('html', $filter->getPreEscape(), $name . ' escapes raw text before it works on it');
+        }
+        foreach ($extension->getFilters() as $filter) {
+            if ($filter->getName() === 'sanitize_html') {
+                $this->assertNull($filter->getPreEscape(), 'sanitize_html purifies its input, so it takes it as it is');
+            }
+        }
         $this->assertSame([], $extension->getTests());
+    }
+
+    public function testEveryNamedFunctionAndFilterExists(): void
+    {
+        $extension = $this->extension();
+        $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
+        $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes'] as $name) {
+            $this->assertContains($name, $functions);
+        }
+        foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text'] as $name) {
+            $this->assertContains($name, $filters);
+        }
+    }
+
+    public function testNoFunctionReachesAServiceByName(): void
+    {
+        $extension = $this->extension();
+        foreach ([...$extension->getFunctions(), ...$extension->getFilters()] as $callable) {
+            $reflection = new \ReflectionFunction($callable->getCallable());
+            foreach ($reflection->getParameters() as $parameter) {
+                $this->assertDoesNotMatchRegularExpression('/^(class|class_?name|fqcn|service_?name|service_?id|container|id)$/i', $parameter->getName(), $callable->getName() . ' takes ' . $parameter->getName());
+            }
+        }
+        $helpers = new TemplateHelpersDouble();
+        $out = $this->render("{{ entity_value('Idno\\Core\\Idno', 'x') is null ? 'none' : 'some' }}{{ entity_value({x: 1}, 'x') }}", [], $helpers);
+        $this->assertSame('none1', $out, 'a class name is only a string');
+        $this->assertSame([], $helpers->calls, 'and reaches nothing');
+    }
+
+    public function testTHtmlEscapesStringSubsAndKeepsMarkupSubs(): void
+    {
+        $this->assertSame('Hi <strong>&lt;x&gt;</strong>', $this->render("{{ t_html('Hi <strong>%s</strong>', ['<x>']) }}"));
+        $this->assertSame('Hi <strong>&lt;&quot;&#039;&amp;</strong>', $this->render("{{ t_html('Hi <strong>%s</strong>', ['<\"\'&']) }}"));
+        $this->assertSame('See <a href="/x">it</a> now', $this->render("{% set link %}<a href=\"/x\">it</a>{% endset %}{{ t_html('See %s now', [link]) }}"), 'a capture is markup');
+        $this->assertSame('3 items', $this->render("{{ t_html('%d items', [3]) }}"));
+    }
+
+    public function testTIsStillEscapedWhereTHtmlIsNot(): void
+    {
+        $this->assertSame('&lt;b&gt;hi&lt;/b&gt;', $this->render("{{ t('<b>hi</b>') }}"));
+        $this->assertSame('<b>hi</b>', $this->render("{{ t_html('<b>hi</b>') }}"));
+    }
+
+    public function testParseFiltersEscapeRawTextFirst(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $this->assertSame('&lt;script&gt;', $this->render("{{ raw|parse_urls }}", ['raw' => '<script>'], $helpers));
+        $this->assertSame('&lt;script&gt;', $this->render("{{ raw|parse_hashtags }}", ['raw' => '<script>'], $helpers));
+        $this->assertSame('&lt;script&gt;', $this->render("{{ raw|parse_users }}", ['raw' => '<script>'], $helpers));
+        $this->assertSame('<p>&lt;script&gt;</p>', $this->render("{{ raw|autop }}", ['raw' => '<script>'], $helpers));
+        $this->assertSame('[sanitized <b>x</b>]', $this->render("{{ raw|sanitize_html|parse_urls }}", ['raw' => '<b>x</b>'], $helpers), 'sanitized HTML is kept');
+        $this->assertSame('<p><b>x</b></p>', $this->render("{{ markup|autop }}", ['markup' => new Markup('<b>x</b>', 'UTF-8')], $helpers), 'markup is kept');
+        $helpers->calls = [];
+        $this->render("{{ 'x'|parse_users('https://twitter.com/a') }}", [], $helpers);
+        $this->assertSame([['parseUsers', ['x', 'https://twitter.com/a']]], $helpers->calls, 'the reply target is passed on');
+    }
+
+    public function testHttpUrlRefusesOtherSchemes(): void
+    {
+        $this->assertSame('', $this->render("{{ 'javascript:alert(1)'|http_url }}"));
+        $this->assertSame('', $this->render("{{ 'data:text/html,x'|http_url }}"));
+        $this->assertSame('', $this->render("{{ 'https://a.example/\"x'|http_url }}"));
+        $this->assertSame('', $this->render("{{ null|http_url }}"));
+        $this->assertSame('https://a.example/x?y=1&amp;z=2', $this->render("{{ 'https://a.example/x?y=1&z=2'|http_url }}"), 'the result is still escaped by Twig');
+        $this->assertSame('//a.example/x', $this->render("{{ '//a.example/x'|http_url }}"));
+    }
+
+    public function testSettingRefusesSecrets(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $this->assertSame('', $this->render("{{ setting('smtp_password') }}", [], $helpers));
+        $this->assertSame('', $this->render("{{ setting('dbpass') }}", [], $helpers));
+        $this->assertSame('My site', $this->render("{{ setting('title') }}", [], $helpers));
+        $this->assertSame('none', $this->render("{{ setting('smtp_password') is null ? 'none' : 'some' }}", [], $helpers));
+        $this->assertSame([['setting', ['title']]], array_values(array_filter($helpers->calls, static fn (array $call): bool => $call[0] === 'setting' && $call[1] === ['title'])), 'a permitted name is passed on');
+        $helpers->settings['api_key'] = 'k';
+        $helpers->settings['home'] = 'sk_live_abc';
+        $this->assertSame('none', $this->render("{{ setting('api_key') is null and setting('home') is null ? 'none' : 'some' }}", [], $helpers), 'by name, and by a value that is a key');
+        $helpers->settings['home'] = 'mysql://user:pw@host/db';
+        $this->assertSame('mysql://host/db', $this->render("{{ setting('home') }}", [], $helpers), 'an address loses its user name and password');
+    }
+
+    public function testRequestFactsComeFromTheRequestStack(): void
+    {
+        $this->assertSame('||', $this->render("{{ current_url() }}|{{ current_path() }}|{{ referrer() }}"), 'no request');
+        $stack = new RequestStack();
+        $stack->push(Request::create('https://site.example/a/b?x=1&y=2', 'GET', [], [], [], ['HTTP_REFERER' => 'https://other.example/p']));
+
+        $this->assertSame('https://site.example/a/b?x=1&amp;y=2|/a/b|https://other.example/p', $this->render("{{ current_url() }}|{{ current_path() }}|{{ referrer() }}", [], null, $stack));
+    }
+
+    public function testSiteAndViewerFunctionsAnswerWhatTheHelpersDo(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $out = $this->render("{{ site_url('x') }} {{ site_url() }} {{ static_url('s.css') }} {{ site_title() }} {{ site_icons().defaults.default_57 }} {{ can_write() ? 'w' : '-' }} {{ content_types()|length }} {{ content_type_for_post_type('note').name }} {{ content_type_for_post_type('x') is null ? 'null' : 'some' }} {{ current_user().handle }} {{ is_logged_in() ? 'in' : 'out' }} {{ is_admin() ? 'admin' : 'member' }}", [], $helpers);
+
+        $this->assertSame('https://site.example/x https://site.example/ https://static.example/s.css A &lt;b&gt;site&lt;/b&gt; a.png w 1 note null ben in member', $out);
+    }
+
+    public function testPageFunctionsAnswerWhatTheHelpersDo(): void
+    {
+        $out = $this->render("{{ input('offset') }} {{ input('nope', 'dflt') }} {{ path_matches('a/b') ? 'y' : 'n' }} {{ is_permalink() ? 'y' : 'n' }} {{ is_xhr() ? 'y' : 'n' }} {{ page_assets('css').a }} {{ page_assets('js')|length }} {{ page_owner() is null ? 'none' : 'owner' }} {{ http_status() }} {{ login_url_for('/a b') }} {{ url_with_var('offset', 20) }} {{ url_with_var('offset', 20, 'https://x.example/p') }} {{ url_without_var('https://x.example/p?a=1', 'a') }} {{ current_url_without_var('a') }} {{ body_classes() }}");
+
+        $this->assertSame('20 dflt y n n /a.css 0 none 200 https://site.example/session/login/?fwd=%2Fa%20b https://site.example/here?offset=20 https://x.example/p?offset=20 https://x.example/p?a=1#without-a https://site.example/here#without-a page-a &quot;quoted&quot; &lt;i&gt;', $out, 'body_classes() is escaped');
+    }
+
+    public function testFormFunctionsKeepMarkupAndEscapePlainStrings(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $this->assertSame('<input name="__bTk" value="token-for-/a?b=1&amp;c=2">', $this->render("{{ form_token('/a?b=1&c=2') }}", [], $helpers));
+
+        $this->assertSame('<a href="/x"><b>Go</b></a>', $this->render("{{ action_link('/x', label|raw) }}", ['label' => '<b>Go</b>'], $helpers), 'markup label');
+        $this->assertSame('<a href="/x"><b>Go</b></a>', $this->render("{% set label %}<b>Go</b>{% endset %}{{ action_link('/x', label) }}", [], $helpers), 'a capture');
+        $helpers->calls = [];
+        $this->render("{{ action_link('/x', 'Go', {a: 1}, {class: 'c'}) }}", [], $helpers);
+        $this->assertSame([['actionLink', ['/x', 'Go', ['a' => 1], ['class' => 'c']]]], $helpers->calls);
+    }
+
+    public function testFormDataIsMarkupBackOnlyInAnXhrRequest(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $this->assertSame('', $this->render("{{ form_data(html|raw) }}", ['html' => '<form></form>'], $helpers));
+        $helpers->xhr = true;
+        $this->assertSame('<form></form>', $this->render("{{ form_data(html|raw) }}", ['html' => '<form></form>'], $helpers));
+    }
+
+    public function testDrawingFunctionsPassTheirArgumentsOn(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $out = $this->render("{{ pagination(40) }} {{ pagination(40, 10, {'control-id': 'c'}) }} {{ syndication_services('note')|join(',') }} {{ syndication_selected('twitter', 'me') }} {{ share_types({a: 'A'})|length }} {{ expand_urls(null, 'text') }}", [], $helpers);
+
+        $this->assertSame('<nav>40</nav> <nav>40</nav> twitter twitter:me 2 text expanded', $out);
+        $this->assertSame([[40, null, []], [40, 10, ['control-id' => 'c']]], array_map(static fn (array $call): array => $call[1], array_values(array_filter($helpers->calls, static fn (array $call): bool => $call[0] === 'pagination'))));
+    }
+
+    public function testLookupFunctionsAnswerNullWhenThereIsNothing(): void
+    {
+        $this->assertSame('null null 0 null', $this->render("{{ local_entity('https://x.example/p') is null ? 'null' : 'some' }} {{ local_file('https://x.example/f') is null ? 'null' : 'some' }} {{ access_groups_of('u')|length }} {{ latest_post_of(user) is null ? 'null' : 'some' }}", ['user' => new \stdClass()]));
+    }
+
+    public function testShellVariablesAreComputedFromTheContextWithoutBookkeeping(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $twig = new Environment(new ArrayLoader(['a.html.twig' => "{% set sv = shell_variables() %}{{ sv.title }}|{{ sv.lang }}|{{ sv._idno_type is defined ? 'leak' : 'clean' }}"]), ['cache' => false, 'autoescape' => 'name']);
+        $twig->addExtension($this->extension($helpers));
+
+        $this->assertSame('T|en|clean', $twig->render('a.html.twig', ['title' => 'T', '_idno_type' => 'default', '_idno_context' => new \stdClass()]));
+        $this->assertSame(['title' => 'T'], $helpers->calls[0][1][0]);
+    }
+
+    public function testEntityValueReadsAStoredAttributeAndNeverCallsAMethod(): void
+    {
+        $entity = new class () {
+            private array $attributes = ['title' => 'Stored', 'zero' => 0];
+
+            public function &__get(string $name): mixed
+            {
+                $this->attributes[$name] ??= null;
+
+                return $this->attributes[$name];
+            }
+
+            public function __isset(string $name): bool
+            {
+                return !empty($this->attributes[$name]);
+            }
+
+            public function getTitle(): string
+            {
+                return 'METHOD';
+            }
+        };
+        $this->assertSame('Stored|0||A|', $this->render("{{ entity_value(o, 'title') }}|{{ entity_value(o, 'zero') }}|{{ entity_value(o, 'missing') }}|{{ entity_value(a, 'k') }}|{{ entity_value(n, 'k') }}", ['o' => $entity, 'a' => ['k' => 'A'], 'n' => null]));
+    }
+
+    public function testTheTextFiltersThatArePlain(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+        $out = $this->render("{{ 'https://a.example/p'|display_url }} {{ 'a.example'|fix_url }} {{ 'https://i.example/a.jpg'|proxied_image(100, 'square') }} {{ 'a b c d'|sample_text(2) }} {{ '<b>x</b>'|sample_text }}", [], $helpers);
+
+        $this->assertSame('//a.example/p http://a.example https://i.example/a.jpg a b &lt;b&gt;x&lt;/b&gt;', $out, 'none of them is markup');
     }
 
     public function testTranslationIsEscapedByTwig(): void

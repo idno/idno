@@ -82,7 +82,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry, the renderer, the Twig loader and the Twig engine are wired below.
         'Templating' => ['CascadeTwigLoader.php', 'LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
-        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -384,8 +384,14 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autowire(false)
         ->autoconfigure(false);
     $services->alias(\Idno\Templating\TemplateTranslation::class, \Idno\Legacy\LegacyTemplateTranslation::class);
+    // The helpers' adapter holds nothing and touches the legacy application only when a method is called, so it can be built
+    // (and the environment with it) where that application is not booted.
+    $services->set(\Idno\Legacy\LegacyTemplateHelpers::class)
+        ->autowire(false)
+        ->autoconfigure(false);
+    $services->alias(\Idno\Templating\TemplateHelpers::class, \Idno\Legacy\LegacyTemplateHelpers::class)->public();
     $services->set(\Idno\Templating\IdnoTwigExtension::class)
-        ->args([service(\Idno\Templating\TemplateTranslation::class)])
+        ->args([service(\Idno\Templating\TemplateTranslation::class), service(\Idno\Templating\TemplateHelpers::class), service('request_stack')])
         ->autowire(false)
         ->autoconfigure(false)
         ->public()

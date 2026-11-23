@@ -85,7 +85,7 @@ switch ($case) {
             {
                 return $text;
             }
-        }));
+        }, new \Tests\Unit\Templating\TemplateHelpersDouble(), new \Symfony\Component\HttpFoundation\RequestStack()));
         $engine = new TwigTemplateEngine(static fn (): Environment => $environment);
         $render = static fn (string $logical): string => $engine->render(new LocatedTemplate($fixtures . '/x', 'twig', 'default', $fixtures . '/theme', $logical), [], new DefaultTemplate());
         $result = [

@@ -7,7 +7,9 @@ namespace Idno\Core;
  * gettext .pot (Portable Object Template) files.
  *
  * Uses PHP's built-in token_get_all() for reliable parsing, looking
- * for ->_() and ->esc_() method calls used by the Idno i18n system.
+ * for ->_() and ->esc_() method calls used by the Idno i18n system, and,
+ * in Twig templates (.twig files), Twig's own lexer, looking for the
+ * t() and t_html() functions.
  *
  * Replaces the external mapkyca/known-language-tools package.
  */
@@ -27,7 +29,7 @@ class PotGenerator
     private array $methodNames = ['_', 'esc_'];
 
     /**
-     * Extract translatable strings from a single PHP file.
+     * Extract translatable strings from a single PHP file (or a Twig one, by its `.twig` extension).
      *
      * Tokenizes the file and scans for the pattern:
      *   -> _( 'string' )  or  -> esc_( 'string' )
@@ -48,6 +50,12 @@ class PotGenerator
             if (str_starts_with($filePath, $basePath)) {
                 $relativePath = './' . substr($filePath, strlen($basePath));
             }
+        }
+
+        if (str_ends_with($filePath, '.twig')) {
+            $this->extractFromTwigSource($code, $relativePath);
+
+            return;
         }
 
         $this->extractFromSource($code, $relativePath);
@@ -122,7 +130,52 @@ class PotGenerator
     }
 
     /**
-     * Scan a directory recursively for PHP files and extract strings.
+     * Extract translatable strings from a Twig template: the first argument of `t(` and `t_html(` when it is a string
+     * literal (a variable, a concatenation or an interpolated string is not a string that can be translated, and is left out).
+     * The template is read by Twig's lexer, so a call split over lines, a comment or a string that only looks like a call
+     * is told apart; a template the lexer cannot read adds nothing.
+     *
+     * @param string $source Twig source
+     * @param string $fileReference File path to use in #: references
+     */
+    public function extractFromTwigSource(string $source, string $fileReference = 'unknown'): void
+    {
+        try {
+            $stream = (new \Twig\Environment(new \Twig\Loader\ArrayLoader()))->tokenize(new \Twig\Source($source, $fileReference));
+            $tokens = [];
+            while (!$stream->isEOF()) {
+                $tokens[] = $stream->next();
+            }
+        } catch (\Twig\Error\SyntaxError $e) {
+            return;
+        }
+
+        // Twig's lexer calls `(` and `|` operators and `)` and `,` punctuation, and may change that: either type counts
+        $is = static fn (\Twig\Token $token, string|array $values): bool => $token->test(\Twig\Token::PUNCTUATION_TYPE, $values) || $token->test(\Twig\Token::OPERATOR_TYPE, $values);
+
+        $count = count($tokens);
+        for ($i = 0; $i + 3 < $count; $i++) {
+            $name = $tokens[$i];
+            if (!$name->test(\Twig\Token::NAME_TYPE) || !in_array($name->getValue(), ['t', 't_html'], true)) {
+                continue;
+            }
+            // `object.t(...)` and `x|t(...)` call something else
+            if ($i > 0 && $is($tokens[$i - 1], ['.', '|'])) {
+                continue;
+            }
+            if (!$is($tokens[$i + 1], '(') || !$tokens[$i + 2]->test(\Twig\Token::STRING_TYPE)) {
+                continue;
+            }
+            // The literal is the whole first argument
+            if (!$is($tokens[$i + 3], [',', ')'])) {
+                continue;
+            }
+            $this->addString((string) $tokens[$i + 2]->getValue(), $fileReference, $tokens[$i + 2]->getLine());
+        }
+    }
+
+    /**
+     * Scan a directory recursively for PHP and Twig files and extract strings.
      *
      * @param string $directory Directory to scan
      * @param string $basePath Base path for relative references
@@ -142,7 +195,7 @@ class PotGenerator
 
         $files = [];
         foreach ($iterator as $file) {
-            if ($file->isFile() && $file->getExtension() === 'php') {
+            if ($file->isFile() && in_array($file->getExtension(), ['php', 'twig'], true)) {
                 $files[] = $file->getPathname();
             }
         }

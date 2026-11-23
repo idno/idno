@@ -2558,8 +2558,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 `Idno\Core\Bonita\Templates`) is the adapter every page and plugin calls, and delegates to it. The classes:
 
 - Excluded from the scan in `config/services.php` and wired there, public: `TemplateCascade`, `SlotRegistry`, `TemplateRenderer`,
-  `TwigTemplateEngine`, `CascadeTwigLoader` and `IdnoTwigExtension` (the adapter `Idno\Legacy\LegacyTemplateTranslation` is wired
-  there too); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
+  `TwigTemplateEngine`, `CascadeTwigLoader` and `IdnoTwigExtension` (the adapters `Idno\Legacy\LegacyTemplateTranslation` and `Idno\Legacy\LegacyTemplateHelpers` are wired
+  there too, the latter under the interface `Idno\Templating\TemplateHelpers`); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
 - `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
   holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
   (`TemplateName::isSafe()` is the check without the strip). The pattern ends in `$`, so a trailing newline passes (it names no file).
@@ -2693,11 +2693,37 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     a COPY of the template object (`withVars()`) holding the including template's variables, less Twig's globals (`app`, ...: only a value identical to the global) and bookkeeping (`_idno_type`, `_idno_context`, `_parent`, `_seq`, `_key`, `_iterated`, `loop`; any other `_foo` variable is kept), and
     the given ones over them; `slot(name)` is `drawSlot()`; both are `is_safe: html` and need `_idno_context`; `t(text, subs)` is
     `TemplateTranslation::translate()` (`Idno\Legacy\LegacyTemplateTranslation` over `Language::_()`, fetched when a string is first translated, so
-    the environment can be built without the legacy application) and is escaped as any string. No other function or filter is marked safe
-    (`IdnoTwigExtensionTest`).
+    the environment can be built without the legacy application) and is escaped as any string.
+  - The helper surface of Twig templates (named functions and filters, no `site`/`idno` object and no lookup of a service or class by name;
+    `IdnoTwigExtension`, with the interface `Idno\Templating\TemplateHelpers`, one method for each name that needs the site, implemented by
+    `Idno\Legacy\LegacyTemplateHelpers` over `Idno::site()`; the adapter holds nothing and reads the application only when a method is called, so
+    the environment is built without it). Functions: `t_html`, `site_url`, `static_url`, `site_title`, `site_icons`, `setting`, `can_write`,
+    `content_types`, `content_type_for_post_type`, `current_user`, `is_logged_in`, `is_admin`, `current_url`, `current_path`, `referrer`, `input`,
+    `path_matches`, `is_permalink`, `is_xhr`, `page_assets`, `page_owner`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
+    `current_url_without_var`, `body_classes`, `form_token`, `action_link`, `form_data`, `shell_variables`, `pagination`, `syndication_services`,
+    `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`;
+    filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `display_url`, `fix_url`, `proxied_image`,
+    `sample_text`. `current_url()`, `current_path()` and `referrer()` come from the `RequestStack` ('' with no request: a legacy page's request is
+    not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
+    value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
+    SAFE for HTML, exactly (pinned by `IdnoTwigExtensionTest::testOnlyTheListedFunctionsAreSafe`): the functions `idno_include`, `slot`, `t_html`
+    (the translated text is trusted; each string sub is escaped, a `Twig\Markup` one kept), `form_token`, `action_link`, `form_data` and
+    `pagination`, and the filters `sanitize_html` (HTMLPurifier through the `text/filter` event) and `autop`, `parse_urls`, `parse_hashtags` and
+    `parse_users`, which have `pre_escape: html` (raw text is escaped first, sanitized HTML and `Markup` are kept). `action_link`'s label and
+    `form_data`'s argument are markup the calling template built (a runtime string cannot be told from `|raw` output): every `|raw` is on the
+    allow-list. Two legacy methods were not safe to inherit and are fixed in the adapter: `parseHashtags()` decoded `&quot;`, `&#60;` and the other
+    entities that mean a quote, bracket or ampersand (turning an escaped attribute value of sanitized HTML into markup), so they are set aside
+    around the decoding; `Actions::createLink()` printed the url, class and title unescaped and put a confirmation text with `"` into an attribute,
+    so `actionLink()` escapes them, percent-encodes a character that ends an attribute in the url and takes only the options the link template reads.
+    `form_data()` registers with `shell/form-data` (nothing returned) or, in an XHR request, returns the markup to the template that is drawing
+    (the legacy link template appended it to a global that only the user search page read). `shell_variables()` computes what
+    `formatShellVariables()` does on a copy of the template object with no variables and returns them (the site's template object is untouched);
+    `pagination()` draws on a copy too. Tests: `IdnoTwigExtensionTest` (a `TemplateHelpersDouble`, no legacy application),
+    `Tests/Kernel/LegacyTemplateHelpersTest` (each adapter method on the rig's site). `Idno\Core\PotGenerator` also reads `.twig` files: the first
+    argument of `t(` and `t_html(` when it is a string literal (Twig's lexer; `PotGeneratorTest::testTwigTranslationCallsAreExtracted`).
   - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
     bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
-    `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`.
+    `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`, `LegacyTemplateHelpersTest`.
     No core template is a Twig file yet, so no golden page changes. The `@core` real-container case writes a probe file in `templates/default/`
     (`zz-core-probe-*`, gitignored) and removes any left by a killed run when it starts.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and

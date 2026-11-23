@@ -55,6 +55,23 @@ A Twig template is a file `templates/<type>/<name>.html.twig` (HTML, escaped aut
 * `{{ idno_include('shell/footer', {key: value}) }}` draws a template by name as `$this->draw()` does in a PHP template: the template type and then `default`, either kind of file, with what plugins and themes added with `extendTemplate()` and friends. The variables of the including template and the given ones are passed on (the include draws with a copy: what it sets is not seen afterwards). Its output is already HTML and is not escaped again.
 * `{{ slot('shell/footer') }}` draws only what plugins and themes registered for that name (`prependTemplate()`, `extendTemplate()`, `extendTemplateWithContent()`), not a template of that name and not a replacement: it is where a Twig template says "extensions go here". Not escaped again either.
 * `{{ t('Posted by %s', [author]) }}` is the site's translation of a string (`Language::_()`); its result is escaped like any other string.
+* `{{ t_html('Posted by <a href="%s">%s</a>', [url|http_url, name]) }}` is the same for a string that holds markup. The translation itself is trusted; every string you put into it is escaped, and a value you built as markup (a `{% set %}` capture) is kept. Use `t` for plain text and `t_html` only where the string has tags.
+
+### Helpers
+
+A Twig template has no object for the site. It calls the named functions and filters below; none takes a class or service name. Everything they return is escaped like any other string, except where marked *markup*.
+
+* Text: `t`, `t_html` (*markup*).
+* The site: `site_url(path)`, `static_url(path)`, `site_title()`, `site_icons()`, `setting(name)` (null for a setting that is a secret: a password, key, token and the like), `can_write()`, `content_types()`, `content_type_for_post_type(type)`.
+* The viewer: `current_user()`, `is_logged_in()`, `is_admin()`.
+* The request and page: `current_url()`, `current_path()`, `referrer()` (empty without a request), `input(name, default)`, `path_matches(path)`, `is_permalink()`, `is_xhr()`, `page_assets(type)`, `page_owner()`, `http_status()`, `login_url_for(path)`, `url_with_var(name, value, url)`, `url_without_var(url, name)`, `current_url_without_var(name)`, `body_classes()`.
+* Forms: `form_token(action)` (*markup*: the hidden token fields), `action_link(url, label, data, options)` (*markup*: a link that submits a signed POST; `label` is markup you built, the url, class, title and confirmation text are escaped for you), `form_data(html)` (*markup*: registers a form with the shell, or returns it in an XHR request).
+* Drawing: `shell_variables()`, `pagination(count, per_page, vars)` (*markup*), `syndication_services(content_type)`, `syndication_selected(service, username)`, `share_types(types)`, `expand_urls(object, text)`.
+* Lookups: `local_entity(url)`, `local_file(url)`, `access_groups_of(owner_uuid)`, `latest_post_of(user)`.
+* Entities: `entity_value(object, name)` reads a stored attribute (`object.name` on an entity would call a method of that name).
+* Filters: `sanitize_html` (*markup*: the text is purified), `autop`, `parse_urls`, `parse_hashtags`, `parse_users(in_reply_to)` (*markup*: each of these four escapes raw text first, so `{{ text|parse_urls }}` is safe for text a person typed, and HTML that is already safe, or purified with `sanitize_html`, is kept), `http_url` (the address, or an empty string unless it is http or https: use it for every address that came from a person or another site, in `href` and `src`), `display_url`, `fix_url`, `proxied_image(max, transform)`, `sample_text(words)`.
+
+`.po` strings are extracted from Twig files too: `build-lang` reads the first argument of `t(` and `t_html(` when it is a string.
 
 Everything else a template prints is escaped. Do not use `|raw` on a value that a person or another site supplied (a title, a comment, a URL): it turns the escaping off for that value. Use it only for HTML that Idno or your own code produced (and, for an address that is going into `href` or `src`, check it first with `\Idno\Core\UrlValidator::httpUrl()`). A `.txt.twig` template is not escaped at all, so it must only print text.
 
