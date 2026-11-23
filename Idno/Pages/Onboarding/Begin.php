@@ -18,6 +18,7 @@ namespace Idno\Pages\Onboarding {
             }
 
             $t = \Idno\Core\Idno::site()->template();
+            $t->sendSimpleShellHeaders();
             echo $t->__(
                 array(
                 'body'     => $t->draw('onboarding/begin'),

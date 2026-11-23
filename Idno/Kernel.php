@@ -83,8 +83,9 @@ class Kernel extends BaseKernel
     {
         $container->addCompilerPass(new DoctrineTrimPass());
         $container->addCompilerPass(new MessengerTrimPass());
-        // Before the bundle's loader pass collects the loaders (priority 0)
-        $container->addCompilerPass(new TwigTrimPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 10);
+        // After the bundle's extension pass (priority 10), which tags the extensions this pass removes, and before the pass that
+        // collects the loaders and the one that collects the extensions (priority 0)
+        $container->addCompilerPass(new TwigTrimPass(), PassConfig::TYPE_BEFORE_OPTIMIZATION, 9);
     }
 
     /**

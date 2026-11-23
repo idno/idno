@@ -70,7 +70,10 @@ namespace Idno\Core\Bonita {
         {
             if (!empty($vars) && is_array($vars)) {
                 foreach ($vars as $var => $value) {
-                    $this->$var = $value;
+                    // a template variable, whatever its name: never the object's own vars, templateType or fallbackToDefault
+                    if (!empty($var)) {
+                        $this->vars[$var] = $value;
+                    }
                 }
             }
             return $this;

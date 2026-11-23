@@ -44,7 +44,8 @@ namespace Idno\Core {
             $params = array('url' => $pageurl, 'label' => $label, 'data' => $data, 'class' => '', 'confirm' => false, 'confirm-text' => 'Are you sure?', 'title' => '');
             $params = array_merge($params, $options);
 
-            return site()->template()->__($params)->draw('forms/link');
+            // drawn on a copy: the variables of the link stay off the site's template object
+            return (clone site()->template())->__($params)->draw('forms/link');
         }
 
         /**
@@ -56,7 +57,9 @@ namespace Idno\Core {
          */
         function createForm($pageurl, $body)
         {
-            return site()->template()->__(array('body' => $body))->draw('forms/action');
+            // drawn on a copy: the body stays off the site's template object. The form posts to $pageurl (the template reads
+            // `action` and `method`, which this once left to whatever an earlier draw had left on the site's template).
+            return (clone site()->template())->__(array('body' => $body, 'action' => $pageurl, 'method' => 'post'))->draw('forms/action');
         }
 
         /**

@@ -602,7 +602,12 @@ pins the SQLite side in the unit tier (a test subclass whose root is a temporary
    registers the Toro `404` hook, adds the `/` route under the site's subdirectory if
    any, and calls `PageHandler::serve()`. The legacy router (Toro) then runs the matching
    `Idno\Common\Page` class, which reads the superglobals and writes the response itself
-   with `header()`, `http_response_code()`, `echo` and often `exit`.
+   with `header()`, `http_response_code()`, `echo` and often `exit`. `LegacyController` gives the response the `Request` and Symfony's
+   `RequestStack` (`new LegacyResponse($callback, $stack, $request)`, also for the response `LegacyFallbackListener` makes): `sendContent()`
+   pushes the request on the stack before the callback and pops it in a `finally` (a page that `exit`s ends the process instead). Symfony takes the
+   request off the stack when `Kernel::handle()` returns, which is before a legacy page runs, so without this the stack is empty while a
+   template draws, and the Twig functions `current_url()`, `current_path()` and `referrer()` would answer ''. The page still reads the
+   superglobals; the stack is for the templates (`Tests/Unit/Legacy/LegacyResponseTest`).
 6. If the page returns rather than exits, `index.php` calls `Kernel::terminate()`. Pages
    that `exit` skip it, so nothing essential may live in a `kernel.terminate` listener.
 
@@ -2558,7 +2563,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 `Idno\Core\Bonita\Templates`) is the adapter every page and plugin calls, and delegates to it. The classes:
 
 - Excluded from the scan in `config/services.php` and wired there, public: `TemplateCascade`, `SlotRegistry`, `TemplateRenderer`,
-  `TwigTemplateEngine`, `CascadeTwigLoader` and `IdnoTwigExtension` (the adapters `Idno\Legacy\LegacyTemplateTranslation` and `Idno\Legacy\LegacyTemplateHelpers` are wired
+  `TwigTemplateEngine`, `CascadeTwigLoader`, `TolerantTwigCache`, `TwigCacheWarmer` and `IdnoTwigExtension` (the adapters `Idno\Legacy\LegacyTemplateTranslation` and `Idno\Legacy\LegacyTemplateHelpers` are wired
   there too, the latter under the interface `Idno\Templating\TemplateHelpers`); `TemplateName`, `TypeChain` and `LocatedTemplate` are value objects and static helpers.
 - `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
   holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
@@ -2673,13 +2678,26 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `TemplateName::normalise()` leaves as they are, with the suffix (`isLogicalName()`): `..`, a backslash, NUL, a trailing newline, a leading or
     doubled slash, an absolute path and `@Twig/...` are refused before any file is looked for, so `{% include %}`, `{% extends %}` and `source()` of
     any name reach only a file of a `templates/` directory of the cascade (`CascadeTwigLoaderTest`, `TwigEngineTest::testATemplateCanLoadOnlyAFileOfTheCascade`).
-    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. `Idno\Kernel\TwigTrimPass` (priority 10, before the bundle's
-    loader pass) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
+    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
+    extension pass, which tags what this removes, and before its loader and environment passes) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
     included), so this is the only loader, and removes `twig.error_renderer.html` (which would draw Symfony's production error page of a
     new-style controller from the bundle's `@Twig` templates: the page is what it was; the CLI never used it), `twig.mailer.message_listener` and
-    `twig.mime_body_renderer` (mail is `Idno\Mail`, whose mailer has no dispatcher). The bundle's `lint:twig` and `debug:twig` stay, and so does
+    `twig.mime_body_renderer` (mail is `Idno\Mail`, whose mailer has no dispatcher), and the bundle's HttpKernel extension and runtime
+    (`twig.extension.httpkernel`, `twig.runtime.httpkernel`: `render()`, `controller()`, `render_esi()`, `render_hinclude()`, `fragment_uri()`: a
+    template draws no other request, and a legacy page's templates have no controller; routing's `path()` stays) and its template cache warmer
+    (`twig.template_cache_warmer`), and sets the environment's cache to `Idno\Templating\TolerantTwigCache`. The bundle's `lint:twig` and `debug:twig` stay, and so does
     the `kernel.view` listener for `#[Template]`, which only acts when a controller returns no response; the others it registers do not run on a
     legacy request. `Tests/Kernel/TwigTrimTest` (test and freshly compiled prod containers, no legacy application: `debug:twig` runs too).
+  - The compiled-template cache (the bundle's directory, `%kernel.cache_dir%/twig`) is `Idno\Templating\TolerantTwigCache` over Twig's
+    `FilesystemCache`: when it cannot create or write its directory (a deploy run as another user, a read-only file system) it logs ONE warning
+    a process (`Twig could not write its compiled template cache: <directory>`, through a logger closure, and nothing if the logger is not available
+    because the legacy application did not boot) and goes on, so Twig evaluates the compiled code in memory: slower, otherwise the same, and no page
+    fails (`Tests/Unit/Templating/TolerantTwigCacheTest`). `Idno\Templating\TwigCacheWarmer` (a `kernel.cache_warmer`, OPTIONAL, so it runs in
+    `php bin/console cache:warmup` and not at a boot) compiles every `.html.twig` and `.txt.twig` file under `templates/` of the project (by its
+    `@core/` name), of each `IdnoPlugins/<name>/` and of each `Themes/<name>/` (by its logical name, through the cascade, to which it adds those
+    directories for the life of the process; a name an earlier file already has resolves to that file). A core file that does not compile is an
+    error; a plugin's or theme's is skipped (the page that draws it shows the error; `lint:twig` checks them). Run it as the web server's user after
+    an update (`docs/install/upgrade.md`). `Tests/Kernel/TwigCacheWarmerTest`.
   - `TwigTemplateEngine` (`TemplateEngine`): holds a CLOSURE to the `twig` service, so the environment is built when the first Twig file is
     drawn and a page that draws none never builds it (`TwigEngineTest::testTheEnvironmentIsBuiltWhenAFirstTwigFileIsDrawnAndNotBefore`,
     `TwigTrimTest`). It loads `$located->logicalName` through the loader (the file the locator found) and renders it with the variables
@@ -2738,6 +2756,21 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   per-class lookup (`object/<Class>` never matched) are gone. A `_t` request value that is not a string asks for no type.
 - `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
   (never the upload path; with no writable directory the definition cache is off).
+- No template sends an HTTP header, and a template draw leaves nothing on the site's template object. Headers: `shell/headers` has no core file
+  but the shells (`shell`, `admin-shell`, `account-shell`) still draw it, so the NAME is an extension point (a plugin extension that calls `header()`
+  still runs); `DefaultTemplate::sendShellHeaders()` sends `Content-type: text/html` and `Access-Control-Allow-Origin: *` for the `default` type, called
+  by `drawPage()` and by the two pages that draw the shell with `draw('shell')` (`Account\Register`, `Account\Password`);
+  `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
+  `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,
+  `Connect`, `Profile`); `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
+  `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`. Header values are unchanged
+  (`Tests/Characterisation/PageHeadersTest`). `Bonita\Templates::__()` writes template variables only, whatever their names (a variable named
+  `templateType`, `vars` or `fallbackToDefault` no longer sets the object's own property of that name: use `setTemplateType()`;
+  `TemplateContractTest::testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties`); `Actions::createLink()` and `createForm()` and
+  `DefaultTemplate::drawSyndication()` and `drawPagination()` draw on a `clone`, so their variables stay off the site's template object
+  except the keys a page's JSON output has, which they publish by explicit assignment: `items_per_page` (pagination) and `services` (the details the
+  syndication template computes), `content_type` and `posseLinks` (`Tests/Core/ActionsTest`). `signForm()` and `forms/token` are NOT changed: the form token's `csrf` list stays on the site's template, which is what the
+  JSON output prints. `createForm()` now passes the address it is given as the form's `action` (it never did, and the template needs it).
 - Idno 2026, the built-in look (`templates/default/`, `IdnoPlugins/<P>/templates/default/`, `css/idno-2026.min.css`, `js/idno-2026.min.js`, and
   `Idno\Pages\Drafts`, the member's drafts page, a legacy page registered in `Idno::init()`), was the Twenty26 theme: its templates were in a
   `modern` type that the theme's controller set. It is core's: a site's template type is `default`, `Themes::resolve()` maps the stored `theme`

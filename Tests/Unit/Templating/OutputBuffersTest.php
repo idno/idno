@@ -63,6 +63,18 @@ final class OutputBuffersTest extends TestCase
         $this->assertSame('returned', trim((string) end($lines)));
     }
 
+    /**
+     * The catch path itself: a buffer that can be removed, whose handler raises a notice while it is ended, with an error handler
+     * that turns the notice into an exception. The exception does not escape, and the closing stops: the buffer below the one
+     * that threw is not ended.
+     */
+    public function testAnErrorHandlerThatThrowsStopsTheClosing(): void
+    {
+        $lines = $this->run_('$hit = 0; set_error_handler(function ($no, $str) use (&$hit) { ++$hit; throw new \\ErrorException($str); }); $base = ob_get_level(); ob_start(); ob_start(function ($b) { trigger_error("while ended", E_USER_NOTICE); return $b; }); \\Idno\\Templating\\OutputBuffers::endDownTo($base); echo "\\nhit=", $hit, " left=", ob_get_level() - $base, "\\n";');
+
+        $this->assertSame('hit=1 left=1', trim((string) end($lines)), 'the error handler ran and threw, nothing escaped, and the closing stopped');
+    }
+
     public function testAHandlerThatThrowsWhenItsBufferIsEndedDoesNotEscape(): void
     {
         $lines = $this->run_('$base = ob_get_level(); ob_start(function ($b) { throw new \\RuntimeException("handler"); }); \\Idno\\Templating\\OutputBuffers::endDownTo($base); echo "\\nreturned\\n";');

@@ -15,6 +15,7 @@ namespace Idno\Pages\Txt {
         function getContent()
         {
             $t = \Idno\Core\Idno::site()->template();
+            header('Content-type: text/plain');
             echo $t->draw('txt/robots');
         }
 

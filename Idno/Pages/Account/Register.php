@@ -37,6 +37,7 @@ namespace Idno\Pages\Account {
             if (empty($onboarding)) {
                 $t->body  = $t->__(array('email' => $email, 'code' => $code))->draw('account/register');
                 $t->title = \Idno\Core\Idno::site()->language()->_('Create a new account');
+                $t->sendShellHeaders();
                 echo $t->draw('shell');
             } else {
                 $t->body  = $t->__(
@@ -47,6 +48,7 @@ namespace Idno\Pages\Account {
                     'messages' => \Idno\Core\Idno::site()->session()->getAndFlushMessages())
                 )->draw('onboarding/register');
                 $t->title = \Idno\Core\Idno::site()->language()->_('Create a new account');
+                $t->sendSimpleShellHeaders();
                 echo $t->draw('shell/simple');
             }
         }

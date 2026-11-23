@@ -20,6 +20,7 @@ namespace Idno\Pages\Onboarding {
             $_SESSION['onboarding_passthrough'] = true;
 
             $t = \Idno\Core\Idno::site()->template();
+            $t->sendSimpleShellHeaders();
             echo $t->__(
                 array(
 

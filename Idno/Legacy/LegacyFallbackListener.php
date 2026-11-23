@@ -69,7 +69,7 @@ final class LegacyFallbackListener
         ));
 
         $event->allowCustomResponseCode();
-        $event->setResponse($this->controller->response());
+        $event->setResponse($this->controller->response($event->getRequest()));
     }
 
     /**

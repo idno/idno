@@ -169,6 +169,21 @@ switch ($case) {
         $result['copiesVars'] = $copy->vars;
         break;
 
+    case 'underscore-underscore-never-sets-the-objects-own-properties':
+        $register('core');
+        $t = $template();
+        $t->__(['templateType' => 'rss', 'vars' => 1, 'fallbackToDefault' => false]);
+        $result = [
+            'type' => $t->getTemplateType(),
+            'fallback' => $t->fallbackToDefault,
+            'varsIsAnArray' => is_array($t->vars),
+            'templateTypeVariable' => $t->vars['templateType'] ?? null,
+            'varsVariable' => $t->vars['vars'] ?? null,
+            'fallbackVariable' => $t->vars['fallbackToDefault'] ?? 'unset',
+            'drawn' => $t->draw('only-core'),
+        ];
+        break;
+
     case 'child-draw-sees-parent-vars-and-this-and-t':
         $register('core');
         $t = $template();
@@ -329,17 +344,10 @@ switch ($case) {
         $result = ['t' => $template()->__(['t' => 'a string'])->draw('show'), 'plain' => $template()->draw('show')];
         // A variable named `vars` given to the constructor (or set in `vars` directly) is `$vars` in the template.
         $result['vars'] = (new \Idno\Core\Bonita\Templates(['vars' => 'a string']))->draw('show');
-        // Through __() a name that is a property of the object sets the property, not a variable: `vars` replaces the variable
-        // store (and the draw then fails in the rig's pedantic_mode, where the warning is an exception), `templateType` sets the
-        // type without the check setTemplateType() makes.
+        // Through __() every name is a variable, also one that is a property of the object (`vars`, `templateType`,
+        // `fallbackToDefault`): the object's own properties are changed by their methods only.
         $levels = ob_get_level();
-        $broken = $template()->__(['vars' => 'a string']);
-        try {
-            $broken->draw('show');
-            $result['varsThroughUnderscore'] = 'drawn';
-        } catch (\Throwable $e) {
-            $result['varsThroughUnderscore'] = [get_class($e), $e->getMessage()];
-        }
+        $result['varsThroughUnderscore'] = $template()->__(['vars' => 'a string'])->draw('show');
         $typed = $template()->__(['templateType' => 'no/such/type', 'a' => 1]);
         $result['templateType'] = [$typed->getTemplateType(), $typed->vars];
         try {

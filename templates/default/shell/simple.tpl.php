@@ -1,10 +1,5 @@
 <?php
 
-    header('Content-type: text/html');
-    header('Link: <' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'webmention/>; rel="http://webmention.org/"');
-    header('Link: <' . \Idno\Core\Idno::site()->config()->getDisplayURL() . 'webmention/>; rel="webmention"');
-    header("Access-Control-Allow-Origin: *");
-
 if (empty($vars['title'])) {
     if (!empty($vars['description'])) {
         $vars['title'] = implode(' ', array_slice(explode(' ', strip_tags($vars['description'])), 0, 10));

@@ -39,8 +39,8 @@ final class FrontController
             static function (): void {
                 header('Location: ./warmup/');
             },
-            302,
-            ['Location' => './warmup/']
+            status: 302,
+            headers: ['Location' => './warmup/']
         );
     }
 

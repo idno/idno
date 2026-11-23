@@ -148,6 +148,19 @@ final class TemplateContractTest extends TestCase
         $this->assertSame(['a' => [1, 2]], $result['copiesVars'], 'new Templates($template) copies the variables');
     }
 
+    public function testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties(): void
+    {
+        $result = $this->runCase('underscore-underscore-never-sets-the-objects-own-properties');
+
+        $this->assertSame('default', $result['type'], 'a variable named templateType is a variable, not the template type');
+        $this->assertTrue($result['fallback'], 'nor does fallbackToDefault turn the fallback off');
+        $this->assertTrue($result['varsIsAnArray'], 'nor does vars replace the variables');
+        $this->assertSame('rss', $result['templateTypeVariable']);
+        $this->assertSame(1, $result['varsVariable']);
+        $this->assertFalse($result['fallbackVariable']);
+        $this->assertSame('core:default/only-core|', $result['drawn'], 'the draw still finds a default template');
+    }
+
     public function testChildDrawSeesParentVarsAndThisAndT(): void
     {
         $result = $this->runCase('child-draw-sees-parent-vars-and-this-and-t');
@@ -312,8 +325,8 @@ final class TemplateContractTest extends TestCase
     }
 
     /**
-     * What a variable named `t`, `vars` or `this` does today. `vars` and `templateType` given to `__()` set the object's own
-     * properties of those names (the magic setter is for names that are not properties).
+     * What a variable named `t`, `vars` or `this` does today. Given to `__()`, `vars` and `templateType` are variables like any
+     * other (they never set the object's own properties of those names).
      */
     public function testVariablesNamedTVarsAndThis(): void
     {
@@ -322,9 +335,8 @@ final class TemplateContractTest extends TestCase
         $this->assertSame('t=object vars=array|', $result['plain']);
         $this->assertSame('t=string vars=array|', $result['t'], '`$t` is the variable: the template object is gone from that template');
         $this->assertSame('t=object vars=string|', $result['vars'], 'given to the constructor, `vars` is `$vars` in the template');
-        $this->assertSame('ErrorException', $result['varsThroughUnderscore'][0], 'through __() it replaces the store of variables, and the draw fails (in pedantic_mode)');
-        $this->assertStringStartsWith('PHP [2] foreach() argument must be of type array|object, string given', $result['varsThroughUnderscore'][1]);
-        $this->assertSame(['no/such/type', ['a' => 1]], $result['templateType'], '`templateType` through __() sets the type with no check, and is no variable');
+        $this->assertSame('t=object vars=string|', $result['varsThroughUnderscore'], 'through __() it is the variable `$vars`, as given to the constructor');
+        $this->assertSame(['default', ['templateType' => 'no/such/type', 'a' => 1]], $result['templateType'], '`templateType` through __() is a variable and does not set the type');
         $this->assertSame(['Error', 'Cannot re-assign $this'], $result['this'], 'a variable named `this` is an Error');
         $this->assertSame(0, $result['levelsLeaked'], 'that Error is thrown before the output buffer is started');
     }

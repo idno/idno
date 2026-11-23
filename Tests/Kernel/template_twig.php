@@ -259,7 +259,8 @@ switch ($case) {
             $found[] = substr($file->getPathname(), strlen($cacheDir) + 1);
         }
         $environment = Idno::container()->get('idno.test.twig');
-        $cache = $environment->getCache(true);
+        // the environment's cache is Idno\Templating\TolerantTwigCache: its directory is where a key's file is, two levels up
+        $cache = dirname($environment->getCache(false)->generateKey('default/x.html.twig', 'Cls'), 2);
         $result = ['cacheDir' => $cacheDir, 'configured' => $cache, 'filesAreUnderIt' => $found !== [] && count(array_filter($found, static fn (string $f): bool => str_starts_with($f, 'twig/') && str_ends_with($f, '.php'))) === count($found)];
         break;
 

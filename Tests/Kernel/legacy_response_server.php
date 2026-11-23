@@ -27,7 +27,7 @@ $response = match ($_GET['scenario'] ?? 'plain') {
     'plain' => new LegacyResponse(static function (): void {
         header('X-Legacy: 1');
         echo 'legacy body';
-    }, 500, ['X-Symfony' => '1', 'Cache-Control' => 'private']),
+    }, status: 500, headers: ['X-Symfony' => '1', 'Cache-Control' => 'private']),
     'status' => new LegacyResponse(static function (): void {
         http_response_code(418);
         echo 'teapot';

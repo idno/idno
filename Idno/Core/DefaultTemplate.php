@@ -191,8 +191,37 @@ namespace Idno\Core {
             // End session BEFORE we output any data
             session_write_close();
 
+            $this->sendShellHeaders();
+
             return parent::drawPage($echo, $shell);
 
+        }
+
+        /**
+         * Sends the headers every page of the default type has: what the `shell/headers` template sent, before no template sent a
+         * header. `shell/headers` is still drawn by the shells, as a place a plugin can extend (an extension may call `header()`),
+         * and has no file of its own. Another template type has the headers of its own shell.
+         */
+        function sendShellHeaders()
+        {
+            if (strtolower((string) $this->getTemplateType()) === 'default') {
+                header('Content-type: text/html');
+                header('Access-Control-Allow-Origin: *');
+            }
+        }
+
+        /**
+         * Sends the headers of the simple shell (`shell/simple`: the onboarding pages and registration), which the shell sent
+         * itself before no template sent a header: the HTML type, the webmention endpoint twice (the two `rel` values) and
+         * the cross-origin header. The page that draws the simple shell calls this first.
+         */
+        function sendSimpleShellHeaders()
+        {
+            $url = \Idno\Core\Idno::site()->config()->getDisplayURL();
+            header('Content-type: text/html');
+            header('Link: <' . $url . 'webmention/>; rel="http://webmention.org/"');
+            header('Link: <' . $url . 'webmention/>; rel="webmention"');
+            header('Access-Control-Allow-Origin: *');
         }
 
         /**
@@ -204,11 +233,22 @@ namespace Idno\Core {
          */
         function drawSyndication($content_type, $posse_links = [])
         {
-            return $this->__(
-                array('services'     => \Idno\Core\Idno::site()->syndication()->getServices($content_type),
+            $variables = array('services'     => \Idno\Core\Idno::site()->syndication()->getServices($content_type),
                                    'content_type' => $content_type,
-                'posseLinks'   => $posse_links)
-            )->draw('content/syndication');
+                'posseLinks'   => $posse_links);
+            // Published on the page's template object on purpose: these three keys are part of the page's JSON output, not a side effect of drawing
+            foreach ($variables as $name => $value) {
+                $this->vars[$name] = $value;
+            }
+            // and the draw itself is on a copy, so nothing else of it stays on the site's template object. The template
+            // replaces `services` with the details it draws (on the object it draws on): that is the value the JSON shows.
+            $copy   = clone $this;
+            $output = $copy->__($variables)->draw('content/syndication');
+            if (array_key_exists('services', $copy->vars)) {
+                $this->vars['services'] = $copy->vars['services'];
+            }
+
+            return $output;
         }
 
         /**
@@ -232,7 +272,11 @@ namespace Idno\Core {
             if ($offset == 0 && $count < $items_per_page) {
                 return '';
             } else {
-                return $this->__(array_merge(array('count' => $count, 'offset' => $offset, 'items_per_page' => $items_per_page), $vars))->draw('shell/pagination');
+                $variables = array_merge(array('count' => $count, 'offset' => $offset, 'items_per_page' => $items_per_page), $vars);
+                // Published on the page's template object on purpose: `items_per_page` is part of the page's JSON output, not a side effect of drawing
+                $this->vars['items_per_page'] = $variables['items_per_page'];
+                // and the draw itself is on a copy, so nothing else of it stays on the site's template object
+                return (clone $this)->__($variables)->draw('shell/pagination');
             }
 
         }

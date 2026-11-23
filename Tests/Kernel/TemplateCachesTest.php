@@ -36,6 +36,25 @@ final class TemplateCachesTest extends PrivateSiteTestCase
         $this->assertDirectoryExists($purifierDirectory, 'the purifier\'s cache is in the kernel\'s cache directory');
     }
 
+    public function testThePurifierCacheIsWrittenInTheKernelCacheDirectory(): void
+    {
+        $cookie = $this->registerUser('writer');
+        $permalink = $this->publishStatus($cookie, '<p onclick="x()">A <b>purified</b> post</p>');
+        $this->assertSame(200, $this->site()->request('GET', substr($permalink, strlen($this->baseUrl())))->status, $this->serverLog());
+
+        $directory = $this->runInSite('return \Idno\Core\Idno::container()->get("kernel")->getCacheDir() . "/htmlpurifier";');
+        $this->assertIsString($directory);
+        $serialised = [];
+        if (is_dir($directory)) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if ($file->isFile() && str_ends_with($file->getFilename(), '.ser')) {
+                    $serialised[] = $file->getPathname();
+                }
+            }
+        }
+        $this->assertNotSame([], $serialised, 'a serialised definition was written in the kernel\'s cache directory');
+    }
+
     public function testTwigsCompiledTemplatesGoToTheKernelCacheDirectory(): void
     {
         $result = $this->runInSite('
@@ -43,13 +62,15 @@ final class TemplateCachesTest extends PrivateSiteTestCase
             $kernel = $container->get("kernel");
             $twig = $container->get("idno.test.twig");
             return [
-                "twig" => $twig->getCache(true),
+                "cacheClass" => get_class($twig->getCache(false)),
+                "twig" => $twig->getCache(false)->generateKey("a/b.html.twig", "Cls"),
                 "cacheDir" => $kernel->getCacheDir(),
                 "upload" => rtrim((string) \Idno\Core\Idno::site()->config()->uploadpath, "/"),
             ];
         ');
         $this->assertIsArray($result);
-        $this->assertSame($result['cacheDir'] . '/twig', $result['twig'], 'the compiled templates are in the kernel\'s cache directory, trusted as the compiled container is');
+        $this->assertSame(\Idno\Templating\TolerantTwigCache::class, $result['cacheClass']);
+        $this->assertStringStartsWith($result['cacheDir'] . '/twig/', $result['twig'], 'the compiled templates are in the kernel\'s cache directory, trusted as the compiled container is');
         $this->assertFalse(str_starts_with($result['twig'], $result['upload'] . '/'), 'and not in the upload path');
         $this->assertFalse(str_starts_with($result['twig'], sys_get_temp_dir() . '/') && !str_starts_with($result['cacheDir'], sys_get_temp_dir() . '/'), 'nor a shared temporary directory');
     }

@@ -34,6 +34,10 @@ final class TemplateLinkersTest extends TestCase
             'a comment' => ['<!-- http://x/p #tag @someone -->'],
             'a tag that is never closed' => ['<img alt="http://x/p #tag @someone'],
             'an attribute with a greater-than sign' => ['<p title="a > http://x/p #tag">t</p>'],
+            'a quote inside an unquoted attribute value' => ['<p x=a\'b y="c\' > http://x/onerror=alert(1)//">t</p>'],
+            'a quote after an equals sign and white space' => ['<p x= \'a > http://x/p #tag @someone\' y= "b > http://x/q">t</p>'],
+            'a script that only mentions a longer end tag' => ['<script>a=\'</scriptx>http://x/p #tag @someone\'</script>'],
+            'a style that only mentions a longer end tag' => ['<style>a { content: "</styled> http://x/p #tag"; }</style>'],
         ];
     }
 

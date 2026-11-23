@@ -17,6 +17,7 @@ namespace Idno\Pages\Onboarding {
             $user = \Idno\Core\Idno::site()->session()->currentUser();
 
             $t = \Idno\Core\Idno::site()->template();
+            $t->sendSimpleShellHeaders();
             echo $t->__(
                 array(
 

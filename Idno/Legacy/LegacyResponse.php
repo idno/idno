@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno\Legacy;
 
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -17,6 +18,24 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 final class LegacyResponse extends StreamedResponse
 {
+    /**
+     * @param array<string, string|list<string>> $headers
+     *
+     * The request, with the stack, is what a Twig template's `current_url()`, `current_path()` and `referrer()` read: it is
+     * put on the stack while the legacy code runs (Symfony takes it off again when the kernel has returned the response,
+     * which is before this one is sent).
+     */
+    public function __construct(
+        callable $callback,
+        private readonly ?RequestStack $stack = null,
+        private readonly ?Request $request = null,
+        int $status = 200,
+        array $headers = [],
+    )
+    {
+        parent::__construct($callback, $status, $headers);
+    }
+
     /**
      * Sends nothing: legacy code calls header() and http_response_code() itself.
      */
@@ -32,6 +51,23 @@ final class LegacyResponse extends StreamedResponse
     public function prepare(Request $request): static
     {
         return $this;
+    }
+
+    /**
+     * Runs the callback with the request on the stack, and takes it off again also when the callback throws (a page that
+     * exits skips that, and the process ends then).
+     */
+    public function sendContent(): static
+    {
+        if ($this->stack === null || $this->request === null) {
+            return parent::sendContent();
+        }
+        $this->stack->push($this->request);
+        try {
+            return parent::sendContent();
+        } finally {
+            $this->stack->pop();
+        }
     }
 
     /**

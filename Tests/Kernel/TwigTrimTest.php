@@ -161,6 +161,38 @@ final class TwigTrimTest extends TestCase
     /**
      * @dataProvider kernels
      */
+    public function testTheHttpKernelExtensionIsGone(string $environment): void
+    {
+        $kernel = $this->kernel($environment);
+        $application = new Application($kernel);
+        $application->setAutoExit(false);
+        $tester = new ApplicationTester($application);
+        $this->assertSame(0, $tester->run(['command' => 'debug:twig', '--format' => 'json'], ['capture_stderr_separately' => true]), $tester->getErrorOutput());
+        $functions = array_keys(json_decode($tester->getDisplay(), true)['functions']);
+
+        foreach (['render', 'render_esi', 'render_hinclude', 'controller', 'fragment_uri'] as $name) {
+            $this->assertNotContains($name, $functions, $name . '() would draw another request\'s page into a template');
+        }
+        $this->assertContains('path', $functions, 'routing\'s path() stays');
+        $this->assertStringNotContainsString('Symfony\\Bridge\\Twig\\Extension\\HttpKernelExtension', $this->compiledContainer($kernel));
+    }
+
+    /**
+     * @dataProvider kernels
+     */
+    public function testTheCompiledTemplateCacheIsTheTolerantOneAndTheBundlesWarmerIsGone(string $environment): void
+    {
+        $kernel = $this->kernel($environment);
+        $source = $this->compiledContainer($kernel);
+
+        $this->assertStringContainsString('TolerantTwigCache', $source);
+        $this->assertStringContainsString('TwigCacheWarmer', $source);
+        $this->assertStringNotContainsString('TwigBundle\\CacheWarmer\\TemplateCacheWarmer', $source);
+    }
+
+    /**
+     * @dataProvider kernels
+     */
     public function testNoMailListenerIsRegistered(string $environment): void
     {
         $dispatcher = $this->kernel($environment)->getContainer()->get('event_dispatcher');

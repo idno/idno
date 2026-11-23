@@ -184,7 +184,8 @@ namespace Idno\Core\Templating {
         /**
          * Applies a function to the TEXT of a piece of HTML and leaves the rest as it is: the inside of a tag (an attribute value
          * can hold an address, a hashtag or a mention that is not to be linked, and a link made there would end the attribute), a
-         * comment, an element that already is a link (<a>), and the contents of <script>, <style> and <textarea>. Plain text
+         * comment, an element that already is a link (<a>), and the contents of <script>, <style> and <textarea>. A quote starts a
+         * quoted attribute value only straight after an equals sign (and white space), as in HTML. Plain text
          * (no tags) is all text. Markup that is cut short (a tag that is never closed) is left from there on.
          *
          * @param  string   $html
@@ -210,7 +211,7 @@ namespace Idno\Core\Templating {
                     $end     = $end === false ? $length : $end + 3;
                     $result .= substr($html, $pos, $end - $pos);
                     $start   = $pos = $end;
-                } else if (preg_match('/\G<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:"[^"]*"|\'[^\']*\'|[^>"\'])*)>/', $html, $tag, 0, $pos)) {
+                } else if (preg_match('/\G<(\/?)([a-zA-Z][a-zA-Z0-9:-]*)((?:=\s*"[^"]*"|=\s*\'[^\']*\'|=(?!\s*["\'])|[^>=])*+)>/', $html, $tag, 0, $pos)) {
                     $flush($pos);
                     $name    = strtolower($tag[2]);
                     $result .= $tag[0];
@@ -219,8 +220,8 @@ namespace Idno\Core\Templating {
                         $links = $tag[1] == '/' ? max(0, $links - 1) : $links + 1;
                     } else if ($tag[1] == '' && in_array($name, ['script', 'style', 'textarea'])) {
                         // Its contents are not text: leave everything up to its end tag
-                        $end     = stripos($html, '</' . $name, $pos);
-                        $end     = $end === false ? $length : $end;
+                        // (an end tag is the element's name followed by white space, a slash or a greater-than sign)
+                        $end     = preg_match('/<\/' . $name . '(?=[\s\/>])/i', $html, $close, PREG_OFFSET_CAPTURE, $pos) ? $close[0][1] : $length;
                         $result .= substr($html, $pos, $end - $pos);
                         $start   = $pos = $end;
                     }

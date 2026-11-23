@@ -81,7 +81,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry, the renderer, the Twig loader and the Twig engine are wired below.
-        'Templating' => ['CascadeTwigLoader.php', 'LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
+        'Templating' => ['CascadeTwigLoader.php', 'LocatedTemplate.php', 'OutputBuffers.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -379,6 +379,19 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->public()
         ->tag('twig.loader', ['priority' => 100]);
+    // Twig's file cache in the kernel's cache directory that goes on in memory, with one warning, when it cannot write there
+    // (Idno\Kernel\TwigTrimPass makes it the environment's cache). The warmer compiles every Twig template for
+    // `cache:warmup` and takes the place of the bundle's.
+    $services->set(\Idno\Templating\TolerantTwigCache::class)
+        ->args(['%kernel.cache_dir%/twig', service_closure(\Psr\Log\LoggerInterface::class)])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->set(\Idno\Templating\TwigCacheWarmer::class)
+        ->args(['%kernel.project_dir%', service(\Idno\Templating\TemplateCascade::class), service_closure('twig')])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->tag('kernel.cache_warmer');
     $services->set(\Idno\Legacy\LegacyTemplateTranslation::class)
         ->args([service_closure(\Idno\Core\Language::class)])
         ->autowire(false)
