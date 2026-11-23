@@ -1,0 +1,66 @@
+{{ idno_include('entity/edit/header') -}}
+<form action="{{ object.getURL() }}" method="post" enctype="multipart/form-data">
+
+    <div class="row">
+
+        <div class="col-md-8 col-md-offset-2 edit-pane">
+
+                <h4>
+
+                {% if not entity_value(object, '_id') %}{{ t('New Audio') }}{% else %}{{ t('Edit Audio') }}{% endif %}
+                </h4>
+
+            <p>
+
+                <label>
+                    <span class="btn btn-primary btn-file">
+                        <i class="fa fa-play-circle"></i> <span id="media-filename">{% if not entity_value(object, '_id') %}{{ t('Upload audio') }}{% else %}{{ t('Choose different audio') }}{% endif %}</span>
+                        {{ idno_include('forms/input/file', {
+                            name: 'media',
+                            id: 'media',
+                            accept: 'audio/*;video/*;capture=microphone',
+                            onchange: "$('#media-filename').html($(this).val())",
+                            class: 'col-md-9'
+                        }) }}
+                    </span>
+                </label>
+
+            </p>
+            <div class="content-form">
+                <label for="title">
+                    {{ t('Title') }}</label>
+                    {{ idno_include('forms/input/input', {
+                        name: 'title',
+                        id: 'title',
+                        placeholder: t('Give it a title'),
+                        value: entity_value(object, 'title'),
+                        class: 'form-control'
+                    }) }}
+
+            </div>
+
+            {{ idno_include('forms/input/richtext', {
+                name: 'body',
+                value: entity_value(object, 'body'),
+                wordcount: false,
+                height: 250,
+                class: 'wysiwyg-short',
+                placeholder: t('Describe your audio'),
+                label: t('Description')
+            }) }}
+            {{ idno_include('entity/tags/input') }}
+            {{ idno_include('content/syndication', {services: syndication_services('media'), content_type: 'media', posseLinks: object.getPosseLinks()}) }}
+            {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+            {{ idno_include('content/extra') }}
+            {{ idno_include('content/access') }}
+            <p class="button-bar ">
+                {{ form_token('/media/edit') }}
+                <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();" />
+                <input type="submit" class="btn btn-primary" value="{{ t('Publish') }}" />
+
+            </p>
+        </div>
+
+    </div>
+</form>
+{{ idno_include('entity/edit/footer') }}

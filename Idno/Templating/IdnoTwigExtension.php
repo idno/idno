@@ -156,6 +156,9 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('form_urlencode', self::formUrlencode(...)),
             new TwigFilter('identity_url', self::identityUrl(...)),
             new TwigFilter('to_int', self::toInt(...)),
+            new TwigFilter('to_timestamp', self::toTimestamp(...)),
+            new TwigFilter('ucfirst', self::ucfirst(...)),
+            new TwigFilter('decode_entities', self::decodeEntities(...)),
             new TwigFilter('display_url', $this->displayUrl(...)),
             new TwigFilter('fix_url', $this->fixUrl(...)),
             new TwigFilter('proxied_image', $this->proxiedImage(...)),
@@ -961,6 +964,38 @@ final class IdnoTwigExtension extends AbstractExtension
     public static function toInt(mixed $value): int
     {
         return is_scalar($value) || $value === null ? (int) $value : 0;
+    }
+
+    /**
+     * The Unix time a date the author typed means, as `strtotime()` reads it in the site's time zone; 0 for text that is not a date
+     * (the old templates passed `false` on to `date()`, which treated it as 0).
+     */
+    public static function toTimestamp(mixed $value): int
+    {
+        if (!is_scalar($value) && $value !== null && !$value instanceof \Stringable) {
+            return 0;
+        }
+        $time = strtotime(self::text($value));
+
+        return $time === false ? 0 : $time;
+    }
+
+    /**
+     * The text with its first byte upper-cased when that is an ASCII letter, as PHP's `ucfirst()` does (Twig's `capitalize` lower-cases the rest).
+     */
+    public static function ucfirst(mixed $value): string
+    {
+        return is_scalar($value) || $value === null || $value instanceof \Stringable ? ucfirst(self::text($value)) : '';
+    }
+
+    /**
+     * The text with its HTML character references (named, decimal and hexadecimal, quotes included) read as the characters they stand for,
+     * as `html_entity_decode()` reads them. It is plain text, so Twig escapes it as it does any string: a note stored with `&amp;` or `&lt;` in it is
+     * shown as the characters it was written with.
+     */
+    public static function decodeEntities(mixed $value): string
+    {
+        return is_scalar($value) || $value === null || $value instanceof \Stringable ? html_entity_decode(self::text($value)) : '';
     }
 
     /**

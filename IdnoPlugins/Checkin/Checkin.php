@@ -78,11 +78,20 @@ namespace IdnoPlugins\Checkin {
             return false; // Otherwise we add some jitter.
         }
 
+        /**
+         * Whether a stored latitude or longitude is a number: one that is not (a value a member or another site sent with
+         * the check-in) is no coordinate, so that the map script of the post can only ever hold a number.
+         */
+        private static function isCoordinate($value) : bool
+        {
+            return !empty($value) && is_numeric($value) && is_finite((float) $value);
+        }
+
         function lat() : ?float
         {
             if (!empty($this->_lat)) return $this->_lat;
 
-            if (!empty($this->lat)) {
+            if (self::isCoordinate($this->lat)) {
 
                 if ($this->canSeePreciseLocation()) {
                     $this->_lat = $this->lat;
@@ -102,7 +111,7 @@ namespace IdnoPlugins\Checkin {
 
             if (!empty($this->_lng)) return $this->_lng;
 
-            if (!empty($this->long)) {
+            if (self::isCoordinate($this->long)) {
 
                 if ($this->canSeePreciseLocation()) {
                     $this->_lng = $this->long;

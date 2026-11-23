@@ -339,7 +339,7 @@ Private
         function filePickerDialog(callback, value, meta) {
             tinymce.activeEditor.windowManager.open({
                 title: 'File Manager',
-                url: '{site}/filepicker/?type=' + meta.filetype,
+                url: '{site}\/filepicker\/\u003Ftype\u003D' + meta.filetype,
                 width: 650,
                 height: 550
             }, {
@@ -387,7 +387,7 @@ Private
         });
     });
 </script>
-<div id="submit-spinner" class="spinner wysiwyg" style="display:none">
+<div id="submit-spinner" class="spinner " style="display:none">
 <div class="bounce1"></div>
 <div class="bounce2"></div>
 <div class="bounce3"></div>

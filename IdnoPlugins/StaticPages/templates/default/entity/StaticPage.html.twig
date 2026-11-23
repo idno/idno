@@ -1,0 +1,32 @@
+<div>
+    {% if object.canEdit() %}
+            <div class="row edit-page-actions">
+                <div class="col-md-12">
+        <span class="page-action">
+            <a href="{{ site_url('admin/staticpages/') }}"><i class="fa fa-cog"></i>{{ t('Manage pages') }}</a>
+        </span>
+                            <span class="page-action">
+                                <a href="{{ object.getEditURL() }}" class="edit"><i class="fa fa-pencil"></i>{{ t('Edit') }}</a>
+                            </span>
+                            <span class="page-action">
+                        {% set delete_label %}<i class="fa fa-trash-o"></i>{{ t('Delete') }}{% endset %}{{ action_link(object.getDeleteURL(), delete_label, [], {'method': 'POST', 'class': 'edit', 'confirm': true, 'confirm-text': t('Are you sure you want to permanently delete this entry?')}) }}
+                            </span>
+                </div>
+            </div>
+
+
+    {% endif %}
+
+    {% if not entity_value(object, 'hide_title') %}
+            <h1 class="p-name">{{ object.getTitle() }}</h1>
+    {% endif %}
+
+    {% if entity_value(object, 'forward_url') %}
+            <h2>
+            {{ t('You are seeing this page because you are a site administrator. Other users will be forwarded to') }} <a href="{{ entity_value(object, 'forward_url')|http_url }}">{{ entity_value(object, 'forward_url') }}</a>.
+            </h2>
+    {% endif %}
+
+    {{ entity_value(object, 'body')|sanitize_html|parse_hashtags|parse_urls|autop }}
+
+</div>

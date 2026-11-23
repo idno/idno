@@ -1,0 +1,70 @@
+{{ idno_include('entity/edit/header') -}}
+<form action="{{ object.getURL() }}" method="post">
+
+    <div class="row">
+
+        <div class="col-md-8 col-md-offset-2 edit-pane">
+        
+            <h4>
+                                {% if not entity_value(object, '_id') %}{{ t('New RSVP') }}{% else %}{{ t('Edit RSVP') }}{% endif %}
+            </h4>
+
+
+            <div class="content-form">
+                <label id="in-reply-to" for="reply">
+                    {{ t("What's the URL of the event you're responding to?") }}</label>
+                    {# One address; an RSVP saved by an earlier version can hold a list #}{% set event_addresses = object.getEventURLs() %}{% set event_address = url ? url : (event_addresses ? event_addresses|first : '') %}
+                    {{ idno_include('forms/input/url', {
+                            name: 'inreplyto',
+                            id: 'reply',
+                            placeholder: t('The website address of the event'),
+                            value: event_address,
+                    class: 'form-control'}) }}
+            </div>
+            <div class="content-form">
+                <label for="rsvp">
+                    {{ t('Are you going?') }}</label>
+                    
+                    {{ idno_include('forms/input/select', {
+                            name: 'rsvp',
+                            id: 'rsvp',
+                            placeholder: t('Are you going?'),
+                            value: entity_value(object, 'rsvp'),
+                            class: 'form-control',
+                            options: {
+                                'yes': t('Yes: I am attending this event'),
+                                'no': t('No: I am not attending this event'),
+                                'maybe': t('Maybe: I might attend this event')
+                            },
+                            required: true
+                    }) }}
+            </div>
+
+            <div class="content-form">
+                <label for="body">
+                    {{ t('Any comments?') }}</label>
+                    {{ idno_include('forms/input/longtext', {
+                        name: 'body',
+                        id: 'body',
+                        placeholder: t('Say something here...'),
+                        height: 126,
+                        value: entity_value(object, 'body'),
+                    class: 'form-control event'}) }}
+            </div>
+            {{ idno_include('entity/tags/input') }}
+            {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+            {{ idno_include('content/syndication', {services: syndication_services('note'), content_type: 'note', posseLinks: object.getPosseLinks()}) }}
+            {{ idno_include('content/extra') }}
+            {{ idno_include('content/access') }}
+            <p class="button-bar">
+                {{ form_token('/status/edit') }}
+                <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();" />
+                <input type="submit" class="btn btn-primary" value="{{ t('Save') }}" />
+
+            </p>
+
+        </div>
+
+    </div>
+</form>
+{{ idno_include('entity/edit/footer') }}

@@ -1213,6 +1213,313 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * A bookmark's address is the member's word (or another site's, through Micropub): only an http or https address is a link
+     * target, and nothing that is not is printed in `href`.
+     */
+    public function testABookmarkWithAJavascriptAddressRendersNoLink(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/like/x') . <<<'PHP'
+        $like = new \IdnoPlugins\Like\Like();
+        $like->setOwner(\Idno\Entities\User::getByHandle('ada'));
+        $like->body = 'javascript:alert(1)';
+        $like->pageTitle = 'Click <b>me</b>';
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $like])->draw('entity/Like');
+        PHP);
+
+        $this->assertDoesNotMatchRegularExpression('/href="\s*javascript:/i', $drawn);
+        $this->assertStringContainsString('href=""', $drawn, 'the refused address is printed as nothing');
+        $this->assertStringContainsString('>Click me</a>', $drawn, 'the title is text: its tags are removed');
+        $this->assertStringNotContainsString('<b>me</b>', $drawn);
+    }
+
+    /**
+     * The name of a place is typed by the member (or sent by a client): it is printed as text in the check-in's data and in its title,
+     * and it is never a script.
+     */
+    public function testACheckinPlaceNameIsEscaped(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/checkin/x') . <<<'PHP'
+        $checkin = new \IdnoPlugins\Checkin\Checkin();
+        $checkin->setOwner(\Idno\Entities\User::getByHandle('ada'));
+        $checkin->placename = '"><script>alert(1)</script>';
+        $checkin->lat = 51.5;
+        $checkin->long = -0.12;
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $checkin])->draw('entity/Checkin');
+        PHP);
+
+        $this->assertStringNotContainsString('<script>alert(1)', $drawn);
+        $this->assertStringContainsString('<data class="p-name" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"></data>', $drawn);
+        $this->assertSame(1, substr_count($drawn, '<script>'), 'the one script is the map\'s own');
+    }
+
+    /**
+     * The text of an RSVP is purified and linked, its answer is text, the address of the event it answers is never printed as a link
+     * target unless it is http or https, and the form that edits it offers only such an address.
+     */
+    public function testAnRsvpBodyAndEventAddressAreSanitized(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/rsvp/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $rsvp = new \IdnoPlugins\Event\RSVP();
+        $rsvp->setOwner($ada);
+        $rsvp->rsvp = 'yes" onmouseover="alert(1)';
+        $rsvp->body = 'See you <script>alert(2)</script> <a href="javascript:alert(3)">x</a> <img src="https://example.com/x.png" onerror="alert(4)"> https://ok.example/e #fun';
+        $rsvp->inreplyto = ['javascript:alert(5)', 'https://ok.example/event'];
+        $site = \Idno\Core\Idno::site();
+        $site->session()->logUserOn($ada);
+        $template = clone $site->template();
+        $shown = $template->__(['object' => $rsvp])->draw('entity/RSVP');
+        $template = clone $site->template();
+        $edit = $template->__(['object' => $rsvp])->draw('entity/RSVP/edit');
+
+        return [$shown, $edit];
+        PHP);
+
+        $this->assertIsArray($out);
+        [$shown, $edit] = $out;
+        $this->assertStringNotContainsString('<script', $shown);
+        $this->assertStringNotContainsString('onerror', $shown);
+        $this->assertStringNotContainsString('javascript:', $shown);
+        $this->assertStringContainsString('value="yes&quot; onmouseover=&quot;alert(1)"', $shown, 'the answer is text');
+        $this->assertStringContainsString('href="https://ok.example/e"', $shown);
+        $this->assertStringNotContainsString('value="javascript:', $edit, 'the form offers no address that is not http');
+        $this->assertStringContainsString('value="https://ok.example/event"', $edit);
+    }
+
+    /**
+     * The coordinates of a check-in are put into the post's map script as numbers: a stored latitude that is script (a member or a
+     * remote client can send one) leaves nothing in the script but an empty place, and a real one is written as the number it is.
+     */
+    public function testACheckinsCoordinatesAreNumbersInTheMapScript(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/checkin/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $template = clone \Idno\Core\Idno::site()->template();
+        $drawn = [];
+        foreach ([['1);alert(1', '2);alert(2'], [51.5072, -0.1276], ['40.7', '-74'], ['1e999', 'NAN'], [['1'], '3']] as [$lat, $long]) {
+            $checkin = new \IdnoPlugins\Checkin\Checkin();
+            $checkin->setOwner($ada);
+            $checkin->placename = 'Odd';
+            $checkin->lat = $lat;
+            $checkin->long = $long;
+            $drawn[] = $template->__(['object' => $checkin])->draw('entity/Checkin');
+        }
+
+        return $drawn;
+        PHP);
+
+        $this->assertIsArray($out);
+        $views = [];
+        foreach ($out as $html) {
+            $this->assertStringNotContainsString('alert(', $html);
+            $this->assertSame(1, preg_match('/setView\(\[([^\]]*)\], 16\)/', (string) $html, $view));
+            $views[] = $view[1];
+            $this->assertMatchesRegularExpression('/^(-?[0-9]+(\.[0-9]+)?)?, (-?[0-9]+(\.[0-9]+)?)?$/', $view[1], 'a number or nothing, each');
+            $this->assertSame(1, preg_match('/L\.marker\(\[([^\]]*)\]\)/', (string) $html, $marker));
+            $this->assertSame($view[1], $marker[1]);
+        }
+        $this->assertSame([', ', '51.5072, -0.1276', '40.7, -74', ', ', ', 3'], $views);
+    }
+
+    /**
+     * What the plugins' posts write inside a script, they write for a script: the address of an audio file (with an apostrophe in it),
+     * the id of the check-in's map, the address a bookmark form asks for a title and the one the page editor's file picker opens.
+     */
+    public function testThePluginPostsScriptsWriteTheirValuesForAScript(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $site = \Idno\Core\Idno::site();
+        $site->session()->logUserOn($ada);
+        $template = clone $site->template();
+        $media = new \IdnoPlugins\Media\Media();
+        $media->setOwner($ada);
+        $media->title = 'Sound';
+        $media->media_type = 'audio/mpeg';
+        $media->attachments = [['url' => "https://x.example/a'b.mp3", 'filename' => 'a', '_id' => 'a', 'mime-type' => 'audio/mpeg'], ['url' => 'javascript:alert(1)', 'filename' => 'b', '_id' => 'b', 'mime-type' => 'audio/mpeg']];
+        $checkin = new \IdnoPlugins\Checkin\Checkin();
+        $checkin->setOwner($ada);
+        $checkin->_id = "00000000-0000-4000-8000-000000000021";
+        $checkin->placename = 'Place';
+        $checkin->lat = 1.5;
+        $checkin->long = 2.5;
+        $checkin->body = '<p>Fine</p><script>alert(7)</script>';
+        $like = new \IdnoPlugins\Like\Like();
+        $like->setOwner($ada);
+        $page = new \IdnoPlugins\StaticPages\StaticPage();
+        $page->setOwner($ada);
+
+        return [
+            $template->__(['object' => $media])->draw('entity/Media'),
+            $template->__(['object' => $checkin])->draw('entity/Checkin'),
+            $template->__(['object' => $like])->draw('entity/Like/edit'),
+            $template->__(['object' => $page, 'category' => 'No Category'])->draw('entity/StaticPage/edit'),
+            $site->config()->getDisplayURL(),
+        ];
+        PHP);
+
+        $this->assertIsArray($out);
+        [$media, $checkin, $like, $page, $site] = $out;
+        $this->assertStringContainsString(".load('https\\u003A\\/\\/x.example\\/a\\u0027b.mp3');", $media, 'the apostrophe cannot end the string');
+        $this->assertStringContainsString(".load('');", $media, 'an address that is not http is no address');
+        $this->assertStringNotContainsString('javascript:', $media);
+        $this->assertStringContainsString("L.map('map_00000000\\u002D0000\\u002D4000\\u002D8000\\u002D000000000021'", $checkin);
+        $this->assertStringNotContainsString('alert(7)', $checkin, 'the body of the check-in is purified');
+        $written = strtr($site, [':' => '\\u003A', '/' => '\\/']);
+        $this->assertStringContainsString("fetch('" . $written . "like\\/callback\\/\\u003Furl\\u003D'", $like);
+        $this->assertStringContainsString("url: '" . $written . "filepicker\\/\\u003Ftype\\u003D'", $page);
+    }
+
+    /**
+     * A static page's title is text, its forward address is a link only when it is http or https (and is text either way), and its
+     * body is purified: the old template printed all three as they were stored.
+     */
+    public function testAStaticPagesTitleForwardAddressAndBodyAreEscaped(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/pages/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $site = \Idno\Core\Idno::site();
+        $site->session()->logUserOn($ada);
+        $page = new \IdnoPlugins\StaticPages\StaticPage();
+        $page->setOwner($ada);
+        $page->title = '<script>alert(1)</script>';
+        $page->body = '<p>Body</p><script>alert(2)</script>';
+        $page->forward_url = 'https://example.org/"><script>alert(3)</script>';
+        $template = clone $site->template();
+        $first = $template->__(['object' => $page])->draw('entity/StaticPage');
+        $page->forward_url = 'javascript:alert(4)';
+        $template = clone $site->template();
+
+        return $first . $template->__(['object' => $page])->draw('entity/StaticPage');
+        PHP);
+
+        $this->assertStringNotContainsString('<script', $drawn);
+        $this->assertStringContainsString('<h1 class="p-name">&lt;script&gt;alert(1)&lt;/script&gt;</h1>', $drawn);
+        $this->assertDoesNotMatchRegularExpression('/href="\s*javascript:/i', $drawn);
+        $this->assertStringContainsString('javascript:alert(4)</a>', $drawn, 'the address is shown as text');
+        $this->assertStringContainsString('<p>Body</p>', $drawn);
+    }
+
+    /**
+     * The address of a picture is printed only when it is http or https: the old template turned the scheme of any address into
+     * http (`javascript:alert(1)` became `http:alert(1)`).
+     */
+    public function testAPhotosPictureAddressThatIsNotHttpIsNotPrinted(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/photo/x') . <<<'PHP'
+        $photo = new \IdnoPlugins\Photo\Photo();
+        $photo->setOwner(\Idno\Entities\User::getByHandle('ada'));
+        $photo->title = 'Hostile';
+        $photo->attachments = [['url' => 'javascript:alert(1)', 'filename' => 'x.png', '_id' => 'x'], ['url' => 'https://img.example/p.png?a=1&b=2', 'filename' => 'p.png', '_id' => 'p']];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $photo])->draw('entity/Photo');
+        PHP);
+
+        $this->assertStringNotContainsString('alert(1)', $drawn);
+        $this->assertStringContainsString('src="" class="u-photo"', $drawn);
+        $this->assertStringContainsString('src="https://img.example/p.png?a=1&amp;b=2" class="u-photo"', $drawn);
+    }
+
+    /**
+     * What a check-in or an event stores as its body is purified when it is drawn too, not only when it was saved (a Micropub client or
+     * an import can store a body that the form would have cleaned): a script and a handler are gone, the markup that is allowed stays.
+     */
+    public function testAStoredBodyIsPurifiedWhenItIsDrawn(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/event/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $body = '<p>Fine <b>bold</b></p><script>alert(1)</script><img src="x" onerror="alert(2)">';
+        $drawn = [];
+        foreach ([\IdnoPlugins\Checkin\Checkin::class => 'entity/Checkin', \IdnoPlugins\Event\Event::class => 'entity/Event'] as $class => $name) {
+            $post = new $class();
+            $post->setOwner($ada);
+            $post->body = $body;
+            $post->lat = 1.5;
+            $post->long = 2.5;
+            $template = clone \Idno\Core\Idno::site()->template();
+            $drawn[] = $template->__(['object' => $post, 'feed_view' => true])->draw($name);
+        }
+
+        return $drawn;
+        PHP);
+
+        $this->assertIsArray($out);
+        foreach ($out as $html) {
+            $this->assertStringNotContainsString('<script>alert', (string) $html);
+            $this->assertStringNotContainsString('onerror', (string) $html);
+            $this->assertStringContainsString('<b>bold</b>', (string) $html);
+        }
+    }
+
+    /**
+     * A control of a compose or edit form is drawn with the attributes it was given and no others: the old forms passed the attributes
+     * of an earlier control (its class, whether it was required, its placeholder, its id) to the hidden field that follows and to the
+     * spinner of the footer, through the page's template object.
+     */
+    public function testALaterControlOfAnEditFormDoesNotInheritTheAttributesOfAnEarlierOne(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/status/edit') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $site = \Idno\Core\Idno::site();
+        $site->session()->logUserOn($ada);
+        $drawn = [];
+        foreach ([
+            'entity/Status/edit' => \IdnoPlugins\Status\Status::class,
+            'entity/Entry/edit' => \IdnoPlugins\Text\Entry::class,
+            'entity/Photo/edit' => \IdnoPlugins\Photo\Photo::class,
+            'entity/Media/edit' => \IdnoPlugins\Media\Media::class,
+            'entity/Like/edit' => \IdnoPlugins\Like\Like::class,
+            'entity/Checkin/edit' => \IdnoPlugins\Checkin\Checkin::class,
+            'entity/Event/edit' => \IdnoPlugins\Event\Event::class,
+            'entity/RSVP/edit' => \IdnoPlugins\Event\RSVP::class,
+            'entity/StaticPage/edit' => \IdnoPlugins\StaticPages\StaticPage::class,
+        ] as $name => $class) {
+            $template = clone $site->template();
+            $drawn[$name] = $template->__(['object' => new $class(), 'category' => 'No Category'])->draw($name);
+        }
+
+        return $drawn;
+        PHP);
+
+        $this->assertIsArray($out);
+        $this->assertCount(9, $out);
+        foreach ($out as $name => $html) {
+            // A static page's form has none: it forwards nowhere
+            if ($name !== 'entity/StaticPage/edit') {
+                $this->assertSame(1, preg_match('/<input\s+type="hidden" name="forward-to" id="([^"]*)"([^>]*)>/s', (string) $html, $hidden), $name . ' has the hidden field');
+                $this->assertMatchesRegularExpression('/^forward-to_\d+$/', $hidden[1], $name);
+                $this->assertSame('class="idno-input input-hidden"', trim((string) preg_replace('/\s+/', ' ', explode('value=', $hidden[2])[0])), $name . ': the hidden field has its own class and nothing else');
+            }
+            if (preg_match('/<div id="submit-spinner" class="([^"]*)"/', (string) $html, $spinner) === 1) {
+                $this->assertSame('spinner ', $spinner[1], $name . ': the spinner has its own class');
+            }
+        }
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

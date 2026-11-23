@@ -169,7 +169,7 @@ Ada Admin
                             cursorColor: '#aaa',
                             height: 100
                         });
-                        wavesurfer{1}.load('{site}/file/00000000000040008000000000000022/sound.mp3');
+                        wavesurfer{1}.load('{site}\/file\/00000000000040008000000000000022\/sound.mp3');
                         $('#waveform{1}').click(function() {
                             wavesurfer{1}.play();
                         });
@@ -256,7 +256,7 @@ Ada Admin
 </div>
 <script>
             (function () {
-                var map = L.map('map_00000000-0000-4000-8000-000000000021', {
+                var map = L.map('map_00000000\u002D0000\u002D4000\u002D8000\u002D000000000021', {
                     touchZoom: false,
                     scrollWheelZoom: false
                 }).setView([51.5072, -0.1276], 16);

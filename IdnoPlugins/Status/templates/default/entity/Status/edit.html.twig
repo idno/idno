@@ -1,0 +1,93 @@
+{{ idno_include('entity/edit/header') -}}
+{# The address this post replies to: one given on the way in (a share) wins over what is stored; one address or a list #}{% set replies = [] %}{% set stored_replies = entity_value(object, 'inreplyto') %}{% if url %}{% set replies = [url] %}{% elseif stored_replies %}{% set replies = stored_replies is iterable ? stored_replies : [stored_replies] %}{% endif %}
+<form action="{{ object.getURL() }}" method="post">
+
+    <div class="idno-editor">
+
+            <h4 class="idno-editor-heading">
+                {% if not entity_value(object, '_id') %}{{ t('New Status Update') }}{% else %}{{ t('Edit Status Update') }}{% endif %}{% if entity_value(object, '_id') and object.getPublishStatus() == 'draft' %} <span class="idno-badge-draft">{{ t('Draft') }}</span>{% endif %}
+            </h4>
+
+            {% set post_body = body ?: entity_value(object, 'body') %}
+            <div class="idno-form-field" style="position:relative">
+                {{ idno_include('forms/input/longtext', {
+                    unique_id: 'body',
+                    name: 'body',
+                    placeholder: t('Share a quick note or comment. You can use links and #hashtags.'),
+                    required: true,
+                    class: 'idno-textarea ctrl-enter-submit',
+                    value: post_body,
+                    height: 140
+                }) }}
+                <span id="counter" style="display:none;position:absolute;bottom:0.5rem;right:0.75rem;font-size:var(--font-size-sm);color:var(--color-text-muted);pointer-events:none">
+                    <span class="count"></span>
+                </span>
+            </div>
+            {{ idno_include('entity/tags/input') }}{# Set focus so you can start typing straight away (on shares) #}{% if input('share_url') %}
+            <script>
+                document.addEventListener('DOMContentLoaded', function(){
+                    var el = document.getElementById('body');
+                    if (el) {
+                        var len = el.value.length;
+                        el.focus();
+                        el.setSelectionRange(len, len);
+                    }
+                });
+            </script>
+            {% endif %}
+
+            <div class="idno-reply-section" x-data="{ open: {{ replies is not empty ? 'true' : 'false' }} }">
+                <button type="button" class="idno-reply-toggle" x-on:click="open = !open" :class="{ 'active': open }">
+                    {{ idno_include('shell/icon', {icon: 'reply', class: 'idno-reply-toggle-icon'}) }}
+                    {{ t('Reply to a site') }}
+                </button>
+                <div class="idno-reply-input" x-show="open" x-cloak>
+                    <input type="url" name="inreplyto[]"
+                           placeholder="{{ t("Add the URL that you're replying to") }}"
+                           class="idno-input"
+                           value="{{ replies is not empty ? (replies[0] ?? '') : '' }}"/>
+                </div>
+            </div>
+
+            {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+            {{ idno_include('content/syndication', {services: syndication_services('note'), content_type: 'note', posseLinks: object.getPosseLinks()}) }}
+            {{ idno_include('content/extra') }}
+            {{ idno_include('content/access') }}
+
+            {{ form_token('/status/edit') }}
+
+            <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                    {{ t('Publish') }}
+                </button>
+                <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                    {{ t('Save as Draft') }}
+                </button>
+                <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="idno-btn idno-btn-ghost">
+                    {{ t('Cancel') }}
+                </a>
+            </div>
+
+    </div>
+</form>
+<script src="{{ static_url('IdnoPlugins/Status/external/brevity-js/brevity.js') }}"></script>
+<script>
+    function count_chars() {
+        var bodyEl = document.getElementById('body');
+        var counterEl = document.getElementById('counter');
+        if (!bodyEl || !counterEl || typeof brevity === 'undefined') return;
+        var len = brevity.tweetLength(bodyEl.value);
+        if (len > 0) {
+            counterEl.style.display = '';
+        }
+        counterEl.querySelector('.count').textContent = len;
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var bodyEl = document.getElementById('body');
+        if (bodyEl) {
+            bodyEl.addEventListener('keyup', count_chars);
+        }
+    });
+</script>
+{{ idno_include('entity/edit/footer') }}

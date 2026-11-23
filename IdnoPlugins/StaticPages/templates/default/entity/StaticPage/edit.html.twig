@@ -1,0 +1,154 @@
+{{ idno_include('entity/edit/header') -}}
+{% set page_title = object.getTitle() %}{% set forward_address = entity_value(object, 'forward_url') %}{% set hide_title_value = entity_value(object, 'hide_title') %}{% if page_title == 'Untitled' %}{% set page_title = '' %}{% endif %}
+    <form action="{{ object.getURL() }}" method="post">
+
+        <div class="row">
+
+            <div class="col-md-8 col-md-offset-2 edit-pane">
+
+
+                {% if not entity_value(object, '_id') %}
+                        <h4>{{ t('New Page') }}</h4>
+                {% else %}
+                        <h4>{{ t('Edit Page') }}</h4>
+                {% endif %}
+                <p>
+                    <label for="title">
+                        {{ t('Title') }}</label>
+                    <input type="text" name="title" id="title" placeholder="{{ t('Give it a title') }}"
+                           value="{{ page_title }}" class="form-control"/>
+                </p>
+
+
+
+                {{ idno_include('forms/input/richtext', {
+                    name: 'body',
+                    value: entity_value(object, 'body'),
+                    wordcount: false,
+                    class: 'wysiwyg',
+                    height: 500,
+                    placeholder: t('Share something brilliant...'),
+                    label: t('Body')
+                }) }}
+
+                {{ idno_include('entity/tags/input') }}
+
+                <div class="page-cat">
+                    <label>
+                        {{ t('Parent category') }}</label><br>
+                    <select name="category" class="selectpicker">
+                        <option {% if category == 'No Category' %}selected{% endif %}>{{ t('No Category') }}
+                        </option>
+                        {% if categories %}{% for page_category in categories %}
+                                    <option {% if page_category == category %}selected{% endif %}>{{ page_category }}</option>
+                        {% endfor %}{% endif %}
+                    </select>
+
+                </div>
+
+                <p id="show-options">
+                    <small><a href="#" onclick="$('#moreoptions').toggle(); $('#show-options').hide(); return false;"><i
+                                class="fa fa-plus"></i>
+                            {{ t('Show advanced options') }}</a></small>
+                </p>
+                <div id="moreoptions" {% if not hide_title_value and not forward_address %}
+                        style="display:none"
+                    {% endif %}>
+
+                    <p id="hide-options">
+                        <small><a href="#"
+                                  onclick="$('#moreoptions').toggle(); $('#show-options').show(); return false;"><i
+                                    class="fa fa-minus"></i>
+                                {{ t('Hide advanced options') }}</a></small>
+                    </p>
+
+                    <div>
+                        <p>
+                            <label for="forward_url">
+                                {{ t('Forward URL') }}</label>
+                            <input type="text" name="forward_url" id="forward_url"
+                                   placeholder="{{ t('Website to forward users to') }}"
+                                   value="{{ forward_address }}" class="form-control"/>
+                            <small>{{ t('Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content.') }}</small>
+                        </p>
+                    </div>
+                    <p style="margin-bottom: 20px">
+                        <strong>{{ t('Show the page title as a heading?') }}</strong><br>
+                        <label class="radio-inline">
+                            <input type="radio" name="hide_title" id="title-heading" value="0" {% if not hide_title_value %}checked{% endif %}>
+                            Yes
+                        </label>
+                        <label class="radio-inline">
+                            <input type="radio" name="hide_title" id="title-heading" value="1" {% if hide_title_value %}checked{% endif %}>
+                            No
+                        </label>
+                    </p>
+
+                    <div class="page-cat">
+
+
+                    </div>
+
+                </div>
+
+                {{ idno_include('content/extra') }}
+                {{ idno_include('content/access') }}
+
+                <p class="button-bar " style="text-align: right">
+                    {{ form_token('/staticpages/edit') }}
+                    <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();"/>
+                    <input type="submit" class="btn btn-primary" value="{{ t('Publish') }}"/>
+                </p>
+
+            </div>
+
+        </div>
+    </form>
+    <script>
+
+        /*function postForm() {
+         var content = $('textarea[name="body"]').html($('#body').html());
+         console.log(content);
+         return content;
+         }*/
+
+        $(document).ready(function () {
+            makeRich('#body');
+        })
+        ;
+
+        function makeRich(container) {
+            $(container).tinymce({
+                selector: 'textarea',
+                theme: 'modern',
+                skin: 'light',
+                statusbar: false,
+                menubar: false,
+                toolbar: 'styleselect | bold italic | link image | blockquote bullist numlist | alignleft aligncenter alignright | code',
+                plugins: 'code link image autoresize',
+                relative_urls: false,
+                remove_script_host: false,
+                convert_urls: true,
+                file_picker_callback: function (callback, value, meta) {
+                    filePickerDialog(callback, value, meta);
+                }
+            });
+        }
+
+        function filePickerDialog(callback, value, meta) {
+            tinymce.activeEditor.windowManager.open({
+                title: 'File Manager',
+                url: '{{ site_url('filepicker/?type=')|e('js') }}' + meta.filetype,
+                width: 650,
+                height: 550
+            }, {
+                oninsert: function (url) {
+                    callback(url);
+                }
+            });
+        }
+
+        //$('.selectpicker').selectpicker();
+
+    </script>
+{{ idno_include('entity/edit/footer') }}

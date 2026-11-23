@@ -1,0 +1,42 @@
+{% set post_tags = entity_value(object, 'tags') %}{% set map_id = entity_value(object, '_id') %}
+
+<div>
+
+    <h2 class="idno-entry-title p-name">
+        {% if not feed_view %}
+            <a href="{{ object.getURL() }}">{{ object.getTitle() }}</a>
+        {% endif %}
+    </h2>
+
+    <span class="p-location u-checkin h-card">
+        <data class="p-name" value="{{ entity_value(object, 'placename') }}"></data>
+        <data class="p-latitude" value="{{ object.lat() }}"></data>
+        <data class="p-longitude" value="{{ object.long() }}"></data>
+    </span>
+
+    {% if not feed_view %}
+        <div id="map_{{ map_id }}" style="height: 250px; border-radius: var(--radius-sm); overflow: hidden; margin: var(--spacing-gap) 0;"></div>
+    {% endif %}
+
+    <div class="idno-entry-body e-content entry-content">
+        {% if entity_value(object, 'body') %}{{ entity_value(object, 'body')|sanitize_html|parse_hashtags|parse_urls|autop }}{% endif %}{% if post_tags %}{{ idno_include('forms/output/tags', {tags: post_tags}) }}{% endif %}
+    </div>
+
+</div>
+{% if not feed_view %}
+        <script>
+            (function () {
+                var map = L.map('map_{{ map_id|e('js') }}', {
+                    touchZoom: false,
+                    scrollWheelZoom: false
+                }).setView([{{ object.lat() }}, {{ object.long() }}], 16);
+                var layer = new L.StamenTileLayer("toner-lite");
+                map.addLayer(layer);
+                var marker = L.marker([{{ object.lat() }}, {{ object.long() }}]);
+                marker.addTo(map);
+                map.scrollWheelZoom.disable();
+                map.touchZoom.disable();
+                map.doubleClickZoom.disable();
+            })();
+        </script>
+{% endif %}

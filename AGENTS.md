@@ -2766,7 +2766,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `path_matches`, `is_permalink`, `is_xhr`, `is_secure`, `page_assets`, `page_owner`, `page_icon`, `leaked_user`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
     `current_url_without_var`, `body_classes`, `form_token`, `action_link`, `form_data`, `shell_variables`, `pagination`, `syndication_services`,
     `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`, `twitter_account_of`, `is_user`;
-    filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `identity_url`, `to_int`, `display_url`, `fix_url`, `proxied_image`,
+    filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `identity_url`, `to_int`, `to_timestamp`, `ucfirst`, `decode_entities`, `display_url`, `fix_url`, `proxied_image`,
     `sample_text`. `current_url()`, `current_path()` and `referrer()` come from the `RequestStack` ('' with no request: a legacy page's request is
     not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
     value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
@@ -2907,6 +2907,25 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `classic` copies of the originals of `admin/dependencies` and `admin/statistics/report` exist (their `__()` calls left `version`, `extension`, `report` and
     `level` on the page's template), and the other bodies a JSON request can reach left nothing (`NonHtmlReachTest`). `BuiltInLookTest::testAdminMenuItemsOfBundledPluginsAreListed` pins the
     plugin entries of the menu and their order.
+  - The bundled plugins' entity templates (`IdnoPlugins/{Status,Text,Photo,Media,Like,Checkin,Event,StaticPages}/templates/default/entity/**`: how a post is
+    drawn in a stream and on its page, its icon, its compose and edit form) have Twig files beside their `.tpl.php` originals. A post's text is read as the
+    original read it: a note's is decoded and escaped (`decode_entities`, which is `html_entity_decode()`; the old `htmlentities(html_entity_decode())`) then
+    linked and followed by its tags, with `nl2br`; an article's goes through `forms/output/richtext`; the stored HTML of a photo, media, event, check-in, RSVP
+    and static page goes through `sanitize_html` first (the originals printed it as stored, relying on the save to clean it, so a body a client stored without
+    cleaning is no longer markup) and then the linkers in the order the original used. An address from a post (a picture, an audio file, a bookmark, a static page's
+    forward address) is printed through `http_url`; what a script holds (the player's file address, the map's element id, the addresses of the bookmark form and of
+    the page editor's file picker) is written with `e('js')`; a check-in's coordinates are `?float` (`Checkin::lat()` and `long()` answer null for a stored value that
+    is not a finite number, which used to be a `TypeError`), so the map script can only hold numbers. An event's times are read with `to_timestamp` (an
+    undated or unreadable time is 0, as `date()` took `false`) and written with Twig's `date`; an RSVP's answer is `ucfirst`. The forms draw each control with
+    exactly the attributes it is given: the originals left the attributes of an earlier control on the page's template, so the hidden `forward-to` field and the
+    footer's spinner inherited an editor's class, `required`, placeholder or id (`TemplateEscapingTest::testALaterControlOfAnEditFormDoesNotInheritTheAttributesOfAnEarlierOne`).
+    The differences are in `port-exceptions.php`, each pinned by a `TemplateEscapingTest` method
+    (`testThePluginPostsScriptsWriteTheirValuesForAScript`, `testAStaticPagesTitleForwardAddressAndBodyAreEscaped`, `testAPhotosPictureAddressThatIsNotHttpIsNotPrinted`,
+    `testAStoredBodyIsPurifiedWhenItIsDrawn`; `testABookmarkWithAJavascriptAddressRendersNoLink`, `testACheckinPlaceNameIsEscaped`, `testAnRsvpBodyAndEventAddressAreSanitized`
+    and `testACheckinsCoordinatesAreNumbersInTheMapScript` pin what the originals already did). The golden pages that hold such a post or form changed in exactly those
+    lines. `forms/output/richtext` no longer ends with a newline (the original did not), so a post's text is followed directly by what the template closes. The
+    media, RSVP and static page edit templates have `classic` copies of their originals, because their `__()` calls (and `drawSyndication()`) leave variables on the
+    page's template that the JSON of the edit page prints; the icons leave nothing (`NonHtmlReachTest`, which now also looks at the plugins' entity templates).
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

@@ -1,0 +1,15 @@
+{% set rel = is_permalink() ? 'rel="in-reply-to" class="u-in-reply-to"' : '' %}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}
+
+{% if not feed_view %}
+        <h2 class="idno-entry-title p-name"><a
+                href="{{ object.getDisplayURL() }}">{{ object.getTitle()|striptags }}</a>
+        </h2>
+
+        {% if object.getShortDescription() %}
+        <h3 class="idno-entry-subtitle p-summary"><a
+                href="{{ object.getDisplayURL() }}">{{ entity_value(object, 'short_description')|striptags }}</a>
+        </h3>
+        {% endif %}
+{% endif %}
+<div class="idno-entry-body e-content entry-content">
+{{ idno_include('forms/output/richtext', {value: entity_value(object, 'body'), rel: rel}) }}{{ tags_html }}</div>

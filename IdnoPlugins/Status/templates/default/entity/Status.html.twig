@@ -1,0 +1,4 @@
+{# A note: its text is read as plain text (character references decoded, then escaped), linked, and followed by its tags; line breaks become <br />. #}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}{% set note_text %}{{ entity_value(object, 'body')|decode_entities }}{{ tags_html }}{% endset %}<div class="idno-entry-content">
+<p class="p-name e-content entry-content">{{ note_text|parse_users(entity_value(object, 'inreplyto'))|parse_hashtags|parse_urls|nl2br }}</p>
+</div>
+{% if entity_value(object, 'link_preview') and not entity_value(object, 'hide_preview') %}{{ idno_include('entity/LinkPreviewCard', {preview: entity_value(object, 'link_preview')}) }}{% elseif '<img' not in ((entity_value(object, 'body') ?? '')|lower) %}{{ idno_include('entity/content/embed') }}{% endif %}

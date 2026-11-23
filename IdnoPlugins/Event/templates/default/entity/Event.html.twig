@@ -1,0 +1,44 @@
+{% if not feed_view %}
+    <h2 class="idno-entry-title p-name">
+        <a href="{{ object.getDisplayURL() }}"
+           class="u-url">{{ object.getTitle()|striptags }}</a>
+    </h2>
+{% endif %}
+{% set starttime = entity_value(object, 'starttime')|to_timestamp %}{% set endtime = entity_value(object, 'endtime')|to_timestamp %}{% set timeformat = 'l, jS F Y h:i A' %}
+<div class="idno-event-details">
+    {% if entity_value(object, 'summary') %}
+    <p class="p-summary">
+        <strong>{{ entity_value(object, 'summary')|striptags }}</strong>
+    </p>
+    {% endif %}
+    {% if entity_value(object, 'location') %}
+    <p>
+        {{ t('Location') }}: <span
+                class="p-location">{{ entity_value(object, 'location')|striptags }}</span>
+    </p>
+    {% endif %}
+    {% if entity_value(object, 'starttime') %}
+        <p>
+            <time class="dt-start"
+                  datetime="{{ starttime|date('c') }}">{{ starttime|date(timeformat) }}</time>
+            {% if endtime and endtime < starttime + 86400 %}- <time class="dt-end"
+                  datetime="{{ endtime|date('c') }}">{{ endtime|date('h:i A') }}</time>{% endif %}
+        </p>
+    {% endif %}
+    {% if endtime and endtime >= starttime + 86400 %}
+        <p>
+        {{ t('Ends') }}:
+            <time class="dt-end"
+                  datetime="{{ endtime|date('c') }}">{{ endtime|date(timeformat) }}</time>
+        </p>
+    {% endif %}
+    {% if entity_value(object, 'timezone') %}
+    <p>
+        {{ t('Time Zone') }}:
+        {{ idno_include('forms/output/timezones', {value: entity_value(object, 'timezone')}) }}
+    </p>
+    {% endif %}
+</div>
+<div class="idno-entry-body e-content">
+    {{ entity_value(object, 'body')|sanitize_html|parse_urls|parse_hashtags|autop }}
+</div>

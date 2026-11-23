@@ -1,0 +1,98 @@
+{{ idno_include('entity/edit/header') -}}
+{% set title_value = entity_value(object, 'title') ?: '' %}{% set subtitle_value = entity_value(object, 'short_description') ?: '' %}{% set editor_id = 'body' ~ random(9999) %}{# The address this post replies to: one given on the way in (a share) wins over what is stored; one address or a list #}{% set replies = [] %}{% set stored_replies = entity_value(object, 'inreplyto') %}{% if url %}{% set replies = [url] %}{% elseif stored_replies %}{% set replies = stored_replies is iterable ? stored_replies : [stored_replies] %}{% endif %}
+    <form action="{{ object.getURL() }}" method="post">
+
+        <div class="idno-editor">
+
+                <h4 class="idno-editor-heading">
+                    {% if not entity_value(object, '_id') %}
+                        {{ t('New Post') }}
+                    {% else %}
+                        {{ t('Edit Post') }}
+                        {% if object.getPublishStatus() == 'draft' %}
+                            <span class="idno-badge-draft">{{ t('Draft') }}</span>
+                        {% endif %}
+                    {% endif %}
+                </h4>
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="title">{{ t('Title') }}</label>
+                    {{ idno_include('forms/input/input', {name: 'title', placeholder: t('Give it a title'), id: 'title', value: title_value, required: true, class: 'idno-input idno-editor-title'}) }}
+                </div>
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="subtitle">{{ t('Subtitle') }}</label>
+                    {{ idno_include('forms/input/input', {name: 'subtitle', placeholder: t('Optional sub title for this post'), id: 'subtitle', value: subtitle_value, class: 'idno-input idno-editor-subtitle'}) }}
+                </div>
+
+                {{ idno_include('forms/input/richtext', {
+                    name: 'body',
+                    unique_id: editor_id,
+                    value: entity_value(object, 'body') ?: '',
+                    object: object,
+                    wordcount: true,
+                    required: true
+                }) }}
+
+                {{ idno_include('entity/tags/input') }}
+                {{ idno_include('content/unfurl') }}
+
+                {# Set focus so you can start typing straight away (on shares) #}{% if input('share_url') %}
+                    <script>
+                        document.addEventListener('DOMContentLoaded', function(){
+                            var el = document.getElementById('title');
+                            if (el) {
+                                var len = el.value.length;
+                                el.focus();
+                                el.setSelectionRange(len, len);
+                            }
+                        });
+                    </script>
+                {% endif %}
+
+                <div class="idno-reply-section" x-data="{ open: {{ replies is not empty ? 'true' : 'false' }} }">
+                    <button type="button" class="idno-reply-toggle" x-on:click="open = !open" :class="{ 'active': open }">
+                        {{ idno_include('shell/icon', {icon: 'reply', class: 'idno-reply-toggle-icon'}) }}
+                        {{ t('Reply to a site') }}
+                    </button>
+                    <div class="idno-reply-input" x-show="open" x-cloak>
+                        <input type="url" name="inreplyto[]"
+                               placeholder="{{ t("Add the URL that you're replying to") }}"
+                               class="idno-input"
+                               value="{{ replies is not empty ? (replies[0] ?? '') : '' }}"/>
+                    </div>
+                </div>
+
+                {{ idno_include('content/syndication', {services: syndication_services('article'), content_type: 'article', posseLinks: object.getPosseLinks()}) }}
+                {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+
+                {{ idno_include('content/extra') }}
+                {{ idno_include('content/access') }}
+
+                {{ form_token('/entry/edit') }}
+
+                <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                    <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                        {{ t('Publish') }}
+                    </button>
+                    <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                        {{ t('Save as Draft') }}
+                    </button>
+                    <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="idno-btn idno-btn-ghost">
+                        {{ t('Cancel') }}
+                    </a>
+                </div>
+
+        </div>
+    </form>
+{{ idno_include('entity/edit/footer') }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Autosave the title & body
+        if (typeof autoSave === 'function') {
+            autoSave('entry', ['title', 'body'], {
+              'body': '#{{ editor_id|e('js') }}',
+            });
+        }
+    });
+</script>

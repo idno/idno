@@ -1,0 +1,9 @@
+{% if entity_value(object, 'likeof') %}{% set link_class = 'u-like-of' %}{% elseif entity_value(object, 'repostof') %}{% set link_class = 'u-repost-of' %}{% else %}{% set link_class = 'u-bookmark-of' %}{% endif %}{% set link_text = entity_value(object, 'pageTitle') ?: entity_value(object, 'body') %}
+<div class="idno-bookmark">
+    {% if not feed_view %}
+            <h2 class="idno-entry-title">{% if link_class == 'u-like-of' %}<i class="fa fa-thumbs-up"></i> {% elseif link_class == 'u-repost-of' %}<i class="fa fa-retweet"></i> {% else %}<i class="fa fa-bookmark"></i> {% endif %}<a href="{{ entity_value(object, 'body')|http_url }}" class="{{ link_class }} p-name"
+                target="_blank">{{ link_text|striptags|parse_urls }}</a>
+            </h2>
+    {% endif %}{% if entity_value(object, 'description') %}<div class="idno-entry-body e-content">{{ idno_include('forms/output/richtext', {value: entity_value(object, 'description'), object: object}) }}</div>{% endif %}{% if entity_value(object, 'tags') %}{{ idno_include('forms/output/tags', {tags: entity_value(object, 'tags')}) }}{% endif %}
+</div>
+{{ idno_include('entity/content/embed') }}

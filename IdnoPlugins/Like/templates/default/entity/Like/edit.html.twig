@@ -1,0 +1,112 @@
+{{ idno_include('entity/edit/header') -}}
+<form action="{{ object.getURL() }}" method="post">
+
+    <div class="idno-editor">
+        <h4 class="idno-editor-heading">
+            {% if not entity_value(object, '_id') %}{{ t('New Bookmark') }}{% else %}{{ t('Edit Bookmark') }}{% if object.getPublishStatus() == 'draft' %} <span class="idno-badge-draft">{{ t('Draft') }}</span>{% endif %}{% endif %}
+        </h4>
+
+        <div class="idno-form-field">
+            <label class="idno-label" for="body">
+                {{ t('Link Address') }}</label>
+            {% set address = url ? url : entity_value(object, 'body') %}{{ idno_include('forms/input/url', {
+                name: 'body',
+                id: 'body',
+                placeholder: 'https://....',
+                class: 'idno-input bookmark-url',
+                value: address,
+                required: true
+            }) }}
+        </div>
+
+        {% if not url %}
+            <div class="bookmark-spinner-container">
+                {{ idno_include('entity/edit/spinner', {class: 'bookmark-title-spinner'}) }}
+            </div>
+        {% endif %}
+
+        <div class="bookmark-title-container idno-form-field"
+                {% if not entity_value(object, 'pageTitle') and not entity_value(object, '_id') and (not url and not entity_value(object, 'body')) %}style="display:none"{% endif %}>
+            <label class="idno-label" for="title">
+                {{ t('Title') }}
+            </label>
+            {{ idno_include('forms/input/input', {
+                name: 'title',
+                id: 'title',
+                placeholder: t('Page name'),
+                value: entity_value(object, 'pageTitle'),
+                required: true,
+                class: 'idno-input bookmark-title'
+            }) }}
+        </div>
+
+        {{ idno_include('content/unfurl') }}
+
+        {{ idno_include('forms/input/richtext', {
+            name: 'description',
+            value: entity_value(object, 'description'),
+            wordcount: false,
+            class: 'wysiwyg-short',
+            height: 250,
+            placeholder: t('Add notes to your bookmark...'),
+            label: t('Description')
+        }) }}
+
+        {{ idno_include('entity/tags/input') }}
+        {{ idno_include('content/syndication', {services: syndication_services('bookmark'), content_type: 'bookmark', posseLinks: object.getPosseLinks()}) }}
+        {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+        {{ idno_include('content/extra') }}
+        {{ idno_include('content/access') }}
+
+        {{ form_token('/like/edit') }}
+
+        <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+            <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                {{ t('Publish') }}
+            </button>
+            <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                {{ t('Save as Draft') }}
+            </button>
+            <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="idno-btn idno-btn-ghost">
+                {{ t('Cancel') }}
+            </a>
+        </div>
+
+    </div>
+
+</form>
+{{ idno_include('entity/edit/footer') }}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var urlInput = document.querySelector('.bookmark-url');
+        if (urlInput) {
+            urlInput.addEventListener('change', function () {
+                if (urlInput.value) {
+                    var spinner = document.querySelector('.bookmark-title-spinner');
+                    if (spinner) spinner.style.display = '';
+                    fetch('{{ site_url('like/callback/?url=')|e('js') }}' + encodeURIComponent(urlInput.value))
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            var title = document.querySelector('.bookmark-title');
+                            if (title) title.value = data.value;
+                            var spinnerContainer = document.querySelector('.bookmark-spinner-container');
+                            if (spinnerContainer) spinnerContainer.innerHTML = ' ';
+                            var titleContainer = document.querySelector('.bookmark-title-container');
+                            if (titleContainer) titleContainer.style.display = '';
+                            var unfurl = urlInput.closest('form').querySelector('.unfurl');
+                            if (unfurl && typeof Unfurl !== 'undefined') {
+                                unfurl.setAttribute('data-url', urlInput.value);
+                                Unfurl.unfurl(unfurl);
+                            }
+                        })
+                        .catch(function() {
+                            var spinnerContainer = document.querySelector('.bookmark-spinner-container');
+                            if (spinnerContainer) spinnerContainer.innerHTML = ' ';
+                            var titleContainer = document.querySelector('.bookmark-title-container');
+                            if (titleContainer) titleContainer.style.display = '';
+                        });
+                }
+            });
+        }
+    });
+</script>

@@ -1,0 +1,112 @@
+{{ idno_include('entity/edit/header') }}
+<form action="{{ object.getURL() }}" method="post">
+    <div class="idno-editor">
+        <h4 class="idno-editor-heading">
+            {% if not entity_value(object, '_id') %}{{ t('New Location') }}{% else %}{{ t('Edit Location') }}{% if object.getPublishStatus() == 'draft' %} <span class="idno-badge-draft">{{ t('Draft') }}</span>{% endif %}{% endif %}
+        </h4>
+
+        <div id="geoplaceholder">
+            <p style="text-align: center; color: var(--color-text-muted);">
+                {{ t('Hang tight ... searching for your location.') }}
+            </p>
+            <div class="geospinner">
+                <div class="rect1"></div>
+                <div class="rect2"></div>
+                <div class="rect3"></div>
+                <div class="rect4"></div>
+                <div class="rect5"></div>
+            </div>
+        </div>
+
+        <div id="geofields" class="map" style="display:none">
+            <div class="geolocation idno-form-field">
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="placename">
+                        {{ t('Location') }}
+                    </label>
+                    {{ idno_include('forms/input/input', {
+                        name: 'placename',
+                        id: 'placename',
+                        placeholder: t('Where are you?'),
+                        value: entity_value(object, 'placename'),
+                        class: 'idno-input'
+                    }) }}
+                    {{ idno_include('forms/input/hidden', {
+                        name: 'lat',
+                        id: 'lat',
+                        value: entity_value(object, 'lat')
+                    }) }}
+                    {{ idno_include('forms/input/hidden', {
+                        name: 'long',
+                        id: 'long',
+                        value: entity_value(object, 'long')
+                    }) }}
+                </div>
+
+                <div class="idno-form-field">
+                    <label class="idno-label" for="user_address">
+                        {{ t('Address') }}
+                        <small style="display:block;color:var(--color-text-muted)">{{ t("You can edit the address if it's wrong.") }}</small>
+                    </label>
+                    {{ idno_include('forms/input/input', {
+                        name: 'user_address',
+                        id: 'user_address',
+                        value: entity_value(object, 'address'),
+                        class: 'idno-input'
+                    }) }}
+                    {{ idno_include('forms/input/hidden', {
+                        name: 'address',
+                        id: 'address'
+                    }) }}
+                </div>
+
+                <div id="checkinMap" style="height: 250px; border-radius: var(--radius-sm); overflow: hidden;"></div>
+            </div>
+        </div>
+
+        {{ idno_include('forms/input/richtext', {
+            name: 'body',
+            value: entity_value(object, 'body'),
+            wordcount: false,
+            class: 'wysiwyg-short',
+            height: 100,
+            placeholder: '',
+            label: t('Description')
+        }) }}
+
+        <div class="idno-form-field">
+            <label class="idno-label" for="anonymity" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+                <input name="anonymity" type="checkbox"
+                       value="Yes" {% if entity_value(object, 'anonymity') and entity_value(object, 'anonymity') == 'Yes' %}checked{% endif %}
+                       title="{{ t('When selected, your precise location will only be shown to logged out users after 24 hours have passed') }}">
+                {{ t('Protect my location for 24 hours') }}
+            </label>
+        </div>
+
+        {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
+        {{ idno_include('entity/tags/input') }}
+        {{ idno_include('content/syndication', {services: syndication_services('place'), content_type: 'place', posseLinks: object.getPosseLinks()}) }}
+        {{ idno_include('content/extra') }}
+        {{ idno_include('content/access') }}
+
+        {{ form_token('/checkin/edit') }}
+
+        <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+            <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+                {{ t('Publish') }}
+            </button>
+            <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+                {{ t('Save as Draft') }}
+            </button>
+            <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="idno-btn idno-btn-ghost">
+                {{ t('Cancel') }}
+            </a>
+        </div>
+
+    </div>
+</form>
+
+{{ idno_include('entity/edit/footer') }}
+
+<script src="{{ static_url('IdnoPlugins/Checkin/checkin.min.js') }}"></script>

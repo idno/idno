@@ -223,8 +223,8 @@ placeholder="Page name"     value=""
 <textarea name="description" id="editor-{1}" style="display:none" ></textarea>
 </div>
 <input
-type="hidden" name="forward-to" id="forward-to_1"     class="idno-input wysiwyg-short"
-placeholder="Add notes to your bookmark..."     value="{site}/content/all/"
+type="hidden" name="forward-to" id="forward-to_1"     class="idno-input input-hidden"
+    value="{site}/content/all/"
     />
 <div class="access-control-block">
 <input type="hidden" name="access" id="access-control-id-acl-{id-1}" value="PUBLIC"/>
@@ -338,7 +338,7 @@ Cancel
                 if (urlInput.value) {
                     var spinner = document.querySelector('.bookmark-title-spinner');
                     if (spinner) spinner.style.display = '';
-                    fetch('{site}/like/callback/?url=' + encodeURIComponent(urlInput.value))
+                    fetch('{site}\/like\/callback\/\u003Furl\u003D' + encodeURIComponent(urlInput.value))
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             var title = document.querySelector('.bookmark-title');

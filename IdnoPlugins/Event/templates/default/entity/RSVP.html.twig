@@ -1,0 +1,2 @@
+{% set rel = is_permalink() ? 'rel="in-reply-to" class="u-in-reply-to"' : '' %}<p class="p-name e-content entry-content"><data class="p-rsvp" value="{{ entity_value(object, 'rsvp') }}"><strong>{{ entity_value(object, 'rsvp')|ucfirst }}:</strong> {{ entity_value(object, 'body')|sanitize_html|parse_hashtags|parse_urls(rel) }}</data></p>
+{{ idno_include('entity/content/embed') }}

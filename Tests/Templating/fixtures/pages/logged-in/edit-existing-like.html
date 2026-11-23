@@ -321,7 +321,7 @@ Cancel
         });
     });
 </script>
-<div id="submit-spinner" class="spinner wysiwyg-short" style="display:none">
+<div id="submit-spinner" class="spinner " style="display:none">
 <div class="bounce1"></div>
 <div class="bounce2"></div>
 <div class="bounce3"></div>
@@ -334,7 +334,7 @@ Cancel
                 if (urlInput.value) {
                     var spinner = document.querySelector('.bookmark-title-spinner');
                     if (spinner) spinner.style.display = '';
-                    fetch('{site}/like/callback/?url=' + encodeURIComponent(urlInput.value))
+                    fetch('{site}\/like\/callback\/\u003Furl\u003D' + encodeURIComponent(urlInput.value))
                         .then(function(r) { return r.json(); })
                         .then(function(data) {
                             var title = document.querySelector('.bookmark-title');

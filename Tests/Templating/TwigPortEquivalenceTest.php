@@ -203,6 +203,8 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawIdentityLinks();
         $this->drawIconLeakCases();
         $this->drawEntityCases();
+        $this->drawPluginPostCases();
+        $this->drawPluginEditCases();
         $this->drawAnnotationCases();
         $this->drawSyndicationCases();
         $this->drawProfileAndFollowingCases();
@@ -443,6 +445,263 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertStringContainsString('The item', (string) $out['feed item']);
         $this->assertStringContainsString('class="subscription"', str_replace('row subscription', 'subscription', (string) $out['subscription']));
         $this->assertStringContainsString('Cafe &quot;quoted&quot;', (string) $out['link preview, a card with a quote']);
+    }
+
+    /**
+     * How a post of each bundled content type is drawn in a stream and on its own page, with the branches the fixture posts do not
+     * reach: a note with entities, a reply address list, a link preview and an image; an article with and without a title; a photo
+     * with several pictures, none, thumbnails and a broken address; audio and video; bookmarks, likes and reposts (and a script address);
+     * a check-in with and without coordinates; an event with and without an end, one that ends the next day, and one that has no date; an
+     * RSVP of each kind; a static page seen by a visitor and by its owner, hidden title, forward address.
+     */
+    private function drawPluginPostCases(): void
+    {
+        $code = $this->siteDrawPrelude() . <<<'PHP'
+        $base = $site->config()->getURL();
+        $page = static function (bool $permalink) use ($site): void {
+            $page = new \Idno\Pages\Onboarding\Begin();
+            $property = new \ReflectionProperty(\Idno\Common\Page::class, 'isPermalinkPage');
+            $property->setValue($page, $permalink);
+            $site->setCurrentPage($page);
+        };
+        $post = static function (\Idno\Common\Entity $entity, array $fields) use ($ada): \Idno\Common\Entity {
+            foreach ($fields as $name => $value) {
+                $entity->$name = $value;
+            }
+            $entity->setOwner($ada);
+            $entity->created = 1773000000;
+
+            return $entity;
+        };
+        $each = static function (string $label, string $template, \Idno\Common\Entity $entity, array $extra = []) use (&$out, $draw, $page): void {
+            foreach ([['', false, false], [' on its page', true, false], [' in a feed', false, true]] as [$where, $permalink, $feed]) {
+                $page($permalink);
+                $out[$label . $where] = $draw($template, ['object' => $entity, 'feed_view' => $feed] + $extra);
+            }
+        };
+
+        // Notes
+        foreach ([
+            'a note' => ['body' => 'Hello world: a note with https://example.org/a?x=1&y=2 and #tagged text', 'tags' => '#one #two'],
+            'a note with entities and markup' => ['body' => "Tom &amp; Jerry &lt;b&gt;bold&lt;/b&gt; it's \"quoted\" <script>alert(1)</script>\nsecond line\r\nthird line"],
+            'a note with tag list' => ['body' => 'Tagged', 'tags' => ['alpha', 'beta gamma']],
+            'a note with one address to reply to' => ['body' => '@ada says hi to @bob@example.org', 'inreplyto' => 'https://elsewhere.example/post'],
+            'a note with addresses to reply to' => ['body' => 'Replying', 'inreplyto' => ['https://elsewhere.example/a', 'https://other.example/b']],
+            'a note with an image' => ['body' => 'See <img src="https://img.example/a.png"> here https://www.youtube.com/watch?v=abc'],
+            'a note with a video link' => ['body' => 'Watch https://www.youtube.com/watch?v=abc-1_ now'],
+            'a note with a link preview' => ['body' => 'A link https://a.example/p', 'link_preview' => ['url' => 'https://a.example/p', 'title' => 'The title', 'description' => 'The description', 'image' => 'https://a.example/i.png']],
+            'a note with a hidden link preview' => ['body' => 'A link https://a.example/p', 'link_preview' => ['url' => 'https://a.example/p', 'title' => 'The title'], 'hide_preview' => true],
+            'a note with nothing' => ['body' => ''],
+            'a note that is only a zero' => ['body' => '0'],
+        ] as $label => $fields) {
+            $each($label, 'entity/Status', $post(new \IdnoPlugins\Status\Status(), $fields));
+            $each('a reply: ' . $label, 'entity/Reply', $post(new \IdnoPlugins\Status\Reply(), $fields));
+        }
+        $out['the icons of a note and a reply'] = $draw('entity/Status/icon') . $draw('entity/Reply/icon');
+
+        // Articles
+        foreach ([
+            'an article' => ['title' => 'A "longer" article <b>about</b> templates', 'short_description' => 'The <i>subtitle</i> & more', 'body' => '<p>Templates draw pages. <strong>Hello</strong> #again https://example.org/x</p><script>alert(1)</script>', 'tags' => '#templates #idno'],
+            'an article with no title or subtitle' => ['body' => '<p>Only a body</p>'],
+            'an article with a script address' => ['title' => 'Links', 'body' => '<p><a href="javascript:alert(1)">x</a> <a href="https://example.org/ok">ok</a></p>'],
+        ] as $label => $fields) {
+            $each($label, 'entity/Entry', $post(new \IdnoPlugins\Text\Entry(), $fields));
+        }
+        $out['the icon of an article'] = $draw('entity/Entry/icon');
+
+        // Photos
+        $pictures = static function (int $count) use ($base): array {
+            $list = [];
+            for ($n = 1; $n <= $count; $n++) {
+                $list[] = ['url' => $base . 'file/0000000000004000800000000000' . sprintf('%04d', $n) . '/photo' . $n . '.png', 'filename' => 'photo' . $n . '.png', '_id' => '0000000000004000800000000000' . sprintf('%04d', $n), 'mime-type' => 'image/png', 'length' => 100];
+            }
+
+            return $list;
+        };
+        foreach ([
+            'a photo' => ['title' => 'A "fixture" photo', 'body' => 'A <b>caption</b> with https://example.org/c and #hash', 'attachments' => $pictures(1), 'tags' => '#snap'],
+            'a photo with seven pictures' => ['title' => 'Many', 'body' => 'Seven', 'attachments' => $pictures(7)],
+            'a photo with six pictures' => ['title' => 'Six', 'body' => 'Six', 'attachments' => $pictures(6)],
+            'a photo with five pictures' => ['title' => 'Five', 'body' => 'Five', 'attachments' => $pictures(5)],
+            'a photo with none' => ['title' => 'None', 'body' => 'No pictures'],
+            'a photo with no title' => ['body' => 'Untitled', 'attachments' => $pictures(2)],
+            'a photo called Untitled' => ['title' => 'Untitled', 'body' => 'Untitled', 'attachments' => $pictures(1)],
+            'a photo with thumbnails' => ['title' => 'Thumbs', 'body' => 'Thumbs', 'attachments' => $pictures(2), 'thumbs_large' => ['photo1.png' => ['url' => $base . 'file/thumb1/t1.png']], 'thumbnail_large' => $base . 'file/large/l.png', 'thumbnail' => $base . 'file/small/s.png'],
+            'a photo with a large thumbnail' => ['title' => 'Large', 'body' => 'Large', 'attachments' => $pictures(1), 'thumbnail_large' => $base . 'file/large/l.png', 'thumbnail' => $base . 'file/small/s.png'],
+            'a photo with a small thumbnail' => ['title' => 'Small', 'body' => 'Small', 'attachments' => $pictures(1), 'thumbnail' => $base . 'file/small/s.png'],
+            'a photo with a broken address' => ['title' => 'Broken', 'body' => 'Broken', 'attachments' => [['url' => 'http:///file/x/broken.png', 'filename' => 'broken.png', '_id' => 'x']], 'thumbnail' => 'https:///file/y/thumb.png'],
+            'a photo with a script address' => ['title' => 'Script', 'body' => 'Script', 'attachments' => [['url' => 'javascript:alert(1)', 'filename' => 'x.png', '_id' => 'x']]],
+            'a photo with a remote address' => ['title' => 'Remote', 'body' => '', 'attachments' => [['url' => 'https://img.example/p.png?a=1&b=2', 'filename' => 'p.png', '_id' => 'x']]],
+        ] as $label => $fields) {
+            $each($label, 'entity/Photo', $post(new \IdnoPlugins\Photo\Photo(), $fields));
+        }
+        $site->config()->attachment_base_host = 'cdn.example';
+        $each('a photo on an attachment host', 'entity/Photo', $post(new \IdnoPlugins\Photo\Photo(), ['title' => 'Cdn', 'body' => 'Cdn', 'attachments' => $pictures(2)]));
+        $site->config()->attachment_base_host = '';
+        $out['the icon of a photo'] = $draw('entity/Photo/icon');
+
+        // Audio and video
+        foreach ([
+            'audio' => ['title' => 'A <b>recording</b>', 'body' => 'Listen https://example.org/r #sound', 'media_type' => 'audio/mpeg', 'attachments' => [['url' => $base . 'file/00000000000040008000000000000022/sound.mp3', 'filename' => 'sound.mp3', '_id' => '22', 'mime-type' => 'audio/mpeg']], 'tags' => '#audio'],
+            'audio with two files' => ['title' => 'Two', 'body' => 'Two files', 'media_type' => 'audio/mpeg', 'attachments' => [['url' => $base . 'file/a1/one.mp3', 'filename' => 'one.mp3', '_id' => '1', 'mime-type' => 'audio/mpeg'], ['url' => $base . 'file/a2/two.mp3', 'filename' => 'two.mp3', '_id' => '2', 'mime-type' => 'audio/mpeg']]],
+            'video' => ['title' => 'A video', 'body' => 'Watch', 'media_type' => 'video/mp4', 'attachments' => [['url' => $base . 'file/v1/clip.mp4', 'filename' => 'clip.mp4', '_id' => 'v1', 'mime-type' => 'video/mp4'], ['url' => $base . 'file/v2/clip.webm', 'filename' => 'clip.webm', '_id' => 'v2', 'mime-type' => 'video/webm']]],
+            'media with no file' => ['title' => 'Nothing', 'body' => 'No file', 'media_type' => 'audio/mpeg'],
+            'media with no type' => ['title' => 'Typeless', 'body' => 'No type', 'attachments' => [['url' => $base . 'file/t1/x.mp3', 'filename' => 'x.mp3', '_id' => 't', 'mime-type' => 'audio/mpeg']]],
+            'audio with a hostile address' => ['title' => 'Hostile', 'body' => 'H', 'media_type' => 'audio/mpeg', 'attachments' => [['url' => "https://x.example/a'b.mp3", 'filename' => 'x', '_id' => 'x', 'mime-type' => 'audio/mpeg'], ['url' => 'javascript:alert(1)', 'filename' => 'y', '_id' => 'y', 'mime-type' => 'x" onerror="1']]],
+        ] as $label => $fields) {
+            $each($label, 'entity/Media', $post(new \IdnoPlugins\Media\Media(), $fields));
+        }
+        $out['the icon of media'] = $draw('entity/Media/icon');
+
+        // Bookmarks, likes and reposts
+        foreach ([
+            'a bookmark' => ['body' => 'https://example.org/interesting?a=1&b=2', 'bookmarkof' => 'https://example.org/interesting', 'pageTitle' => 'An <i>interesting</i> page', 'description' => 'Worth reading, <b>hello</b> https://example.org/more', 'tags' => '#links'],
+            'a bookmark with no title or notes' => ['body' => 'https://example.org/bare'],
+            'a bookmark with a script address' => ['body' => 'javascript:alert(1)', 'pageTitle' => 'Click me'],
+            'a bookmark with a script address and no title' => ['body' => 'javascript:alert(1)'],
+            'a bookmark with a hostile title' => ['body' => 'https://example.org/x', 'pageTitle' => '"><script>alert(1)</script> https://example.org/y'],
+            'a like' => ['body' => 'https://example.org/liked', 'likeof' => 'https://example.org/liked'],
+            'a repost' => ['body' => 'https://example.org/reposted', 'repostof' => 'https://example.org/reposted', 'description' => 'Repost notes'],
+            'a bookmark of a video' => ['body' => 'https://www.youtube.com/watch?v=abc-1_', 'pageTitle' => 'A video'],
+        ] as $label => $fields) {
+            $each($label, 'entity/Like', $post(new \IdnoPlugins\Like\Like(), $fields));
+        }
+        $out['the icon of a bookmark'] = $draw('entity/Like/icon');
+
+        // Check-ins
+        foreach ([
+            'a check-in' => ['title' => 'Checked into The Library', 'placename' => 'The Library', 'lat' => 51.5072, 'long' => -0.1276, 'address' => '1 Library Road', 'body' => 'A quiet <b>afternoon</b> https://example.org/b #books', 'tags' => '#books'],
+            'a check-in with no body' => ['placename' => 'Somewhere', 'lat' => '40.7', 'long' => '-74'],
+            'a check-in with no coordinates' => ['placename' => 'Nowhere', 'body' => 'No map'],
+            'a check-in with a hostile place' => ['placename' => '"><script>alert(1)</script>', 'lat' => 1.5, 'long' => 2.5, 'body' => '<script>alert(2)</script>'],
+            'a check-in with hostile coordinates' => ['placename' => 'Odd', 'lat' => '1);alert(1', 'long' => '2);alert(2'],
+            'an anonymous check-in' => ['placename' => 'Hidden', 'lat' => 10.0, 'long' => 20.0, 'anonymity' => 'Yes'],
+        ] as $label => $fields) {
+            $entity = $post(new \IdnoPlugins\Checkin\Checkin(), $fields);
+            $entity->_id = '00000000-0000-4000-8000-0000000000aa';
+            $each($label, 'entity/Checkin', $entity);
+        }
+        $out['the icon of a check-in'] = $draw('entity/Checkin/icon');
+
+        // Events and RSVPs
+        foreach ([
+            'an event' => ['title' => 'Fixture "meetup"', 'summary' => 'A <b>meetup</b>', 'body' => 'We meet https://example.org/m #hello', 'location' => 'The Library, <i>Springfield</i>', 'starttime' => '2026-04-10 18:00', 'endtime' => '2026-04-10 20:00', 'timezone' => 'Europe/London'],
+            'an event with no end' => ['title' => 'No end', 'body' => 'Open', 'starttime' => '2026-04-10 18:00', 'timezone' => 'UTC'],
+            'an event that ends the next day' => ['title' => 'Long', 'body' => 'Long', 'starttime' => '2026-04-10 18:00', 'endtime' => '2026-04-11 20:00'],
+            'an event that ends before it starts' => ['title' => 'Backwards', 'body' => 'B', 'starttime' => '2026-04-10 18:00', 'endtime' => '2026-04-09 09:00'],
+            'an event with no start' => ['title' => 'Undated', 'body' => 'Undated', 'endtime' => '2026-04-11 20:00', 'location' => 'Somewhere'],
+            'an event with nothing but a name' => ['title' => 'Bare'],
+            'an event with a date that is not a date' => ['title' => 'Odd', 'body' => 'Odd', 'starttime' => 'next flurb', 'endtime' => 'a week of mondays'],
+            'an event before 1970' => ['title' => 'Old', 'body' => 'Old', 'starttime' => '1960-05-01 10:00', 'endtime' => '1960-05-01 12:00'],
+            'an event with hostile text' => ['title' => '<script>alert(1)</script>', 'summary' => '"><script>x</script>', 'location' => '<b>here</b>', 'body' => '<script>alert(2)</script> <img src=x onerror=alert(3)>', 'starttime' => '2026-04-10 18:00', 'timezone' => 'Europe/London'],
+        ] as $label => $fields) {
+            $each($label, 'entity/Event', $post(new \IdnoPlugins\Event\Event(), $fields));
+        }
+        $out['the icons of an event and an RSVP'] = $draw('entity/Event/icon') . $draw('entity/RSVP/icon');
+        foreach ([
+            'an RSVP that is yes' => ['rsvp' => 'yes', 'body' => 'I will be there https://example.org/e #event', 'inreplyto' => 'https://example.org/event/1'],
+            'an RSVP that is no' => ['rsvp' => 'no', 'body' => 'Sorry', 'inreplyto' => 'https://example.org/event/1'],
+            'an RSVP that is maybe' => ['rsvp' => 'maybe', 'body' => '', 'inreplyto' => ['https://example.org/event/1']],
+            'an RSVP of another word' => ['rsvp' => 'éxcited', 'body' => 'Wow'],
+            'an RSVP with a hostile answer and text' => ['rsvp' => 'yes" onmouseover="alert(1)', 'body' => 'See you <script>alert(1)</script> <a href="javascript:alert(2)">x</a> <img src="https://example.com/x.png" onerror="alert(3)">', 'inreplyto' => 'javascript:alert(4)'],
+            'an RSVP with a video' => ['rsvp' => 'YES', 'body' => 'Watch https://www.youtube.com/watch?v=abc-1_', 'inreplyto' => 'https://example.org/event/1'],
+        ] as $label => $fields) {
+            $each($label, 'entity/RSVP', $post(new \IdnoPlugins\Event\RSVP(), $fields));
+        }
+
+        // Static pages, seen by a visitor and by the administrator who owns them
+        foreach ([
+            'a static page' => ['title' => 'About "this" site', 'body' => '<p>The static page <b>about</b> the site. https://example.org/s #site</p>', 'category' => 'No Category', 'forward_url' => '', 'hide_title' => ''],
+            'a static page with a hidden title' => ['title' => 'Hidden', 'body' => '<p>Body</p>', 'hide_title' => '1'],
+            'a static page that forwards' => ['title' => 'Forwards', 'body' => '<p>Body</p>', 'forward_url' => 'https://example.org/else?a=1&b=2'],
+            'a static page with a hostile title and address' => ['title' => '<script>alert(1)</script>', 'body' => '<p>Body</p><script>alert(2)</script>', 'forward_url' => 'javascript:alert(3)'],
+            'a static page with a quote in its address' => ['title' => 'Quote', 'body' => '<p>b</p>', 'forward_url' => 'https://example.org/"><script>alert(1)</script>'],
+        ] as $label => $fields) {
+            foreach ([false, true] as $admin) {
+                $admin ? $site->session()->logUserOn($ada) : $site->session()->logUserOff();
+                $entity = $post(new \IdnoPlugins\StaticPages\StaticPage(), $fields);
+                $entity->_id = '00000000-0000-4000-8000-0000000000bb';
+                $each($label . ($admin ? ' seen by its owner' : ''), 'entity/StaticPage', $entity);
+            }
+        }
+        $site->session()->logUserOff();
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('Hello world: a note', (string) $out['a note']);
+        $this->assertStringContainsString('class="p-rsvp"', (string) $out['an RSVP that is yes']);
+        $this->assertStringContainsString('dt-end', (string) $out['an event']);
+    }
+
+    /**
+     * The compose and edit form of each bundled content type, as a member writes a new post and edits a stored one: with a draft, a
+     * shared address, a reply address (one, several), what was typed before, pictures, a time zone and categories, and the share
+     * script that sets focus.
+     */
+    private function drawPluginEditCases(): void
+    {
+        $code = $this->siteDrawPrelude() . <<<'PHP'
+        $base = $site->config()->getURL();
+        $site->session()->logUserOn($ada);
+        $site->syndication()->registerService('zzedit', static fn () => true, ['note', 'article', 'image', 'media', 'bookmark', 'place', 'event']);
+        $site->syndication()->registerServiceAccount('zzedit', 'ada_l', 'Ada L');
+        $stored = static function (\Idno\Common\Entity $entity, array $fields, string $status = 'published') use ($ada): \Idno\Common\Entity {
+            foreach ($fields as $name => $value) {
+                $entity->$name = $value;
+            }
+            $entity->_id = '00000000-0000-4000-8000-0000000000cc';
+            $entity->setOwner($ada);
+            $entity->setPublishStatus($status);
+            $entity->created = 1773000000;
+            $entity->posse = ['zzedit' => [['account_id' => 'ada_l', 'url' => 'https://x.example/1', 'identifier' => 'ada_l']]];
+
+            return $entity;
+        };
+        $pictures = static fn (int $count): array => array_map(static fn (int $n): array => ['url' => $base . 'file/0000000000004000800000000000' . sprintf('%04d', $n) . '/photo' . $n . '.png', 'filename' => 'photo' . $n . '.png', '_id' => '0000000000004000800000000000' . sprintf('%04d', $n), 'mime-type' => 'image/png'], range(1, $count));
+        $forms = [
+            'entity/Status/edit' => [\IdnoPlugins\Status\Status::class, ['body' => 'A <b>note</b> & "more" #tag', 'inreplyto' => 'https://elsewhere.example/post', 'tags' => '#tag']],
+            'entity/Entry/edit' => [\IdnoPlugins\Text\Entry::class, ['title' => 'An "article"', 'short_description' => 'Sub & title', 'body' => '<p>Body <b>text</b></p>', 'inreplyto' => ['https://elsewhere.example/a', 'https://other.example/b']]],
+            'entity/Photo/edit' => [\IdnoPlugins\Photo\Photo::class, ['title' => 'A "photo"', 'body' => 'Caption <b>here</b>', 'attachments' => $pictures(2)]],
+            'entity/Media/edit' => [\IdnoPlugins\Media\Media::class, ['title' => 'A "recording"', 'body' => 'Notes', 'media_type' => 'audio/mpeg']],
+            'entity/Like/edit' => [\IdnoPlugins\Like\Like::class, ['body' => 'https://example.org/page?a=1&b=2', 'pageTitle' => 'A "page"', 'description' => 'Notes <b>b</b>']],
+            'entity/Checkin/edit' => [\IdnoPlugins\Checkin\Checkin::class, ['placename' => 'The "Library"', 'lat' => 51.5, 'long' => -0.12, 'address' => '1 Library Road & more', 'body' => 'Quiet', 'anonymity' => 'Yes']],
+            'entity/Event/edit' => [\IdnoPlugins\Event\Event::class, ['title' => 'A "meetup"', 'summary' => 'Sum & mary', 'location' => 'Library', 'starttime' => '2026-04-10T18:00', 'endtime' => '2026-04-10T20:00', 'timezone' => 'Europe/London', 'body' => 'We meet']],
+            'entity/RSVP/edit' => [\IdnoPlugins\Event\RSVP::class, ['rsvp' => 'maybe', 'body' => 'Perhaps "so"', 'inreplyto' => ['https://example.org/event/1', 'https://example.org/event/2']]],
+            'entity/StaticPage/edit' => [\IdnoPlugins\StaticPages\StaticPage::class, ['title' => 'A "page"', 'body' => '<p>Page</p>', 'forward_url' => 'https://example.org/else?a=1&b=2', 'hide_title' => '1']],
+        ];
+        foreach ($forms as $name => [$class, $fields]) {
+            $short = substr($name, 7, -5);
+            // The page of a static page always says in which category it is
+            $category = $class === \IdnoPlugins\StaticPages\StaticPage::class ? ['category' => 'No Category'] : [];
+            $out[$short . ' new'] = $draw($name, ['object' => new $class()] + $category);
+            $out[$short . ' stored'] = $draw($name, ['object' => $stored(new $class(), $fields)] + $category);
+            $out[$short . ' draft'] = $draw($name, ['object' => $stored(new $class(), $fields, 'draft')] + $category);
+            $out[$short . ' with what was typed'] = $draw($name, ['object' => new $class(), 'url' => 'https://shared.example/x?a=1&b="2"', 'body' => 'Typed <b>text</b> "here"', 'tags' => '#typed', 'category' => 'Writing', 'categories' => ['Writing', 'Notes & "more"']]);
+            $_GET = ['share_url' => 'https://shared.example/x'];
+            $_REQUEST = $_GET;
+            $out[$short . ' shared'] = $draw($name, ['object' => new $class(), 'url' => 'https://shared.example/x'] + $category);
+            $_GET = [];
+            $_REQUEST = [];
+        }
+        $out['status with nothing stored but a reply list'] = $draw('entity/Status/edit', ['object' => $stored(new \IdnoPlugins\Status\Status(), ['body' => 'x', 'inreplyto' => ['https://a.example/1', 'https://b.example/2']])]);
+        $out['status with an empty reply'] = $draw('entity/Status/edit', ['object' => $stored(new \IdnoPlugins\Status\Status(), ['body' => 'x', 'inreplyto' => ''])]);
+        $out['status with a reply that the url replaces'] = $draw('entity/Status/edit', ['object' => $stored(new \IdnoPlugins\Status\Status(), ['body' => 'x', 'inreplyto' => 'https://a.example/1']), 'url' => 'https://b.example/2']);
+        $out['photo with seven pictures'] = $draw('entity/Photo/edit', ['object' => $stored(new \IdnoPlugins\Photo\Photo(), ['title' => 'Many', 'attachments' => $pictures(7)])]);
+        $out['photo with one picture'] = $draw('entity/Photo/edit', ['object' => $stored(new \IdnoPlugins\Photo\Photo(), ['title' => 'One', 'attachments' => $pictures(1)])]);
+        $out['event with no time zone'] = $draw('entity/Event/edit', ['object' => $stored(new \IdnoPlugins\Event\Event(), ['title' => 'Zoneless'])]);
+        $out['an rsvp with an address that is not http'] = $draw('entity/RSVP/edit', ['object' => $stored(new \IdnoPlugins\Event\RSVP(), ['rsvp' => 'yes', 'inreplyto' => ['javascript:alert(1)', 'https://ok.example/e']])]);
+        $out['an rsvp with none'] = $draw('entity/RSVP/edit', ['object' => $stored(new \IdnoPlugins\Event\RSVP(), ['rsvp' => 'no'])]);
+        $out['a static page with a plain title'] = $draw('entity/StaticPage/edit', ['object' => $stored(new \IdnoPlugins\StaticPages\StaticPage(), ['title' => 'Untitled', 'body' => 'b']), 'category' => 'No Category', 'categories' => ['One']]);
+        $out['a static page in a category'] = $draw('entity/StaticPage/edit', ['object' => $stored(new \IdnoPlugins\StaticPages\StaticPage(), ['title' => 'T', 'body' => 'b', 'hide_title' => '']), 'category' => 'Two', 'categories' => ['One', 'Two']]);
+        $site->session()->logUserOff();
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('name="publish_status"', (string) $out['Status new']);
     }
 
     /**
