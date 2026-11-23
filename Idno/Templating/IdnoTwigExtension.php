@@ -56,7 +56,6 @@ final class IdnoTwigExtension extends AbstractExtension
 
     public function getFunctions(): array
     {
-        $h = $this->helpers;
         $html = ['is_safe' => ['html']];
 
         return [
@@ -65,54 +64,54 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('t', $this->translate(...)),
             new TwigFunction('t_html', $this->translateHtml(...), $html),
 
-            new TwigFunction('site_url', $h->siteUrl(...)),
-            new TwigFunction('static_url', $h->staticUrl(...)),
-            new TwigFunction('site_title', $h->siteTitle(...)),
-            new TwigFunction('site_icons', $h->siteIcons(...)),
+            new TwigFunction('site_url', $this->siteUrl(...)),
+            new TwigFunction('static_url', $this->staticUrl(...)),
+            new TwigFunction('site_title', $this->siteTitle(...)),
+            new TwigFunction('site_icons', $this->siteIcons(...)),
             new TwigFunction('setting', $this->setting(...)),
-            new TwigFunction('can_write', $h->canWrite(...)),
-            new TwigFunction('content_types', $h->contentTypes(...)),
-            new TwigFunction('content_type_for_post_type', $h->contentTypeForPostType(...)),
+            new TwigFunction('can_write', $this->canWrite(...)),
+            new TwigFunction('content_types', $this->contentTypes(...)),
+            new TwigFunction('content_type_for_post_type', $this->contentTypeForPostType(...)),
 
-            new TwigFunction('current_user', $h->currentUser(...)),
-            new TwigFunction('is_logged_in', $h->isLoggedIn(...)),
-            new TwigFunction('is_admin', $h->isAdmin(...)),
+            new TwigFunction('current_user', $this->currentUser(...)),
+            new TwigFunction('is_logged_in', $this->isLoggedIn(...)),
+            new TwigFunction('is_admin', $this->isAdmin(...)),
 
             new TwigFunction('current_url', $this->currentUrl(...)),
             new TwigFunction('current_url_parts', $this->currentUrlParts(...)),
             new TwigFunction('current_path', $this->currentPath(...)),
             new TwigFunction('referrer', $this->referrer(...)),
-            new TwigFunction('input', $h->input(...)),
-            new TwigFunction('path_matches', $h->pathMatches(...)),
-            new TwigFunction('is_permalink', $h->isPermalink(...)),
-            new TwigFunction('is_xhr', $h->isXhr(...)),
-            new TwigFunction('is_secure', $h->isSecure(...)),
-            new TwigFunction('page_icon', $h->pageIcon(...)),
-            new TwigFunction('page_icon_user', $h->pageIconUser(...)),
-            new TwigFunction('page_assets', $h->pageAssets(...)),
-            new TwigFunction('page_owner', $h->pageOwner(...)),
-            new TwigFunction('http_status', $h->httpStatus(...)),
-            new TwigFunction('login_url_for', $h->loginUrlFor(...)),
-            new TwigFunction('url_with_var', $h->urlWithVar(...)),
-            new TwigFunction('url_without_var', $h->urlWithoutVar(...)),
-            new TwigFunction('current_url_without_var', $h->currentUrlWithoutVar(...)),
-            new TwigFunction('body_classes', $h->bodyClasses(...)),
+            new TwigFunction('input', $this->input(...)),
+            new TwigFunction('path_matches', $this->pathMatches(...)),
+            new TwigFunction('is_permalink', $this->isPermalink(...)),
+            new TwigFunction('is_xhr', $this->isXhr(...)),
+            new TwigFunction('is_secure', $this->isSecure(...)),
+            new TwigFunction('page_icon', $this->pageIcon(...)),
+            new TwigFunction('page_icon_user', $this->pageIconUser(...)),
+            new TwigFunction('page_assets', $this->pageAssets(...)),
+            new TwigFunction('page_owner', $this->pageOwner(...)),
+            new TwigFunction('http_status', $this->httpStatus(...)),
+            new TwigFunction('login_url_for', $this->loginUrlFor(...)),
+            new TwigFunction('url_with_var', $this->urlWithVar(...)),
+            new TwigFunction('url_without_var', $this->urlWithoutVar(...)),
+            new TwigFunction('current_url_without_var', $this->currentUrlWithoutVar(...)),
+            new TwigFunction('body_classes', $this->bodyClasses(...)),
 
-            new TwigFunction('form_token', fn (string $action): Markup => new Markup($h->formToken($action), 'UTF-8'), $html),
+            new TwigFunction('form_token', $this->formToken(...), $html),
             new TwigFunction('action_link', $this->actionLink(...), $html),
             new TwigFunction('form_data', $this->formData(...), $html),
 
             new TwigFunction('shell_variables', $this->shellVariables(...), ['needs_context' => true, 'needs_environment' => true]),
-            new TwigFunction('pagination', fn (int $count, ?int $per_page = null, array $vars = []): Markup => new Markup($h->pagination($count, $per_page, $vars), 'UTF-8'), $html),
-            new TwigFunction('syndication_services', $h->syndicationServices(...)),
-            new TwigFunction('syndication_selected', $h->syndicationSelected(...)),
-            new TwigFunction('share_types', $h->shareTypes(...)),
-            new TwigFunction('expand_urls', $h->expandUrls(...)),
+            new TwigFunction('pagination', $this->pagination(...), $html),
+            new TwigFunction('syndication_services', $this->syndicationServices(...)),
+            new TwigFunction('syndication_selected', $this->syndicationSelected(...)),
+            new TwigFunction('share_types', $this->shareTypes(...)),
+            new TwigFunction('expand_urls', $this->expandUrls(...)),
 
-            new TwigFunction('local_entity', $h->localEntity(...)),
-            new TwigFunction('local_file', $h->localFile(...)),
-            new TwigFunction('access_groups_of', $h->accessGroupsOf(...)),
-            new TwigFunction('latest_post_of', $h->latestPostOf(...)),
+            new TwigFunction('local_entity', $this->localEntity(...)),
+            new TwigFunction('local_file', $this->localFile(...)),
+            new TwigFunction('access_groups_of', $this->accessGroupsOf(...)),
+            new TwigFunction('latest_post_of', $this->latestPostOf(...)),
 
             new TwigFunction('entity_value', self::entityValue(...)),
             new TwigFunction('twitter_account_of', self::twitterAccountOf(...)),
@@ -124,17 +123,269 @@ final class IdnoTwigExtension extends AbstractExtension
         $text = ['is_safe' => ['html'], 'pre_escape' => 'html'];
 
         return [
-            new TwigFilter('sanitize_html', fn (mixed $html): string => $this->helpers->sanitizeHtml(self::text($html)), ['is_safe' => ['html']]),
-            new TwigFilter('autop', fn (mixed $html): string => $this->helpers->autop(self::text($html)), $text),
-            new TwigFilter('parse_urls', fn (mixed $html): string => $this->helpers->parseUrls(self::text($html)), $text),
-            new TwigFilter('parse_hashtags', fn (mixed $html): string => $this->helpers->parseHashtags(self::text($html)), $text),
-            new TwigFilter('parse_users', fn (mixed $html, string|array|null $in_reply_to = null): string => $this->helpers->parseUsers(self::text($html), $in_reply_to), $text),
+            new TwigFilter('sanitize_html', $this->sanitizeHtml(...), ['is_safe' => ['html']]),
+            new TwigFilter('autop', $this->autop(...), $text),
+            new TwigFilter('parse_urls', $this->parseUrls(...), $text),
+            new TwigFilter('parse_hashtags', $this->parseHashtags(...), $text),
+            new TwigFilter('parse_users', $this->parseUsers(...), $text),
             new TwigFilter('http_url', self::httpUrl(...)),
-            new TwigFilter('display_url', fn (mixed $url): string => $this->helpers->displayUrl(self::text($url))),
-            new TwigFilter('fix_url', fn (mixed $url): string => $this->helpers->fixUrl(self::text($url))),
-            new TwigFilter('proxied_image', fn (mixed $url, ?int $max = null, ?string $transform = null): string => $this->helpers->proxiedImage(self::text($url), $max, $transform)),
-            new TwigFilter('sample_text', fn (mixed $text, int $words = 32): string => $this->helpers->sampleText(self::text($text), $words)),
+            new TwigFilter('display_url', $this->displayUrl(...)),
+            new TwigFilter('fix_url', $this->fixUrl(...)),
+            new TwigFilter('proxied_image', $this->proxiedImage(...)),
+            new TwigFilter('sample_text', $this->sampleText(...)),
         ];
+    }
+
+    /*
+     * The functions and filters below pass what a template asks for to the site's helpers. They are methods of this extension, and not
+     * closures over the helpers, so that Twig compiles a call in a template to a call of the method (`$this->extensions[...]->siteUrl()`)
+     * and does not look the function up in the environment at run time: that look-up makes Twig build every function, filter, test,
+     * token parser and operator of every extension before the first one is called, in every request that draws a template.
+     */
+
+    public function siteUrl(string $path = ''): string
+    {
+        return $this->helpers->siteUrl($path);
+    }
+
+    public function staticUrl(string $path = ''): string
+    {
+        return $this->helpers->staticUrl($path);
+    }
+
+    public function siteTitle(): string
+    {
+        return $this->helpers->siteTitle();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function siteIcons(): array
+    {
+        return $this->helpers->siteIcons();
+    }
+
+    public function canWrite(): bool
+    {
+        return $this->helpers->canWrite();
+    }
+
+    /**
+     * @return list<object>
+     */
+    public function contentTypes(): array
+    {
+        return $this->helpers->contentTypes();
+    }
+
+    public function contentTypeForPostType(string $type): ?object
+    {
+        return $this->helpers->contentTypeForPostType($type);
+    }
+
+    public function currentUser(): ?object
+    {
+        return $this->helpers->currentUser();
+    }
+
+    public function isLoggedIn(): bool
+    {
+        return $this->helpers->isLoggedIn();
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->helpers->isAdmin();
+    }
+
+    public function input(string $name, mixed $default = null): mixed
+    {
+        return $this->helpers->input($name, $default);
+    }
+
+    public function pathMatches(string $path): bool
+    {
+        return $this->helpers->pathMatches($path);
+    }
+
+    public function isPermalink(): bool
+    {
+        return $this->helpers->isPermalink();
+    }
+
+    public function isXhr(): bool
+    {
+        return $this->helpers->isXhr();
+    }
+
+    public function isSecure(): bool
+    {
+        return $this->helpers->isSecure();
+    }
+
+    public function pageIcon(): string
+    {
+        return $this->helpers->pageIcon();
+    }
+
+    public function pageIconUser(): ?object
+    {
+        return $this->helpers->pageIconUser();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function pageAssets(string $type): array
+    {
+        return $this->helpers->pageAssets($type);
+    }
+
+    public function pageOwner(): ?object
+    {
+        return $this->helpers->pageOwner();
+    }
+
+    public function httpStatus(): int
+    {
+        return $this->helpers->httpStatus();
+    }
+
+    public function loginUrlFor(string $path): string
+    {
+        return $this->helpers->loginUrlFor($path);
+    }
+
+    public function urlWithVar(string $name, string $value, string $url = ''): string
+    {
+        return $this->helpers->urlWithVar($name, $value, $url);
+    }
+
+    public function urlWithoutVar(string $url, string $name): string
+    {
+        return $this->helpers->urlWithoutVar($url, $name);
+    }
+
+    public function currentUrlWithoutVar(string $name): string
+    {
+        return $this->helpers->currentUrlWithoutVar($name);
+    }
+
+    public function bodyClasses(): string
+    {
+        return $this->helpers->bodyClasses();
+    }
+
+    public function formToken(string $action): Markup
+    {
+        return new Markup($this->helpers->formToken($action), 'UTF-8');
+    }
+
+    /**
+     * @param array<string, mixed> $vars
+     */
+    public function pagination(int $count, ?int $per_page = null, array $vars = []): Markup
+    {
+        return new Markup($this->helpers->pagination($count, $per_page, $vars), 'UTF-8');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function syndicationServices(string $contentType): array
+    {
+        return $this->helpers->syndicationServices($contentType);
+    }
+
+    public function syndicationSelected(string $service, ?string $username = null): mixed
+    {
+        return $this->helpers->syndicationSelected($service, $username);
+    }
+
+    /**
+     * @param array<string, string> $types
+     * @return array<string, string>
+     */
+    public function shareTypes(array $types): array
+    {
+        return $this->helpers->shareTypes($types);
+    }
+
+    public function expandUrls(?object $object, string $text): string
+    {
+        return $this->helpers->expandUrls($object, $text);
+    }
+
+    public function localEntity(string $url): ?object
+    {
+        return $this->helpers->localEntity($url);
+    }
+
+    public function localFile(string $url): ?object
+    {
+        return $this->helpers->localFile($url);
+    }
+
+    /**
+     * @return list<object>
+     */
+    public function accessGroupsOf(string $ownerUuid): array
+    {
+        return $this->helpers->accessGroupsOf($ownerUuid);
+    }
+
+    public function latestPostOf(object $user): ?object
+    {
+        return $this->helpers->latestPostOf($user);
+    }
+
+    public function sanitizeHtml(mixed $html): string
+    {
+        return $this->helpers->sanitizeHtml(self::text($html));
+    }
+
+    public function autop(mixed $html): string
+    {
+        return $this->helpers->autop(self::text($html));
+    }
+
+    public function parseUrls(mixed $html): string
+    {
+        return $this->helpers->parseUrls(self::text($html));
+    }
+
+    public function parseHashtags(mixed $html): string
+    {
+        return $this->helpers->parseHashtags(self::text($html));
+    }
+
+    /**
+     * @param string|array<int|string, mixed>|null $in_reply_to
+     */
+    public function parseUsers(mixed $html, string|array|null $in_reply_to = null): string
+    {
+        return $this->helpers->parseUsers(self::text($html), $in_reply_to);
+    }
+
+    public function displayUrl(mixed $url): string
+    {
+        return $this->helpers->displayUrl(self::text($url));
+    }
+
+    public function fixUrl(mixed $url): string
+    {
+        return $this->helpers->fixUrl(self::text($url));
+    }
+
+    public function proxiedImage(mixed $url, ?int $max = null, ?string $transform = null): string
+    {
+        return $this->helpers->proxiedImage(self::text($url), $max, $transform);
+    }
+
+    public function sampleText(mixed $text, int $words = 32): string
+    {
+        return $this->helpers->sampleText(self::text($text), $words);
     }
 
     /**
@@ -157,13 +408,17 @@ final class IdnoTwigExtension extends AbstractExtension
      */
     private static function variablesOf(Environment $environment, array $context): array
     {
-        $globals = $environment->getGlobals();
+        // The context is the largest of the two (every variable of the page), so it is the globals that are looked at one by one
+        static $bookkeeping = null;
+        $bookkeeping ??= array_flip(self::BOOKKEEPING);
+        $variables = array_diff_key($context, $bookkeeping);
+        foreach ($environment->getGlobals() as $key => $value) {
+            if (array_key_exists($key, $variables) && $variables[$key] === $value) {
+                unset($variables[$key]);
+            }
+        }
 
-        return array_filter(
-            $context,
-            static fn ($value, $key): bool => !in_array($key, self::BOOKKEEPING, true) && !(array_key_exists($key, $globals) && $globals[$key] === $value),
-            ARRAY_FILTER_USE_BOTH
-        );
+        return $variables;
     }
 
     /**

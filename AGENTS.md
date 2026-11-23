@@ -299,7 +299,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   through `/_test/server`; an outbound request fails at once), warms each page with 10 requests and times it in 5 blocks of 40
   sequential requests; a server's number is the smallest block median. `compare` while a Twig file has its `.tpl.php` beside it
   starts TWO servers (test environment, debug off: not production, which is acceptable because both sides are equal) identical but for `IDNO_TEST_TWIG_BYPASS`, interleaves their blocks in one run and asserts the Twig server's
-  number for `/` and for a note's permalink is at most 1.15 times the bypass server's (both numbers and the ratio are printed);
+  number for `/` and for a note's permalink is at most 1.15 times the bypass server's (both pages' numbers and ratios are printed before the first is asserted);
   with no such file there is nothing to bypass and the Twig server alone is compared with the baseline `record` stored
   (`<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits of the SHA-256 of the checkout's real path>.json`, by the same method), which is a
   number from another moment and NOT a reliable gate (it varied 13% on a repeat): the rule for deleting the originals is to run `ratio`
@@ -307,7 +307,8 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   with a baseline recorded on that same commit in the same session (the minimum of several block medians), never the first baseline. `ratio` is the two-server run whatever is ported (with nothing ported both draw the same files, so the ratio is the method's own noise). Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
-  `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".
+  `IdnoTwigExtensionTest`, `TemplateLocatorTest` and `EngineCostTest` (what drawing a template must not cost, counted: a path of the file system is asked about once, the
+  loader resolves a name once, a compiled template is drawn without Twig building its extensions); see "Templates".
 - A test never compares two separately generated timestamps for equality (a time the code under test made against `time()` or `date()` in the test, or two times made at two moments): it asserts against a stored value, an injected clock, or a range, and never sleeps to make two moments differ.
 - Three test suites: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`), `Plugins`
 - CI (`.github/workflows/tests.yml`, on PHP 8.4 and 8.5 each): `phpcs`; the unit tier as its own job
@@ -2615,7 +2616,12 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   tried before every directory's `default`.
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
   puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
-  `generation()` (changes with each directory added).
+  `generation()` (changes with each directory added), `isFile($path)`: whether a path is a file, asked of the disk ONCE and remembered (the
+  locator and the Twig loader ask about the same paths, and each answer is a system call: a page drew about 730 of them for its 28 Twig
+  files, 26 for each, before the answers were shared), until a directory is added (`addBase()`) or `forgetFiles()` is called (the locator
+  calls it when it empties its own answers, so a forgotten answer is looked up on the disk again); it holds at most
+  `TemplateCascade::REMEMBER_LIMIT` paths and is emptied when it passes. A file created after its path was asked about is not seen until then,
+  as for the locator's answers (`Tests/Unit/Templating/EngineCostTest`).
   Filled at run time by the plugins and the theme (`Bonita\Main::additionalPath()` forwards to it), never from the
   container's configuration. A command-line process has core's directory too (it is the cascade's, not added at boot).
 - `TemplateLocator::locate($name, $type, $fallbackToDefault = true)`: the order is the type, then the base, then the format:
@@ -2624,7 +2630,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   ActivityPub and KML types are `.tpl.php` only, whatever Twig file of their name exists) and then `<name>.tpl.php`, as a `LocatedTemplate`
   (`path`, `engine` `php` or `twig`, `type`, `base`, `logicalName` `<type>/<name>.<ext>`), or null. So a third-party
   `.tpl.php` override in a plugin or theme still beats a Twig file of the same name and type in core, and within one directory
-  Twig wins. The answers are remembered (type, name, fallback) until the cascade's `generation()` changes: the files of a directory do not
+  Twig wins. Every file it looks for is asked of `TemplateCascade::isFile()`. The answers are remembered (type, name, fallback) until the cascade's `generation()` changes: the files of a directory do not
   change while a request is served, and an ordinary page draws the same names again and again, each look-up a file-system check per directory,
   type and format (measured: the Twig check alone made a locate about twice as slow; remembered, a repeat costs a fraction of a microsecond).
   The Twig candidate is offered only when `CascadeTwigLoader::isLogicalName()` (the one predicate) accepts its logical name: a name with a
@@ -2685,7 +2691,10 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `TemplateName::normalise()` leaves as they are, with the suffix (`isLogicalName()`): `..`, a backslash, NUL, a trailing newline, a leading or
     doubled slash, an absolute path and `@Twig/...` are refused before any file is looked for, so `{% include %}`, `{% extends %}` and `source()` of
     any name reach only a file of a `templates/` directory of the cascade (`CascadeTwigLoaderTest`, `TwigEngineTest::testATemplateCanLoadOnlyAFileOfTheCascade`).
-    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
+    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. A name is resolved once and the answer kept (until the cascade's
+    `generation()` changes, at most 2000 names: Twig asks `getCacheKey()` and `isFresh()` of every template it loads, and `auto_reload` is on), and the
+    paths it looks at are `TemplateCascade::isFile()`'s, which the locator has asked about already, so loading a template the locator found costs
+    one `filemtime()` and no search of the directories. `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
     extension pass, which tags what this removes, and before its loader and environment passes) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
     included), so this is the only loader, and removes `twig.error_renderer.html` (which would draw Symfony's production error page of a
     new-style controller from the bundle's `@Twig` templates: the page is what it was; the CLI never used it), `twig.mailer.message_listener` and
@@ -2715,6 +2724,12 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `RuntimeError` wrapper; a Twig error (syntax, a missing template) is thrown as it is, never swallowed (`HybridTwigTemplate` caught every exception).
     The variables are a snapshot for the whole render: a Twig template does not see a variable an included template sets afterwards (a `.tpl.php`
     file reads them from the object at each draw); they must be an array, else an `\UnexpectedValueException`.
+  - Every function and filter of `IdnoTwigExtension` is a METHOD of the extension (`siteUrl()`, `autop()`, ...; they pass on to the helpers), never a closure
+    over the helpers or of the extension's own code: Twig compiles a call of a method of an extension to `$this->extensions[...]->method()`, and any other
+    callable to `$this->env->getFunction(name)->getCallable()()`, whose first use in a request makes Twig build every function, filter, test, token parser and
+    operator of every extension (about 0.14 ms and 60 classes a request: the largest part of what a page drawn from Twig cost over the same page from the
+    old engine, with the Symfony bridge's extensions loaded too). A new function is a method of the extension, passed as `$this->name(...)`
+    (`EngineCostTest::testEveryFunctionAndFilterIsAMethodOfTheExtension` and `testATemplateIsDrawnWithoutBuildingTheExtensions`).
   - `IdnoTwigExtension`: `idno_include(name, vars)` draws as `$this->draw()` does (type then `default`, either engine, contributions) through
     a COPY of the template object (`withVars()`) holding the including template's variables, less Twig's globals (`app`, ...: only a value identical to the global) and bookkeeping (`_idno_type`, `_idno_context`, `_parent`, `_seq`, `_key`, `_iterated`, `loop`; any other `_foo` variable is kept), and
     the given ones over them; `slot(name)` is `drawSlot()`; both are `is_safe: html` and need `_idno_context`; `t(text, subs)` is

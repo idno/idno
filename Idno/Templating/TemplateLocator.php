@@ -52,7 +52,9 @@ final class TemplateLocator
         $key = $type . "\0" . $name . "\0" . ($fallbackToDefault ? '1' : '0');
         if (!array_key_exists($key, $this->remembered)) {
             if (count($this->remembered) >= $this->rememberLimit) {
+                // The answers are forgotten with what they were found from: a file looked for again is looked for on the disk
                 $this->remembered = [];
+                $this->cascade->forgetFiles();
             }
             $this->remembered[$key] = $this->find($name, $type, $fallbackToDefault);
         }
@@ -95,13 +97,13 @@ final class TemplateLocator
                     $twig = $candidate . '/' . $name . '.' . $extension;
                     // Only a name the Twig loader accepts is offered to it (the one predicate): a name with a leading or doubled
                     // slash, which the file system resolves, is a .tpl.php name only, and a Twig file of it is not found
-                    if (CascadeTwigLoader::isLogicalName($twig) && file_exists($base . '/templates/' . $twig)) {
+                    if (CascadeTwigLoader::isLogicalName($twig) && $this->cascade->isFile($base . '/templates/' . $twig)) {
                         return new LocatedTemplate($base . '/templates/' . $twig, 'twig', $candidate, $base, $twig);
                     }
                 }
                 $logical = $candidate . '/' . $name . '.tpl.php';
                 $path = $base . '/templates/' . $logical;
-                if (file_exists($path)) {
+                if ($this->cascade->isFile($path)) {
                     return new LocatedTemplate($path, 'php', $candidate, $base, $logical);
                 }
             }

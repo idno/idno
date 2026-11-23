@@ -90,11 +90,15 @@ final class PagePerformanceTest extends RenderedSiteTestCase
         } else {
             $baseline = $numbers['bypass'];
         }
+        // Every page's numbers are printed before the first assertion, so that a failing page does not hide the other
+        $ratios = [];
         foreach ($pages as $name => $path) {
-            $ratio = $numbers['twig'][$name] / $baseline[$name];
-            fwrite(STDOUT, sprintf("\n%s: twig %.2f ms, %s %.2f ms: ratio %.3f\n", $name, $numbers['twig'][$name], $twoServers ? 'bypass' : 'baseline', $baseline[$name], $ratio));
-            if (self::mode() === 'compare') {
-                $this->assertLessThanOrEqual(self::BUDGET, $ratio, sprintf('%s: %.2f ms is over %.2f times the %.2f ms of the old engine', $name, $numbers['twig'][$name], self::BUDGET, $baseline[$name]));
+            $ratios[$name] = $numbers['twig'][$name] / $baseline[$name];
+            fwrite(STDOUT, sprintf("\n%s: twig %.2f ms, %s %.2f ms: ratio %.3f\n", $name, $numbers['twig'][$name], $twoServers ? 'bypass' : 'baseline', $baseline[$name], $ratios[$name]));
+        }
+        if (self::mode() === 'compare') {
+            foreach ($pages as $name => $path) {
+                $this->assertLessThanOrEqual(self::BUDGET, $ratios[$name], sprintf('%s: %.2f ms is over %.2f times the %.2f ms of the old engine', $name, $numbers['twig'][$name], self::BUDGET, $baseline[$name]));
             }
         }
         $this->addToAssertionCount(1);

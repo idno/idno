@@ -25,6 +25,14 @@ final class CascadeTwigLoader implements LoaderInterface
 
     private const SUFFIXES = ['.html.twig', '.txt.twig'];
 
+    /** The most names remembered: names reach the loader from templates, so a long-lived process must not keep them all. */
+    private const REMEMBER_LIMIT = 2000;
+
+    /** @var array<string, ?string> the file of each name asked for (null: none), for one state of the cascade */
+    private array $resolved = [];
+
+    private int $resolvedGeneration = -1;
+
     public function __construct(private readonly TemplateCascade $cascade)
     {
     }
@@ -70,6 +78,22 @@ final class CascadeTwigLoader implements LoaderInterface
      */
     private function resolve(string $name): ?string
     {
+        if ($this->resolvedGeneration !== $this->cascade->generation()) {
+            $this->resolved = [];
+            $this->resolvedGeneration = $this->cascade->generation();
+        }
+        if (array_key_exists($name, $this->resolved)) {
+            return $this->resolved[$name];
+        }
+        if (count($this->resolved) >= self::REMEMBER_LIMIT) {
+            $this->resolved = [];
+        }
+
+        return $this->resolved[$name] = $this->find($name);
+    }
+
+    private function find(string $name): ?string
+    {
         $bases = $this->cascade->bases();
         if (str_starts_with($name, self::CORE_PREFIX)) {
             $name = substr($name, strlen(self::CORE_PREFIX));
@@ -80,7 +104,7 @@ final class CascadeTwigLoader implements LoaderInterface
         }
         foreach ($bases as $base) {
             $path = $base . '/templates/' . $name;
-            if (is_file($path)) {
+            if ($this->cascade->isFile($path)) {
                 return $path;
             }
         }

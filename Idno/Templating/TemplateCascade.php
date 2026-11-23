@@ -17,6 +17,12 @@ final class TemplateCascade
 
     private int $generation = 0;
 
+    /** The most answers of isFile() remembered: names reach it from requests, so a long-lived process must not keep them all. */
+    public const REMEMBER_LIMIT = 4000;
+
+    /** @var array<string, bool> whether a path is a file, for one state of the directories */
+    private array $files = [];
+
     public function __construct(private readonly string $coreDir)
     {
     }
@@ -32,6 +38,7 @@ final class TemplateCascade
         }
         array_unshift($this->added, $dir);
         ++$this->generation;
+        $this->forgetFiles();
     }
 
     /**
@@ -41,6 +48,31 @@ final class TemplateCascade
     public function generation(): int
     {
         return $this->generation;
+    }
+
+    /**
+     * Whether a path is a file. The files of the directories do not change while a request is served, so the answer is
+     * remembered until a directory is added (as the locator remembers which file a name is): a page draws the same names
+     * again and again, the locator and the Twig loader ask about the same paths, and each answer is a system call.
+     */
+    public function isFile(string $path): bool
+    {
+        if (!array_key_exists($path, $this->files)) {
+            if (count($this->files) >= self::REMEMBER_LIMIT) {
+                $this->files = [];
+            }
+            $this->files[$path] = is_file($path);
+        }
+
+        return $this->files[$path];
+    }
+
+    /**
+     * Forgets what isFile() remembered (the locator calls it when it forgets its own answers).
+     */
+    public function forgetFiles(): void
+    {
+        $this->files = [];
     }
 
     /**
