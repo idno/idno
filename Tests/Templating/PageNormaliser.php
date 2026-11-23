@@ -102,18 +102,24 @@ final class PageNormaliser
         return self::html($body);
     }
 
+    /** The named character references a browser reads without their semicolon (HTML's legacy ones). */
+    private const LEGACY_ENTITIES = 'AElig|AMP|Aacute|Acirc|Agrave|Aring|Atilde|Auml|COPY|Ccedil|ETH|Eacute|Ecirc|Egrave|Euml|GT|Iacute|Icirc|Igrave|Iuml|LT|Ntilde|Oacute|Ocirc|Ograve|Oslash|Otilde|Ouml|QUOT|REG|THORN|Uacute|Ucirc|Ugrave|Uuml|Yacute|aacute|acirc|acute|aelig|agrave|amp|aring|atilde|auml|brvbar|ccedil|cedil|cent|copy|curren|deg|divide|eacute|ecirc|egrave|eth|euml|frac12|frac14|frac34|gt|iacute|icirc|iexcl|igrave|iquest|iuml|laquo|lt|macr|micro|middot|nbsp|not|ntilde|oacute|ocirc|ograve|ordf|ordm|oslash|otilde|ouml|para|plusmn|pound|quot|raquo|reg|sect|shy|sup1|sup2|sup3|szlig|thorn|times|uacute|ucirc|ugrave|uml|uuml|yacute|yen|yuml';
+
     /**
      * What a template port may change in an HTML page and nothing else: white space that touches a tag is one line break
-     * (how a template is indented is not what it renders), and the several ways to write the same character are one
-     * (`&amp;` and `&`, `&#039;`, `&#39;`, `&apos;` and `'`; in text, `&quot;` and `&#34;` and `"`). The contents of
-     * `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched (a comment is not: its tags are tags). A quote written as an entity inside a tag is kept (it is
-     * what keeps the attribute whole), and so is an ampersand that begins what reads as an entity (`&amp;lt;` is a double
-     * escape, not the same as `&lt;`).
+     * (how a template is indented is not what it renders), and the several ways to write the same character are one:
+     * `&amp;` and `&` (but not where what follows could begin an entity: `#`, a name and its semicolon, or a legacy name
+     * such as `copy` that a browser reads without one, so `&amp;lt;` and `&amp;copy` stay different from `&lt;` and `&copy`);
+     * `&#039;`, `&#39;`, `&apos;` and `'` in text and in a double-quoted attribute value only (in any other place the entity
+     * is what keeps an attribute whole: `title='x&#039; onclick=...'` is not `title='x' onclick=...'`); `&quot;` and
+     * `&#34;` and `"` in text only. The contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched, up to the
+     * end of the page when the element is not closed. A comment is one token whatever it holds (what it holds is normalised as markup, see comment()).
      */
     private static function html(string $body): string
     {
         $attributes = '(?:"[^"]*"|\'[^\']*\'|[^>"\'])*';
-        $pattern = '~(?<raw><(?<name>script|style|pre|textarea)\b' . $attributes . '>)(?<content>.*?)(?<close></\k<name>\s*>)'
+        $pattern = '~(?<raw><(?<name>script|style|pre|textarea)\b' . $attributes . '>)(?<content>.*?)(?<close></\k<name>\s*>|\z)'
+            . '|(?<comment><!--.*?-->)'
             . '|(?<tag><(?:/?[A-Za-z][^\s>/]*|!)' . $attributes . '>)~is';
         $tokens = [];
         $position = 0;
@@ -128,7 +134,11 @@ final class PageNormaliser
                 if ($match['content'][0] !== '') {
                     $tokens[] = ['raw', $match['content'][0]];
                 }
-                $tokens[] = ['tag', $match['close'][0]];
+                if ($match['close'][0] !== '') {
+                    $tokens[] = ['tag', $match['close'][0]];
+                }
+            } elseif (($match['comment'][0] ?? '') !== '') {
+                $tokens[] = ['comment', $whole];
             } else {
                 $tokens[] = ['tag', $whole];
             }
@@ -142,7 +152,7 @@ final class PageNormaliser
         $out = '';
         foreach ($tokens as $i => [$kind, $value]) {
             if ($kind === 'text') {
-                $value = self::characters($value, true);
+                $value = self::characters($value, true, true);
                 if ($i > 0) {
                     $value = preg_replace('/^\s+/', "\n", $value) ?? $value;
                 }
@@ -150,7 +160,9 @@ final class PageNormaliser
                     $value = preg_replace('/\s+$/', "\n", $value) ?? $value;
                 }
             } elseif ($kind === 'tag') {
-                $value = self::characters($value, false);
+                $value = self::tag($value);
+            } elseif ($kind === 'comment') {
+                $value = self::comment($value);
             }
             $out .= $value;
         }
@@ -158,13 +170,38 @@ final class PageNormaliser
         return $out;
     }
 
-    private static function characters(string $value, bool $text): string
+    /**
+     * A comment's contents are the page's own markup commented out: what stands before its first tag is kept, and the rest
+     * is normalised as a page is (white space that touches a tag; its tags' character forms), never reading past the comment.
+     */
+    private static function comment(string $comment): string
     {
-        $value = preg_replace('/&(?:#0*39|apos);/', "'", $value) ?? $value;
+        $inner = substr($comment, 4, -3);
+        $at = strpos($inner, '<');
+        if ($at === false) {
+            return $comment;
+        }
+
+        return '<!--' . substr($inner, 0, $at) . substr(self::html('<i>' . substr($inner, $at) . 'x'), 3, -1) . '-->';
+    }
+
+    /**
+     * A tag with its character forms made one by where they are: apostrophe entities only in a double-quoted value.
+     */
+    private static function tag(string $tag): string
+    {
+        return preg_replace_callback('/"[^"]*"|\'[^\']*\'|[^"\']+|["\']/s', static fn (array $m): string => self::characters($m[0], false, str_starts_with($m[0], '"') && strlen($m[0]) > 1), $tag) ?? $tag;
+    }
+
+    private static function characters(string $value, bool $text, bool $apostrophes): string
+    {
+        if ($apostrophes) {
+            $value = preg_replace('/&(?:#0*39|apos);/', "'", $value) ?? $value;
+        }
         if ($text) {
             $value = preg_replace('/&(?:quot|#0*34);/', '"', $value) ?? $value;
         }
 
-        return preg_replace('/&amp;(?![A-Za-z0-9#]+;)/', '&', $value) ?? $value;
+        return preg_replace('/&amp;(?!#|[A-Za-z][A-Za-z0-9]*;|(?:' . self::LEGACY_ENTITIES . '))/', '&', $value) ?? $value;
     }
 }

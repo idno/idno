@@ -35,7 +35,7 @@ final class RawUsageTest extends TestCase
                 }
             }
         }
-        $this->assertSame([], $unlisted, 'a `|raw` that is not in raw-allowlist.php');
+        $this->assertSame([], $unlisted, 'a `|raw` (or `autoescape false`, `filter raw`, `apply raw`, `source()`) that is not in raw-allowlist.php');
 
         $stale = [];
         foreach ($allowed as $file => $entries) {
@@ -46,7 +46,7 @@ final class RawUsageTest extends TestCase
                 }
             }
         }
-        $this->assertSame([], $stale, 'an entry of raw-allowlist.php that matches no `|raw`');
+        $this->assertSame([], $stale, 'an entry of raw-allowlist.php that matches nothing');
     }
 
     public function testTheExpressionBeforeARawIsFound(): void
@@ -56,6 +56,21 @@ final class RawUsageTest extends TestCase
         $this->assertSame(['label', 'x|json_encode(constant("JSON_HEX_TAG"))'], self::rawExpressions('{{ label|raw }} {{ x|json_encode(constant("JSON_HEX_TAG"))|raw }}'), 'other filters are part of the expression');
         $this->assertSame(['set x = body'], self::rawExpressions('{% set x = body|raw %}'));
         $this->assertSame([], self::rawExpressions('{{ body|e }} {{ raw }} {{ rawness }} {{ x|rawurlencode }} {# {{ y|raw }} #}'), 'a variable named raw, another filter, a comment');
+    }
+
+    public function testEveryWayToTurnEscapingOffIsFound(): void
+    {
+        $this->assertSame(['body'], self::rawExpressions('{{ body|raw() }}'), 'called');
+        $this->assertSame(['body'], self::rawExpressions('{{ body | raw }}'), 'spaced');
+        $this->assertSame(['body'], self::rawExpressions("{{ body |\n raw }}"));
+        $this->assertSame(['autoescape false'], self::rawExpressions('{% autoescape false %}{{ x }}{% endautoescape %}'));
+        $this->assertSame(['autoescape \'false\''], self::rawExpressions('{% autoescape \'false\' %}x{% endautoescape %}'));
+        $this->assertSame([], self::rawExpressions("{% autoescape 'html' %}x{% endautoescape %} {% autoescape %}y{% endautoescape %}"), 'an autoescape that keeps escaping');
+        $this->assertSame(['filter raw'], self::rawExpressions('{% filter raw %}x{% endfilter %}'));
+        $this->assertSame(['apply upper|raw'], self::rawExpressions('{% apply upper|raw %}x{% endapply %}'));
+        $this->assertSame(['apply raw'], self::rawExpressions('{% apply raw %}x{% endapply %}'));
+        $this->assertSame(['source(\'default/x.html.twig\')'], self::rawExpressions("{{ source('default/x.html.twig') }}"));
+        $this->assertSame([], self::rawExpressions('{% apply upper %}x{% endapply %} {% filter lower %}y{% endfilter %} {{ resource(1) }}'), 'other filters and functions');
     }
 
     /**
@@ -81,8 +96,9 @@ final class RawUsageTest extends TestCase
     }
 
     /**
-     * The expression before each `|raw` of the output (`{{ }}`) and statement (`{% %}`) tags, from the tag's start (its trim
-     * marker and the first keyword of a statement kept, white space as one space); comments are not read.
+     * What turns escaping off, in the output (`{{ }}`) and statement (`{% %}`) tags: the expression before each `|raw` (with or
+     * without a call, any white space around the bar), `{% autoescape false %}`, `{% filter raw %}` and `{% apply ... raw %}`, and
+     * each `source(...)` call, which prints a file as it is. White space is one space; comments are not read.
      *
      * @return list<string>
      */
@@ -94,10 +110,20 @@ final class RawUsageTest extends TestCase
         foreach ($tags as $tag) {
             $body = ($tag[1] ?? '') !== '' ? $tag[1] : ($tag[2] ?? '');
             $offset = 0;
-            while (preg_match('/\|\s*raw\b(?!\s*\()/', $body, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
+            $filterTag = preg_match('/^\s*(?:filter|apply)\s/', $body) === 1;
+            while (!$filterTag && preg_match('/\|\s*raw\b/', $body, $match, PREG_OFFSET_CAPTURE, $offset) === 1) {
                 $before = substr($body, 0, (int) $match[0][1]);
                 $expressions[] = trim((string) preg_replace('/\s+/', ' ', $before));
                 $offset = (int) $match[0][1] + strlen($match[0][0]);
+            }
+            $statement = trim((string) preg_replace('/\s+/', ' ', $body));
+            if (preg_match('/^autoescape\s+[\'"]?false[\'"]?$/', $statement) === 1 || preg_match('/^(?:filter|apply)\s+(?:[^|]*\|\s*)*raw\b/', $statement) === 1) {
+                $expressions[] = preg_replace('/\s*\|\s*/', '|', $statement);
+            }
+            if (preg_match_all('/\bsource\s*\([^)]*\)/', $body, $calls) > 0) {
+                foreach ($calls[0] as $call) {
+                    $expressions[] = trim((string) preg_replace('/\s+/', ' ', $call));
+                }
             }
         }
 

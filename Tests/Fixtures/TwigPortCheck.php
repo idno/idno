@@ -15,17 +15,25 @@ use Tests\Templating\PageNormaliser;
  * Test-environment only (config/services_test.php puts it in front of the Twig engine of the template renderer): proves a
  * Twig port against the `.tpl.php` file it was ported from, on the pages a test visits.
  *
- * It returns what the Twig engine rendered, always, and unchanged. When the environment variable
+ * It returns what the Twig engine rendered, unchanged (but for the bypass, below). When the environment variable
  * IDNO_TEST_TWIG_PORT_REPORT names a file (read at each render, from $_SERVER and then the process environment) and a
  * `.tpl.php` of the same name is beside the Twig file, it also renders that original with the same variables (on a
  * copy of the template object: the original cannot change what the page goes on to draw), normalises both outputs with
  * PageNormaliser, the one rule of the golden pages, and appends one JSON line to the file:
- * `{"file": <the Twig file, relative to the project>, "same": <bool>, "original": <string>, "port": <string>}`. The two
- * outputs are there only when they differ, each cut at 64 KiB. An original that throws is a difference too (its
- * `original` is the exception's class and message). While the original renders nothing is compared (a template the
- * original draws is compared when a page draws it).
+ * `{"file": <the Twig file, relative to the project>, "same": <bool>, "original_hash": <sha256 of the original's normalised
+ * output>}` and, when they differ, `"hash"` (sha256 of the normalised original, a NUL and the normalised port: what an entry of
+ * port-exceptions.php lists), `"original"` and `"port"` (the outputs, each cut at 64 KiB). An original that throws is a difference
+ * too (`same` false, a `"reason"`, and `original` holds the exception's class and message). While the original renders
+ * nothing is compared (a template the original draws is compared when a page draws it).
  *
- * Without the variable it does nothing but call the Twig engine.
+ * While the original renders (a shadow render), every file it draws that has a `.tpl.php` beside it is drawn from that `.tpl.php`
+ * too (a file with none is Twig's), so a comparison is the whole old tree against the whole new one: a variable the old parent
+ * leaked to a child and the ports drop is a difference. The shadow render is not isolated: it runs after the port, on a copy of
+ * the template object, but shares the session, the site and `header()`; an original that exits ends the request. When the
+ * environment variable IDNO_TEST_TWIG_BYPASS is `1` a file with an original beside it is drawn from the original and nothing is
+ * compared: the old engine alone, for the performance test.
+ *
+ * Without the variables it does nothing but call the Twig engine.
  */
 final class TwigPortCheck implements TemplateEngine
 {
@@ -50,21 +58,26 @@ final class TwigPortCheck implements TemplateEngine
 
     public function render(LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string
     {
+        $original = self::originalOf($template);
+        // The bypass (the old engine alone) and a shadow render (the whole old tree) draw a file that has its original beside
+        // it from the original; a file with none is Twig's.
+        if ($original !== null && (self::bypass() || self::$shadowing)) {
+            return $this->renderOriginal($template, $original, $vars, $context);
+        }
+
         $port = $this->twig->render($template, $vars, $context);
         $report = self::reportFile();
-        if ($report === '' || self::$shadowing || !is_array($vars)) {
-            return $port;
-        }
-        $original = preg_replace('/\.(?:html|txt)\.twig$/', '.tpl.php', $template->path, -1, $replaced);
-        if ($replaced !== 1 || $original === null || !is_file($original)) {
+        if ($report === '' || $original === null || self::$shadowing || !is_array($vars)) {
             return $port;
         }
 
         self::$shadowing = true;
+        $reason = null;
         try {
-            $drawn = $this->php->render(new LocatedTemplate($original, 'php', $template->type, $template->base, $template->type . '/' . basename($original)), $vars, $context->withVars($vars));
+            $drawn = $this->renderOriginal($template, $original, $vars, $context->withVars($vars));
         } catch (\Throwable $e) {
             $drawn = '[the original threw ' . $e::class . ': ' . $e->getMessage() . ']';
+            $reason = 'the original threw ' . $e::class;
         } finally {
             self::$shadowing = false;
         }
@@ -72,14 +85,36 @@ final class TwigPortCheck implements TemplateEngine
         $html = $template->type !== 'email-text';
         $before = PageNormaliser::normalise($drawn, $this->siteUrl, $html);
         $after = PageNormaliser::normalise($port, $this->siteUrl, $html);
-        $line = ['file' => $this->relative($template->path), 'same' => $before === $after];
-        if ($before !== $after) {
+        $same = $before === $after && $reason === null;
+        $line = ['file' => $this->relative($template->path), 'same' => $same, 'original_hash' => hash('sha256', $before)];
+        if (!$same) {
+            $line['hash'] = hash('sha256', $before . "\0" . $after);
             $line['original'] = substr($before, 0, self::OUTPUT_LIMIT);
             $line['port'] = substr($after, 0, self::OUTPUT_LIMIT);
+            if ($reason !== null) {
+                $line['reason'] = $reason;
+            }
         }
         file_put_contents($report, json_encode($line, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", FILE_APPEND | LOCK_EX);
 
         return $port;
+    }
+
+    private function renderOriginal(LocatedTemplate $template, string $original, mixed $vars, PhpTemplateContext $context): string
+    {
+        return $this->php->render(new LocatedTemplate($original, 'php', $template->type, $template->base, $template->type . '/' . basename($original)), $vars, $context);
+    }
+
+    private static function originalOf(LocatedTemplate $template): ?string
+    {
+        $original = preg_replace('/\.(?:html|txt)\.twig$/', '.tpl.php', $template->path, -1, $replaced);
+
+        return $replaced === 1 && $original !== null && is_file($original) ? $original : null;
+    }
+
+    private static function bypass(): bool
+    {
+        return ($_SERVER['IDNO_TEST_TWIG_BYPASS'] ?? getenv('IDNO_TEST_TWIG_BYPASS')) === '1';
     }
 
     private function relative(string $path): string

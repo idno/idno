@@ -231,9 +231,12 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   the site's address, the form token and its time (only a value of the token's shape), ids made by `uniqid()`,
   `md5(rand())` and `rand()` (numbered by first appearance), the base64 address in an annotation's delete link, the
   built assets' modification-time cache-buster and the password reset code, and, for an HTML page only, makes white space
-  that touches a tag one line break, `&amp;` and `&` one character, `&#039;`, `&#39;` and `&apos;` and `'` one, and, in text
-  (never inside a tag), `&quot;` and `&#34;` and `"` one (an ampersand that begins what reads as an entity, `&amp;lt;`, stays);
-  the contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched; every replacement is in
+  that touches a tag one line break, `&amp;` and `&` one character (not where what follows could begin an entity: `#`, a name
+  and its semicolon, or a legacy name such as `copy` that a browser reads without one, so `&amp;lt;` and `&amp;copy` stay different
+  from `&lt;` and `&copy`), `&#039;`, `&#39;` and `&apos;` and `'` one in text and in a double-quoted attribute value only (in a
+  single-quoted or unquoted value the entity keeps the attribute whole), and, in text (never inside a tag), `&quot;` and `&#34;`
+  and `"` one; the contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched (an unclosed one: everything after
+  its opening tag), a comment is one token whatever it holds (what stands before its first tag kept, the rest normalised as markup); every replacement is in
   `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there. The
   JSON goldens of the form pages (`json-account-settings-logged-in`, `json-status-edit-logged-in`) pin `csrf` and `formFields`
   (the second replaces the time of the note that does not exist yet, in that page's test, not in the normaliser), and every mail
@@ -262,22 +265,36 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   returns the Twig output unchanged; when `IDNO_TEST_TWIG_PORT_REPORT` names a file (read from `$_SERVER`, then the environment,
   at each render) and a `.tpl.php` of the same name is beside the Twig file, it draws that original too (with the same variables, on
   a copy of the template object, in the same request: a shadow render, not a replay, because templates read the session, the
-  current page and the site; nothing is compared inside a shadow render), normalises both with `PageNormaliser` and appends
-  `{"file", "same", "original", "port"}` to the file (the outputs only on a difference, 64 KiB each; an original that throws is a
-  difference). `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
+  current page and the site; nothing is compared inside a shadow render, and inside it every file that has a `.tpl.php` beside it
+  is drawn from that `.tpl.php`, a file with none by Twig, so a comparison is the WHOLE old tree against the whole new one and a
+  variable an old parent leaked to a child through `__()` and the ports drop is a difference; a child drawn at the top level by the
+  real render is compared in its own right too), normalises both with `PageNormaliser` and appends
+  `{"file", "same", "original_hash"}` to the file (and, on a difference, `hash` = sha256 of the normalised original, a NUL and the
+  normalised port, with `original` and `port`, 64 KiB each; an original that throws is a difference, `same` false with a `reason`).
+  The shadow render is not isolated: it runs after the port, on a clone of the template object, but shares the session, the site
+  and `header()`, and an original that exits ends the request. With `IDNO_TEST_TWIG_BYPASS=1` in the environment (test wiring only)
+  a file with an original beside it is drawn from the original and nothing is compared: the old engine alone. `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
   error and empty pages, as visitor, administrator, member and new user) and draws the mails and `DRAWS` (a template no page
-  reaches) in the site, and fails for a difference not listed in `Tests/Templating/fixtures/port-exceptions.php` (the Twig file,
-  its reason and the `Class::method` that pins the new output; a stale entry or a missing test fails), and for a Twig file with an
-  original beside it that nothing compared (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
+  reaches) in the site, and fails (`Tests\Templating\PortReportChecker`, itself tested in `PortReportCheckerTest`) for a difference not listed in
+  `Tests/Templating/fixtures/port-exceptions.php` (per Twig file: its reason, the `Class::method` that pins the new output and the
+  `differences`, the hash of each difference the failure prints; an entry covers exactly the differences it lists; a listed hash no
+  comparison produced, an entry with no hash and a missing test fail), and for a Twig file with an
+  original beside it that nothing compared; a file whose original's output never varied across the comparisons is a notice, and a
+  failure when it is in `PortReportChecker::MUST_VARY` (`shell/messages`: a failed login sets a session message and the next page
+  draws it) (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
   the pages are visited, not compared with goldens). Its self-test, `Tests/Unit/Templating/TwigPortCheckTest`, proves the check can fail.
   `Tests/Templating/fixtures/unported.php` lists every web and mail `.tpl.php` (types `default`, `email`, `email-text`; core and
   the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted), and
-  `raw-allowlist.php` every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`).
-  `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record` or `compare`) serves the fixture
-  site from a second server of the test (`PrivateSiteTestCase::startExtraServer()`: production environment, opcache on, an
-  outbound request fails at once), times 100 sequential requests of `/` and of a note's permalink after 10 to warm up, prints
-  the medians and 90th percentiles, and `record` writes the medians to `<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits
-  of the SHA-256 of the checkout's real path>.json` while `compare` asserts each is at most 1.15 times it. Twig templates in the cascade are pinned by
+  `raw-allowlist.php` every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`: also `autoescape false`, `filter raw`, `apply raw`, `|raw()` and `source()`).
+  `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record`, `compare` or `ratio`) serves the
+  fixture site from servers of the test (`PrivateSiteTestCase::startExtraServer()`: test environment, debug off, opcache on, checked
+  through `/_test/server`; an outbound request fails at once), warms each page with 10 requests and times it in 5 blocks of 40
+  sequential requests; a server's number is the smallest block median. `compare` while a Twig file has its `.tpl.php` beside it
+  starts TWO servers identical but for `IDNO_TEST_TWIG_BYPASS`, interleaves their blocks in one run and asserts the Twig server's
+  number for `/` and for a note's permalink is at most 1.15 times the bypass server's (both numbers and the ratio are printed);
+  with no such file it compares the Twig server alone with the baseline `record` stored (`<sys_get_temp_dir()>/idno-perf-baseline-<12
+  hex digits of the SHA-256 of the checkout's real path>.json`, by the same method: a number from another moment, noisier); `ratio`
+  is the two-server run whatever is ported (with nothing ported both draw the same files, so the ratio is the method's own noise). Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
   `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".
@@ -663,7 +680,8 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   bytes, at most 50 MB decoded and a few dozen kilobytes on the wire); `/_test/sink/{name}` (appends the request, in `/_test/echo`'s
   shape, to a file of its own and answers 202) and `/_test/sink/{name}/log` (the recorded requests as
   a JSON list, then the file is emptied), with `name` matching `[a-z0-9-]{1,40}`; and
-  `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint); and
+  `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint);
+  `/_test/server` (JSON: `env`, `debug`, `opcache`, `twig_bypass`: how the server that answers is set up; `ServerProbeController`); and
   `/_test/mail/log` (the mail the site has sent, recorded by `RecordingMailTransport`, as a JSON list
   oldest first, then emptied; see "Mail"). The
   sink's files are in `<sys_get_temp_dir()>/idno-test-sink-<first 12 hex digits of the SHA-256 of the

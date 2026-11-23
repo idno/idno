@@ -176,6 +176,47 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame('<p>&amp;copy;</p>', $this->html('<p>&amp;copy;</p>'), 'an ampersand that begins what reads as an entity is kept (a double escape is a difference)');
     }
 
+    public function testAnApostropheEntityIsFoldedInTextAndInADoubleQuotedValueOnly(): void
+    {
+        $this->assertSame('<a title="it\'s">it\'s</a>', $this->html('<a title="it&#039;s">it&#39;s</a>'));
+
+        $breakout = "<a title='x&#039; onclick=alert(1) '>";
+        $this->assertSame($breakout, $this->html($breakout), 'in a single-quoted value the entity is what keeps the attribute whole');
+        $this->assertNotSame($this->html("<a title='x' onclick=alert(1) '>"), $this->html($breakout), 'an attribute breakout is not the same as the entity');
+        $unquoted = '<a title=x&#039;onclick=alert(1)>';
+        $this->assertSame($unquoted, $this->html($unquoted), 'nor in an unquoted value');
+        $this->assertNotSame($this->html("<a title=x'onclick=alert(1)>"), $this->html($unquoted));
+        $this->assertSame("<a title='a&apos;b' alt=\"c'd\">", $this->html("<a title='a&apos;b' alt=\"c&apos;d\">"), 'each value by its own quotes');
+    }
+
+    public function testAnAmpersandIsFoldedOnlyWhereItCannotBeginAnEntity(): void
+    {
+        foreach (['&lt;', '&quot;', '&#39;', '&#x27;', '&copy', '&copy;', '&nbsp', '&amp;'] as $entity) {
+            $double = '&amp;' . substr($entity, 1);
+            $this->assertSame('<p>' . $double . '</p>', $this->html('<p>' . $double . '</p>'), $double . ' is not folded');
+            $this->assertNotSame($this->html('<p>' . $entity . '</p>'), $this->html('<p>' . $double . '</p>'), $double . ' stays different from ' . $entity);
+        }
+        $this->assertSame('<p>a & b, R&D, AT&T</p>', $this->html('<p>a &amp; b, R&amp;D, AT&amp;T</p>'));
+        $this->assertSame('<a href="?a=1&b=2&c=3">', $this->html('<a href="?a=1&amp;b=2&amp;c=3">'));
+        $this->assertSame('<a href="?a=1&amp;copy=2">', $this->html('<a href="?a=1&amp;copy=2">'), 'a legacy name without its semicolon is read as an entity by a browser: kept');
+    }
+
+    public function testACommentIsOneTokenWhateverItHolds(): void
+    {
+        $page = "<p>a</p><!-- it's a <b>  \"quote\" --><script>x  &amp;  y</script>";
+        $this->assertSame("<p>a</p><!-- it's a <b>\n\"quote\" --><script>x  &amp;  y</script>", $this->html($page), 'an apostrophe, a quote and a `<` in a comment do not start a quoted run or swallow the script after it');
+        $this->assertSame("<!-- a < b -->\n<pre>  x  </pre>", $this->html("<!-- a < b -->  <pre>  x  </pre>"));
+        $this->assertSame("<!-- <div>\nx -->", $this->html("<!-- <div>   x -->"), 'the tags a comment holds are normalised as the page\'s are');
+    }
+
+    public function testAnUnclosedRawTextElementLeavesEverythingAfterItsOpeningTagUntouched(): void
+    {
+        foreach (['script', 'style', 'pre', 'textarea'] as $name) {
+            $this->assertSame("<p>a</p>\n<$name x=\"1\">  &amp;  <b>  &quot;  ", $this->html("<p>a</p>  <$name x=\"1\">  &amp;  <b>  &quot;  "), $name);
+        }
+        $this->assertSame("<p>\nit's\n</p>", $this->html("<p>  it&#39;s  </p>"), 'the same page with nothing unclosed is normalised');
+    }
+
     public function testScriptStylePreAndTextareaAreUntouched(): void
     {
         $script = '<script>{"a":"&quot;", "b": "&amp;  x", "c": "&#039;"}</script>';

@@ -121,46 +121,26 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertNoDifferences();
 
         $root = dirname(__DIR__, 2);
-        /** @var array<string, array{reason: string, test: string}> $exceptions */
+        /** @var array<string, array{reason: string, test: string, differences: list<string>}> $exceptions */
         $exceptions = require __DIR__ . '/fixtures/port-exceptions.php';
         $lines = [];
         foreach (array_filter(explode("\n", (string) file_get_contents($this->report))) as $line) {
             $lines[] = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
         }
 
-        // 1. Every difference is an exception.
-        $unexpected = [];
-        $compared = [];
-        $differed = [];
-        foreach ($lines as $line) {
-            $compared[$line['file']] = true;
-            if (!$line['same']) {
-                $differed[$line['file']] = true;
-                if (!isset($exceptions[$line['file']]) && count($unexpected) < 5) {
-                    $unexpected[$line['file']] = $line['file'] . ":\n  original: " . json_encode($line['original'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n  port:     " . json_encode($line['port'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
-                }
-            }
-        }
-        $this->assertSame([], array_values($unexpected), "A Twig port draws something other than its original (the first five), and is not in port-exceptions.php:\n" . implode("\n", $unexpected));
-
-        // 2. Every exception differs, and its test exists.
-        foreach ($exceptions as $file => $exception) {
-            $this->assertNotSame('', trim($exception['reason']), $file . ': an exception needs its reason');
-            $this->assertArrayHasKey($file, $compared, $file . ' is an exception, and no page or draw compared it');
-            $this->assertArrayHasKey($file, $differed, $file . ' is a stale exception: it draws what its original drew');
-            [$class, $method] = explode('::', $exception['test'] . '::') + [1 => ''];
-            $this->assertTrue(class_exists($class) && method_exists($class, $method), $file . ': the test ' . $exception['test'] . ' does not exist');
-        }
-
-        // 3. Every Twig file with an original beside it was compared.
         $originals = BundledTemplates::files($root, '.tpl.php');
-        $uncompared = [];
+        $ported = [];
         foreach (BundledTemplates::twigTemplates($root) as $logical => $path) {
-            if (isset($originals[$logical]) && !isset($compared[substr($path, strlen($root) + 1)])) {
-                $uncompared[] = substr($path, strlen($root) + 1);
+            if (isset($originals[$logical])) {
+                $ported[] = substr($path, strlen($root) + 1);
             }
         }
-        $this->assertSame([], $uncompared, "These Twig files have an original beside them and no page or draw of this test compared them (add a page to EXTRA_PAGES, or a draw to DRAWS):\n" . implode("\n", $uncompared));
+
+        $result = PortReportChecker::check($lines, $exceptions, $ported);
+        foreach ($result['notices'] as $notice) {
+            fwrite(STDERR, "\nNotice: " . $notice . "\n");
+        }
+        $this->assertSame([], $result['failures'], implode("\n", $result['failures']));
     }
 
     /**
@@ -173,6 +153,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $cookies = ['visitor' => null, 'admin' => $admin];
         $cookies['member'] = (new Browser($this->site()))->login(self::MEMBER, self::PASSWORD);
         $cookies['new'] = $this->registerUser('carol');
+        $this->visitWithAMessage();
         $failed = [];
         foreach (self::EXTRA_PAGES as [$who, $path]) {
             $response = $this->site()->request('GET', $path, $cookies[$who] === null ? [] : ['Cookie' => $cookies[$who]]);
@@ -182,6 +163,21 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         }
         $this->assertSame([], $failed, implode("\n", $failed) . $this->serverLog());
         $this->assertNotEmpty($paths);
+    }
+
+    /**
+     * A visitor's failed login sets a message in the session, and the next page draws it: the pages' message area is compared
+     * with something in it.
+     */
+    private function visitWithAMessage(): void
+    {
+        $form = $this->site()->request('GET', 'session/login');
+        $cookie = Browser::cookie($form);
+        $post = $this->site()->request('POST', 'session/login', ['Cookie' => $cookie], Browser::token($form->body, 'session/login') + ['email' => 'nobody', 'password' => 'not the password']);
+        $cookie = Browser::cookieOr($post, $cookie) ?? $cookie;
+        $page = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
+        $this->assertSame(200, $page->status);
+        $this->assertMatchesRegularExpression('/id="page-messages">\s*<\w/', $page->body, 'the page after a failed login draws a message');
     }
 
     /**
