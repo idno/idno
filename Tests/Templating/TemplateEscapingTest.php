@@ -1388,7 +1388,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
      * A static page's title is text, its forward address is a link only when it is http or https (and is text either way), and its
      * body is purified: the old template printed all three as they were stored.
      */
-    public function testAStaticPagesTitleForwardAddressAndBodyAreEscaped(): void
+    public function testAStaticPagesTitleAndForwardAddressAreEscapedAndItsBodyIsAsWritten(): void
     {
         $this->seedSite();
 
@@ -1409,11 +1409,13 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         return $first . $template->__(['object' => $page])->draw('entity/StaticPage');
         PHP);
 
-        $this->assertStringNotContainsString('<script', $drawn);
+        $this->assertStringNotContainsString('<script>alert(1)', $drawn, 'the title is text');
+        $this->assertStringNotContainsString('<script>alert(3)', $drawn, 'the forward address is text');
         $this->assertStringContainsString('<h1 class="p-name">&lt;script&gt;alert(1)&lt;/script&gt;</h1>', $drawn);
         $this->assertDoesNotMatchRegularExpression('/href="\s*javascript:/i', $drawn);
         $this->assertStringContainsString('javascript:alert(4)</a>', $drawn, 'the address is shown as text');
         $this->assertStringContainsString('<p>Body</p>', $drawn);
+        $this->assertStringContainsString('<script>alert(2)</script>', $drawn, 'the body is as the administrator wrote it');
     }
 
     /**
@@ -1564,6 +1566,33 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * A static page is written by an administrator, with an editor that lets them write raw HTML, and the site's purifier would take out what a page
+     * legitimately holds: the body is drawn as it was stored. A form, an element with an `id` (an in-page anchor), a style block and an iframe from a host the
+     * purifier does not list are all there; the title and the forward address are still escaped.
+     */
+    public function testAStaticPageHoldsTheFormTheAnchorTheStyleAndTheEmbedItsAdministratorWrote(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/pages/x') . <<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $page = new \IdnoPlugins\StaticPages\StaticPage();
+        $page->setOwner($ada);
+        $page->title = 'Contact';
+        $page->body = '<h2 id="top">Top</h2><form action="https://lists.example.org/subscribe" method="post"><input name="email"></form><style>.x { color: red; }</style><iframe src="https://maps.example.org/embed?q=1" width="300"></iframe><p><a href="#top" target="_blank">Back</a></p>';
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $page])->draw('entity/StaticPage');
+        PHP);
+
+        $this->assertStringContainsString('<h2 id="top">Top</h2>', $drawn, 'an anchor keeps its id');
+        $this->assertStringContainsString('<form action="https://lists.example.org/subscribe" method="post"><input name="email"></form>', $drawn);
+        $this->assertStringContainsString('<style>.x { color: red; }</style>', $drawn);
+        $this->assertStringContainsString('<iframe src="https://maps.example.org/embed?q=1" width="300"></iframe>', $drawn, 'an embed from a host outside the purifier\'s list keeps its address');
+        $this->assertStringContainsString('<a href="#top" target="_blank"', $drawn);
+    }
+
+    /**
      * The address of a picture is printed only when it is http or https: the old template turned the scheme of any address into
      * http (`javascript:alert(1)` became `http:alert(1)`).
      */
@@ -1587,7 +1616,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * What a check-in or an event stores as its body is purified when it is drawn too, not only when it was saved (a Micropub client or
+     * What a check-in, an event, a photo or a media post stores as its body is purified when it is drawn too, not only when it was saved (a Micropub client or
      * an import can store a body that the form would have cleaned): a script and a handler are gone, the markup that is allowed stays.
      */
     public function testAStoredBodyIsPurifiedWhenItIsDrawn(): void
@@ -1598,7 +1627,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $ada = \Idno\Entities\User::getByHandle('ada');
         $body = '<p>Fine <b>bold</b></p><script>alert(1)</script><img src="x" onerror="alert(2)">';
         $drawn = [];
-        foreach ([\IdnoPlugins\Checkin\Checkin::class => 'entity/Checkin', \IdnoPlugins\Event\Event::class => 'entity/Event'] as $class => $name) {
+        foreach ([\IdnoPlugins\Checkin\Checkin::class => 'entity/Checkin', \IdnoPlugins\Event\Event::class => 'entity/Event', \IdnoPlugins\Photo\Photo::class => 'entity/Photo', \IdnoPlugins\Media\Media::class => 'entity/Media'] as $class => $name) {
             $post = new $class();
             $post->setOwner($ada);
             $post->body = $body;

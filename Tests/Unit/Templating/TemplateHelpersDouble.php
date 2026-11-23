@@ -151,6 +151,13 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return false;
     }
 
+    public bool $streamPage = false;
+
+    public function isStreamPage(): bool
+    {
+        return $this->streamPage;
+    }
+
     public function isXhr(): bool
     {
         return $this->xhr;

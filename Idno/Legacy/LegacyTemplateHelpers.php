@@ -134,6 +134,13 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return $page ? (bool) $page->isPermalink() : false;
     }
 
+    public function isStreamPage(): bool
+    {
+        $page = Idno::site()->currentPage();
+
+        return $page ? !$page->isPermalink() : false;
+    }
+
     public function isXhr(): bool
     {
         $page = Idno::site()->currentPage();

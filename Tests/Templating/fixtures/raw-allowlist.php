@@ -81,4 +81,7 @@ return [
     'IdnoPlugins/StaticPages/templates/default/staticpages/page.html.twig' => [
         ['expression' => 'object.draw()', 'reason' => 'HTML a static page has already drawn through its own template (`Entity::draw()`, `entity/StaticPage`), which escapes the title and the forward address; the page only places it'],
     ],
+    'IdnoPlugins/StaticPages/templates/default/entity/StaticPage.html.twig' => [
+        ['expression' => 'entity_value(object, \'body\')', 'reason' => 'administrator-authored page HTML, as stored; only administrators can write it (the plugin\'s edit page is behind `adminGatekeeper()`), with an editor that lets them write raw HTML, and the site\'s purifier would remove what a page legitimately holds (an `id` anchor, a form, a style block, an embed from a host it does not list). The linkers then link its text and never the inside of a tag'],
+    ],
 ];

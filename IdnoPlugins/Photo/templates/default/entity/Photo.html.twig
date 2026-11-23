@@ -1,4 +1,4 @@
-{% set attachments = object.getAttachments() %}{% set num_pics = attachments|length %}{% set many_pics = num_pics > 1 %}{% set on_permalink = is_permalink() %}{% set rel = on_permalink ? 'rel="in-reply-to"' : '' %}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}{% set photo_title = object.getTitle()|striptags %}
+{% set attachments = object.getAttachments() %}{% set num_pics = attachments|length %}{% set many_pics = num_pics > 1 %}{% set on_permalink = is_permalink() %}{% set stream_page = is_stream_page() %}{% set rel = on_permalink ? 'rel="in-reply-to"' : '' %}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}{% set photo_title = object.getTitle()|striptags %}
 {% if not feed_view and object.getTitle() and object.getTitle() != 'Untitled' %}
     <h2 class="idno-entry-title p-name"><a
                 href="{{ object.getDisplayURL() }}">{{ photo_title }}</a>
@@ -8,7 +8,7 @@
 <div class="idno-entry-body e-content entry-content {% if many_pics %}multiple-images{% endif %}"
      data-num-pics="{{ num_pics }}">
 
-    {# A stream shows the first five pictures and a link to the rest; a permalink shows them all #}{% for attachment in (on_permalink ? attachments : attachments|slice(0, 5)) %}{% set mainsrc = attachment.url %}{% set filename = attachment.filename ?? '' %}{% set thumbs = entity_value(object, 'thumbs_large') %}{% if thumbs and thumbs[filename] %}{% set src = thumbs[filename].url %}{% elseif entity_value(object, 'thumbnail_large') %}{% set src = entity_value(object, 'thumbnail_large') %}{% elseif entity_value(object, 'thumbnail') %}{% set src = entity_value(object, 'thumbnail') %}{% else %}{% set src = mainsrc %}{% endif %}{# Patch to correct certain broken URLs #}{% for broken in ['https:///', 'http:///'] %}{% if src starts with broken %}{% set src = site_url() ~ (src|slice(broken|length)) %}{% endif %}{% if mainsrc starts with broken %}{% set mainsrc = site_url() ~ (mainsrc|slice(broken|length)) %}{% endif %}{% endfor %}{% set src = src|attachment_url %}{% set mainsrc = mainsrc|attachment_url %}
+    {# A stream shows the first five pictures and a link to the rest; a permalink, and a post drawn with no page at all (an export), shows them all #}{% for attachment in (stream_page ? attachments|slice(0, 5) : attachments) %}{% set mainsrc = attachment.url %}{% set filename = attachment.filename ?? '' %}{% set thumbs = entity_value(object, 'thumbs_large') %}{% if thumbs and thumbs[filename] %}{% set src = thumbs[filename].url %}{% elseif entity_value(object, 'thumbnail_large') %}{% set src = entity_value(object, 'thumbnail_large') %}{% elseif entity_value(object, 'thumbnail') %}{% set src = entity_value(object, 'thumbnail') %}{% else %}{% set src = mainsrc %}{% endif %}{# Patch to correct certain broken URLs #}{% for broken in ['https:///', 'http:///'] %}{% if src starts with broken %}{% set src = site_url() ~ (src|slice(broken|length)) %}{% endif %}{% if mainsrc starts with broken %}{% set mainsrc = site_url() ~ (mainsrc|slice(broken|length)) %}{% endif %}{% endfor %}{% set src = src|attachment_url %}{% set mainsrc = mainsrc|attachment_url %}
             <div class="idno-photo-view">
                 <a href="{{ on_permalink ? (mainsrc|display_url|http_url) : object.getDisplayURL() }}"
                    data-gallery="{{ photo_title }}"
@@ -19,7 +19,7 @@
                             src="{{ src|display_url|http_url }}" class="u-photo"
                             alt="{{ photo_title }}"/></a>
             </div>
-            {% endfor %}{% if not on_permalink and num_pics > 5 %}
+            {% endfor %}{% if stream_page and num_pics > 5 %}
                     <div class="idno-photo-view idno-photo-view-more">
                         <a href="{{ object.getDisplayURL() }}">{{ t('%d more...', [num_pics - 5]) }}</a>
                     </div>

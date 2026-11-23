@@ -27,6 +27,6 @@
             </h2>
     {% endif %}
 
-    {{ entity_value(object, 'body')|sanitize_html|parse_hashtags|parse_urls|autop }}
+    {{ entity_value(object, 'body')|raw|parse_hashtags|parse_urls|autop }}
 
 </div>

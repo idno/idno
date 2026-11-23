@@ -90,6 +90,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('input', $this->input(...)),
             new TwigFunction('path_matches', $this->pathMatches(...)),
             new TwigFunction('is_permalink', $this->isPermalink(...)),
+            new TwigFunction('is_stream_page', $this->isStreamPage(...)),
             new TwigFunction('is_xhr', $this->isXhr(...)),
             new TwigFunction('is_secure', $this->isSecure(...)),
             new TwigFunction('page_icon', $this->pageIcon(...)),
@@ -344,6 +345,11 @@ final class IdnoTwigExtension extends AbstractExtension
     public function pathMatches(string $path): bool
     {
         return $this->helpers->pathMatches($path);
+    }
+
+    public function isStreamPage(): bool
+    {
+        return $this->helpers->isStreamPage();
     }
 
     public function isPermalink(): bool

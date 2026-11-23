@@ -107,6 +107,32 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertStringContainsString('logged-out', $helpers->bodyClasses());
     }
 
+    /**
+     * A stream page is a page that is being served and is not a permalink page: with no page at all (a console process, the queue worker
+     * drawing an export's entities) it is false, which is not what "not a permalink" says.
+     */
+    public function testIsStreamPageIsTrueOnlyForAPageThatIsNotAPermalink(): void
+    {
+        $helpers = $this->helpers();
+        $property = new \ReflectionProperty(Idno::site(), 'currentPage');
+        $page = Idno::site()->currentPage();
+
+        try {
+            $this->assertFalse($page->isPermalink());
+            $this->assertTrue($helpers->isStreamPage(), 'a listing is a stream page');
+            $page->setPermalink();
+            $this->assertTrue($page->isPermalink());
+            $this->assertFalse($helpers->isStreamPage(), 'a permalink page is not');
+            $this->assertTrue($helpers->isPermalink());
+            $property->setValue(Idno::site(), null);
+            $this->assertFalse($helpers->isStreamPage(), 'with no page there is no stream');
+            $this->assertFalse($helpers->isPermalink());
+        } finally {
+            $page->setPermalink(false);
+            $property->setValue(Idno::site(), $page);
+        }
+    }
+
     public function testThePartsOfTheAddressAreTheConfiguredOnesWithTheRequestUri(): void
     {
         $parts = $this->helpers()->currentUrlPartsFor('/some/page?x=1&y=2');

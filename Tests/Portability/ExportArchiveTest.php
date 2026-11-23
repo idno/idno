@@ -223,6 +223,37 @@ final class ExportArchiveTest extends PortabilityTestCase
         $this->assertMatchesRegularExpression('/class="([^"]* )?e-content entry-content( [^"]*)?"/', $html);
     }
 
+    /**
+     * The archive is made by the queue worker, which draws each entity with no page at all: a stream shows five pictures of a post and a link to
+     * the rest, and an archive is not a stream, so every picture of a photo post is in its file.
+     */
+    public function testAPhotoPostWithSevenPicturesIsDrawnWithAllSevenInTheArchive(): void
+    {
+        $photo = new \IdnoPlugins\Photo\Photo();
+        $photo->title = 'Seven pictures';
+        $photo->body = 'A caption';
+        $attachments = [];
+        for ($n = 1; $n <= 7; $n++) {
+            $attachments[] = ['url' => Idno::site()->config()->getDisplayURL() . 'file/' . $this->fileId . '/pool' . $n . '.png', 'filename' => 'pool' . $n . '.png', '_id' => $this->fileId, 'mime-type' => 'image/png', 'length' => strlen($this->pngBytes)];
+        }
+        $photo->attachments = $attachments;
+        $photo = $this->store($photo, $this->admin());
+
+        $site = Idno::site();
+        $property = new \ReflectionProperty($site, 'currentPage');
+        $page = $site->currentPage();
+        $property->setValue($site, null);
+        try {
+            $path = $this->export();
+        } finally {
+            $property->setValue($site, $page ?: null);
+        }
+
+        $html = (string) file_get_contents($path . '/html/' . $photo->getID() . '.html');
+        $this->assertSame(7, substr_count($html, 'class="u-photo"'), 'every picture is in the file');
+        $this->assertStringNotContainsString('more...', $html);
+    }
+
     public function testAPrivateEntityIsInTheArchiveToo(): void
     {
         $path = $this->export();

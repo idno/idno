@@ -84,6 +84,12 @@ interface TemplateHelpers
 
     public function isPermalink(): bool;
 
+    /**
+     * Whether a page is being served and it is not a permalink page: a stream, a listing, an admin page. False when there is no page (a console
+     * process, the queue worker that draws an export's entities), which is not the same as "not a permalink".
+     */
+    public function isStreamPage(): bool;
+
     public function isXhr(): bool;
 
     /**

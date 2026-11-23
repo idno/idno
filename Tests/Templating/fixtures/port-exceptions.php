@@ -416,11 +416,11 @@ return [
         ],
     ],
     'IdnoPlugins/StaticPages/templates/default/entity/StaticPage.html.twig' => [
-        'reason' => "a page's title is text, its forward address is a link only when it is http or https and is text either way, and its body is purified when it is drawn; the old template printed the title and the address as they were stored (in an element and in an attribute) and the body unpurified",
-        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAStaticPagesTitleForwardAddressAndBodyAreEscaped',
+        'reason' => "a page's title is text, its forward address is a link only when it is http or https and is text either way, the old template printed them as they were stored (in an element and in an attribute); the body is printed as stored, as before",
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAStaticPagesTitleAndForwardAddressAreEscapedAndItsBodyIsAsWritten',
         'differences' => [
-            'b0ccb5d3cb8a196fcaf8804dc0ce73c6ff31ba86af89abff5052e289885dfa2e',
-            '7f300fc4adeff4716ce0a2628b082f27ef46487dba7e800c8081627b95c07873',
+            '21b1b1561be3d988883c219df29fff5c235f81ef7fe31cf82371a5908675a793',
+            'c030b88db83b2704309660288772b141fc80f3d768dd664765cb044f8d1ab2b6',
             '02586093aba5de8ac8b510d89e971e27f8ed2eeeb588e79d4bc395c9c6ec2c3b',
             'f0076044814d90bdcd7ef1533091718451099048f735eb63f2951f38874f5655',
         ],

@@ -2915,8 +2915,13 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     drawn in a stream and on its page, its icon, its compose and edit form) have Twig files beside their `.tpl.php` originals. A post's text is read as the
     original read it: a note's is decoded and escaped (`decode_entities`, which is `html_entity_decode()`; the old `htmlentities(html_entity_decode())`) then
     linked and followed by its tags, with `nl2br`; an article's goes through `forms/output/richtext`; the stored HTML of a photo, media, event, check-in, RSVP
-    and static page goes through `sanitize_html` first (the originals printed it as stored, relying on the save to clean it, so a body a client stored without
-    cleaning is no longer markup) and then the linkers in the order the original used. An address from a post (a picture, an audio file, a bookmark, a static page's
+    goes through `sanitize_html` first (the originals printed it as stored, relying on the save to clean it, so a body a client stored without
+    cleaning is no longer markup) and then the linkers in the order the original used. A STATIC PAGE's body is not purified: only administrators write one (`adminGatekeeper()`
+    on the plugin's edit page, an editor that takes raw HTML) and the purifier would remove an anchor's `id`, a form, a style block and an embed from a host it does not list, which existing
+    pages hold; it is printed as stored with `|raw` (`raw-allowlist.php`), then linked, as the original did (`TemplateEscapingTest::testAStaticPageHoldsTheFormTheAnchorTheStyleAndTheEmbedItsAdministratorWrote`).
+    A photo post limits a stream to five pictures only when a page is being served and it is not a permalink (`is_stream_page()`, a `TemplateHelpers` method: false with no current
+    page, which is the console and the queue worker's export, where every picture is drawn, as the original drew them: `ExportArchiveTest::testAPhotoPostWithSevenPicturesIsDrawnWithAllSevenInTheArchive`);
+    `is_permalink()` is false with no page too, which is what the other templates that test "is a permalink" need. An address from a post (a picture, an audio file, a bookmark, a static page's
     forward address) is printed through `http_url`; what a script holds (the player's file address, the map's element id, the addresses of the bookmark form and of
     the page editor's file picker) is written with `e('js')`; a check-in's coordinates are `?float` (`Checkin::lat()` and `long()` answer null for a stored value that
     is not a finite number, which used to be a `TypeError`), so the map script can only hold numbers. An event's times are read with `to_timestamp` (an
@@ -2924,7 +2929,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     exactly the attributes it is given: the originals left the attributes of an earlier control on the page's template, so the hidden `forward-to` field and the
     footer's spinner inherited an editor's class, `required`, placeholder or id (`TemplateEscapingTest::testALaterControlOfAnEditFormDoesNotInheritTheAttributesOfAnEarlierOne`).
     The differences are in `port-exceptions.php`, each pinned by a `TemplateEscapingTest` method
-    (`testThePluginPostsScriptsWriteTheirValuesForAScript`, `testAStaticPagesTitleForwardAddressAndBodyAreEscaped`, `testAPhotosPictureAddressThatIsNotHttpIsNotPrinted`,
+    (`testThePluginPostsScriptsWriteTheirValuesForAScript`, `testAStaticPagesTitleAndForwardAddressAreEscapedAndItsBodyIsAsWritten`, `testAPhotosPictureAddressThatIsNotHttpIsNotPrinted`,
     `testAStoredBodyIsPurifiedWhenItIsDrawn`; `testABookmarkWithAJavascriptAddressRendersNoLink`, `testACheckinPlaceNameIsEscaped`, `testAnRsvpBodyAndEventAddressAreSanitized`
     and `testACheckinsCoordinatesAreNumbersInTheMapScript` pin what the originals already did). The golden pages that hold such a post or form changed in exactly those
     lines. `forms/output/richtext` no longer ends with a newline (the original did not), so a post's text is followed directly by what the template closes. The

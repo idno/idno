@@ -547,6 +547,12 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $site->config()->attachment_base_host = 'cdn.example';
         $each('a photo on an attachment host', 'entity/Photo', $post(new \IdnoPlugins\Photo\Photo(), ['title' => 'Cdn', 'body' => 'Cdn', 'attachments' => $pictures(2)]));
         $site->config()->attachment_base_host = '';
+        // No page at all (a console process: the queue worker's export draws each entity through `$entity->draw()`): every picture is shown, as the original showed them
+        $noPage = new \ReflectionProperty($site, 'currentPage');
+        $pageWas = $site->currentPage();
+        $noPage->setValue($site, null);
+        $out['a photo with seven pictures, drawn with no page'] = $draw('entity/Photo', ['object' => $post(new \IdnoPlugins\Photo\Photo(), ['title' => 'Many', 'body' => 'Seven', 'attachments' => $pictures(7)]), 'feed_view' => true]);
+        $noPage->setValue($site, $pageWas);
         $out['the icon of a photo'] = $draw('entity/Photo/icon');
 
         // Audio and video
