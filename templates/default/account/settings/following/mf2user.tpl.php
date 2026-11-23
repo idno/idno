@@ -16,7 +16,7 @@ if (empty($photo)) {
     $number = 1 + ($bn % 5);
     $photo = \Idno\Core\Idno::site()->config()->getStaticURL() . 'gfx/users/default-'. str_pad($number, 2, '0', STR_PAD_LEFT) .'.png';
 } else {
-    $photo = \Idno\Core\Idno::site()->template()->getProxiedImageUrl($properties['photo'][0], 300, 'square');
+    $photo = \Idno\Core\UrlValidator::httpUrl(\Idno\Core\Idno::site()->template()->getProxiedImageUrl($properties['photo'][0], 300, 'square'));
 }
 
 $email =  $properties['email'][0];
@@ -31,15 +31,15 @@ $nickname =  $properties['nickname'][0];
 
     <div class="col-md-1 col-md-offset-1 owner h-card hidden-sm">
         <p>
-        <span class="u-url icon-container"><img class="u-photo" src="<?php echo $photo ?>" /></span><br />
-        <?php echo $name; ?>
+        <span class="u-url icon-container"><img class="u-photo" src="<?php echo htmlspecialchars($photo) ?>" /></span><br />
+        <?php echo htmlspecialchars($name); ?>
         </p>
     </div>
     <div class="col-md-8 idno-object idno-content">
         <div class="visible-sm">
         <p class="p-author author h-card vcard">
             <img class="u-logo logo u-photo photo" src="<?php echo htmlspecialchars($photo) ?>" alt="<?php echo htmlspecialchars($name) ?>" />
-            <span class="p-name fn"><?php echo $name ?></span>
+            <span class="p-name fn"><?php echo htmlspecialchars($name) ?></span>
         </p>
         </div>
         <div class="e-content entry-content">
@@ -94,8 +94,8 @@ $nickname =  $properties['nickname'][0];
                 ?>
             </select>
             <?php } else { ?>
-                <a href="<?php echo $url; ?>" target="_blank"><?php echo $url; ?></a>
-                <input type="hidden" name="uuid" value="<?php echo $url; ?>" />
+                <a href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($url)); ?>" target="_blank"><?php echo htmlspecialchars($url); ?></a>
+                <input type="hidden" name="uuid" value="<?php echo htmlspecialchars($url); ?>" />
             <?php } ?>
             </div>
 
