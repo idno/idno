@@ -391,6 +391,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $status = current(array_filter(\IdnoPlugins\Status\Status::get([], [], 50), static fn ($post) => $post->countAnnotations('reply') > 0));
         $status->posse = ['zz' => [
             ['url' => 'javascript:alert(1)', 'identifier' => '<b>x</b> & "y"'],
+            ['url' => 'data:text/html,x', 'identifier' => 'second'],
             ['url' => 'https://x.example/?a=1&b=2', 'identifier' => 'ok'],
         ]];
         $template = clone \Idno\Core\Idno::site()->template();
@@ -404,6 +405,8 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertSame(1, substr_count($drawn, 'class="u-syndication"'), 'only the http address is a link');
         $this->assertStringNotContainsString('href=""', $drawn);
         $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot;', $drawn, 'the identifier of the refused link is still shown, as text');
+        $this->assertStringContainsString('&quot;y&quot; <i class="fa', $drawn, 'and a space follows it, so that the next item does not run into it');
+        $this->assertStringContainsString('second <a href="https://x.example', $drawn, 'also the one before a link');
     }
 
     /**
@@ -563,6 +566,127 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertStringContainsString('Carol', $inserted);
         $this->assertStringContainsString('&lt;b&gt;', $inserted, 'the name, escaped for HTML');
         $this->assertStringContainsString('<i class="fa fa-share-square-o"></i>', $inserted, 'the icon is the markup it was');
+    }
+
+    /**
+     * Every value a control prints (a name, an id, a class, a placeholder, a value, the text of an option or of a tag, a form's address)
+     * can be supplied by a member, a request or another site: a value with `"><script>` in it is read back as the same text from the
+     * attribute or the element that holds it, and opens no element. The same fragment is drawn for a value that is not ASCII (printed as
+     * itself, not as an entity) and for a text area whose value is "0" (a body of "0" is kept).
+     */
+    public function testFormValuesAreEscaped(): void
+    {
+        $this->seedSite();
+        $hostile = '"><script>alert(1)</script>\'';
+
+        $drawn = $this->runInSite($this->pageCode('/status/edit') . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $draw = static function (string $name, array $vars) {
+            $template = clone \Idno\Core\Idno::site()->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+        $out = [];
+        $out['input'] = $draw('forms/input/input', ['name' => $hostile, 'id' => $hostile, 'value' => $hostile, 'placeholder' => $hostile, 'alt' => $hostile, 'class' => $hostile, 'pattern' => $hostile, 'onclick' => $hostile]);
+        $out['text'] = $draw('forms/input/text', ['name' => 'x', 'value' => $hostile, 'placeholder' => $hostile]);
+        $out['hidden'] = $draw('forms/input/hidden', ['name' => 'x', 'value' => $hostile]);
+        $out['non-ASCII'] = $draw('forms/input/text', ['name' => 'x', 'value' => "caf\u{e9} \u{2603}"]);
+        $out['select'] = $draw('forms/input/select', ['name' => $hostile, 'id' => $hostile, 'options' => [$hostile => $hostile], 'value' => [$hostile], 'class' => $hostile, 'onchange' => $hostile]);
+        $out['longtext'] = $draw('forms/input/longtext', ['name' => $hostile, 'value' => "</textarea>" . $hostile, 'unique_id' => $hostile, 'class' => $hostile, 'placeholder' => $hostile]);
+        $out['longtext, zero'] = $draw('forms/input/longtext', ['name' => 'body', 'value' => '0']);
+        $out['richtext'] = $draw('forms/input/richtext', ['name' => $hostile, 'value' => "</textarea>" . $hostile, 'unique_id' => $hostile]);
+        $out['richtext, zero'] = $draw('forms/input/richtext', ['name' => 'body', 'value' => '0']);
+        $out['tags'] = $draw('forms/output/tags', ['tags' => [$hostile, 'ok']]);
+        $out['tag'] = $draw('forms/output/tags', ['tags' => $hostile]);
+        $out['url'] = $draw('forms/output/url', ['value' => 'javascript:alert(1)', 'label' => '']);
+        $out['url with a quote'] = $draw('forms/output/url', ['value' => 'https://example.org/"><script>x</script>', 'label' => $hostile]);
+        $out['email'] = $draw('forms/output/email', ['value' => 'ada@example.com', 'label' => $hostile]);
+        $out['text output'] = $draw('forms/output/text', ['value' => $hostile]);
+        $out['form'] = $draw('forms/action', ['action' => $hostile, 'method' => 'post', 'body' => '<p>body</p>']);
+        $out['token'] = $draw('forms/token', ['action' => $hostile]);
+        $out['search'] = $draw('forms/usersearch', ['name' => $hostile, 'id' => $hostile, 'class' => $hostile, 'source-url' => $hostile, 'render-template' => $hostile]);
+        $out['form list'] = $draw('forms/input/form-list', ['form' => ['a' => 'text', 'b' => 'text'], 'labels' => ['a' => 'A <i>one</i>', 'b' => $hostile], 'help' => ['a' => $hostile], 'defaults' => ['a' => $hostile, 'b' => ''], 'required' => ['a'], 'placeholders' => [], 'values' => []]);
+
+        return $out;
+        PHP);
+        $this->assertIsArray($drawn);
+
+        $elements = function (string $html, string $tag): array {
+            $dom = new \DOMDocument();
+            libxml_use_internal_errors(true);
+            $dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>');
+            libxml_clear_errors();
+
+            return iterator_to_array($dom->getElementsByTagName($tag));
+        };
+        foreach ($drawn as $label => $html) {
+            $this->assertCount($label === 'search' ? 1 : 0, $elements($html, 'script'), $label . ' opens no script element but its own');
+        }
+
+        // An input: every attribute reads back as what was given
+        [$input] = $elements($drawn['input'], 'input');
+        foreach (['name', 'id', 'value', 'placeholder', 'alt', 'pattern', 'onclick'] as $attribute) {
+            $this->assertSame($hostile, $input->getAttribute($attribute), 'the ' . $attribute . ' of an input');
+        }
+        $this->assertSame('idno-input ' . $hostile, $input->getAttribute('class'));
+        $this->assertSame($hostile, $elements($drawn['text'], 'input')[0]->getAttribute('value'));
+        $this->assertSame($hostile, $elements($drawn['text'], 'input')[0]->getAttribute('placeholder'));
+        $this->assertSame($hostile, $elements($drawn['hidden'], 'input')[0]->getAttribute('value'));
+        $this->assertStringContainsString('value="caf' . "\u{e9} \u{2603}" . '"', $drawn['non-ASCII'], 'non-ASCII text is printed as itself');
+
+        // A select: the name, the id, the option's value and its text
+        [$select] = $elements($drawn['select'], 'select');
+        $this->assertSame($hostile, $select->getAttribute('name'));
+        $this->assertSame($hostile, $select->getAttribute('id'));
+        $this->assertSame($hostile, $select->getAttribute('onchange'));
+        $option = $elements($drawn['select'], 'option')[1];
+        $this->assertSame($hostile, $option->getAttribute('value'));
+        $this->assertSame($hostile, $option->textContent);
+        $this->assertTrue($option->hasAttribute('selected'));
+
+        // The text areas: the value stays inside, whatever it holds
+        [$longtext] = $elements($drawn['longtext'], 'textarea');
+        $this->assertSame($hostile, $longtext->getAttribute('name'));
+        $this->assertSame($hostile, $longtext->getAttribute('id'));
+        $this->assertSame($hostile, $longtext->getAttribute('placeholder'));
+        $this->assertSame('</textarea>' . $hostile, $longtext->textContent);
+        $this->assertSame('0', $elements($drawn['longtext, zero'], 'textarea')[0]->textContent, 'a body of "0" is kept');
+        $textareas = $elements($drawn['richtext'], 'textarea');
+        $this->assertCount(1, $textareas);
+        $this->assertSame('</textarea>' . $hostile, $textareas[0]->textContent);
+        $this->assertSame($hostile, $textareas[0]->getAttribute('name'));
+        $this->assertSame($hostile, $textareas[0]->getAttribute('id'));
+        $editor = array_values(array_filter($elements($drawn['richtext'], 'div'), static fn (\DOMElement $div): bool => $div->hasAttribute('x-data')));
+        $this->assertSame("tiptapEditor('" . '"><script>alert(1)</script>\\\'' . "')", $editor[0]->getAttribute('x-data'), 'the id is one JavaScript string');
+        $this->assertSame('0', $elements($drawn['richtext, zero'], 'textarea')[0]->textContent);
+
+        // Tags and outputs
+        $links = $elements($drawn['tags'], 'a');
+        $this->assertSame($hostile, $links[0]->textContent);
+        $this->assertStringEndsWith('/tag/' . urlencode($hostile), $links[0]->getAttribute('href'));
+        $this->assertSame($hostile, $elements($drawn['tag'], 'a')[0]->textContent);
+        $this->assertSame('', $elements($drawn['url'], 'a')[0]->getAttribute('href'), 'an address that is not http or https is no link');
+        $this->assertSame('javascript:alert(1)', $elements($drawn['url'], 'a')[0]->textContent);
+        $this->assertStringNotContainsString('<script', $elements($drawn['url with a quote'], 'a')[0]->getAttribute('href'), 'a quote in an address does not end the attribute');
+        $this->assertSame($hostile, $elements($drawn['url with a quote'], 'a')[0]->textContent);
+        $this->assertSame($hostile, $elements($drawn['email'], 'a')[0]->textContent);
+        $this->assertSame(htmlspecialchars($hostile, ENT_QUOTES), $drawn['text output']);
+
+        // The form and its token: the address is text in the form's attribute and in the token's field
+        $this->assertSame($hostile, $elements($drawn['form'], 'form')[0]->getAttribute('action'));
+        $fields = array_values(array_filter($elements($drawn['token'], 'input'), static fn (\DOMElement $field): bool => $field->getAttribute('name') === '__bTa'));
+        $this->assertSame($hostile, $fields[0]->getAttribute('value'));
+
+        // The user search: its id and class, and the address and template its script is started with
+        $div = $elements($drawn['search'], 'div')[0];
+        $this->assertSame($hostile, $div->getAttribute('id'));
+        $this->assertSame('users-search ' . $hostile, $div->getAttribute('class'));
+        $this->assertSame("userSearch('" . '"><script>alert(1)</script>\\\'' . "', '" . '"><script>alert(1)</script>\\\'' . "')", $div->getAttribute('x-data'));
+
+        // A list of fields: the labels and help are text, and only a required field is marked so
+        $this->assertStringContainsString('A &lt;i&gt;one&lt;/i&gt;', $drawn['form list']);
+        $this->assertSame(1, substr_count($drawn['form list'], ' required '), 'one field is required');
+        $this->assertSame($hostile, $elements($drawn['form list'], 'p')[0]->textContent, 'the help is text');
     }
 
     /**

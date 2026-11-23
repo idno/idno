@@ -1,0 +1,5 @@
+{% set time = time is not empty ? time : 'now'|date('U') %}{% set tokenid = 'tid' ~ random_id() %}<span class="known-security-token" style="display: none;" id="{{ tokenid }}"></span>
+<input type="hidden" name="__bTs" value="{{ time }}" />
+<input type="hidden" name="__bTk" value="{{ security_token(action, time) }}" />
+<input type="hidden" name="__bTa" value="{{ action }}" />
+{% do forget_variables(['time', 'action']) %}

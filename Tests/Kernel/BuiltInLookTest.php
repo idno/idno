@@ -410,6 +410,49 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         }
     }
 
+    /**
+     * A link that submits a signed POST (the delete link of a post) is a link and a hidden form. A page registers the form with its
+     * shell, which draws it at the end; an XHR request draws no shell, so there the form is printed after the link, and the link of
+     * content inserted by a script is active (the form the link submits is in the response). Each link and its form share an id.
+     */
+    public function testALinkActionInAnXhrResponseCarriesItsForm(): void
+    {
+        $paths = $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+
+        $xhr = $this->site()->request('GET', $paths['status'], ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertSame(200, $xhr->status);
+
+        $document = new \DOMDocument();
+        @$document->loadHTML('<?xml encoding="utf-8"?>' . $xhr->body);
+        $links = [];
+        foreach ($document->getElementsByTagName('a') as $link) {
+            if ($link->hasAttribute('data-form-id')) {
+                $links[$link->getAttribute('data-form-id')] = $link;
+            }
+        }
+        $this->assertNotEmpty($links, 'the response has an action link: the test is looking at it');
+        $forms = [];
+        foreach ($document->getElementsByTagName('form') as $form) {
+            $forms[$form->getAttribute('id')] = $form;
+        }
+        foreach ($links as $id => $link) {
+            $this->assertArrayHasKey($id, $forms, 'the form the link submits is in the response');
+            $this->assertSame($link->getAttribute('href'), $forms[$id]->getAttribute('action'), 'and posts to the address of the link');
+            $this->assertStringContainsString("document.getElementById('" . $id . "').submit()", $link->getAttribute('onclick'));
+            $this->assertSame('post', strtolower($forms[$id]->getAttribute('method')));
+            $names = array_map(static fn (\DOMElement $field): string => $field->getAttribute('name'), iterator_to_array($forms[$id]->getElementsByTagName('input')));
+            $this->assertContains('__bTk', $names, 'and the form is signed');
+            $this->assertSame(1, preg_match('#<a data-form-id="' . $id . '"[^>]*>(?:(?!</a>).)*</a>\s*<form action="[^"]*" style="display: none; margin: 0; padding: 0" id="' . $id . '"#s', $xhr->body), 'the form follows its link');
+        }
+
+        // A page draws the same form once, in its shell: where the link is not followed by it
+        $page = $this->site()->request('GET', $paths['status'], ['Cookie' => $cookie]);
+        $this->assertSame(200, $page->status);
+        $this->assertSame(substr_count($page->body, 'data-form-id="'), substr_count($page->body, 'style="display: none; margin: 0; padding: 0" id="f'), 'a page has one form for each link');
+        $this->assertSame(0, preg_match('#<a data-form-id="[^"]*"[^>]*>(?:(?!</a>).)*</a>\s*<form action="#s', $page->body), 'in the page the forms are the shell\'s, not printed beside their links');
+    }
+
     public function testDraftsPageIsServedFromCore(): void
     {
         $this->seedSite();

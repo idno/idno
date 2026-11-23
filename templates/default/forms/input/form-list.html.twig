@@ -1,0 +1,31 @@
+
+<div class="form-list">
+    
+    {% for field, kind in form %}
+        {% set settings = {name: field, id: 'form-list-element-' ~ field, value: values[field] ?? defaults[field] ?? null, required: field in required ? true : null, placeholder: placeholders[field] is not empty ? placeholders[field] : null} %}
+        {% if kind != 'hidden' %}
+        
+    <div class="row">
+        <div class="col-sm-12 col-md-2">
+            <label>
+                {{ t(labels[field]) }}
+            </label> 
+        </div>
+        <div class="col-sm-12 col-md-6">  
+            {{ idno_include('forms/input/' ~ kind, settings) }}
+        </div>
+        <div class="col-sm-12 col-md-4">
+            {% if help[field] is not empty %}
+            <p class="config-desc">{{ t(help[field]) }}</p>
+            {% endif %}
+        </div>
+    </div>
+        
+        {% else %}
+            {{ idno_include('forms/input/' ~ kind, settings) }}
+        {% endif %}
+    {% endfor %}
+    
+    
+</div>
+{% do forget_variables(['type', 'name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange', 'placeholder', 'value', 'class']) %}

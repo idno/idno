@@ -1,0 +1,10 @@
+{% set blank_default = _context['blank-default'] ?? null %}{% if blank_default is null and multiple is empty %}{% set blank_default = true %}{% endif %}{% set options = options is not empty ? options : [] %}{% if id is null %}{% set id = name ~ '_' ~ next_input_id() %}{% endif %}{% if multiple is not empty %}{% set name = name ~ '[]' %}{% set class = (class ?? '') ~ ' select-multiple' %}{% endif %}{% set selected = value is iterable ? value : [value] %}<select
+{% for field in ['name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange'] %}{% set shown = _context[field] ?? null %}{% if shown is not null %}{% if shown is same as(true) %}{{ field }} {% else %}{{ field }}="{{ shown }}" {% endif %}{% endif %}{% endfor %}    class="idno-select {{ class ?? '' }}">
+    {% if blank_default is not empty %}
+    <option></option>
+    {% endif %}
+    {% for option, label in options %}
+    <option value="{{ option }}" {% if option in selected %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+</select>
+{% do forget_variables(['name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange', 'options', 'blank-default', 'placeholder', 'value', 'class']) %}

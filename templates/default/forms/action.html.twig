@@ -1,0 +1,6 @@
+{% set method = method|lower != 'get' ? 'post' : method %}<form method="{{ method }}" action="{{ action }}" enctype="multipart/form-data">
+    
+    {{ body|raw }}
+    {{ idno_include('forms/token') }}
+    
+</form>

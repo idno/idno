@@ -1,0 +1,1 @@
+{% set href = value|email_address %}<a href="mailto:{{ href }}">{{ idno_include('forms/output/text', {value: label ? label : value}) }}</a>

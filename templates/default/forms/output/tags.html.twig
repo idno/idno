@@ -1,0 +1,11 @@
+{% if tags is not empty %}{% if tags is iterable %}
+        <p class="tag-row">
+            <i class="fa fa-tag"></i>
+            {% for tag in tags %}
+            <a href="{{ site_url('tag/' ~ (tag|form_urlencode)) }}" class="p-category" rel="tag">{{ tag }}</a>
+            {% endfor %}
+        </p> 
+        {% else %}
+        <i class="fa fa-tag"></i><a href="{{ site_url('tag/' ~ (tags|form_urlencode)) }}" class="p-category" rel="tag">{{ tags }}</a>
+        {% endif %}{% endif %}
+{% do forget_variables(['tags']) %}

@@ -1,0 +1,2 @@
+{% set class = class is not empty ? class : 'input-file' %}{{ idno_include('forms/input/input', {type: 'file'}) }}
+{% do forget_variables(['type', 'name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange', 'placeholder', 'value', 'class']) %}

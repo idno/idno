@@ -19,6 +19,16 @@ interface PhpTemplateContext
     public function withVars(array $vars): static;
 
     /**
+     * Removes the named template variables from this object. A form control that is drawn on a page's own template object (a
+     * `.tpl.php` page sets the control's variables with `__()` and draws it) takes its variables off the object again when it is
+     * done, so that what it was given does not reach what the page draws next: a Twig control does the same here, and it does
+     * nothing when it is drawn on the copy another Twig template made.
+     *
+     * @param list<string> $names
+     */
+    public function forgetVariables(array $names): void;
+
+    /**
      * The class a template file is bound to: inside the file, what `$this` can reach is what that class can (the
      * private members of a subclass are not reachable, so a variable may have any name).
      *

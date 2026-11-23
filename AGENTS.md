@@ -63,8 +63,9 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
-- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; it sets `memory_limit` to 256M, because the
-  whole suite runs in one process and peaked at 124 MB of PHP's default 128 MB on MySQL) for `composer test`;
+- PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
+  whole suite runs in one process: on SQLite it peaks at about 305 MB, and did before the form templates were ported (327 MB measured on the
+  commit before them, with the same steps: the kernels the tests build, 50 MB held by `ImportTest`, and about 1 MB per hundred tests after that)) for `composer test`;
   `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
   for `composer test:unit`
 - Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's
@@ -2809,7 +2810,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
     (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
-    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins, the account, admin and form templates are not ported
+    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins and the account and admin templates are not ported
     yet). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
     by `__()` is gone for the Twig ones, and an HTML page that showed one changes by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
@@ -2833,6 +2834,37 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (`/_test/hostile/feed`, `/_test/hostile/hcard`, test environment only) serves another site's page that names itself with a script. The following
     page that fetches a feed cannot run on PHP 8 (`Reader::getFeedDetails()` calls `DOMDocument::loadHTML()` statically), and the template of a feed item
     draws `$item->draw()`, which draws the template again: both are old defects, so those templates are drawn with the objects the pages would give them.
+  - The form templates are Twig too (`templates/default/forms/**`: 28 files beside their frozen `.tpl.php`). Things to know when you change one.
+    (1) A control is drawn on the PAGE's template object by a `.tpl.php` page (`$this->__(['name' => ...])->draw('forms/input/text')`), and the old
+    control took its variables off that object again (`unset($this->vars[...])`, "prevent bonita pollution"); a Twig file draws its includes on a copy,
+    so each top-level control ends with `{% do forget_variables([...]) %}` (a function of the extension, over `PhpTemplateContext::forgetVariables()`:
+    it acts on the object the file was drawn on and does nothing on the copy another Twig file made), with the names the original unset
+    (`Tests/Templating/FormControlsTest`; without it a spinner took the `id` of an earlier input and an icon its `class`: the golden pages caught it).
+    (2) The counter that gives an input its id (`global $input_id`) is the site's one, `next_input_id()` (`TemplateHelpers::nextInputId()`), so the
+    `classic` copies and a third-party `.tpl.php` that count on it stay in step; `Tests\Fixtures\TwigPortCheck` puts the counter back before it renders
+    the original so that the port and the original number from the same value. (3) The JSON look documents the form fields of a page
+    (`formFields`: `documentFormControl()` writes to the page's template), which a Twig control drawn on a copy cannot do: the controls a JSON request
+    can reach (`forms/input/{text,email,url,hidden,password,file,datetime-local,timezones}`, with `input`, `select`, `longtext`, `richtext`,
+    `image-file`, `forms/token`, `forms/link`, `forms/action`, `forms/output/{richtext,tags,timezones}` and `forms/usersearch` already there) have
+    byte-identical `classic` copies of their originals (`NonHtmlReachTest` names what is reached; `captcha` leaves nothing and is in its list); the
+    ones no page of core can reach from JSON (`button`, `submit`, `form-list`, the outputs `text`, `email`, `url`) have none, and a third-party page
+    that draws one for JSON loses that field's documentation. (4) `forms/token` prints the three hidden inputs and keeps no `csrf` list (the list
+    the JSON of a page prints comes from the `classic` copy, which `Actions::signForm()` draws on the site's template for a JSON request; nothing
+    reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`), so the Twig file neither calls `form_token()`
+    nor `signForm()`: no recursion, and `form_token()` is `signForm()`, which draws this file. (5) `forms/link` registers its form with `form_data()`:
+    in an XHR response (no shell draws the registered forms) the form is printed after the link, which fixes a link in content a script inserts
+    (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`; `port-exceptions.php`); the old template kept it in a global that nothing read.
+    The address is `|link_url` (`UrlValidator::linkUrl()`), the confirmation is `js_string()` (the same single-quoted JavaScript string, escaped for the
+    attribute, as `action_link()` prints), and the label is `|raw` because `Actions::createLink()` callers pass markup (`raw-allowlist.php`); `forms/action` prints its
+    `body` the same way. (6) Values printed from a variable are escaped: every attribute of `input` and `select`, a `textarea`'s name, the editor's id
+    (`js_string()` in `x-data`, escaped elsewhere), a tag, the user search's id, class, name, address and template (`js_string()`), the label and help of
+    `form-list` (`port-exceptions.php`, `TemplateEscapingTest::testFormValuesAreEscaped`); the `value` and placeholder were escaped before. Differences
+    that are not about a value from outside: non-ASCII text in a value is printed as itself, not by `htmlentities()` as named entities; a text area whose
+    value is `0` keeps it; `forms/output/url` links only http(s) (`FILTER_SANITIZE_URL` kept `javascript:`); a field of `form-list` that is not required
+    has no `required` attribute (the old one printed `required="Array"` and a PHP warning). `forms/input/timezones` takes its `class` from the caller as it
+    did (the template's own default was assigned to a local variable and never used). Helpers added: `js_string`, `next_input_id`, `security_token`,
+    `timezone_options`, `timezone_info`, `email_is_blocked`, `forget_variables` and the filters `link_url`, `email_address` (`FILTER_SANITIZE_EMAIL`) and
+    `form_urlencode` (`urlencode()`: a tag link writes a space as `+`, as it always did).
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

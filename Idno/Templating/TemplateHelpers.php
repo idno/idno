@@ -126,6 +126,29 @@ interface TemplateHelpers
 
     public function formData(string $html): string;
 
+    /**
+     * The next number of the counter that makes the id of a form control unique on the page (the site has one, whichever template
+     * draws the control).
+     */
+    public function nextInputId(): int;
+
+    /**
+     * The token a form carries for an action at a time.
+     */
+    public function securityToken(string $action, string $time): string;
+
+    /**
+     * @return array<string, string> identifier => label for each time zone PHP lists, as of now
+     */
+    public function timezoneOptions(): array;
+
+    /**
+     * @return array{offset: int, gmt: string, diff: ?string} `diff` is null for a visitor who is not logged in
+     */
+    public function timezoneInfo(string $zone): array;
+
+    public function emailIsBlocked(string $email): bool;
+
     // drawing
 
     /**

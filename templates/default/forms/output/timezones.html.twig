@@ -1,0 +1,4 @@
+{% set info = timezone_info(value) %}<span class="timezone" data-timezone="{{ value }}" data-timezone-offset="{{ info.offset }}">{{ value }} 
+    
+    {% if info.diff is not null %}                {% if info.offset != 0 and info.diff is not empty %}({{ info.diff }}){% endif %}    {% else %}        {% if info.offset != 0 %}(GMT {{ info.gmt }}) {% endif %}    {% endif %}
+</span>

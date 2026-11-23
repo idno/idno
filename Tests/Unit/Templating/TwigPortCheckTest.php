@@ -101,6 +101,33 @@ final class TwigPortCheckTest extends TestCase
         $this->assertSame('the original threw RuntimeException', $line['reason']);
     }
 
+    public function testTheSitesCounterOfFormControlIdsIsNotCountedTwice(): void
+    {
+        $before = array_key_exists('input_id', $GLOBALS) ? $GLOBALS['input_id'] : null;
+        try {
+            $GLOBALS['input_id'] = 4;
+            file_put_contents($this->project . '/templates/default/probe.tpl.php', '<?php global $input_id; $input_id = (int) $input_id + 1; echo "id_" . $input_id;');
+            $check = $this->check(static function (): string {
+                $GLOBALS['input_id'] = ($GLOBALS['input_id'] ?? 0) + 1;
+
+                return 'id_' . $GLOBALS['input_id'];
+            });
+
+            $this->assertSame('id_5', $check->render($this->located('probe'), [], $this->context()), 'the port counted from 4');
+            $this->assertSame([['file' => 'templates/default/probe.html.twig', 'same' => true]], $this->lines(), 'and the original from 4 too');
+            $this->assertSame(5, $GLOBALS['input_id'], 'what the port counted stays counted');
+            unset($GLOBALS['input_id']);
+            $this->assertSame('id_1', $check->render($this->located('probe'), [], $this->context()), 'with no counter yet, both start from nothing');
+            $this->assertSame(1, $GLOBALS['input_id']);
+        } finally {
+            if ($before === null) {
+                unset($GLOBALS['input_id']);
+            } else {
+                $GLOBALS['input_id'] = $before;
+            }
+        }
+    }
+
     public function testATwigFileWithNoOriginalBesideItWritesNothing(): void
     {
         $check = $this->check('whatever');
@@ -513,6 +540,13 @@ final class TwigPortCheckTest extends TestCase
 
             public function __construct(private readonly ?\Closure $onDraw)
             {
+            }
+
+            public function forgetVariables(array $names): void
+            {
+                foreach ($names as $name) {
+                    unset($this->vars[$name]);
+                }
             }
 
             public function withVars(array $vars): static

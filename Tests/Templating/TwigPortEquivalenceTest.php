@@ -204,6 +204,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawSyndicationCases();
         $this->drawProfileAndFollowingCases();
         $this->drawEmbedAndFileCases();
+        $this->drawFormCases();
         if (self::DRAWS === []) {
             return;
         }
@@ -637,6 +638,164 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $out = $this->runInSite($code);
         $this->assertIsArray($out);
         $this->assertStringContainsString('class="u-email"', (string) $out['entity/User/profile/fields, a list of addresses']);
+    }
+
+    /**
+     * The form controls and outputs: each input with every attribute it reads and with none, the select with one value and many, the
+     * rich text and long text fields, the outputs (text, address, rich text, tags, time zones) for a visitor and a member, a form and its
+     * token, the action link of every shape, the user search and its rows. A second group holds values that a person or another site
+     * could supply (a quote, a tag, a script) in every place a control prints one: where the old template printed it as it was, the
+     * difference is an exception of its own (TemplateEscapingTest::testFormValuesAreEscaped).
+     */
+    private function drawFormCases(): void
+    {
+        $code = $this->siteDrawPrelude() . <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $cases = [
+            'input, every attribute' => ['forms/input/input', ['name' => 'title', 'id' => 'given-id', 'value' => 'A "title" & <b>', 'placeholder' => 'Title & more', 'alt' => 'Alt text', 'class' => 'my-class', 'type' => 'number', 'autocomplete' => 'off', 'autofocus' => true, 'accept' => 'image/*', 'checked' => true, 'disabled' => true, 'min' => 1, 'max' => 5, 'step' => 1, 'maxlength' => 20, 'multiple' => true, 'pattern' => '[a-z]+', 'readonly' => true, 'required' => true, 'src' => '/x.png', 'spellcheck' => 'false', 'onclick' => 'go(1)', 'onfocus' => 'a()', 'onblur' => 'b()', 'onchange' => 'c()']],
+            'input, a name only' => ['forms/input/input', ['name' => 'plain']],
+            'input, false and zero' => ['forms/input/input', ['name' => 'zero', 'value' => 0, 'maxlength' => 0, 'required' => false, 'disabled' => '', 'class' => 'x']],
+            'input, null attributes' => ['forms/input/input', ['name' => 'nulls', 'type' => null, 'value' => null, 'required' => null, 'placeholder' => null]],
+            'input, an apostrophe in the value' => ['forms/input/input', ['name' => 'quote', 'value' => "it's", 'placeholder' => "o'clock"]],
+            'text' => ['forms/input/text', ['name' => 'text', 'value' => 'Some text']],
+            'text with a class' => ['forms/input/text', ['name' => 'text', 'value' => 'Some text', 'class' => 'wide', 'id' => 'mine']],
+            'email' => ['forms/input/email', ['name' => 'email', 'value' => 'ada@example.com']],
+            'url' => ['forms/input/url', ['name' => 'url', 'value' => 'https://example.org/?a=1&b=2', 'class' => 'u']],
+            'password' => ['forms/input/password', ['name' => 'pass', 'value' => 'secret']],
+            'hidden' => ['forms/input/hidden', ['name' => 'forward-to', 'value' => '/here?x=1&y=2']],
+            'file' => ['forms/input/file', ['name' => 'photo[]', 'accept' => 'image/*']],
+            'datetime-local' => ['forms/input/datetime-local', ['name' => 'when', 'value' => '2026-01-02T03:04']],
+            'button' => ['forms/input/button', ['name' => 'go', 'value' => 'Go']],
+            'submit' => ['forms/input/submit', ['name' => 'save', 'value' => 'Save', 'class' => 'btn big']],
+            'captcha' => ['forms/input/captcha', []],
+            'select' => ['forms/input/select', ['name' => 'colour', 'options' => ['r' => 'Red & rose', 'g' => 'Green', 3 => 'Three'], 'value' => 'g', 'class' => 'c']],
+            'select, no blank' => ['forms/input/select', ['name' => 'colour', 'options' => ['r' => 'Red'], 'value' => 'x', 'blank-default' => false, 'id' => 'own', 'required' => true, 'onchange' => 'f()']],
+            'select, multiple' => ['forms/input/select', ['name' => 'colours', 'options' => ['r' => 'Red', 'g' => 'Green', 'b' => 'Blue'], 'value' => ['r', 'b'], 'multiple' => true, 'class' => 'many']],
+            'select, none' => ['forms/input/select', ['name' => 'empty', 'value' => '']],
+            'select, a number' => ['forms/input/select', ['name' => 'n', 'options' => [0 => 'Zero', 1 => 'One'], 'value' => 1]],
+            'time zones' => ['forms/input/timezones', ['name' => 'timezone', 'value' => 'Europe/London', 'class' => 'form-control']],
+            'longtext' => ['forms/input/longtext', ['name' => 'body', 'value' => "line <b>1</b>\n\"two\" & 'three'", 'unique_id' => 'body-one', 'required' => true, 'class' => 'wide', 'height' => 300, 'placeholder' => 'Say it "now"']],
+            'longtext, defaults' => ['forms/input/longtext', ['name' => 'body']],
+            'richtext' => ['forms/input/richtext', ['name' => 'body', 'value' => "<p>Some <b>html</b> & \"quotes\"</p>\n</textarea><script>alert(1)</script>", 'unique_id' => 'editor-one', 'required' => true]],
+            'richtext, defaults' => ['forms/input/richtext', []],
+            'text output' => ['forms/output/text', ['value' => 'A & B <i>c</i> "d" \'e\'']],
+            'email output' => ['forms/output/email', ['value' => 'ada@example.com', 'label' => '']],
+            'email output with a label' => ['forms/output/email', ['value' => 'ada@example.com', 'label' => 'Mail <Ada>']],
+            'email output with a bad address' => ['forms/output/email', ['value' => 'a b"c<d>@example.com', 'label' => null]],
+            'url output' => ['forms/output/url', ['value' => 'https://example.org/a?b=1&c=2', 'label' => '']],
+            'url output with a label' => ['forms/output/url', ['value' => 'https://example.org/a', 'label' => 'Example & co']],
+            'rich text output' => ['forms/output/richtext', ['value' => '<p>Hello <b>world</b> #tagged https://example.org/a?b=1 <script>alert(1)</script></p>']],
+            'rich text output with a rel' => ['forms/output/richtext', ['value' => 'See https://example.org/ #one', 'rel' => 'rel="nofollow"']],
+            'tags output' => ['forms/output/tags', ['tags' => ['one', 'two-words', 'a&b']]],
+            'tags output, one string' => ['forms/output/tags', ['tags' => 'solo']],
+            'tags output, a string with a space' => ['forms/output/tags', ['tags' => '#templates #idno']],
+            'tags output, none' => ['forms/output/tags', ['tags' => []]],
+            'a form' => ['forms/action', ['action' => '/status/edit?a=1&b=2', 'method' => 'post', 'body' => '<p>The body</p>']],
+            'a form to get' => ['forms/action', ['action' => '/search', 'method' => 'GET', 'body' => '<p>b</p>']],
+            'a form with another method' => ['forms/action', ['action' => '/x', 'method' => 'delete', 'body' => '']],
+            'a token' => ['forms/token', ['action' => '/x?a=1', 'time' => 1773000000]],
+            'a token, now' => ['forms/token', ['action' => '/y']],
+            'a link' => ['forms/link', ['url' => '/status/delete', 'label' => '<b>Remove</b>', 'data' => ['uuid' => 'abc', 'n' => 3], 'class' => 'x y', 'title' => 'Remove it', 'confirm' => false, 'method' => 'POST']],
+            'a link to confirm' => ['forms/link', ['url' => 'https://example.org/go?a=1&b=2', 'label' => 'Go', 'data' => [], 'confirm' => true, 'confirm-text' => "Are you sure? It's \"final\"\nreally \\ done", 'method' => 'DELETE']],
+            'a link, a method that is not allowed' => ['forms/link', ['url' => '/x', 'label' => 'x', 'data' => ['a' => 'b'], 'method' => 'TRACE', 'confirm' => true]],
+            'a link to a script' => ['forms/link', ['url' => 'javascript:alert(1)', 'label' => 'x', 'data' => ['a' => $hostile], 'class' => $hostile, 'title' => $hostile, 'confirm' => true, 'confirm-text' => $hostile, 'method' => $hostile]],
+            'a form list' => ['forms/input/form-list', ['form' => ['title' => 'text', 'email' => 'email', 'secret' => 'hidden'], 'labels' => ['title' => 'Title', 'email' => 'Email address', 'secret' => 's'], 'placeholders' => ['title' => 'Say "it"'], 'help' => ['email' => 'We will not <share> it'], 'defaults' => ['title' => 'Default title', 'email' => '', 'secret' => 'x'], 'required' => ['title', 'email', 'secret'], 'values' => ['email' => 'ada@example.com']]],
+            'a form list of two' => ['forms/input/form-list', ['form' => ['when' => 'datetime-local', 'pass' => 'password'], 'labels' => ['when' => 'When', 'pass' => 'Password'], 'placeholders' => ['pass' => 'Not 1234'], 'help' => [], 'defaults' => ['when' => '', 'pass' => ''], 'required' => ['when', 'pass'], 'values' => ['when' => '2026-01-02T03:04']]],
+            'the user search' => ['forms/usersearch', []],
+            'the user search, named' => ['forms/usersearch', ['name' => 'people', 'id' => 'my-people', 'class' => 'wide', 'source-url' => 'https://x.example/find/', 'render-template' => 'forms/components/usersearch/user']],
+        ];
+        foreach ($cases as $label => [$name, $vars]) {
+            $out[$label] = $draw($name, $vars);
+        }
+
+        // What a person or another site could supply, in every place a control prints a value
+        $hostileCases = [
+            'hostile input' => ['forms/input/input', ['name' => $hostile, 'id' => $hostile, 'value' => $hostile, 'placeholder' => $hostile, 'alt' => $hostile, 'class' => $hostile, 'type' => $hostile, 'pattern' => $hostile, 'onclick' => $hostile]],
+            'hostile text' => ['forms/input/text', ['name' => 'x', 'value' => $hostile, 'placeholder' => $hostile]],
+            'a non-ASCII value' => ['forms/input/text', ['name' => 'x', 'value' => 'caf' . "\u{e9}" . ' ' . "\u{2603}", 'placeholder' => "\u{fc}ber"]],
+            'hostile select' => ['forms/input/select', ['name' => $hostile, 'id' => $hostile, 'options' => [$hostile => $hostile, 'ok' => 'fine'], 'value' => [$hostile], 'class' => $hostile, 'onchange' => $hostile]],
+            'hostile select, multiple' => ['forms/input/select', ['name' => $hostile, 'options' => ['a' => 'A'], 'multiple' => true]],
+            'hostile longtext' => ['forms/input/longtext', ['name' => $hostile, 'value' => $hostile, 'unique_id' => $hostile, 'class' => $hostile, 'height' => $hostile, 'placeholder' => $hostile]],
+            'hostile richtext' => ['forms/input/richtext', ['name' => $hostile, 'value' => $hostile, 'unique_id' => $hostile]],
+            'hostile tags' => ['forms/output/tags', ['tags' => [$hostile, 'ok']]],
+            'hostile tag' => ['forms/output/tags', ['tags' => $hostile]],
+            'a link of a script in a url output' => ['forms/output/url', ['value' => 'javascript:alert(1)', 'label' => '']],
+            'a quote in a url output' => ['forms/output/url', ['value' => 'https://example.org/"><script>x</script>', 'label' => 'x']],
+            'hostile form' => ['forms/action', ['action' => $hostile, 'method' => 'post', 'body' => '']],
+            'hostile token' => ['forms/token', ['action' => $hostile, 'time' => 1773000000]],
+            'hostile user search' => ['forms/usersearch', ['name' => $hostile, 'id' => $hostile, 'class' => $hostile, 'source-url' => $hostile, 'render-template' => $hostile]],
+        ];
+        foreach ($hostileCases as $label => [$name, $vars]) {
+            $out[$label] = $draw($name, $vars);
+        }
+
+        // The time zones, for a visitor and for members of other zones
+        foreach (['Europe/London', 'America/New_York', 'UTC', 'Asia/Kolkata'] as $zone) {
+            $out['zone ' . $zone . ' for a visitor'] = $draw('forms/output/timezones', ['value' => $zone]);
+        }
+        $ada->timezone = 'America/Los_Angeles';
+        $site->session()->logUserOn($ada);
+        foreach (['Europe/London', 'America/New_York', 'UTC', 'America/Los_Angeles', 'Asia/Kolkata'] as $zone) {
+            $out['zone ' . $zone . ' for a member'] = $draw('forms/output/timezones', ['value' => $zone]);
+        }
+        $ada->timezone = '';
+        $out['a zone for a member with none'] = $draw('forms/output/timezones', ['value' => 'Europe/London']);
+
+        // Pictures of a post: its attachments, who may delete them
+        $photo = current(\IdnoPlugins\Photo\Photo::get([], [], 5)) ?: null;
+        $photoCases = [
+            'no object' => ['name' => 'photo'],
+            'a new post' => ['name' => 'photo', 'object' => new \IdnoPlugins\Photo\Photo()],
+            'a new post, many' => ['name' => 'photo[]', 'object' => new \IdnoPlugins\Photo\Photo(), 'id' => 'mine'],
+        ];
+        if ($photo !== null) {
+            $photoCases['a post with a photo'] = ['name' => 'photo', 'object' => $photo];
+            $photoCases['a post with a photo, many'] = ['name' => 'photo[]', 'object' => $photo, 'id' => 'p1'];
+            $photoCases['a post with a photo, kept'] = ['name' => 'photo', 'object' => $photo, 'hide-existing' => true];
+            $photoCases['a post with a photo, no delete'] = ['name' => 'photo', 'object' => $photo, 'hide-delete' => true];
+            foreach (['thumbs' => ['thumbs_large' => null], 'old thumbnails' => ['thumbnail_large' => 'https:///thumbs/large.png'], 'really old' => ['thumbnail' => 'http:///thumbs/old.png'], 'a broken address' => ['thumbnail' => 'javascript:alert(1)']] as $label => $set) {
+                $variant = clone $photo;
+                $variant->thumbs_large = [];
+                foreach ($set as $key => $value) {
+                    $variant->$key = $value;
+                }
+                $photoCases['a photo with ' . $label] = ['name' => 'photo', 'object' => $variant];
+            }
+            $variant = clone $photo;
+            $attachments = $variant->getAttachments();
+            $variant->thumbs_large = [$attachments[0]['filename'] => ['url' => 'https://img.example/t.png?a=1&b=2']];
+            $photoCases['a photo with a thumbnail of its own'] = ['name' => 'photo', 'object' => $variant];
+        }
+        foreach ($photoCases as $label => $vars) {
+            $out['image field, ' . $label] = $draw('forms/input/image-file', $vars);
+        }
+        $site->session()->logUserOff();
+        $out['image field, a visitor'] = $draw('forms/input/image-file', ['name' => 'photo', 'object' => $photo]);
+
+        // In an XHR response no shell draws the forms of the links: the link is followed by its form
+        $xhrPage = new \Idno\Pages\Onboarding\Begin();
+        $xhrPage->xhr = true;
+        $site->setCurrentPage($xhrPage);
+        $out['a link in an XHR response'] = $draw('forms/link', ['url' => '/status/delete', 'label' => 'Remove', 'data' => ['uuid' => 'abc'], 'confirm' => false, 'method' => 'POST']);
+        $site->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+
+        // A row of the user search, for another member and for oneself, with a member blocked
+        $site->session()->logUserOn($ada);
+        $out['user row, another member'] = $draw('forms/components/usersearch/user', ['user' => $bob]);
+        $out['user row, oneself'] = $draw('forms/components/usersearch/user', ['user' => $ada]);
+        $out['user row, not a user'] = $draw('forms/components/usersearch/user', ['user' => 'nobody']);
+        $site->config()->blocked_emails = [$bob->email];
+        $out['user row, a blocked member'] = $draw('forms/components/usersearch/user', ['user' => $bob]);
+        $site->config()->blocked_emails = [];
+        $site->session()->logUserOff();
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('class="idno-input input-text"', (string) $out['text']);
+        $this->assertStringContainsString('<option value="g" selected>Green</option>', (string) $out['select']);
+        $this->assertStringContainsString('name="__bTk"', (string) $out['a form']);
     }
 
     /**

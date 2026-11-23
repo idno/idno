@@ -108,6 +108,7 @@ final class TwigPortCheck implements TemplateEngine
         $report = self::reportFile();
         $comparing = $report !== '' && $original !== null && !self::$shadowing && is_array($vars);
         $registered = $comparing ? $this->registrations() : null;
+        $counted = array_key_exists('input_id', $GLOBALS) ? $GLOBALS['input_id'] : null;
         $port = $this->twig->render($template, $vars, $context);
         if (!$comparing) {
             return $port;
@@ -117,6 +118,14 @@ final class TwigPortCheck implements TemplateEngine
         $reason = null;
         $copy = $context->withVars($vars);
         $restore = $this->shareRegistrations($copy, $registered);
+        // The counter that numbers the ids of the form controls (`global $input_id`) is the site's one: the original counts from where the
+        // port started, and what the port counted stays counted
+        $countedByPort = array_key_exists('input_id', $GLOBALS) ? $GLOBALS['input_id'] : null;
+        if ($counted === null) {
+            unset($GLOBALS['input_id']);
+        } else {
+            $GLOBALS['input_id'] = $counted;
+        }
         try {
             $drawn = $this->renderOriginal($template, $original, $vars, $copy);
         } catch (\Throwable $e) {
@@ -125,6 +134,11 @@ final class TwigPortCheck implements TemplateEngine
         } finally {
             self::$shadowing = false;
             $restore();
+            if ($countedByPort === null) {
+                unset($GLOBALS['input_id']);
+            } else {
+                $GLOBALS['input_id'] = $countedByPort;
+            }
         }
 
         $html = $template->type !== 'email-text';

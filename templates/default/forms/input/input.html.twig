@@ -1,0 +1,5 @@
+{% if id is null %}{% set id = name ~ '_' ~ next_input_id() %}{% endif %}<input
+{% for field in ['type', 'name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange'] %}{% set shown = _context[field] ?? null %}{% if shown is not null %}{% if shown is same as(true) %}{{ field }} {% else %}{{ field }}="{{ shown }}" {% endif %}{% elseif field == 'type' %}type="text" {% endif %}{% endfor %}    class="idno-input {{ class ?? ('input-' ~ (type ?? 'text')) }}"
+{% if placeholder is not null %}placeholder="{{ placeholder }}" {% endif %}{% if alt is not null %}alt="{{ alt }}" {% endif %}    value="{{ value }}"
+    />
+{% do forget_variables(['type', 'name', 'id', 'autocomplete', 'autofocus', 'accept', 'checked', 'disabled', 'min', 'max', 'step', 'maxlength', 'multiple', 'pattern', 'readonly', 'required', 'src', 'spellcheck', 'onclick', 'onfocus', 'onblur', 'onchange', 'placeholder', 'value', 'class']) %}

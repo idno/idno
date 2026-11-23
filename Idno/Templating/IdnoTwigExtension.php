@@ -100,6 +100,13 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('form_token', $this->formToken(...), $html),
             new TwigFunction('action_link', $this->actionLink(...), $html),
             new TwigFunction('form_data', $this->formData(...), $html),
+            new TwigFunction('js_string', self::jsString(...), $html),
+            new TwigFunction('forget_variables', $this->forgetVariables(...), ['needs_context' => true]),
+            new TwigFunction('next_input_id', $this->nextInputId(...)),
+            new TwigFunction('security_token', $this->securityToken(...)),
+            new TwigFunction('timezone_options', $this->timezoneOptions(...)),
+            new TwigFunction('timezone_info', $this->timezoneInfo(...)),
+            new TwigFunction('email_is_blocked', $this->emailIsBlocked(...)),
 
             new TwigFunction('shell_variables', $this->shellVariables(...), ['needs_context' => true, 'needs_environment' => true]),
             new TwigFunction('pagination', $this->pagination(...), $html),
@@ -138,6 +145,9 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('parse_hashtags', $this->parseHashtags(...), $text),
             new TwigFilter('parse_users', $this->parseUsers(...), $text),
             new TwigFilter('http_url', self::httpUrl(...)),
+            new TwigFilter('link_url', self::linkUrl(...)),
+            new TwigFilter('email_address', self::emailAddress(...)),
+            new TwigFilter('form_urlencode', self::formUrlencode(...)),
             new TwigFilter('identity_url', self::identityUrl(...)),
             new TwigFilter('to_int', self::toInt(...)),
             new TwigFilter('display_url', $this->displayUrl(...)),
@@ -742,6 +752,102 @@ final class IdnoTwigExtension extends AbstractExtension
     public function formData(string|\Stringable $html): Markup
     {
         return new Markup($this->helpers->formData(self::markup($html)), 'UTF-8');
+    }
+
+    /**
+     * Takes the named variables off the template object the file was drawn on, as the `.tpl.php` file it replaces did (`unset($this->vars[...])`):
+     * the controls whose callers set their variables on the page's own template with `__()` and then draw them. The variables of the file
+     * being drawn are its own snapshot, so it goes on as it was; nothing happens when the file was drawn from another Twig template (the
+     * object is then the copy that `idno_include()` made).
+     *
+     * @param array<string, mixed> $context
+     * @param list<string>         $names
+     */
+    public function forgetVariables(array $context, array $names): void
+    {
+        $template = $context['_idno_context'] ?? null;
+        if ($template instanceof PhpTemplateContext) {
+            $template->forgetVariables($names);
+        }
+    }
+
+    /**
+     * A value as one single-quoted JavaScript string, for an attribute that holds script (`onclick`, an Alpine `x-data`): the string is
+     * escaped for JavaScript (a backslash, a quote, a line break and the two line separators) and then for the double-quoted attribute it
+     * is in, so it reads back as the same text and can end neither the string nor the attribute. It is markup (a `Markup`) because it is
+     * already escaped.
+     */
+    public static function jsString(mixed $value): Markup
+    {
+        $script = "'" . strtr(self::text($value), ['\\' => '\\\\', "'" => "\\'", "\r" => '\\r', "\n" => '\\n', "\u{2028}" => '\\u2028', "\u{2029}" => '\\u2029']) . "'";
+
+        return new Markup(htmlspecialchars($script, ENT_COMPAT | ENT_SUBSTITUTE, 'UTF-8'), 'UTF-8');
+    }
+
+    /**
+     * The address of an action link or a link a form draws: http(s) or relative to the site, as `UrlValidator::linkUrl()` reads it; empty otherwise.
+     */
+    public static function linkUrl(mixed $url): string
+    {
+        return \Idno\Core\UrlValidator::linkUrl(self::text($url));
+    }
+
+    /**
+     * An email address with every character removed that an address cannot hold (`FILTER_SANITIZE_EMAIL`).
+     */
+    public static function emailAddress(mixed $address): string
+    {
+        return (string) filter_var(self::text($address), FILTER_SANITIZE_EMAIL);
+    }
+
+    /**
+     * `urlencode()`: a space is `+`, as the tag links of a post have always been written (Twig's own `url_encode` writes `%20`).
+     */
+    public static function formUrlencode(mixed $value): string
+    {
+        return urlencode(self::text($value));
+    }
+
+    /**
+     * The number that makes the id of a form control unique on the page: the site's one counter, which every control that gives itself an id counts on.
+     */
+    public function nextInputId(): int
+    {
+        return $this->helpers->nextInputId();
+    }
+
+    /**
+     * The token a form carries for an action at a time (`Forms::token()`).
+     */
+    public function securityToken(mixed $action, mixed $time): string
+    {
+        return $this->helpers->securityToken(self::text($action), self::text($time));
+    }
+
+    /**
+     * The time zones for a select: identifier => label (`(GMT+01:00) Europe, London`), in the order PHP lists them, as of now.
+     *
+     * @return array<string, string>
+     */
+    public function timezoneOptions(): array
+    {
+        return $this->helpers->timezoneOptions();
+    }
+
+    /**
+     * What the page says of a time zone: `offset` (seconds from UTC now), `gmt` (the offset as `+01:00`) and `diff`, how far it is from the
+     * logged-in member's own zone in words (empty when it is the same or the visitor is nobody; null for a visitor who is not logged in).
+     *
+     * @return array{offset: int, gmt: string, diff: ?string}
+     */
+    public function timezoneInfo(string $zone): array
+    {
+        return $this->helpers->timezoneInfo($zone);
+    }
+
+    public function emailIsBlocked(mixed $email): bool
+    {
+        return $this->helpers->emailIsBlocked(self::text($email));
     }
 
     /**

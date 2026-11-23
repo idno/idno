@@ -181,6 +181,61 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertStringContainsString('name="__bTa" value="/a?b=1&amp;c=&quot;2&quot;"', $html, 'the action is escaped');
     }
 
+    public function testTheTokenHelperAndSignFormDrawTheSameFieldsAndLeaveNoVariablesOnTheSitesTemplate(): void
+    {
+        $template = Idno::site()->template();
+        $before = array_keys($template->vars);
+
+        $viaHelper = $this->helpers()->formToken('/a?b=1');
+        $viaSignForm = (string) Idno::site()->actions()->signForm('/a?b=1');
+
+        $fields = static function (string $html): array {
+            $plain = (string) preg_replace(['/ id="tid[0-9a-f]{32}"/', '/(name="__bTs" value=")\d+/', '/(name="__bTk" value=")[0-9a-f]+/'], ['', '$1T', '$1K'], $html);
+
+            return array_values(array_filter(array_map('trim', explode("\n", $plain))));
+        };
+        $this->assertSame($fields($viaSignForm), $fields($viaHelper), 'the helper draws what signForm draws');
+        $this->assertSame(1, preg_match('/name="__bTk" value="([0-9a-f]{64})"/', $viaSignForm, $token));
+        $this->assertSame(1, preg_match('/name="__bTs" value="(\d+)"/', $viaSignForm, $time));
+        $this->assertSame(\Idno\Core\Bonita\Forms::token('/a?b=1', $time[1]), $token[1], 'the token is the one for the action and the time');
+        $this->assertSame([], array_values(array_diff(array_keys($template->vars), $before, ['csrf'])), 'the variables of the token stay off the site\'s template (but the `csrf` list that only the JSON look keeps)');
+        $this->assertArrayNotHasKey('action', $template->vars);
+        $this->assertArrayNotHasKey('time', $template->vars);
+    }
+
+    public function testTheCounterOfControlIdsIsTheSitesOneAndTheTokenAndZonesAreWhatTheSiteGives(): void
+    {
+        global $input_id;
+        $previous = $input_id ?? null;
+        try {
+            $input_id = 6;
+            $this->assertSame(7, $this->helpers()->nextInputId());
+            $this->assertSame(8, $this->helpers()->nextInputId());
+            $this->assertSame(8, $input_id, 'the counter the legacy templates count on');
+        } finally {
+            $input_id = $previous;
+        }
+
+        $this->assertSame(\Idno\Core\Bonita\Forms::token('/x', '1773000000'), $this->helpers()->securityToken('/x?y=1', '1773000000'), 'a query string is not part of the token');
+        $zones = $this->helpers()->timezoneOptions();
+        $this->assertSame('(GMT) UTC', $zones['UTC']);
+        $this->assertMatchesRegularExpression('/^\(GMT(?:[+-]\d\d:\d\d)?\) Europe, London$/', $zones['Europe/London']);
+        $this->assertSame(array_values(timezone_identifiers_list()), array_keys($zones), 'in the order PHP lists them');
+        $info = $this->helpers()->timezoneInfo('UTC');
+        $this->assertSame(['offset' => 0, 'gmt' => '+00:00', 'diff' => null], $info, 'nobody is logged in: no difference to say');
+
+        $config = Idno::site()->config();
+        $blocked = $config->blocked_emails;
+        try {
+            $config->blocked_emails = ['bad@example.com'];
+            $this->assertTrue($this->helpers()->emailIsBlocked('Bad@Example.com'));
+            $this->assertFalse($this->helpers()->emailIsBlocked('good@example.com'));
+            $this->assertFalse($this->helpers()->emailIsBlocked('not an address'));
+        } finally {
+            $config->blocked_emails = $blocked;
+        }
+    }
+
     public function testActionLinkDrawsTheLinkAndItsFormAndNeutralisesWhatEndsAnAttribute(): void
     {
         $slots = new SlotRegistry();

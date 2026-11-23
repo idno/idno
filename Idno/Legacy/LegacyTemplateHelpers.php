@@ -247,6 +247,50 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return '';
     }
 
+    public function nextInputId(): int
+    {
+        global $input_id;
+        $input_id = (int) $input_id + 1;
+
+        return $input_id;
+    }
+
+    public function securityToken(string $action, string $time): string
+    {
+        return (string) \Idno\Core\Bonita\Forms::token($action, $time);
+    }
+
+    public function timezoneOptions(): array
+    {
+        $options = [];
+        $now = new \DateTime('now', new \DateTimeZone('UTC'));
+        foreach (timezone_identifiers_list() as $timezone) {
+            $now->setTimezone(new \DateTimeZone($timezone));
+            $offset = $now->getOffset();
+            $hours = intval($offset / 3600);
+            $minutes = abs(intval($offset % 3600 / 60));
+            $options[$timezone] = '(' . 'GMT' . ($offset ? sprintf('%+03d:%02d', $hours, $minutes) : '') . ') ' . str_replace('/', ', ', $timezone);
+        }
+
+        return $options;
+    }
+
+    public function timezoneInfo(string $zone): array
+    {
+        $offset = \Idno\Core\Time::timezoneToGMTOffset($zone);
+        $diff = null;
+        if (Idno::site()->session()->isLoggedIn()) {
+            $diff = (string) \Idno\Core\Time::printTimezoneDiff(\Idno\Core\Time::timezoneDiff($zone, Idno::site()->session()->currentUser()->getTimezone()));
+        }
+
+        return ['offset' => (int) $offset, 'gmt' => \Idno\Core\Time::printTimezoneOffset($offset), 'diff' => $diff];
+    }
+
+    public function emailIsBlocked(string $email): bool
+    {
+        return (bool) Idno::site()->config()->emailIsBlocked($email);
+    }
+
     public function shellVariables(array $vars): array
     {
         // A copy with no variables: the site's own template object is left as it was

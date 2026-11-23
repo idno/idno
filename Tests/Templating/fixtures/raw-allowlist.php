@@ -35,6 +35,12 @@ return [
     'templates/default/file/picker/donejs.html.twig' => [
         ['expression' => '(static_url() ~ \'file/\' ~ entity_value(file, \'file\')._id)|json_encode(constant(\'JSON_HEX_TAG\') b-or constant(\'JSON_HEX_AMP\') b-or constant(\'JSON_HEX_APOS\') b-or constant(\'JSON_HEX_QUOT\'))', 'reason' => 'JSON for a script, encoded with all four JSON_HEX_* flags, so that the id of the file cannot end the script or open a tag'],
     ],
+    'templates/default/forms/action.html.twig' => [
+        ['expression' => 'body', 'reason' => 'the body of the form: the controls its caller (`Actions::createForm()`) already drew; the form only places it'],
+    ],
+    'templates/default/forms/link.html.twig' => [
+        ['expression' => 'label', 'reason' => 'the label of the link: markup its caller built (an icon and text). `action_link()` escapes a label that is not markup before it draws this template, and the legacy `Actions::createLink()` callers pass markup'],
+    ],
     'templates/default/following/confirm.html.twig' => [
         ['expression' => 'item.draw()', 'reason' => 'a feed item\'s own drawing (`entity/FeedItem`), which escapes what the remote feed supplied'],
     ],

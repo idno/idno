@@ -1,0 +1,49 @@
+{% if is_user(user ?? null) %}{% set handle = user.getHandle() %}{% if handle is not empty %}{% set display_handle = handle|length > 18 ? handle|slice(0, 16) ~ '...' : handle %}{% set is_self = user.getUUID() == current_user().getUUID() %}
+
+    <div class="idno-user-row idno-entities-{{ user.getEntityTypeName()|lower }}">
+        <div class="idno-user-info">
+            <img src="{{ user.getIcon() }}" alt="" class="idno-user-avatar">
+            <div class="idno-user-details">
+                <a href="{{ user.getDisplayURL() }}" class="idno-user-name">{{ user.getTitle() }}</a>
+                <span class="idno-user-handle">{{ display_handle }}</span>
+                <span class="idno-user-email">{{ entity_value(user, 'email') }}</span>
+            </div>
+        </div>
+        <div class="idno-user-meta">
+            <div class="idno-user-meta-item">
+                <strong>{{ t('Joined') }}</strong>
+                <time datetime="{{ entity_value(user, 'created')|date('c') }}">{{ entity_value(user, 'created')|date('M j, Y') }}</time>
+            </div>
+            <div class="idno-user-meta-item">
+                <strong>{{ t('Last post') }}</strong>
+                {% set latest = latest_post_of(user) %}
+                {% if latest %}
+                    <time datetime="{{ entity_value(latest, 'updated')|date('c') }}">{{ entity_value(latest, 'updated')|date('M j, Y') }}</time>
+                {% else %}
+                    <span>{{ t('Never') }}</span>
+                {% endif %}
+            </div>
+            <div class="idno-user-meta-item">
+                {% if user.getEntityTypeName() == 'RemoteUser' %}<span>{{ t('Remote member') }}</span>{% elseif user.isAdmin() %}<strong>{{ t('Administrator') }}</strong>{% else %}<span>{{ t('Member') }}</span>{% endif %}
+            </div>
+        </div>
+        <div class="idno-user-actions">
+            {% if not is_self %}
+                {% if user.getEntityTypeName() != 'RemoteUser' %}
+                    {% if user.isAdmin() %}
+                        {{ action_link(site_url('admin/users'), t('Remove admin'), {'user': user.getUUID(), 'action': 'remove_rights'}, {'class': 'idno-user-action-link'}) }}
+                    {% else %}
+                        {{ action_link(site_url('admin/users'), t('Make admin'), {'user': user.getUUID(), 'action': 'add_rights'}, {'class': 'idno-user-action-link'}) }}
+                    {% endif %}
+                {% endif %}
+                {% if email_is_blocked(entity_value(user, 'email')) %}
+                    {{ action_link(site_url('admin/users'), t('Unblock'), {'blocked_emails': entity_value(user, 'email'), 'action': 'unblock_emails'}, {'class': 'idno-user-action-link', 'confirm': true, 'confirm-text': t('Are you sure? The user will be able to log in and post again.')}) }}
+                {% else %}
+                    {{ action_link(site_url('admin/users'), t('Block'), {'blocked_emails': entity_value(user, 'email'), 'action': 'block_emails'}, {'class': 'idno-user-action-link idno-user-action-danger', 'confirm': true, 'confirm-text': t('Are you sure? The user will be logged out and will no longer be able to log in or post.')}) }}
+                {% endif %}
+                {{ action_link(site_url('admin/users'), t('Delete'), {'user': user.getUUID(), 'action': 'delete'}, {'class': 'idno-user-action-link idno-user-action-danger', 'confirm': true, 'confirm-text': t('Are you sure? This will delete this user and all their content.')}) }}
+            {% endif %}
+        </div>
+    </div>
+
+        {% endif %}{% endif %}

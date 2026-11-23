@@ -125,6 +125,18 @@ namespace Idno\Core\Bonita {
         }
 
         /**
+         * Removes the named template variables (see PhpTemplateContext).
+         *
+         * @param array $names
+         */
+        function forgetVariables(array $names): void
+        {
+            foreach ($names as $name) {
+                unset($this->vars[$name]);
+            }
+        }
+
+        /**
          * The class template files are bound to: this one, so that `$this` in a template reaches what a Bonita
          * template always reached
          *

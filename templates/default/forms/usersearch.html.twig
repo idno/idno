@@ -1,0 +1,78 @@
+{% set name = name is not empty ? name : 'user-search' %}{% if id is null %}{% set id = name ~ '_' ~ next_input_id() %}{% endif %}{% set source_url = _context['source-url'] is not empty ? _context['source-url'] : site_url('search/users/') %}{% set render_template = _context['render-template'] is not empty ? _context['render-template'] : 'forms/components/usersearch/user' %}<div id="{{ id }}" class="users-search {{ class is not empty ? class : '' }}"
+     x-data="userSearch({{ js_string(source_url) }}, {{ js_string(render_template) }})"
+     x-init="search()">
+    <form @submit.prevent="search()" x-ref="form">
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+            <input name="query" type="text" class="idno-input" style="flex: 1;"
+                   placeholder="{{ t('Search by name, email address, or username') }}"
+                   @change="search()"
+                   x-model="query">
+            <button type="submit" class="idno-btn-primary">
+                {{ idno_include('shell/icon', {icon: 'search'}) }}
+            </button>
+            <input type="hidden" name="template" value="{{ render_template }}">
+            <input type="hidden" name="sort" value="created">
+            <input type="hidden" name="order" value="desc">
+            <input type="hidden" name="offset" x-bind:value="offset">
+            <input type="hidden" name="limit" value="100">
+        </div>
+    </form>
+
+    <div class="results pane" x-html="resultsHtml"></div>
+
+    <div class="pager" style="display: flex; gap: 1rem; margin-top: 0.75rem;">
+        <span :class="{ 'pagination-disabled': offset <= 0 }">
+            <a href="#" @click.prevent="prevPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">&laquo; {{ t('Prev') }}</a>
+        </span>
+        <span :class="{ 'pagination-disabled': offset + limit >= totalCount }">
+            <a href="#" @click.prevent="nextPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">{{ t('Next') }} &raquo;</a>
+        </span>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('userSearch', function(sourceUrl, renderTemplate) {
+            return {
+                query: '',
+                offset: 0,
+                limit: 100,
+                totalCount: 0,
+                resultsHtml: '',
+
+                search() {
+                    var self = this;
+                    var params = new URLSearchParams({
+                        query: this.query,
+                        template: renderTemplate,
+                        sort: 'created',
+                        order: 'desc',
+                        offset: this.offset,
+                        limit: this.limit
+                    });
+                    fetch(sourceUrl + '?' + params.toString())
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.totalCount = data.count || 0;
+                        self.resultsHtml = data.rendered || '';
+                    });
+                },
+
+                prevPage() {
+                    if (this.offset > 0) {
+                        this.offset = Math.max(0, this.offset - this.limit);
+                        this.search();
+                    }
+                },
+
+                nextPage() {
+                    if (this.offset + this.limit < this.totalCount) {
+                        this.offset += this.limit;
+                        this.search();
+                    }
+                }
+            };
+        });
+    });
+</script>
+{% do forget_variables(['source-url', 'control-id', 'render-template', 'name', 'id']) %}

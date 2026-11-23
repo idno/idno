@@ -55,6 +55,13 @@ final class TemplateRendererTest extends TestCase
                 return $this;
             }
 
+            public function forgetVariables(array $names): void
+            {
+                foreach ($names as $name) {
+                    unset($this->vars[$name]);
+                }
+            }
+
             public function phpTemplateScope(): string
             {
                 return self::class;

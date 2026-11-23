@@ -42,6 +42,7 @@ final class TwigAutoReloadTest extends TestCase
         $container->get(Idno\Templating\TemplateCascade::class)->addBase($argv[3]);
         $context = new class () implements Idno\Templating\PhpTemplateContext {
             public function withVars(array $vars): static { return $this; }
+            public function forgetVariables(array $names): void {}
             public function phpTemplateScope(): string { return self::class; }
             public function draw($templateName, $returnBlank = true) { return ''; }
             public function drawSlot($name) { return ''; }

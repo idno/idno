@@ -20,6 +20,8 @@ final class TemplateHelpersDouble implements TemplateHelpers
 
     public bool $xhr = false;
 
+    private int $inputIds = 0;
+
     public bool $secure = false;
 
     public ?object $iconUser = null;
@@ -198,6 +200,41 @@ final class TemplateHelpersDouble implements TemplateHelpers
         $this->note(__FUNCTION__, $html);
 
         return $this->xhr ? $html : '';
+    }
+
+    public function nextInputId(): int
+    {
+        $this->note(__FUNCTION__);
+
+        return ++$this->inputIds;
+    }
+
+    public function securityToken(string $action, string $time): string
+    {
+        $this->note(__FUNCTION__, $action, $time);
+
+        return 'token-' . $action . '-' . $time;
+    }
+
+    public function timezoneOptions(): array
+    {
+        $this->note(__FUNCTION__);
+
+        return ['UTC' => '(GMT) UTC', 'Europe/London' => '(GMT) Europe, London'];
+    }
+
+    public function timezoneInfo(string $zone): array
+    {
+        $this->note(__FUNCTION__, $zone);
+
+        return ['offset' => 3600, 'gmt' => '+01:00', 'diff' => null];
+    }
+
+    public function emailIsBlocked(string $email): bool
+    {
+        $this->note(__FUNCTION__, $email);
+
+        return $email === 'blocked@example.com';
     }
 
     public function shellVariables(array $vars): array

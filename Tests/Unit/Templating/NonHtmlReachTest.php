@@ -136,6 +136,7 @@ final class NonHtmlReachTest extends TestCase
         'templates/default/following/add.tpl.php',
         'templates/default/following/confirm.tpl.php',
         'templates/default/following/home.tpl.php',
+        'templates/default/forms/input/captcha.tpl.php',
         'templates/default/pages/403.tpl.php',
         'templates/default/pages/404.tpl.php',
         'templates/default/pages/410.tpl.php',
@@ -150,7 +151,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^templates/default/(?:drafts|(?:entity|content|stream|pages|file|following)/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
+                if (preg_match('#^templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms)/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
                     $reached[$file] = true;
                 }
             }

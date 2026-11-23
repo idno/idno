@@ -43,7 +43,7 @@ final class IdnoTwigExtensionTest extends TestCase
     }
 
     /** What the extension marks as safe for HTML: functions, and filters */
-    private const SAFE_FUNCTIONS = ['idno_include', 'slot', 't_html', 'form_token', 'action_link', 'form_data', 'pagination'];
+    private const SAFE_FUNCTIONS = ['idno_include', 'slot', 't_html', 'form_token', 'action_link', 'form_data', 'js_string', 'pagination'];
 
     private const SAFE_FILTERS = ['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users'];
 
@@ -83,10 +83,10 @@ final class IdnoTwigExtensionTest extends TestCase
         $extension = $this->extension();
         $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
         $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
-        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user', 'is_entity', 'random_id', 'default_avatar', 'visitor_message', 'profile_link', 'embeds', 'syndication_has', 'syndication_accounts'] as $name) {
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user', 'is_entity', 'random_id', 'default_avatar', 'visitor_message', 'profile_link', 'embeds', 'syndication_has', 'syndication_accounts', 'js_string', 'next_input_id', 'security_token', 'timezone_options', 'timezone_info', 'email_is_blocked'] as $name) {
             $this->assertContains($name, $functions);
         }
-        foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text', 'identity_url', 'to_int'] as $name) {
+        foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text', 'identity_url', 'to_int', 'link_url', 'email_address', 'form_urlencode'] as $name) {
             $this->assertContains($name, $filters);
         }
     }
@@ -461,6 +461,13 @@ final class IdnoTwigExtensionTest extends TestCase
             {
             }
 
+            public function forgetVariables(array $names): void
+            {
+                foreach ($names as $name) {
+                    unset($this->vars[$name]);
+                }
+            }
+
             public function withVars(array $vars): static
             {
                 $copy = clone $this;
@@ -506,6 +513,13 @@ final class IdnoTwigExtensionTest extends TestCase
             {
             }
 
+            public function forgetVariables(array $names): void
+            {
+                foreach ($names as $name) {
+                    unset($this->vars[$name]);
+                }
+            }
+
             public function withVars(array $vars): static
             {
                 $copy = clone $this;
@@ -542,6 +556,69 @@ final class IdnoTwigExtensionTest extends TestCase
             ['_foo' => 'kept', 'a' => 1, 'other' => 'mine'],
             ['_foo' => 'kept', 'a' => 1, 'other' => 'mine', 'i' => 1],
         ], $seen, 'no global (a variable that only has a global\'s name and another value is kept), no bookkeeping, a variable starting with an underscore stays');
+    }
+
+    public function testTheFormHelpers(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+
+        // A value as one single-quoted JavaScript string in a double-quoted attribute
+        $this->assertSame("'It\\'s a \\\\ &quot;test&quot;\\n\\u2028 &lt;b&gt; &amp;'", $this->render("{{ js_string(v) }}", ['v' => "It's a \\ \"test\"\n\u{2028} <b> &"]), 'escaped for the string, then for the attribute');
+        $this->assertSame("''", $this->render("{{ js_string(null) }}"), 'nothing is an empty string');
+        $this->assertSame("'1'", $this->render("{{ js_string(1) }}"));
+        // The address of a link
+        $this->assertSame('/a?b=1|https://x.example/y||', $this->render("{{ '/a?b=1'|link_url }}|{{ 'https://x.example/y'|link_url }}|{{ 'javascript:alert(1)'|link_url }}|{{ null|link_url }}"));
+        $this->assertSame('ada@example.com|abc@b.c', $this->render("{{ 'ada@example.com'|email_address }}|{{ 'a b\"<c>@b.c'|email_address }}"), 'what an address cannot hold is removed');
+        $this->assertSame('a+b%2Fc%7E', $this->render("{{ 'a b/c~'|form_urlencode }}"), 'urlencode(), a space is a plus');
+        // The counter of ids, the token, the zones and the blocked addresses are the site's: the extension passes them on
+        $this->assertSame('1 2', $this->render('{{ next_input_id() }} {{ next_input_id() }}', [], $helpers));
+        $this->assertSame('token-/a?b=1-1773000000|token--', $this->render("{{ security_token('/a?b=1', 1773000000) }}|{{ security_token(null, null) }}", [], $helpers));
+        $this->assertSame('UTC=(GMT) UTC,Europe/London=(GMT) Europe, London,', $this->render("{% for zone, label in timezone_options() %}{{ zone }}={{ label }},{% endfor %}", [], $helpers));
+        $this->assertSame('3600 +01:00 null', $this->render("{% set info = timezone_info('Europe/London') %}{{ info.offset }} {{ info.gmt }} {{ info.diff is null ? 'null' : info.diff }}", [], $helpers));
+        $this->assertSame('1|0|0', $this->render("{{ email_is_blocked('blocked@example.com') ? 1 : 0 }}|{{ email_is_blocked('x@example.com') ? 1 : 0 }}|{{ email_is_blocked(null) ? 1 : 0 }}", [], $helpers));
+    }
+
+    public function testForgetVariablesTakesTheNamedVariablesOffTheObjectTheFileWasDrawnOnAndNothingElse(): void
+    {
+        $context = new class implements PhpTemplateContext {
+            public array $vars = ['class' => 'x', 'name' => 'n', 'keep' => 'k'];
+
+            public function forgetVariables(array $names): void
+            {
+                foreach ($names as $name) {
+                    unset($this->vars[$name]);
+                }
+            }
+
+            public function withVars(array $vars): static
+            {
+                $copy = clone $this;
+                $copy->vars = $vars;
+
+                return $copy;
+            }
+
+            public function phpTemplateScope(): string
+            {
+                return self::class;
+            }
+
+            public function draw($templateName, $returnBlank = true)
+            {
+                return '';
+            }
+
+            public function drawSlot($name)
+            {
+                return '';
+            }
+        };
+        $twig = new Environment(new ArrayLoader(['a.html.twig' => "{% do forget_variables(['class', 'name', 'absent']) %}{{ class }}{{ name }}{{ keep }}"]), ['cache' => false]);
+        $twig->addExtension($this->extension());
+
+        $this->assertSame('xnk', $twig->render('a.html.twig', ['class' => 'x', 'name' => 'n', 'keep' => 'k', '_idno_context' => $context]), 'the file goes on with the variables it was given');
+        $this->assertSame(['keep' => 'k'], $context->vars, 'the object lost the named ones');
+        $this->assertSame('', $twig->render('a.html.twig', ['_idno_context' => 'not a template object']), 'a context that is not a template object is left alone');
     }
 
     public function testThePureHelpersOfTheEntityTemplates(): void
