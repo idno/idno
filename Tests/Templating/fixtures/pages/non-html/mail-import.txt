@@ -1,0 +1,7 @@
+Your data import is done!
+===================
+
+We've taken the data you uploaded and turned it into Idno posts. Enjoy!
+12 posts were imported, and 2 items in the file were not (pages, attachments, other types, or items that could not be imported).
+
+Visit your site: {site}/

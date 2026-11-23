@@ -56,6 +56,9 @@ abstract class PrivateSiteTestCase extends TestCase
     /** @var resource|null */
     private $server = null;
 
+    /** @var list<resource> the servers startExtraServer() made */
+    private array $extraServers = [];
+
     private ?SiteClient $client = null;
 
     protected function setUp(): void
@@ -119,6 +122,26 @@ abstract class PrivateSiteTestCase extends TestCase
         $this->assertNotNull($this->client);
 
         return $this->client;
+    }
+
+    /**
+     * Starts another web server on the test site's database and upload directory (a free port, never 8089; stopped in
+     * tearDown()) and returns its base URL with the trailing slash: for a test that needs the site served with other
+     * settings than the test's own server has (the production environment, an opcache). Both servers are the site: a
+     * write through one is read through the other.
+     *
+     * @param array<string, string> $environment variables over the site's own environment (APP_ENV, IDNO_PROXY_STRING, ...);
+     *                                           IDNO_URL and IDNO_TEST_HTTP_ALLOW name the new server unless given
+     * @param array<string, string> $ini         PHP settings (`-d name=value`) of the server's process
+     */
+    protected function startExtraServer(array $environment, array $ini = []): string
+    {
+        $port = self::freePort();
+        $url = 'http://127.0.0.1:' . $port . '/';
+        $environment += ['IDNO_URL' => $this->configuredScheme() . substr($url, strlen('http')), 'IDNO_TEST_HTTP_ALLOW' => '127.0.0.1:' . $port];
+        $this->extraServers[] = $this->launch($port, $environment, $ini, $this->directory . '/extra-' . $port . '.log');
+
+        return $url;
     }
 
     /**
@@ -386,6 +409,20 @@ abstract class PrivateSiteTestCase extends TestCase
 
     private function startServer(int $port): void
     {
+        $this->serverLog = $this->directory . '/server.log';
+        $this->server = $this->launch($port, [], [], $this->serverLog);
+    }
+
+    /**
+     * Starts `php -S` on the port with the site's environment (and $environment over it) and waits until it listens.
+     *
+     * @param array<string, string> $environment
+     * @param array<string, string> $ini
+     *
+     * @return resource
+     */
+    private function launch(int $port, array $environment, array $ini, string $log)
+    {
         $root = dirname(__DIR__, 2);
         $router = $this->directory . '/router.php';
         // The built-in server does not put the environment into $_SERVER, where the configuration
@@ -397,48 +434,63 @@ abstract class PrivateSiteTestCase extends TestCase
             . "if (getenv('IDNO_TEST_SERVER_HTTPS') === '1') { \$_SERVER['HTTPS'] = 'on'; }\n"
             . 'return require ' . $this->literal($root . '/Tests/rig/router.php') . ";\n";
         file_put_contents($router, $script);
-        $this->serverLog = $this->directory . '/server.log';
+        $command = [PHP_BINARY, '-d', 'error_reporting=22527'];
+        foreach ($ini as $name => $value) {
+            $command[] = '-d';
+            $command[] = $name . '=' . $value;
+        }
+        array_push($command, '-S', '127.0.0.1:' . $port, $router);
         $server = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-S', '127.0.0.1:' . $port, $router],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->serverLog, 'a'], 2 => ['file', $this->serverLog, 'a']],
+            $command,
+            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']],
             $pipes,
             $root,
-            $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '4'],
+            $environment + $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '4'],
         );
         $this->assertIsResource($server);
-        $this->server = $server;
         $deadline = microtime(true) + self::START_SECONDS;
         while (microtime(true) < $deadline) {
             $socket = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
             if ($socket !== false) {
                 fclose($socket);
 
-                return;
+                return $server;
             }
             usleep(50_000);
         }
-        $this->fail('The web server did not start.' . $this->serverLog());
+        $pid = (int) proc_get_status($server)['pid'];
+        exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
+        proc_terminate($server, 9);
+        proc_close($server);
+        $this->fail('The web server did not start.' . (is_file($log) ? "\n" . (string) file_get_contents($log) : ''));
     }
 
     private function stopServer(): void
     {
-        if ($this->server === null) {
-            return;
+        $servers = $this->extraServers;
+        $this->extraServers = [];
+        if ($this->server !== null) {
+            $servers[] = $this->server;
+            $this->server = null;
         }
-        $pid = (int) proc_get_status($this->server)['pid'];
-        // The workers PHP_CLI_SERVER_WORKERS forks are the server's children.
-        exec('pkill -TERM -P ' . $pid . ' 2>/dev/null');
-        proc_terminate($this->server);
-        $deadline = microtime(true) + 5;
-        while (proc_get_status($this->server)['running'] && microtime(true) < $deadline) {
-            usleep(50_000);
+        foreach ($servers as $server) {
+            $pid = (int) proc_get_status($server)['pid'];
+            // The workers PHP_CLI_SERVER_WORKERS forks are the server's children.
+            exec('pkill -TERM -P ' . $pid . ' 2>/dev/null');
+            proc_terminate($server);
         }
-        if (proc_get_status($this->server)['running']) {
-            exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-            proc_terminate($this->server, 9);
+        foreach ($servers as $server) {
+            $deadline = microtime(true) + 5;
+            while (proc_get_status($server)['running'] && microtime(true) < $deadline) {
+                usleep(50_000);
+            }
+            if (proc_get_status($server)['running']) {
+                $pid = (int) proc_get_status($server)['pid'];
+                exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
+                proc_terminate($server, 9);
+            }
+            proc_close($server);
         }
-        proc_close($this->server);
-        $this->server = null;
     }
 
     private static function freePort(): int

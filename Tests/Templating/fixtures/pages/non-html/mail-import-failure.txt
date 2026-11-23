@@ -1,0 +1,8 @@
+Sorry, your data import was unsuccessful.
+=========================================
+
+The import was stopped after repeated errors. 4 posts were imported before it stopped.
+Check the site's log for the cause, and check your posts before you import the file
+again, or it may add them twice.
+
+Visit your site: {site}/

@@ -1,0 +1,57 @@
+{
+    "object": {
+        "id": "",
+        "uuid": false,
+        "content": "",
+        "formattedContent": "",
+        "displayName": {},
+        "objectType": "note",
+        "published": "{now}",
+        "updated": "{now}",
+        "url": "{site}\/status\/edit\/",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "url": null,
+    "tags": null,
+    "formFields": {
+        "body": {
+            "type": "longtext",
+            "id": "body",
+            "required": true,
+            "description": "Share a quick note or comment. You can use links and #hashtags."
+        },
+        "forward-to": {
+            "type": "hidden",
+            "name": "forward-to",
+            "id": "forward-to_1"
+        },
+        "access": {
+            "id": "access-control-id-acl-{id-1}",
+            "description": "Access control"
+        }
+    },
+    "services": [],
+    "content_type": "note",
+    "posseLinks": [],
+    "csrf": [
+        {
+            "tid": "tid{id}",
+            "action": "\/status\/edit",
+            "time": {token-time},
+            "token": "{token}"
+        }
+    ],
+    "title": "Edit status update",
+    "messages": []
+}

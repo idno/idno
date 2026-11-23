@@ -57,6 +57,19 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->tag('kernel.event_listener', ['event' => 'kernel.request', 'priority' => 1000]);
 
+    // When the environment variable IDNO_TEST_TWIG_PORT_REPORT names a file, a Twig file drawn beside the `.tpl.php` it was ported
+    // from is compared with it, and the result is appended to the file (see Tests\Fixtures\TwigPortCheck). The check stands in front
+    // of the Twig engine the template renderer is given (its fourth argument) and returns the Twig output unchanged; inert otherwise.
+    $container->services()
+        ->set(\Tests\Fixtures\TwigPortCheck::class)
+        ->factory([\Tests\Fixtures\TwigPortCheck::class, 'forSite'])
+        ->args([service(\Idno\Templating\TwigTemplateEngine::class), service(\Idno\Templating\PhpTemplateEngine::class), service(BootConfig::class)])
+        ->autowire(false)
+        ->autoconfigure(false);
+    $container->services()
+        ->get(\Idno\Templating\TemplateRenderer::class)
+        ->arg(3, service(\Tests\Fixtures\TwigPortCheck::class));
+
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
     // test environment; no request can set it.

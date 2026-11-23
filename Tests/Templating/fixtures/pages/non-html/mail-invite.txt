@@ -1,0 +1,14 @@
+Join us!
+=======
+
+Hi there! Your friend *Ada Admin* has invited you to join Fixture Site: {site}/.
+
+
+You can use this space to publish your stories, share things that interest you, and discuss things that matter.
+
+Get started with *Fixture Site* by setting up your account.
+
+
+Sign up now: {site}/account/register/?email=new.member%40example.com&code=0123456789abcdef0123456789abcdef
+
+If you have any questions at all, please don't hesitate to contact us by sending an email to site@example.com

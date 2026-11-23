@@ -167,7 +167,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     it compiled into the container, lazy, the old backend's session, failures), and the `RepositoryDataConciergeTest` cases that need MySQL (`requireMysql()`: the old
     backend's MySQL connection, full-text settings, a lost MySQL connection, `database` names that
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
-    (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
+    but `PagePerformanceTest`, which skips without `IDNO_TEST_PERFORMANCE` (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
     missing directory on SQLite); the characterisation suite runs in full on both.
 - A test that needs a site of its own extends `Tests\Support\PrivateSiteTestCase` (abstract): each test starts
   `php -S` (four workers, a free port, never 8089) on a private database (a private database of the rig's MySQL or
@@ -176,7 +176,9 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `tearDown()`, with an assertion that the rig's shared upload directory gained no file), and stops it and drops the
   database in `tearDown()`. The site is SYNCHRONOUS. It gives `site()`, `baseUrl()`, `console()`, `runInSite()`,
   `registerUser()`/`publishStatus()` (over HTTP), `sessionCookie()`, `formToken()`, `serverLog()`, and a subclass
-  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches).
+  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches). `startExtraServer(array $environment, array $ini = []): string`
+  starts a second `php -S` (a free port, stopped in `tearDown()`) on the same database and upload directory, with other
+  environment variables or PHP settings (the production environment, opcache), and returns its base URL.
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
   `Tests\Queue\AsyncSiteTestCase`, a `PrivateSiteTestCase` that sets `IDNO_EVENT_QUEUE=AsynchronousQueue` (through
   `additionalEnvironment()`; `siteEnvironment()` stays the test class's) and adds `runWorkerOnce()`
@@ -228,9 +230,16 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   ids are the only variable things). A page is compared after `Tests\Templating\PageNormaliser`, which replaces only
   the site's address, the form token and its time (only a value of the token's shape), ids made by `uniqid()`,
   `md5(rand())` and `rand()` (numbered by first appearance), the base64 address in an annotation's delete link, the
-  built assets' modification-time cache-buster and the password reset code, and, for an HTML page only, collapses
-  white space between tags outside `<pre>` and `<textarea>`; every replacement is in
-  `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there.
+  built assets' modification-time cache-buster and the password reset code, and, for an HTML page only, makes white space
+  that touches a tag one line break, `&amp;` and `&` one character, `&#039;`, `&#39;` and `&apos;` and `'` one, and, in text
+  (never inside a tag), `&quot;` and `&#34;` and `"` one (an ampersand that begins what reads as an entity, `&amp;lt;`, stays);
+  the contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched; every replacement is in
+  `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there. The
+  JSON goldens of the form pages (`json-account-settings-logged-in`, `json-status-edit-logged-in`) pin `csrf` and `formFields`
+  (the second replaces the time of the note that does not exist yet, in that page's test, not in the normaliser), and every mail
+  of `templates/email*` has a golden (`non-html/mail-<name>.html` and `.txt`, drawn in the site by
+  `RenderedSiteTestCase::drawMails()` from `MAIL_CASES`: fixed variables, the shell's link made with no request path, so a mail
+  drawn by the web path, the password reset, differs only there).
   A golden is written, not compared, when `IDNO_TEST_CAPTURE_GOLDENS=1`: that run always FAILS, naming the files it wrote
   (so a capture is never a green run), is refused when `CI` is set, and also fails if two looks render a shared golden
   differently. Goldens are captured from the code they pin, are the same on SQLite, MySQL and MariaDB, and a change to one
@@ -247,7 +256,28 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   announced once), a pinned theme, `?_t=modern` (the default type), `?_t=classic` and traversal types (refused, in any letter case: on a file
   system that ignores case `CLASSIC` is the directory), a third-party plugin's `templates/modern/` file (still wins; one deprecation
   line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author, the drafts page
-  and that no template refers to `Themes/Twenty26`. Twig templates in the cascade are pinned by
+  and that no template refers to `Themes/Twenty26`. A Twig port of a core or bundled-plugin template is proven against its
+  original, which stays beside it (`<name>.tpl.php`, until the originals are deleted): in the test environment
+  `Tests\Fixtures\TwigPortCheck` (`config/services_test.php`) stands in front of the Twig engine the template renderer is given and
+  returns the Twig output unchanged; when `IDNO_TEST_TWIG_PORT_REPORT` names a file (read from `$_SERVER`, then the environment,
+  at each render) and a `.tpl.php` of the same name is beside the Twig file, it draws that original too (with the same variables, on
+  a copy of the template object, in the same request: a shadow render, not a replay, because templates read the session, the
+  current page and the site; nothing is compared inside a shadow render), normalises both with `PageNormaliser` and appends
+  `{"file", "same", "original", "port"}` to the file (the outputs only on a difference, 64 KiB each; an original that throws is a
+  difference). `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
+  error and empty pages, as visitor, administrator, member and new user) and draws the mails and `DRAWS` (a template no page
+  reaches) in the site, and fails for a difference not listed in `Tests/Templating/fixtures/port-exceptions.php` (the Twig file,
+  its reason and the `Class::method` that pins the new output; a stale entry or a missing test fails), and for a Twig file with an
+  original beside it that nothing compared (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
+  the pages are visited, not compared with goldens). Its self-test, `Tests/Unit/Templating/TwigPortCheckTest`, proves the check can fail.
+  `Tests/Templating/fixtures/unported.php` lists every web and mail `.tpl.php` (types `default`, `email`, `email-text`; core and
+  the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted), and
+  `raw-allowlist.php` every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`).
+  `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record` or `compare`) serves the fixture
+  site from a second server of the test (`PrivateSiteTestCase::startExtraServer()`: production environment, opcache on, an
+  outbound request fails at once), times 100 sequential requests of `/` and of a note's permalink after 10 to warm up, prints
+  the medians and 90th percentiles, and `record` writes the medians to `<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits
+  of the SHA-256 of the checkout's real path>.json` while `compare` asserts each is at most 1.15 times it. Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
   `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".

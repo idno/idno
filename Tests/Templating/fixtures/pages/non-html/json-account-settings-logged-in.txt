@@ -1,0 +1,40 @@
+{
+    "formFields": {
+        "name": {
+            "type": "text",
+            "name": "name",
+            "id": "inputName",
+            "description": "Your name"
+        },
+        "email": {
+            "type": "email",
+            "name": "email",
+            "id": "inputEmail",
+            "description": "Your email address"
+        },
+        "password": {
+            "type": "password",
+            "name": "password",
+            "id": "inputPassword",
+            "autocomplete": "off",
+            "description": "Password"
+        },
+        "timezone": {
+            "type": "select",
+            "multiple": false,
+            "name": "timezone",
+            "id": "inputTimezone",
+            "description": "Timezone"
+        }
+    },
+    "csrf": [
+        {
+            "tid": "tid{id}",
+            "action": "\/account\/settings",
+            "time": {token-time},
+            "token": "{token}"
+        }
+    ],
+    "title": "Account settings",
+    "messages": []
+}

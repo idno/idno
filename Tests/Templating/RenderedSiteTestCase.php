@@ -31,6 +31,35 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
 
     private int $compared = 0;
 
+    /** Whether golden() compares (or, capturing, writes) the file: a test that only visits the pages sets it to false. */
+    protected bool $compareGoldens = true;
+
+    /**
+     * The mails the site sends, drawn by name with fixed, representative variables: name => [template, variables]. The
+     * variants after the first of a template draw its other branches; the goldens are the ones in GOLDEN_MAILS.
+     * The markup in `message` is what an error message holds (the `oops` template prints it as it is).
+     *
+     * @var array<string, array{string, array<string, mixed>}>
+     */
+    protected const MAIL_CASES = [
+        'invite' => ['account/invite', ['inviter' => 'Ada Admin', 'email' => 'new.member@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
+        'password' => ['account/password', ['email' => 'ada@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
+        'emailtest' => ['admin/emailtest', []],
+        'export' => ['admin/export', ['unrendered' => 3]],
+        'export-all' => ['admin/export', []],
+        'export-failure' => ['admin/export_failure', []],
+        'import' => ['admin/import', ['imported' => 12, 'skipped' => 2]],
+        'import-no-skipped' => ['admin/import', ['imported' => 5]],
+        'import-nothing' => ['admin/import', []],
+        'import-failure' => ['admin/import_failure', ['imported' => 4, 'stopped' => true]],
+        'import-failure-started-before' => ['admin/import_failure', ['startedBefore' => true]],
+        'import-failure-nothing' => ['admin/import_failure', []],
+        'oops' => ['admin/oops', ['site' => 'https://example.org/', 'message' => 'Unexpected token < in <b>index.php</b> on line 7 & more', 'user' => 'ada', 'agent' => 'Mozilla/5.0 (X11; Linux)', 'qs' => 'a=1&b=2', 'referrer' => 'https://example.org/from?x=1']],
+    ];
+
+    /** The mails that have golden files (mail-<name>.html and .txt), in Tests/Templating/fixtures/pages/non-html. */
+    protected const GOLDEN_MAILS = ['invite', 'emailtest', 'export', 'export-failure', 'import', 'import-failure', 'oops'];
+
     /** @var list<string> the files this test wrote instead of comparing (IDNO_TEST_CAPTURE_GOLDENS=1) */
     private array $written = [];
 
@@ -190,8 +219,9 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      * Fetches a page (as the person whose cookie it is, if any) and compares it with its golden file.
      *
      * @param array<string, string> $headers
+     * @param \Closure|null         $prepare given the body before it is compared: for a page that draws the time of the request (and no other)
      */
-    protected function page(string $golden, string $path, int $status = 200, string $contentType = 'text/html', ?string $cookie = null, array $headers = []): ?SiteResponse
+    protected function page(string $golden, string $path, int $status = 200, string $contentType = 'text/html', ?string $cookie = null, array $headers = [], ?\Closure $prepare = null): ?SiteResponse
     {
         $response = $this->site()->request('GET', $path, ($cookie === null ? [] : ['Cookie' => $cookie]) + $headers);
         if ($response->status !== $status) {
@@ -203,7 +233,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         if (!str_starts_with(strtolower($type), $contentType)) {
             $this->differences[] = $golden . ': ' . $path . ' is ' . $type . ', not ' . $contentType;
         }
-        $this->golden($golden, $response->body, str_starts_with(strtolower($type), 'text/html'));
+        $this->golden($golden, $prepare === null ? $response->body : $prepare($response->body), str_starts_with(strtolower($type), 'text/html'));
 
         return $response;
     }
@@ -216,6 +246,9 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $file = dirname(__DIR__) . '/Templating/fixtures/pages/' . $golden;
         $actual = PageNormaliser::normalise($body, $this->baseUrl(), $html);
         ++$this->compared;
+        if (!$this->compareGoldens) {
+            return;
+        }
         if (self::capturing()) {
             $this->written[] = $golden;
             if (isset(self::$captured[$golden]) && self::$captured[$golden] !== $actual) {
@@ -357,7 +390,56 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $this->page('non-html/kml-home.xml', '?_t=kml', 200, 'application/vnd.google-earth.kml+xml');
         $this->page('non-html/json-home-logged-in.txt', '?_t=json', 200, 'application/json', $cookie);
         $this->page('non-html/json-status-logged-in.txt', $paths['status'] . '?_t=json', 200, 'application/json', $cookie);
+        // The JSON of a form page: the form's token (`csrf`) and its fields (`formFields`).
+        $this->page('non-html/json-account-settings-logged-in.txt', 'account/settings/?_t=json', 200, 'application/json', $cookie);
+        // The form of a new note describes the note that does not exist yet, "published" and "updated" now: the one page whose time is replaced.
+        $this->page('non-html/json-status-edit-logged-in.txt', 'status/edit?_t=json', 200, 'application/json', $cookie, [], static fn (string $body): string => preg_replace('/("(?:published|updated)": ")\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00"/', '$1{now}"', $body) ?? $body);
         $this->passwordResetMail();
+        $this->mails();
+    }
+
+    /**
+     * Draws every mail of MAIL_CASES in the site (HTML inside the email shell, and plain text), as the mail adapter does.
+     * The shell reads the request's path for its link: a console process has none, so the link is the same every time.
+     *
+     * @return array<string, array{html: string, text: string}>
+     */
+    protected function drawMails(): array
+    {
+        $cases = $this->literal(json_encode(self::MAIL_CASES, JSON_THROW_ON_ERROR));
+        $code = <<<'PHP'
+        $draw = static function (string $type, string $name, array $vars): string {
+            $template = clone \Idno\Core\Idno::site()->template();
+            $template->setTemplateType($type);
+
+            return (string) $template->__($vars)->draw($name);
+        };
+        $mails = [];
+        foreach (json_decode(%CASES%, true) as $name => [$template, $vars]) {
+            $mails[$name] = [
+                'html' => $draw('email', 'shell', ['body' => $draw('email', $template, $vars)]),
+                'text' => $draw('email-text', $template, $vars),
+            ];
+        }
+
+        return $mails;
+        PHP;
+        $mails = $this->runInSite(str_replace('%CASES%', $cases, $code));
+        $this->assertIsArray($mails);
+
+        return $mails;
+    }
+
+    /**
+     * Compares the mails that have golden files with them: the pages' mails (the password reset is drawn by a request, above).
+     */
+    private function mails(): void
+    {
+        $mails = $this->drawMails();
+        foreach (self::GOLDEN_MAILS as $name) {
+            $this->golden('non-html/mail-' . $name . '.html', $mails[$name]['html'], true);
+            $this->golden('non-html/mail-' . $name . '.txt', $mails[$name]['text']);
+        }
     }
 
     /**

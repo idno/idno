@@ -1,0 +1,8 @@
+Your data export is ready!
+===================
+
+We've gathered all your site content and placed it in an archive for you. To download it, click the following link:
+
+3 entries could not be rendered and are included as data only.
+
+Get your data: {site}/admin/export/
