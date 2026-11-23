@@ -27,8 +27,14 @@ final class NonHtmlReachTest extends TestCase
         'drawPagination' => 'shell/pagination',
     ];
 
-    /** What `content/end/annotations` and the annotation page build the name of: `entity/annotations/<name>`. */
-    private const ANNOTATION_NAMES = ['rsvps', 'likes', 'shares', 'replies', 'mentions', 'like', 'reply'];
+    /**
+     * Templates drawn by a name no draw call holds as a literal, each with where the name comes from. Only a name that really is drawn
+     * belongs here: the user search page takes the template to draw from its `template` input, defaulting to this one, and
+     * `forms/usersearch` hands it on as `render-template`.
+     */
+    private const DRAWN_BY_A_NAME_HELD_ELSEWHERE = [
+        'forms/components/usersearch/user' => 'Idno/Pages/Search/User.php: getInput(\'template\', ...) default; forms/usersearch: render-template',
+    ];
 
     /**
      * @param bool $withPageBodies also start from every name a PHP class outside the templates names in a string (a page's body,
@@ -39,7 +45,7 @@ final class NonHtmlReachTest extends TestCase
      */
     public static function reachable(string $projectDir, bool $withPageBodies = false): array
     {
-        $pageNames = $withPageBodies ? self::namedByPageClasses($projectDir) : [];
+        $pageNames = $withPageBodies ? array_merge(self::namedByPageClasses($projectDir), array_keys(self::DRAWN_BY_A_NAME_HELD_ELSEWHERE)) : [];
         $result = [];
         foreach (array_diff(FallbackTrace::TYPES, ['email', 'email-text']) as $type) {
             $files = [];
@@ -51,7 +57,7 @@ final class NonHtmlReachTest extends TestCase
                     continue;
                 }
                 $seen[$name] = true;
-                if ($withPageBodies && str_ends_with($name, '/')) {
+                if (str_ends_with($name, '/')) {
                     foreach (self::namesUnder($projectDir, $name) as $under) {
                         $queue[] = $under;
                     }
@@ -59,7 +65,7 @@ final class NonHtmlReachTest extends TestCase
                 }
                 foreach (self::resolve($projectDir, $type, $name) as $file) {
                     $files[$file] = true;
-                    foreach (self::drawnNames((string) file_get_contents($projectDir . '/' . $file), $withPageBodies) as $next) {
+                    foreach (self::drawnNames((string) file_get_contents($projectDir . '/' . $file), true) as $next) {
                         $queue[] = $next;
                     }
                 }
@@ -85,10 +91,8 @@ final class NonHtmlReachTest extends TestCase
             foreach (self::drawnNames($php, true) as $name) {
                 $names[$name] = true;
             }
-            if (preg_match_all('/[\'"]([a-z0-9_-]+(?:\/[A-Za-z0-9_-]+)+)[\'"]/', $php, $matches) > 0) {
-                foreach ($matches[1] as $name) {
-                    $names[$name] = true;
-                }
+            foreach (self::registeredNames($php) as $name) {
+                $names[$name] = true;
             }
         }
         $list = array_map('strval', array_keys($names));
@@ -225,15 +229,35 @@ final class NonHtmlReachTest extends TestCase
                 $names[] = $name;
             }
         }
-        if (str_contains($php, "'entity/annotations/' .")) {
-            foreach (self::ANNOTATION_NAMES as $annotation) {
-                $names[] = 'entity/annotations/' . $annotation;
+        // A literal prefix of a draw that goes on by concatenation (`draw('content/syndication/icon/' . $service)`): every template under it
+        if ($withPrefixes && preg_match_all('/\bdraw\(\s*[\'"]([A-Za-z0-9_\/-]+\/)[\'"]\s*\./', $php, $matches) > 0) {
+            foreach ($matches[1] as $prefix) {
+                $names[] = $prefix;
             }
         }
 
-        if ($withPrefixes && preg_match_all('/[\'"]([A-Za-z0-9_\/-]+\/)[\'"]\s*\./', $php, $matches) > 0) {
-            foreach ($matches[1] as $prefix) {
-                $names[] = $prefix;
+        return $names;
+    }
+
+    /**
+     * The template names a PHP file passes as string literals to the calls that register or choose templates: both names of
+     * `extendTemplate()`, `prependTemplate()` and `replaceTemplate()`, the name of `extendTemplateWithContent()`, and the shell
+     * `drawPage()` is given. A name held in a variable, or any other string, is not one.
+     *
+     * @return list<string>
+     */
+    private static function registeredNames(string $php): array
+    {
+        $names = [];
+        if (preg_match_all('/\b(?:extendTemplate|prependTemplate|replaceTemplate)\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]\s*,\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]/', $php, $matches, PREG_SET_ORDER) > 0) {
+            foreach ($matches as $match) {
+                $names[] = $match[1];
+                $names[] = $match[2];
+            }
+        }
+        if (preg_match_all('/\b(?:extendTemplateWithContent|drawPage)\(\s*(?:(?:true|false|\$[A-Za-z_]+)\s*,\s*)?[\'"]([A-Za-z0-9_\/-]+)[\'"]/', $php, $matches) > 0) {
+            foreach ($matches[1] as $name) {
+                $names[] = $name;
             }
         }
 

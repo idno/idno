@@ -172,9 +172,10 @@ namespace Idno\Core {
          */
         function drawPage($echo = true, $shell = 'shell')
         {
-            // Detect page, and see if we need to use a different shell. The override is for web pages: a feed, JSON or any other
-            // type has the shell of its own type.
-            if ($this->getTemplateType() === 'default') {
+            // Detect page, and see if we need to use a different shell. The override is for web pages: JSON, a feed or any other type
+            // has the shell of its own type. JSONP keeps the override, as it always had: its shell is a script that any site can load, and
+            // these pages hold the account's and the site's settings, so they are never drawn as one.
+            if (in_array(strtolower((string) $this->getTemplateType()), ['default', 'jsonp'], true)) {
                 foreach ($this->url_shell_overrides as $url => $page_shell) {
 
                     if (strpos(\Idno\Core\Idno::site()->currentPage()->currentUrl(), \Idno\Core\Idno::site()->config()->getDisplayURL() . $url.'/') === 0) {

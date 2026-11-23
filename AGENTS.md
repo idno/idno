@@ -2524,11 +2524,18 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `classic` also holds a
   copy of every `default` file those types reach by name from there (the syndication buttons, `forms/token`, `forms/action`, the annotation
   and profile partials, `pages/home/nocontent`, the output of a few form controls, the entity templates of Media and StaticPages): the
-  original in `default` is the web page's and may be changed or ported, the copy is what a feed draws. `Tests/Unit/Templating/NonHtmlReachTest`
-  works out the closure of names each non-HTML type reaches from the file system and keeps it true: no file under a `default` directory is
-  reachable from those types, and no `classic` file is unreachable. The URL shell overrides (`/admin/` and `/account/` draw `settings-shell`)
-  apply to web pages (the `default` type) only, so `?_t=json` on those pages draws the JSON shell
-  (`Tests/Characterisation/SettingsPagesJsonTest`). `selectable($type)` is
+  original in `default` is the web page's and may be changed or ported, the copy is what a feed draws.
+  `Tests/Unit/Templating/NonHtmlReachTest` works out, from the file system, the closure of template names each non-HTML type reaches:
+  it starts from the type's own directory, `entity/<Class>` for each `#[AsEntity]` class, `entity/default` and the helper methods'
+  names, follows the string literals passed to `draw()` (a literal prefix followed by `.`, as in `draw('content/syndication/icon/' . $service)`,
+  stands for every template of any type under it) and resolves each name through the type's chain. It asserts that no file under a
+  `default` directory is reached (so a bundled plugin that adds a `default` file under such a prefix fails it until the file is copied),
+  and, starting also from the string literals passed to `extendTemplate()`, `prependTemplate()`, `replaceTemplate()`,
+  `extendTemplateWithContent()` and `drawPage()` in PHP outside the templates (and from the one name listed in the test as drawn through
+  a `template` input), that every `classic` file is reached. The URL shell overrides (`/admin/` and `/account/` draw `settings-shell`)
+  apply to web pages (the `default` type) and to `jsonp`, in any letter case: a JSONP page is a script any site can load, and these
+  pages hold the account's and the site's settings, so they stay the HTML settings shell. Any other type, `?_t=json` included, draws the shell
+  of its own type (`Tests/Characterisation/SettingsPagesJsonTest`). `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
   `Templates::setTemplateType()` and the `?_t=` check both refuse it) and for anything that is not one segment; `requestable($type)` is
   `selectable()` less `email` and `email-text` (any letter case): a REQUEST (`?_t=`, in `Page::init()` and

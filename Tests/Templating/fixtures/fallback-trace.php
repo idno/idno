@@ -226,6 +226,7 @@ return [
         ['entity/annotations/reply', 'templates/classic/entity/annotations/reply.tpl.php'],
         ['entity/annotations/rsvps', 'templates/classic/entity/annotations/rsvps.tpl.php'],
         ['entity/annotations/shares', 'templates/classic/entity/annotations/shares.tpl.php'],
+        ['entity/annotations/shell', 'templates/classic/entity/annotations/shell.tpl.php'],
         ['entity/content/embed', 'templates/classic/entity/content/embed.tpl.php'],
         ['entity/feed', 'templates/classic/entity/feed.tpl.php'],
         ['entity/shell', 'templates/classic/entity/shell.tpl.php'],
