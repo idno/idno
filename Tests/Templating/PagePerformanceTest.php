@@ -22,7 +22,9 @@ use Tests\Fixtures\BundledTemplates;
  *   moods hit both, and the Twig server's number must be at most BUDGET times the bypass server's, for each page. Both numbers and
  *   the ratio are printed.
  * - `compare`, with no such file (nothing ported yet, or the originals deleted): the Twig server alone against the baseline
- *   `record` stored, by the same method.
+ *   `record` stored, by the same method. That is a number from another moment and not a reliable gate: before the originals are
+ *   deleted run `ratio` and keep its ratio in the commit message of the deleting change; after, compare only with a baseline
+ *   recorded on that same commit in the same session.
  * - `record`: the Twig server alone, its two numbers (milliseconds) written to the baseline file in the system's temporary directory,
  *   named for this checkout, for use after the originals are deleted.
  * - `ratio`: the two servers as in the first `compare`, whatever is ported (with nothing ported both draw the same files: the ratio

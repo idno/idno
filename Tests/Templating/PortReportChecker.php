@@ -43,7 +43,14 @@ final class PortReportChecker
             $hash = (string) $line['hash'];
             $produced[$file][$hash] = true;
             if (!in_array($hash, $exceptions[$file]['differences'] ?? [], true)) {
-                $failures[] = $file . " draws something other than its original, and port-exceptions.php does not list this difference (add the hash to its `differences` with a reason and a test, or fix the port):\n  hash:     " . $hash . "\n  original: " . self::quote($line['original'] ?? '') . "\n  port:     " . self::quote($line['port'] ?? '');
+                $notes = '';
+                if (($line['substitutions'] ?? 0) > 0) {
+                    $notes .= ' (compared after ' . $line['substitutions'] . ' substitutions of listed differences of templates it draws)';
+                }
+                if (($line['unsubstituted'] ?? 0) > 0) {
+                    $notes .= ' (' . $line['unsubstituted'] . ' listed difference(s) of templates it draws were not substituted, because their original output is empty or shorter than 16 bytes: this template needs its own entry for what they changed in it)';
+                }
+                $failures[] = $file . " draws something other than its original" . $notes . ", and port-exceptions.php does not list this difference (add the hash to its `differences` with a reason and a test, or fix the port):\n  hash:     " . $hash . "\n  original: " . self::quote($line['original'] ?? '') . "\n  port:     " . self::quote($line['port'] ?? '');
             }
         }
 

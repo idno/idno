@@ -269,9 +269,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   is drawn from that `.tpl.php`, a file with none by Twig, so a comparison is the WHOLE old tree against the whole new one and a
   variable an old parent leaked to a child through `__()` and the ports drop is a difference; a child drawn at the top level by the
   real render is compared in its own right too), normalises both with `PageNormaliser` and appends
-  `{"file", "same", "original_hash"}` to the file (and, on a difference, `hash` = sha256 of the normalised original, a NUL and the
+  `{"file", "same", "original_hash"}` to the file (a `\n` at the very end of either output is not a difference; and, on a difference, `hash` = sha256 of the normalised original, a NUL and the
   normalised port, with `original` and `port`, 64 KiB each; an original that throws is a difference, `same` false with a `reason`).
-  The shadow render is not isolated: it runs after the port, on a clone of the template object, but shares the session, the site
+  An exception covers its own file only: the check loads `port-exceptions.php` itself, remembers for the rest of the request the
+  (normalised original, normalised port) pair of each listed difference, and before a later comparison replaces each remembered
+  original (longest first) by its port in that comparison's original (a parent that drew the child), recording `substitutions`; an
+  original empty, white space or under 16 bytes is never replaced (the parents then show `unsubstituted` and need entries of their
+  own). The shadow render is not isolated: it runs after the port, on a clone of the template object, but shares the session, the site
   and `header()`, and an original that exits ends the request. With `IDNO_TEST_TWIG_BYPASS=1` in the environment (test wiring only)
   a file with an original beside it is drawn from the original and nothing is compared: the old engine alone. `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
   error and empty pages, as visitor, administrator, member and new user) and draws the mails and `DRAWS` (a template no page
@@ -290,11 +294,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   fixture site from servers of the test (`PrivateSiteTestCase::startExtraServer()`: test environment, debug off, opcache on, checked
   through `/_test/server`; an outbound request fails at once), warms each page with 10 requests and times it in 5 blocks of 40
   sequential requests; a server's number is the smallest block median. `compare` while a Twig file has its `.tpl.php` beside it
-  starts TWO servers identical but for `IDNO_TEST_TWIG_BYPASS`, interleaves their blocks in one run and asserts the Twig server's
+  starts TWO servers (test environment, debug off: not production, which is acceptable because both sides are equal) identical but for `IDNO_TEST_TWIG_BYPASS`, interleaves their blocks in one run and asserts the Twig server's
   number for `/` and for a note's permalink is at most 1.15 times the bypass server's (both numbers and the ratio are printed);
-  with no such file it compares the Twig server alone with the baseline `record` stored (`<sys_get_temp_dir()>/idno-perf-baseline-<12
-  hex digits of the SHA-256 of the checkout's real path>.json`, by the same method: a number from another moment, noisier); `ratio`
-  is the two-server run whatever is ported (with nothing ported both draw the same files, so the ratio is the method's own noise). Twig templates in the cascade are pinned by
+  with no such file there is nothing to bypass and the Twig server alone is compared with the baseline `record` stored
+  (`<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits of the SHA-256 of the checkout's real path>.json`, by the same method), which is a
+  number from another moment and NOT a reliable gate (it varied 13% on a repeat): the rule for deleting the originals is to run `ratio`
+  one last time while they still exist and keep that ratio in the commit message of the deleting change, and afterwards to compare only
+  with a baseline recorded on that same commit in the same session (the minimum of several block medians), never the first baseline. `ratio` is the two-server run whatever is ported (with nothing ported both draw the same files, so the ratio is the method's own noise). Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
   `IdnoTwigExtensionTest` and `TemplateLocatorTest`; see "Templates".

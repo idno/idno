@@ -32,6 +32,22 @@ final class PortReportCheckerTest extends TestCase
         $this->assertStringContainsString('"new"', $result['failures'][0]);
     }
 
+    public function testTheFailureOfAParentSaysWhatWasAndWasNotSubstituted(): void
+    {
+        $line = $this->differs('old', 'new') + ['substitutions' => 2, 'unsubstituted' => 1];
+
+        $failure = PortReportChecker::check([$line], [], [self::FILE], [])['failures'][0];
+
+        $this->assertStringContainsString('after 2 substitutions', $failure);
+        $this->assertStringContainsString('1 listed difference', $failure);
+        $this->assertStringContainsString('shorter than 16 bytes', $failure);
+        $this->assertStringContainsString('needs its own entry', $failure);
+
+        $plain = PortReportChecker::check([$this->differs('old', 'new')], [], [self::FILE], [])['failures'][0];
+        $this->assertStringNotContainsString('substitution', $plain);
+        $this->assertStringNotContainsString('listed difference', $plain);
+    }
+
     public function testAListedHashPassesAndAnotherDifferenceInTheSameFileFails(): void
     {
         $exceptions = [self::FILE => $this->exception([hash('sha256', "old\0new")])];

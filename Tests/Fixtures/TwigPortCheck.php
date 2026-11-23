@@ -26,6 +26,17 @@ use Tests\Templating\PageNormaliser;
  * too (`same` false, a `"reason"`, and `original` holds the exception's class and message). While the original renders
  * nothing is compared (a template the original draws is compared when a page draws it).
  *
+ * A newline at the very end of a fragment is not a difference (only `\n`, only the end): each fragment is compared again as part of
+ * its parents, up to the whole page or mail, and the golden pages keep a newline inside a text run, so only the end of a fragment is free.
+ *
+ * An exception covers its own file only. The check loads Tests/Templating/fixtures/port-exceptions.php itself (a test reading a test
+ * fixture; the report is read only after the request, and its outputs are cut, so the substitution cannot be made there soundly): when
+ * a comparison differs and its hash is listed, the pair (normalised original, normalised port) is remembered for the rest of the
+ * request, and before a later comparison decides `same`, each remembered original is replaced, longest first, by its port in the
+ * normalised original of that one (a parent that drew the child), the line recording `substitutions` (the occurrences replaced; none
+ * where the fragment does not occur). An original that is empty, white space or shorter than MINIMUM_FRAGMENT bytes is never
+ * replaced (it could match unrelated text): later differing lines say `unsubstituted` and need entries of their own.
+ *
  * While the original renders (a shadow render), every file it draws that has a `.tpl.php` beside it is drawn from that `.tpl.php`
  * too (a file with none is Twig's), so a comparison is the whole old tree against the whole new one: a variable the old parent
  * leaked to a child and the ports drop is a difference. The shadow render is not isolated: it runs after the port, on a copy of
@@ -40,15 +51,38 @@ final class TwigPortCheck implements TemplateEngine
     /** The longest output a report line carries. */
     public const OUTPUT_LIMIT = 65536;
 
+    /** The shortest original fragment that may be replaced in a parent's output: a shorter one could match unrelated text. */
+    public const MINIMUM_FRAGMENT = 16;
+
     private static bool $shadowing = false;
 
+    /** @var array<string, string> for the rest of the request: the normalised original and port output of each listed difference */
+    private static array $accepted = [];
+
+    /** @var int the listed differences of the request whose fragment is too short or empty to be replaced */
+    private static int $unsubstituted = 0;
+
+    /**
+     * @param array<string, array{reason: string, test: string, differences: list<string>}>|null $exceptions the listed differences
+     *                                                                                          (null: Tests/Templating/fixtures/port-exceptions.php)
+     */
     public function __construct(
         private readonly TemplateEngine $twig,
         private readonly PhpTemplateEngine $php,
         private readonly string $siteUrl = 'http://localhost/',
         private readonly ?string $projectDirectory = null,
+        private ?array $exceptions = null,
     )
     {
+    }
+
+    /**
+     * Forgets the listed differences remembered for the request (a unit test starts each case clean).
+     */
+    public static function forget(): void
+    {
+        self::$accepted = [];
+        self::$unsubstituted = 0;
     }
 
     public static function forSite(TemplateEngine $twig, PhpTemplateEngine $php, BootConfig $config): self
@@ -83,10 +117,28 @@ final class TwigPortCheck implements TemplateEngine
         }
 
         $html = $template->type !== 'email-text';
-        $before = PageNormaliser::normalise($drawn, $this->siteUrl, $html);
-        $after = PageNormaliser::normalise($port, $this->siteUrl, $html);
+        // A newline at the very end is not a difference: each fragment is compared again as part of its parents, up to the whole
+        // page or mail, and the golden pages keep a newline inside a text run; only the end of a fragment is free.
+        $raw = rtrim(PageNormaliser::normalise($drawn, $this->siteUrl, $html), "\n");
+        $after = rtrim(PageNormaliser::normalise($port, $this->siteUrl, $html), "\n");
+        $before = $raw;
+        // A difference that is listed for a template it draws is that template's own: its original output is replaced by its
+        // port's in this one's original, so that the entry of the child covers the child alone and not every ancestor.
+        $substitutions = 0;
+        $fragments = self::$accepted;
+        uksort($fragments, static fn (string $a, string $b): int => strlen($b) <=> strlen($a));
+        foreach ($fragments as $fragment => $replacement) {
+            $count = substr_count($before, (string) $fragment);
+            if ($count > 0) {
+                $before = str_replace((string) $fragment, $replacement, $before);
+                $substitutions += $count;
+            }
+        }
         $same = $before === $after && $reason === null;
-        $line = ['file' => $this->relative($template->path), 'same' => $same, 'original_hash' => hash('sha256', $before)];
+        $line = ['file' => $this->relative($template->path), 'same' => $same, 'original_hash' => hash('sha256', $raw)];
+        if ($substitutions > 0) {
+            $line['substitutions'] = $substitutions;
+        }
         if (!$same) {
             $line['hash'] = hash('sha256', $before . "\0" . $after);
             $line['original'] = substr($before, 0, self::OUTPUT_LIMIT);
@@ -94,10 +146,34 @@ final class TwigPortCheck implements TemplateEngine
             if ($reason !== null) {
                 $line['reason'] = $reason;
             }
+            if (self::$unsubstituted > 0) {
+                $line['unsubstituted'] = self::$unsubstituted;
+            }
+            if (in_array($line['hash'], $this->exceptions()[$line['file']]['differences'] ?? [], true)) {
+                if (strlen($raw) < self::MINIMUM_FRAGMENT || trim($raw) === '') {
+                    ++self::$unsubstituted;
+                } else {
+                    self::$accepted[$raw] = $after;
+                }
+            }
         }
         file_put_contents($report, json_encode($line, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) . "\n", FILE_APPEND | LOCK_EX);
 
         return $port;
+    }
+
+    /**
+     * @return array<string, array{reason: string, test: string, differences: list<string>}>
+     */
+    private function exceptions(): array
+    {
+        if ($this->exceptions === null) {
+            /** @var array<string, array{reason: string, test: string, differences: list<string>}> $loaded */
+            $loaded = require dirname(__DIR__) . '/Templating/fixtures/port-exceptions.php';
+            $this->exceptions = $loaded;
+        }
+
+        return $this->exceptions;
     }
 
     private function renderOriginal(LocatedTemplate $template, string $original, mixed $vars, PhpTemplateContext $context): string

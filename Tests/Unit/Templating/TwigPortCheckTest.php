@@ -23,6 +23,7 @@ final class TwigPortCheckTest extends TestCase
 
     protected function setUp(): void
     {
+        TwigPortCheck::forget();
         $this->project = sys_get_temp_dir() . '/idno-port-check-' . bin2hex(random_bytes(6));
         mkdir($this->project . '/templates/default', 0777, true);
         file_put_contents($this->project . '/templates/default/probe.tpl.php', 'a<?= $vars[\'x\'] ?>');
@@ -206,7 +207,182 @@ final class TwigPortCheckTest extends TestCase
     /**
      * @param string|\Closure $twigOutput what the Twig engine double renders, or a closure that gives it from the template, its variables and the template object
      */
-    private function check(string|\Closure $twigOutput): TwigPortCheck
+    public function testTrailingNewlinesAreNotADifferenceButNothingElseAtTheEndOrStartIs(): void
+    {
+        foreach ([['x', "x\n"], ["x\n", "x\n\n"], ["x\n\n\n", 'x']] as [$original, $port]) {
+            file_put_contents($this->project . '/templates/default/probe.tpl.php', $original);
+            @unlink($this->report);
+            $this->check($port)->render($this->located('probe'), [], $this->context());
+            $this->assertTrue($this->lines()[0]['same'], json_encode([$original, $port]));
+        }
+        foreach ([["x\ny", 'xy'], ["\nx", 'x'], ['x ', 'x'], ["x\n", "x\ny"]] as [$original, $port]) {
+            file_put_contents($this->project . '/templates/default/probe.tpl.php', $original);
+            @unlink($this->report);
+            $this->check($port)->render($this->located('probe'), [], $this->context());
+            $this->assertFalse($this->lines()[0]['same'], json_encode([$original, $port]) . ' differ');
+        }
+    }
+
+    public function testAListedDifferenceOfAChildDoesNotMakeItsParentDiffer(): void
+    {
+        $this->parentAndChild("<p>[<?= \$t->draw('other') ?>]</p>", 'the original child text', 'the PORT child text!!');
+        $check = $this->nestedCheck(['other' => 'the PORT child text!!'], '<p>[%other%]</p>', [self::exceptionFor('other', 'the original child text', 'the PORT child text!!')]);
+
+        $check->render($this->located('probe'), [], $this->nestedContext($check));
+
+        $lines = $this->lines(true);
+        $this->assertSame(['templates/default/other.html.twig', 'templates/default/probe.html.twig'], array_column($lines, 'file'));
+        $this->assertFalse($lines[0]['same']);
+        $this->assertSame(hash('sha256', "the original child text\0the PORT child text!!"), $lines[0]['hash']);
+        $this->assertTrue($lines[1]['same'], 'the parent draws the child\'s listed difference and nothing else');
+        $this->assertSame(1, $lines[1]['substitutions']);
+    }
+
+    public function testTheSameChildDifferenceUnlistedFailsTheParentToo(): void
+    {
+        $this->parentAndChild("<p>[<?= \$t->draw('other') ?>]</p>", 'the original child text', 'the PORT child text!!');
+        $check = $this->nestedCheck(['other' => 'the PORT child text!!'], '<p>[%other%]</p>', []);
+
+        $check->render($this->located('probe'), [], $this->nestedContext($check));
+
+        $this->assertSame([false, false], array_column($this->lines(), 'same'));
+    }
+
+    public function testAListedChildDifferencePlusASeparateParentDifferenceStillFailsTheParent(): void
+    {
+        $this->parentAndChild("<p>[<?= \$t->draw('other') ?>]</p><i>old text</i>", 'the original child text', 'the PORT child text!!');
+        $check = $this->nestedCheck(['other' => 'the PORT child text!!'], '<p>[%other%]</p><i>new text</i>', [self::exceptionFor('other', 'the original child text', 'the PORT child text!!')]);
+
+        $check->render($this->located('probe'), [], $this->nestedContext($check));
+
+        $lines = $this->lines();
+        $this->assertFalse($lines[1]['same'], 'the parent has a difference of its own');
+        $this->assertSame(1, $lines[1]['substitutions']);
+        $this->assertStringContainsString('<i>old text</i>', $lines[1]['original']);
+        $this->assertStringContainsString('the PORT child text!!', $lines[1]['original'], 'the child\'s fragment was replaced');
+    }
+
+    public function testAShortOrEmptyOriginalFragmentIsNeverSubstituted(): void
+    {
+        foreach ([['short', 'the PORT child text!!'], ['', 'the PORT child text!!'], ["  \n ", 'the PORT child text!!'], ['0123456789abcde', 'port of the child']] as [$original, $port]) {
+            @unlink($this->report);
+            TwigPortCheck::forget();
+            $this->parentAndChild("<p>[<?= \$t->draw('other') ?>]</p>", $original, $port);
+            $check = $this->nestedCheck(['other' => $port], '<p>[%other%]</p>', [self::exceptionFor('other', $original, $port)]);
+
+            $check->render($this->located('probe'), [], $this->nestedContext($check));
+
+            $lines = $this->lines();
+            $this->assertCount(2, $lines, json_encode($original));
+            $this->assertFalse($lines[1]['same'], json_encode($original) . ': a fragment that short could match unrelated text; the parent is reported');
+            $this->assertSame(1, $lines[1]['unsubstituted'], 'and says that a listed difference was not substituted');
+            $this->assertArrayNotHasKey('substitutions', $lines[1]);
+        }
+    }
+
+    public function testAFragmentThatIsNotInTheParentChangesNothing(): void
+    {
+        $this->parentAndChild("<p>[nothing of the child]</p>", 'the original child text', 'the PORT child text!!');
+        $check = $this->nestedCheck(['other' => 'the PORT child text!!'], '<p>[%other%]</p>', [self::exceptionFor('other', 'the original child text', 'the PORT child text!!')]);
+        $context = $this->context(static fn (): string => '');
+        $check->render($this->located('other'), [], $context);
+
+        $check->render($this->located('probe'), [], $context);
+
+        $lines = $this->lines();
+        $parent = $lines[array_key_last($lines)];
+        $this->assertFalse($parent['same']);
+        $this->assertArrayNotHasKey('substitutions', $parent, 'no occurrence, no substitution');
+    }
+
+    public function testTwoDifferentListedChildrenInOneParent(): void
+    {
+        file_put_contents($this->project . '/templates/default/probe.tpl.php', "<p><?= \$t->draw('other') ?> and <?= \$t->draw('second') ?></p>");
+        file_put_contents($this->project . '/templates/default/other.tpl.php', 'the first original child');
+        file_put_contents($this->project . '/templates/default/other.html.twig', '');
+        file_put_contents($this->project . '/templates/default/second.tpl.php', 'the second original child');
+        file_put_contents($this->project . '/templates/default/second.html.twig', '');
+        $check = null;
+        $check = $this->check(function (LocatedTemplate $template, mixed $vars, PhpTemplateContext $context) use (&$check): string {
+            if (str_contains($template->path, 'other')) {
+                return 'the first PORT child!!';
+            }
+            if (str_contains($template->path, 'second')) {
+                return 'the second PORT child!!';
+            }
+
+            return '<p>' . $check->render($this->located('other'), [], $context) . ' and ' . $check->render($this->located('second'), [], $context) . '</p>';
+        }, array_column([
+            self::exceptionFor('other', 'the first original child', 'the first PORT child!!'),
+            self::exceptionFor('second', 'the second original child', 'the second PORT child!!'),
+        ], 1, 0));
+        $context = $this->context(fn (PhpTemplateContext $context, string $name): string => $check->render($this->located($name), [], $context));
+
+        $check->render($this->located('probe'), [], $context);
+
+        $lines = $this->lines();
+        $this->assertSame(['other', 'second', 'probe'], array_map(static fn (array $line): string => basename($line['file'], '.html.twig'), $lines));
+        $this->assertTrue($lines[2]['same'], json_encode($lines[2]));
+        $this->assertSame(2, $lines[2]['substitutions']);
+        unlink($this->project . '/templates/default/second.tpl.php');
+        unlink($this->project . '/templates/default/second.html.twig');
+    }
+
+    /**
+     * The original parent (`$parent`, PHP) draws `other`; `other` has $original as its original and a port.
+     */
+    private function parentAndChild(string $parent, string $original, string $port): void
+    {
+        file_put_contents($this->project . '/templates/default/probe.tpl.php', $parent);
+        file_put_contents($this->project . '/templates/default/other.tpl.php', $original);
+    }
+
+    /**
+     * A check whose Twig doubles are `$outputs` (by template name, for the children) and `$parent` (the parent's, with `%name%`
+     * replaced by the child's rendering through the check: a port parent draws its child through the renderer, so the child is compared first).
+     *
+     * @param array<string, string> $outputs
+     * @param list<array{string, array{reason: string, test: string, differences: list<string>}}> $exceptions
+     */
+    private function nestedCheck(array $outputs, string $parent, array $exceptions): TwigPortCheck
+    {
+        $merged = [];
+        foreach ($exceptions as [$file, $exception]) {
+            $merged[$file] = $exception;
+        }
+        $check = null;
+        $check = $this->check(function (LocatedTemplate $template, mixed $vars, PhpTemplateContext $context) use (&$check, $outputs, $parent): string {
+            foreach ($outputs as $name => $output) {
+                if (str_contains($template->path, '/' . $name . '.')) {
+                    return $output;
+                }
+            }
+
+            return (string) preg_replace_callback('/%(\w+)%/', fn (array $m): string => $check->render($this->located($m[1]), [], $context), $parent);
+        }, $merged);
+
+        return $check;
+    }
+
+    private function nestedContext(TwigPortCheck $check): PhpTemplateContext
+    {
+        return $this->context(fn (PhpTemplateContext $context, string $name): string => $check->render($this->located($name), [], $context));
+    }
+
+    /**
+     * @return array{string, array{reason: string, test: string, differences: list<string>}}
+     */
+    private static function exceptionFor(string $name, string $original, string $port): array
+    {
+        $original = rtrim($original, "\n");
+
+        return ['templates/default/' . $name . '.html.twig', ['reason' => 'why', 'test' => self::class . '::testTheReportLineCarriesTheHashesOfTheOutputs', 'differences' => [hash('sha256', $original . "\0" . rtrim($port, "\n"))]]];
+    }
+
+    /**
+     * @param array<string, array{reason: string, test: string, differences: list<string>}> $exceptions
+     */
+    private function check(string|\Closure $twigOutput, array $exceptions = []): TwigPortCheck
     {
         $twig = new class ($twigOutput) implements TemplateEngine {
             public function __construct(private readonly string|\Closure $output)
@@ -219,7 +395,7 @@ final class TwigPortCheckTest extends TestCase
             }
         };
 
-        return new TwigPortCheck($twig, new PhpTemplateEngine(), 'http://127.0.0.1:1/', $this->project);
+        return new TwigPortCheck($twig, new PhpTemplateEngine(), 'http://127.0.0.1:1/', $this->project, $exceptions);
     }
 
     private function located(string $name): LocatedTemplate
