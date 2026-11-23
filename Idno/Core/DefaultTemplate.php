@@ -302,7 +302,10 @@ namespace Idno\Core {
                     $template = '';
                 }
                 if (!empty($template)) {
-                    site()->template()->setTemplateType($template);
+                    // A request never selects a mail type (the mail sender does)
+                    if (\Idno\Templating\TypeChain::requestable($template)) {
+                        site()->template()->setTemplateType($template);
+                    }
                 } else if ($page->isAcceptedContentType('application/json')) {
                     site()->template()->setTemplateType('json');
                 } else if ($page->isAcceptedContentType('application/ld+json; profile="https://www.w3.org/ns/activitystreams"') ||

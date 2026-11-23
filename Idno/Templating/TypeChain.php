@@ -16,10 +16,13 @@ namespace Idno\Templating;
 final class TypeChain
 {
     /**
-     * @return list<string>
+     * @return list<string> empty when $type is not a template type (one segment: see TemplateName::isType())
      */
     public static function for(string $type): array
     {
+        if (!TemplateName::isType($type)) {
+            return [];
+        }
         // A type is a directory name, and on a file system that ignores case `DEFAULT` is the directory `default`: so the names are compared in lower case
         if (in_array(strtolower($type), ['default', 'modern'], true)) {
             return ['modern', 'default'];
@@ -34,6 +37,15 @@ final class TypeChain
      */
     public static function selectable(string $type): bool
     {
-        return strtolower($type) !== 'classic';
+        return TemplateName::isType($type) && strtolower($type) !== 'classic';
+    }
+
+    /**
+     * Whether a REQUEST (`?_t=`) may select the type: what code may select (selectable()), except the mail types. A mail type is set
+     * by the mail sender; a plain-text mail (`email-text`) is not escaped, so a web page drawn from it would print text as markup.
+     */
+    public static function requestable(string $type): bool
+    {
+        return self::selectable($type) && !in_array(strtolower($type), ['email', 'email-text'], true);
     }
 }

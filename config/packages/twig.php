@@ -9,6 +9,9 @@ return static function (ContainerConfigurator $container): void {
         // Compiled templates are PHP files that get included: they live in the kernel's cache directory, trusted
         // exactly as the compiled container is, never in the upload path or a shared temporary directory.
         'cache' => '%kernel.cache_dir%/twig',
+        // A template of a plugin or theme edited in place (an update) is compiled again: the compiled files are kept per build and
+        // nothing in the code fingerprint covers IdnoPlugins/ or Themes/. The cost is one filemtime for each Twig file loaded.
+        'auto_reload' => true,
         // Templates that legacy code draws pass sparse variables.
         'strict_variables' => false,
         // The bundle's autoescape strategy is `name`: HTML for *.html.twig, none for *.txt.twig (the extension decides).

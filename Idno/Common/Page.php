@@ -66,7 +66,7 @@ namespace Idno\Common {
                 header('X-Idno-Build-Fingerprint: ' . \Idno\Core\TokenProvider::truncateToken(\Idno\Core\Version::fingerprint()));
             }
             if ($template = $this->getInput('_t')) {
-                if (\Idno\Core\Idno::site()->template()->templateTypeExists($template)) {
+                if (is_string($template) && \Idno\Templating\TypeChain::requestable($template) && \Idno\Core\Idno::site()->template()->templateTypeExists($template)) {
                     \Idno\Core\Idno::site()->template()->setTemplateType($template);
                 }
             }

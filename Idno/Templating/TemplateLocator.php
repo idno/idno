@@ -23,6 +23,9 @@ final class TemplateLocator
     /** @var array<string, ?LocatedTemplate> the answers of locate(), by type, name and fallback, for one state of the cascade */
     private array $remembered = [];
 
+    /** @var array<string, bool> whether `<base>/templates/<type>` is a directory, by base and type, for one state of the cascade */
+    private array $directories = [];
+
     private int $rememberedGeneration = -1;
 
     /** The most answers remembered: names reach locate() from requests, so a long-lived process must not keep them all. */
@@ -42,13 +45,10 @@ final class TemplateLocator
      */
     public function locate(string $name, string $type, bool $fallbackToDefault = true): ?LocatedTemplate
     {
-        if (!TemplateName::isSafe($name) || !TemplateName::isSafe($type)) {
+        if (!TemplateName::isSafe($name) || !TemplateName::isType($type)) {
             return null;
         }
-        if ($this->rememberedGeneration !== $this->cascade->generation()) {
-            $this->remembered = [];
-            $this->rememberedGeneration = $this->cascade->generation();
-        }
+        $this->forgetWhenTheCascadeChanged();
         $key = $type . "\0" . $name . "\0" . ($fallbackToDefault ? '1' : '0');
         if (!array_key_exists($key, $this->remembered)) {
             if (count($this->remembered) >= $this->rememberLimit) {
@@ -60,11 +60,36 @@ final class TemplateLocator
         return $this->remembered[$key];
     }
 
+    private function forgetWhenTheCascadeChanged(): void
+    {
+        if ($this->rememberedGeneration !== $this->cascade->generation()) {
+            $this->remembered = [];
+            $this->directories = [];
+            $this->rememberedGeneration = $this->cascade->generation();
+        }
+    }
+
+    private function hasTypeDirectory(string $base, string $type): bool
+    {
+        $key = $base . "\0" . $type;
+        if (!array_key_exists($key, $this->directories)) {
+            if (count($this->directories) >= $this->rememberLimit) {
+                $this->directories = [];
+            }
+            $this->directories[$key] = is_dir($base . '/templates/' . $type);
+        }
+
+        return $this->directories[$key];
+    }
+
     private function find(string $name, string $type, bool $fallbackToDefault): ?LocatedTemplate
     {
         $types = $fallbackToDefault ? TypeChain::for($type) : [$type];
         foreach ($types as $candidate) {
             foreach ($this->cascade->bases() as $base) {
+                if (!$this->hasTypeDirectory($base, $candidate)) {
+                    continue;
+                }
                 $extension = $type === 'email-text' ? 'txt.twig' : (self::TWIG_EXTENSIONS[$candidate] ?? null);
                 if ($extension !== null) {
                     $twig = $candidate . '/' . $name . '.' . $extension;
@@ -90,11 +115,12 @@ final class TemplateLocator
      */
     public function typeExists(string $type): bool
     {
-        if (!TemplateName::isSafe($type)) {
+        if (!TemplateName::isType($type)) {
             return false;
         }
+        $this->forgetWhenTheCascadeChanged();
         foreach ($this->cascade->bases() as $base) {
-            if (is_dir($base . '/templates/' . $type)) {
+            if ($this->hasTypeDirectory($base, $type)) {
                 return true;
             }
         }

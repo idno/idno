@@ -14,11 +14,13 @@ final class TemplateRenderer
      * Test hook: when set (only in the test environment, by Tests\Fixtures\TemplateTrace), called as
      * ($type, $name, $path) for each file a draw looks for, before it is rendered; $path is the file found, or `-`.
      *
-     * @var callable|null
      */
-    public static $trace = null;
+    public static ?\Closure $trace = null;
 
-    /** Shared by every copy of the renderer (withSlots() copies it for each draw of a template object): whether the deprecation was logged. */
+    /**
+     * Shared by every copy of the renderer (withSlots() copies it for each draw of a template object): whether each kind of
+     * deprecation was logged (`directory`: a file of a `modern` directory; `registration`: a registration for the `modern` type).
+     */
     private readonly \stdClass $deprecated;
 
     /**
@@ -34,7 +36,8 @@ final class TemplateRenderer
     )
     {
         $this->deprecated = new \stdClass();
-        $this->deprecated->logged = false;
+        $this->deprecated->directory = false;
+        $this->deprecated->registration = false;
     }
 
     /**
@@ -86,13 +89,19 @@ final class TemplateRenderer
         }
         $replaced = false;
         foreach ($this->slotTypes($name, $this->value($type)) as $slotType) {
+            $applied = false;
             $replacement = $this->slots->replacement($name, $slotType);
             if ($replacement !== null && $replacements) {
                 $result .= $this->drawFile($replacement, $vars, $type, $context, $fallbackToDefault);
                 $replaced = true;
+                $applied = true;
             }
             foreach ($this->slots->extensions($name, $slotType) as $template) {
                 $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
+                $applied = true;
+            }
+            if ($applied && $slotType === 'modern') {
+                $this->logModernRegistration($name);
             }
         }
         if (!$replaced) {
@@ -122,8 +131,13 @@ final class TemplateRenderer
             $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
         }
         foreach ($this->slotTypes($name, $this->value($type)) as $slotType) {
+            $applied = false;
             foreach ($this->slots->extensions($name, $slotType) as $template) {
                 $result .= $this->drawFile($template, $vars, $type, $context, $fallbackToDefault);
+                $applied = true;
+            }
+            if ($applied && $slotType === 'modern') {
+                $this->logModernRegistration($name);
             }
         }
 
@@ -164,22 +178,21 @@ final class TemplateRenderer
     }
 
     /**
-     * The types whose registrations a draw of $name applies: `*`, the type, and for a web page also `modern`, because the type a
-     * Twenty26 theme's plugin registered for (`extendTemplate($name, $t, false, 'modern')`) is the web page's now. Using one logs the
-     * deprecation line (once a process).
+     * The types whose registrations a draw of $name applies: `*` and the type. For a web page the type is `default`, and a
+     * name that has registrations for `modern` (what a plugin written for the Twenty26 theme made with
+     * `extendTemplate($name, $t, false, 'modern')`) applies those INSTEAD of the `default` ones, as a page drew `*` and `modern`
+     * or `*` and `default`, never both, before `modern` was folded into the web page.
      *
      * @return list<string>
      */
     private function slotTypes(string $name, mixed $type): array
     {
         $type = (string) $type;
-        $types = ['*', $type];
         if (strtolower($type) === 'default' && ($this->slots->replacement($name, 'modern') !== null || $this->slots->extensions($name, 'modern') !== [])) {
-            $types[] = 'modern';
-            $this->logDeprecation('Deprecated: the template `' . preg_replace('/[[:cntrl:]]+/', ' ', $name) . '` has an extension or replacement registered for the `modern` template type. The `modern` template type is retired and its registrations are applied to web pages for this release only: register for the default type.');
+            return ['*', 'modern'];
         }
 
-        return $types;
+        return ['*', $type];
     }
 
     /**
@@ -189,15 +202,23 @@ final class TemplateRenderer
     private function logModernDeprecation(LocatedTemplate $located): void
     {
         $path = (string) preg_replace('/[[:cntrl:]]+/', ' ', $located->path);
-        $this->logDeprecation('Deprecated: the template ' . $path . ' is in a `modern` template directory. The `modern` template type is retired and its directories are read for this release only: move the file to templates/default/.');
+        $this->logDeprecation('directory', 'Deprecated: the template ' . $path . ' is in a `modern` template directory. The `modern` template type is retired and its directories are read for this release only: move the file to templates/default/.');
     }
 
-    private function logDeprecation(string $line): void
+    /**
+     * A registration for the `modern` type was applied to a web page (once a process).
+     */
+    private function logModernRegistration(string $name): void
     {
-        if ($this->deprecated->logged || $this->logger === null) {
+        $this->logDeprecation('registration', 'Deprecated: the template `' . preg_replace('/[[:cntrl:]]+/', ' ', $name) . '` has an extension or replacement registered for the `modern` template type. The `modern` template type is retired and its registrations are applied to web pages for this release only: register for the default type.');
+    }
+
+    private function logDeprecation(string $kind, string $line): void
+    {
+        if ($this->deprecated->$kind || $this->logger === null) {
             return;
         }
-        $this->deprecated->logged = true;
+        $this->deprecated->$kind = true;
         try {
             ($this->logger)()->warning($line);
         } catch (\Throwable) {

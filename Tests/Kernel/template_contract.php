@@ -178,11 +178,25 @@ switch ($case) {
         $result = [$result, $t->draw('parent')];
         break;
 
-    case 'a-variable-named-path-replaces-the-file-included':
+    case 'a-variable-named-path-does-not-replace-the-file-included':
         $register('core');
         $t = $template();
         $t->__(['path' => $fixtures . '/core/templates/default/other.tpl.php']);
-        $result = $t->draw('x');
+        $result = [$t->draw('x'), $t->draw('engine-names')];
+        break;
+
+    case 'the-engines-own-names-are-ordinary-variables':
+        $register('core');
+        $t = $template();
+        $t->__(['path' => 'P', 'k' => 'K', 'v' => 'V']);
+        $result = $t->draw('engine-names');
+        break;
+
+    case 'a-nested-draw-includes-its-own-file-whatever-the-variables':
+        $register('core');
+        $t = $template();
+        $t->__(['path' => $fixtures . '/core/templates/default/other.tpl.php']);
+        $result = $t->draw('parent');
         break;
 
     case 'filter-shell-applies-to-shell-only':

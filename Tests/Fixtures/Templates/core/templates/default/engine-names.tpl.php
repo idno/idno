@@ -1,0 +1,1 @@
+<?php echo 'path=' . json_encode($path ?? null) . ' k=' . json_encode($k ?? null) . ' v=' . json_encode($v ?? null) . ' vars=' . (is_array($vars ?? null) ? 'array' : json_encode($vars ?? null)) . '|';

@@ -381,6 +381,112 @@ final class TemplateRendererTest extends TestCase
         $this->assertStringContainsString('modern', $lines[0]);
     }
 
+    /**
+     * @param list<string> $lines
+     */
+    private function loggingRenderer(array &$lines, ?TemplateCascade $cascade = null): TemplateRenderer
+    {
+        $logger = new class ($lines) extends \Psr\Log\AbstractLogger {
+            public function __construct(public array &$lines)
+            {
+            }
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->lines[] = $level . ': ' . $message;
+            }
+        };
+
+        return new TemplateRenderer(new TemplateLocator($cascade ?? new TemplateCascade($this->core)), $this->slots, new PhpTemplateEngine(), null, static fn () => $logger);
+    }
+
+    /**
+     * Before the `modern` type was folded into the web page a page applied the registrations of `*` and of `modern`, or of `*`
+     * and `default`, never both: a plugin that registered the same name for both gets the `modern` ones only.
+     */
+    public function testANameWithModernRegistrationsAppliesNoDefaultOnes(): void
+    {
+        $lines = [];
+        $renderer = $this->loggingRenderer($lines);
+        $this->slots->replace('p1', 'p2', 'default');
+        $this->slots->replace('p1', 'r', 'modern');
+        $this->slots->extend('x', 'e', false, 'default');
+        $this->slots->extend('x', 'e2', false, 'modern');
+
+        $this->assertSame('default/r|', $renderer->draw('p1', [], 'default', $this->context), 'the replacement for modern, not both');
+        $this->assertSame('default/e2|default/x|', $renderer->draw('x', [], 'default', $this->context), 'the extension for modern, not both');
+        $this->assertSame('default/e2|', $renderer->drawSlot('x', [], 'default', $this->context));
+    }
+
+    public function testANameWithOnlyDefaultRegistrationsIsUnaffected(): void
+    {
+        $lines = [];
+        $renderer = $this->loggingRenderer($lines);
+        $this->slots->replace('p1', 'r', 'default');
+        $this->slots->extend('x', 'e', false, 'default');
+        $this->slots->extend('e2', 'e', false, '*');
+
+        $this->assertSame('default/r|', $renderer->draw('p1', [], 'default', $this->context));
+        $this->assertSame('default/e|default/x|', $renderer->draw('x', [], 'default', $this->context));
+        $this->assertSame('default/e|default/e2|', $renderer->draw('e2', [], 'default', $this->context));
+        $this->assertSame([], $lines, 'nothing is deprecated');
+    }
+
+    public function testANonWebTypeNeverGetsModernRegistrations(): void
+    {
+        $lines = [];
+        $renderer = $this->loggingRenderer($lines);
+        $this->slots->extend('x', 'e', false, 'modern');
+        $this->slots->extend('x', 'e2', false, 'rss');
+        $this->slots->replace('p1', 'r', 'modern');
+
+        $this->assertSame('default/e2|default/x|', $renderer->draw('x', [], 'rss', $this->context));
+        $this->assertSame('default/p1|', $renderer->draw('p1', [], 'rss', $this->context));
+        $this->assertSame([], $lines);
+    }
+
+    /**
+     * The two deprecations (a `modern` directory, a `modern` registration) each log once a process: one does not hide the other.
+     */
+    public function testTheDirectoryAndTheRegistrationDeprecationsEachLogOnce(): void
+    {
+        $plugin = dirname($this->core) . '/plugin';
+        mkdir($plugin . '/templates/modern', 0700, true);
+        file_put_contents($plugin . '/templates/modern/e2.tpl.php', 'modern/e2|');
+        $cascade = new TemplateCascade($this->core);
+        $cascade->addBase($plugin);
+        $lines = [];
+        $renderer = $this->loggingRenderer($lines, $cascade);
+        $this->slots->extend('x', 'e', false, 'modern');
+
+        $renderer->draw('e2', [], 'default', $this->context);
+        $renderer->draw('e2', [], 'default', $this->context);
+        $renderer->draw('x', [], 'default', $this->context);
+        $renderer->draw('x', [], 'default', $this->context);
+
+        $this->assertCount(2, $lines);
+        $this->assertStringContainsString('is in a `modern` template directory', $lines[0]);
+        $this->assertStringContainsString('registered for the `modern` template type', $lines[1]);
+    }
+
+    /**
+     * Only a registration that was applied is deprecated: a replacement that a draw without replacements ignores, and a name the
+     * slot has no extension for, log nothing.
+     */
+    public function testNoRegistrationLineWhenNothingRegisteredForModernWasApplied(): void
+    {
+        $lines = [];
+        $renderer = $this->loggingRenderer($lines);
+        $this->slots->replace('p1', 'r', 'modern');
+
+        $this->assertSame('default/p1|', $renderer->draw('p1', [], 'default', $this->context, true, true, false), 'replacements are off');
+        $this->assertSame('', $renderer->drawSlot('p1', [], 'default', $this->context), 'a slot draws no replacement');
+        $this->assertSame([], $lines);
+
+        $this->assertSame('default/r|', $renderer->draw('p1', [], 'default', $this->context));
+        $this->assertCount(1, $lines);
+    }
+
     public function testNothingIsLoggedForAFeedOrWithoutALogger(): void
     {
         $plugin = dirname($this->core) . '/plugin';

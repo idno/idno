@@ -26,7 +26,7 @@ By default, Idno assumes we're talking HTML5 (referred to internally as the `def
 
 However, if you want to build an RSS feed, for example, your template type might be `rss`. Idno includes the template types `default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `email`, `email-text` and `activitypub`.
 
-On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type only exists if some `templates/` folder contains a folder of that name.
+On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type is one word (letters, digits, hyphens and underscores: `classic/` or `rss/` is not a type, and asks for none) and only exists if some `templates/` folder contains a folder of that name. A request cannot choose the mail types (`email`, `email-text`): the mail sender sets them, and a plain-text mail is not escaped.
 
 Each template type contains its own set of templates. However, templates always fall back to the "default" template type, so that if you try to draw, for example, `page/navigation` in the `rss` template type, and it doesn't exist, `page/navigation` in the `default` template type will be called instead (if it exists).
 
@@ -66,7 +66,7 @@ A syntax error or a missing template in a Twig file is an exception, not a blank
 
 ## Template variables
 
-In a PHP template, variables are accessible through the `$vars` array (and each one is also available as a variable of its own name, e.g. `$title`). The template object (a `DefaultTemplate`) is `$this` and also the variable `$t`: `$t->draw('page/navigation')` and `$this->__(['item' => $item])->draw('example/item')` draw another template, and a variable set through `__()` stays on the object for the draws after it. A variable you give the name `t`, `vars` or `path` replaces what that name is in the template (`$path` is the file being included), and one called `this` is an error: do not use those names.
+In a PHP template, variables are accessible through the `$vars` array (and each one is also available as a variable of its own name, e.g. `$title`). The template object (a `DefaultTemplate`) is `$this` and also the variable `$t`: `$t->draw('page/navigation')` and `$this->__(['item' => $item])->draw('example/item')` draw another template, and a variable set through `__()` stays on the object for the draws after it. A variable you give the name `t` or `vars` replaces what that name is in the template, and one called `this` is an error: do not use those names. A variable called `path` is just a variable: the file that is drawn is the one that was found, whatever the variables are called.
 
 Examples:
 

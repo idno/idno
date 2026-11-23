@@ -143,7 +143,21 @@ final class BuiltInLookTest extends RenderedSiteTestCase
     {
         $this->seedSite();
 
-        foreach (['../classic', '..%2Fclassic', 'classic/../default', '%2e%2e/classic', 'classic%00'] as $type) {
+        foreach (['../classic', '..%2Fclassic', 'classic/../default', '%2e%2e/classic', 'classic%00', 'classic/', 'CLASSIC/', 'classic%2F', 'default/', '/classic', '%2Fclassic', 'rss/'] as $type) {
+            $this->assertRendersAs('twenty26/home.html', '', '?_t=' . $type);
+        }
+        $this->assertNoDifferences();
+    }
+
+    /**
+     * The mail types are set by the mail sender, never by a request: a plain-text mail is not escaped, so a web page drawn from it
+     * would print text as markup.
+     */
+    public function testAMailTypeCannotBeRequested(): void
+    {
+        $this->seedSite();
+
+        foreach (['email', 'email-text', 'EMAIL-TEXT'] as $type) {
             $this->assertRendersAs('twenty26/home.html', '', '?_t=' . $type);
         }
         $this->assertNoDifferences();
@@ -252,38 +266,26 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         $this->assertStringNotContainsString('<script>alert(5)', $html->body);
         $this->assertStringNotContainsString('<img src=x', $html->body);
 
-        // What a feed and the JSON draw come from the `classic` templates: the hostile values are as inert there.
-        $json = $this->site()->request('GET', $paths['status'] . '?_t=json');
-        $this->assertSame(200, $json->status);
-        $data = json_decode($json->body, true);
-        $this->assertIsArray($data, 'the JSON of the post');
-        $this->assertStringContainsString('Mallory', $json->body, 'the annotations are in it');
-        // The `annotation` and `annotations` of the JSON are the stored data (the sender's text, as a name or a title is): only what a template drew is markup
-        unset($data['annotation'], $data['annotations'], $data['object']['annotations']);
-        array_walk_recursive($data, function ($value, $key) {
-            if (is_string($value) && str_contains($value, '<')) {
-                $this->assertMarkupIsInert($value, 'the JSON value ' . $key);
+        // A feed and the JSON do not draw a post's annotations (the JSON carries them as stored data, which is the sender's text:
+        // only what a template draws is markup). The `classic` templates that the other types fall back to do draw them, for the
+        // places that still use them: the same hostile values are as inert there.
+        $drawn = $this->runInSite(<<<PHP
+        \$status = \\Idno\\Common\\Entity::getByID($id);
+        \$out = [];
+        foreach (['rss', 'json'] as \$type) {
+            \$t = new \\Idno\\Core\\DefaultTemplate();
+            \$t->setTemplateType(\$type);
+            foreach (['replies' => 'reply', 'likes' => 'like', 'mentions' => 'mention', 'shares' => 'share'] as \$kind => \$subtype) {
+                \$out[\$type . ':' . \$kind] = \$t->__(['object' => \$status, 'annotations' => \$status->annotations[\$subtype]])->draw('entity/annotations/' . \$kind);
             }
-        });
-
-        foreach (['', $paths['status']] as $path) {
-            $rss = $this->site()->request('GET', $path . '?_t=rss');
-            $this->assertSame(200, $rss->status, $path);
-            $xml = new \DOMDocument();
-            $this->assertTrue(@$xml->loadXML($rss->body), 'the feed is well-formed XML: ' . substr($rss->body, 0, 200));
-            foreach ($xml->getElementsByTagName('*') as $element) {
-                foreach ($element->attributes ?? [] as $attribute) {
-                    $this->assertDoesNotMatchRegularExpression('/^on/i', $attribute->name, 'the feed');
-                    $this->assertDoesNotMatchRegularExpression('/^\s*javascript:/i', $attribute->value, 'the feed');
-                }
-                if (!$element->hasChildNodes() || $element->getElementsByTagName('*')->length > 0) {
-                    continue;
-                }
-                if (str_contains($element->textContent, '<')) {
-                    $this->assertMarkupIsInert($element->textContent, 'the feed element ' . $element->nodeName);
-                }
-            }
-            $this->assertStringNotContainsString('<script>alert(5)', $rss->body);
+        }
+        return \$out;
+        PHP);
+        foreach ($drawn as $label => $html) {
+            $this->assertStringContainsString('Mallory', (string) $html, $label . ': the annotation is drawn: the check is looking at it');
+            $this->assertMarkupIsInert((string) $html, 'the ' . $label . ' annotations');
+            $this->assertStringNotContainsString('<script>alert(5)', (string) $html, $label);
+            $this->assertStringNotContainsString('<img src=x', (string) $html, $label);
         }
     }
 

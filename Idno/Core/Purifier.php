@@ -40,7 +40,7 @@ namespace Idno\Core {
         {
             $directory = \Idno\Core\Idno::container()->get('kernel')->getCacheDir() . '/htmlpurifier';
             if (!is_dir($directory)) {
-                @mkdir($directory, 0775, true);
+                @mkdir($directory, 0755, true);
             }
             if (is_dir($directory) && is_writable($directory)) {
                 $config->set('Cache.SerializerPath', $directory);

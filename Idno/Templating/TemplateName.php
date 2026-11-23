@@ -32,4 +32,24 @@ final class TemplateName
 
         return is_string($name) && self::isSafe($name) ? $name : null;
     }
+
+    /**
+     * Whether $type is a template type: exactly one segment of letters, digits, hyphens and underscores. A type is a directory
+     * name, so one with a slash (`classic/` is the directory `classic`) is not a type. (The pattern ends in `\z`: a trailing
+     * newline is refused.)
+     */
+    public static function isType(string $type): bool
+    {
+        return preg_match('/\A[a-zA-Z0-9_-]+\z/', $type) === 1;
+    }
+
+    /**
+     * The type a name asks for, by the rule of normalise(), or null when it is not a template type (see isType()).
+     */
+    public static function normaliseType(string $type): ?string
+    {
+        $type = self::normalise($type);
+
+        return $type !== null && self::isType($type) ? $type : null;
+    }
 }

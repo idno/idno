@@ -244,7 +244,7 @@ namespace Idno\Core\Bonita {
             if (!is_string($templateType)) {
                 return false;
             }
-            $templateType = \Idno\Templating\TemplateName::normalise($templateType);
+            $templateType = \Idno\Templating\TemplateName::normaliseType($templateType);
             if ($templateType === null || !\Idno\Templating\TypeChain::selectable($templateType)) {
                 return false;
             }
@@ -270,7 +270,7 @@ namespace Idno\Core\Bonita {
             if (!is_string($templateType)) {
                 return false;
             }
-            $templateType = \Idno\Templating\TemplateName::normalise($templateType);
+            $templateType = \Idno\Templating\TemplateName::normaliseType($templateType);
             if ($templateType === null) {
                 return false;
             }

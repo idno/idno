@@ -217,7 +217,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
 - Template rendering is pinned by `Tests/Kernel/TemplateContractTest` (the cascade as `DefaultTemplate` keeps it, on
   the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
   process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
-  types a request may choose, and the `?_t[]=` defect, marked incomplete) and by golden pages,
+  types a request may choose, and that `?_t[]=` asks for no type and is no server error) and by golden pages,
   `Tests/Templating/fixtures/pages/` (`twenty26/`: Idno 2026, the look of every site, for a visitor; `logged-in/`: the
   administrator; and `non-html/`: RSS, JSON Feed, JSON, JSONP, the
   ActivityPub actor, KML, the JSON of each content type's permalink and the password reset mail's two parts), made by
@@ -240,7 +240,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   bundled plugins, computed from the file system and asserted (`Tests/Unit/Templating/ClassicTemplatesTest`: each has a `default`
   file of the same name beside it, only `.tpl.php`, and the recorded list is the file system's). With
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
-  (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static hook that
+  (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static `?\Closure` hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
   only when the variable names a file; nothing is called or written otherwise. `Tests/Kernel/BuiltInLookTest` is the built-in look
   on private sites: no theme, a stored `Twenty26` (resolved, never saved or announced) and a retired theme (saved as no theme and
@@ -813,7 +813,9 @@ other new code may.
   `StopWhenQueueIsEmpty.php` (built by the command) and the static helper `WorkerSiteUrl.php`; in
   `Idno/Portability/`, the static helpers `SafeXml.php` and `SettingsRedactor.php`, the value objects
   `ImportedPost.php`, `ImportedComment.php` and `ImportResult.php`, the helper `ImportedImages.php`, the five
-  interfaces, and `ImportedMedia.php` (wired by hand: it takes a closure that fetches the remote client).
+  interfaces, and `ImportedMedia.php` (wired by hand: it takes a closure that fetches the remote client), and in `Idno/Templating/` the value objects and static helpers
+  `LocatedTemplate.php`, `OutputBuffers.php`, `TemplateName.php` and `TypeChain.php` and the classes wired by hand (`CascadeTwigLoader.php`,
+  `SlotRegistry.php`, `TemplateCascade.php`, `TemplateRenderer.php`, `TwigTemplateEngine.php`).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
@@ -2507,19 +2509,29 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `TemplateName::normalise($name)`: a leading `_` followed by letters, digits and slashes is removed, then a name that
   holds `..`, a character outside `[a-zA-Z0-9/_-]` or is empty is `null` (refused); a template type is checked the same way
   (`TemplateName::isSafe()` is the check without the strip). The pattern ends in `$`, so a trailing newline passes (it names no file).
+  A template TYPE is stricter: exactly one segment, `/\A[a-zA-Z0-9_-]+\z/` (`TemplateName::isType()`, `normaliseType()`), because a type is a
+  directory name and `classic/` is the directory `classic` once the path is built. It is enforced wherever a type is accepted:
+  `Templates::setTemplateType()` and `templateTypeExists()`, `TemplateLocator::locate()` and `typeExists()`, `TypeChain::for()` (empty
+  for a non-type) and `selectable()`; a slash in a `?_t=` value (`classic/`, `CLASSIC/`, `/classic`, `default/`, `rss/`) asks for no type.
 - `TypeChain::for($type)`: `default` and `modern` (in any letter case) are `['modern', 'default']`; any other type is `[$type, 'classic',
   'default']`. No core or bundled directory has a `modern` type: it is there so that a third-party plugin's or theme's `templates/modern/`
   files (written for the Twenty26 theme, whose `modern` type Idno 2026 replaced) still win on web pages for one release; the first
   `modern` file a process draws logs ONE `warning` line, `Deprecated: the template <path> is in a `modern` template directory...`
   (`TemplateRenderer`, with the logger as a closure: the site's logger needs the legacy application; the "already logged" state is
-  shared by the copies `withSlots()` makes), so one line a request; removed in 3.0. `classic` holds the entity templates of the look
+  shared by the copies `withSlots()` makes), so one line a request; removed in 3.0 (the registration line below has a flag of its own, so neither
+  hides the other). `classic` holds the entity templates of the look
   Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, ActivityPub, KML and mail reach them by falling back
   from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
-  `Templates::setTemplateType()` and the `?_t=` check both refuse it); `setTemplateType()` of `default` or `modern` in any letter case stores `default`
+  `Templates::setTemplateType()` and the `?_t=` check both refuse it) and for anything that is not one segment; `requestable($type)` is
+  `selectable()` less `email` and `email-text` (any letter case): a REQUEST (`?_t=`, in `Page::init()` and
+  `DefaultTemplate::autodetectTemplateType()`) never selects a mail type, because a plain-text mail is not escaped and a web page drawn from it
+  would print text as markup, while code (the mail sender's `setTemplateType('email')`) still can (`BuiltInLookTest::testAMailTypeCannotBeRequested`); `setTemplateType()` of `default` or `modern` in any letter case stores `default`
   (`getTemplateType()` never returns `modern`: a plugin that tested for it tests for `default`), so `?_t=modern` is the default type. What a
   third-party plugin registered for the type `modern` (`extendTemplate(..., 'modern')`, `replaceTemplate(..., 'modern')`) is applied to a web page
-  draw too (`TemplateRenderer::slotTypes()`, with the same one deprecation line, shared with the `modern` directory's); `Tests/Kernel/TemplateTypeNameTest`. A third-party plugin's `default/<entity template>` override no longer changes a feed or a mail for a name `classic` has: `classic` is
+  draw too, INSTEAD of the `default` ones for a name that has any `modern` registration (a page applied the registrations of `*` and `modern`
+  or of `*` and `default`, never both: `TemplateRenderer::slotTypes()`), with one deprecation line of its own a process, logged only when a
+  registration for `modern` was applied (not by a draw without replacements that ignored a replacement, nor for a name with none); `Tests/Kernel/TemplateTypeNameTest`. A third-party plugin's `default/<entity template>` override no longer changes a feed or a mail for a name `classic` has: `classic` is
   tried before every directory's `default`.
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
   puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
@@ -2537,12 +2549,16 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   type and format (measured: the Twig check alone made a locate about twice as slow; remembered, a repeat costs a fraction of a microsecond).
   The Twig candidate is offered only when `CascadeTwigLoader::isLogicalName()` (the one predicate) accepts its logical name: a name with a
   leading or doubled slash (`TemplateName` accepts it, the file system resolves it) is a `.tpl.php` name only, and a Twig file of it alone is not found.
-  The memo holds at most `TemplateLocator::REMEMBER_LIMIT` answers and is emptied when it passes (names come from requests). A plain-text mail
+  The memo holds at most `TemplateLocator::REMEMBER_LIMIT` answers and is emptied when it passes (names come from requests). Whether
+  `<base>/templates/<type>` is a directory is asked once per directory and type (`is_dir`) and remembered the same way (every web page's
+  chain includes `modern`, which no bundled directory has, so each name would otherwise cost a failed file check per directory), and a
+  directory without the type's folder is not probed for files; the trade-off: a `templates/<type>/` folder created while a process runs is
+  seen only after the cascade changes or the process restarts. A plain-text mail
   (`email-text`) looks for `.txt.twig` in EVERY directory of its chain (its own, `classic`, `default`) and never for `.html.twig`, which would
   escape its text as HTML: it draws `.txt.twig` or `.tpl.php` files only (`TemplateLocatorTest::testEmailTextNeverDrawsAnHtmlTwigFile`). The
   feed, JSON and KML types still find a `default/<name>.html.twig` by fallback (no core template is Twig yet); a template of those types that
   is Twig must be a `.tpl.php` file in the type's own directory or in `classic`.
-  `typeExists($type)`: some base has a `templates/<type>/` directory.
+  `typeExists($type)`: some base has a `templates/<type>/` directory (a type is one segment: `classic/` is no type).
 - `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
   record (`extend`, `prepend`, `replace`, `extendWithContent`; `extensions()`, `prepends()`, `replacement()`, `content()`
   and the `*Map()` readers). The container has one (the site's template object keeps its registrations in it:
@@ -2564,8 +2580,14 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `drawSlot($name)`: what `idno_include()` and `slot()` of a Twig template draw through (`Bonita\Templates` implements both).
 - `PhpTemplateEngine` (`TemplateEngine`): `include`s the file in a function bound to the `PhpTemplateContext` (`$this` and `$t`;
   `DefaultTemplate` is one, `withVars()` gives a copy with other variables; the file is bound with the scope `phpTemplateScope()` names, `Bonita\Templates`, so no private member of a subclass is reachable from a template and a variable may be named `slots`) with the variables extracted into its scope, inside an
-  output buffer. Its own variables are visible to the file and pinned: `$path` (a template variable named `path` changes the file
-  included), `$vars`, `$k`, `$v`; a variable named `this` is an Error; an exception in a template propagates after the
+  output buffer. The file included is the file the locator found, whatever the variables are called: its name is kept on a static stack
+  (one entry for each draw in progress, popped in a `finally`, so a nested draw includes its own file and an exception leaves nothing
+  behind; `PhpTemplateEngine::currentFile()` is read by the including function after the variables are in scope), where extracting cannot
+  write it. In scope of the file are the variables, `$vars` (the variables as an array, which templates use) and `$t` (the context); a
+  variable named `vars` or `t` replaces them; the loop's own variables have names no template can write (`${' k'}`), so a variable named
+  `path`, `k` or `v` is the caller's (`TemplateContractTest::testAVariableNamedPathDoesNotReplaceTheFileIncluded`,
+  `testTheEnginesOwnNamesAreOrdinaryVariables`; no core or bundled template relied on the engine's `$path`: those that use `$path` assign it
+  first); a variable named `this` is an Error; an exception in a template propagates after the
   engine has ended the buffer(s) its render opened (what they held is discarded; buffers opened before the render are left
   alone), so a draw nested any depth leaves the buffer level as it found it
   (`TemplateContractTest::testAnExceptionInATemplateLeavesNoOutputBufferOpen`, `testAnExceptionThreeDrawsDeepLeavesNoOutputBufferOpen`).
@@ -2574,8 +2596,9 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   templates are PHP files that get included: they are trusted exactly as the compiled container is, and never go in the upload path or a
   shared temporary directory; `TemplateCachesTest`, `TwigEngineTest::testCompiledTemplatesLiveInTheKernelCacheDir`); `strict_variables` is
   off (legacy templates pass sparse variables); the autoescape strategy is the bundle's `name`: HTML for `.html.twig`, none for `.txt.twig`.
-  There are no `paths` and no globals from the configuration (the bundle's `app` global stays); in a production build a template edited
-  on disk is recompiled when the cache is cleared (`auto_reload` follows debug). `translator` stays OFF in FrameworkBundle: `t()` is Idno's own.
+  There are no `paths` and no globals from the configuration (the bundle's `app` global stays); `auto_reload` is on in every environment (one `filemtime` for each Twig file loaded), because the compiled files are kept per build and the
+  code fingerprint does not cover `IdnoPlugins/` or `Themes/`: a plugin or theme template updated in place is compiled again
+  (`Tests/Kernel/TwigAutoReloadTest`, a production kernel in a process for each render: Twig declares a compiled class once a process). `translator` stays OFF in FrameworkBundle: `t()` is Idno's own.
   - `CascadeTwigLoader` (`Twig\Loader\LoaderInterface`, tagged `twig.loader` priority 100): `<type>/<name>.html.twig` or `.txt.twig` is the
     file in the first directory of the cascade that has it, `@core/<type>/<name>...twig` is core's alone; any other name is not its own
     (`exists()` false). A name reaches the file system only after it is at least two segments of `[a-zA-Z0-9_-]` joined by single slashes, that

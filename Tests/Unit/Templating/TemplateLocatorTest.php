@@ -218,6 +218,47 @@ final class TemplateLocatorTest extends TestCase
         $this->assertSame($core, $locator->locate('later', 'default')?->base);
     }
 
+    /**
+     * A base that has no `templates/<type>/` directory is asked once and then skipped, not probed for every name: the answer is
+     * remembered until the cascade changes, so a type directory created while the process runs is seen after that only.
+     */
+    public function testABaseWithoutTheTypesDirectoryIsNotProbedForFiles(): void
+    {
+        $core = $this->base('core', 'default/x');
+        $plugin = $this->base('plugin', 'default/y');
+        $cascade = new TemplateCascade($core);
+        $cascade->addBase($plugin);
+        $locator = new TemplateLocator($cascade);
+
+        // The first name finds nothing of the type `modern` in either base and caches that
+        $this->assertSame($core, $locator->locate('x', 'default')?->base);
+
+        // A `modern` directory that appears now, with a file for a name not drawn yet, is not looked into
+        mkdir($plugin . '/templates/modern', 0700, true);
+        file_put_contents($plugin . '/templates/modern/z.tpl.php', 'late');
+        file_put_contents($core . '/templates/default/z.tpl.php', 'core:z');
+        $this->assertSame('default', $locator->locate('z', 'default')?->type, 'the directory made after the first look-up is not seen');
+
+        // ...until the cascade changes
+        $cascade->addBase($this->base('theme', 'default/q'));
+        $located = $locator->locate('z2', 'default');
+        $this->assertNull($located);
+        file_put_contents($plugin . '/templates/modern/w.tpl.php', 'w');
+        $this->assertSame($plugin, $locator->locate('w', 'default')?->base);
+        $this->assertSame('modern', $locator->locate('w', 'default')?->type);
+    }
+
+    public function testAnythingButOneSegmentIsNoType(): void
+    {
+        $core = $this->base('core', 'classic/x', 'default/x');
+        $locator = new TemplateLocator(new TemplateCascade($core));
+
+        foreach (['classic/', 'CLASSIC/', '/classic', 'default/', 'a/b'] as $type) {
+            $this->assertNull($locator->locate('x', $type), $type);
+            $this->assertFalse($locator->typeExists($type), $type);
+        }
+    }
+
     public function testMissingIsNull(): void
     {
         $locator = new TemplateLocator(new TemplateCascade($this->base('core', 'default/x')));

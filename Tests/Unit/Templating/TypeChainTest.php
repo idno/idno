@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Templating;
 
+use Idno\Templating\TemplateName;
 use Idno\Templating\TypeChain;
 use PHPUnit\Framework\TestCase;
 
@@ -46,5 +47,51 @@ final class TypeChainTest extends TestCase
         $this->assertTrue(TypeChain::selectable('rss'));
         $this->assertTrue(TypeChain::selectable('email-text'));
         $this->assertFalse(TypeChain::selectable('classic'), 'the output that is not a web page reaches classic by fallback only');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function notTypes(): array
+    {
+        return ['trailing slash' => ['classic/'], 'upper case with a slash' => ['CLASSIC/'], 'default with a slash' => ['default/'], 'leading slash' => ['/classic'], 'rss with a slash' => ['rss/'], 'nested' => ['a/b'], 'traversal' => ['../classic'], 'empty' => [''], 'newline' => ["classic\n"]];
+    }
+
+    /**
+     * A template type is exactly one segment: `classic/` is the directory `classic` once the path is built, so it must never be
+     * selectable, and a chain is never made from it.
+     *
+     * @dataProvider notTypes
+     */
+    public function testATypeIsOneSegment(string $type): void
+    {
+        $this->assertFalse(TemplateName::isType($type));
+        $this->assertNull(TemplateName::normaliseType($type));
+        $this->assertFalse(TypeChain::selectable($type));
+        $this->assertFalse(TypeChain::requestable($type));
+        $this->assertSame([], TypeChain::for($type));
+    }
+
+    public function testASingleSegmentIsAType(): void
+    {
+        foreach (['default', 'email-text', 'a_b', 'A1'] as $type) {
+            $this->assertTrue(TemplateName::isType($type), $type);
+            $this->assertSame($type, TemplateName::normaliseType($type), $type);
+        }
+    }
+
+    /**
+     * What a request may choose with `?_t=` is not what code may set: the mail types are set by the mail sender, and a plain-text
+     * mail is not escaped, so a web page must never be drawn from it.
+     */
+    public function testAMailTypeIsNotRequestableButIsSelectable(): void
+    {
+        foreach (['email', 'email-text', 'EMAIL', 'Email-Text'] as $type) {
+            $this->assertFalse(TypeChain::requestable($type), $type);
+            $this->assertTrue(TypeChain::selectable($type), $type);
+        }
+        $this->assertTrue(TypeChain::requestable('rss'));
+        $this->assertTrue(TypeChain::requestable('default'));
+        $this->assertFalse(TypeChain::requestable('classic'));
     }
 }

@@ -157,12 +157,33 @@ final class TemplateContractTest extends TestCase
     }
 
     /**
-     * A DEFECT, pinned: the variables are extracted into the scope of the function that includes the file, whose
-     * own `$path` is the file's name, so a template variable called `path` is what gets included.
+     * The file that is included is the file that was found, whatever the variables are called: a template variable called
+     * `path` is the template's `$path` with the caller's value, and never decides which file runs.
      */
-    public function testAVariableNamedPathReplacesTheFileIncluded(): void
+    public function testAVariableNamedPathDoesNotReplaceTheFileIncluded(): void
     {
-        $this->assertSame('core:default/other|', $this->runCase('a-variable-named-path-replaces-the-file-included'));
+        $result = $this->runCase('a-variable-named-path-does-not-replace-the-file-included');
+
+        $this->assertSame('core:default/x|', $result[0]);
+        $this->assertStringStartsWith('path="', $result[1]);
+        $this->assertStringContainsString('core\\/templates\\/default\\/other.tpl.php"', $result[1], 'the template sees the caller\'s value of `path`');
+    }
+
+    /**
+     * The names the engine itself uses are not in the template's scope but `$vars` (the variables, which templates use) and `$t`:
+     * a variable called `path`, `k` or `v` is what the caller gave.
+     */
+    public function testTheEnginesOwnNamesAreOrdinaryVariables(): void
+    {
+        $this->assertSame('path="P" k="K" v="V" vars=array|', $this->runCase('the-engines-own-names-are-ordinary-variables'));
+    }
+
+    public function testANestedDrawIncludesItsOwnFileWhateverTheVariables(): void
+    {
+        $result = (string) $this->runCase('a-nested-draw-includes-its-own-file-whatever-the-variables');
+
+        $this->assertStringStartsWith('[parent', $result);
+        $this->assertStringContainsString('child=[child', $result, 'the nested draw included the child, not the file the variable names');
     }
 
     public function testFilterShellAppliesToShellOnly(): void
