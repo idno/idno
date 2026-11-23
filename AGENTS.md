@@ -3702,7 +3702,9 @@ the CLI installer no longer writes one.
 - Text linkers (`DefaultTemplate::parseURLs()`, `parseHashtags()`, `parseUsers()`, and the Twig filters over them): they link text only, never inside a tag,
   a link, a script, a style or a textarea, and `parseHashtags()` never decodes an entity of `< > & " '` or a backtick; an address in an attribute of sanitized HTML
   is therefore never made into a link. `Tests/Kernel/TemplateLinkersTest` checks this against an HTML5 parser, and
-  `IdnoPlugins/Event/Tests/RSVPOutputTest::testLinkingTheSanitizedBodyAddsNothingToTheMarkup` through a real template.
+  `IdnoPlugins/Event/Tests/RSVPOutputTest::testLinkingTheSanitizedBodyAddsNothingToTheMarkup` through a real template; `Tests/Core/ParseHashtagsTest.php`
+  pins every spelling of those entities (named, decimal, hex, leading zeros, either case of `x`) while named letters such as `&auml;` still decode so that
+  `#Äpfel` links. Don't `html_entity_decode()` text that is going to be printed as HTML.
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
   unless its signature covers `(request-target)`, `host` and `date`, and, for any method
@@ -3851,6 +3853,11 @@ the CLI installer no longer writes one.
 - TLS: every HTTPS request `Webservice` makes verifies the certificate and host name, on both
   clients, unless the boot configuration's `disable_ssl_verify` is set (see "Webservice" above). Do not
   turn verification off anywhere else.
+- `Actions::createLink()` (`forms/link`, the Idno 2026 template and the `classic` one a feed or JSON would draw; `action_link()` in Twig follows the same rule) prints the address (only if
+  `UrlValidator::httpUrl()` accepts it), class, title and confirmation text escaped; the
+  confirmation text goes into the handler as one JSON string. The label is markup by design and is
+  printed as given, so a caller must escape any text it puts in the label.
+  `Tests/Core/CreateLinkOutputTest.php` checks this.
 - File access control: `Entity::save()` records the entity's UUID on each of its stored
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra

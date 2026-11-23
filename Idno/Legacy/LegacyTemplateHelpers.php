@@ -214,23 +214,18 @@ final class LegacyTemplateHelpers implements TemplateHelpers
     }
 
     /**
-     * What `Actions::createLink()` draws, with the values the `forms/link` template prints without escaping made safe first: the
-     * class and title are escaped; the confirmation text is escaped for an HTML attribute (the template then escapes it for
-     * the JavaScript string inside: a quote of the text can never end the attribute) and made one line; the address keeps what a
-     * URL holds and percent-encodes a character that could end the attribute or start a tag (it is also what the token is
-     * signed for, so a page's own address, which has none of them, is unchanged). Only the options the template reads are
-     * passed on (an option cannot replace the url or label). The label is markup: the caller's.
+     * What `Actions::createLink()` draws. The `forms/link` template escapes the class, title and confirmation text itself (and
+     * refuses an address that is neither http(s) nor relative to the site: `UrlValidator::linkUrl()`); this adds that the
+     * confirmation text is one line, and that the address keeps what a URL holds and percent-encodes a character that could
+     * end the attribute or start a tag (it is also what the token is signed for, so a page's own address, which has none of
+     * them, is unchanged). Only the options the template reads are passed on (an option cannot replace the url or label). The
+     * label is markup: the caller's.
      */
     public function actionLink(string $url, string $label, array $data = [], array $options = []): string
     {
         $options = array_intersect_key($options, array_flip(['class', 'confirm', 'confirm-text', 'title', 'method']));
-        foreach (['class', 'title'] as $key) {
-            if (isset($options[$key])) {
-                $options[$key] = htmlspecialchars((string) $options[$key], ENT_COMPAT | ENT_SUBSTITUTE, 'UTF-8');
-            }
-        }
         if (isset($options['confirm-text'])) {
-            $options['confirm-text'] = str_replace(["\r", "\n"], ' ', htmlspecialchars((string) $options['confirm-text'], ENT_COMPAT | ENT_SUBSTITUTE, 'UTF-8'));
+            $options['confirm-text'] = str_replace(["\r", "\n"], ' ', (string) $options['confirm-text']);
         }
         $url = (string) preg_replace_callback('/["<>\x00-\x20\x7f]/', static fn (array $m): string => rawurlencode($m[0]), $url);
 

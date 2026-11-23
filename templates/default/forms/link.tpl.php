@@ -6,12 +6,19 @@
     // Get HTTP method (GET, POST, PUT and DELETE supported for now)
     if (empty($vars['method']) || !in_array($vars['method'], array('GET','POST','PUT','DELETE'))) $vars['method'] = 'POST';
 
+    // The address, class, title and confirmation text are printed escaped. The label is markup
+    // on purpose (callers pass an icon and text), so it is printed as given.
+    $linkUrl = \Idno\Core\UrlValidator::linkUrl($vars['url'] ?? '');
+
+    // The confirmation text is one single-quoted JavaScript string, then escaped for the attribute it is in.
+    $confirmJs = "'" . strtr((string) ($vars['confirm-text'] ?? ''), ['\\' => '\\\\', "'" => "\\'", "\r" => '\\r', "\n" => '\\n', "\u{2028}" => '\\u2028', "\u{2029}" => '\\u2029']) . "'";
+
 ?>
-<a data-form-id="<?= $uniqueID ?>" <?php if (!empty($vars['class'])) { ?> class="<?= $vars['class'] ?>" <?php
-} ?> <?php if (!empty($vars['title'])) { ?> title="<?= $vars['title'] ?>" <?php
-} ?> href="<?= $vars['url'] ?>" onclick="<?php
+<a data-form-id="<?= $uniqueID ?>" <?php if (!empty($vars['class'])) { ?> class="<?php echo htmlspecialchars((string) $vars['class'], ENT_QUOTES) ?>" <?php
+} ?> <?php if (!empty($vars['title'])) { ?> title="<?php echo htmlspecialchars((string) $vars['title'], ENT_QUOTES) ?>" <?php
+} ?> href="<?php echo htmlspecialchars($linkUrl, ENT_QUOTES) ?>" onclick="<?php
 if ($vars['confirm']) {
-    ?>if (confirm('<?= addslashes($vars['confirm-text']) ?>')) { document.getElementById('<?= $uniqueID ?>').submit(); return false; } else { return false; } <?php
+    ?>if (confirm(<?php echo htmlspecialchars($confirmJs, ENT_COMPAT | ENT_SUBSTITUTE) ?>)) { document.getElementById('<?= $uniqueID ?>').submit(); return false; } else { return false; } <?php
 } else {
     ?>document.getElementById('<?= $uniqueID ?>').submit(); return false; <?php
 } ?>"><?= $vars['label'] ?></a>
@@ -20,9 +27,9 @@ if ($vars['confirm']) {
     ob_start();
 
 ?>
-<form action="<?= $vars['url'] ?>" style="display: none; margin: 0; padding: 0" id="<?= $uniqueID ?>" method="<?= $vars['method'] ?>">
+<form action="<?php echo htmlspecialchars($linkUrl, ENT_QUOTES) ?>" style="display: none; margin: 0; padding: 0" id="<?= $uniqueID ?>" method="<?php echo htmlspecialchars($vars['method'], ENT_QUOTES) ?>">
     <textarea name="json"><?= htmlspecialchars(json_encode($vars['data'])) ?></textarea>
-    <?= \Idno\Core\Idno::site()->actions()->signForm($vars['url']) ?>
+    <?= \Idno\Core\Idno::site()->actions()->signForm($linkUrl) ?>
 </form>
 <?php
 

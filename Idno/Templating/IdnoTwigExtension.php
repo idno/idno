@@ -536,8 +536,8 @@ final class IdnoTwigExtension extends AbstractExtension
 
     /**
      * A link that submits a signed POST form. The label is markup only when it is `Markup` (a capture, the output of a safe
-     * function) and is escaped otherwise; the url must be relative to the site or http(s), else nothing is drawn (the helper
-     * escapes the class, title and confirmation text and the url's characters that end an attribute).
+     * function) and is escaped otherwise; the url must be relative to the site or http(s), else nothing is drawn (`forms/link` escapes the class, title
+     * and confirmation text; the helper percent-encodes the url's characters that end an attribute).
      *
      * @param array<string, mixed> $data
      * @param array<string, mixed> $options
@@ -566,11 +566,7 @@ final class IdnoTwigExtension extends AbstractExtension
      */
     private static function isLinkableAddress(string $url): bool
     {
-        if (\Idno\Core\UrlValidator::httpUrl($url) !== '') {
-            return true;
-        }
-
-        return preg_match('~^(?![a-zA-Z][a-zA-Z0-9+.\-]*:)(?!//)[^"<>\\\\\x00-\x20\x7f]*$~D', $url) === 1;
+        return $url === '' || \Idno\Core\UrlValidator::linkUrl($url) !== '';
     }
 
     /**

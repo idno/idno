@@ -27,6 +27,10 @@ class UrlValidator
      *   ["<>`]              a double quote, an angle bracket, a backtick
      *   [\x00-\x20\x7f]     white space and control characters
      */
+    private const RELATIVE_URL_PATTERN = <<<'PATTERN'
+~^(?![a-zA-Z][a-zA-Z0-9+.\-]*:)(?!//)[^"<>\\\x00-\x20\x7f]*$~D
+PATTERN;
+
     private const HTTP_URL_PATTERN = <<<'PATTERN'
 ~^(?:https?:)?//(?![/\\])[^"<>`\x00-\x20\x7f]+$~iD
 PATTERN;
@@ -76,6 +80,24 @@ PATTERN;
         }
 
         return $url;
+    }
+
+    /**
+     * The address of an action link: an http(s) address as httpUrl() accepts it, or one relative to the site (no scheme, not
+     * "//", none of the characters that end an attribute or start a tag, no backslash); '' for any other. The one rule of
+     * `forms/link` (both looks) and of the `action_link()` Twig function.
+     *
+     * @param mixed $url The address
+     * @return string The address, or ''
+     */
+    public static function linkUrl($url): string
+    {
+        $checked = self::httpUrl($url);
+        if ($checked !== '' || !is_string($url)) {
+            return $checked;
+        }
+
+        return preg_match(self::RELATIVE_URL_PATTERN, $url) === 1 ? $url : '';
     }
 
     /**
