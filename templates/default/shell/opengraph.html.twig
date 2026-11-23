@@ -1,5 +1,5 @@
-{% set og = {'og:type': 'website', 'og:title': title|striptags, 'og:site_name': site_title()|striptags, 'og:image': page_icon()} %}
-{% set objectIcon = object ? object.getIcon() : false %}
+{% set og = {'og:type': 'website', 'og:title': title|striptags, 'og:site_name': site_title()|striptags, 'og:image': page_icon()|http_url} %}
+{% set objectIcon = object ? object.getIcon()|http_url : false %}
 {% set twitter_account = is_permalink() ? twitter_account_of(page_owner()) : '' %}
 {% if description %}{% set og = og|merge({'og:description': description}) %}{% endif %}
 {% if is_permalink() %}{% set og = og|merge({'og:url': current_url()}) %}{% if object %}{% set og = og|merge({'og:title': object.getTitle()|striptags, 'og:description': object.getShortDescription(), 'og:type': 'article', 'og:image': objectIcon}) %}{% set icon = object.getIcon() %}{% if icon %}{% set icon_file = local_file(icon) %}{% if icon_file %}{% set icon_metadata = entity_value(icon_file, 'metadata') %}{% if icon_metadata.width %}{% set og = og|merge({'og:image:width': icon_metadata.width}) %}{% endif %}{% if icon_metadata.height %}{% set og = og|merge({'og:image:height': icon_metadata.height}) %}{% endif %}{% endif %}{% endif %}{% if object.getDisplayURL() %}{% set og = og|merge({'og:url': object.getDisplayURL()}) %}{% endif %}{% endif %}{% endif %}

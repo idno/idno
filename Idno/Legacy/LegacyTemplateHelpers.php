@@ -126,6 +126,10 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return $page ? (bool) $page->xhr : false;
     }
 
+    /**
+     * Delegates to `Page::isSSL()` (the server's HTTPS variable, the port, `X-Forwarded-Proto`): the one rule the old templates asked,
+     * not a second copy of it.
+     */
     public function isSecure(): bool
     {
         return (bool) \Idno\Common\Page::isSSL();
@@ -138,18 +142,12 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return $page ? (string) $page->getIcon() : '';
     }
 
-    public function pageIconUser(): ?object
+    public function siteTemplateUser(object $template): ?object
     {
-        $page = Idno::site()->currentPage();
-        if (!$page) {
-            return null;
-        }
-        $template = Idno::site()->template();
-        $before = $template->vars['user'] ?? null;
-        $page->getIcon();
-        $after = $template->vars['user'] ?? null;
+        $site = Idno::site()->template();
+        $user = $template === $site ? ($site->vars['user'] ?? null) : null;
 
-        return is_object($after) && $after !== $before ? $after : null;
+        return is_object($user) ? $user : null;
     }
 
     public function pageAssets(string $type): array

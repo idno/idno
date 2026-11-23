@@ -1,6 +1,6 @@
 {% set control_id = _context['control-id'] ?? '' %}{% set source_url = _context['source-url'] ?? '' %}
 {% if offset is not null and count %}
-{% set per_page = (items_per_page ?: setting('items_per_page')) + 0 %}{% set count = count + 0 %}{% set offset = offset + 0 %}{% set prev_offset = max(offset - per_page, 0) %}{% set next_offset = min(offset + per_page, count - 1) %}{% set xhr = control_id and source_url %}
+{% set per_page = (items_per_page ?: setting('items_per_page'))|to_int %}{% set count = count|to_int %}{% set offset = offset|to_int %}{% set prev_offset = max(offset - per_page, 0) %}{% set next_offset = min(offset + per_page, count - 1) %}{% set xhr = control_id and source_url %}
 
         <nav class="idno-pagination {% if xhr %}pager-xhr{% endif %}" data-count="{{ count }}" data-limit="{{ per_page }}" data-offset="{{ offset }}" data-control-id="{{ control_id ?: '' }}" data-source-url="{{ source_url ?: '' }}">
             <ul>

@@ -74,8 +74,9 @@ interface TemplateHelpers
     public function isXhr(): bool;
 
     /**
-     * Whether the request was made over HTTPS (`Page::isSSL()`: the server's own word, and a proxy's `X-Forwarded-Proto`); a console
-     * process has none, and is secure when the site's configured address is https.
+     * Whether the request was made over HTTPS: the answer of `Page::isSSL()` itself (the server's own word, the port, a proxy's
+     * `X-Forwarded-Proto`; a console process has none, and is secure when the site's configured address is https), which the adapter
+     * calls and does not copy.
      */
     public function isSecure(): bool;
 
@@ -86,12 +87,13 @@ interface TemplateHelpers
     public function pageIcon(): string;
 
     /**
-     * The user the page's icon lookup drew a default avatar for, or null. `Page::getIcon()` draws that avatar on the site's template
-     * object, which keeps the user there as its `user` variable, and the page shell has always drawn what follows its icons (the
-     * identity links, the ActivityPub link, the structured data) with that user as the page's `user`: the shell passes it on, because
-     * a Twig template sees no variable that another template set on the object.
+     * The `user` variable the site's own template object holds, when `$template` IS that object, else null. Code that looks up an icon
+     * (`Page::getIcon()`, `Entity::getIcon()`) draws a default avatar on the site's template object, which leaves the avatar's user there as
+     * its `user` variable, and the page shell has always drawn what follows its icons (the identity links, the ActivityPub link, the structured
+     * data) with whatever user the LAST such lookup left: the shell passes it on, because a Twig template sees no variable that another
+     * template set on the object. A shell drawn on a copy of the site's template (not the object icon lookups write to) saw none of it.
      */
-    public function pageIconUser(): ?object;
+    public function siteTemplateUser(object $template): ?object;
 
     /**
      * @return array<string, string>

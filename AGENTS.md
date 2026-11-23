@@ -2617,8 +2617,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `TemplateCascade` (container service, public, shared; core's directory is `%kernel.project_dir%`): `addBase($dir)`
   puts an existing directory that is not listed yet FIRST, `bases()` lists them with core always last, `coreDir()`,
   `generation()` (changes with each directory added), `isFile($path)`: whether a path is a file, asked of the disk ONCE and remembered (the
-  locator and the Twig loader ask about the same paths, and each answer is a system call: a page drew about 730 of them for its 28 Twig
-  files, 26 for each, before the answers were shared), until a directory is added (`addBase()`) or `forgetFiles()` is called (the locator
+  locator and the Twig loader ask about the same paths, and each answer is a system call: a page drew about 702 of them for its 26 Twig
+  templates, 26 for each, before the answers were shared; the extension set-up that the first function call forced cost 135 us and 117 more classes before the functions became methods), until a directory is added (`addBase()`) or `forgetFiles()` is called (which also changes `forgotten()`, the number the Twig loader reads to drop its resolved names) (the locator
   calls it when it empties its own answers, so a forgotten answer is looked up on the disk again); it holds at most
   `TemplateCascade::REMEMBER_LIMIT` paths and is emptied when it passes. A file created after its path was asked about is not seen until then,
   as for the locator's answers (`Tests/Unit/Templating/EngineCostTest`).
@@ -2694,7 +2694,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `getCacheKey()` is the resolved file, `isFresh()` compares modification times. A name is resolved once and the answer kept (until the cascade's
     `generation()` changes, at most 2000 names: Twig asks `getCacheKey()` and `isFresh()` of every template it loads, and `auto_reload` is on), and the
     paths it looks at are `TemplateCascade::isFile()`'s, which the locator has asked about already, so loading a template the locator found costs
-    one `filemtime()` and no search of the directories. `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
+    one `filemtime()` and no search of the directories (with `auto_reload` on, as in debug mode, loading a compiled template costs a `filemtime()` of the source and one of the compiled file). The loader drops its names when a directory is added or `forgetFiles()` is called, and `isFresh()` asks the disk itself whether the file is still there (a template deleted under a long-lived worker is not fresh; `getSourceContext()` throws `LoaderError`). `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
     extension pass, which tags what this removes, and before its loader and environment passes) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
     included), so this is the only loader, and removes `twig.error_renderer.html` (which would draw Symfony's production error page of a
     new-style controller from the bundle's `@Twig` templates: the page is what it was; the CLI never used it), `twig.mailer.message_listener` and
@@ -2740,19 +2740,23 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `Idno\Legacy\LegacyTemplateHelpers` over `Idno::site()`; the adapter holds nothing and reads the application only when a method is called, so
     the environment is built without it). Functions: `t_html`, `site_url`, `static_url`, `site_title`, `site_icons`, `setting`, `can_write`,
     `content_types`, `content_type_for_post_type`, `current_user`, `is_logged_in`, `is_admin`, `current_url`, `current_url_parts`, `current_path`, `referrer`, `input`,
-    `path_matches`, `is_permalink`, `is_xhr`, `is_secure`, `page_assets`, `page_owner`, `page_icon`, `page_icon_user`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
+    `path_matches`, `is_permalink`, `is_xhr`, `is_secure`, `page_assets`, `page_owner`, `page_icon`, `leaked_user`, `http_status`, `login_url_for`, `url_with_var`, `url_without_var`,
     `current_url_without_var`, `body_classes`, `form_token`, `action_link`, `form_data`, `shell_variables`, `pagination`, `syndication_services`,
-    `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`, `twitter_account_of`;
-    filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `display_url`, `fix_url`, `proxied_image`,
+    `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`, `twitter_account_of`, `is_user`;
+    filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `identity_url`, `to_int`, `display_url`, `fix_url`, `proxied_image`,
     `sample_text`. `current_url()`, `current_path()` and `referrer()` come from the `RequestStack` ('' with no request: a legacy page's request is
     not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
     value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
     `current_url_parts()` is `Page::currentUrl(true)` (`parse_url()` of the configured address with the request URI as `path`; `[]` with no request),
-    `is_secure()` is `Page::isSSL()`, `page_icon()` is `Page::getIcon()`, and `page_icon_user()` is the user `Page::getIcon()` drew a default avatar for, or
-    null: `User::getIcon()` draws that avatar on the SITE's template object, which keeps the user there as its `user` variable, and the old page
-    shell drew everything after its icons (the identity links, the ActivityPub link, the structured data) with that user as the page's `user`
-    (the HTML goldens pin it, and the JSON pages print the same leaked `user`: do not change `User::getIcon()` without changing both). A Twig
-    template cannot see what another template set on the object, so `shell.html.twig` merges that user into `shell` after the metatags.
+    `is_secure()` is `Page::isSSL()` (the adapter calls it), `page_icon()` is `Page::getIcon()`, and `leaked_user()` is the `user` variable of the SITE's
+    template object when the template that asks is that object, else null: icon lookups (`Page::getIcon()`, `Entity::getIcon()` through
+    `User::getIcon()`) draw a default avatar on the site's template object, which keeps the user there, and the old page shell drew everything after
+    its icons with the user the LAST lookup left as the page's `user` (the object's owner when the page has an object, else the page's owner; the HTML
+    goldens pin it and the JSON pages print the same leaked `user`: do not change `User::getIcon()` without changing both). A Twig template cannot see
+    what another template set on the object, so `shell.html.twig` merges `leaked_user()` into `shell` before the structured data and the ActivityPub
+    link (the head's partials make the same icon calls in the same order: `TwigPortEquivalenceTest::drawIconLeakCases()`); a shell drawn on a copy of
+    the site's template saw none of it, and gets none. `is_user(v)` is `instanceof \Idno\Entities\User`, `to_int` is `(int)`, `identity_url` is
+    `UrlValidator::httpUrl()` or a `mailto:`, `sms:` or `tel:` address (any case, trimmed) with no white space or control character, else ''; all pure.
     `twitter_account_of(person)` is pure (it needs nothing of the site) and the old Open Graph partial's search of a profile for a Twitter account.
     SAFE for HTML, exactly (pinned by `IdnoTwigExtensionTest::testOnlyTheListedFunctionsAreSafe`): the functions `idno_include`, `slot`, `t_html`
     (the translated text is trusted; each string sub is escaped, a `Twig\Markup` one kept; `|raw` output is not `Markup`), `form_token`, `action_link`, `form_data` and

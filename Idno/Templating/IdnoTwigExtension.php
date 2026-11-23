@@ -87,7 +87,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('is_xhr', $this->isXhr(...)),
             new TwigFunction('is_secure', $this->isSecure(...)),
             new TwigFunction('page_icon', $this->pageIcon(...)),
-            new TwigFunction('page_icon_user', $this->pageIconUser(...)),
+            new TwigFunction('leaked_user', $this->leakedUser(...), ['needs_context' => true]),
             new TwigFunction('page_assets', $this->pageAssets(...)),
             new TwigFunction('page_owner', $this->pageOwner(...)),
             new TwigFunction('http_status', $this->httpStatus(...)),
@@ -115,6 +115,7 @@ final class IdnoTwigExtension extends AbstractExtension
 
             new TwigFunction('entity_value', self::entityValue(...)),
             new TwigFunction('twitter_account_of', self::twitterAccountOf(...)),
+            new TwigFunction('is_user', self::isUser(...)),
         ];
     }
 
@@ -129,6 +130,8 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('parse_hashtags', $this->parseHashtags(...), $text),
             new TwigFilter('parse_users', $this->parseUsers(...), $text),
             new TwigFilter('http_url', self::httpUrl(...)),
+            new TwigFilter('identity_url', self::identityUrl(...)),
+            new TwigFilter('to_int', self::toInt(...)),
             new TwigFilter('display_url', $this->displayUrl(...)),
             new TwigFilter('fix_url', $this->fixUrl(...)),
             new TwigFilter('proxied_image', $this->proxiedImage(...)),
@@ -229,9 +232,17 @@ final class IdnoTwigExtension extends AbstractExtension
         return $this->helpers->pageIcon();
     }
 
-    public function pageIconUser(): ?object
+    /**
+     * The user that icon lookups left on the site's template object, when the template that asks is that object (see
+     * `TemplateHelpers::siteTemplateUser()`).
+     *
+     * @param array<string, mixed> $context
+     */
+    public function leakedUser(array $context): ?object
     {
-        return $this->helpers->pageIconUser();
+        $template = $context['_idno_context'] ?? null;
+
+        return is_object($template) ? $this->helpers->siteTemplateUser($template) : null;
     }
 
     /**
@@ -586,6 +597,44 @@ final class IdnoTwigExtension extends AbstractExtension
         }
 
         return null;
+    }
+
+    /**
+     * Whether a value is a user (`$value instanceof \Idno\Entities\User`).
+     */
+    public static function isUser(mixed $value): bool
+    {
+        return $value instanceof \Idno\Entities\User;
+    }
+
+    /**
+     * `(int) $value`, as PHP casts it (a non-numeric string is 0, `'12abc'` is 12).
+     */
+    public static function toInt(mixed $value): int
+    {
+        return is_scalar($value) || $value === null ? (int) $value : 0;
+    }
+
+    /**
+     * The address a profile may name as one of its identities (`rel="me"`): an http(s) address as `httpUrl()` reads it, or a `mailto:`,
+     * `sms:` or `tel:` address (any letter case, surrounding white space removed) that holds no white space or control character; an
+     * empty string for anything else (`javascript:`, `data:`, `vbscript:`, a bare word). The result is printed escaped, like any value.
+     */
+    public static function identityUrl(mixed $url): string
+    {
+        if (!is_string($url) && !$url instanceof \Stringable) {
+            return '';
+        }
+        $url = trim((string) $url);
+        $http = \Idno\Core\UrlValidator::httpUrl($url);
+        if ($http !== '') {
+            return $http;
+        }
+        if (preg_match('/^(?:mailto|sms|tel):/i', $url) === 1 && preg_match('/[\s\x00-\x1f\x7f]/', $url) === 0) {
+            return $url;
+        }
+
+        return '';
     }
 
     /**

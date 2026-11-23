@@ -175,6 +175,50 @@ final class CascadeTwigLoaderTest extends TestCase
         $this->assertFalse($loader->isFresh('default/gone.html.twig', time()));
     }
 
+    public function testATemplateDeletedWhileTheProcessRunsIsNotFreshAndIsNotFound(): void
+    {
+        $path = $this->file('core/templates/default/x.html.twig', 'core');
+        $loader = $this->loader();
+        $this->assertSame('core', $loader->getSourceContext('default/x.html.twig')->getCode());
+        $this->assertTrue($loader->isFresh('default/x.html.twig', time() + 10));
+        unlink($path);
+
+        $warnings = [];
+        set_error_handler(static function (int $number, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+        try {
+            $fresh = $loader->isFresh('default/x.html.twig', time() + 10);
+            $thrown = null;
+            try {
+                $loader->getSourceContext('default/x.html.twig');
+            } catch (LoaderError $e) {
+                $thrown = $e;
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertFalse($fresh, 'the remembered path is checked on the disk');
+        $this->assertSame([], $warnings, 'and no warning is raised for the missing file');
+        $this->assertInstanceOf(LoaderError::class, $thrown);
+    }
+
+    public function testTheLoaderForgetsItsNamesWhenTheCascadeForgetsItsFiles(): void
+    {
+        $cascade = new TemplateCascade($this->root . '/core');
+        $loader = new CascadeTwigLoader($cascade);
+        $this->assertFalse($loader->exists('default/x.html.twig'));
+        $this->file('core/templates/default/x.html.twig', 'core');
+        $this->assertFalse($loader->exists('default/x.html.twig'), 'remembered');
+
+        $cascade->forgetFiles();
+
+        $this->assertTrue($loader->exists('default/x.html.twig'), 'looked for again once the cascade forgot its files');
+    }
+
     public function testADirectoryAddedAfterwardsIsSearched(): void
     {
         $cascade = new TemplateCascade($this->root . '/core');

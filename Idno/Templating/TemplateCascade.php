@@ -17,6 +17,8 @@ final class TemplateCascade
 
     private int $generation = 0;
 
+    private int $forgotten = 0;
+
     /** The most answers of isFile() remembered: names reach it from requests, so a long-lived process must not keep them all. */
     public const REMEMBER_LIMIT = 4000;
 
@@ -51,6 +53,15 @@ final class TemplateCascade
     }
 
     /**
+     * A number that changes each time the remembered answers of isFile() are forgotten, for what is worked out from them (the Twig
+     * loader remembers which file a name is until it changes).
+     */
+    public function forgotten(): int
+    {
+        return $this->forgotten;
+    }
+
+    /**
      * Whether a path is a file. The files of the directories do not change while a request is served, so the answer is
      * remembered until a directory is added (as the locator remembers which file a name is): a page draws the same names
      * again and again, the locator and the Twig loader ask about the same paths, and each answer is a system call.
@@ -73,6 +84,7 @@ final class TemplateCascade
     public function forgetFiles(): void
     {
         $this->files = [];
+        ++$this->forgotten;
     }
 
     /**

@@ -33,6 +33,8 @@ final class CascadeTwigLoader implements LoaderInterface
 
     private int $resolvedGeneration = -1;
 
+    private int $resolvedForgotten = -1;
+
     public function __construct(private readonly TemplateCascade $cascade)
     {
     }
@@ -43,7 +45,7 @@ final class CascadeTwigLoader implements LoaderInterface
         if ($path === null) {
             throw new LoaderError(sprintf('Unable to find template "%s".', $this->printable($name)));
         }
-        $code = file_get_contents($path);
+        $code = is_file($path) ? @file_get_contents($path) : false;
         if ($code === false) {
             throw new LoaderError(sprintf('Unable to read template "%s".', $this->printable($name)));
         }
@@ -65,7 +67,8 @@ final class CascadeTwigLoader implements LoaderInterface
     {
         $path = $this->resolve($name);
 
-        return $path !== null && (int) filemtime($path) <= $time;
+        // The disk itself, not the remembered answer: a file deleted while a long-lived process runs (a worker after a deploy) is not fresh
+        return $path !== null && is_file($path) && (int) filemtime($path) <= $time;
     }
 
     public function exists(string $name): bool
@@ -78,9 +81,10 @@ final class CascadeTwigLoader implements LoaderInterface
      */
     private function resolve(string $name): ?string
     {
-        if ($this->resolvedGeneration !== $this->cascade->generation()) {
+        if ($this->resolvedGeneration !== $this->cascade->generation() || $this->resolvedForgotten !== $this->cascade->forgotten()) {
             $this->resolved = [];
             $this->resolvedGeneration = $this->cascade->generation();
+            $this->resolvedForgotten = $this->cascade->forgotten();
         }
         if (array_key_exists($name, $this->resolved)) {
             return $this->resolved[$name];

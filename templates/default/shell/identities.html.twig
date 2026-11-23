@@ -1,3 +1,3 @@
-{% set profile = entity_value(user ?? null, 'profile') %}{% if profile.url is iterable and profile.url %}{% for url in profile.url %}{% if url %}{% if url starts with '@' and url matches '/@[a-z0-9_]+/i' %}{% set url = 'https://twitter.com/' ~ (url|replace({'@': ''})) %}{% endif %}{% set address = url|http_url %}{% if address %}
+{% set profile = entity_value(user ?? null, 'profile') %}{% if profile.url is iterable and profile.url %}{% for url in profile.url %}{% if url %}{% if url starts with '@' and url matches '/@[a-z0-9_]+/i' %}{% set url = 'https://twitter.com/' ~ (url|replace({'@': ''})) %}{% endif %}{% set address = url|identity_url %}{% if address %}
             <link href="{{ address }}" rel="me" class="u-url"/>
             {% endif %}{% endif %}{% endfor %}{% endif %}

@@ -83,10 +83,10 @@ final class IdnoTwigExtensionTest extends TestCase
         $extension = $this->extension();
         $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
         $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
-        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'page_icon_user', 'twitter_account_of'] as $name) {
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user'] as $name) {
             $this->assertContains($name, $functions);
         }
-        foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text'] as $name) {
+        foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text', 'identity_url', 'to_int'] as $name) {
             $this->assertContains($name, $filters);
         }
     }
@@ -189,10 +189,42 @@ final class IdnoTwigExtensionTest extends TestCase
     {
         $helpers = new TemplateHelpersDouble();
         $icon = new \stdClass();
-        $this->assertSame('no|https://static.example/page.png|none', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ page_icon_user() is null ? 'none' : 'user' }}", [], $helpers));
+        $this->assertSame('no|https://static.example/page.png|none', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ leaked_user() is null ? 'none' : 'user' }}", ['_idno_context' => new \stdClass()], $helpers));
         $helpers->secure = true;
         $helpers->iconUser = $icon;
-        $this->assertSame('yes|https://static.example/page.png|user', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ page_icon_user() is null ? 'none' : 'user' }}", [], $helpers));
+        $this->assertSame('yes|https://static.example/page.png|user', $this->render("{{ is_secure() ? 'yes' : 'no' }}|{{ page_icon() }}|{{ leaked_user() is null ? 'none' : 'user' }}", ['_idno_context' => new \stdClass()], $helpers));
+    }
+
+    public function testTheIdentityUrlKeepsHttpMailSmsAndTelAddressesOnly(): void
+    {
+        $identity = static fn (mixed $v): string => IdnoTwigExtension::identityUrl($v);
+
+        $this->assertSame('http://a.example/x', $identity('http://a.example/x'));
+        $this->assertSame('https://a.example/x', $identity('https://a.example/x'));
+        $this->assertSame('mailto:a@b.example', $identity('mailto:a@b.example'));
+        $this->assertSame('sms:+15555550100', $identity('sms:+15555550100'));
+        $this->assertSame('tel:+15555550100', $identity('tel:+15555550100'));
+        $this->assertSame('MAILTO:A@B.EXAMPLE', $identity('MAILTO:A@B.EXAMPLE'), 'any letter case');
+        $this->assertSame('mailto:a@b', $identity(' mailto:a@b'), 'surrounding white space is removed');
+        foreach (['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x', 'ftp://a.example/', 'example.com', 'ada', '', 'mailto:a b@c', "mailto:a@b\nBcc: x@y", "sms:1\t2", "tel:\x001", '//host/x/'] as $bad) {
+            $this->assertSame('', $identity($bad) === '//host/x/' ? '' : $identity($bad), json_encode($bad));
+        }
+        $this->assertSame('', $identity(null));
+        $this->assertSame('', $identity(['mailto:a@b']));
+        $this->assertSame('mailto:a@b&quot;onx=', $this->render("{{ v|identity_url }}", ['v' => 'mailto:a@b"onx=']), 'a quote is kept and escaped when printed');
+    }
+
+    public function testToIntCastsAsPhpDoes(): void
+    {
+        $this->assertSame('0|12|7|0|0|1', $this->render("{{ 'abc'|to_int }}|{{ '12abc'|to_int }}|{{ 7.9|to_int }}|{{ null|to_int }}|{{ []|to_int }}|{{ true|to_int }}"));
+    }
+
+    public function testIsUserIsAnInstanceCheck(): void
+    {
+        $this->assertTrue(IdnoTwigExtension::isUser((new \ReflectionClass(\Idno\Entities\User::class))->newInstanceWithoutConstructor()));
+        $this->assertFalse(IdnoTwigExtension::isUser('user'));
+        $this->assertFalse(IdnoTwigExtension::isUser(new \stdClass()));
+        $this->assertFalse(IdnoTwigExtension::isUser(null));
     }
 
     public function testTheTwitterAccountOfAProfile(): void

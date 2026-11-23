@@ -74,25 +74,30 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * A profile address that is not http or https is no identity link: the shell prints a `rel="me"` link for the others only.
+     * A profile address that is not http, https, mailto, sms or tel is no identity link: the shell prints a `rel="me"` link for those only.
      */
-    public function testAProfileAddressThatIsNotHttpIsNotLinkedAsAnIdentity(): void
+    public function testAProfileAddressThatIsNotHttpMailSmsOrTelIsNotLinkedAsAnIdentity(): void
     {
         $this->seedSite();
 
         $drawn = (string) $this->runInSite($this->pageCode('/profile/ada') . <<<'PHP'
         $user = \Idno\Entities\User::getByHandle('ada');
-        $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'javascript:alert(1)', 'data:text/html,x', '']];
+        $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'mailto:ada@example.com', 'SMS:+15555550100', 'tel:+15555550100', 'javascript:alert(1)', 'data:text/html,x', 'vbscript:x', 'mailto:a b@c', '']];
         $template = clone \Idno\Core\Idno::site()->template();
 
         return $template->__(['user' => $user])->draw('shell/identities');
         PHP);
 
-        $this->assertSame(2, substr_count($drawn, 'rel="me"'));
+        $this->assertSame(5, substr_count($drawn, 'rel="me"'));
+        $this->assertStringContainsString('href="mailto:ada@example.com"', $drawn);
+        $this->assertStringContainsString('href="SMS:+15555550100"', $drawn);
+        $this->assertStringContainsString('href="tel:+15555550100"', $drawn);
         $this->assertStringContainsString('href="https://example.org/ada"', $drawn);
         $this->assertStringContainsString('href="https://twitter.com/ada_l"', $drawn, 'a handle is the address of its account');
         $this->assertStringNotContainsString('javascript:', $drawn);
         $this->assertStringNotContainsString('data:', $drawn);
+        $this->assertStringNotContainsString('vbscript:', $drawn);
+        $this->assertStringNotContainsString('a b@c', $drawn);
     }
 
     /**
@@ -114,6 +119,42 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertStringContainsString('service-worker.min.js\', {', $drawn);
         $this->assertStringContainsString("scope: '\\/'", $drawn);
         $this->assertStringContainsString('<link rel="manifest" href="https://', $drawn);
+    }
+
+    /**
+     * The worker's scope is the path of the site's address: `/blog/` for a site in a subdirectory, the path as written when it has no
+     * trailing slash, and `/` for a site at the root. This branch is not compared with the original on the http rig, so the exact lines
+     * are asserted.
+     *
+     * @return array<string, array{string, string, string}>
+     */
+    public static function serviceWorkerScopes(): array
+    {
+        $bs = chr(92);
+
+        return [
+            'a subdirectory' => ['https://example.org/blog/', 'https' . $bs . 'u003A' . $bs . '/' . $bs . '/example.org' . $bs . '/blog' . $bs . '/service-worker.min.js', $bs . '/blog' . $bs . '/'],
+            // the site's own addresses run into the path (`blogservice-worker.min.js`), as they always did: the address needs its slash
+            'no trailing slash' => ['https://example.org/blog', 'https' . $bs . 'u003A' . $bs . '/' . $bs . '/example.org' . $bs . '/blogservice-worker.min.js', $bs . '/blog'],
+            'the root' => ['https://example.org/', 'https' . $bs . 'u003A' . $bs . '/' . $bs . '/example.org' . $bs . '/service-worker.min.js', $bs . '/'],
+        ];
+    }
+
+    /**
+     * @dataProvider serviceWorkerScopes
+     */
+    public function testTheServiceWorkerScopeIsThePathOfTheSite(string $url, string $register, string $scope): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite('$_SERVER["HTTPS"] = "on"; \\Idno\\Core\\Idno::site()->config()->url = ' . $this->literal($url) . ';' . $this->pageCode('/') . <<<'PHP'
+        \Idno\Core\Idno::site()->session()->logUserOn(\Idno\Entities\User::getByHandle('ada'));
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->draw('shell/webapp');
+        PHP);
+
+        $this->assertStringContainsString("            navigator.serviceWorker.register('" . $register . "', {\n                scope: '" . $scope . "'\n            })", $drawn);
     }
 
     /**

@@ -1,21 +1,22 @@
 {% set shell = shell_variables() %}
 {% do idno_include('shell/headers', shell) %}
 <!DOCTYPE html>
-<html lang="{{ shell.lang }}"{% if shell.html_className %} class="h-feed"{% endif %}>
+<html lang="{{ shell.lang }}"{{ shell.html_className|raw }}>
 <head>
 {% block head %}
 {{- idno_include('shell/metatags', shell) -}}
-{% set icon_user = page_icon_user() %}{% if icon_user %}{% set shell = shell|merge({user: icon_user}) %}{% endif %}
 {{- idno_include('shell/icons', shell) -}}
 {{- idno_include('shell/favicon', shell) -}}
 {{- idno_include('shell/webapp', shell) -}}
 {{- idno_include('shell/opengraph', shell) -}}
+{% set shell = shell|merge(leaked_user() ? {user: leaked_user()} : {}) %}
 {{- idno_include('shell/structured-data', shell) -}}
 {{- idno_include('shell/dublincore', shell) -}}
 {{- idno_include('shell/amp', shell) -}}
 {{- idno_include('shell/bootstrap', shell) -}}
 {{- idno_include('shell/javascript', shell) -}}
 {{- idno_include('shell/css', shell) -}}
+{% set shell = shell|merge(leaked_user() ? {user: leaked_user()} : {}) %}
 {{- idno_include('shell/activitypub', shell) -}}
 {{- idno_include('shell/syndication', shell) -}}
 {{- idno_include('shell/identities', shell) -}}

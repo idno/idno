@@ -21,10 +21,10 @@ return [
         ],
     ],
     'templates/default/shell/identities.html.twig' => [
-        'reason' => 'a profile address that is not http or https (`javascript:`, `data:`, a bare word) is not linked as an identity: the old template printed a `rel="me"` link for any address a member had typed, with `href` set to it; an address that came from a member goes through http_url',
-        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAProfileAddressThatIsNotHttpIsNotLinkedAsAnIdentity',
+        'reason' => 'an identity (`rel="me"`) link is printed for an http(s) address and for a `mailto:`, `sms:` or `tel:` address with no white space or control character (RelMeAuth and IndieLogin use them); the old template printed whatever address a member had typed into `href`, so `javascript:`, `data:`, `vbscript:`, a bare word, and a `mailto:` with white space in it are no longer linked',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAProfileAddressThatIsNotHttpMailSmsOrTelIsNotLinkedAsAnIdentity',
         'differences' => [
-            '800441b1acae971682179c5b4d5af065640c39576e302562b11bea7d1abb2613',
+            '31e8c61e0d2c0d8d61da2b595b506d8cff5f42e92799b815746f5ca5c643694f',
         ],
     ],
 ];

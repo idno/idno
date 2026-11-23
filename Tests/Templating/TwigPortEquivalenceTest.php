@@ -87,6 +87,9 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         ['default', 'js/idno', []],
         ['default', 'shell/simple/messages', ['messages' => [['message' => 'Saved. <a href="/x">See it</a>', 'message_type' => 'alert-success'], ['message' => 'Plain text', 'message_type' => 'alert-danger']]]],
         ['default', 'shell/simple/messages', ['messages' => []]],
+        ['default', 'shell/pagination', ['count' => 'abc', 'offset' => '3', 'items_per_page' => '12abc']],
+        ['default', 'shell/pagination', ['count' => '45xyz', 'offset' => 'abc', 'items_per_page' => 'abc']],
+        ['default', 'shell/pagination', ['count' => 45, 'offset' => 20, 'items_per_page' => 10, 'control-id' => 'c', 'source-url' => '/s?a=1&b=2']],
         ['default', 'shell/simple', ['title' => 'Welcome', 'description' => 'A <b>fresh</b> site', 'body' => '<p>Hello</p>']],
         ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
     ];
@@ -195,6 +198,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
     {
         $this->assertNotEmpty($this->drawMails());
         $this->drawIdentityLinks();
+        $this->drawIconLeakCases();
         if (self::DRAWS === []) {
             return;
         }
@@ -229,7 +233,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $user = \Idno\Entities\User::getByHandle('ada');
-        $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'javascript:alert(1)', '']];
+        $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'mailto:ada@example.com', 'SMS:+15555550100', 'tel:+15555550100', 'javascript:alert(1)', 'data:text/html,x', 'mailto:a b@c', '']];
         \Tests\Fixtures\TwigPortCheck::forget();
         $template = clone \Idno\Core\Idno::site()->template();
 
@@ -237,5 +241,67 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         PHP;
         $drawn = (string) $this->runInSite($code);
         $this->assertStringContainsString('https://twitter.com/ada_l', $drawn);
+    }
+
+    /**
+     * What the shell's partials after the icons see as `user`: whatever the last icon lookup left on the site's template object. Drawn
+     * on the site's own template object (as a page is), with a page owner and an object whose owner is another user, neither with a
+     * picture; with a picture (no default avatar is drawn: nothing is left); a `user` that is not a user.
+     */
+    private function drawIconLeakCases(): void
+    {
+        $code = <<<'PHP'
+        $uri = '/view/x';
+        $_SERVER['REQUEST_URI'] = $uri;
+        \Idno\Core\Idno::container()->get('request_stack')->push(new \Symfony\Component\HttpFoundation\Request([], [], [], [], [], ['REQUEST_URI' => $uri]));
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $bob = \Idno\Entities\User::getByHandle('bob');
+        $status = null;
+        foreach (\IdnoPlugins\Status\Status::get([], [], 50) as $candidate) {
+            if ($candidate->getOwnerID() === $ada->getUUID() && $status === null) {
+                $status = $candidate;
+            }
+        }
+        $live = \Idno\Core\Idno::site()->template();
+        $out = [];
+        foreach ([
+            'owners without pictures' => [[], [], $bob, null],
+            'the object\'s owner has a picture' => [['ada' => 'https://example.org/ada.png'], [], $bob, null],
+            'both have pictures' => [['ada' => 'https://example.org/ada.png', 'bob' => 'https://example.org/bob.png'], [], $bob, $ada],
+        ] as $label => [$images, $unused, $owner, $user]) {
+            \Tests\Fixtures\TwigPortCheck::forget();
+            $ada->image = $images['ada'] ?? null;
+            $status->getOwner()->image = $images['ada'] ?? null;
+            $bob->image = $images['bob'] ?? null;
+            $page = new \Idno\Pages\Onboarding\Begin();
+            if ($owner) {
+                $page->setOwner($owner);
+            }
+            $property = new \ReflectionProperty(\Idno\Common\Page::class, 'isPermalinkPage');
+            $property->setValue($page, true);
+            \Idno\Core\Idno::site()->setCurrentPage($page);
+            $live->vars = [];
+            $vars = ['title' => 'T', 'description' => 'D', 'body' => '<p>b</p>', 'object' => $status];
+            if ($user !== null) {
+                $vars['user'] = $user;
+            }
+            $out[$label] = (string) $live->__($vars)->draw('shell');
+        }
+
+        \Tests\Fixtures\TwigPortCheck::forget();
+        $probe = clone $live;
+        $probe->vars = [];
+        $out['a user that is not a user'] = (string) $probe->__(['user' => 'not a user', 'object' => $status])->draw('shell/activitypub');
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertCount(4, $out);
+        $this->assertStringContainsString('<script type="application/ld+json">', (string) $out['owners without pictures']);
+        // The page's owner is bob and the object's is ada: the last icon lookup was for the object, so the ActivityPub link is ada's
+        $this->assertStringContainsString('/actor/ada"', (string) $out['owners without pictures']);
+        $this->assertStringContainsString('/view/', (string) $out['a user that is not a user'], 'a user that is not a user is not one: the object\'s own address is linked');
+        $this->assertStringNotContainsString('/actor/', (string) $out['a user that is not a user']);
     }
 }

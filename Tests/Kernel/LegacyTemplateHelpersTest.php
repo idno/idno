@@ -137,10 +137,10 @@ final class LegacyTemplateHelpersTest extends TestCase
     }
 
     /**
-     * The icon of a page that has an owner who has no picture is the default avatar, drawn on the site's template object, which
-     * leaves its user there: the helper hands that user to the shell. A page with no owner, or whose own user is the same, leaves none.
+     * An icon lookup draws the default avatar on the site's template object, which leaves its user there; the helper reads it, for
+     * the site's template object only (a copy of it never saw the lookup).
      */
-    public function testThePageIconUserIsTheUserAnAvatarWasDrawnFor(): void
+    public function testTheSiteTemplateUserIsReadFromTheSiteTemplateOnly(): void
     {
         $helpers = $this->helpers();
         $template = Idno::site()->template();
@@ -149,15 +149,14 @@ final class LegacyTemplateHelpersTest extends TestCase
         try {
             Idno::site()->setCurrentPage($page);
             unset($template->vars['user']);
-            $this->assertNull($helpers->pageIconUser(), 'a page with no owner');
+            $this->assertNull($helpers->siteTemplateUser($template), 'no user there');
 
             $owner = new \Idno\Entities\User();
             $owner->handle = 'icon-owner';
             $page->setOwner($owner);
-            $this->assertSame($owner, $helpers->pageIconUser(), 'the owner the default avatar was drawn for');
-
-            $template->vars['user'] = $owner;
-            $this->assertNull($helpers->pageIconUser(), 'nothing changed: the page already has that user');
+            $page->getIcon();
+            $this->assertSame($owner, $helpers->siteTemplateUser($template), 'the owner the default avatar was drawn for');
+            $this->assertNull($helpers->siteTemplateUser(clone $template), 'a copy of the site\'s template is not the object the lookup wrote to');
         } finally {
             $template->vars = $before;
         }

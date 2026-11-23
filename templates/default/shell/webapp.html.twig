@@ -1,9 +1,9 @@
 {% set icons = site_icons() %}{% set page_icon = icons.page %}
 
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon-precomposed" href="{{ page_icon }}">
+<link rel="apple-touch-icon-precomposed" href="{{ page_icon|http_url }}">
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon" href="{{ page_icon }}">
+<link rel="apple-touch-icon" href="{{ page_icon|http_url }}">
 <!-- <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black"> -->
 

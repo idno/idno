@@ -60,7 +60,7 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return 'https://static.example/page.png';
     }
 
-    public function pageIconUser(): ?object
+    public function siteTemplateUser(object $template): ?object
     {
         return $this->iconUser;
     }
