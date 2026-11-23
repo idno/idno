@@ -1,4 +1,4 @@
-{% set unique_id = unique_id is not empty ? unique_id : 'editor-' ~ random(9999) %}{% set name = name is not empty ? name : 'body' %}
+{% set unique_id = unique_id ? unique_id : 'editor-' ~ random(9999) %}{% set name = name ? name : 'body' %}
 <div class="idno-editor" x-data="tiptapEditor({{ js_string(unique_id) }})">
     <div class="idno-editor-toolbar">
         <button type="button" class="idno-editor-toolbar-btn" title="Bold" x-on:click="editor.chain().focus().toggleBold().run()" :class="{ 'active': editor?.isActive('bold') }">
@@ -48,5 +48,5 @@
         </button>
     </div>
     <div class="idno-editor-content" id="{{ unique_id }}-editor"></div>
-    <textarea name="{{ name }}" id="{{ unique_id }}" style="display:none" {{ required is not empty ? 'required' : '' }}>{{ value }}</textarea>
+    <textarea name="{{ name }}" id="{{ unique_id }}" style="display:none" {{ required ? 'required' : '' }}>{{ value }}</textarea>
 </div>

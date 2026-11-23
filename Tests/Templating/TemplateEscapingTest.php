@@ -834,6 +834,122 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * Every template of `forms/input/` is drawn with a hostile value in each place a control prints one (the list is the directory's, so a
+     * control added later is drawn too), and the picture field with a hostile id and name, which it prints in four places: nothing opens a
+     * script element or an attribute of its own.
+     */
+    public function testEveryFormInputIsDrawnWithHostileValues(): void
+    {
+        $this->seedSite();
+        $names = array_map(static fn (string $file): string => basename($file, '.html.twig'), glob(dirname(__DIR__, 2) . '/templates/default/forms/input/*.html.twig') ?: []);
+        sort($names);
+        $this->assertContains('image-file', $names);
+        $this->assertContains('datetime-local', $names);
+
+        $drawn = $this->runInSite($this->pageCode('/status/edit') . str_replace('%NAMES%', $this->literal(json_encode($names, JSON_THROW_ON_ERROR)), <<<'PHP'
+        $hostile = '"><script>alert(1)</script>\'';
+        $out = [];
+        foreach (json_decode(%NAMES%, true) as $name) {
+            $vars = ['name' => $hostile, 'id' => $hostile, 'value' => $hostile, 'class' => $hostile, 'placeholder' => $hostile, 'alt' => $hostile, 'unique_id' => $hostile, 'options' => [$hostile => $hostile], 'title' => $hostile, 'onclick' => $hostile];
+            if ($name === 'image-file') {
+                $vars = ['name' => $hostile, 'id' => $hostile, 'object' => new \IdnoPlugins\Photo\Photo()];
+            }
+            if ($name === 'form-list') {
+                $vars = ['form' => ['a' => 'text'], 'labels' => ['a' => $hostile], 'help' => ['a' => $hostile], 'defaults' => ['a' => $hostile], 'required' => ['a'], 'placeholders' => ['a' => $hostile], 'values' => ['a' => $hostile]];
+            }
+            $template = clone \Idno\Core\Idno::site()->template();
+            $out[$name] = (string) $template->__($vars)->draw('forms/input/' . $name);
+        }
+
+        return $out;
+        PHP));
+        $this->assertIsArray($drawn);
+        $this->assertSame($names, array_keys($drawn), 'every control was drawn');
+        foreach ($drawn as $name => $html) {
+            if ($name !== 'captcha') {
+                $this->assertNotSame('', trim($html), $name . ' draws something');
+            }
+            $this->assertStringNotContainsString('<script>alert(1)', $html, $name . ' opens no script of the value\'s');
+            $dom = new \DOMDocument();
+            libxml_use_internal_errors(true);
+            $dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>');
+            libxml_clear_errors();
+            foreach ($dom->getElementsByTagName('script') as $script) {
+                $this->assertStringNotContainsString('alert(1)', $script->textContent, $name . ' puts the value into a script element');
+            }
+        }
+        $image = $drawn['image-file'];
+        $this->assertGreaterThanOrEqual(4, substr_count($image, htmlspecialchars('"><script>alert(1)</script>\'', ENT_QUOTES)), 'the id and name are text in each place the picture field prints them');
+    }
+
+    /**
+     * A boolean attribute is printed when it is set and not otherwise: `true` sets it; `false`, `null`, `0`, `'0'` and an empty string do not
+     * (the old template wrote `required=""` for `false`, which a browser reads as set). The same for the select. A text area's height is a number.
+     */
+    public function testABooleanAttributeIsPrintedOnlyWhenItIsSet(): void
+    {
+        $this->seedSite();
+
+        $drawn = $this->runInSite($this->pageCode('/status/edit') . <<<'PHP'
+        $draw = static function (string $name, array $vars): string {
+            $template = clone \Idno\Core\Idno::site()->template();
+
+            return (string) $template->__($vars)->draw($name);
+        };
+        $booleans = ['autofocus', 'checked', 'disabled', 'multiple', 'readonly', 'required'];
+        $out = [];
+        foreach (['true' => true, 'false' => false, 'null' => null, 'zero' => 0, 'the string zero' => '0', 'an empty string' => ''] as $label => $value) {
+            $out['input, ' . $label] = $draw('forms/input/input', ['name' => 'f', 'value' => 'v'] + array_fill_keys($booleans, $value));
+            $out['select, ' . $label] = $draw('forms/input/select', ['name' => 's', 'value' => '', 'options' => ['a' => 'A']] + array_fill_keys(array_diff($booleans, ['multiple']), $value));
+            $out['select multiple, ' . $label] = $draw('forms/input/select', ['name' => 's', 'value' => '', 'options' => ['a' => 'A'], 'multiple' => $value]);
+        }
+        $out['value zero'] = $draw('forms/input/input', ['name' => 'f', 'value' => 0, 'maxlength' => 0, 'min' => '0']);
+        $out['height'] = $draw('forms/input/longtext', ['name' => 'b', 'height' => '1px;position:fixed;inset:0;']);
+        $out['height, a number'] = $draw('forms/input/longtext', ['name' => 'b', 'height' => 300]);
+
+        return $out;
+        PHP);
+        $this->assertIsArray($drawn);
+
+        $attributes = static function (string $html, string $tag): array {
+            $dom = new \DOMDocument();
+            libxml_use_internal_errors(true);
+            $dom->loadHTML('<?xml encoding="utf-8" ?><body>' . $html . '</body>');
+            libxml_clear_errors();
+            $element = $dom->getElementsByTagName($tag)->item(0);
+            $found = [];
+            foreach ($element->attributes as $attribute) {
+                $found[$attribute->name] = $attribute->value;
+            }
+
+            return $found;
+        };
+        $booleans = ['autofocus', 'checked', 'disabled', 'multiple', 'readonly', 'required'];
+        foreach ($booleans as $attribute) {
+            $this->assertArrayHasKey($attribute, $attributes($drawn['input, true'], 'input'), 'an input with ' . $attribute . ' set');
+            if ($attribute !== 'multiple') {
+                $this->assertArrayHasKey($attribute, $attributes($drawn['select, true'], 'select'));
+            }
+        }
+        $this->assertArrayHasKey('multiple', $attributes($drawn['select multiple, true'], 'select'));
+        foreach (['false', 'null', 'zero', 'the string zero', 'an empty string'] as $label) {
+            foreach ($booleans as $attribute) {
+                $this->assertArrayNotHasKey($attribute, $attributes($drawn['input, ' . $label], 'input'), $attribute . ' of an input is not set by ' . $label);
+                $this->assertArrayNotHasKey($attribute, $attributes($drawn['select, ' . $label], 'select'), $attribute . ' of a select is not set by ' . $label);
+            }
+            $this->assertArrayNotHasKey('multiple', $attributes($drawn['select multiple, ' . $label], 'select'), 'a select is not multiple for ' . $label);
+        }
+        $value = $attributes($drawn['value zero'], 'input');
+        $this->assertSame('0', $value['value'], 'a value of zero is printed');
+        $this->assertSame('0', $value['maxlength']);
+        $this->assertSame('0', $value['min']);
+
+        $style = $attributes($drawn['height'], 'textarea')['style'];
+        $this->assertSame('height:1px', $style, 'a height is a number: what follows it is not a declaration');
+        $this->assertSame('height:300px', $attributes($drawn['height, a number'], 'textarea')['style']);
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

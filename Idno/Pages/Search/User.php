@@ -54,6 +54,9 @@ namespace Idno\Pages\Search {
                 }
             }
 
+            // The rows draw their action links on the JSON template type this page sets, whose `forms/link` (the copy in `templates/classic/`)
+            // keeps each link's form in this global when the request is an XHR one (the search's script sends X-Requested-With); the Twig
+            // `forms/link` of a web page returns the form inline instead, through form_data(). So the forms of the links come here.
             global $template_postponed_link_actions;
             if (!empty($template_postponed_link_actions)) {
                 $results['rendered'] .= $template_postponed_link_actions;

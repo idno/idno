@@ -1,4 +1,4 @@
-{% if is_user(user ?? null) %}{% set handle = user.getHandle() %}{% if handle is not empty %}{% set display_handle = handle|length > 18 ? handle|slice(0, 16) ~ '...' : handle %}{% set is_self = user.getUUID() == current_user().getUUID() %}
+{% if is_user(user ?? null) %}{% set handle = user.getHandle() %}{% if handle %}{% set display_handle = handle|length > 18 ? handle|slice(0, 16) ~ '...' : handle %}{% set is_self = user.getUUID() == current_user().getUUID() %}
 
     <div class="idno-user-row idno-entities-{{ user.getEntityTypeName()|lower }}">
         <div class="idno-user-info">

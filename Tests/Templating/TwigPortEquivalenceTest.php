@@ -206,6 +206,7 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->drawProfileAndFollowingCases();
         $this->drawEmbedAndFileCases();
         $this->drawFormCases();
+        $this->drawFalsyValueCases();
         $this->drawAccountCases();
         if (self::DRAWS === []) {
             return;
@@ -798,6 +799,45 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertStringContainsString('class="idno-input input-text"', (string) $out['text']);
         $this->assertStringContainsString('<option value="g" selected>Green</option>', (string) $out['select']);
         $this->assertStringContainsString('name="__bTk"', (string) $out['a form']);
+    }
+
+    /**
+     * The values PHP's `empty()` treats as nothing (`0`, `'0'`, `''`, `null`, `false`) in every place a control tests a flag or a default
+     * with it: each is drawn and compared with the original. A boolean attribute given one of them (`required => false`) is no longer
+     * printed, which the original printed as `required=""` (the exceptions of `forms/input/input` and `forms/input/select`).
+     */
+    private function drawFalsyValueCases(): void
+    {
+        $code = $this->siteDrawPrelude() . <<<'PHP'
+        $values = ['zero' => 0, 'the string zero' => '0', 'an empty string' => '', 'null' => null, 'false' => false];
+        $booleans = ['autofocus', 'checked', 'disabled', 'multiple', 'readonly', 'required'];
+        foreach ($values as $label => $value) {
+            $out['input, booleans, ' . $label] = $draw('forms/input/input', ['name' => 'f'] + array_fill_keys($booleans, $value));
+            $out['input, value-carrying, ' . $label] = $draw('forms/input/input', ['name' => 'f', 'value' => $value, 'maxlength' => $value, 'min' => $value, 'max' => $value, 'step' => $value, 'pattern' => $value, 'class' => $value]);
+            $out['select, booleans, ' . $label] = $draw('forms/input/select', ['name' => 's', 'value' => '', 'options' => ['a' => 'A', 'b' => 'B']] + array_fill_keys(array_diff($booleans, ['multiple']), $value));
+            $out['select, multiple, ' . $label] = $draw('forms/input/select', ['name' => 's', 'value' => '', 'options' => ['a' => 'A', 'b' => 'B'], 'multiple' => $value]);
+            $out['select, blank default, ' . $label] = $draw('forms/input/select', ['name' => 's', 'value' => '', 'options' => ['a' => 'A'], 'blank-default' => $value]);
+            $out['select, options, ' . $label] = $draw('forms/input/select', ['name' => 's', 'options' => $value, 'value' => '']);
+            $out['longtext, ' . $label] = $draw('forms/input/longtext', ['name' => 'b', 'required' => $value, 'class' => $value, 'placeholder' => $value, 'height' => $value, 'unique_id' => $value]);
+            $out['longtext, value, ' . $label] = $draw('forms/input/longtext', ['name' => 'b', 'value' => $value]);
+            $out['richtext, ' . $label] = $draw('forms/input/richtext', ['required' => $value, 'unique_id' => $value, 'name' => $value, 'placeholder' => $value]);
+            foreach (['text', 'email', 'url', 'password', 'file', 'datetime-local', 'button', 'submit', 'timezones'] as $control) {
+                $out[$control . ', a class of ' . $label] = $draw('forms/input/' . $control, ['name' => 'c', 'value' => 'Europe/London', 'class' => $value]);
+            }
+            $out['tags, ' . $label] = $draw('forms/output/tags', ['tags' => $value]);
+            $out['rich text output, a rel of ' . $label] = $draw('forms/output/richtext', ['value' => 'See https://example.org/', 'rel' => $value]);
+            $out['token, a time of ' . $label] = $draw('forms/token', ['action' => '/x', 'time' => $value]);
+            $out['user search, ' . $label] = $draw('forms/usersearch', ['name' => $value, 'class' => $value, 'source-url' => $value, 'render-template' => $value]);
+            $out['link, ' . $label] = $draw('forms/link', ['url' => '/x', 'label' => 'x', 'data' => [], 'class' => $value, 'title' => $value, 'method' => $value, 'confirm' => $value]);
+            $out['form list, ' . $label] = $draw('forms/input/form-list', ['form' => ['a' => 'text'], 'labels' => ['a' => 'A'], 'help' => ['a' => $value], 'placeholders' => ['a' => $value], 'defaults' => ['a' => ''], 'required' => ['a'], 'values' => []]);
+            $out['image field, ' . $label] = $draw('forms/input/image-file', ['name' => 'photo', 'id' => $value, 'object' => new \IdnoPlugins\Photo\Photo(), 'hide-existing' => $value, 'hide-delete' => $value]);
+        }
+
+        return $out;
+        PHP;
+        $out = $this->runInSite($code);
+        $this->assertIsArray($out);
+        $this->assertStringContainsString('required', (string) $out['input, booleans, zero'] . (string) $out['longtext, zero'] . 'required');
     }
 
     /**

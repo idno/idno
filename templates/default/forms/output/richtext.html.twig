@@ -1,1 +1,1 @@
-{{ value|sanitize_html|parse_hashtags|parse_urls(rel is not empty ? rel : '')|autop }}
+{{ value|sanitize_html|parse_hashtags|parse_urls(rel ? rel : '')|autop }}

@@ -2,7 +2,7 @@
 <div class="form-list">
     
     {% for field, kind in form %}
-        {% set settings = {name: field, id: 'form-list-element-' ~ field, value: values[field] ?? defaults[field] ?? null, required: field in required ? true : null, placeholder: placeholders[field] is not empty ? placeholders[field] : null} %}
+        {% set settings = {name: field, id: 'form-list-element-' ~ field, value: values[field] ?? defaults[field] ?? null, required: field in required ? true : null, placeholder: placeholders[field] ? placeholders[field] : null} %}
         {% if kind != 'hidden' %}
         
     <div class="row">
@@ -15,7 +15,7 @@
             {{ idno_include('forms/input/' ~ kind, settings) }}
         </div>
         <div class="col-sm-12 col-md-4">
-            {% if help[field] is not empty %}
+            {% if help[field] %}
             <p class="config-desc">{{ t(help[field]) }}</p>
             {% endif %}
         </div>

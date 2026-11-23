@@ -2853,7 +2853,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`), so the Twig file neither calls `form_token()`
     nor `signForm()`: no recursion, and `form_token()` is `signForm()`, which draws this file. (5) `forms/link` registers its form with `form_data()`:
     in an XHR response (no shell draws the registered forms) the form is printed after the link, which fixes a link in content a script inserts
-    (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`; `port-exceptions.php`); the old template kept it in a global that nothing read.
+    (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`; `port-exceptions.php`); the old template kept it in a global (`$template_postponed_link_actions`) that only the admin user search's page, `Idno\Pages\Search\User`, read and appended to its results. That page draws its rows on the JSON type, whose `forms/link` is the `classic` copy, which still fills the global, so its read stays; the search's script sends `X-Requested-With` so that the page's request is an XHR one and the forms arrive (without the header they never did: `UserSearchActionLinksTest`).
     The address is `|link_url` (`UrlValidator::linkUrl()`), the confirmation is `js_string()` (the same single-quoted JavaScript string, escaped for the
     attribute, as `action_link()` prints), and the label is `|raw` because `Actions::createLink()` callers pass markup (`raw-allowlist.php`); `forms/action` prints its
     `body` the same way. (6) Values printed from a variable are escaped: every attribute of `input` and `select`, a `textarea`'s name, the editor's id
@@ -2861,7 +2861,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `form-list` (`port-exceptions.php`, `TemplateEscapingTest::testFormValuesAreEscaped`); the `value` and placeholder were escaped before. Differences
     that are not about a value from outside: non-ASCII text in a value is printed as itself, not by `htmlentities()` as named entities; a text area whose
     value is `0` keeps it; `forms/output/url` links only http(s) (`FILTER_SANITIZE_URL` kept `javascript:`); a field of `form-list` that is not required
-    has no `required` attribute (the old one printed `required="Array"` and a PHP warning). `forms/input/timezones` takes its `class` from the caller as it
+    has no `required` attribute (the old one printed `required="Array"` and a PHP warning). A boolean attribute (`autofocus`, `checked`, `disabled`, `multiple`, `readonly`, `required`) of `input` and `select` is printed only when set: `false`, `0`, `'0'`, `''` and `null` print none (the old template wrote `required=""`, which a browser reads as set), and any attribute given `false` is not printed; a flag or default the original tested with `empty()` is tested by plain Twig truthiness (`{% if x %}`), never `is empty`, which differs for `0` and `'0'`; a text area's height is `|to_int`. `forms/input/timezones` takes its `class` from the caller as it
     did (the template's own default was assigned to a local variable and never used). Helpers added: `js_string`, `next_input_id`, `security_token`,
     `timezone_options`, `timezone_info`, `email_is_blocked`, `forget_variables` and the filters `link_url`, `email_address` (`FILTER_SANITIZE_EMAIL`) and
   - The account and onboarding pages are Twig too (`templates/default/account/**` and `onboarding/**`: 18 files beside their frozen `.tpl.php`). The
@@ -2896,8 +2896,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `TemplateContractTest::testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties`); `Actions::createLink()` and `createForm()` and
   `DefaultTemplate::drawSyndication()` and `drawPagination()` draw on a `clone`, so their variables stay off the site's template object
   except the keys a page's JSON output has, which they publish by explicit assignment: `items_per_page` (pagination) and `services` (the details the
-  syndication template computes), `content_type` and `posseLinks` (`Tests/Core/ActionsTest`). `signForm()` and `forms/token` are NOT changed: the form token's `csrf` list stays on the site's template, which is what the
-  JSON output prints. `createForm()` now passes the address it is given as the form's `action` (it never did, and the template needs it).
+  syndication template computes), `content_type` and `posseLinks` (`Tests/Core/ActionsTest`). `signForm()` is not changed (it draws `forms/token` on the site's template). For a web page `forms/token` is Twig and keeps no `csrf` list; the list the JSON
+  output prints comes only from the `classic` copy of `forms/token`, drawn for the non-HTML types. `createForm()` now passes the address it is given as the form's `action` (it never did, and the template needs it).
 - Idno 2026, the built-in look (`templates/default/`, `IdnoPlugins/<P>/templates/default/`, `css/idno-2026.min.css`, `js/idno-2026.min.js`, and
   `Idno\Pages\Drafts`, the member's drafts page, a legacy page registered in `Idno::init()`), was the Twenty26 theme: its templates were in a
   `modern` type that the theme's controller set. It is core's: a site's template type is `default`, `Themes::resolve()` maps the stored `theme`

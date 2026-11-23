@@ -1,4 +1,4 @@
-{% set name = name is not empty ? name : 'user-search' %}{% if id is null %}{% set id = name ~ '_' ~ next_input_id() %}{% endif %}{% set source_url = _context['source-url'] is not empty ? _context['source-url'] : site_url('search/users/') %}{% set render_template = _context['render-template'] is not empty ? _context['render-template'] : 'forms/components/usersearch/user' %}<div id="{{ id }}" class="users-search {{ class is not empty ? class : '' }}"
+{% set name = name ? name : 'user-search' %}{% if id is null %}{% set id = name ~ '_' ~ next_input_id() %}{% endif %}{% set source_url = _context['source-url'] ? _context['source-url'] : site_url('search/users/') %}{% set render_template = _context['render-template'] ? _context['render-template'] : 'forms/components/usersearch/user' %}<div id="{{ id }}" class="users-search {{ class ? class : '' }}"
      x-data="userSearch({{ js_string(source_url) }}, {{ js_string(render_template) }})"
      x-init="search()">
     <form @submit.prevent="search()" x-ref="form">
@@ -50,7 +50,7 @@
                         offset: this.offset,
                         limit: this.limit
                     });
-                    fetch(sourceUrl + '?' + params.toString())
+                    fetch(sourceUrl + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         self.totalCount = data.count || 0;

@@ -1,5 +1,5 @@
-{% set unique_id = unique_id is not empty ? unique_id : 'body' ~ random(9999) %}{% set height = height is not empty ? height : 500 %}{% set placeholder = placeholder is not empty ? placeholder : t('Share something brilliant...') %}
+{% set unique_id = unique_id ? unique_id : 'body' ~ random(9999) %}{% set height = height ? height : 500 %}{% set placeholder = placeholder ? placeholder : t('Share something brilliant...') %}
 
-<textarea name="{{ name }}"  placeholder="{{ placeholder }}" style="height:{{ height }}px"
-          class="bodyInput mentionable idno-textarea {{ class ?? '' }}" id="{{ unique_id }}" {{ required is not empty ? 'required' : '' }}>{{ value is not empty ? value : '' }}</textarea>
+<textarea name="{{ name }}"  placeholder="{{ placeholder }}" style="height:{{ height|to_int }}px"
+          class="bodyInput mentionable idno-textarea {{ class ? class : '' }}" id="{{ unique_id }}" {{ required ? 'required' : '' }}>{{ value is not empty ? value : '' }}</textarea>
 {% do forget_variables(['unique_id', 'class', 'height', 'placeholder', 'value', 'required', 'name']) %}

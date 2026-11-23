@@ -141,7 +141,7 @@ users.
                         offset: this.offset,
                         limit: this.limit
                     });
-                    fetch(sourceUrl + '?' + params.toString())
+                    fetch(sourceUrl + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
                     .then(function(r) { return r.json(); })
                     .then(function(data) {
                         self.totalCount = data.count || 0;

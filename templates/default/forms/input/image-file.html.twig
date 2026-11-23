@@ -1,15 +1,15 @@
-{% set id = id is not empty ? id : 'photo-' ~ random_id() %}{% set is_multiple = name is not null and '[]' in name %}{% set hide_existing = _context['hide-existing'] is not empty %}
+{% set id = id ? id : 'photo-' ~ random_id() %}{% set is_multiple = name is not null and '[]' in name %}{% set hide_existing = _context['hide-existing'] %}
 <div class="image-file-input">
     <div class="photo-preview-existing">
-        {% if entity_value(object, '_id') is not empty and not hide_existing %}
+        {% if entity_value(object, '_id') and not hide_existing %}
             {% for attachment in object.getAttachments() %}
                 {% set filename = attachment['filename'] %}
                 {% set thumbs = entity_value(object, 'thumbs_large') %}
-                {% if thumbs is not empty and thumbs[filename] is not empty %}
+                {% if thumbs and thumbs[filename] %}
                     {% set src = thumbs[filename]['url'] %}
-                {% elseif entity_value(object, 'thumbnail_large') is not empty %}
+                {% elseif entity_value(object, 'thumbnail_large') %}
                     {% set src = entity_value(object, 'thumbnail_large') %}
-                {% elseif entity_value(object, 'thumbnail') is not empty %}
+                {% elseif entity_value(object, 'thumbnail') %}
                     {% set src = entity_value(object, 'thumbnail') %}
                 {% else %}
                     {% set src = attachment['url'] %}
@@ -17,7 +17,7 @@
                 {% for broken in ['https:///', 'http:///'] %}{% if src starts with broken %}{% set src = site_url() ~ (src|slice(broken|length)) %}{% endif %}{% endfor %}
                 {% set src = src|attachment_url %}
                 <div class="idno-image-existing">
-                    {% if object.canEdit() and _context['hide-delete'] is empty %}
+                    {% if object.canEdit() and not _context['hide-delete'] %}
                     <span class="idno-image-delete delete-control">
                         {% set delete_label %}<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>{% endset %}
                         {{ action_link(site_url('attachment/' ~ object.getId() ~ '/' ~ attachment['_id'] ~ '/'), delete_label, [], {'method': 'POST', 'class': 'edit', 'confirm': true, 'confirm-text': t('Are you sure you want to permanently delete this?')}) }}
@@ -35,7 +35,7 @@
         <label class="idno-btn idno-btn-ghost" for="{{ id }}" style="width:100%;justify-content:center;cursor:pointer">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             <span class="photo-filename" data-nexttext="{{ t('Choose different photo') }}">
-                {% if entity_value(object, '_id') is empty %}{{ t('Select a photo') }}{% elseif not is_multiple %}{{ t('Choose different photo') }}{% else %}{{ t('Add photo') }}{% endif %}
+                {% if not entity_value(object, '_id') %}{{ t('Select a photo') }}{% elseif not is_multiple %}{{ t('Choose different photo') }}{% else %}{{ t('Add photo') }}{% endif %}
             </span>
             {{ idno_include('forms/input/file', {name: name, id: id, accept: 'image/*', onchange: 'Template.activateImagePreview(this)', class: 'input-file'}) }}
         </label>

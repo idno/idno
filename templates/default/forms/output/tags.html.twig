@@ -1,4 +1,4 @@
-{% if tags is not empty %}{% if tags is iterable %}
+{% if tags %}{% if tags is iterable %}
         <p class="tag-row">
             <i class="fa fa-tag"></i>
             {% for tag in tags %}
