@@ -2730,6 +2730,16 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     operator of every extension (about 0.14 ms and 60 classes a request: the largest part of what a page drawn from Twig cost over the same page from the
     old engine, with the Symfony bridge's extensions loaded too). A new function is a method of the extension, passed as `$this->name(...)`
     (`EngineCostTest::testEveryFunctionAndFilterIsAMethodOfTheExtension` and `testATemplateIsDrawnWithoutBuildingTheExtensions`).
+  - `object.method(...)` in a Twig template (a method called by a name written in the template: no `?.`, no `is defined`, not a property) is compiled by
+    `Idno\Templating\MethodCallNodeVisitor` and `MethodCallExpression` (not services: in `config/services.php`'s excludes; the extension's `getNodeVisitors()`)
+    to `$this->extensions[...]->callMethod(object, name, arguments, ...)`, which calls a public method of the object and for anything else (another letter
+    case or the shorthand `name` for `getName()`, `__call()`, a value that is not an object, a missing method) is `CoreExtension::getAttribute()`, as Twig
+    answers it. Twig's own attribute access builds, once for each class a request touches, a table of the class's methods (about 40 microseconds for an
+    entity class: `get_class_methods()`, a sort and a lower-casing of 150 to 200 names) and then spends about a microsecond a call; a home page made 230 such
+    calls and Twig's share of them was about 0.4 ms a request. A property or `?.` is still Twig's. Pinned by `EngineCostTest` (compiled form, and the same
+    answer as `getAttribute()` for a public method, a name in another case, `__call()`, a private or protected method, null, an array, a string and a closure).
+  - `TwigTemplateEngine` keeps the compiled template of each (logical name, file) it has drawn (at most 2000), so a template drawn again in the request (a
+    partial in a loop) is not looked up in Twig again; like Twig's own table of loaded templates it lives as long as the process.
   - `IdnoTwigExtension`: `idno_include(name, vars)` draws as `$this->draw()` does (type then `default`, either engine, contributions) through
     a COPY of the template object (`withVars()`) holding the including template's variables, less Twig's globals (`app`, ...: only a value identical to the global) and bookkeeping (`_idno_type`, `_idno_context`, `_parent`, `_seq`, `_key`, `_iterated`, `loop`; any other `_foo` variable is kept), and
     the given ones over them; `slot(name)` is `drawSlot()`; both are `is_safe: html` and need `_idno_context`; `t(text, subs)` is

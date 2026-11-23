@@ -35,6 +35,12 @@ final class TwigTemplateEngine implements TemplateEngine
     {
     }
 
+    /** The most templates kept: a path is a file of the cascade, so there are as many as there are templates. */
+    private const REMEMBER_LIMIT = 2000;
+
+    /** @var array<string, \Twig\Template> the compiled template of each name and file drawn, so that a template drawn again is not looked up again */
+    private array $loaded = [];
+
     public function render(LocatedTemplate $template, mixed $vars, PhpTemplateContext $context): string
     {
         if (!is_array($vars)) {
@@ -47,7 +53,7 @@ final class TwigTemplateEngine implements TemplateEngine
         try {
             // Twig's own render() ends the buffers it opened when a template throws, and fails on one that cannot be removed:
             // the buffer is this engine's, as the .tpl.php engine's is, and is ended the same way
-            $twig = ($this->environment)()->load($template->logicalName)->unwrap();
+            $twig = $this->loaded[$template->logicalName . "\0" . $template->path] ??= $this->load($template);
             ob_start();
             $twig->display($vars);
 
@@ -57,6 +63,15 @@ final class TwigTemplateEngine implements TemplateEngine
 
             throw self::original($e);
         }
+    }
+
+    private function load(LocatedTemplate $template): \Twig\Template
+    {
+        if (count($this->loaded) >= self::REMEMBER_LIMIT) {
+            $this->loaded = [];
+        }
+
+        return ($this->environment)()->load($template->logicalName)->unwrap();
     }
 
     /**

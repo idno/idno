@@ -6,6 +6,9 @@ namespace Tests\Unit\Templating;
 
 use Idno\Templating\CascadeTwigLoader;
 use Idno\Templating\IdnoTwigExtension;
+use Idno\Templating\LocatedTemplate;
+use Idno\Templating\PhpTemplateContext;
+use Idno\Templating\TwigTemplateEngine;
 use Idno\Templating\TemplateCascade;
 use Idno\Templating\TemplateLocator;
 use Idno\Templating\TemplateTranslation;
@@ -15,6 +18,7 @@ use Twig\Cache\FilesystemCache;
 use Twig\Environment;
 use Twig\Error\LoaderError;
 use Twig\Loader\ArrayLoader;
+use Twig\Source;
 
 /**
  * What drawing a template must not cost, counted and not timed (the timing test, PagePerformanceTest, is not run with the
@@ -143,6 +147,99 @@ final class EngineCostTest extends TestCase
         $second = $this->environment($directory, $template);
         $this->assertSame($expected, $second->render('a.html.twig'));
         $this->assertFalse(self::initialised($second), 'drawing a compiled template looks no function or filter up: Twig built every function, filter, tag and operator of every extension for the first one it looked up');
+    }
+
+    public function testAPlainMethodCallIsCompiledToACallOfTheExtension(): void
+    {
+        $twig = $this->environment($this->root . '/c', '{{ o.getName() }}{{ o.getName(1, 2) }}{{ o?.getName() }}{{ o.getName() is defined ? 1 : 0 }}{{ o.name }}{{ o.name() }}');
+        $php = $twig->compileSource(new Source('{{ o.getName() }}{{ o.getName(1, 2) }}{{ o?.getName() }}{{ o.getName() is defined ? 1 : 0 }}{{ o.name }}{{ o.name() }}', 'a.html.twig'));
+
+        $this->assertSame(2 + 1, substr_count($php, '->callMethod('), 'o.getName(), o.getName(1, 2) and o.name() are calls of the extension');
+        $this->assertSame(3, substr_count($php, 'CoreExtension::getAttribute('), 'a null-safe call, an `is defined` test and a property are compiled as Twig does');
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function objects(): array
+    {
+        $callable = new class {
+            public function getName(mixed ...$a): string
+            {
+                return 'public' . implode(',', $a);
+            }
+
+            public function isReady(): bool
+            {
+                return true;
+            }
+
+            private function secret(): string
+            {
+                return 'private';
+            }
+
+            public function __call(string $name, array $arguments): string
+            {
+                return 'magic ' . $name;
+            }
+        };
+        $plain = new class {
+            public function getName(): string
+            {
+                return 'plain';
+            }
+
+            protected function hidden(): string
+            {
+                return 'protected';
+            }
+        };
+
+        return ['public method' => [$plain], 'object with __call' => [$callable], 'null' => [null], 'array' => [['getName' => 1]], 'string' => ['text'], 'closure' => [static fn (): string => 'closure']];
+    }
+
+    /**
+     * @dataProvider objects
+     */
+    public function testTheFastMethodCallAnswersWhatTwigsAttributeAccessAnswers(mixed $object): void
+    {
+        $extension = $this->extension();
+        $twig = new Environment(new ArrayLoader([]), ['cache' => false]);
+        $source = new Source('', 'a');
+        foreach (['getName', 'getname', 'name', 'isReady', 'ready', 'secret', 'hidden', 'missing', '__invoke'] as $name) {
+            foreach ([[], ['x', 2]] as $arguments) {
+                $expected = \Twig\Extension\CoreExtension::getAttribute($twig, $source, $object, $name, $arguments, \Twig\Template::METHOD_CALL, false, true, false, 1);
+                $this->assertSame($expected, $extension->callMethod($object, $name, $arguments, $twig, $source, true, 1), $name . ' on ' . get_debug_type($object));
+            }
+        }
+    }
+
+    public function testAMissingMethodIsAnErrorWhenVariablesAreStrict(): void
+    {
+        $twig = new Environment(new ArrayLoader([]), ['cache' => false, 'strict_variables' => true]);
+        $this->expectException(\Twig\Error\RuntimeError::class);
+        $this->extension()->callMethod(new \stdClass(), 'getNothing', [], $twig, new Source('', 'a'), false, 1);
+    }
+
+    public function testATemplateIsLoadedOnceForTheFileItIsDrawnFrom(): void
+    {
+        $file = $this->file('core/templates/default/x.html.twig', 'x {{ a }}');
+        $cascade = new TemplateCascade($this->root . '/core');
+        $built = 0;
+        $engine = new TwigTemplateEngine(function () use ($cascade, &$built): Environment {
+            ++$built;
+            $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => false]);
+            $twig->addExtension($this->extension());
+
+            return $twig;
+        });
+        $context = $this->createStub(PhpTemplateContext::class);
+        $located = new LocatedTemplate($file, 'twig', 'default', $this->root . '/core', 'default/x.html.twig');
+
+        $this->assertSame('x 1', $engine->render($located, ['a' => 1], $context));
+        $this->assertSame('x 2', $engine->render($located, ['a' => 2], $context));
+        $this->assertSame(1, $built, 'the second draw asks Twig for nothing');
     }
 
     private static function initialised(Environment $twig): bool

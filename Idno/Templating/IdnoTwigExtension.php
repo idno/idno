@@ -153,6 +153,27 @@ final class IdnoTwigExtension extends AbstractExtension
         ];
     }
 
+    public function getNodeVisitors(): array
+    {
+        return [new MethodCallNodeVisitor()];
+    }
+
+    /**
+     * `object.name(arguments)` of a template (see MethodCallExpression): a public method of the object is called, and anything else is
+     * what Twig's attribute access makes of it (a method by its shorthand name or in another letter case, `__call()`, a value that is not
+     * an object, a template object, a missing method: null, or an error when `strict_variables` is on).
+     *
+     * @param array<int|string, mixed> $arguments
+     */
+    public function callMethod(mixed $object, string $name, array $arguments, Environment $environment, \Twig\Source $source, bool $ignoreStrictCheck, int $line): mixed
+    {
+        if (is_object($object) && !$object instanceof \Twig\Template && method_exists($object, $name) && is_callable([$object, $name])) {
+            return $object->$name(...$arguments);
+        }
+
+        return \Twig\Extension\CoreExtension::getAttribute($environment, $source, $object, $name, $arguments, \Twig\Template::METHOD_CALL, false, $ignoreStrictCheck, false, $line);
+    }
+
     /*
      * The functions and filters below pass what a template asks for to the site's helpers. They are methods of this extension, and not
      * closures over the helpers, so that Twig compiles a call in a template to a call of the method (`$this->extensions[...]->siteUrl()`)
