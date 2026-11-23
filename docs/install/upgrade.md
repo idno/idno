@@ -380,6 +380,8 @@ not copied again; a file that did not copy correctly is not left there.
 
 Upgrades normally need no cache clearing, because the compiled cache is keyed by the code it was built from (and by the installation's directory). Deleting everything under `var/cache/` is always safe, and is the fix if the site reports a container error after a deploy.
 
+Compiled Twig templates of Idno's own `templates/` directory are trusted outside debug mode: the site does not look at their files to see whether they changed. They change with a release, and a release changes `version.idno`, which moves the whole compiled cache to a new directory. The templates of plugins and themes are still checked, so one you update in place is compiled again without clearing anything. If you edit a file of Idno's own `templates/` directory in place (use a theme or a plugin instead), or deploy changed template files without changing `version.idno`, delete everything under `var/cache/`; with `APP_DEBUG` on, nothing needs clearing.
+
 !!! warning "Opcache with `opcache.validate_timestamps=0`"
     If your server runs PHP's opcache with `opcache.validate_timestamps=0` (common in production, and set by the bundled Docker image), restart PHP (PHP-FPM, or your web server if it runs PHP) or reset opcache immediately after replacing the files. Until you do, PHP keeps running the old code, and a request in that window can build the new compiled cache from it. If the site reports a container error after a deploy, delete everything under `var/cache/` and restart PHP again.
 

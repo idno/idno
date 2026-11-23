@@ -350,6 +350,46 @@ final class EngineCostTest extends TestCase
         $this->assertSame('x|x|x', $twig->render('a', ['o' => $object]));
     }
 
+    /**
+     * @return array<string, array{bool, bool, bool}> core or not, debug or not, whether a file newer than the compiled one is fresh
+     */
+    public static function freshness(): array
+    {
+        return [
+            'core, not debug: not looked at' => [true, false, true],
+            'core, debug: checked' => [true, true, false],
+            'plugin, not debug: checked' => [false, false, false],
+            'plugin, debug: checked' => [false, true, false],
+        ];
+    }
+
+    /**
+     * @dataProvider freshness
+     */
+    public function testOnlyACoreTemplateOutsideDebugIsFreshWithoutLookingAtTheFile(bool $core, bool $debug, bool $fresh): void
+    {
+        $file = $this->file(($core ? 'core' : 'plugin') . '/templates/default/f.html.twig');
+        $cascade = new TemplateCascade($this->root . '/core');
+        $cascade->addBase($this->root . '/plugin');
+        $loader = new CascadeTwigLoader($cascade, $debug);
+        touch($file, time() + 100);
+
+        $this->assertSame($fresh, $loader->isFresh('default/f.html.twig', time()), 'a file newer than the compiled template');
+        $this->assertFalse($loader->isFresh('default/missing.html.twig', time()));
+    }
+
+    public function testACoreTemplateOutsideDebugIsNotTouchedOnTheDiskAfterItsResolution(): void
+    {
+        $file = $this->file('core/templates/default/f.html.twig');
+        $cascade = new TemplateCascade($this->root . '/core');
+        $loader = new CascadeTwigLoader($cascade, false);
+        $this->assertTrue($loader->exists('default/f.html.twig'));
+
+        unlink($file);
+
+        $this->assertTrue($loader->isFresh('default/f.html.twig', 0), 'no is_file and no filemtime: a deleted core file is noticed when the cache is cleared');
+    }
+
     private static function initialised(Environment $twig): bool
     {
         // ExtensionSet::isInitialized() is also true once a template is loaded: the property is the one that says every function, filter, tag

@@ -51,6 +51,7 @@ config.ini
 
 # Directories the template tests make and remove
 /templates/default/zz-core-probe-*
+/templates/default/zz-reload-probe-*
 /Themes/Zz*
 tests/_output/*
 *-ori.*
