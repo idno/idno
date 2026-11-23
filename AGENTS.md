@@ -3701,7 +3701,7 @@ the CLI installer no longer writes one.
   NOT apply this rule: drafts the user cannot see are counted.
 - Text linkers (`DefaultTemplate::parseURLs()`, `parseHashtags()`, `parseUsers()`, and the Twig filters over them): they link text only, never inside a tag,
   a link, a script, a style or a textarea, and `parseHashtags()` never decodes an entity of `< > & " '` or a backtick; an address in an attribute of sanitized HTML
-  is therefore never made into a link. `Tests/Kernel/TemplateLinkersTest` checks this against an HTML5 parser, and
+  is therefore never made into a link. `Tests/Kernel/TemplateLinkersTest` and `Tests/Core/ParseLinksOutsideTagsTest.php` check this against an HTML parser (the one private method all three go through is `Parsing::mapText()`), and
   `IdnoPlugins/Event/Tests/RSVPOutputTest::testLinkingTheSanitizedBodyAddsNothingToTheMarkup` through a real template; `Tests/Core/ParseHashtagsTest.php`
   pins every spelling of those entities (named, decimal, hex, leading zeros, either case of `x`) while named letters such as `&auml;` still decode so that
   `#Äpfel` links. Don't `html_entity_decode()` text that is going to be printed as HTML.
