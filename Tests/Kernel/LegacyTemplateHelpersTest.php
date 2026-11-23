@@ -287,6 +287,21 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertFalse((bool) $helpers->syndicationSelected('no-such-service', 'me'));
     }
 
+    public function testTheSyndicationAndAttachmentLookups(): void
+    {
+        $helpers = $this->helpers();
+
+        $this->assertFalse($helpers->syndicationHas('no-such-service'), 'a service nobody registered is not the viewer\'s');
+        $this->assertSame([], $helpers->syndicationAccounts('no-such-service'));
+        $this->assertSame('https://x.example/a.png', $helpers->attachmentUrl('https://x.example/a.png'), 'no attachment host: the address as it is');
+        \Idno\Core\Idno::site()->config()->attachment_base_host = 'cdn.example';
+        try {
+            $this->assertSame('https://cdn.example/a.png', $helpers->attachmentUrl('https://x.example/a.png'));
+        } finally {
+            \Idno\Core\Idno::site()->config()->attachment_base_host = '';
+        }
+    }
+
     public function testLookupsThatFindNothing(): void
     {
         $helpers = $this->helpers();

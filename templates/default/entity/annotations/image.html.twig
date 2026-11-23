@@ -1,0 +1,3 @@
+{% set owner_url = annotation.owner_url|http_url %}{% set owner_image = annotation.owner_image|http_url %}{% if owner_image != '' %}{% set owner_image = owner_image|attachment_url %}{% endif %}<a href="{{ owner_url }}" rel="nofollow" class="icon-container"><img
+        src="{{ owner_image }}"
+        alt="{{ annotation.owner_name }}"/></a>

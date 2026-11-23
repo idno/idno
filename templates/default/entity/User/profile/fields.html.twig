@@ -1,0 +1,6 @@
+{% set profile = entity_value(user, 'profile') %}{% set urls = profile.url ?? null %}{% if urls is not empty and urls is iterable %}{% for url in urls %}{% if url %}{% set link = profile_link(url) %}
+            <p class="url-container">
+                <i class="{{ link.icon }}"></i> <a href="{{ link.url }}" rel="me"
+                                                       class="{{ link.class }}">{{ link.display }}</a>
+            </p>
+            {% endif %}{% endfor %}{% endif %}

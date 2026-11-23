@@ -1,0 +1,38 @@
+{% if annotations is not empty and annotations is iterable %}{% for locallink, annotation in annotations|sort((a, b) => a.time < b.time ? -1 : 1) %}{# The addresses come from whoever sent the annotation: only http and https ones are printed #}{% set permalink = (annotation.permalink ?: locallink)|http_url %}{% set owner_url = annotation.owner_url|http_url %}{% set owner_image = annotation.owner_image|http_url %}{# Anchor ID for this annotation, derived from the local link hash #}{% set anchor_id = 'annotation-' ~ (locallink|url_basename) %}{# For direct comments (permalink is a local annotation URL), link to the anchor; for webmentions, link to the source post #}{% set is_local = permalink matches '#/annotations/[a-f0-9]+$#' %}{% set date_href = is_local ? '#' ~ anchor_id : permalink %}
+    <div class="idno-annotation h-cite" id="{{ anchor_id }}">
+        {% if owner_image != '' %}
+        <a href="{{ owner_url }}" class="u-url">
+            <img class="idno-annotation-avatar u-photo"
+                 src="{{ owner_image }}"
+                 alt="{{ annotation.owner_name }}" />
+        </a>
+        {% endif %}
+        <div class="idno-annotation-content">
+            <div>
+                <a href="{{ owner_url }}" class="p-name u-url p-author h-card" rel="nofollow" style="font-weight:600;color:var(--color-text-strong)">
+                    {{ annotation.owner_name }}
+                </a>
+                <span class="idno-entry-meta">
+                    <a href="{{ date_href }}" rel="nofollow" class="u-url">
+                        <time class="dt-published" datetime="{{ annotation.time|date('c') }}">
+                            {{ annotation.time|date('M j, Y') }}
+                        </time>
+                    </a>
+                </span>
+            </div>
+            {% if annotation.content is not empty %}
+            <div class="e-content" style="margin-top:0.25rem">
+                {{ annotation.content|striptags|parse_urls('rel="nofollow"')|autop }}
+            </div>
+            {% endif %}
+            {% if permalink is not empty and not is_local %}
+            <div class="idno-annotation-source">
+                via <a href="{{ permalink }}" class="u-url" rel="nofollow">
+                    {{ permalink|url_host }}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% if object.canEditAnnotation(annotation) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
+    </div>
+{% endfor %}{% endif %}

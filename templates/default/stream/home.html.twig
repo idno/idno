@@ -1,0 +1,3 @@
+{% if items is not empty %}{% for item in items %}
+        {{ item.draw()|raw }}
+        {% endfor %}{% endif %}

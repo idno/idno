@@ -1,0 +1,5 @@
+{% if service is not empty %}{% set human_name %}{% for part in (service|slice(0, 1)|upper ~ service|slice(1))|split(' ') %}{% if not loop.first %}&nbsp;{% endif %}{{ part }}{% endfor %}{% endset %}{% set human_icon = idno_include('content/syndication/icon/' ~ service) %}{% if human_icon is empty %}{% set human_icon = idno_include('content/syndication/icon/generic') %}{% endif %}
+        <span class="syndication-toggle">
+            <input type="checkbox" name="syndication[]" class="checkbox" {{ disabled }} id="syndication_{{ service }}_toggle" value="{{ service }}" data-toggle="toggle" data-onstyle="info" data-on="{{ human_icon|e }}&nbsp;{{ human_name }}" data-off="{{ human_icon|e }}&nbsp;{{ human_name }}" {% if selected %}checked{% endif %}>
+        </span>
+        {% endif %}

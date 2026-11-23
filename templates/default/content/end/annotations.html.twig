@@ -1,0 +1,1 @@
+{% for annotation_type, template_name in {'rsvp': 'rsvps', 'like': 'likes', 'share': 'shares', 'reply': 'replies', 'mention': 'mentions'} %}{% set annotations = object.getAnnotations(annotation_type) %}{% if annotations %}{{ idno_include('entity/annotations/' ~ template_name, {annotations: annotations}) }}{% endif %}{% endfor %}

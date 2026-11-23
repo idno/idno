@@ -1,0 +1,22 @@
+{% set me = current_user() %}{% if me and object %}
+    <div class="idno-comment-form">
+        <a href="{{ me.getDisplayURL() }}" class="u-url">
+            <img class="idno-annotation-avatar u-photo"
+                 src="{{ me.getIcon() }}"
+                 alt="{{ me.getTitle() }}" />
+        </a>
+        <form action="{{ site_url() }}annotation/post" method="post">
+            <textarea name="body"
+                      placeholder="{{ t('Add a comment ...') }}"
+                      class="idno-textarea mentionable ctrl-enter-submit"></textarea>
+            {{ form_token('annotation/post') }}
+            <input type="hidden" name="object" value="{{ object.getUUID() }}">
+            <input type="hidden" name="type" value="reply">
+            <div class="idno-comment-form-actions">
+                <button type="submit" class="idno-btn idno-btn-primary idno-btn-sm">
+                    {{ t('Comment') }}
+                </button>
+            </div>
+        </form>
+    </div>
+{% endif %}

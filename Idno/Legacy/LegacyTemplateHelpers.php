@@ -287,6 +287,23 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return Idno::site()->events()->triggerEvent('syndication/selected/' . $service, $data, false);
     }
 
+    public function syndicationHas(string $service): bool
+    {
+        return (bool) Idno::site()->syndication()->has($service);
+    }
+
+    public function syndicationAccounts(string $service): array
+    {
+        $accounts = Idno::site()->syndication()->getServiceAccounts($service);
+
+        return is_array($accounts) ? array_values($accounts) : [];
+    }
+
+    public function attachmentUrl(string $url): string
+    {
+        return (string) Idno::site()->config()->sanitizeAttachmentURL($url);
+    }
+
     public function shareTypes(array $types): array
     {
         $result = Idno::site()->events()->triggerEvent('share/types', ['types' => $types], $types);
@@ -340,9 +357,9 @@ final class LegacyTemplateHelpers implements TemplateHelpers
      * The extension escapes raw text before this runs. Only text is linked: not the inside of a tag (an attribute of
      * sanitized HTML), a link, a script, a style or a textarea.
      */
-    public function parseUrls(string $html): string
+    public function parseUrls(string $html, string $attributes = ''): string
     {
-        return (string) Idno::site()->template()->parseURLs($html);
+        return (string) Idno::site()->template()->parseURLs($html, $attributes);
     }
 
     /**

@@ -1,0 +1,34 @@
+{% set user = user ?: object %}{% set me = current_user() %}{% set my_uuid = me ? me.getUUID() : false %}
+<div class="idno-profile h-card">
+    <div class="idno-profile-header">
+        <a href="{{ user.getDisplayURL() }}" class="u-url">
+            <img class="idno-profile-avatar u-photo" src="{{ user.getIcon() }}"
+                 alt="{{ user.getTitle() }}" />
+        </a>
+        <div>
+            <h1 class="idno-profile-name">
+                <a href="{{ user.getDisplayURL() }}" class="u-url p-name">
+                    {{ user.getTitle()|striptags }}
+                </a>
+            </h1>
+            {% if user.canEdit() and user.getUUID() == my_uuid %}
+                <a href="{{ user.getEditURL() }}" class="idno-btn idno-btn-ghost idno-btn-sm">
+                    {{ t('Edit profile') }}
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    {% set description = user.getDescription() %}{% if description %}
+        <div class="idno-profile-bio e-note">
+            {{ idno_include('forms/output/richtext', {value: description}) }}
+        </div>
+    {% elseif user.getUUID() == my_uuid %}
+        <div class="idno-profile-bio">
+            <p style="color:var(--color-text-muted)">
+                {{ t("You haven't described yourself yet.") }}
+                <a href="{{ user.getDisplayURL() }}/edit/">{{ t('Fill in your profile.') }}</a>
+            </p>
+        </div>
+    {% endif %}
+    {{ idno_include('entity/User/profile/fields') }}
+</div>

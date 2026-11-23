@@ -1,0 +1,5 @@
+{% set id = id is not empty ? id : 'spinner_' ~ random_id() %}{% set hidden = _context['start-hidden'] ?? true %}<div id="{{ id }}" class="spinner {{ class ?? '' }}" {% if hidden is same as(true) %}style="display:none"{% endif %}>
+  <div class="bounce1"></div>
+  <div class="bounce2"></div>
+  <div class="bounce3"></div>
+</div>

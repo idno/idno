@@ -1,0 +1,22 @@
+{% if annotations is not empty and annotations is iterable %}{# usort() renumbers the annotations: the delete link of each one names its place in the sorted list #}{% set groups = {'yes': [], 'maybe': [], 'no': [], 'etc': []} %}{% for locallink, annotation in annotations|sort((a, b) => a.time < b.time ? -1 : 1) %}{% set locallink = loop.index0 %}{# The addresses come from whoever sent the annotation: only http and https ones are printed #}{% set permalink = (annotation.permalink is not empty ? annotation.permalink : locallink)|http_url %}{% set owner_image = annotation.owner_image|http_url %}{% set rsvp = annotation.rsvp is not empty ? annotation.rsvp|trim|lower : 'etc' %}{% set rsvp = rsvp in ['yes', 'maybe', 'no'] ? rsvp : 'etc' %}{% set block %}
+            <div class="idno-annotation">
+                {% if owner_image != '' %}
+                <img class="idno-annotation-avatar"
+                     src="{{ owner_image }}"
+                     alt="{{ annotation.owner_name }}" />
+                {% endif %}
+                <div class="idno-annotation-content">
+                    <span><strong>{{ annotation.content|striptags }}</strong></span>
+                    <br>
+                    <span class="idno-entry-meta">
+                        <a href="{{ permalink }}" rel="nofollow">{{ annotation.time|date('M j, Y') }}</a>
+                        on <a href="{{ permalink }}" rel="nofollow">{{ permalink|url_host }}</a>
+                    </span>
+                </div>
+                {% if object.canEditAnnotation(annotation) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
+            </div>
+{% endset %}{% set groups = groups|merge({(rsvp): groups[rsvp]|merge([block])}) %}{% endfor %}{% for rsvp, list in groups %}{% if list is not empty %}
+            <div class="idno-annotation-section">
+                <h4>{% if rsvp == 'yes' %}{{ t('Attending') }}{% elseif rsvp == 'maybe' %}{{ t('Maybe attending') }}{% elseif rsvp == 'no' %}{{ t('Not attending') }}{% else %}{{ t('Other responses') }}{% endif %}</h4>
+            </div>
+{% for block in list %}{{ block }}{% endfor %}{% endif %}{% endfor %}{% endif %}

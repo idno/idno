@@ -1,0 +1,3 @@
+<span class="idno-annotation-delete">
+    {{ action_link(object.getDisplayURL() ~ '/annotation/delete?permalink=' ~ (annotation_permalink|base64_url), t('Delete'), [], {'method': 'POST'}) }}
+</span>

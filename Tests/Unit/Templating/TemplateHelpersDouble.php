@@ -244,6 +244,27 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return null;
     }
 
+    public function syndicationHas(string $service): bool
+    {
+        $this->note(__FUNCTION__, $service);
+
+        return true;
+    }
+
+    public function syndicationAccounts(string $service): array
+    {
+        $this->note(__FUNCTION__, $service);
+
+        return [];
+    }
+
+    public function attachmentUrl(string $url): string
+    {
+        $this->note(__FUNCTION__, $url);
+
+        return $url;
+    }
+
     public function accessGroupsOf(string $ownerUuid): array
     {
         return [];
@@ -268,9 +289,9 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return '<p>' . $html . '</p>';
     }
 
-    public function parseUrls(string $html): string
+    public function parseUrls(string $html, string $attributes = ''): string
     {
-        $this->note(__FUNCTION__, $html);
+        $this->note(__FUNCTION__, $html, $attributes);
 
         return $html;
     }

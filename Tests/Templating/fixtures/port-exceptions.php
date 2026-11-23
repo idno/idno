@@ -13,6 +13,42 @@ declare(strict_types=1);
  * @return array<string, array{reason: string, test: string, differences: list<string>}>
  */
 return [
+    'templates/default/content/syndication/links.html.twig' => [
+        'reason' => 'a link to where a post was syndicated is made from what a service returned: the address is linked only if it is http or https and the identifier is text; the old template printed both into the markup as they were, so a `javascript:` address was a link and an identifier with a tag was markup',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testASyndicationLinkIsEscapedAndOnlyHttpIsLinked',
+        'differences' => [
+            '680df9cf5eac997c1818b30914b70d838b49d70a9f21280610911b197f0c4152',
+            '3715c2a01bc13beede9d229b7fa0c7a06acda9a43c1ff14e374510fb6404606e',
+        ],
+    ],
+    'templates/default/entity/annotations/rsvps.html.twig' => [
+        'reason' => 'an RSVP whose answer is none of yes, maybe and no (a webmention may carry any word) is listed under "Other responses"; the old template stopped with an undefined array key',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAnRsvpWithAnAnswerThatIsNotYesMaybeOrNoIsListedAsOther',
+        'differences' => [
+            '4b1e85b34227b0356aae3ece62c7bedbcbc88cb729a645a314da69829eae47d4',
+        ],
+    ],
+    'templates/default/entity/shell.html.twig' => [
+        'reason' => 'the address a post replies to is the author\'s word or another site\'s (a webmention or a Micropub post names it): only an http or https address is linked, and the old template printed any address, `javascript:` included, in `href`',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testAnInReplyToAddressThatIsNotHttpIsNotLinked',
+        'differences' => [
+            '2e81cd05d17796527dcb5f8112ff884bd964176866c23c13159b61e6a2d389f3',
+        ],
+    ],
+    'templates/default/file/picker/donejs.html.twig' => [
+        'reason' => 'the message that tells the editor which file was uploaded is JSON for a script (every `/`, `<`, `>`, `&`, `\'` and `"` an escape): the old template printed the address and the file\'s id between double quotes as they were. The same value, written differently, and it reads back as the address',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheFilePickersMessageIsWrittenForAScript',
+        'differences' => [
+            'c505c73966a4b763f0d3b65b02e2a51e362649ad99b12b79c8323778fd18bd96',
+        ],
+    ],
+    'templates/default/file/picker/image.html.twig' => [
+        'reason' => 'the words the picker puts into its script (`Choose a different image`, translated) are written for a script with the `e(\'js\')` escape, so that a translation with an apostrophe or a tag cannot end the string or the script; the old template printed the translation between single quotes as it was. The same JavaScript string value, written differently',
+        'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheImagePickersScriptWritesItsWordsForAScript',
+        'differences' => [
+            '66c5b0be73e71c5ff97e7fc647f463393227c3743352d73cc6facbcef44a2590',
+        ],
+    ],
     'templates/default/js/idno.html.twig' => [
         'reason' => 'the environment script encodes `&`, `<`, `>`, `\'` and `"` of a value as \\u escapes (JSON_HEX_*), so that nothing in the page\'s address, which holds the visitor\'s words, can end the script or open a tag; the old template used json_encode() with no flags. The same JSON value, written differently',
         'test' => 'Tests\\Templating\\TemplateEscapingTest::testTheEnvironmentScriptIsEncodedForAScript',

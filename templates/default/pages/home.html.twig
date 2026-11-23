@@ -1,0 +1,2 @@
+{% if contentTypes is not empty %}{% if can_write() %}{{ idno_include('content/create') }}{% endif %}{% else %}{{ idno_include('pages/home/blurb') }}{% endif %}
+{{ idno_include('entity/feed') }}

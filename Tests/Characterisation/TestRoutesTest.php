@@ -181,6 +181,23 @@ final class TestRoutesTest extends CharacterisationTestCase
         $this->assertSame(404, $this->site()->request('GET', '_test/page/Bad_Name')->status);
     }
 
+    public function testTheHostilePagesNameThemselvesWithAScriptAndNeverCache(): void
+    {
+        $name = htmlspecialchars('</h1><script>x()</script>', ENT_QUOTES);
+        $feed = $this->site()->request('GET', '_test/hostile/feed');
+        $hcard = $this->site()->request('GET', '_test/hostile/hcard');
+
+        $this->assertSame(200, $feed->status);
+        $this->assertStringContainsString('<title>' . $name . '</title>', $feed->body);
+        $this->assertStringContainsString('<h1 class="p-name">' . $name . '</h1>', $feed->body, 'an h-feed with the hostile name');
+        $this->assertSame(200, $hcard->status);
+        $this->assertStringContainsString('class="p-name u-url" href="javascript:alert(1)">' . $name . '</a>', $hcard->body, 'an h-card with the hostile name and a script address');
+        $this->assertStringContainsString('class="u-photo" src="javascript:alert(2)"', $hcard->body);
+        $this->assertStringContainsString('no-store', (string) $feed->header('Cache-Control'));
+        $this->assertStringContainsString('no-store', (string) $hcard->header('Cache-Control'));
+        $this->assertSame(404, $this->site()->request('POST', '_test/hostile/feed')->status, 'only GET');
+    }
+
     public function testPageAdvertisesTheSinkAsItsFeedOnlyForFeedOne(): void
     {
         $feed = '<link rel="alternate" type="application/rss+xml" href="' . $this->site()->baseUrl() . '_test/sink/some-name">';

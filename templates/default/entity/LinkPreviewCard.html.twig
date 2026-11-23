@@ -1,0 +1,20 @@
+{# Medium-style link preview card, rendered server-side from cached metadata. Expects `preview` with keys: url, title, description, image, domain, site_name. The preview is made from a page on another site: the link and the image are printed only if they are http or https addresses, and everything is escaped. #}{% if preview is not empty and preview.url is not empty %}{% set link = preview.url|http_url %}{% if link != '' %}{% set title = preview.title ?? '' %}{% set description = preview.description ?? '' %}{% set image = (preview.image ?? '')|http_url %}{% set domain = preview.domain ?? (link|url_host) %}{% if title or description or image %}
+<a href="{{ link }}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+    {% if image %}
+        <div class="link-preview-image">
+            <img src="{{ image|proxied_image }}" alt="" loading="lazy" />
+        </div>
+    {% endif %}
+    <div class="link-preview-content">
+        {% if title %}
+            <div class="link-preview-title">{{ title }}</div>
+        {% endif %}
+        {% if description %}
+            <div class="link-preview-description">{{ description }}</div>
+        {% endif %}
+        <div class="link-preview-domain">
+            {{ domain }}
+        </div>
+    </div>
+</a>
+{% endif %}{% endif %}{% endif %}

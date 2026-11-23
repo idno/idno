@@ -1,0 +1,1 @@
+{% if offset == 0 %}{% set user = page_owner() %}{% if user %}{{ idno_include('entity/User', {user: user}) }}{% endif %}{% endif %}

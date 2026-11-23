@@ -156,6 +156,23 @@ interface TemplateHelpers
 
     public function expandUrls(?object $object, string $text): string;
 
+    /**
+     * Whether the viewer has the syndication service enabled (the service's own checker answers).
+     */
+    public function syndicationHas(string $service): bool;
+
+    /**
+     * The accounts the service has registered, each at least `username` and `name`; empty for a service with none.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function syndicationAccounts(string $service): array;
+
+    /**
+     * The address as it is on the site's attachment host (`Config::sanitizeAttachmentURL()`): unchanged when the site names none.
+     */
+    public function attachmentUrl(string $url): string;
+
     // lookups
 
     public function localEntity(string $url): ?object;
@@ -175,7 +192,10 @@ interface TemplateHelpers
 
     public function autop(string $html): string;
 
-    public function parseUrls(string $html): string;
+    /**
+     * @param string $attributes HTML attribute text a template wrote itself (`rel="nofollow"`), put in the tag of each link: never from a person
+     */
+    public function parseUrls(string $html, string $attributes = ''): string;
 
     public function parseHashtags(string $html): string;
 

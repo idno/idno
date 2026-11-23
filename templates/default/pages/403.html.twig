@@ -1,0 +1,24 @@
+{# Display the login link, if the user is not currently logged in. If they're logged out, this is probably why they're denied. #}{% set login_url = login_url_for(current_url_parts().path) %}{% if not is_logged_in() %}
+        <a id="soft-forward"
+           href="{{ login_url }}">{{ t('Click here to log in.') }}</a>
+        <script>
+            $('#soft-forward').hide();  // JS users will be forwarded anyway
+        </script>
+        {% else %}
+        <div class="container result-403">
+            <div class="row" style="margin-bottom: 2em; margin-top: 6em">
+                <div class="col-md-offset-1 col-md-5">
+                    <h1 class="p-name" style="margin-bottom: 2em;">
+                    {{ t("Hold on. You don't have access to this content.") }}
+                    </h1>
+                    <p>{{ t("It's nothing personal. You just don't have the right permissions to see what's here.") }}</p>
+                    <p>
+                    {{ t_html('Find something else to view on the <a href="%s">%s homepage</a>.', [site_url(), setting('title')]) }}
+                    </p>
+                </div>
+                <div class="col-md-5">
+                    <img src="{{ static_url() }}gfx/robots/aleph_403.png" alt="Robot with a stop sign">
+                </div>
+            </div>
+        </div>
+{% endif %}

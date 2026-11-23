@@ -1,0 +1,23 @@
+{% if annotations is not empty and annotations is iterable %}{% for locallink, annotation in annotations|sort((a, b) => a.time < b.time ? -1 : 1) %}{# The addresses come from whoever sent the annotation: only http and https ones are printed #}{% set permalink = (annotation.permalink ?: locallink)|http_url %}{% set owner_url = annotation.owner_url|http_url %}{% set owner_image = annotation.owner_image|http_url %}
+        <div class="idno-annotation">
+            {% if owner_image != '' %}
+            <img class="idno-annotation-avatar"
+                 src="{{ owner_image }}"
+                 alt="{{ annotation.owner_name }}" />
+            {% endif %}
+            <div class="idno-annotation-content">
+                <span>
+                    <a href="{{ owner_url }}" rel="nofollow">
+                        {{ annotation.owner_name }}
+                    </a>
+                    {{ t('liked this post') }}
+                </span>
+                <br>
+                <span class="idno-entry-meta">
+                    <a href="{{ permalink }}" rel="nofollow">{{ annotation.time|date('M j, Y') }}</a>
+                    on <a href="{{ permalink }}" rel="nofollow">{{ permalink|url_host }}</a>
+                </span>
+            </div>
+            {% if object.canEditAnnotation(annotation) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
+        </div>
+{% endfor %}{% endif %}

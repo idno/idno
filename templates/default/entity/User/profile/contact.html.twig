@@ -1,0 +1,3 @@
+{% set profile = entity_value(user, 'profile') %}{% set urls = profile.url ?? null %}{% if urls is not empty and urls is iterable %}{% for url in urls %}{% if url %}{% set scheme = url|url_scheme %}{% set known = {'mailto': ['fa fa-envelope-o', 'u-email'], 'sms': ['fa fa-mobile', 'p-tel'], 'tel': ['fa fa-phone', 'p-tel'], 'facetime': ['fa fa-video-camera', 'p-facetime']} %}{% if known[scheme] is defined %}
+                        <a href="{{ url }}" rel="me" class="{{ known[scheme][1] }} btn"><i class="{{ known[scheme][0] }}"></i></a>
+                {% endif %}{% endif %}{% endfor %}{% endif %}

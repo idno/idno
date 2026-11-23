@@ -1,0 +1,44 @@
+<h1 class="idno-admin-page-title">{{ t('Your Drafts') }}</h1>
+
+{% if drafts is empty %}
+    <div class="idno-entry" style="text-align:center;padding:2rem">
+        <p style="color:var(--color-text-muted)">{{ t('No drafts yet.') }}</p>
+    </div>
+{% else %}
+    <div class="idno-grid">
+        {% for draft in drafts %}
+        <div class="idno-entry">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                    <a href="{{ draft.getEditURL() }}" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+                        {{ draft.getTitle() ?: t('Untitled') }}
+                    </a>
+                    <div class="idno-entry-meta">
+                        {{ entity_value(draft, 'updated')|date('M j, Y g:ia') }}                        &middot;
+                        {{ draft.getContentTypeCategoryTitle() }}
+                    </div>
+                </div>
+                <a href="{{ draft.getEditURL() }}" class="idno-btn idno-btn-ghost idno-btn-sm">
+                    {{ t('Edit') }}
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {# Pagination #}
+    {% if total > count %}
+    <div style="display:flex;justify-content:center;gap:var(--spacing-gap);padding:var(--spacing-lg) 0">
+        {% if offset > 0 %}
+            <a href="{{ site_url() }}drafts/?offset={{ max(0, offset - count) }}" class="idno-btn idno-btn-ghost">
+                &larr; {{ t('Newer') }}
+            </a>
+        {% endif %}
+        {% if offset + count < total %}
+            <a href="{{ site_url() }}drafts/?offset={{ offset + count }}" class="idno-btn idno-btn-ghost">
+                {{ t('Older') }} &rarr;
+            </a>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endif %}

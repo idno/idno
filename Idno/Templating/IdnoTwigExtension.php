@@ -116,6 +116,14 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('entity_value', self::entityValue(...)),
             new TwigFunction('twitter_account_of', self::twitterAccountOf(...)),
             new TwigFunction('is_user', self::isUser(...)),
+            new TwigFunction('is_entity', self::isEntity(...)),
+            new TwigFunction('random_id', self::randomId(...)),
+            new TwigFunction('default_avatar', self::defaultAvatar(...)),
+            new TwigFunction('visitor_message', self::visitorMessage(...)),
+            new TwigFunction('profile_link', $this->profileLink(...)),
+            new TwigFunction('embeds', self::embeds(...)),
+            new TwigFunction('syndication_has', $this->syndicationHas(...)),
+            new TwigFunction('syndication_accounts', $this->syndicationAccounts(...)),
         ];
     }
 
@@ -136,6 +144,12 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('fix_url', $this->fixUrl(...)),
             new TwigFilter('proxied_image', $this->proxiedImage(...)),
             new TwigFilter('sample_text', $this->sampleText(...)),
+            new TwigFilter('url_host', self::urlHost(...)),
+            new TwigFilter('url_basename', self::urlBasename(...)),
+            new TwigFilter('url_scheme', self::urlScheme(...)),
+            new TwigFilter('alnum_only', self::alnumOnly(...)),
+            new TwigFilter('base64_url', self::base64Url(...)),
+            new TwigFilter('attachment_url', $this->attachmentUrl(...)),
         ];
     }
 
@@ -361,9 +375,9 @@ final class IdnoTwigExtension extends AbstractExtension
         return $this->helpers->autop(self::text($html));
     }
 
-    public function parseUrls(mixed $html): string
+    public function parseUrls(mixed $html, string $attributes = ''): string
     {
-        return $this->helpers->parseUrls(self::text($html));
+        return $this->helpers->parseUrls(self::text($html), $attributes);
     }
 
     public function parseHashtags(mixed $html): string
@@ -397,6 +411,131 @@ final class IdnoTwigExtension extends AbstractExtension
     public function sampleText(mixed $text, int $words = 32): string
     {
         return $this->helpers->sampleText(self::text($text), $words);
+    }
+
+    /**
+     * Whether the viewer has the syndication service (a service is offered only where its checker says the viewer has it enabled).
+     */
+    public function syndicationHas(string $service): bool
+    {
+        return $this->helpers->syndicationHas($service);
+    }
+
+    /**
+     * The accounts of a syndication service, each `['username' => ..., 'name' => ...]` and whatever else the service registered; none for a service with no account.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function syndicationAccounts(string $service): array
+    {
+        return $this->helpers->syndicationAccounts($service);
+    }
+
+    /**
+     * An address on the site's attachment host, when the site names one (`attachment_base_host`): the address as it is
+     * otherwise.
+     */
+    public function attachmentUrl(mixed $url): string
+    {
+        return $this->helpers->attachmentUrl(self::text($url));
+    }
+
+    /**
+     * How a profile draws one of a member's addresses: `['url', 'icon', 'class', 'display']` (see ProfileLink). `url` is the address
+     * as `fix_url` fixes it, which is never a `javascript:` or `data:` address; `display` is plain text and is escaped like any string.
+     *
+     * @return array{url: string, icon: string, class: string, display: string}
+     */
+    public function profileLink(mixed $url): array
+    {
+        $typed = self::text($url);
+
+        return ProfileLink::describe($typed, $this->helpers->fixUrl(ProfileLink::expandHandle($typed)));
+    }
+
+    /**
+     * The players and pictures a post's text links to (see EmbedFinder): a list of `['kind', 'id']`.
+     *
+     * @return list<array{kind: string, id: string}>
+     */
+    public static function embeds(mixed $text): array
+    {
+        return EmbedFinder::find(self::text($text));
+    }
+
+    /**
+     * The host of an address (`parse_url()`), an empty string for an address with none.
+     */
+    public static function urlHost(mixed $url): string
+    {
+        return (string) parse_url(self::text($url), PHP_URL_HOST);
+    }
+
+    /**
+     * The scheme of an address (`parse_url()`), an empty string for an address with none.
+     */
+    public static function urlScheme(mixed $url): string
+    {
+        return (string) parse_url(self::text($url), PHP_URL_SCHEME);
+    }
+
+    /**
+     * The text with everything but ASCII letters, digits and spaces removed.
+     */
+    public static function alnumOnly(mixed $value): string
+    {
+        return (string) preg_replace('/[^A-Za-z0-9 ]/', '', self::text($value));
+    }
+
+    /**
+     * The path (below the static address) of the picture a user without one is given: one of five, by the user's uuid.
+     */
+    public static function defaultAvatar(mixed $uuid): string
+    {
+        $number = 1 + (hexdec(substr(md5(self::text($uuid)), 0, 15)) % 5);
+
+        return 'gfx/users/default-' . str_pad((string) abs($number), 2, '0', STR_PAD_LEFT) . '.png';
+    }
+
+    /**
+     * The last segment of the path of an address (`basename(parse_url($url, PHP_URL_PATH))`), an empty string for an address with no path.
+     */
+    public static function urlBasename(mixed $url): string
+    {
+        return basename((string) parse_url(self::text($url), PHP_URL_PATH));
+    }
+
+    /**
+     * The URL-safe base64 of a value (`Webservice::base64UrlEncode()`): how an address travels in the query of a link.
+     */
+    public static function base64Url(mixed $value): string
+    {
+        return \Idno\Core\Webservice::base64UrlEncode(self::text($value));
+    }
+
+    /**
+     * Whether a value is an entity (`$value instanceof \Idno\Common\Entity`).
+     */
+    public static function isEntity(mixed $value): bool
+    {
+        return $value instanceof \Idno\Common\Entity;
+    }
+
+    /**
+     * An identifier for a part of a form that a page may show more than once: 32 hexadecimal digits from `md5(mt_rand())`.
+     */
+    public static function randomId(): string
+    {
+        return md5((string) mt_rand());
+    }
+
+    /**
+     * What a visitor is told of an exception (`ExceptionMessage::forVisitor()`): its message when it was written for visitors,
+     * else that something went wrong, and the message itself only when `debug` is set.
+     */
+    public static function visitorMessage(mixed $exception): string
+    {
+        return $exception instanceof \Throwable ? \Idno\Core\ExceptionMessage::forVisitor($exception) : '';
     }
 
     /**

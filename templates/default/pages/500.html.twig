@@ -1,0 +1,35 @@
+<div class="h-entry result-500">
+    <div class="row" style="margin-bottom: 2em; margin-top: 4em">
+
+        <div class="col-md-offset-1 col-md-10">
+            <h1 class="p-name">
+                {{ t('Something went wrong.') }}
+            </h1>
+        </div>
+    </div>
+    {% if exception is not empty %}
+    <div class="row">
+        <div class="col-md-offset-1 col-md-10">
+            <p class="p-summary">{{ visitor_message(exception) }}</p>
+            <p>
+                {{ t_html('<a href="#" onclick="window.history.back();">Click here to try again</a> or <a href="%s">click here to go back to the homepage</a>.', [site_url()]) }}
+            </p>
+            {% if setting('debug') %}
+                <p>
+                    <small><a href="#" onclick="$('#details').show(); return false;">{{ t('Click here to see the technical details.') }}</a></small>
+                </p>
+                <div id="details" style="display:none">
+                    <pre>
+                {{ exception }}                    </pre>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="row">
+        <div class="col-md-offset-1 col-md-10">
+            <p class="p-summary">{{ t('Oh no! Something went wrong.') }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>

@@ -2798,6 +2798,31 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     values; `shell/identities` links only http(s) addresses; `js/idno` and the service worker script use JSON_HEX_* / `|e('js')`
     (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
     (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
+  - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
+    `drafts`: 58 files beside their frozen `.tpl.php`; the entity templates of the bundled plugins, the account, admin and form templates are not ported
+    yet). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
+    by `__()` is gone for the Twig ones, and the pages that showed one change by it, on purpose: the JSON of a page no longer holds the keys `annotation`
+    and `value` that the annotation lists and the profile left behind (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
+    page-body templates `entity/wrapper` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
+    `fixtures/fallback-trace.php`), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
+    (`entity/feed` drew each note with `object` left on the template, which the permalink page's head used). Helpers added for them:
+    `is_entity`, `random_id` (`md5(mt_rand())`, for the ids the normaliser numbers), `default_avatar(uuid)`, `visitor_message(exception)`
+    (`ExceptionMessage::forVisitor()`), `profile_link(address)` (`Idno\Templating\ProfileLink`: the icon, class and text of a profile address; the address
+    is `fix_url`'s, which never leaves a script address), `embeds(text)` (`Idno\Templating\EmbedFinder`: what a text embeds; the `content/embed` template
+    only draws what it finds), `syndication_has(service)`, `syndication_accounts(service)` (helpers: the viewer's services and their accounts) and the
+    filters `url_host`, `url_scheme`, `url_basename`, `alnum_only`, `base64_url` (`Webservice::base64UrlEncode()`), `attachment_url`
+    (`Config::sanitizeAttachmentURL()`), and `parse_urls(attributes)` (the attribute text a template writes for each link, `rel="nofollow"` on a comment).
+    The annotation lists sort in the template with the old comparison (`|sort((a, b) => a.time < b.time ? -1 : 1)`, PHP's `uasort()` as before, so
+    equal times come out in the same order); RSVPs are renumbered after the sort, as `usort()` did, so the delete link of an RSVP names its place in
+    the list (an old defect, kept). A `|raw` is the HTML an entity's own `draw()` or `drawEdit()` produced, or the page's body (`raw-allowlist.php`).
+    On purpose different from the `.tpl.php` files (`port-exceptions.php`, each pinned by a `TemplateEscapingTest` method): `entity/shell` links an
+    in-reply-to address only if it is http(s); `content/syndication/links` escapes the identifier and links only http(s); `entity/annotations/rsvps`
+    lists an unknown answer as "Other responses" (the old one stopped); `file/picker/image` and `file/picker/donejs` write their words and the file
+    address for a script; `entity/User/profile/contact` draws only the schemes it has an icon for. The htmlentities() of the old templates (`é` as
+    `&eacute;`) is Twig's escape (`é`): the same text, which the harness's normaliser does not equate. `Tests/Fixtures/HostilePageController`
+    (`/_test/hostile/feed`, `/_test/hostile/hcard`, test environment only) serves another site's page that names itself with a script. The following
+    page that fetches a feed cannot run on PHP 8 (`Reader::getFeedDetails()` calls `DOMDocument::loadHTML()` statically), and the template of a feed item
+    draws `$item->draw()`, which draws the template again: both are old defects, so those templates are drawn with the objects the pages would give them.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
   (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s

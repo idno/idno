@@ -1,0 +1,23 @@
+<div class="row">
+    <div class="col-md-10 col-md-offset-1">
+        <h1>{{ t('Following') }}</h1>
+        {{ idno_include('following/menu') }}
+    </div>
+</div>
+{% if subscriptions is not empty %}
+    <div class="row">
+        <div class="col-md-10 col-md-offset-1">
+            <p id="follow-link"><a href="#" onclick="$('#follow-link').hide(); $('#follow-enclosure').slideDown(); return false;">+ {{ t('Follow another site') }}</a></p>
+            <div id="follow-enclosure" style="display:none">{{ idno_include('following/add') }}</div>
+        </div>
+    </div>
+    {% for subscription in subscriptions %}{{ subscription.draw()|raw }}{% endfor %}{% else %}
+        <div class="row">
+            <div class="col-md-10 col-md-offset-1">
+                <p>
+                {{ t("You're not following anyone yet.") }}
+                </p>
+            {{ idno_include('following/add') }}
+            </div>
+        </div>
+    {% endif %}

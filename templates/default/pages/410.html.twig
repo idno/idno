@@ -1,0 +1,18 @@
+<div class="container result-410">
+    <div class="row" style="margin-bottom: 2em; margin-top: 6em">
+
+        <div class="col-md-offset-1 col-md-5">
+            <h1 class="p-name" style="margin-bottom: 2em;">
+               {{ t("Sorry, this content isn't here anymore.") }}
+            </h1>
+            <p>{{ t("You may be wondering where it went, but we can't tell you. It's a secret.") }}</p>
+            <p>
+                {{ t_html('Maybe you\'d like to head back to the <a href="%s">%s homepage</a> instead.', [site_url(), setting('title')]) }}
+            </p>            
+        </div>
+        <div class="col-md-5">
+            <img src="{{ static_url() }}gfx/robots/aleph_410.png" alt="Robot with a gone sign">
+        </div>
+        
+    </div>
+</div>

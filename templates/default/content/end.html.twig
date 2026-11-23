@@ -1,0 +1,61 @@
+{% set replies = object.countAnnotations('reply') %}{% set likes = object.countAnnotations('like') %}{% set mentions = object.countAnnotations('mention') %}{% set me = current_user() %}{% set has_liked = false %}{% for like in object.getAnnotations('like') %}{% if me and like.owner_url == me.getDisplayURL() %}{% set has_liked = true %}{% endif %}{% endfor %}{% set owner = object.getOwner() %}{% if owner %}{# Star icon SVG #}{% set star_icon %}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="{{ has_liked ? 'currentColor' : 'none' }}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>{% endset %}
+
+        <div class="idno-entry-footer-bar">
+            <a class="u-url idno-entry-permalink" href="{{ object.getDisplayURL() }}" rel="permalink"><time class="dt-published"
+                      datetime="{{ entity_value(object, 'created')|date('c') }}">{{ entity_value(object, 'created')|date('d F Y') }}</time></a>
+            {% if entity_value(object, 'access') != 'PUBLIC' %}
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-entry-lock-icon"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            {% endif %}
+
+            <span class="idno-entry-footer-right">
+                <span class="idno-entry-action">
+                    {% if me %}{{ action_link(site_url() ~ 'annotation/post', star_icon, {'type': 'like', 'object': object.getUUID()}, {'method': 'POST', 'class': 'idno-action-toggle'}) }}{% else %}{{ star_icon }}{% endif %}
+                    <a href="{{ object.getDisplayURL() }}#comments">{{ likes }}</a>
+                </span>
+
+                <span class="idno-entry-action">
+                    <a href="{{ object.getDisplayURL() }}#comments">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
+                        {{ replies }}
+                    </a>
+                </span>
+
+                {% set shares = object.countAnnotations('share') %}{% if shares %}
+                <span class="idno-entry-action">
+                    <a href="{{ object.getDisplayURL() }}#comments">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
+                        {{ shares }}
+                    </a>
+                </span>
+                {% endif %}
+
+                {% set rsvps = object.countAnnotations('rsvp') %}{% if rsvps %}
+                <span class="idno-entry-action">
+                    <a href="{{ object.getDisplayURL() }}#comments">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+                        {{ rsvps }}
+                    </a>
+                </span>
+                {% endif %}
+
+                {{ idno_include('content/edit') }}
+                {{ idno_include('content/end/links') }}
+            </span>
+
+            {% if is_permalink() and setting('indieweb_citation') %}
+                <span class="idno-entry-citation">{{ object.getCitation() }}</span>
+            {% endif %}
+        </div>
+        {% if is_permalink() %}{% if likes or replies or shares or rsvps or mentions %}
+                <div class="idno-annotations">
+
+                    <a name="comments"></a>
+                    {{ idno_include('content/end/annotations') }}
+
+                </div>
+                {% endif %}{{ idno_include('entity/annotations/comment/main') }}{{ idno_include('content/syndication/links') }}{% else %}
+            <div class="idno-entry-extra">
+                {{ idno_include('content/syndication/links') }}
+            </div>
+            {% if me %}{{ idno_include('entity/annotations/comment/mini') }}{% endif %}{% endif %}
+{% endif %}

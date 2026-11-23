@@ -53,6 +53,7 @@ return [
             ['entity/content/embed', 'templates/classic/entity/content/embed.tpl.php'],
             ['entity/feed', 'templates/classic/entity/feed.tpl.php'],
             ['entity/shell', 'templates/classic/entity/shell.tpl.php'],
+            ['entity/wrapper', 'templates/classic/entity/wrapper.tpl.php'],
             ['forms/input/input', 'templates/classic/forms/input/input.tpl.php'],
             ['forms/input/longtext', 'templates/classic/forms/input/longtext.tpl.php'],
             ['forms/input/select', 'templates/classic/forms/input/select.tpl.php'],
@@ -62,6 +63,7 @@ return [
             ['forms/output/timezones', 'templates/classic/forms/output/timezones.tpl.php'],
             ['forms/token', 'templates/classic/forms/token.tpl.php'],
             ['pages/home', 'templates/classic/pages/home.tpl.php'],
+            ['pages/home/blurb', 'templates/classic/pages/home/blurb.tpl.php'],
             ['shell/pagination', 'templates/classic/shell/pagination.tpl.php'],
         ],
         'jsonfeed' => [
@@ -88,6 +90,7 @@ return [
             ['forms/output/tags', 'templates/classic/forms/output/tags.tpl.php'],
             ['forms/output/timezones', 'templates/classic/forms/output/timezones.tpl.php'],
             ['pages/home', 'templates/classic/pages/home.tpl.php'],
+            ['pages/home/blurb', 'templates/classic/pages/home/blurb.tpl.php'],
             ['shell/pagination', 'templates/classic/shell/pagination.tpl.php'],
         ],
         'jsonp' => [
@@ -105,6 +108,7 @@ return [
             ['entity/annotations/shares', 'templates/classic/entity/annotations/shares.tpl.php'],
             ['entity/content/embed', 'templates/classic/entity/content/embed.tpl.php'],
             ['entity/shell', 'templates/classic/entity/shell.tpl.php'],
+            ['entity/wrapper', 'templates/classic/entity/wrapper.tpl.php'],
         ],
         'kml' => [
             ['content/edit', 'templates/classic/content/edit.tpl.php'],
@@ -130,6 +134,7 @@ return [
             ['forms/output/tags', 'templates/classic/forms/output/tags.tpl.php'],
             ['forms/output/timezones', 'templates/classic/forms/output/timezones.tpl.php'],
             ['pages/home', 'templates/classic/pages/home.tpl.php'],
+            ['pages/home/blurb', 'templates/classic/pages/home/blurb.tpl.php'],
             ['shell/pagination', 'templates/classic/shell/pagination.tpl.php'],
         ],
         'rss' => [
@@ -163,6 +168,7 @@ return [
             ['forms/output/tags', 'templates/classic/forms/output/tags.tpl.php'],
             ['forms/output/timezones', 'templates/classic/forms/output/timezones.tpl.php'],
             ['pages/home', 'templates/classic/pages/home.tpl.php'],
+            ['pages/home/blurb', 'templates/classic/pages/home/blurb.tpl.php'],
             ['shell/pagination', 'templates/classic/shell/pagination.tpl.php'],
         ],
     ],
@@ -240,6 +246,7 @@ return [
         ['entity/content/embed', 'templates/classic/entity/content/embed.tpl.php'],
         ['entity/feed', 'templates/classic/entity/feed.tpl.php'],
         ['entity/shell', 'templates/classic/entity/shell.tpl.php'],
+        ['entity/wrapper', 'templates/classic/entity/wrapper.tpl.php'],
         ['forms/action', 'templates/classic/forms/action.tpl.php'],
         ['forms/components/usersearch/user', 'templates/classic/forms/components/usersearch/user.tpl.php'],
         ['forms/input/image-file', 'templates/classic/forms/input/image-file.tpl.php'],
@@ -254,6 +261,7 @@ return [
         ['forms/token', 'templates/classic/forms/token.tpl.php'],
         ['forms/usersearch', 'templates/classic/forms/usersearch.tpl.php'],
         ['pages/home', 'templates/classic/pages/home.tpl.php'],
+        ['pages/home/blurb', 'templates/classic/pages/home/blurb.tpl.php'],
         ['pages/home/nocontent', 'templates/classic/pages/home/nocontent.tpl.php'],
         ['shell/messages/message', 'templates/classic/shell/messages/message.tpl.php'],
         ['shell/pagination', 'templates/classic/shell/pagination.tpl.php'],

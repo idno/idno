@@ -1,0 +1,15 @@
+{% if input('sharing') %}{% set share_type = input('share_type') ?: 'note' %}
+
+            <div class="row">
+                <div class="col-md-8 col-md-offset-2">
+                    <ul class="nav nav-tabs">
+                    {% for variable, label in share_types({'note': 'Share', 'reply': 'Reply', 'bookmark': 'Bookmark', 'rsvp': 'RSVP'}) %}{% if content_type_for_post_type(variable) %}
+                                    <li {% if variable == share_type %}class="active"{% endif %}>
+                                        <a href="{{ url_with_var('share_type', variable) }}">{{ t(label) }}</a>
+                                    </li>
+                                {% endif %}{% endfor %}
+                    </ul>
+                </div>
+            </div>
+
+        {% endif %}

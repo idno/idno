@@ -158,6 +158,328 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * A followed site's name is the site's word: the confirmation page for a feed whose name is `</h1><script>x()</script>` prints it as
+     * text in the heading. The page cannot be driven over HTTP (the reader fails before it draws: Reader::getFeedDetails() calls
+     * DOMDocument::loadHTML() statically, which PHP 8 refuses, whatever the feed holds), so the template is drawn with the feed object
+     * the page would give it; the test route of the hostile feed is checked to say what this test says it does.
+     */
+    public function testAFollowedFeedsTitleIsEscaped(): void
+    {
+        $this->seedSite();
+        $served = $this->site()->request('GET', '_test/hostile/feed');
+        $this->assertStringContainsString(htmlspecialchars(\Tests\Fixtures\HostilePageController::NAME, ENT_QUOTES), $served->body, 'the route serves a feed named with a script');
+
+        $drawn = (string) $this->runInSite($this->pageCode('/following/confirm/') . <<<'PHP'
+        $feed = new \Idno\Entities\Reader\Feed();
+        $feed->setTitle('</h1><script>x()</script>');
+        $feed->setURL('https://feed.example/');
+        $feed->setFeedURL('https://feed.example/rss"><script>y()</script>');
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['feed' => $feed, 'items' => []])->draw('following/confirm');
+        PHP);
+
+        $this->assertStringContainsString('Follow &lt;/h1&gt;&lt;script&gt;x()&lt;/script&gt;?', $drawn, 'the name is text in the heading');
+        $this->assertStringNotContainsString('<script>', $drawn);
+        $this->assertSame(1, substr_count($drawn, '</h1>'), 'the heading is closed once, by the template');
+        $this->assertStringContainsString('name="feed" value="https://feed.example/"', $drawn);
+    }
+
+    /**
+     * A subscription is drawn from the feed it follows, whose name and address came from another site: a name that closes the paragraph
+     * and a `javascript:` address print as text, and the address links nowhere. (Drawn with the feed a subscription holds: a feed is
+     * found in the database, which the page has none of; the test route of the hostile feed is what the page-level test above fetches.)
+     */
+    public function testASubscriptionsTitleAndAddressAreEscaped(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/following/') . <<<'PHP'
+        $feed = new \Idno\Entities\Reader\Feed();
+        $feed->setTitle('</h1><script>x()</script>');
+        $feed->setURL('javascript:alert(1)');
+        $feed->setFeedURL('javascript:alert(2)"><script>y()</script>');
+        $subscription = new class extends \Idno\Entities\Reader\Subscription {
+            public $heldFeed = false;
+
+            public function getFeedObject()
+            {
+                return $this->heldFeed;
+            }
+        };
+        $subscription->heldFeed = $feed;
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['subscriptions' => [$subscription]])->draw('following/home') . $template->__(['object' => $subscription])->draw('entity/Subscription');
+        PHP);
+
+        $this->assertStringContainsString('&lt;/h1&gt;&lt;script&gt;x()&lt;/script&gt;', $drawn);
+        $this->assertStringNotContainsString('<script>', $drawn);
+        $this->assertStringNotContainsString('javascript:alert(1)"', $drawn);
+        $this->assertStringContainsString('<a href="">', $drawn, 'an address that is not http or https links nowhere');
+        $this->assertStringContainsString('javascript:alert(2)&quot;&gt;&lt;script&gt;y()&lt;/script&gt;', $drawn, 'the feed address is text');
+    }
+
+    /**
+     * A webmention's author is whoever sent it: a name that closes the tag, an address and a picture that are scripts. On every list of
+     * annotations (replies, likes, shares, mentions and RSVPs) they print as text, and the author links and shows no picture.
+     */
+    public function testAHostileWebmentionAuthorRendersInertOnEveryAnnotationList(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $status = null;
+        foreach (\IdnoPlugins\Status\Status::get([], [], 50) as $candidate) {
+            if ($status === null && $candidate->countAnnotations('reply') > 0) {
+                $status = $candidate;
+            }
+        }
+        $annotations = ['https://elsewhere.example/hostile' => [
+            'permalink' => 'javascript:alert(3)',
+            'owner_name' => '"><script>x()</script>',
+            'owner_url' => 'javascript:alert(1)',
+            'owner_image' => 'data:text/html,<script>y()</script>',
+            'content' => '<script>z()</script>see https://ok.example/ "quoted" <img src=x onerror=w()>',
+            'title' => '"><script>t()</script>',
+            'rsvp' => 'yes',
+            'time' => 1773000000,
+        ]];
+        $out = [];
+        foreach (['replies', 'likes', 'shares', 'mentions', 'rsvps'] as $name) {
+            $template = clone \Idno\Core\Idno::site()->template();
+            $out[$name] = (string) $template->__(['annotations' => $annotations, 'object' => $status])->draw('entity/annotations/' . $name);
+        }
+
+        return $out;
+        PHP);
+
+        $this->assertIsArray($out);
+        foreach ($out as $name => $drawn) {
+            $this->assertNotSame('', trim((string) $drawn), $name . ' is drawn');
+            $this->assertStringNotContainsString('<script', (string) $drawn, $name);
+            $this->assertStringNotContainsString('<img src=x', (string) $drawn, $name);
+            $this->assertStringNotContainsString('javascript:', (string) $drawn, $name);
+            $this->assertStringNotContainsString('data:text', (string) $drawn, $name);
+            $this->assertStringNotContainsString('<img class="idno-annotation-avatar"', (string) $drawn, $name . ' shows no picture for an address that is not http or https');
+        }
+        $this->assertStringContainsString('&quot;&gt;&lt;script&gt;x()&lt;/script&gt;', (string) $out['replies'], 'the name is text');
+        $this->assertStringContainsString('rel="nofollow"', (string) $out['replies'], 'a link in a comment is nofollow');
+    }
+
+    /**
+     * A member's note is escaped and its links are made: `see https://a.example/"><b>x` becomes text with a link in it and no `<b>`
+     * element, in the feed of the home page and on the note's own page.
+     */
+    public function testAMembersStatusBodyIsEscapedAndLinked(): void
+    {
+        $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+        $permalink = ltrim((string) parse_url($this->publishStatus($cookie, 'see https://a.example/"><b>x'), PHP_URL_PATH), '/');
+
+        foreach (['' => 'the home page', $permalink => 'the permalink'] as $path => $where) {
+            $page = $this->site()->request('GET', $path, ['Cookie' => $cookie]);
+            $this->assertSame(200, $page->status, $where);
+            $this->assertStringContainsString('see <a href="https://a.example/&quot;&gt;&lt;b&gt;x"', $page->body, $where . ': the address is linked, whole, in an attribute');
+            $this->assertStringNotContainsString('<b>x', $page->body, $where . ': no b element from the post');
+        }
+    }
+
+    /**
+     * The image picker writes the translated words it puts into the page's script for a script: each character that a script could take
+     * for syntax, and each space, is an escape (the old template printed the translation between single quotes as it was, so a
+     * translation with an apostrophe ended the string).
+     */
+    public function testTheImagePickersScriptWritesItsWordsForAScript(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/filepicker/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->draw('file/picker/image');
+        PHP);
+
+        $this->assertStringContainsString("html('Choose\\u0020a\\u0020different\\u0020image')", $drawn);
+        $this->assertStringNotContainsString("html('Choose a different image')", $drawn);
+        $this->assertStringContainsString('Select an image', $drawn, 'the words of the page itself are as they were');
+    }
+
+    /**
+     * What the file picker tells the editor that opened it is JSON for a script: the address of the file has no raw `/` or tag in it,
+     * and it reads back as the address.
+     */
+    public function testTheFilePickersMessageIsWrittenForAScript(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/filepicker/') . <<<'PHP'
+        $file = new \Idno\Entities\File();
+        $file->file = ['_id' => 'abc"</script><script>x()</script>'];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['file' => $file])->draw('file/picker/donejs');
+        PHP);
+
+        $this->assertSame(1, substr_count($drawn, '</script>'), 'the id cannot end the script');
+        $this->assertStringNotContainsString('<script>x()', $drawn);
+        $this->assertSame(1, preg_match('/data: \{url: ("[^\n]*")\}\}, "\*"\);/', $drawn, $url));
+        $this->assertSame(rtrim($this->baseUrl(), '/') . '/file/abc"</script><script>x()</script>', json_decode($url[1], true), 'the address, read back');
+    }
+
+    /**
+     * The address a post replies to is the author's word, or another site's (a webmention or Micropub post names it): only an http or
+     * https address is linked.
+     */
+    public function testAnInReplyToAddressThatIsNotHttpIsNotLinked(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $reply = new \IdnoPlugins\Status\Status();
+        $reply->setOwner(\Idno\Entities\User::getByHandle('ada'));
+        $reply->body = 'In reply';
+        $reply->inreplyto = ['javascript:alert(1)', 'https://elsewhere.example/a?x=1&y=2'];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $reply])->draw('entity/shell');
+        PHP);
+
+        $this->assertStringNotContainsString('javascript:', $drawn);
+        $this->assertStringContainsString('<a href="" rel="in-reply-to"', $drawn, 'linked to nothing');
+        $this->assertStringContainsString('<a href="https://elsewhere.example/a?x=1&amp;y=2" rel="in-reply-to"', $drawn);
+    }
+
+    /**
+     * An RSVP whose answer is not yes, maybe or no (a webmention may carry any word) is listed under "Other responses"; the old template
+     * stopped with an undefined array key.
+     */
+    public function testAnRsvpWithAnAnswerThatIsNotYesMaybeOrNoIsListedAsOther(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $status = current(array_filter(\IdnoPlugins\Status\Status::get([], [], 50), static fn ($post) => $post->countAnnotations('reply') > 0));
+        $annotation = static fn (string $name, string $answer, int $time): array => [
+            'permalink' => 'https://example.org/' . $name, 'owner_name' => $name, 'owner_url' => 'https://example.org/', 'owner_image' => '',
+            'content' => $name . ' says ' . $answer, 'time' => $time, 'rsvp' => $answer,
+        ];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $status, 'annotations' => [
+            'https://example.org/1' => $annotation('ann', 'perhaps', 1773000100),
+            'https://example.org/2' => $annotation('bea', 'no', 1773000200),
+            'https://example.org/3' => $annotation('cid', 'yes', 1773000300),
+        ]])->draw('entity/annotations/rsvps');
+        PHP);
+
+        $this->assertSame(3, preg_match_all("#<h4>(.*?)</h4>#", $drawn, $titles));
+        $this->assertSame(['Attending', 'Not attending', 'Other responses'], $titles[1] ?? [], 'the answers in their order, the unknown one last');
+        $this->assertGreaterThan(strpos($drawn, 'Other responses'), strpos($drawn, 'ann says perhaps'));
+    }
+
+    /**
+     * A link to where a post was syndicated is made from what a service returned: its address links only if it is http or https, and
+     * its identifier is text.
+     */
+    public function testASyndicationLinkIsEscapedAndOnlyHttpIsLinked(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/status/x') . <<<'PHP'
+        $status = current(array_filter(\IdnoPlugins\Status\Status::get([], [], 50), static fn ($post) => $post->countAnnotations('reply') > 0));
+        $status->posse = ['zz' => [
+            ['url' => 'javascript:alert(1)', 'identifier' => '<b>x</b> & "y"'],
+            ['url' => 'https://x.example/?a=1&b=2', 'identifier' => 'ok'],
+        ]];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['object' => $status])->draw('content/syndication/links');
+        PHP);
+
+        $this->assertStringNotContainsString('javascript:', $drawn);
+        $this->assertStringNotContainsString('<b>x</b>', $drawn);
+        $this->assertStringContainsString('&lt;b&gt;x&lt;/b&gt; &amp; &quot;y&quot;</a>', $drawn);
+        $this->assertStringContainsString('<a href="https://x.example/?a=1&amp;b=2"', $drawn);
+        $this->assertSame(2, substr_count($drawn, 'class="u-syndication"'));
+    }
+
+    /**
+     * A member's profile addresses are fields of the profile: the text is escaped (an address with a tag or a quote in it), and an
+     * address that is a script links to `http://javascript:...`, as the address fixer has always made it, never to a script.
+     */
+    public function testAProfileFieldIsEscapedAndNeverLinksToAScript(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/profile/ada') . <<<'PHP'
+        $user = \Idno\Entities\User::getByHandle('ada');
+        $user->profile = ['url' => ['javascript:alert(1)', 'https://x.example/"><script>x()</script>', 'mailto:a@b.example?subject=<i>']];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['user' => $user])->draw('entity/User/profile/fields');
+        PHP);
+
+        $this->assertStringNotContainsString('<script>', $drawn);
+        $this->assertStringNotContainsString('<i>', $drawn);
+        $this->assertStringNotContainsString('href="javascript:', $drawn);
+        $this->assertSame(3, substr_count($drawn, 'rel="me"'));
+    }
+
+    /**
+     * The contact links of a profile are drawn for mailto, sms, tel and facetime addresses only: an address with another scheme (the old
+     * template drew it, with an undefined icon, and stopped) is not a contact link.
+     */
+    public function testTheContactLinksPrintOnlyTheSchemesTheyKnow(): void
+    {
+        $this->seedSite();
+
+        $drawn = (string) $this->runInSite($this->pageCode('/profile/ada') . <<<'PHP'
+        $user = \Idno\Entities\User::getByHandle('ada');
+        $user->profile = ['url' => ['mailto:a@example.com', 'javascript:alert(1)', 'tel:+15555550100', 'https://example.org/', 'example.org/bare', 'sms:+1555', 'facetime:a@example.com']];
+        $template = clone \Idno\Core\Idno::site()->template();
+
+        return $template->__(['user' => $user])->draw('entity/User/profile/contact');
+        PHP);
+
+        $this->assertSame(4, substr_count($drawn, 'rel="me"'));
+        $this->assertStringNotContainsString('javascript:', $drawn);
+        $this->assertStringContainsString('class="u-email btn"', $drawn);
+        $this->assertStringContainsString('class="p-facetime btn"', $drawn);
+    }
+
+    /**
+     * The ActivityPub link in the head of a post's page is the actor's address when the last icon the page looked up was drawn as a
+     * default avatar (the lookup leaves its user on the page's template, and the head uses it as the page's user), and the post's own
+     * address when every picture was a real one (nothing was left). Both branches, with the owner's picture set and not set.
+     */
+    public function testTheActivityPubLinkOfAPostsHeadFollowsWhetherTheOwnerHasAPicture(): void
+    {
+        $paths = $this->seedSite();
+        $link = static function (string $body): string {
+            self::assertSame(1, preg_match('#<link rel="alternate" type="application/activity\+json" href="([^"]*)"#', $body, $match), 'the page has one ActivityPub link');
+
+            return html_entity_decode($match[1], ENT_QUOTES);
+        };
+
+        $withoutPicture = $this->site()->request('GET', ltrim($paths['status'], '/'));
+        $this->assertSame(200, $withoutPicture->status);
+        $this->assertSame(rtrim($this->baseUrl(), '/') . '/actor/ada', $link($withoutPicture->body), 'the owner has no picture: a default avatar is drawn, and its user is the page\'s');
+
+        $this->runInSite(<<<'PHP'
+        $ada = \Idno\Entities\User::getByHandle('ada');
+        $ada->icon = '0123456789abcdef0123456789abcdef';
+        $ada->save(true);
+
+        return true;
+        PHP);
+        $withPicture = $this->site()->request('GET', ltrim($paths['status'], '/'));
+        $this->assertSame(200, $withPicture->status);
+        $this->assertStringStartsWith(rtrim($this->baseUrl(), '/') . '/view/', $link($withPicture->body), 'a real picture leaves no user behind: the link is the post\'s own address');
+        $this->assertStringNotContainsString('/actor/ada', $link($withPicture->body));
+    }
+
+    /**
      * PHP that makes the process a request for $uri served by a page: what the shell's templates read.
      */
     private function pageCode(string $uri): string

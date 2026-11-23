@@ -1,0 +1,4 @@
+<script>
+    {% if file is not empty %}window.parent.postMessage({mceAction: "customAction", data: {url: {{ (static_url() ~ 'file/' ~ entity_value(file, 'file')._id)|json_encode(constant('JSON_HEX_TAG') b-or constant('JSON_HEX_AMP') b-or constant('JSON_HEX_APOS') b-or constant('JSON_HEX_QUOT'))|raw }}}}, "*");{% endif %}
+    window.parent.postMessage({mceAction: 'close'}, "*");
+</script>

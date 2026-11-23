@@ -1,0 +1,6 @@
+{% set posse = object.getPosseLinks() %}{% if posse %}
+<div class="idno-syndication-links">
+    <span class="idno-entry-meta">{{ t('Also on:') }}</span>
+    {% for service, posse_links in posse %}{% if posse_links is not iterable %}{% set posse_links = [{'url': posse_links, 'identifier': service}] %}{% endif %}{% for element in posse_links %}{% set human_icon = idno_include('content/syndication/icon/' ~ service, {username: element.account_id ?? false, details: element}) %}{% if human_icon is empty %}{% set human_icon = idno_include('content/syndication/icon/generic') %}{% endif %}{# An address a service returned: only an http or https one is linked #}{% set href = element.url is not empty ? (element.url|http_url) : '#' %}{%- if is_permalink() -%}<a href="{{ href }}" rel="syndication" class="u-syndication">{{ human_icon }} {{ element.identifier ?? '' }}</a>{%- else -%}<a href="{{ href }}" class="u-syndication">{{ human_icon }} {{ element.identifier ?? '' }}</a>{%- endif -%}{% endfor %}{% endfor %}
+</div>
+    {% endif %}

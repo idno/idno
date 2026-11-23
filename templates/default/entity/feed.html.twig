@@ -1,0 +1,1 @@
+{% if items is not empty %}{% for entry in items %}{% if is_entity(entry) %}{{ idno_include('entity/shell', {object: entry}) }}{% endif %}{% endfor %}{% if count %}{{ pagination(count|to_int) }}{% endif %}{% else %}{{ idno_include('pages/home/nocontent') }}{% endif %}

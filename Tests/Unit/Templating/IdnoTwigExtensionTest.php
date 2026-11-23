@@ -83,7 +83,7 @@ final class IdnoTwigExtensionTest extends TestCase
         $extension = $this->extension();
         $functions = array_map(static fn ($f): string => $f->getName(), $extension->getFunctions());
         $filters = array_map(static fn ($f): string => $f->getName(), $extension->getFilters());
-        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user'] as $name) {
+        foreach (['idno_include', 'slot', 't', 't_html', 'site_url', 'static_url', 'site_title', 'site_icons', 'setting', 'can_write', 'content_types', 'content_type_for_post_type', 'current_user', 'is_logged_in', 'is_admin', 'current_url', 'current_path', 'referrer', 'input', 'path_matches', 'is_permalink', 'is_xhr', 'page_assets', 'page_owner', 'http_status', 'login_url_for', 'url_with_var', 'url_without_var', 'current_url_without_var', 'form_token', 'action_link', 'form_data', 'shell_variables', 'pagination', 'syndication_services', 'syndication_selected', 'share_types', 'expand_urls', 'local_entity', 'local_file', 'access_groups_of', 'latest_post_of', 'entity_value', 'body_classes', 'current_url_parts', 'is_secure', 'page_icon', 'leaked_user', 'twitter_account_of', 'is_user', 'is_entity', 'random_id', 'default_avatar', 'visitor_message', 'profile_link', 'embeds', 'syndication_has', 'syndication_accounts'] as $name) {
             $this->assertContains($name, $functions);
         }
         foreach (['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users', 'http_url', 'display_url', 'fix_url', 'proxied_image', 'sample_text', 'identity_url', 'to_int'] as $name) {
@@ -542,5 +542,68 @@ final class IdnoTwigExtensionTest extends TestCase
             ['_foo' => 'kept', 'a' => 1, 'other' => 'mine'],
             ['_foo' => 'kept', 'a' => 1, 'other' => 'mine', 'i' => 1],
         ], $seen, 'no global (a variable that only has a global\'s name and another value is kept), no bookkeeping, a variable starting with an underscore stays');
+    }
+
+    public function testThePureHelpersOfTheEntityTemplates(): void
+    {
+        $this->assertSame('ex.org|https|ex.org|', $this->render("{{ 'https://ex.org/a'|url_host }}|{{ 'https://ex.org/a'|url_scheme }}|{{ 'http://x@ex.org:81'|url_host }}|{{ 'no host'|url_host }}"), 'the host and scheme of an address, empty when it has none');
+        $this->assertSame('c||b|x', $this->render("{{ 'https://ex.org/a/b/c'|url_basename }}|{{ 'https://ex.org/'|url_basename }}|{{ 'https://ex.org/a/b/'|url_basename }}|{{ x|url_basename }}", ['x' => '/p/x']), 'the last segment of the path, a trailing slash ignored');
+        $this->assertSame('abb 1', $this->render("{{ 'a<b>&b \"1\"'|alnum_only }}"), 'ASCII letters, digits and spaces');
+        $this->assertSame('YS1iYz8-', $this->render("{{ 'a-bc?>'|base64_url }}"), 'URL-safe base64 as Webservice makes it');
+        $this->assertSame('1|0', $this->render("{{ is_entity(e) ? 1 : 0 }}|{{ is_entity(n) ? 1 : 0 }}", ['e' => $this->createMock(\Idno\Common\Entity::class), 'n' => 'not']));
+        $this->assertSame('', $this->render("{{ visitor_message('a string') }}"), 'only an exception has a message');
+    }
+
+    public function testARandomIdIs32HexDigitsAndDiffers(): void
+    {
+        $id = $this->render('{{ random_id() }}');
+
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{32}$/', $id);
+        $this->assertNotSame($id, $this->render('{{ random_id() }}'));
+    }
+
+    public function testTheDefaultAvatarIsOneOfFiveByUuid(): void
+    {
+        $paths = [];
+        foreach (range(1, 40) as $n) {
+            $paths[$this->render("{{ default_avatar('user-" . $n . "') }}")] = true;
+        }
+
+        $this->assertCount(5, $paths);
+        foreach (array_keys($paths) as $path) {
+            $this->assertMatchesRegularExpression('#^gfx/users/default-0[1-5]\.png$#', $path);
+        }
+        $this->assertSame($this->render("{{ default_avatar('same') }}"), $this->render("{{ default_avatar('same') }}"));
+    }
+
+    public function testProfileLinkDescribesAnAddressThroughTheSitesAddressFixer(): void
+    {
+        $out = $this->render("{% set l = profile_link('@ada_l') %}{{ l.url }}|{{ l.icon }}|{{ l.class }}|{% set m = profile_link('javascript:alert(1)') %}{{ m.url }}|{{ m.display }}");
+
+        $this->assertSame('https://twitter.com/ada_l|fa fa-twitter|u-url|http://javascript:alert(1)|javascript:alert(1)', $out, 'the double has no fixer of its own but the one that adds http://');
+    }
+
+    public function testEmbedsListsWhatATextLinksTo(): void
+    {
+        $this->assertSame('vimeo:1,instagram:Q', $this->render("{% for e in embeds(t) %}{{ loop.first ? '' : ',' }}{{ e.kind }}:{{ e.id }}{% endfor %}", ['t' => 'https://vimeo.com/1 https://www.instagram.com/p/Q/']));
+        $this->assertSame('none', $this->render("{{ embeds(null)|length ? 'some' : 'none' }}"));
+    }
+
+    public function testTheSyndicationLookupsAreTheHelpersAndAttachmentUrlIsAFilter(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+
+        $this->assertSame('1|0|x', $this->render("{{ syndication_has('s') ? 1 : 0 }}|{{ syndication_accounts('s')|length }}|{{ 'x'|attachment_url }}", [], $helpers));
+        $this->assertSame(['syndicationHas', 'syndicationAccounts', 'attachmentUrl'], array_map(static fn (array $call): string => $call[0], $helpers->calls));
+    }
+
+    public function testParseUrlsPassesTheAttributesOfTheLinkOnToTheHelper(): void
+    {
+        $helpers = new TemplateHelpersDouble();
+
+        $this->render("{{ 'see https://x.example/'|parse_urls('rel=\"nofollow\"') }}", [], $helpers);
+
+        $this->assertSame('parseUrls', $helpers->calls[0][0]);
+        $this->assertSame(['see https://x.example/', 'rel="nofollow"'], $helpers->calls[0][1]);
     }
 }
