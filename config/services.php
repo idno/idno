@@ -82,6 +82,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry, the renderer, the Twig loader and the Twig engine are wired below.
         'Templating' => ['CascadeTwigLoader.php', 'EmbedFinder.php', 'LocatedTemplate.php', 'MethodCallExpression.php', 'MethodCallNodeVisitor.php', 'OutputBuffers.php', 'ProfileLink.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
+        // Passwords is the service; the legacy hasher is built by it.
+        'Security' => ['LegacyBcryptPasswordHasher.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -344,6 +346,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->public();
     $services->alias(HttpClientInterface::class, 'idno.http_client')->public();
     $services->alias(HttpClientInterface::class . ' $remoteClient', 'idno.http_client.remote')->public();
+
+    // The password service needs nothing of the legacy application; the legacy application's User entity fetches it.
+    $services->set(\Idno\Security\Passwords::class)->public();
 
     // Templates (Idno\Templating): the directories they are found in (core's is the project directory; the theme's and
     // the plugins' are added at run time), what plugins registered for them, and the renderer. Public: legacy code

@@ -579,7 +579,12 @@ namespace Idno\Entities {
         function setPassword($password)
         {
             if (!empty($password)) {
-                $this->password = \password_hash($password, PASSWORD_BCRYPT);
+                try {
+                    $this->password = self::passwords()->hash((string)$password);
+                } catch (\InvalidArgumentException $e) {
+                    // Empty once trimmed, or longer than the hasher accepts
+                    return false;
+                }
 
                 return true;
             }
@@ -588,7 +593,9 @@ namespace Idno\Entities {
         }
 
         /**
-         * Verifies that the supplied password matches this user's password
+         * Verifies that the supplied password matches this user's password. A hash that is not as
+         * a new one would be (another cost, or one PHP made by cutting a long password) is replaced
+         * by a new one when the password is right; a failure to store it never fails the check.
          *
          * @param  string $password
          * @return true|false
@@ -598,7 +605,35 @@ namespace Idno\Entities {
             if (empty(trim($password))) {
                 return false;
             }
-            return \password_verify($password, $this->password);
+            $current = (string)$this->password;
+            $result  = self::passwords()->verifyAndRehash($current, (string)$password);
+            if ($result === null) {
+                return false;
+            }
+            if ($result !== $current) {
+                try {
+                    $this->password = $result;
+                    $this->save(true);
+                } catch (\Throwable $e) {
+                    \error_log('Idno: could not store a password hash that was upgraded: ' . get_class($e));
+                }
+            }
+
+            return true;
+        }
+
+        /**
+         * The password service: the container's, or one built directly where there is no container
+         *
+         * @return \Idno\Security\Passwords
+         */
+        private static function passwords()
+        {
+            try {
+                return \Idno\Core\Idno::container()->get(\Idno\Security\Passwords::class);
+            } catch (\Throwable $e) {
+                return new \Idno\Security\Passwords();
+            }
         }
 
         /**

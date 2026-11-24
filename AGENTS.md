@@ -854,7 +854,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`, `Templating`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`, `Templating`, `Security`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -4100,6 +4100,22 @@ the CLI installer no longer writes one.
   site). The annotation templates of the web page look (`templates/default/entity/annotations/`, Idno 2026) and of the
   `classic` one (`templates/classic/entity/annotations/`, which a feed or JSON would draw) check and escape them again.
   `Tests/Common/AnnotationOutputTest.php` checks this.
+- Passwords: `Idno\Security\Passwords` (a public container service in a scanned directory, `Idno/Security/`; it needs nothing of the legacy
+  application and is built with `new Passwords($cost = 12)` in a unit test) makes and checks the hashes on `symfony/password-hasher`.
+  `hash()` and `verify()` trim the password (the forms trim it too); `hash()` throws `\InvalidArgumentException` for an empty or
+  over-4096-byte password. New hashes are bcrypt from Symfony's `NativePasswordHasher` at cost 12 (what PHP's `password_hash()` always used
+  here: Symfony's own default of 13 would rehash every hash for nothing), which pre-hashes a password longer than 72 bytes or holding a NUL
+  byte, so every byte counts. Hashes PHP made directly from such a password do not verify that way, so a hash the native hasher refuses is
+  tried with `LegacyBcryptPasswordHasher` (plain `password_verify()`; it never makes a hash). Both are `$2y$` hashes that the hash alone does
+  not tell apart, so Symfony's `MigratingPasswordHasher` (which decides from `needsRehash()` of the new hasher) is not used: `verifyAndRehash($hash,
+  $plain): ?string` returns null for a wrong password, the same hash when it is fine, and a new hash when only the legacy hasher verified it
+  or the cost differs; `needsRehash($hash)` is the cost check alone. `User::setPassword()` and `checkPassword()` keep their return values
+  (false for an empty password) and call the service (the container's, else one built with `new` where there is no container);
+  `checkPassword()` stores a replacement hash with `save(true)` (the `updated` hooks of ActivityPub and StandardSiteSync ignore a `User`), a
+  failure to store it is logged and never fails the check, and a replaced hash is not replaced again. A third-party plugin that calls
+  `setPassword()` or `checkPassword()` gets all of this unchanged; one that calls `password_hash()`/`password_verify()` on `$user->password`
+  itself still verifies (bcrypt), but does not upgrade. `RemoteUser::checkPassword()` is false as before. Tests: `Tests/Unit/Security/`,
+  `Tests/Kernel/PasswordCompatibilityTest`.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
