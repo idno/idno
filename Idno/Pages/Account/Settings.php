@@ -31,6 +31,20 @@ namespace Idno\Pages\Account {
             $username = trim($this->getInput('handle'));
             $timezone = trim($this->getInput('timezone'));
 
+            // A new password or a different email address needs the current password: a session
+            // alone (an unattended browser, a stolen cookie) must not be enough to take the account over.
+            // Nothing is changed unless it is right, not even the name.
+            $changesPassword = !empty($password);
+            $changesEmail    = !empty($email) && $email != $user->email;
+            if ($changesPassword || $changesEmail) {
+                $currentPassword = $this->getInput('current_password');
+                if (!is_string($currentPassword) || !$user->checkPassword($currentPassword)) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Your current password isn't right, so your details were not changed."));
+                    $this->forward($_SERVER['HTTP_REFERER']);
+                    return;
+                }
+            }
+
             /*if (!\Idno\Common\Page::isSSL() && !\Idno\Core\Idno::site()->config()->disable_cleartext_warning) {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"));
             }*/

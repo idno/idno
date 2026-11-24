@@ -25,8 +25,14 @@
 
         <div class="idno-form-group">
             <label for="inputPassword"><?php echo \Idno\Core\Idno::site()->language()->_('Your password'); ?></label>
-            <?php echo $this->__(['id' => 'inputPassword', 'class' => 'idno-input', 'name' => 'password', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Password'), 'autocomplete' => 'off', 'value' => ''])->draw('forms/input/password'); ?>
+            <?php echo $this->__(['id' => 'inputPassword', 'class' => 'idno-input', 'name' => 'password', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Password'), 'autocomplete' => 'new-password', 'value' => ''])->draw('forms/input/password'); ?>
             <p class="idno-form-help"><?php echo \Idno\Core\Idno::site()->language()->_("Leave this blank if you don't want to change it."); ?></p>
+        </div>
+
+        <div class="idno-form-group">
+            <label for="inputCurrentPassword"><?php echo \Idno\Core\Idno::site()->language()->_('Your current password'); ?></label>
+            <?php echo $this->__(['id' => 'inputCurrentPassword', 'class' => 'idno-input', 'name' => 'current_password', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Current password'), 'autocomplete' => 'current-password', 'value' => ''])->draw('forms/input/password'); ?>
+            <p class="idno-form-help"><?php echo \Idno\Core\Idno::site()->language()->_('Needed only if you change your email address or password.'); ?></p>
         </div>
 
         <div class="idno-form-group">

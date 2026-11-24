@@ -196,6 +196,69 @@ namespace Tests\API {
             }
         }
 
+        // -----------------------------------------------------------------
+        // A session alone does not change the password or the email address
+        // -----------------------------------------------------------------
+
+        public function testNewPasswordWithTheCurrentPasswordIsChanged()
+        {
+            $new = 'A new passphrase 7 ' . $this->marker();
+
+            $this->submitSettings(['name' => 'API Account Test User', 'password' => $new, 'current_password' => static::$password]);
+
+            try {
+                $this->assertTrue($this->freshMember()->checkPassword($new), 'The right current password should allow the change.');
+            } finally {
+                $this->restoreMember();
+            }
+        }
+
+        public function testNewPasswordWithAWrongCurrentPasswordChangesNothing()
+        {
+            $marker = $this->marker();
+
+            $this->submitSettings(['name' => $marker, 'email' => $marker . '@example.com', 'password' => 'A new passphrase 8 ' . $marker, 'current_password' => 'not the password']);
+
+            $this->assertNothingChanged();
+        }
+
+        public function testNewPasswordWithoutTheCurrentPasswordChangesNothing()
+        {
+            $marker = $this->marker();
+
+            $this->submitSettings(['name' => $marker, 'password' => 'A new passphrase 9 ' . $marker]);
+
+            $this->assertNothingChanged();
+        }
+
+        public function testEmailChangeNeedsTheCurrentPassword()
+        {
+            $marker = $this->marker();
+
+            $this->submitSettings(['name' => $marker, 'email' => $marker . '@example.com']);
+            $this->assertNothingChanged();
+
+            $this->submitSettings(['name' => 'API Account Test User', 'email' => $marker . '@example.com', 'current_password' => static::$password]);
+            try {
+                $this->assertEquals($marker . '@example.com', $this->freshMember()->email, 'The right current password should allow the change.');
+            } finally {
+                $this->restoreMember();
+            }
+        }
+
+        public function testNameOnlyChangeNeedsNoPassword()
+        {
+            $marker = $this->marker();
+
+            $this->submitSettings(['name' => $marker, 'email' => static::$member->email]);
+
+            try {
+                $this->assertEquals($marker, $this->freshMember()->getTitle());
+            } finally {
+                $this->restoreMember();
+            }
+        }
+
         public function testAnonymousVisitorStillSeesPublicAccountPages()
         {
             $result = $this->request('GET', '/account/password', null, []);
@@ -206,6 +269,37 @@ namespace Tests\API {
         // -----------------------------------------------------------------
         // Helpers
         // -----------------------------------------------------------------
+
+        /**
+         * Post the settings form as the logged-in browser, with a valid form token
+         */
+        private function submitSettings(array $fields)
+        {
+            $this->logIn();
+            $form = $this->request('GET', '/account/settings', null, [], true);
+            $this->assertEquals(200, $form['status']);
+            preg_match('#<form[^>]+account/settings[^>]*>(.*?)</form>#s', $form['body'], $match);
+            $this->assertNotEmpty($match, 'The settings form should be on the page.');
+
+            return $this->request('POST', '/account/settings', $this->formFields($match[1]) + $fields, [], true);
+        }
+
+        private function assertNothingChanged()
+        {
+            $member = $this->freshMember();
+            $this->assertEquals('API Account Test User', $member->getTitle(), "The user's name must not change.");
+            $this->assertEquals(static::$member->email, $member->email, "The user's email address must not change.");
+            $this->assertTrue($member->checkPassword(static::$password), "The user's password must not change.");
+        }
+
+        private function restoreMember()
+        {
+            $member = $this->freshMember();
+            $member->setTitle('API Account Test User');
+            $member->email = static::$member->email;
+            $member->setPassword(static::$password);
+            $member->save(true);
+        }
 
         private function marker()
         {
