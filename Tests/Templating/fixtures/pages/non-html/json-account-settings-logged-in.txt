@@ -27,14 +27,6 @@
             "description": "Timezone"
         }
     },
-    "csrf": [
-        {
-            "tid": "tid{id}",
-            "action": "\/account\/settings",
-            "time": {token-time},
-            "token": "{token}"
-        }
-    ],
     "title": "Account settings",
     "messages": []
 }

@@ -52,15 +52,6 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame($odd, $this->normalise($odd), 'a value that is not the shape of a token (digits of a time, 64 hex digits)');
     }
 
-    public function testTheTokenInTheJsonOfAPage(): void
-    {
-        $json = '"csrf": [{"tid": "tid4835b3d13220323f09af38fe6c28872f", "action": "\/session\/login", "time": 1795368191, "token": "2296649423599a74ca3911ec93196f091b81f6d0f1a9bbdf2097a7c16d8f6a48"}]';
-
-        $this->assertSame('"csrf": [{"tid": "tid{id}", "action": "\/session\/login", "time": {token-time}, "token": "{token}"}]', $this->normalise($json));
-        $this->assertSame('"time": 1795368191, "name": "x"', $this->normalise('"time": 1795368191, "name": "x"'), 'a time that no token follows is not one');
-        $this->assertSame('"time": 1795368191, "token": ""', $this->normalise('"time": 1795368191, "token": ""'), 'an empty token is not replaced');
-    }
-
     public function testTheScriptOfADrawCaseInADebugErrorPage(): void
     {
         $this->assertSame('an error in {script}:83', $this->normalise('an error in /private/var/folders/vj/T/idno-site-7c0b449bf12b/script-8e5ec737.php:83'), 'the file of a draw case (a private site\'s directory and a random name)');

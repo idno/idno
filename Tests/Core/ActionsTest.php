@@ -8,7 +8,7 @@ namespace Tests\Core {
     /**
      * What drawing an action link or form leaves behind: nothing on the site's template object (their variables, a
      * link's `label` and `data` or a form's `body`, would otherwise be seen by whatever the page draws next).
-     * signForm() is not changed: its `csrf` entry on the site's template is what the JSON output prints.
+     * signForm() leaves nothing either: no `csrf` list (the JSON output would print it).
      */
     class ActionsTest extends \Tests\IdnoTestCase
     {
@@ -30,15 +30,14 @@ namespace Tests\Core {
         public function testCreateLinkLeavesTheSiteTemplatesVariablesAlone(): void
         {
             $template = Idno::site()->template();
-            $without = static fn (array $vars): array => array_diff_key($vars, ['csrf' => true]);
-            $before = $without($template->vars);
+            $before = $template->vars;
 
             $link = (new Actions())->createLink('/status/delete', 'Remove this', ['uuid' => 'abc'], ['class' => 'x']);
             $form = (new Actions())->createForm('/status/delete', '<p>the body</p>');
 
             $this->assertStringContainsString('Remove this', $link, 'the link was drawn');
             $this->assertStringContainsString('the body', $form, 'the form was drawn');
-            $this->assertSame($before, $without($template->vars), 'and neither left a variable on the site\'s template (but the form token\'s `csrf` entry, which signForm() keeps)');
+            $this->assertSame($before, $template->vars, 'and neither left a variable on the site\'s template');
         }
 
         /**
@@ -58,7 +57,7 @@ namespace Tests\Core {
 
             $this->assertNotSame('', $pagination, 'the pagination was drawn');
             $this->assertIsString($syndication);
-            $added = array_values(array_diff(array_keys($template->vars), $before, ['csrf']));
+            $added = array_values(array_diff(array_keys($template->vars), $before));
             sort($added);
             $this->assertSame(['content_type', 'items_per_page', 'posseLinks', 'services'], $added);
             $this->assertSame(10, $template->vars['items_per_page']);

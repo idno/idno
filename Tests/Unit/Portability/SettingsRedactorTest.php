@@ -14,7 +14,7 @@ final class SettingsRedactorTest extends TestCase
      */
     public static function secrets(): array
     {
-        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'sessiontoken', 'dbstring', 'proxy_string', 'passcode'];
+        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'sessiontoken', 'dbstring', 'proxy_string', 'passcode', '_csrf', 'csrf', 'CSRF', 'xsrf', 'XSRF-TOKEN', 'csrf_token', 'HTTP_X_CSRF_TOKEN'];
 
         return array_combine($keys, array_map(static fn (string $key): array => [$key], $keys));
     }
@@ -43,6 +43,17 @@ final class SettingsRedactorTest extends TestCase
     public function testAnOrdinaryKeyIsLeftAlone(string $key): void
     {
         $this->assertFalse(SettingsRedactor::isSecretKey($key));
+    }
+
+    public function testTheSessionsFormTokenIsRemovedAtAnyDepth(): void
+    {
+        $token = str_repeat('a1', 32);
+        $session = ['user_uuid' => 'u', '_csrf' => ['idno' => $token], 'nested' => ['xsrf' => $token]];
+
+        $redacted = SettingsRedactor::redact($session);
+
+        $this->assertStringNotContainsString($token, json_encode($redacted));
+        $this->assertSame('u', $redacted['user_uuid']);
     }
 
     public function testSecretsAreReplacedAtEveryDepthAndTheRestIsKept(): void

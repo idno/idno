@@ -80,44 +80,6 @@
             "url": "{site}\/gfx\/users\/default-04.png"
         }
     },
-    "csrf": [
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/status\/delete\/00000000-0000-4000-8000-000000000011",
-            "time": {token-time},
-            "token": "{token}"
-        },
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/annotation\/post",
-            "time": {token-time},
-            "token": "{token}"
-        },
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotation\/delete?permalink={base64:{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/be1ab1632e4285edc3733b142935c60b}",
-            "time": {token-time},
-            "token": "{token}"
-        },
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotation\/delete?permalink={base64:{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/e84afaab83ecb301b3d97ce4174d2773}",
-            "time": {token-time},
-            "token": "{token}"
-        },
-        {
-            "tid": "tid{id}",
-            "action": "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotation\/delete?permalink={base64:{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/1993ee5cbe82b07a09d8b7320a2ab0b6}",
-            "time": {token-time},
-            "token": "{token}"
-        },
-        {
-            "tid": "tid{id}",
-            "action": "annotation\/post",
-            "time": {token-time},
-            "token": "{token}"
-        }
-    ],
     "annotation": {
         "permalink": "https:\/\/example.org\/erin\/mention",
         "owner_name": "Erin",

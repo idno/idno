@@ -445,7 +445,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $this->page('non-html/markdown-admin-logged-in.md', 'admin/?_t=markdown', 200, 'text/markdown', $cookie);
         $this->page('non-html/json-home-logged-in.txt', '?_t=json', 200, 'application/json', $cookie);
         $this->page('non-html/json-status-logged-in.txt', $paths['status'] . '?_t=json', 200, 'application/json', $cookie);
-        // The JSON of a form page: the form's token (`csrf`) and its fields (`formFields`).
+        // The JSON of a form page: its fields (`formFields`; never the form token).
         $this->page('non-html/json-account-settings-logged-in.txt', 'account/settings/?_t=json', 200, 'application/json', $cookie);
         // The form of a new note describes the note that does not exist yet, "published" and "updated" now: the one page whose time is replaced.
         $this->page('non-html/json-status-edit-logged-in.txt', 'status/edit?_t=json', 200, 'application/json', $cookie, [], static fn (string $body): string => preg_replace('/("(?:published|updated)": ")\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00"/', '$1{now}"', $body) ?? $body);

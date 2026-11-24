@@ -28,7 +28,7 @@ final class SettingsRedactor
 {
     public const MARKER = '** REDACTED **';
 
-    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|^dbstring$|^proxy_string$|pass(?:code|key)|(?:^|[_.\-])(?:pass|pw|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
+    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|csrf|xsrf|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|^dbstring$|^proxy_string$|pass(?:code|key)|(?:^|[_.\-])(?:pass|pw|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
 
     private const WEBHOOK = '/webhook/i';
 

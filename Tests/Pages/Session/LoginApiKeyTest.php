@@ -89,16 +89,19 @@ namespace Tests\Pages\Session {
             self::$browser = curl_init();
             curl_setopt(self::$browser, CURLOPT_COOKIEFILE, ''); // Keep cookies in memory
 
-            $form = json_decode(self::request(self::loginUrl('_t=json')), true);
-            $this->assertNotEmpty($form['csrf'][0]['token'] ?? null, 'The login form should come with a token.');
+            // The token is in the HTML form of the session (the JSON of the page never carries it).
+            $html = self::request(self::loginUrl());
+            $this->assertSame(1, preg_match('/name="__bTs" value="([^"]*)"/', $html, $time), 'The login form should come with a time.');
+            $this->assertSame(1, preg_match('/name="__bTk" value="([0-9a-f]{64})"/', $html, $token), 'The login form should come with a token.');
+            $this->assertSame(1, preg_match('/name="__bTa" value="([^"]*)"/', $html, $action), 'The login form should come with an action.');
 
             self::request(
                 self::loginUrl(), [
                     'email'    => self::$loginUser->handle,
                     'password' => self::$password,
-                    '__bTs'    => $form['csrf'][0]['time'],
-                    '__bTk'    => $form['csrf'][0]['token'],
-                    '__bTa'    => $form['csrf'][0]['action'],
+                    '__bTs'    => $time[1],
+                    '__bTk'    => $token[1],
+                    '__bTa'    => html_entity_decode($action[1]),
                 ]
             );
         }

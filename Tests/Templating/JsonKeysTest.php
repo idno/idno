@@ -13,7 +13,7 @@ use Tests\Characterisation\SiteResponse;
  * asked for with `?_t=json`, and the sorted TOP-LEVEL keys of the answer are pinned in `fixtures/json-keys.php` (`'<who> <path>' => [keys]`;
  * a page that answers anything but JSON is recorded with its status: `#status 404`). The JSON of a page prints every variable of the page's
  * template object, so a key that appears or goes is a change of what the site tells every client, and a key that names a secret is a leak:
- * no key at any depth may be one `SettingsRedactor` calls a secret, except the form token every form page carries.
+ * no key at any depth may be one `SettingsRedactor` calls a secret (a `csrf` key is one: the form token is never printed).
  *
  * Write the fixture with `IDNO_TEST_CAPTURE_GOLDENS=1` (the run fails, naming what it wrote).
  */
@@ -23,13 +23,12 @@ final class JsonKeysTest extends RenderedSiteTestCase
 
     /**
      * Secret-looking key names the JSON legitimately holds, with why: `<who> <path>` or `*` for any page, then the key's path
-     * (`csrf.0.token`: indexes are written `0`; any index matches).
+     * (`formFields.password`: indexes are written `0`; any index matches).
      *
      * @var array<string, array<string, string>>
      */
     private const SECRET_NAMED_KEYS_ALLOWED = [
         '*' => [
-            'csrf.*.token' => 'the signed form token of a form page: the browser needs it to post the form (its shape is checked: tid, action, time and token only)',
             'formFields.password' => 'the DESCRIPTION of the password field of the account form (its type, name, id and label): the field has no value',
             'user_stats.*.has_keys' => 'a boolean: whether the user has an ActivityPub key pair (ActivityPub admin page); never a key',
         ],
@@ -175,8 +174,7 @@ final class JsonKeysTest extends RenderedSiteTestCase
         foreach ([self::SECRET_NAMED_KEYS_ALLOWED['*'], self::SECRET_NAMED_KEYS_ALLOWED[$page] ?? []] as $allowed) {
             foreach (array_keys($allowed) as $pattern) {
                 if (preg_match('/\A' . str_replace('\*', '[^.]+', preg_quote($pattern, '/')) . '\z/', $dotted) === 1) {
-                    // The form token's shape, and only that
-                    return $pattern !== 'csrf.*.token' || array_diff(array_keys($siblings), ['tid', 'action', 'time', 'token']) === [];
+                    return true;
                 }
             }
         }

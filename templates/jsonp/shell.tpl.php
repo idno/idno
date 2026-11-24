@@ -6,6 +6,8 @@
     header("Access-Control-Allow-Headers: Authorization, Content-Type");
 
     unset($vars['body']);
+    // A page that prints its variables never prints the form token, whatever put it there (see FormToken::scrub()).
+    $vars = \Idno\Security\FormToken::scrub($vars, \Idno\Core\Bonita\Forms::token('', 0));
 
 if (!($callback = \Idno\Core\Idno::site()->currentPage()->getInput('callback'))) {
     if (!($callback = \Idno\Core\Idno::site()->currentPage()->getInput('jsonp'))) {

@@ -333,7 +333,7 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertSame(1, preg_match('/name="__bTk" value="([0-9a-f]{64})"/', $viaSignForm, $token));
         $this->assertSame(1, preg_match('/name="__bTs" value="(\d+)"/', $viaSignForm, $time));
         $this->assertSame(\Idno\Core\Bonita\Forms::token('/a?b=1', $time[1]), $token[1], 'the token is the one for the action and the time');
-        $this->assertSame([], array_values(array_diff(array_keys($template->vars), $before, ['csrf'])), 'the variables of the token stay off the site\'s template (but the `csrf` list that only the JSON look keeps)');
+        $this->assertSame([], array_values(array_diff(array_keys($template->vars), $before)), 'the variables of the token stay off the site\'s template');
         $this->assertArrayNotHasKey('action', $template->vars);
         $this->assertArrayNotHasKey('time', $template->vars);
     }

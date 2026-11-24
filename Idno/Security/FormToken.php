@@ -67,4 +67,41 @@ final class FormToken
     {
         $this->manager->refreshToken(self::ID);
     }
+
+    /**
+     * The variables of a page without anything of the form token, for a shell that prints them (JSON, JSONP): a `csrf`
+     * key at the top level (the list an earlier release's forms kept there), and, at any depth of an array, every
+     * entry whose string value holds the token in the form it is stored in (compared without regard to letter case).
+     * An object is left as it is. A shell that prints variables is a script any site can load (JSONP): the token must
+     * never be among them.
+     *
+     * @param array<mixed> $vars
+     *
+     * @return array<mixed>
+     */
+    public static function scrub(array $vars, string $token): array
+    {
+        unset($vars['csrf']);
+
+        return self::withoutToken($vars, $token);
+    }
+
+    /**
+     * @param array<mixed> $value
+     *
+     * @return array<mixed>
+     */
+    private static function withoutToken(array $value, string $token): array
+    {
+        $list = array_is_list($value);
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                $value[$key] = self::withoutToken($item, $token);
+            } elseif ($token !== '' && is_string($item) && stripos($item, $token) !== false) {
+                unset($value[$key]);
+            }
+        }
+
+        return $list ? array_values($value) : $value;
+    }
 }

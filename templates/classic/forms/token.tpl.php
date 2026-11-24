@@ -14,16 +14,5 @@ if (empty($vars['time'])) {
 <input type="hidden" name="__bTa" value="<?php echo htmlentities($vars['action'])?>" />
 
 <?php
-if (!isset($this->vars['csrf'])) {
-    $this->vars['csrf'] = [];
-}
-    $this->vars['csrf'][] = [
-        'tid' => $tokenid,
-        'action' => $vars['action'],
-        'time' => $vars['time'],
-        'token' => $csrf
-    ];
-
     unset($this->vars['time']);
     unset($this->vars['action']);
-

@@ -44,14 +44,6 @@
     "services": [],
     "content_type": "note",
     "posseLinks": [],
-    "csrf": [
-        {
-            "tid": "tid{id}",
-            "action": "\/status\/edit",
-            "time": {token-time},
-            "token": "{token}"
-        }
-    ],
     "title": "Edit status update",
     "messages": []
 }

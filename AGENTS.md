@@ -238,7 +238,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   the spellings of a character (`&amp;` and `&`, `&#039;`, `&#39;`, `&apos;` and `'`, `&quot;` and `"` are different pages): a golden records how a template escapes, so a change
   in escaping shows. every replacement is in
   `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there. The
-  JSON goldens of the form pages (`json-account-settings-logged-in`, `json-status-edit-logged-in`) pin `csrf` and `formFields`
+  JSON goldens of the form pages (`json-account-settings-logged-in`, `json-status-edit-logged-in`) pin `formFields` and the absence of `csrf` (the form token is never printed)
   (the second replaces the time of the note that does not exist yet, in that page's test, not in the normaliser), and every mail
   of `templates/email*` has a golden (`non-html/mail-<name>.html` and `.txt`, drawn in the site by
   `RenderedSiteTestCase::drawMails()` from `MAIL_CASES`: fixed variables, the shell's link made with no request path, so a mail
@@ -268,7 +268,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   ignores) and compares it on every run, with `IDNO_TEST_CAPTURE_GOLDENS=1` writing them by the page goldens' rules (`RenderedSiteTestCase::drawGolden()`). A case that
   is not the same twice is made so in the case (a fixed `_id` for an entity it creates, a fixed stored time), never skipped. `Tests/Templating/JsonKeysTest` requests
   `?_t=json` of every page of the visitor, member and administrator lists, pins the sorted top-level keys of each answer in `Tests/Templating/fixtures/json-keys.php`
-  (a page that is not JSON by its status), and fails for a key at any depth that `SettingsRedactor` calls a secret, except the form token and the few names listed in
+  (a page that is not JSON by its status), and fails for a key at any depth that `SettingsRedactor` calls a secret, (a `csrf` key is one: the form token is never printed) except the few names listed in
   `SECRET_NAMED_KEYS_ALLOWED` with why. `Tests/Templating/CanarySweepTest` creates each bundled content type and an annotation of each kind with `"><x-canary a='1`
   in every string a member or a remote party can set, draws the streams, permalinks and the owner's edit pages, and fails for an `x-canary` element (parsed with
   `Dom\HTMLDocument`) or an attribute the canary started.
@@ -2956,9 +2956,9 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `image-file`, `forms/token`, `forms/link`, `forms/action`, `forms/output/{richtext,tags,timezones}` and `forms/usersearch` already there) have
     byte-identical `classic` copies of their originals (`NonHtmlReachTest` names what is reached; `captcha` leaves nothing and is in its list); the
     ones no page of core can reach from JSON (`button`, `submit`, `form-list`, the outputs `text`, `email`, `url`) have none, and a third-party page
-    that draws one for JSON loses that field's documentation. (4) `forms/token` prints the three hidden inputs and keeps no `csrf` list (the list
-    the JSON of a page prints comes from the `classic` copy, which `Actions::signForm()` draws on the site's template for a JSON request; nothing
-    reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`: the session's one token, the arguments ignored), so the Twig file neither calls `form_token()`
+    that draws one for JSON loses that field's documentation. (4) `forms/token`, Twig and `classic` alike, prints the three hidden inputs and keeps no `csrf` list: the JSON of a page
+    prints every variable of the template, so the token is never recorded there (nothing read the list; a signed API request needs no token and a browser has it
+    from the HTML form or `/service/security/csrftoken/`). The token itself is `security_token(action, time)` (`Forms::token()`: the session's one token, the arguments ignored), so the Twig file neither calls `form_token()`
     nor `signForm()`: no recursion, and `form_token()` is `signForm()`, which draws this file. (5) `forms/link` registers its form with `form_data()`:
     in an XHR response (no shell draws the registered forms) the form is printed after the link, which fixes a link in content a script inserts
     (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`); the old template kept it in a global (`$template_postponed_link_actions`) that only the admin user search's page, `Idno\Pages\Search\User`, read and appended to its results. That page draws its rows on the JSON type, whose `forms/link` is the `classic` copy, which still fills the global, so its read stays; the search's script sends `X-Requested-With` so that the page's request is an XHR one and the forms arrive (without the header they never did: `UserSearchActionLinksTest`).
@@ -3065,8 +3065,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `TemplateContractTest::testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties`); `Actions::createLink()` and `createForm()` and
   `DefaultTemplate::drawSyndication()` and `drawPagination()` draw on a `clone`, so their variables stay off the site's template object
   except the keys a page's JSON output has, which they publish by explicit assignment: `items_per_page` (pagination) and `services` (the details the
-  syndication template computes), `content_type` and `posseLinks` (`Tests/Core/ActionsTest`). `signForm()` is not changed (it draws `forms/token` on the site's template). For a web page `forms/token` is Twig and keeps no `csrf` list; the list the JSON
-  output prints comes only from the `classic` copy of `forms/token`, drawn for the non-HTML types. `createForm()` now passes the address it is given as the form's `action` (it never did, and the template needs it).
+  syndication template computes), `content_type` and `posseLinks` (`Tests/Core/ActionsTest`). `signForm()` is not changed (it draws `forms/token` on the site's template). `forms/token` keeps no `csrf` list in either look, and the JSON and JSONP shells (`templates/json/shell.tpl.php`, `templates/jsonp/shell.tpl.php`) pass their variables through `FormToken::scrub()` (a top-level `csrf` key, and at any depth of an array every entry holding the token as stored, are removed) as a second guard. `createForm()` now passes the address it is given as the form's `action` (it never did, and the template needs it).
 - Idno 2026, the built-in look (`templates/default/`, `IdnoPlugins/<P>/templates/default/`, `css/idno-2026.min.css`, `js/idno-2026.min.js`, and
   `Idno\Pages\Drafts`, the member's drafts page, a legacy page registered in `Idno::init()`), was the Twenty26 theme: its templates were in a
   `modern` type that the theme's controller set. It is core's: a site's template type is `default`, `Themes::resolve()` maps the stored `theme`
@@ -4112,15 +4111,14 @@ the CLI installer no longer writes one.
   `NativeSessionTokenStorage` and, where no session is active (the console, the queue worker, a test in-process), in the
   process, so drawing a form never starts a session or sends a header. The value a form prints and a request posts is the
   STORED value, 64 lower-case hex characters made by `Idno\Security\HexTokenGenerator` (`bin2hex(random_bytes(32))`), not
-  the manager's per-call randomised form: it is stable for the session, and `PageNormaliser`, the golden pages and the JSON
-  `csrf` list see the shape they always did. `Bonita\Forms::token($action, $time)` returns it and ignores both arguments;
+  the manager's per-call randomised form: it is stable for the session, and `PageNormaliser` and the golden pages see the shape they always did. `Bonita\Forms::token($action, $time)` returns it and ignores both arguments;
   `Forms::validateToken()` is true for a stateless (API) request and otherwise checks `__bTk` alone (`hash_equals` through
   the manager; a missing, array or odd value is simply invalid, never an error); `__bTs` and `__bTa` are still printed and
   ignored, and a token is good for the session's lifetime (`form_token_expiry` is read by nothing). The session makes its token at its first
   request (`Session::init()`), because a page draws its forms after `session_write_close()` and a token made then cannot be stored
   (`SessionTokenStorage` reads a closed session's `$_SESSION`); `Session::logUserOn()` replaces the token at once when it
   regenerates the session id (`Forms::forgetToken()`), and `logUserOff()` empties the session,
-  so a token never outlives the id it was made for; the stored token also makes an anonymous session non-empty for the
+  so a token never outlives the id it was made for; where no session is active the token is kept in the `SessionTokenStorage` object, which is right only because the container lives for one request on the web (a long-lived process, such as the queue worker, never draws a form for a person); the stored token also makes an anonymous session non-empty for the
   database session handler. A form opened before the upgrade (the old keyed hash) fails once with "Invalid token." and
   changes nothing. No log line holds a token or part of one (`Page::debugLogToken()` is gone). `site_secret` no longer
   makes form tokens (it still signs ActivityPub quote stamps). New-style controllers check the same token with
@@ -4389,7 +4387,10 @@ the CLI installer no longer writes one.
   send the session cookie with that request. Never put a secret in the template variables
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
-  `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+  `Tests/Pages/Session/LoginApiKeyTest.php` checks this. The form token is a secret too, and is never a template variable of a page
+  nor a value of one (`FormToken::scrub()` in both shells; `SettingsRedactor` calls a key naming `csrf` or `xsrf` a secret, so the diagnostics
+  report's `$_SESSION` has no token): `Tests/Characterisation/FormTokenNotPrintedTest` takes a session's real token from its HTML form and finds it in no JSON, JSONP,
+  Markdown or diagnostics output. An `/account/` or `/admin/` page asked for as JSONP answers the HTML settings shell, which no other site can use as a script.
 - `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
   that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
   only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`

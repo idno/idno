@@ -31,8 +31,6 @@ final class PageNormaliser
 
         $body = preg_replace('/(name="__bTs" value=")\d{9,12}"/', '$1{token-time}"', $body) ?? $body;
         $body = preg_replace('/(name="__bTk" value=")[0-9a-f]{64}"/', '$1{token}"', $body) ?? $body;
-        // The same token in the JSON of a page (`"csrf": [{"tid": ..., "time": 1795368191, "token": "..."}]`).
-        $body = preg_replace('/("time": )\d{9,12}(,\s+"token": ")[0-9a-f]{64}"/', '$1{token-time}$2{token}"', $body) ?? $body;
         $body = preg_replace('/\btid[0-9a-f]{32}\b/', 'tid{id}', $body) ?? $body;
 
         // The ids forms/link gives a link and its hidden form (uniqid(), `f` and 13 hex digits): numbered by first appearance,
