@@ -419,8 +419,6 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         };
         $mails = [];
         foreach (json_decode(%CASES%, true) as $name => [$template, $vars]) {
-            // Each mail is a case of its own: what the port check remembered of the one before is not this one's.
-            \Tests\Fixtures\TwigPortCheck::forget();
             $mails[$name] = [
                 'html' => $draw('email', 'shell', ['body' => $draw('email', $template, $vars)]),
                 'text' => $draw('email-text', $template, $vars),

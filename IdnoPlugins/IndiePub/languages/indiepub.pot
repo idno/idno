@@ -1,85 +1,28 @@
-#: ./templates/default/indiepub/auth.tpl.php:12
-msgid "You are logged in as %s."
+# Translation template for indiepub.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: indiepub\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Pages/Account.php:20
+msgid "IndiePub Accounts"
 msgstr ""
 
-#: ./templates/default/indiepub/auth.tpl.php:18
-msgid "Authenticate to %s?"
-msgstr ""
-
-#: ./templates/default/indiepub/auth.tpl.php:20
-msgid "Authorize %s to access this site with the following permission(s)?<br />%s"
-msgstr ""
-
-#: ./templates/default/indiepub/auth.tpl.php:28
-msgid "Authenticate"
-msgstr ""
-
-#: ./templates/default/indiepub/auth.tpl.php:28
-msgid "Authorize"
-msgstr ""
-
-#: ./templates/default/indiepub/auth.tpl.php:31
-msgid "Cancel"
-msgstr ""
-
-#: ./templates/default/account/menu/items/indiepub.tpl.php:6
-msgid "IndiePub"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:12
-msgid "Micropub Accounts"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:20
-msgid "There are currently no micropub accounts associated with this site."
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:28
-msgid "Client ID"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:32
-msgid "Authorized"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:33
-msgid "with the scope"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:36
-msgid "Redirect URI"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:39
-msgid "Token"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:43
-msgid "Revoke Access"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:53
-msgid "Add Micropub Account"
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:60
-msgid "To manually add a micropub client account and generate an API token, enter the details below."
-msgstr ""
-
-#: ./templates/default/account/indiepub.tpl.php:75
-msgid "Save"
-msgstr ""
-
-#: ./Pages/Add.php:20
+#: ./Pages/Add.php:21
 msgid "Client ID can't be blank."
 msgstr ""
 
-#: ./Pages/Add.php:24
+#: ./Pages/Add.php:25
 msgid "Redirect URI can't be blank."
-msgstr ""
-
-#: ./Pages/Account.php:17
-msgid "IndiePub Accounts"
 msgstr ""
 
 #: ./Pages/Revoke.php:21
@@ -88,5 +31,101 @@ msgstr ""
 
 #: ./Pages/Revoke.php:27
 msgid "No IndiePub account with that token."
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:12
+#: ./templates/default/account/indiepub.html.twig:1
+msgid "Micropub Accounts"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:20
+#: ./templates/default/account/indiepub.html.twig:8
+msgid "There are currently no micropub accounts associated with this site."
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:28
+#: ./templates/classic/account/indiepub.tpl.php:65
+#: ./templates/default/account/indiepub.html.twig:50
+msgid "Client ID"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:32
+#: ./templates/default/account/indiepub.html.twig:17
+msgid "Authorized"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:33
+#: ./templates/default/account/indiepub.html.twig:19
+msgid "with the scope"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:36
+#: ./templates/classic/account/indiepub.tpl.php:71
+#: ./templates/default/account/indiepub.html.twig:23
+#: ./templates/default/account/indiepub.html.twig:54
+msgid "Redirect URI"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:39
+msgid "Token"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:43
+#: ./templates/default/account/indiepub.html.twig:29
+msgid "Revoke Access"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:53
+#: ./templates/classic/account/indiepub.tpl.php:57
+#: ./templates/default/account/indiepub.html.twig:40
+#: ./templates/default/account/indiepub.html.twig:45
+msgid "Add Micropub Account"
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:60
+#: ./templates/default/account/indiepub.html.twig:46
+msgid "To manually add a micropub client account and generate an API token, enter the details below."
+msgstr ""
+
+#: ./templates/classic/account/indiepub.tpl.php:75
+#: ./templates/default/account/indiepub.html.twig:58
+msgid "Save"
+msgstr ""
+
+#: ./templates/classic/account/menu/items/indiepub.tpl.php:6
+#: ./templates/default/account/menu/items/indiepub.html.twig:4
+msgid "IndiePub"
+msgstr ""
+
+#: ./templates/default/account/indiepub.html.twig:3
+msgid "Manage third-party apps authorized to post to your site via Micropub."
+msgstr ""
+
+#: ./templates/default/account/indiepub.html.twig:28
+msgid "Are you sure you want to revoke this token?"
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:11
+msgid "You are logged in as %s."
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:15
+msgid "Authenticate to %s?"
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:17
+msgid "Authorize %s to access this site with the following permission(s)?<br />%s"
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:24
+msgid "Authorize"
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:24
+msgid "Authenticate"
+msgstr ""
+
+#: ./templates/default/indiepub/auth.html.twig:27
+msgid "Cancel"
 msgstr ""
 

@@ -1,33 +1,44 @@
-#: ContentType.php:21
-msgid "Event"
+# Translation template for event.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: event\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Event.php:11
+msgid "Untitled"
 msgstr ""
 
-#: ContentType.php:30
-msgid "Events"
+#: ./Event.php:99
+msgid "You can't save an event with no description."
 msgstr ""
 
 #: ./Pages/Delete.php:29
+#: ./Pages/RSVP/Delete.php:29
 msgid "Delete %s"
 msgstr ""
 
 #: ./Pages/Delete.php:43
+#: ./Pages/RSVP/Delete.php:43
 msgid "You don't have permission to perform this task."
 msgstr ""
 
 #: ./Pages/Delete.php:48
+#: ./Pages/RSVP/Delete.php:48
 msgid "%s was deleted."
 msgstr ""
 
 #: ./Pages/Delete.php:50
+#: ./Pages/RSVP/Delete.php:50
 msgid "We couldn't delete %s."
-msgstr ""
-
-#: ./Pages/RSVP/Edit.php:31
-msgid "Write an RSVP"
-msgstr ""
-
-#: ./Pages/RSVP/Edit.php:33
-msgid "Edit RSVP"
 msgstr ""
 
 #: ./Pages/Edit.php:42
@@ -38,127 +49,179 @@ msgstr ""
 msgid "Edit event"
 msgstr ""
 
-#: ./templates/default/entity/Event.tpl.php:21
-msgid "Location"
+#: ./Pages/Edit.php:69
+msgid "Your draft has been saved."
 msgstr ""
 
-#: ./templates/default/entity/Event.tpl.php:44
-msgid "Ends"
+#: ./Pages/RSVP/Edit.php:31
+msgid "Write an RSVP"
 msgstr ""
 
-#: ./templates/default/entity/Event.tpl.php:53
-msgid "Time Zone"
+#: ./Pages/RSVP/Edit.php:33
+#: ./templates/classic/entity/RSVP/edit.tpl.php:14
+#: ./templates/default/entity/RSVP/edit.html.twig:9
+msgid "Edit RSVP"
 msgstr ""
 
-#: ./templates/default/entity/RSVP/edit.tpl.php:12
-msgid "New RSVP"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:22
-msgid "What's the URL of the event you're responding to?"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:33
-msgid "The website address of the event"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:39
-msgid "Are you going?"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:48
-msgid "Yes: I am attending this event"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:49
-msgid "No: I am not attending this event"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:50
-msgid "Maybe: I might attend this event"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:58
-msgid "Any comments?"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:62
-msgid "Say something here..."
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:76
-msgid "Cancel"
-msgstr ""
-
-#: ./templates/default/entity/RSVP/edit.tpl.php:77
-msgid "Save"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:10
-msgid "New Event"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:12
-msgid "Edit Event"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:21
-msgid "Event name"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:25
-msgid "Give it a name"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:38
-msgid "Where will it take place?"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:45
-msgid "Start day and time"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:49
-msgid "Type in the start day and time?"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:55
-msgid "End day and time"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:59
-msgid "Type in the end day and time"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:66
-msgid "Time zone"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:82
-msgid "Brief summary"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:86
-msgid "What's this about?"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:94
-msgid "Description"
-msgstr ""
-
-#: ./RSVP.php:96
+#: ./RSVP.php:123
 msgid "Your RSVP was successfully saved."
 msgstr ""
 
-#: ./RSVP.php:100
-msgid "You can\'t save an RSVP with no status."
+#: ./RSVP.php:127
+msgid "You can't save an RSVP with no status."
 msgstr ""
 
-#: ./Event.php:10
-msgid "Untitled"
+#: ./templates/classic/entity/Event.tpl.php:21
+#: ./templates/classic/entity/Event/edit.tpl.php:35
+#: ./templates/default/entity/Event.html.twig:16
+#: ./templates/default/entity/Event/edit.html.twig:26
+msgid "Location"
 msgstr ""
 
-#: ./Event.php:88
-msgid "You can\'t save an event with no description."
+#: ./templates/classic/entity/Event.tpl.php:44
+#: ./templates/default/entity/Event.html.twig:30
+msgid "Ends"
+msgstr ""
+
+#: ./templates/classic/entity/Event.tpl.php:53
+#: ./templates/default/entity/Event.html.twig:37
+msgid "Time Zone"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:10
+#: ./templates/default/entity/Event/edit.html.twig:7
+msgid "New Event"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:12
+#: ./templates/default/entity/Event/edit.html.twig:7
+msgid "Edit Event"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:21
+#: ./templates/default/entity/Event/edit.html.twig:12
+msgid "Event name"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:25
+#: ./templates/default/entity/Event/edit.html.twig:16
+msgid "Give it a name"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:38
+#: ./templates/default/entity/Event/edit.html.twig:30
+msgid "Where will it take place?"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:45
+#: ./templates/default/entity/Event/edit.html.twig:38
+msgid "Start day and time"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:49
+#: ./templates/default/entity/Event/edit.html.twig:42
+msgid "Type in the start day and time?"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:55
+#: ./templates/default/entity/Event/edit.html.twig:50
+msgid "End day and time"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:59
+#: ./templates/default/entity/Event/edit.html.twig:54
+msgid "Type in the end day and time"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:66
+#: ./templates/default/entity/Event/edit.html.twig:62
+msgid "Time zone"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:82
+#: ./templates/default/entity/Event/edit.html.twig:78
+msgid "Brief summary"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:86
+#: ./templates/default/entity/Event/edit.html.twig:82
+msgid "What's this about?"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:94
+#: ./templates/default/entity/Event/edit.html.twig:90
+msgid "Description"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:110
+#: ./templates/classic/entity/RSVP/edit.tpl.php:77
+#: ./templates/default/entity/Event/edit.html.twig:115
+#: ./templates/default/entity/RSVP/edit.html.twig:61
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/classic/entity/Event/edit.tpl.php:111
+#: ./templates/classic/entity/RSVP/edit.tpl.php:78
+#: ./templates/default/entity/RSVP/edit.html.twig:62
+msgid "Save"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:12
+#: ./templates/default/entity/RSVP/edit.html.twig:9
+msgid "New RSVP"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:22
+#: ./templates/default/entity/RSVP/edit.html.twig:15
+msgid "What's the URL of the event you're responding to?"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:34
+#: ./templates/default/entity/RSVP/edit.html.twig:20
+msgid "The website address of the event"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:40
+#: ./templates/classic/entity/RSVP/edit.tpl.php:45
+#: ./templates/default/entity/RSVP/edit.html.twig:26
+#: ./templates/default/entity/RSVP/edit.html.twig:31
+msgid "Are you going?"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:49
+#: ./templates/default/entity/RSVP/edit.html.twig:35
+msgid "Yes: I am attending this event"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:50
+#: ./templates/default/entity/RSVP/edit.html.twig:36
+msgid "No: I am not attending this event"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:51
+#: ./templates/default/entity/RSVP/edit.html.twig:37
+msgid "Maybe: I might attend this event"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:59
+#: ./templates/default/entity/RSVP/edit.html.twig:45
+msgid "Any comments?"
+msgstr ""
+
+#: ./templates/classic/entity/RSVP/edit.tpl.php:63
+#: ./templates/default/entity/RSVP/edit.html.twig:49
+msgid "Say something here..."
+msgstr ""
+
+#: ./templates/default/entity/Event/edit.html.twig:7
+msgid "Draft"
+msgstr ""
+
+#: ./templates/default/entity/Event/edit.html.twig:109
+msgid "Publish"
+msgstr ""
+
+#: ./templates/default/entity/Event/edit.html.twig:112
+msgid "Save as Draft"
 msgstr ""
 

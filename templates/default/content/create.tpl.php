@@ -1,3 +1,0 @@
-<?php
-    // Content type links are not shown in Idno 2026.
-    // Use the New Post button in the sidebar instead.

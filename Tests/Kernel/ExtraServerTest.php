@@ -25,15 +25,15 @@ final class ExtraServerTest extends PrivateSiteTestCase
         $this->assertContains($other->request('GET', '')->status, [200, 302], 'and it serves the site' . $this->serverLog());
     }
 
-    public function testAServerCanBeTheTestEnvironmentWithOpcacheAndTheTwigBypass(): void
+    public function testAServerCanBeTheTestEnvironmentWithOpcache(): void
     {
-        $url = $this->startExtraServer(['APP_ENV' => 'test', 'APP_DEBUG' => '0', 'IDNO_TEST_TWIG_BYPASS' => '1'], ['opcache.enable_cli' => '1']);
+        $url = $this->startExtraServer(['APP_ENV' => 'test', 'APP_DEBUG' => '0'], ['opcache.enable_cli' => '1']);
 
         $probe = (new HttpSiteClient($url))->request('GET', '_test/server');
 
         $this->assertSame(200, $probe->status);
-        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true, 'twig_bypass' => '1'], $probe->json());
+        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true], $probe->json());
         $own = $this->site()->request('GET', '_test/server')->json();
-        $this->assertSame(['test', '1', ''], [$own['env'], $own['debug'], $own['twig_bypass']], 'the test\'s own server: debug on, no bypass');
+        $this->assertSame(['test', '1'], [$own['env'], $own['debug']], 'the test\'s own server: debug on');
     }
 }

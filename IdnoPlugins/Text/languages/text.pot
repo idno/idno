@@ -1,3 +1,22 @@
+# Translation template for text.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: text\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Entry.php:163
+msgid "You can't save an empty entry."
+msgstr ""
+
 #: ./Pages/Delete.php:27
 msgid "Delete %s"
 msgstr ""
@@ -22,55 +41,77 @@ msgstr ""
 msgid "Edit entry"
 msgstr ""
 
-#: ./templates/default/entity/Entry.tpl.php:39
+#: ./Pages/Edit.php:69
+msgid "Your draft has been saved."
+msgstr ""
+
+#: ./templates/classic/entity/Entry.tpl.php:39
 msgid "%d min read"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:53
+#: ./templates/classic/entity/Entry/edit.tpl.php:53
+#: ./templates/default/entity/Entry/edit.html.twig:9
 msgid "New Post"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:59
+#: ./templates/classic/entity/Entry/edit.tpl.php:59
+#: ./templates/default/entity/Entry/edit.html.twig:11
 msgid "Edit Post"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:67
+#: ./templates/classic/entity/Entry/edit.tpl.php:67
+#: ./templates/default/entity/Entry/edit.html.twig:19
 msgid "Title"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:68
+#: ./templates/classic/entity/Entry/edit.tpl.php:68
+#: ./templates/default/entity/Entry/edit.html.twig:20
 msgid "Give it a title"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:72
+#: ./templates/classic/entity/Entry/edit.tpl.php:72
+#: ./templates/default/entity/Entry/edit.html.twig:24
 msgid "Subtitle"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:73
+#: ./templates/classic/entity/Entry/edit.tpl.php:73
+#: ./templates/default/entity/Entry/edit.html.twig:25
 msgid "Optional sub title for this post"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:107
+#: ./templates/classic/entity/Entry/edit.tpl.php:107
+#: ./templates/classic/entity/Entry/edit.tpl.php:119
+#: ./templates/classic/entity/Entry/edit.tpl.php:168
+#: ./templates/default/entity/Entry/edit.html.twig:60
 msgid "Add the URL that you're replying to"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:107
+#: ./templates/classic/entity/Entry/edit.tpl.php:107
+#: ./templates/classic/entity/Entry/edit.tpl.php:123
+#: ./templates/classic/entity/Entry/edit.tpl.php:171
 msgid "Remove URL"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:108
+#: ./templates/classic/entity/Entry/edit.tpl.php:108
+#: ./templates/default/entity/Entry/edit.html.twig:56
 msgid "Reply to a site"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:142
+#: ./templates/classic/entity/Entry/edit.tpl.php:142
+#: ./templates/default/entity/Entry/edit.html.twig:82
 msgid "Cancel"
 msgstr ""
 
-#: ./templates/default/entity/Entry/edit.tpl.php:143
+#: ./templates/classic/entity/Entry/edit.tpl.php:143
+#: ./templates/default/entity/Entry/edit.html.twig:76
 msgid "Publish"
 msgstr ""
 
-#: ./Entry.php:151
-msgid "You can't save an empty entry."
+#: ./templates/default/entity/Entry/edit.html.twig:13
+msgid "Draft"
+msgstr ""
+
+#: ./templates/default/entity/Entry/edit.html.twig:79
+msgid "Save as Draft"
 msgstr ""
 

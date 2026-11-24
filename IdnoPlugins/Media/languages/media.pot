@@ -1,3 +1,38 @@
+# Translation template for media.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: media\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Media.php:12
+msgid "Untitled"
+msgstr ""
+
+#: ./Media.php:132
+msgid "Media wasn't attached."
+msgstr ""
+
+#: ./Media.php:135
+msgid "This doesn't seem to be a media file .. %s"
+msgstr ""
+
+#: ./Media.php:138
+msgid "We couldn't access your media. Please try again."
+msgstr ""
+
+#: ./Media.php:156
+msgid "We couldn't access your media for an unknown reason. Please try again."
+msgstr ""
+
 #: ./Pages/Delete.php:29
 msgid "Delete %s"
 msgstr ""
@@ -15,6 +50,8 @@ msgid "We couldn't delete your media."
 msgstr ""
 
 #: ./Pages/Edit.php:34
+#: ./templates/classic/entity/Media/edit.tpl.php:27
+#: ./templates/default/entity/Media/edit.html.twig:17
 msgid "Upload audio"
 msgstr ""
 
@@ -22,59 +59,53 @@ msgstr ""
 msgid "Edit audio details"
 msgstr ""
 
-#: ./templates/default/entity/Media/edit.tpl.php:13
-msgid "New Audio"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:15
-msgid "Edit Audio"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:25
-msgid "Choose different audio"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:38
-msgid "Title"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:42
-msgid "Give it a title"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:54
-msgid "Describe your audio"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:55
-msgid "Description"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:66
-msgid "Cancel"
-msgstr ""
-
-#: ./templates/default/entity/Media/edit.tpl.php:67
-msgid "Publish"
-msgstr ""
-
-#: ./templates/default/entity/Media.tpl.php:41
+#: ./templates/classic/entity/Media.tpl.php:42
+#: ./templates/default/entity/Media.html.twig:15
 msgid "Sorry, your browser does not support the video tag."
 msgstr ""
 
-#: ./Media.php:11
-msgid "Untitled"
+#: ./templates/classic/entity/Media/edit.tpl.php:13
+#: ./templates/default/entity/Media/edit.html.twig:10
+msgid "New Audio"
 msgstr ""
 
-#: ./Media.php:131
-msgid "Media wasn\'t attached."
+#: ./templates/classic/entity/Media/edit.tpl.php:15
+#: ./templates/default/entity/Media/edit.html.twig:10
+msgid "Edit Audio"
 msgstr ""
 
-#: ./Media.php:134
-msgid "This doesn\'t seem to be a media file .. %s"
+#: ./templates/classic/entity/Media/edit.tpl.php:29
+#: ./templates/default/entity/Media/edit.html.twig:17
+msgid "Choose different audio"
 msgstr ""
 
-#: ./Media.php:137
-msgid "We couldn\'t access your media. Please try again."
+#: ./templates/classic/entity/Media/edit.tpl.php:43
+#: ./templates/default/entity/Media/edit.html.twig:31
+msgid "Title"
+msgstr ""
+
+#: ./templates/classic/entity/Media/edit.tpl.php:47
+#: ./templates/default/entity/Media/edit.html.twig:35
+msgid "Give it a title"
+msgstr ""
+
+#: ./templates/classic/entity/Media/edit.tpl.php:59
+#: ./templates/default/entity/Media/edit.html.twig:48
+msgid "Describe your audio"
+msgstr ""
+
+#: ./templates/classic/entity/Media/edit.tpl.php:60
+#: ./templates/default/entity/Media/edit.html.twig:49
+msgid "Description"
+msgstr ""
+
+#: ./templates/classic/entity/Media/edit.tpl.php:71
+#: ./templates/default/entity/Media/edit.html.twig:58
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/classic/entity/Media/edit.tpl.php:72
+#: ./templates/default/entity/Media/edit.html.twig:59
+msgid "Publish"
 msgstr ""
 

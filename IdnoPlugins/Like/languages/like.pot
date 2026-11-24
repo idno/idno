@@ -1,3 +1,30 @@
+# Translation template for like.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: like\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Like.php:175
+msgid "You need to specify a title."
+msgstr ""
+
+#: ./Like.php:204
+msgid "You can't bookmark an empty URL."
+msgstr ""
+
+#: ./Like.php:208
+msgid "That doesn't look like a valid URL."
+msgstr ""
+
 #: ./Pages/Callback.php:31
 msgid "URL to page title callback"
 msgstr ""
@@ -26,51 +53,63 @@ msgstr ""
 msgid "New bookmark"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:11
+#: ./Pages/Edit.php:58
+msgid "Your draft has been saved."
+msgstr ""
+
+#: ./templates/classic/entity/Like/edit.tpl.php:11
+#: ./templates/default/entity/Like/edit.html.twig:6
 msgid "New Bookmark"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:13
+#: ./templates/classic/entity/Like/edit.tpl.php:13
+#: ./templates/default/entity/Like/edit.html.twig:6
 msgid "Edit Bookmark"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:21
+#: ./templates/classic/entity/Like/edit.tpl.php:21
+#: ./templates/default/entity/Like/edit.html.twig:11
 msgid "Link Address"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:57
+#: ./templates/classic/entity/Like/edit.tpl.php:60
+#: ./templates/default/entity/Like/edit.html.twig:31
 msgid "Title"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:62
+#: ./templates/classic/entity/Like/edit.tpl.php:65
+#: ./templates/default/entity/Like/edit.html.twig:36
 msgid "Page name"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:77
+#: ./templates/classic/entity/Like/edit.tpl.php:80
+#: ./templates/default/entity/Like/edit.html.twig:51
 msgid "Add notes to your bookmark..."
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:78
+#: ./templates/classic/entity/Like/edit.tpl.php:81
+#: ./templates/default/entity/Like/edit.html.twig:52
 msgid "Description"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:92
+#: ./templates/classic/entity/Like/edit.tpl.php:95
+#: ./templates/default/entity/Like/edit.html.twig:71
 msgid "Cancel"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:93
+#: ./templates/classic/entity/Like/edit.tpl.php:96
 msgid "Save"
 msgstr ""
 
-#: ./Like.php:178
-msgid "You need to specify a title."
+#: ./templates/default/entity/Like/edit.html.twig:6
+msgid "Draft"
 msgstr ""
 
-#: ./Like.php:197
-msgid "You can\'t bookmark an empty URL."
+#: ./templates/default/entity/Like/edit.html.twig:65
+msgid "Publish"
 msgstr ""
 
-#: ./Like.php:201
-msgid "That doesn\'t look like a valid URL."
+#: ./templates/default/entity/Like/edit.html.twig:68
+msgid "Save as Draft"
 msgstr ""
 

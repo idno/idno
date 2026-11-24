@@ -251,7 +251,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `.txt`. `Tests/Templating/fixtures/fallback-trace.php` has `traced`: for each type that is not a web page, the `classic`
   files it draws, derived from a real traced run; and `classic`: every file under `templates/classic/` of core and the
   bundled plugins, computed from the file system and asserted (`Tests/Unit/Templating/ClassicTemplatesTest`: each has a `default`
-  file of the same name beside it, only `.tpl.php`, and the recorded list is the file system's). With
+  template of the same name beside it, a Twig file or a `.tpl.php`, only `.tpl.php` files are in `classic`, and the recorded list is the file system's). With
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
   (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static `?\Closure` hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
@@ -260,55 +260,31 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   announced once), a pinned theme, `?_t=modern` (the default type), `?_t=classic` and traversal types (refused, in any letter case: on a file
   system that ignores case `CLASSIC` is the directory), a third-party plugin's `templates/modern/` file (still wins; one deprecation
   line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author, the drafts page
-  and that no template refers to `Themes/Twenty26`. A Twig port of a core or bundled-plugin template is proven against its
-  original, which stays beside it (`<name>.tpl.php`, until the originals are deleted): in the test environment
-  `Tests\Fixtures\TwigPortCheck` (`config/services_test.php`) stands in front of the Twig engine the template renderer is given and
-  returns the Twig output unchanged; when `IDNO_TEST_TWIG_PORT_REPORT` names a file (read from `$_SERVER`, then the environment,
-  at each render) and a `.tpl.php` of the same name is beside the Twig file, it draws that original too (with the same variables, on
-  a copy of the template object, in the same request: a shadow render, not a replay, because templates read the session, the
-  current page and the site; nothing is compared inside a shadow render, and inside it every file that has a `.tpl.php` beside it
-  is drawn from that `.tpl.php`, a file with none by Twig, so a comparison is the WHOLE old tree against the whole new one and a
-  variable an old parent leaked to a child through `__()` and the ports drop is a difference; a child drawn at the top level by the
-  real render is compared in its own right too), normalises both with `PageNormaliser` and appends
-  `{"file", "same", "original_hash"}` to the file (a `\n` at the very end of either output is not a difference; and, on a difference, `hash` = sha256 of the normalised original, a NUL and the
-  normalised port, with `original` and `port`, 64 KiB each; an original that throws is a difference, `same` false with a `reason`).
-  An exception covers its own file only: the check loads `port-exceptions.php` itself, remembers for the rest of the request the
-  (normalised original, normalised port) pair of each listed difference, and before a later comparison replaces each remembered
-  original (longest first) by its port in that comparison's original (a parent that drew the child), recording `substitutions`; an
-  original empty, white space or under 16 bytes is never replaced (the parents then show `unsubstituted` and need entries of their
-  own). The shadow render is not isolated: it runs after the port, on a clone of the template object, but shares the session, the site
-  and `header()`, and an original that exits ends the request. What the original does to the SITE's template object (`Idno::site()->template()`:
-  a link registers its form with `shell/form-data`, an avatar leaves its `user`) is made to land on the clone: while the original renders, the
-  site's template object uses the clone's variables and a copy of the registrations as they were BEFORE the port rendered (put back after, so the
-  port's own are what the page goes on with); without it the original's shell would draw the port's forms and miss its own
-  (`Tests/Kernel/TwigPortCheckSiteTemplateTest`). With `IDNO_TEST_TWIG_BYPASS=1` in the environment (test wiring only)
-  a file with an original beside it is drawn from the original and nothing is compared: the old engine alone. `Tests/Templating/TwigPortEquivalenceTest` visits the golden pages, `EXTRA_PAGES` (admin, account, onboarding,
-  error and empty pages, as visitor, administrator, member and new user) and draws the mails and `DRAWS` (a template no page
-  reaches) in the site, and fails (`Tests\Templating\PortReportChecker`, itself tested in `PortReportCheckerTest`) for a difference not listed in
-  `Tests/Templating/fixtures/port-exceptions.php` (per Twig file: its reason, the `Class::method` that pins the new output and the
-  `differences`, the hash of each difference the failure prints; an entry covers exactly the differences it lists; a listed hash no
-  comparison produced, an entry with no hash and a missing test fail), and for a Twig file with an
-  original beside it that nothing compared; a file whose original's output never varied across the comparisons is a notice, and a
-  failure when it is in `PortReportChecker::MUST_VARY` (each port with a branch: `shell/messages`, which a failed login's message
-  and every page's own show, the shells, `shell/nav`, `shell/compose`, `shell/opengraph`, ...) (it extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`:
-  the pages are visited, not compared with goldens). Its self-test, `Tests/Unit/Templating/TwigPortCheckTest`, proves the check can fail.
-  `Tests/Templating/fixtures/unported.php` lists every web and mail `.tpl.php` (types `default`, `email`, `email-text`; core and
-  the bundled plugins) with no Twig file beside it, by `<base>:<type>/<name>` (`PortProgressTest`: exactly those, sorted). The port is finished:
-  the list is `[]` (`PortProgressTest::testNothingIsLeftToPort`) and `testTheLocatorResolvesNoCoreOrBundledTplPhpForWebAndMailTypes` finds a
-  locator over core and every bundled plugin resolving a Twig file for every name that has a file under `default`, `email` or `email-text`; the
-  frozen `.tpl.php` originals stay beside their Twig files until they are deleted.
+  and that no template refers to `Themes/Twenty26`. The Twig templates of core and the bundled plugins are proven by the golden pages and by the tests that pin
+  what a golden does not draw; the `.tpl.php` files they replaced are gone, and nothing compares a Twig file with another rendering.
+  `Tests/Unit/Templating/CoreTemplatesAreTwigTest` holds the end state: no `.tpl.php` is left under a `default`, `email` or `email-text`
+  directory of core or a bundled plugin, and a locator over core and every bundled plugin resolves a Twig file for every name that has one there.
+  `Tests/Templating/TemplateDrawCasesTest` is a smoke test of what no golden page draws: it visits `EXTRA_PAGES` (admin, account,
+  onboarding, error and empty pages, as visitor, administrator, member and new user) and the golden pages' own visits (without comparing
+  them), then draws in the site the mails, the entity, form, account, admin and plugin cases with hostile values, empty states and
+  plugin states, and `DRAWS` (a template no page reaches); every page must answer below 500, every case must draw without an
+  error, the `DRAWS` must differ from one another, and every Twig file of core and the bundled plugins must have been drawn at least once
+  (read from the template trace, `Tests\Fixtures\TemplateTrace`, which its `runInSite()` installs in each script too): a new Twig file
+  that no page or case reaches fails it. It extends `RenderedSiteTestCase` with `protected bool $compareGoldens = false`. The deliberate
+  differences of the Twig look from the look it replaced, and the hostile values every template must escape, are pinned by assertions of
+  their own, mostly `Tests/Templating/TemplateEscapingTest`, `FormControlsTest`, `UserSearchActionLinksTest`,
+  `Tests/Kernel/BuiltInLookTest` and `Tests/Characterisation/MailFlowsTest`.
   `raw-allowlist.php` lists every `|raw` of a core or bundled Twig file with its reason (`RawUsageTest`: also `autoescape false`, `filter raw`, `apply raw`, `|raw()` and `source()`).
-  `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record`, `compare` or `ratio`) serves the
-  fixture site from servers of the test (`PrivateSiteTestCase::startExtraServer()`: test environment, debug off, opcache on, checked
-  through `/_test/server`; an outbound request fails at once), warms each page with 10 requests and times it in 5 blocks of 40
-  sequential requests; a server's number is the smallest block median. `compare` while a Twig file has its `.tpl.php` beside it
-  starts TWO servers (test environment, debug off: not production, which is acceptable because both sides are equal) identical but for `IDNO_TEST_TWIG_BYPASS`, interleaves their blocks in one run and asserts the Twig server's
-  number for `/` and for a note's permalink is at most 1.20 times the bypass server's (measured at the end of the port: the home page about 1.17 and a note's permalink about 1.13, of which about 0.035 on the home page is Photo, Media and Checkin bodies being purified again when drawn; judge a run by the median of five, the machine's noise is about 0.03) (both pages' numbers and ratios are printed before the first is asserted);
-  with no such file there is nothing to bypass and the Twig server alone is compared with the baseline `record` stored
-  (`<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits of the SHA-256 of the checkout's real path>.json`, by the same method), which is a
-  number from another moment and NOT a reliable gate (it varied 13% on a repeat): the rule for deleting the originals is to run `ratio`
-  one last time while they still exist and keep that ratio in the commit message of the deleting change, and afterwards to compare only
-  with a baseline recorded on that same commit in the same session (the minimum of several block medians), never the first baseline. `ratio` is the two-server run whatever is ported (with nothing ported both draw the same files, so the ratio is the method's own noise). Twig templates in the cascade are pinned by
+  `Tests/Templating/PagePerformanceTest` (skipped unless `IDNO_TEST_PERFORMANCE` is `record` or `compare`) is a tool for a change that may
+  make pages slower, not a gate: it serves the fixture site from a server of the test (`PrivateSiteTestCase::startExtraServer()`: test
+  environment, debug off, opcache on, checked through `/_test/server`; an outbound request fails at once), warms each page (`/` and a
+  note's permalink) with 10 requests and times it in 5 blocks of 40 sequential requests; the number for a page is the smallest block median.
+  `record` writes the two numbers to `<sys_get_temp_dir()>/idno-perf-baseline-<12 hex digits of the SHA-256 of the checkout's real path>.json`;
+  `compare` asserts each is at most 1.20 times the baseline's and prints both numbers and ratios before the first is asserted. A baseline is a
+  number from one moment of one machine (it varied 13% on a repeat): record it on the commit before the change, in the same session, compare
+  after, and repeat a failing comparison before believing it. The two-server comparison with the old engine that the port was judged by
+  (the home page about 1.18 and a note's permalink about 1.14 at the end of the port, medians of five runs) is gone with the old templates.
+  Twig templates in the cascade are pinned by
   `Tests/Kernel/CascadeTest` and `TwigEngineTest` (the fixture bases' Twig files, one subprocess a case:
   `Tests/Kernel/template_twig.php`, run through `RunsTwigCases`), `TwigTrimTest` and, in the unit tier, `CascadeTwigLoaderTest`,
   `IdnoTwigExtensionTest`, `TemplateLocatorTest` and `EngineCostTest` (what drawing a template must not cost, counted: a path of the file system is asked about once, the
@@ -704,7 +680,7 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   shape, to a file of its own and answers 202) and `/_test/sink/{name}/log` (the recorded requests as
   a JSON list, then the file is emptied), with `name` matching `[a-z0-9-]{1,40}`; and
   `/_test/page/{name}` (an HTML page advertising `/_test/sink/{name}` as its webmention endpoint);
-  `/_test/server` (JSON: `env`, `debug`, `opcache`, `twig_bypass`: how the server that answers is set up; `ServerProbeController`); and
+  `/_test/server` (JSON: `env`, `debug`, `opcache`: how the server that answers is set up; `ServerProbeController`); and
   `/_test/mail/log` (the mail the site has sent, recorded by `RecordingMailTransport`, as a JSON list
   oldest first, then emptied; see "Mail"). The
   sink's files are in `<sys_get_temp_dir()>/idno-test-sink-<first 12 hex digits of the SHA-256 of the
@@ -2673,7 +2649,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `TemplateRenderer` (container service): `draw($name, $vars, $type, $context, $contributions = true, $fallbackToDefault = true,
   $replacements = true)` is `DefaultTemplate::draw()`'s order (prepends; for `*` then the type the replacement and the extensions;
   the template unless replaced; the added content) and returns null when nothing was rendered; without `$contributions` it draws the
-  one file (the plain `Bonita\Templates::draw()`: `drawList()`, `drawObject()` and `process()` draw this way, with no extensions);
+  one file (the plain `Bonita\Templates::draw()`);
   `withSlots()` reads another registry. `$vars`, `$type` and `$fallbackToDefault` may be closures (`DefaultTemplate` passes them), called each time a file is drawn: an extension that sets a variable, or a prepend that changes the type or turns the fallback off, changes what the later files and the template itself see (the type that picks the `*` and type registrations is read once, after the prepends), as `Bonita\Templates::draw()` read `$this` for each contribution. Each file drawn calls the trace hook `TemplateRenderer::$trace` (type, name, path or `-`)
   before it is rendered, except a refused name (a Twig file is traced like any other). `drawSlot($name, $vars, $type, $context,
   $fallbackToDefault = true)` draws only the registrations of a name (prepends, then the `*` and the type's extensions, then the added
@@ -2782,7 +2758,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     its icons with the user the LAST lookup left as the page's `user` (the object's owner when the page has an object, else the page's owner; the HTML
     goldens pin it and the JSON pages print the same leaked `user`: do not change `User::getIcon()` without changing both). A Twig template cannot see
     what another template set on the object, so `shell.html.twig` merges `leaked_user()` into `shell` before the structured data and the ActivityPub
-    link (the head's partials make the same icon calls in the same order: `TwigPortEquivalenceTest::drawIconLeakCases()`); a shell drawn on a copy of
+    link (the head's partials make the same icon calls in the same order: `TemplateDrawCasesTest::drawIconLeakCases()`); a shell drawn on a copy of
     the site's template saw none of it, and gets none. `is_user(v)` is `instanceof \Idno\Entities\User`, `to_int` is `(int)`, `identity_url` is
     `UrlValidator::httpUrl()` or a `mailto:`, `sms:` or `tel:` address (any case, trimmed) with no white space or control character, else ''; all pure.
     `twitter_account_of(person)` is pure (it needs nothing of the site) and the old Open Graph partial's search of a profile for a Twitter account.
@@ -2813,7 +2789,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     The `@core` real-container case writes a probe file in `templates/default/` (`zz-core-probe-*`, gitignored) and removes any left by a killed
     run when it starts.
   - The page shells are Twig (`templates/default/{shell,account-shell,admin-shell,settings-shell}.html.twig`, `shell/**`, `js/*`, `assets/*`,
-    `txt/robots`; each beside its frozen `.tpl.php`). `shell`, `account-shell` and `admin-shell` have the blocks `head`, `nav`, `content` and
+    `txt/robots`). `shell`, `account-shell` and `admin-shell` have the blocks `head`, `nav`, `content` and
     `footer` (the same names in all three), so a theme can `{% extends '@core/default/shell.html.twig' %}` and replace one
     (`BuiltInLookTest::testAThemeExtendingTheCoreShellReplacesOneBlock`); they do not extend one another and use no `slot()`. Each reads
     `{% set shell = shell_variables() %}` and draws every partial with `idno_include(name, shell)` (the partials see the formatted variables, as they
@@ -2824,14 +2800,14 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     there (above). `shell/icon` is one `{% if iconName == ... %}` chain of literal SVG. Values from outside are escaped where the old templates
     printed them as they were: the path in the body's classes, the Open Graph description and address, the Dublin Core and structured data
     values; `shell/identities` links only http(s) addresses; `js/idno` and the service worker script use JSON_HEX_* / `|e('js')`
-    (`port-exceptions.php`: `js/idno`, `shell/identities`; `Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
-    (HTTPS and a member) is not drawn by the equivalence test (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
+    (`Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
+    (HTTPS and a member) is not drawn by the golden pages (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
-    `drafts`: 58 files beside their frozen `.tpl.php`). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template left on the page's template object
-    by `__()` is gone for the Twig ones, and an HTML page that showed one changes by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
+    `drafts`: 58 files). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template (the old look's, or a third party's) left on the page's template object
+    by `__()` is gone for the Twig ones, and an HTML page that showed one changed by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
-    `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPortedPageBodyANonHtmlTypeCanReachLeavesNothingOnThePageOrHasAClassicCopy` lists the other
-    ported page bodies a non-HTML request can reach, each of which left nothing on the page, and fails for a new one; `non-html/json-profile-ada.txt` pins the profile page's JSON), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
+    `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPageBodyANonHtmlTypeCanReachIsAClassicFileOrAListedTwigFile` lists the other
+    page bodies a non-HTML request can reach from a Twig file (which publish nothing on the page: a Twig body draws on a copy), and fails for a new one, which needs a `classic` copy if JSON needs what the old template left on the page; `non-html/json-profile-ada.txt` pins the profile page's JSON), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
     (`entity/feed` drew each note with `object` left on the template, which the permalink page's head used). Helpers added for them:
     `is_entity`, `random_id` (`md5(mt_rand())`, for the ids the normaliser numbers), `default_avatar(uuid)`, `visitor_message(exception)`
     (`ExceptionMessage::forVisitor()`), `profile_link(address)` (`Idno\Templating\ProfileLink`: the icon, class and text of a profile address; the address
@@ -2842,23 +2818,22 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     The annotation lists sort in the template with the old comparison (`|sort((a, b) => a.time < b.time ? -1 : 1)`, PHP's `uasort()` as before, so
     equal times come out in the same order); RSVPs are renumbered after the sort, as `usort()` did, so the delete link of an RSVP names its place in
     the list (an old defect, kept). A `|raw` is the HTML an entity's own `draw()` or `drawEdit()` produced, or the page's body (`raw-allowlist.php`).
-    On purpose different from the `.tpl.php` files (`port-exceptions.php`, each pinned by a `TemplateEscapingTest` method): `entity/shell` links an
+    On purpose different from the look they replaced (each pinned by a `TemplateEscapingTest` method): `entity/shell` links an
     in-reply-to address only if it is http(s); `content/syndication/links` escapes the identifier and links only http(s); `entity/annotations/rsvps`
     lists an unknown answer as "Other responses" (the old one stopped); `file/picker/image` and `file/picker/donejs` write their words and the file
     address for a script; `entity/User/profile/contact` draws only the schemes it has an icon for. The htmlentities() of the old templates (`é` as
-    `&eacute;`) is Twig's escape (`é`): the same text, which the harness's normaliser does not equate. `Tests/Fixtures/HostilePageController`
+    `&eacute;`) is Twig's escape (`é`): the same text. `Tests/Fixtures/HostilePageController`
     (`/_test/hostile/feed`, `/_test/hostile/hcard`, test environment only) serves another site's page that names itself with a script. The following
     page that fetches a feed cannot run on PHP 8 (`Reader::getFeedDetails()` calls `DOMDocument::loadHTML()` statically), and the template of a feed item
     draws `$item->draw()`, which draws the template again: both are old defects, so those templates are drawn with the objects the pages would give them.
-  - The form templates are Twig too (`templates/default/forms/**`: 28 files beside their frozen `.tpl.php`). Things to know when you change one.
+  - The form templates are Twig too (`templates/default/forms/**`: 28 files). Things to know when you change one.
     (1) A control is drawn on the PAGE's template object by a `.tpl.php` page (`$this->__(['name' => ...])->draw('forms/input/text')`), and the old
     control took its variables off that object again (`unset($this->vars[...])`, "prevent bonita pollution"); a Twig file draws its includes on a copy,
     so each top-level control ends with `{% do forget_variables([...]) %}` (a function of the extension, over `PhpTemplateContext::forgetVariables()`:
     it acts on the object the file was drawn on and does nothing on the copy another Twig file made), with the names the original unset
     (`Tests/Templating/FormControlsTest`; without it a spinner took the `id` of an earlier input and an icon its `class`: the golden pages caught it).
     (2) The counter that gives an input its id (`global $input_id`) is the site's one, `next_input_id()` (`TemplateHelpers::nextInputId()`), so the
-    `classic` copies and a third-party `.tpl.php` that count on it stay in step; `Tests\Fixtures\TwigPortCheck` puts the counter back before it renders
-    the original so that the port and the original number from the same value. (3) The JSON look documents the form fields of a page
+    `classic` copies and a third-party `.tpl.php` that count on it stay in step. (3) The JSON look documents the form fields of a page
     (`formFields`: `documentFormControl()` writes to the page's template), which a Twig control drawn on a copy cannot do: the controls a JSON request
     can reach (`forms/input/{text,email,url,hidden,password,file,datetime-local,timezones}`, with `input`, `select`, `longtext`, `richtext`,
     `image-file`, `forms/token`, `forms/link`, `forms/action`, `forms/output/{richtext,tags,timezones}` and `forms/usersearch` already there) have
@@ -2869,23 +2844,23 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`), so the Twig file neither calls `form_token()`
     nor `signForm()`: no recursion, and `form_token()` is `signForm()`, which draws this file. (5) `forms/link` registers its form with `form_data()`:
     in an XHR response (no shell draws the registered forms) the form is printed after the link, which fixes a link in content a script inserts
-    (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`; `port-exceptions.php`); the old template kept it in a global (`$template_postponed_link_actions`) that only the admin user search's page, `Idno\Pages\Search\User`, read and appended to its results. That page draws its rows on the JSON type, whose `forms/link` is the `classic` copy, which still fills the global, so its read stays; the search's script sends `X-Requested-With` so that the page's request is an XHR one and the forms arrive (without the header they never did: `UserSearchActionLinksTest`).
+    (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`); the old template kept it in a global (`$template_postponed_link_actions`) that only the admin user search's page, `Idno\Pages\Search\User`, read and appended to its results. That page draws its rows on the JSON type, whose `forms/link` is the `classic` copy, which still fills the global, so its read stays; the search's script sends `X-Requested-With` so that the page's request is an XHR one and the forms arrive (without the header they never did: `UserSearchActionLinksTest`).
     The address is `|link_url` (`UrlValidator::linkUrl()`), the confirmation is `js_string()` (the same single-quoted JavaScript string, escaped for the
     attribute, as `action_link()` prints), and the label is `|raw` because `Actions::createLink()` callers pass markup (`raw-allowlist.php`); `forms/action` prints its
     `body` the same way. (6) Values printed from a variable are escaped: every attribute of `input` and `select`, a `textarea`'s name, the editor's id
     (`js_string()` in `x-data`, escaped elsewhere), a tag, the user search's id, class, name, address and template (`js_string()`), the label and help of
-    `form-list` (`port-exceptions.php`, `TemplateEscapingTest::testFormValuesAreEscaped`); the `value` and placeholder were escaped before. Differences
+    `form-list` (`TemplateEscapingTest::testFormValuesAreEscaped`); the `value` and placeholder were escaped before. Differences
     that are not about a value from outside: non-ASCII text in a value is printed as itself, not by `htmlentities()` as named entities; a text area whose
     value is `0` keeps it; `forms/output/url` links only http(s) (`FILTER_SANITIZE_URL` kept `javascript:`); a field of `form-list` that is not required
     has no `required` attribute (the old one printed `required="Array"` and a PHP warning). A boolean attribute (`autofocus`, `checked`, `disabled`, `multiple`, `readonly`, `required`) of `input` and `select` is printed only when set: `false`, `0`, `'0'`, `''` and `null` print none (the old template wrote `required=""`, which a browser reads as set), and any attribute given `false` is not printed; a flag or default the original tested with `empty()` is tested by plain Twig truthiness (`{% if x %}`), never `is empty`, which differs for `0` and `'0'`; a text area's height is `|to_int`. `forms/input/timezones` takes its `class` from the caller as it
     did (the template's own default was assigned to a local variable and never used). Helpers added: `js_string`, `next_input_id`, `security_token`,
     `timezone_options`, `timezone_info`, `email_is_blocked`, `forget_variables` and the filters `link_url`, `email_address` (`FILTER_SANITIZE_EMAIL`) and
-  - The account and onboarding pages are Twig too (`templates/default/account/**` and `onboarding/**`: 18 files beside their frozen `.tpl.php`). The
+  - The account and onboarding pages are Twig too (`templates/default/account/**` and `onboarding/**`: 18 files). The
     follow bookmarklet's card (`account/settings/following/mf2user`) prints a REMOTE page's h-card: the name, nickname and addresses are escaped, the
     photo and the profile link go through `|http_url`, a photo with an alt text (the parser gives a list with a `value`) is its `value`, and an email
     loses `mailto:` only when it starts with it (the old template cut the first seven characters of every address). Scripts write the page's address
     and the site's address with `e('js')` (the tools page's request for the API key, the follow bookmarklet) and the profile page's words likewise
-    (`port-exceptions.php`, `TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript`; `PageNormaliser` reads the site's
+    (`TemplateEscapingTest::testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript`; `PageNormaliser` reads the site's
     address in that escaped form). The password reset form escapes the email address and the code a request supplied. The tools page prints no secret
     (the API key is fetched by a script, and only whether there is one is read, with `entity_value()`); `account/login` reads the forwarding address the
     page gives it (`Login::sanitizeRedirectUrl()` is applied by the page and its POST, not by the template) and the referrer with `referrer()`, and asks
@@ -2893,7 +2868,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `account/settings/tools` exist, and the other bodies a JSON request can reach left nothing on the page's template (`NonHtmlReachTest`). The golden pages
     of `account/settings/tools` and `account/settings/following` changed only in how the site's address is written inside their scripts.
     `form_urlencode` (`urlencode()`: a tag link writes a space as `+`, as it always did).
-  - The admin pages are Twig too (`templates/default/admin/**`: 25 files beside their frozen `.tpl.php`). A page that needs a lookup only its templates
+  - The admin pages are Twig too (`templates/default/admin/**`: 25 files). A page that needs a lookup only its templates
     use computes it and passes it as a variable: `Pages\Admin\Plugins` passes `plugins_visible` (the plugins the site does not hide, each with its
     `shortname`, by name: what the page listed after `isVisible()` and `ksort()`), `Themes` passes `themes_with_preview` (the themes with a
     `preview.png`: a template does not touch the file system) and `LegacyTables` passes `restored_message`; the JSON of those pages gains those keys. New
@@ -2905,17 +2880,17 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `admin/legacytables/body` escapes every database value by autoescape, as its `$e` did (`AdminLegacyTablesTest` is unchanged). A diagnostics message is
     HTML written by the page and by the listeners of `diagnostics/basics`, so it is the one value printed with `|raw` (`raw-allowlist.php`). Values an
     administrator or a plugin supplied (a plugin's name in a dependency label, statistics labels and values, an invitation's address, a blocked address) are
-    escaped, and the diagnostics and logs scripts write the page's address with `e('js')` (`port-exceptions.php`, `TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint`,
+    escaped, and the diagnostics and logs scripts write the page's address with `e('js')` (`TemplateEscapingTest::testTheAdminPagesEscapeWhatTheyPrint`,
     `testTheAdminScriptsWriteThePagesAddressForAScript`). The homepage settings page no longer draws the icon of each content type and a copy of its form inside HTML
     comments (`testTheHomepageSettingsHoldNoCommentedOutMarkup`; golden `logged-in/admin-homepage.html`). The JSON of these pages is unchanged but for the new keys:
     `classic` copies of the originals of `admin/dependencies` and `admin/statistics/report` exist (their `__()` calls left `version`, `extension`, `report` and
     `level` on the page's template), and the other bodies a JSON request can reach left nothing (`NonHtmlReachTest`). `BuiltInLookTest::testAdminMenuItemsOfBundledPluginsAreListed` pins the
     plugin entries of the menu and their order.
   - The bundled plugins' entity templates (`IdnoPlugins/{Status,Text,Photo,Media,Like,Checkin,Event,StaticPages}/templates/default/entity/**`: how a post is
-    drawn in a stream and on its page, its icon, its compose and edit form) have Twig files beside their `.tpl.php` originals. A post's text is read as the
-    original read it: a note's is decoded and escaped (`decode_entities`, which is `html_entity_decode()`; the old `htmlentities(html_entity_decode())`) then
+    drawn in a stream and on its page, its icon, its compose and edit form) are Twig files. A post's text is read as the
+    old templates read it: a note's is decoded and escaped (`decode_entities`, which is `html_entity_decode()`; the old `htmlentities(html_entity_decode())`) then
     linked and followed by its tags, with `nl2br`; an article's goes through `forms/output/richtext`; the stored HTML of a photo, media, event, check-in, RSVP
-    goes through `sanitize_html` first (the originals printed it as stored, relying on the save to clean it, so a body a client stored without
+    goes through `sanitize_html` first (the old templates printed it as stored, relying on the save to clean it, so a body a client stored without
     cleaning is no longer markup) and then the linkers in the order the original used. A STATIC PAGE's body is not purified: only administrators write one (`adminGatekeeper()`
     on the plugin's edit page, an editor that takes raw HTML) and the purifier would remove an anchor's `id`, a form, a style block and an embed from a host it does not list, which existing
     pages hold; it is printed as stored with `|raw` (`raw-allowlist.php`), then linked, as the original did (`TemplateEscapingTest::testAStaticPageHoldsTheFormTheAnchorTheStyleAndTheEmbedItsAdministratorWrote`).
@@ -2926,17 +2901,17 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     the page editor's file picker) is written with `e('js')`; a check-in's coordinates are `?float` (`Checkin::lat()` and `long()` answer null for a stored value that
     is not a finite number, which used to be a `TypeError`), so the map script can only hold numbers. An event's times are read with `to_timestamp` (an
     undated or unreadable time is 0, as `date()` took `false`) and written with Twig's `date`; an RSVP's answer is `ucfirst`. The forms draw each control with
-    exactly the attributes it is given: the originals left the attributes of an earlier control on the page's template, so the hidden `forward-to` field and the
+    exactly the attributes it is given: the old templates left the attributes of an earlier control on the page's template, so the hidden `forward-to` field and the
     footer's spinner inherited an editor's class, `required`, placeholder or id (`TemplateEscapingTest::testALaterControlOfAnEditFormDoesNotInheritTheAttributesOfAnEarlierOne`).
-    The differences are in `port-exceptions.php`, each pinned by a `TemplateEscapingTest` method
+    The differences from the old templates are each pinned by a `TemplateEscapingTest` method
     (`testThePluginPostsScriptsWriteTheirValuesForAScript`, `testAStaticPagesTitleAndForwardAddressAreEscapedAndItsBodyIsAsWritten`, `testAPhotosPictureAddressThatIsNotHttpIsNotPrinted`,
     `testAStoredBodyIsPurifiedWhenItIsDrawn`; `testABookmarkWithAJavascriptAddressRendersNoLink`, `testACheckinPlaceNameIsEscaped`, `testAnRsvpBodyAndEventAddressAreSanitized`
-    and `testACheckinsCoordinatesAreNumbersInTheMapScript` pin what the originals already did). The golden pages that hold such a post or form changed in exactly those
+    and `testACheckinsCoordinatesAreNumbersInTheMapScript` pin what the old templates already did). The golden pages that hold such a post or form changed in exactly those
     lines. `forms/output/richtext` no longer ends with a newline (the original did not), so a post's text is followed directly by what the template closes. The
     media, RSVP and static page edit templates have `classic` copies of their originals, because their `__()` calls (and `drawSyndication()`) leave variables on the
     page's template that the JSON of the edit page prints; the icons leave nothing (`NonHtmlReachTest`, which now also looks at the plugins' entity templates).
   - The bundled plugins' admin, account, menu, head and footer templates (`IdnoPlugins/{ActivityPub,Bridgy,Checkin,IndiePub,Media,StandardSiteSync,StaticPages,Styles,Webhooks}/templates/default/**`,
-    27 files) have Twig files beside their `.tpl.php` originals; with them `unported.php` is `[]`. Menu entries and head links keep their places (they are drawn through
+    27 files) are Twig files. Menu entries and head links keep their places (they are drawn through
     `admin/menu/items`, `account/menu/items`, `shell/head`, `shell/head/final` and `shell/footer`: `BuiltInLookTest::testAdminMenuItemsOfBundledPluginsAreListed`), and a menu entry is
     `path_matches()` and `site_url()`. A lookup only one page's templates need is the page class's: `Pages\Admin` of StaticPages passes `category_counts` (the number of
     pages in each category; the template used to count them). SECRETS are passed to the draw of the body only, on a copy (`withVars()`), never as a variable of the page, because
@@ -2947,15 +2922,15 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (`testThePluginPagesEscapeWhatTheyPrint`). The StandardSiteSync head link prints the recorded `at://` address escaped and not through `http_url`, which would blank it
     (a `<link>` runs nothing). The pages of ActivityPub, Bridgy, StaticPages, Styles, StandardSiteSync, Webhooks and IndiePub have `classic` copies already (the Bootstrap-era look),
     so a JSON request draws those; the others a non-HTML request can reach leave nothing on the page's template (`NonHtmlReachTest`, whose pattern now covers every `default` file of
-    the plugins). Differences, on purpose, each in `port-exceptions.php` and pinned in `TemplateEscapingTest`: the scripts of the Bridgy, static pages and custom CSS pages
+    the plugins). Differences from the old templates, on purpose, each pinned in `TemplateEscapingTest`: the scripts of the Bridgy, static pages and custom CSS pages
     write their addresses and label with `e('js')`; the Bridgy key is escaped; the IndiePub account page and the authorization page's Cancel link print only http(s) addresses;
-    The equivalence test enables Styles (with a stylesheet) and StandardSiteSync
-    in its site (they are not on in the rig or in CI), so the whole admin menu changes with it: the exception hashes of the admin pages that draw the menu (`admin/homepage`,
-    `admin/diagnostics`) depend on which plugins' entries the menu holds.
+    `TemplateDrawCasesTest` enables Styles (with a stylesheet) and StandardSiteSync
+    in its site (they are not on in the rig or in CI), so that their templates are drawn.
 - `Idno\Core\Bonita\Main::additionalPath()`, `getPaths()` (the cascade's bases, then the empty `Main::$path`) and
   `getAdditionalPaths()` are a facade over the cascade. `Idno\Core\HybridTwigTemplate` is a class alias of `DefaultTemplate`
-  (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache` and `Templates::drawObject()`'s
-  per-class lookup (`object/<Class>` never matched) are gone. A `_t` request value that is not a string asks for no type.
+  (a `template` setting naming it builds `DefaultTemplate`); device template types, `Main::$cache`, `Bonita\Templates::drawList()`, `drawObject()` (its per-class lookup
+  `object/<Class>` never matched) and `process()`, `Bonita\Forms::draw()` and `setTarget()`, and the `BonDrawable` interface file (never loaded) are gone:
+  nothing called them, and `docs/install/upgrade.md` says what replaces each. A `_t` request value that is not a string asks for no type.
 - `Idno\Core\Purifier` keeps HTMLPurifier's serialised definitions in `<kernel cache dir>/htmlpurifier`, created on demand
   (never the upload path; with no writable directory the definition cache is off).
   `Purifier::purify()` keeps nothing: no output in the cache pool (a private post's body would stay on disk) and no memo (the site's template object, which holds the
@@ -2982,8 +2957,9 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   its `theme.ini` `[extensions]` apply, as before). The sources of the style sheet and script are in `frontend/` (not served); the built files
   are committed, and `npm --prefix frontend run build` writes them from Tailwind's scan of `templates/default/` and the bundled plugins'
   `default/` templates (a rebuild is not byte-identical to the committed files: a newer terser, and the old build scanned its own output;
-  it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default` in core
-  and the bundled plugins is a Twig file now; the `.tpl.php` files beside them are the frozen originals, drawn only by the equivalence harness and the bypass of the performance test.
+  it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default`, `email` and `email-text` in core
+  and the bundled plugins is a Twig file (`CoreTemplatesAreTwigTest`); the `.tpl.php` files that were beside them are deleted, and the `.tpl.php` engine stays for the `classic`
+  and type-shell templates and for third-party plugins and themes.
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
   `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the

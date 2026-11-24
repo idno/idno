@@ -1,72 +1,117 @@
-#: ./Pages/Admin.php:17
+# Translation template for webhooks.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: webhooks\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Pages/Admin.php:20
+#: ./templates/classic/webhooks/admin/home.tpl.php:6
+#: ./templates/classic/webhooks/admin/menu.tpl.php:1
+#: ./templates/default/webhooks/admin/home.html.twig:1
+#: ./templates/default/webhooks/admin/menu.html.twig:4
 msgid "Webhooks"
 msgstr ""
 
-#: ./Pages/Admin.php:41
+#: ./Pages/Admin.php:44
 msgid "%s doesn't seem to be a valid URL."
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:9
+#: ./templates/classic/webhooks/admin/home.tpl.php:9
+#: ./templates/default/webhooks/admin/home.html.twig:3
 msgid "Webhooks let you syndicate content to external applications very simply. The content of your post is sent to an external URL. Services like Slack, Wufoo, and Mailchimp all use Webhooks."
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:12
+#: ./templates/classic/webhooks/admin/home.tpl.php:12
 msgid "To learn more about Webhooks and what they can be used for, read the"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:12
+#: ./templates/classic/webhooks/admin/home.tpl.php:12
 msgid "PBWiki Webhooks page"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:14
+#: ./templates/classic/webhooks/admin/home.tpl.php:14
+#: ./templates/default/webhooks/admin/home.html.twig:8
 msgid "When content is syndicated via Webhooks, the external URL is sent the following data"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:17
+#: ./templates/classic/webhooks/admin/home.tpl.php:17
+#: ./templates/default/webhooks/admin/home.html.twig:10
 msgid "text"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:17
+#: ./templates/classic/webhooks/admin/home.tpl.php:17
+#: ./templates/default/webhooks/admin/home.html.twig:10
 msgid "the text of the update"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:18
+#: ./templates/classic/webhooks/admin/home.tpl.php:18
+#: ./templates/default/webhooks/admin/home.html.twig:11
 msgid "username"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:18
+#: ./templates/classic/webhooks/admin/home.tpl.php:18
+#: ./templates/default/webhooks/admin/home.html.twig:11
 msgid "the username of the account-holder"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:19
+#: ./templates/classic/webhooks/admin/home.tpl.php:19
+#: ./templates/default/webhooks/admin/home.html.twig:12
 msgid "the URL of the user's icon"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:20
+#: ./templates/classic/webhooks/admin/home.tpl.php:20
+#: ./templates/default/webhooks/admin/home.html.twig:13
 msgid "the type of content being sent"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:29
+#: ./templates/classic/webhooks/admin/home.tpl.php:29
 msgid "Create a new Webhook"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:42
+#: ./templates/classic/webhooks/admin/home.tpl.php:42
+#: ./templates/classic/webhooks/admin/home.tpl.php:60
+#: ./templates/classic/webhooks/admin/home.tpl.php:83
+#: ./templates/default/webhooks/admin/home.html.twig:34
 msgid "Name of this webhook"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:45
+#: ./templates/classic/webhooks/admin/home.tpl.php:45
+#: ./templates/classic/webhooks/admin/home.tpl.php:63
+#: ./templates/classic/webhooks/admin/home.tpl.php:86
+#: ./templates/default/webhooks/admin/home.html.twig:39
 msgid "Webhook URL"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:48
+#: ./templates/classic/webhooks/admin/home.tpl.php:48
+#: ./templates/classic/webhooks/admin/home.tpl.php:66
+#: ./templates/classic/webhooks/admin/home.tpl.php:89
 msgid "Remove this Webhook"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:72
+#: ./templates/classic/webhooks/admin/home.tpl.php:72
+#: ./templates/default/webhooks/admin/home.html.twig:52
 msgid "Add another Webhook"
 msgstr ""
 
-#: ./templates/default/webhooks/admin/home.tpl.php:76
+#: ./templates/classic/webhooks/admin/home.tpl.php:76
+#: ./templates/default/webhooks/admin/home.html.twig:58
 msgid "Save Webhooks"
+msgstr ""
+
+#: ./templates/default/webhooks/admin/home.html.twig:7
+msgid "About Webhooks"
+msgstr ""
+
+#: ./templates/default/webhooks/admin/home.html.twig:27
+msgid "Your Webhooks"
 msgstr ""
 

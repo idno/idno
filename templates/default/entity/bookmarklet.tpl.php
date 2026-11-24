@@ -1,2 +1,0 @@
-<p style="padding-top: 15px; padding-bottom: 15px;"><a class="bookmarklet" href="javascript:(function(){window.open('<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL(); ?>share?share_url='+encodeURIComponent(location.href)+'&share_title\='+encodeURIComponent(document.title));})();" class="btn"><?php echo \Idno\Core\Idno::site()->config()->title?></a>
-</p>

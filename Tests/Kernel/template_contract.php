@@ -26,7 +26,6 @@ if ($case === 'console-process-finds-core-templates') {
 }
 require dirname(__DIR__, 2) . '/Idno/start.php';
 
-use Idno\Core\Bonita\Forms;
 use Idno\Core\Bonita\Main;
 use Idno\Core\DefaultTemplate;
 
@@ -265,13 +264,6 @@ switch ($case) {
             'root' => $root,
             'drawn' => strlen($t->__(['unrendered' => 0])->draw('admin/export')) > 0,
         ];
-        break;
-
-    case 'forms-draw-returns-nothing':
-        $register('core');
-        $forms = new Forms();
-        $forms->setTarget('/target');
-        $result = ['returned' => $forms->draw('x'), 'token' => is_string($forms->token) && $forms->token !== '', 'time' => is_int($forms->time)];
         break;
 
     case 'exists-and-prints-nothing':

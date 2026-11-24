@@ -8,17 +8,18 @@ use Tests\Acceptance\Browser;
 use Tests\Fixtures\BundledTemplates;
 
 /**
- * Proves every Twig port of a core or bundled-plugin template against the `.tpl.php` original beside it. The site (the same
- * private site as the golden pages, with the same content) is visited as a visitor, as the administrator, as a member and as a
- * new user; each time a page draws a Twig file that has its original beside it, Tests\Fixtures\TwigPortCheck draws the original
- * too, with the same variables, in the same request (the templates read the session, the current page and the site, so the
- * variables are not replayed from a capture) and reports whether the normalised outputs are the same.
+ * Draws the branches no golden page reaches, through the real engines of a private site: hostile values, empty states, plugin
+ * states, every mail, the forms and the admin pages with their odd inputs. The golden pages carry the proof of what a page looks
+ * like; this test is a smoke test of what they do not draw. The site (the same private site as the golden pages, with the same
+ * content) is visited as a visitor, as the administrator, as a member and as a new user, and the draw cases run in the site's
+ * own process.
  *
- * The test fails for a difference that is not in fixtures/port-exceptions.php, for an exception that matches no difference or
- * whose test is missing, and for a Twig file with an original beside it that no visit compared (add a page to EXTRA_PAGES, or a
- * draw to drawCases(), that reaches it).
+ * Every page must answer below 500, every case must draw without an error, a few cases must draw different output for the
+ * different states they set up, and every Twig template of core and the bundled plugins must have been drawn at least once by the
+ * pages and the cases together (the template trace of Tests\Fixtures\TemplateTrace records each draw): add a page to EXTRA_PAGES,
+ * or a draw to one of the draw methods, for a template that no visit reaches.
  */
-final class TwigPortEquivalenceTest extends RenderedSiteTestCase
+final class TemplateDrawCasesTest extends RenderedSiteTestCase
 {
     /**
      * Pages beyond the golden ones, by who asks: `visitor`, `admin`, `member` (not an administrator) and `new` (a user who has
@@ -104,29 +105,39 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
 
     protected bool $compareGoldens = false;
 
-    private string $report = '';
+    private string $trace = '';
 
     protected function setUp(): void
     {
-        $this->report = sys_get_temp_dir() . '/idno-twig-port-' . bin2hex(random_bytes(6));
-        touch($this->report);
+        $this->trace = sys_get_temp_dir() . '/idno-template-trace-' . bin2hex(random_bytes(6));
+        touch($this->trace);
         parent::setUp();
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
-        if ($this->report !== '' && is_file($this->report)) {
-            unlink($this->report);
+        if ($this->trace !== '' && is_file($this->trace)) {
+            unlink($this->trace);
         }
     }
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_TWIG_PORT_REPORT' => $this->report];
+        return ['IDNO_TEST_TEMPLATE_TRACE' => $this->trace];
     }
 
-    public function testEveryPortedTemplateDrawsWhatItsOriginalDrew(): void
+    /**
+     * Every script the draw cases run in the site records its template draws in the trace, as the site's requests do.
+     */
+    protected function runInSite(string $code, bool $asConsole = false): mixed
+    {
+        $install = '\\Tests\\Fixtures\\TemplateTrace::install(' . $this->literal($this->trace) . ', ' . $this->literal(dirname(__DIR__, 2)) . ");\n";
+
+        return parent::runInSite($install . $code, $asConsole);
+    }
+
+    public function testEveryTemplateDrawsWithoutAnErrorAndEveryTwigFileIsDrawn(): void
     {
         $paths = $this->seedSite();
         $admin = $this->loginAsAdmin();
@@ -140,26 +151,17 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $this->assertNoDifferences();
 
         $root = dirname(__DIR__, 2);
-        /** @var array<string, array{reason: string, test: string, differences: list<string>}> $exceptions */
-        $exceptions = require __DIR__ . '/fixtures/port-exceptions.php';
-        $lines = [];
-        foreach (array_filter(explode("\n", (string) file_get_contents($this->report))) as $line) {
-            $lines[] = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
+        $drawn = [];
+        foreach (array_filter(explode("\n", (string) file_get_contents($this->trace))) as $line) {
+            $drawn[explode("\t", $line)[2] ?? '-'] = true;
         }
-
-        $originals = BundledTemplates::files($root, '.tpl.php');
-        $ported = [];
-        foreach (BundledTemplates::twigTemplates($root) as $logical => $path) {
-            if (isset($originals[$logical])) {
-                $ported[] = substr($path, strlen($root) + 1);
+        $notDrawn = [];
+        foreach (BundledTemplates::twigTemplates($root) as $path) {
+            if (!isset($drawn[substr($path, strlen($root) + 1)])) {
+                $notDrawn[] = substr($path, strlen($root) + 1);
             }
         }
-
-        $result = PortReportChecker::check($lines, $exceptions, $ported);
-        foreach ($result['notices'] as $notice) {
-            fwrite(STDERR, "\nNotice: " . $notice . "\n");
-        }
-        $this->assertSame([], $result['failures'], implode("\n", $result['failures']));
+        $this->assertSame([], $notDrawn, 'a Twig template that no page or draw case reaches: add one that does');
     }
 
     /**
@@ -231,7 +233,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $drawn = [];
         foreach (json_decode(%DRAWS%, true) as [$type, $name, $vars]) {
-            \Tests\Fixtures\TwigPortCheck::forget();
             $template = clone \Idno\Core\Idno::site()->template();
             $template->setTemplateType($type);
             $drawn[] = (string) $template->__($vars)->draw($name);
@@ -239,7 +240,10 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
 
         return $drawn;
         PHP;
-        $this->runInSite(str_replace('%DRAWS%', $this->literal(json_encode(self::DRAWS, JSON_THROW_ON_ERROR)), $code));
+        $drawn = $this->runInSite(str_replace('%DRAWS%', $this->literal(json_encode(self::DRAWS, JSON_THROW_ON_ERROR)), $code));
+        $this->assertIsArray($drawn);
+        $this->assertCount(count(self::DRAWS), $drawn);
+        $this->assertSame(count(self::DRAWS), count(array_unique($drawn)), 'each draw case draws something of its own: the states differ in what they show');
     }
 
     /**
@@ -255,7 +259,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $user = \Idno\Entities\User::getByHandle('ada');
         $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'mailto:ada@example.com', 'SMS:+15555550100', 'tel:+15555550100', 'javascript:alert(1)', 'data:text/html,x', 'mailto:a b@c', '']];
-        \Tests\Fixtures\TwigPortCheck::forget();
         $template = clone \Idno\Core\Idno::site()->template();
 
         return (string) $template->__(['user' => $user])->draw('shell/identities');
@@ -290,7 +293,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
             'the object\'s owner has a picture' => [['ada' => 'https://example.org/ada.png'], [], $bob, null],
             'both have pictures' => [['ada' => 'https://example.org/ada.png', 'bob' => 'https://example.org/bob.png'], [], $bob, $ada],
         ] as $label => [$images, $unused, $owner, $user]) {
-            \Tests\Fixtures\TwigPortCheck::forget();
             $ada->image = $images['ada'] ?? null;
             $status->getOwner()->image = $images['ada'] ?? null;
             $bob->image = $images['bob'] ?? null;
@@ -309,7 +311,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
             $out[$label] = (string) $live->__($vars)->draw('shell');
         }
 
-        \Tests\Fixtures\TwigPortCheck::forget();
         $probe = clone $live;
         $probe->vars = [];
         $out['a user that is not a user'] = (string) $probe->__(['user' => 'not a user', 'object' => $status])->draw('shell/activitypub');
@@ -348,7 +349,6 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
             }
         }
         \$draw = static function (string \$name, array \$vars = [], string \$type = 'default') use (\$site): string {
-            \\Tests\\Fixtures\\TwigPortCheck::forget();
             \$template = clone \$site->template();
             \$template->setTemplateType(\$type);
 
@@ -788,11 +788,9 @@ final class TwigPortEquivalenceTest extends RenderedSiteTestCase
         $syndication->registerService('zznot', static fn () => false, ['note']);
         $posse = ['zzaccounts' => [['account_id' => 'ada_l', 'url' => 'https://x.example/1', 'identifier' => 'ada_l']], 'zz plain' => 'https://x.example/plain'];
         foreach ([[], $posse, ['zzaccounts' => 'https://x.example/legacy']] as $i => $links) {
-            \Tests\Fixtures\TwigPortCheck::forget();
             $template = clone $site->template();
             $out['syndication ' . $i] = (string) $template->drawSyndication('note', $links);
         }
-        \Tests\Fixtures\TwigPortCheck::forget();
         $template = clone $site->template();
         $out['syndication of a type with none'] = (string) $template->drawSyndication('no-such-type', []);
         $out['the generic icon'] = $draw('content/syndication/icon/generic');

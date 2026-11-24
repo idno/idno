@@ -123,8 +123,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
 
     /**
      * The worker's scope is the path of the site's address: `/blog/` for a site in a subdirectory, the path as written when it has no
-     * trailing slash, and `/` for a site at the root. This branch is not compared with the original on the http rig, so the exact lines
-     * are asserted.
+     * trailing slash, and `/` for a site at the root. The golden pages draw one address only, so the exact lines are asserted here.
      *
      * @return array<string, array{string, string, string}>
      */

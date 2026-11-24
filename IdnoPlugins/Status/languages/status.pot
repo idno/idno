@@ -1,10 +1,17 @@
-#: ./ContentType.php:8
-msgid "Status update"
+# Translation template for status.
+#
+#, fuzzy
+msgid ""
 msgstr ""
-
-#: ./ContentType.php:9
-msgid "Status updates"
-msgstr ""
+"Project-Id-Version: status\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
 
 #: ./Pages/Delete.php:29
 msgid "Delete %s"
@@ -30,35 +37,58 @@ msgstr ""
 msgid "Edit status update"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:30
+#: ./Pages/Edit.php:63
+msgid "Your draft has been saved."
+msgstr ""
+
+#: ./templates/classic/entity/Status/edit.tpl.php:30
+#: ./templates/default/entity/Status/edit.html.twig:8
 msgid "New Status Update"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:32
+#: ./templates/classic/entity/Status/edit.tpl.php:32
+#: ./templates/default/entity/Status/edit.html.twig:8
 msgid "Edit Status Update"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:48
+#: ./templates/classic/entity/Status/edit.tpl.php:48
+#: ./templates/default/entity/Status/edit.html.twig:16
 msgid "Share a quick note or comment. You can use links and #hashtags."
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:82
-msgid "Reply to a site"
-msgstr ""
-
-#: ./templates/default/entity/Status/edit.tpl.php:93
+#: ./templates/classic/entity/Status/edit.tpl.php:79
+#: ./templates/classic/entity/Status/edit.tpl.php:91
+#: ./templates/classic/entity/Status/edit.tpl.php:156
+#: ./templates/default/entity/Status/edit.html.twig:46
 msgid "Add the URL that you're replying to"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:97
+#: ./templates/classic/entity/Status/edit.tpl.php:79
+#: ./templates/classic/entity/Status/edit.tpl.php:95
+#: ./templates/classic/entity/Status/edit.tpl.php:159
 msgid "Remove URL"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:114
+#: ./templates/classic/entity/Status/edit.tpl.php:80
+#: ./templates/default/entity/Status/edit.html.twig:42
+msgid "Reply to a site"
+msgstr ""
+
+#: ./templates/classic/entity/Status/edit.tpl.php:112
+#: ./templates/default/entity/Status/edit.html.twig:67
 msgid "Cancel"
 msgstr ""
 
-#: ./templates/default/entity/Status/edit.tpl.php:115
+#: ./templates/classic/entity/Status/edit.tpl.php:113
+#: ./templates/default/entity/Status/edit.html.twig:61
 msgid "Publish"
+msgstr ""
+
+#: ./templates/default/entity/Status/edit.html.twig:8
+msgid "Draft"
+msgstr ""
+
+#: ./templates/default/entity/Status/edit.html.twig:64
+msgid "Save as Draft"
 msgstr ""
 

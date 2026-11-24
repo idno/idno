@@ -18,6 +18,9 @@ use Tests\Templating\FallbackTrace;
  */
 final class NonHtmlReachTest extends TestCase
 {
+    /** The types that have Twig files, and their extension (the locator's own list). */
+    private const TWIG_TYPES = ['default' => 'html.twig', 'email' => 'html.twig', 'email-text' => 'txt.twig'];
+
     /** The names the helper methods of the template draw. */
     private const HELPER_NAMES = [
         'signForm' => 'forms/token',
@@ -117,80 +120,83 @@ final class NonHtmlReachTest extends TestCase
     }
 
     /**
-     * The page bodies (and what they draw) that a non-HTML request can reach and that are drawn from a ported `default` file: each is a
-     * template that, in its `.tpl.php` original, left nothing on the page's template (no `__()` on `$this`, no `$this->name =`), so
-     * drawing it from Twig, on a copy, loses no key of the JSON of the page. A body that left something has a `classic` copy, which is
-     * found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`). The account pages that a JSON request draws (`classic` copies exist for the menu, login, settings, tools and export) leave nothing either: the forms they draw (`forms/token`, the captcha) are drawn on the site's own object by `signForm()`, which is the same call as before. The admin pages that a JSON request draws leave nothing either, but for `dependencies` and `statistics/report`, which have `classic` copies of their originals (the `__()` calls of the originals leave `version`, `extension`, `report` and `level` on the page's template; the menu a body draws is the `classic` one, which leaves nothing). The bundled plugins' icons leave nothing; their media, RSVP and static page edit templates leave variables (`__()`, `drawSyndication()`) and have `classic` copies. The bundled plugins' head, footer, authorization and static page templates that a feed or JSON request can reach leave nothing too (the others, the admin and account pages and their menus, have `classic` copies, which are found first). Every template that is a page body or a part of one is in the pattern: a template that is added later and reached by such a request is listed here, or has a `classic` copy.
+     * The page bodies (and what they draw) that a non-HTML request can reach and that are drawn from a `default` Twig file. Such a file
+     * publishes nothing on the page's template: `idno_include()` draws on a copy, so JSON, which prints every variable of the page's
+     * template, never sees a key a Twig body set. A body whose pre-Twig version left a variable on the page (`__()`, `$this->name =`)
+     * has a `classic` copy, which is found first and so never appears here (`entity/wrapper`, `pages/home/blurb`, `entity/User/profile`,
+     * the account menu, login, settings, tools and export, the admin `dependencies` and `statistics/report`, the media, RSVP and static
+     * page edit templates). What is listed is every other body such a request reaches, so that one added later is a decision: a
+     * `classic` copy where JSON needs what it left, a place in this list where it leaves nothing.
      */
     private const PORTED_BODIES_THAT_LEAVE_NOTHING = [
-        'IdnoPlugins/Checkin/templates/default/checkin/head.tpl.php',
-        'IdnoPlugins/Checkin/templates/default/entity/Checkin/icon.tpl.php',
-        'IdnoPlugins/Event/templates/default/entity/Event/icon.tpl.php',
-        'IdnoPlugins/Event/templates/default/entity/RSVP/icon.tpl.php',
-        'IdnoPlugins/IndiePub/templates/default/indiepub/auth.tpl.php',
-        'IdnoPlugins/IndiePub/templates/default/indiepub/shell/head.tpl.php',
-        'IdnoPlugins/Like/templates/default/entity/Like/icon.tpl.php',
-        'IdnoPlugins/Media/templates/default/entity/Media/icon.tpl.php',
-        'IdnoPlugins/Media/templates/default/media/shell/footer.tpl.php',
-        'IdnoPlugins/Media/templates/default/media/shell/head.tpl.php',
-        'IdnoPlugins/Photo/templates/default/entity/Photo/icon.tpl.php',
-        'IdnoPlugins/StandardSiteSync/templates/default/standardsitesync/head.tpl.php',
-        'IdnoPlugins/StaticPages/templates/default/staticpages/page.tpl.php',
-        'IdnoPlugins/Status/templates/default/entity/Reply/icon.tpl.php',
-        'IdnoPlugins/Status/templates/default/entity/Status/icon.tpl.php',
-        'IdnoPlugins/Styles/templates/default/styles/shell/head.tpl.php',
-        'IdnoPlugins/Text/templates/default/entity/Entry/icon.tpl.php',
-        'templates/default/account/password.tpl.php',
-        'templates/default/account/password/reset.tpl.php',
-        'templates/default/account/password/sent.tpl.php',
-        'templates/default/account/register.tpl.php',
-        'templates/default/account/settings/feedback.tpl.php',
-        'templates/default/account/settings/feedback/confirm.tpl.php',
-        'templates/default/account/settings/following.tpl.php',
-        'templates/default/account/settings/following/bookmarklet.tpl.php',
-        'templates/default/account/settings/following/mf2user.tpl.php',
-        'templates/default/admin/about.tpl.php',
-        'templates/default/admin/dependencies/build.tpl.php',
-        'templates/default/admin/dependencies/extension.tpl.php',
-        'templates/default/admin/dependencies/idno.tpl.php',
-        'templates/default/admin/dependencies/php.tpl.php',
-        'templates/default/admin/dependencies/plugin.tpl.php',
-        'templates/default/admin/diagnostics.tpl.php',
-        'templates/default/admin/home/description.tpl.php',
-        'templates/default/admin/homepage.tpl.php',
-        'templates/default/admin/legacytables/body.tpl.php',
-        'templates/default/drafts.tpl.php',
-        'templates/default/entity/User/icon.tpl.php',
-        'templates/default/entity/bookmarklet.tpl.php',
-        'templates/default/entity/edit/footer.tpl.php',
-        'templates/default/entity/edit/header.tpl.php',
-        'templates/default/entity/edit/spinner.tpl.php',
-        'templates/default/entity/editwrapper.tpl.php',
-        'templates/default/entity/share.tpl.php',
-        'templates/default/file/picker/donejs.tpl.php',
-        'templates/default/following/add.tpl.php',
-        'templates/default/following/confirm.tpl.php',
-        'templates/default/following/home.tpl.php',
-        'templates/default/forms/input/captcha.tpl.php',
-        'templates/default/onboarding/begin.tpl.php',
-        'templates/default/onboarding/connect.tpl.php',
-        'templates/default/onboarding/profile.tpl.php',
-        'templates/default/onboarding/register.tpl.php',
-        'templates/default/pages/403.tpl.php',
-        'templates/default/pages/404.tpl.php',
-        'templates/default/pages/410.tpl.php',
-        'templates/default/pages/500.tpl.php',
-        'templates/default/pages/webmention.tpl.php',
-        'templates/default/stream/home.tpl.php',
+        'IdnoPlugins/Checkin/templates/default/checkin/head.html.twig',
+        'IdnoPlugins/Checkin/templates/default/entity/Checkin/icon.html.twig',
+        'IdnoPlugins/Event/templates/default/entity/Event/icon.html.twig',
+        'IdnoPlugins/Event/templates/default/entity/RSVP/icon.html.twig',
+        'IdnoPlugins/IndiePub/templates/default/indiepub/auth.html.twig',
+        'IdnoPlugins/IndiePub/templates/default/indiepub/shell/head.html.twig',
+        'IdnoPlugins/Like/templates/default/entity/Like/icon.html.twig',
+        'IdnoPlugins/Media/templates/default/entity/Media/icon.html.twig',
+        'IdnoPlugins/Media/templates/default/media/shell/footer.html.twig',
+        'IdnoPlugins/Media/templates/default/media/shell/head.html.twig',
+        'IdnoPlugins/Photo/templates/default/entity/Photo/icon.html.twig',
+        'IdnoPlugins/StandardSiteSync/templates/default/standardsitesync/head.html.twig',
+        'IdnoPlugins/StaticPages/templates/default/staticpages/page.html.twig',
+        'IdnoPlugins/Status/templates/default/entity/Reply/icon.html.twig',
+        'IdnoPlugins/Status/templates/default/entity/Status/icon.html.twig',
+        'IdnoPlugins/Styles/templates/default/styles/shell/head.html.twig',
+        'IdnoPlugins/Text/templates/default/entity/Entry/icon.html.twig',
+        'templates/default/account/password.html.twig',
+        'templates/default/account/password/reset.html.twig',
+        'templates/default/account/password/sent.html.twig',
+        'templates/default/account/register.html.twig',
+        'templates/default/account/settings/feedback.html.twig',
+        'templates/default/account/settings/feedback/confirm.html.twig',
+        'templates/default/account/settings/following.html.twig',
+        'templates/default/account/settings/following/bookmarklet.html.twig',
+        'templates/default/account/settings/following/mf2user.html.twig',
+        'templates/default/admin/about.html.twig',
+        'templates/default/admin/dependencies/build.html.twig',
+        'templates/default/admin/dependencies/extension.html.twig',
+        'templates/default/admin/dependencies/idno.html.twig',
+        'templates/default/admin/dependencies/php.html.twig',
+        'templates/default/admin/dependencies/plugin.html.twig',
+        'templates/default/admin/diagnostics.html.twig',
+        'templates/default/admin/home/description.html.twig',
+        'templates/default/admin/homepage.html.twig',
+        'templates/default/admin/legacytables/body.html.twig',
+        'templates/default/drafts.html.twig',
+        'templates/default/entity/User/icon.html.twig',
+        'templates/default/entity/bookmarklet.html.twig',
+        'templates/default/entity/edit/footer.html.twig',
+        'templates/default/entity/edit/header.html.twig',
+        'templates/default/entity/edit/spinner.html.twig',
+        'templates/default/entity/editwrapper.html.twig',
+        'templates/default/entity/share.html.twig',
+        'templates/default/file/picker/donejs.html.twig',
+        'templates/default/following/add.html.twig',
+        'templates/default/following/confirm.html.twig',
+        'templates/default/following/home.html.twig',
+        'templates/default/forms/input/captcha.html.twig',
+        'templates/default/onboarding/begin.html.twig',
+        'templates/default/onboarding/connect.html.twig',
+        'templates/default/onboarding/profile.html.twig',
+        'templates/default/onboarding/register.html.twig',
+        'templates/default/pages/403.html.twig',
+        'templates/default/pages/404.html.twig',
+        'templates/default/pages/410.html.twig',
+        'templates/default/pages/500.html.twig',
+        'templates/default/pages/webmention.html.twig',
+        'templates/default/stream/home.html.twig',
     ];
 
-    public function testAPortedPageBodyANonHtmlTypeCanReachLeavesNothingOnThePageOrHasAClassicCopy(): void
+    public function testAPageBodyANonHtmlTypeCanReachIsAClassicFileOrAListedTwigFile(): void
     {
         $root = dirname(__DIR__, 3);
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.tpl\.php$#', $file) === 1 && is_file($root . '/' . substr($file, 0, -8) . '.html.twig')) {
+                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.html\.twig$#', $file) === 1) {
                     $reached[$file] = true;
                 }
             }
@@ -198,7 +204,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = array_keys($reached);
         sort($reached);
 
-        $this->assertSame(self::PORTED_BODIES_THAT_LEAVE_NOTHING, $reached, 'a ported page body that a feed or JSON request draws: it needs a classic copy if its original left a variable on the page\'s template, or a place in the list if it left none');
+        $this->assertSame(self::PORTED_BODIES_THAT_LEAVE_NOTHING, $reached, 'a page body that a feed or JSON request draws from a Twig file: it needs a classic copy if JSON needs a variable the old template left on the page, or a place in the list if not');
     }
 
     public function testNoClassicFileIsUnreachable(): void
@@ -273,7 +279,8 @@ final class NonHtmlReachTest extends TestCase
     }
 
     /**
-     * @return list<string> the files a draw of $name resolves to for $type: those of the first type of the chain that has one
+     * @return list<string> the files a draw of $name resolves to for $type: those of the first type of the chain that has one (in a
+     *                      directory of a type that has Twig files, the Twig file wins over a `.tpl.php` of the same name, as the locator has it)
      */
     private static function resolve(string $projectDir, string $type, string $name): array
     {
@@ -281,9 +288,13 @@ final class NonHtmlReachTest extends TestCase
         foreach (TypeChain::for($type) as $candidate) {
             $found = [];
             foreach ($bases as $base) {
-                $file = $base . '/templates/' . $candidate . '/' . $name . '.tpl.php';
-                if (is_file($file)) {
-                    $found[] = substr($file, strlen($projectDir) + 1);
+                $stem = $base . '/templates/' . $candidate . '/' . $name;
+                $files = isset(self::TWIG_TYPES[$candidate]) ? [$stem . '.' . self::TWIG_TYPES[$candidate], $stem . '.tpl.php'] : [$stem . '.tpl.php'];
+                foreach ($files as $file) {
+                    if (is_file($file)) {
+                        $found[] = substr($file, strlen($projectDir) + 1);
+                        break;
+                    }
                 }
             }
             if ($found !== []) {
@@ -302,7 +313,7 @@ final class NonHtmlReachTest extends TestCase
     private static function drawnNames(string $php, bool $withPrefixes = false): array
     {
         $names = [];
-        if (preg_match_all('/\bdraw\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]/', $php, $matches) > 0) {
+        if (preg_match_all('/\b(?:draw|idno_include)\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]/', $php, $matches) > 0) {
             foreach ($matches[1] as $name) {
                 if (!str_ends_with($name, '/')) {
                     $names[] = $name;
@@ -315,7 +326,7 @@ final class NonHtmlReachTest extends TestCase
             }
         }
         // A literal prefix of a draw that goes on by concatenation (`draw('content/syndication/icon/' . $service)`): every template under it
-        if ($withPrefixes && preg_match_all('/\bdraw\(\s*[\'"]([A-Za-z0-9_\/-]+\/)[\'"]\s*\./', $php, $matches) > 0) {
+        if ($withPrefixes && preg_match_all('/\b(?:draw|idno_include)\(\s*[\'"]([A-Za-z0-9_\/-]+\/)[\'"]\s*[.~]/', $php, $matches) > 0) {
             foreach ($matches[1] as $prefix) {
                 $names[] = $prefix;
             }
@@ -365,8 +376,10 @@ final class NonHtmlReachTest extends TestCase
                     continue;
                 }
                 foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
-                    if ($file->isFile() && str_ends_with($file->getFilename(), '.tpl.php')) {
-                        $names[] = substr($file->getPathname(), strlen($typeDirectory) + 1, -strlen('.tpl.php'));
+                    foreach (['.tpl.php', '.html.twig', '.txt.twig'] as $extension) {
+                        if ($file->isFile() && str_ends_with($file->getFilename(), $extension)) {
+                            $names[] = substr($file->getPathname(), strlen($typeDirectory) + 1, -strlen($extension));
+                        }
                     }
                 }
             }

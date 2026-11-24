@@ -22,18 +22,19 @@ final class ClassicTemplatesTest extends TestCase
     }
 
     /**
-     * A `classic` file stands behind a `default` file of the same name in the same directory: it is the template that file
-     * replaced. A classic file with no default one beside it would be a template only feeds could draw.
+     * A `classic` file stands behind a `default` template of the same name in the same directory (a Twig file, or a `.tpl.php`
+     * where there is none): it is the template that file replaced. A classic file with no default one beside it would be a
+     * template only feeds could draw.
      */
-    public function testEveryClassicFileHasADefaultFileOfTheSameNameBesideIt(): void
+    public function testEveryClassicFileHasADefaultTemplateOfTheSameNameBesideIt(): void
     {
         $classic = FallbackTrace::classic($this->root);
 
         $this->assertNotEmpty($classic, 'there are classic templates');
         $missing = [];
         foreach ($classic as [$name, $file]) {
-            $default = str_replace('/templates/classic/', '/templates/default/', '/' . $file);
-            if (!is_file($this->root . $default)) {
+            $default = substr(str_replace('/templates/classic/', '/templates/default/', '/' . $file), 0, -strlen('.tpl.php'));
+            if (!is_file($this->root . $default . '.html.twig') && !is_file($this->root . $default . '.tpl.php')) {
                 $missing[] = $file;
             }
         }

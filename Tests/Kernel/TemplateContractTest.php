@@ -251,14 +251,6 @@ final class TemplateContractTest extends TestCase
     }
 
     /**
-     * Bonita\Forms::draw() draws the template and returns nothing (a missing `return`: it is not used).
-     */
-    public function testFormsDrawReturnsNothing(): void
-    {
-        $this->assertSame(['returned' => null, 'token' => true, 'time' => true], $this->runCase('forms-draw-returns-nothing'));
-    }
-
-    /**
      * `draw()` cannot tell a template that prints nothing, or `0` (which `empty()` takes for nothing), from one that is
      * not there: both are the empty string, or false when asked. Entity::draw() relies on it to draw `entity/default`.
      */

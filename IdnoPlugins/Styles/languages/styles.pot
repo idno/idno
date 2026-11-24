@@ -1,44 +1,72 @@
+# Translation template for styles.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: styles\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
 #: ./Pages/Admin.php:29
 msgid "Site Styles"
 msgstr ""
 
-#: ./templates/default/styles/admin/menu.tpl.php:1
+#: ./templates/classic/styles/admin.tpl.php:5
+#: ./templates/classic/styles/admin/menu.tpl.php:1
+#: ./templates/default/styles/admin.html.twig:1
+#: ./templates/default/styles/admin/menu.html.twig:4
 msgid "Custom CSS"
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:9
+#: ./templates/classic/styles/admin.tpl.php:9
+#: ./templates/default/styles/admin.html.twig:3
 msgid "The site styles CSS editor lets you easily modify the visual style of your Idno site by overriding the default CSS. With Custom CSS, you have more control over the fonts, colors, and visual impact of your site."
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:17
+#: ./templates/classic/styles/admin.tpl.php:17
+#: ./templates/default/styles/admin.html.twig:8
 msgid "Stylesheet editor"
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:22
+#: ./templates/classic/styles/admin.tpl.php:22
+#: ./templates/default/styles/admin.html.twig:10
 msgid "Add your changes to Idno's core CSS below."
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:24
+#: ./templates/classic/styles/admin.tpl.php:24
+#: ./templates/default/styles/admin.html.twig:17
 msgid "Do you have an existing stylesheet that you'd like to use? Import a CSS file from your computer."
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:26
+#: ./templates/classic/styles/admin.tpl.php:26
+#: ./templates/default/styles/admin.html.twig:14
+#: ./templates/default/styles/admin.html.twig:44
 msgid "Upload a stylesheet"
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:36
+#: ./templates/classic/styles/admin.tpl.php:36
+#: ./templates/default/styles/admin.html.twig:25
 msgid "You can also"
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:36
+#: ./templates/classic/styles/admin.tpl.php:36
+#: ./templates/default/styles/admin.html.twig:26
 msgid "download your stylesheet"
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:36
+#: ./templates/classic/styles/admin.tpl.php:36
+#: ./templates/default/styles/admin.html.twig:27
 msgid "to work on it locally."
 msgstr ""
 
-#: ./templates/default/styles/admin.tpl.php:43
+#: ./templates/classic/styles/admin.tpl.php:43
+#: ./templates/default/styles/admin.html.twig:32
 msgid "Save stylesheet"
 msgstr ""
 

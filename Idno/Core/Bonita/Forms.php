@@ -16,25 +16,6 @@ namespace Idno\Core\Bonita {
     {
 
         /**
-         *  Attaches a target URL to the form.
-         *
-         * @param string $targetURL URL for the form to point to
-         */
-        public function setTarget($targetURL)
-        {
-            $this->targetURL = $targetURL;
-        }
-
-        public function draw($templateName, $returnBlank = true)
-        {
-
-            $time = time();
-            $this->token = static::token($this->targetURL, $time);
-            $this->time = $time;
-            parent::draw($templateName, $returnBlank);
-        }
-
-        /**
          *  Gatekeeper function that validates input forms and prevents csrf attacks.
          *  Call this from your form action code.
          *

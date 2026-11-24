@@ -158,62 +158,6 @@ namespace Idno\Core\Bonita {
         }
 
         /**
-         * Draws a list of PHP objects using a specified list template. Objects
-         * must have a template of the form object/classname
-         *
-         * @param  $items An array of PHP objects
-         * @return string
-         */
-        function drawList($items, $style = 'stream')
-        {
-            if (is_array($items) && !empty($items) && !empty($style)) {
-                $t = new \Idno\Core\Bonita\Templates($this);
-                $t->items = $items;
-                return $t->draw('list/' . $style);
-            }
-            return '';
-        }
-
-        /**
-         * Draws a single supplied PHP object. Objects should have a corresponding template
-         * of the form object/classname
-         *
-         * @param  $item PHP object
-         * @return string
-         */
-        function drawObject($object)
-        {
-            if (is_object($object)) {
-                $t = new \Idno\Core\Bonita\Templates($this);
-                $t->object = $object;
-                if ($object instanceof BonDrawable) {
-                    return $t->draw('object/default');
-                }
-            }
-            return '';
-        }
-
-        /**
-         * Takes some text and runs it through the current template's processor.
-         * This is in the form of a template at processors/text, or processors/X where X
-         * is a custom processor
-         *
-         * @param  $content   Some content
-         * @param  $processor Optionally, the processor you want to use (default: text)
-         * @return string Formatted content (or the input content if the processor doesn't exist)
-         */
-        function process($content, $processor = 'text')
-        {
-            $t = new \Idno\Core\Bonita\Templates();
-            $t->content = $content;
-            $t->setTemplateType($this->getTemplateType());
-            if (($result = $t->draw('processor/' . $processor, false)) !== false) {
-                return $result;
-            }
-            return $content;
-        }
-
-        /**
          * Draws the shell template
          *
          * @param $echo  If set to true (by default), echoes the page; otherwise returns it

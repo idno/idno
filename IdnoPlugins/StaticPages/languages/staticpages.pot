@@ -1,5 +1,25 @@
-#: ./Pages/View.php:110
-msgid "%s was deleted."
+# Translation template for staticpages.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: staticpages\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Pages/Admin.php:26
+#: ./templates/classic/staticpages/admin.tpl.php:27
+#: ./templates/classic/staticpages/admin/menu.tpl.php:1
+#: ./templates/default/staticpages/admin.html.twig:3
+#: ./templates/default/staticpages/admin.html.twig:91
+#: ./templates/default/staticpages/admin/menu.html.twig:4
+msgid "Pages"
 msgstr ""
 
 #: ./Pages/Delete.php:29
@@ -19,166 +39,230 @@ msgid "We couldn't delete %s."
 msgstr ""
 
 #: ./Pages/Edit.php:48
+#: ./templates/classic/staticpages/admin.tpl.php:100
+#: ./templates/default/staticpages/admin.html.twig:48
 msgid "Edit page"
 msgstr ""
 
-#: ./Pages/Admin.php:19
-msgid "Pages"
+#: ./Pages/View.php:110
+msgid "%s was deleted."
 msgstr ""
 
-#: ./templates/default/entity/StaticPage/edit.tpl.php:30
-msgid "New Page"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:36
-msgid "Edit Page"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:44
-msgid "Title"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:45
-msgid "Give it a title"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:57
-msgid "Share something brilliant..."
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:58
-msgid "Body"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:65
-msgid "Parent category"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:69
-msgid "No Category"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:93
-msgid "Show advanced options"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:107
-msgid "Hide advanced options"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:113
-msgid "Forward URL"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:115
-msgid "Website to forward users to"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:117
-msgid "Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content."
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:121
-msgid "Show the page title as a heading?"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:156
-msgid "Cancel"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:157
-msgid "Publish"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage.tpl.php:10
+#: ./templates/classic/entity/StaticPage.tpl.php:10
+#: ./templates/default/entity/StaticPage.html.twig:6
 msgid "Manage pages"
 msgstr ""
 
-#: ./templates/default/entity/StaticPage.tpl.php:19
+#: ./templates/classic/entity/StaticPage.tpl.php:19
+#: ./templates/classic/staticpages/admin.tpl.php:100
+#: ./templates/classic/staticpages/admin.tpl.php:209
+#: ./templates/default/entity/StaticPage.html.twig:9
 msgid "Edit"
 msgstr ""
 
-#: ./templates/default/entity/StaticPage.tpl.php:22
+#: ./templates/classic/entity/StaticPage.tpl.php:22
+#: ./templates/classic/staticpages/admin.tpl.php:103
+#: ./templates/classic/staticpages/admin.tpl.php:222
+#: ./templates/default/entity/StaticPage.html.twig:12
 msgid "Delete"
 msgstr ""
 
-#: ./templates/default/entity/StaticPage.tpl.php:22
+#: ./templates/classic/entity/StaticPage.tpl.php:22
+#: ./templates/default/entity/StaticPage.html.twig:12
 msgid "Are you sure you want to permanently delete this entry?"
 msgstr ""
 
-#: ./templates/default/entity/StaticPage.tpl.php:47
+#: ./templates/classic/entity/StaticPage.tpl.php:47
+#: ./templates/default/entity/StaticPage.html.twig:26
 msgid "You are seeing this page because you are a site administrator. Other users will be forwarded to"
 msgstr ""
 
-#: ./templates/default/staticpages/admin/categories.tpl.php:8
-msgid "Save"
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:30
+#: ./templates/default/entity/StaticPage/edit.html.twig:11
+msgid "New Page"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:31
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:36
+#: ./templates/default/entity/StaticPage/edit.html.twig:13
+msgid "Edit Page"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:44
+#: ./templates/classic/staticpages/admin.tpl.php:55
+#: ./templates/default/entity/StaticPage/edit.html.twig:17
+#: ./templates/default/staticpages/admin.html.twig:20
+msgid "Title"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:45
+#: ./templates/default/entity/StaticPage/edit.html.twig:18
+msgid "Give it a title"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:57
+#: ./templates/default/entity/StaticPage/edit.html.twig:30
+msgid "Share something brilliant..."
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:58
+#: ./templates/default/entity/StaticPage/edit.html.twig:31
+msgid "Body"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:65
+#: ./templates/default/entity/StaticPage/edit.html.twig:38
+msgid "Parent category"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:70
+#: ./templates/default/entity/StaticPage/edit.html.twig:40
+msgid "No Category"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:95
+#: ./templates/default/entity/StaticPage/edit.html.twig:52
+msgid "Show advanced options"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:109
+#: ./templates/default/entity/StaticPage/edit.html.twig:62
+msgid "Hide advanced options"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:115
+#: ./templates/default/entity/StaticPage/edit.html.twig:68
+msgid "Forward URL"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:117
+#: ./templates/default/entity/StaticPage/edit.html.twig:70
+msgid "Website to forward users to"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:119
+#: ./templates/default/entity/StaticPage/edit.html.twig:72
+msgid "Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content."
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:123
+#: ./templates/default/entity/StaticPage/edit.html.twig:76
+msgid "Show the page title as a heading?"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:158
+#: ./templates/default/entity/StaticPage/edit.html.twig:99
+#: ./templates/default/staticpages/admin.html.twig:113
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/classic/entity/StaticPage/edit.tpl.php:159
+#: ./templates/default/entity/StaticPage/edit.html.twig:100
+msgid "Publish"
+msgstr ""
+
+#: ./templates/classic/staticpages/admin.tpl.php:31
 msgid "Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates.  Common examples of pages include an about page, a contact page, or a resume."
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:41
+#: ./templates/classic/staticpages/admin.tpl.php:41
+#: ./templates/default/staticpages/admin.html.twig:5
 msgid "Add new page"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:56
+#: ./templates/classic/staticpages/admin.tpl.php:56
+#: ./templates/default/staticpages/admin.html.twig:21
 msgid "Category"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:89
+#: ./templates/classic/staticpages/admin.tpl.php:89
+#: ./templates/default/staticpages/admin.html.twig:42
 msgid "Remove as homepage"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:89
+#: ./templates/classic/staticpages/admin.tpl.php:89
+#: ./templates/default/staticpages/admin.html.twig:42
 msgid "Are you sure you want to remove this page from your homepage?"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:93
+#: ./templates/classic/staticpages/admin.tpl.php:93
+#: ./templates/default/staticpages/admin.html.twig:45
 msgid "Make homepage"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:93
+#: ./templates/classic/staticpages/admin.tpl.php:93
+#: ./templates/default/staticpages/admin.html.twig:45
 msgid "Are you sure you want to make this page your homepage?"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:103
+#: ./templates/classic/staticpages/admin.tpl.php:103
+#: ./templates/default/staticpages/admin.html.twig:52
 msgid "Delete page"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:103
+#: ./templates/classic/staticpages/admin.tpl.php:103
+#: ./templates/default/staticpages/admin.html.twig:52
 msgid "Are you sure you want to permanently delete this page?"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:131
+#: ./templates/classic/staticpages/admin.tpl.php:131
+#: ./templates/default/staticpages/admin.html.twig:68
 msgid "Categories"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:135
+#: ./templates/classic/staticpages/admin.tpl.php:135
 msgid "If you plan on adding many pages, you may want to group them under categories.  However, you don’t have to assign a page to a category."
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:143
+#: ./templates/classic/staticpages/admin.tpl.php:143
 msgid "Add new category"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:153
+#: ./templates/classic/staticpages/admin.tpl.php:153
+#: ./templates/default/staticpages/admin.html.twig:79
 msgid "Name of category to add"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:154
+#: ./templates/classic/staticpages/admin.tpl.php:154
+#: ./templates/default/staticpages/admin.html.twig:80
 msgid "Add"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:168
+#: ./templates/classic/staticpages/admin.tpl.php:168
+#: ./templates/default/staticpages/admin.html.twig:90
 msgid "Category Name"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:169
+#: ./templates/classic/staticpages/admin.tpl.php:169
 msgid "Count"
 msgstr ""
 
-#: ./templates/default/staticpages/admin.tpl.php:216
+#: ./templates/classic/staticpages/admin.tpl.php:222
+#: ./templates/default/staticpages/admin.html.twig:125
 msgid "Are you sure you want to permanently delete this category?"
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:9
+msgid "Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume."
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:15
+msgid "All Pages"
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:22
+#: ./templates/default/staticpages/admin.html.twig:92
+msgid "Actions"
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:70
+msgid "Add category"
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:74
+msgid "If you plan on adding many pages, you may want to group them under categories. However, you don't have to assign a page to a category."
+msgstr ""
+
+#: ./templates/default/staticpages/admin.html.twig:112
+msgid "Save"
 msgstr ""
 

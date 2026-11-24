@@ -1,3 +1,31 @@
+# Translation template for checkin.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: checkin\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Checkin.php:16
+#: ./Checkin.php:170
+msgid "Checked into %s"
+msgstr ""
+
+#: ./Checkin.php:17
+msgid "somewhere near..."
+msgstr ""
+
+#: ./Checkin.php:194
+msgid "You can't save an empty checkin."
+msgstr ""
+
 #: ./Pages/Delete.php:18
 msgid "You don't have permission to perform this task."
 msgstr ""
@@ -11,6 +39,8 @@ msgid "We couldn't delete %s."
 msgstr ""
 
 #: ./Pages/Edit.php:32
+#: ./templates/classic/entity/Checkin/edit.tpl.php:39
+#: ./templates/default/entity/Checkin/edit.html.twig:31
 msgid "Where are you?"
 msgstr ""
 
@@ -18,51 +48,74 @@ msgstr ""
 msgid "Edit checkin"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:10
+#: ./Pages/Edit.php:58
+msgid "Your draft has been saved."
+msgstr ""
+
+#: ./templates/classic/entity/Checkin/edit.tpl.php:10
+#: ./templates/default/entity/Checkin/edit.html.twig:5
 msgid "New Location"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:12
+#: ./templates/classic/entity/Checkin/edit.tpl.php:12
+#: ./templates/default/entity/Checkin/edit.html.twig:5
 msgid "Edit Location"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:18
+#: ./templates/classic/entity/Checkin/edit.tpl.php:18
+#: ./templates/default/entity/Checkin/edit.html.twig:10
 msgid "Hang tight ... searching for your location."
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:34
+#: ./templates/classic/entity/Checkin/edit.tpl.php:34
+#: ./templates/default/entity/Checkin/edit.html.twig:26
 msgid "Location"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:53
+#: ./templates/classic/entity/Checkin/edit.tpl.php:53
+#: ./templates/default/entity/Checkin/edit.html.twig:49
 msgid "Address"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:54
+#: ./templates/classic/entity/Checkin/edit.tpl.php:54
+#: ./templates/default/entity/Checkin/edit.html.twig:50
 msgid "You can edit the address if it's wrong."
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:77
+#: ./templates/classic/entity/Checkin/edit.tpl.php:77
+#: ./templates/default/entity/Checkin/edit.html.twig:75
 msgid "Description"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:83
+#: ./templates/classic/entity/Checkin/edit.tpl.php:83
+#: ./templates/default/entity/Checkin/edit.html.twig:83
 msgid "Protect my location for 24 hours"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:89
+#: ./templates/classic/entity/Checkin/edit.tpl.php:85
+#: ./templates/default/entity/Checkin/edit.html.twig:82
+msgid "When selected, your precise location will only be shown to logged out users after 24 hours have passed"
+msgstr ""
+
+#: ./templates/classic/entity/Checkin/edit.tpl.php:98
+#: ./templates/default/entity/Checkin/edit.html.twig:103
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/classic/entity/Checkin/edit.tpl.php:102
+#: ./templates/default/entity/Checkin/edit.html.twig:97
 msgid "Publish"
 msgstr ""
 
-#: ./templates/default/entity/Checkin/edit.tpl.php:91
+#: ./templates/classic/entity/Checkin/edit.tpl.php:104
 msgid "Save"
 msgstr ""
 
-#: ./Checkin.php:72
-msgid "Checked into %s"
+#: ./templates/default/entity/Checkin/edit.html.twig:5
+msgid "Draft"
 msgstr ""
 
-#: ./Checkin.php:85
-msgid "You can\\'t save an empty checkin."
+#: ./templates/default/entity/Checkin/edit.html.twig:100
+msgid "Save as Draft"
 msgstr ""
 

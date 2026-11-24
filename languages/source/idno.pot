@@ -1,32 +1,47 @@
-#: ./Idno/Common/Entity.php:703
+# Translation template for idno.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: idno\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-11-23 23:48+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ./Idno/Common/Entity.php:794
 msgid "There was a problem syndicating."
 msgstr ""
 
-#: ./Idno/Common/Page.php:414
+#: ./Idno/Common/Page.php:420
+#: ./Idno/Common/Page.php:421
 msgid "Invalid token."
 msgstr ""
 
-#: ./Idno/Common/Page.php:432
+#: ./Idno/Common/Page.php:438
+#: ./templates/default/pages/500.html.twig:6
 msgid "Something went wrong."
 msgstr ""
 
-#: ./Idno/Common/Page.php:523
-msgid "Attempted to redirect page to a non local URL."
-msgstr ""
-
-#: ./Idno/Common/Page.php:635
+#: ./Idno/Common/Page.php:646
+#: ./Idno/Common/Page.php:737
 msgid "The page you were on timed out."
 msgstr ""
 
-#: ./Idno/Common/Page.php:649
+#: ./Idno/Common/Page.php:660
+#: ./Idno/Common/Page.php:751
 msgid "Couldn't say anything about execution, probably something went wrong"
 msgstr ""
 
-#: ./Idno/Common/Page.php:811
+#: ./Idno/Common/Page.php:824
 msgid "This content isn't here."
 msgstr ""
 
-#: ./Idno/Common/Page.php:827
+#: ./Idno/Common/Page.php:840
 msgid "This page can't be found."
 msgstr ""
 
@@ -34,28 +49,25 @@ msgstr ""
 msgid "Plugin %s doesn't have a version"
 msgstr ""
 
-#: ./Idno/Core/AsynchronousQueue.php:63
-msgid "No event passed"
+#: ./Idno/Console/Application.php:257
+msgid "Returns the current Idno version as defined in version.idno"
 msgstr ""
 
-#: ./Idno/Core/AsynchronousQueue.php:67
-msgid "Event passed is not a queued event, and so can't be dispatched"
+#: ./Idno/Console/Application.php:266
+msgid "WARNING: Your build of Idno is behind the latest version from Github (%s - %s). If you're having problems, you may want to try updating to the latest version.\nUpdate now: https://github.com/idno/idno\n"
 msgstr ""
 
-#: ./Idno/Core/AsynchronousQueue.php:71
-msgid "Sorry, this event has already been dispatched (but not yet cleaned up)"
+#: ./Idno/Core/ExceptionMessage.php:101
+#: ./templates/default/pages/500.html.twig:31
+msgid "Oh no! Something went wrong."
 msgstr ""
 
-#: ./Idno/Core/AsynchronousQueue.php:81
-msgid "Invalid user (%s) given for runAsContext, aborting"
-msgstr ""
-
-#: ./Idno/Core/Email.php:16
-msgid "Something went wrong and we couldn't create the email message to send."
-msgstr ""
-
-#: ./Idno/Core/Idno.php:504
+#: ./Idno/Core/Idno.php:456
 msgid "Site entity for \"%s\" could not be created"
+msgstr ""
+
+#: ./Idno/Core/PageHandler.php:69
+msgid "Account pages are not available to API requests."
 msgstr ""
 
 #: ./Idno/Core/Service.php:25
@@ -82,35 +94,35 @@ msgstr ""
 msgid "No result from endpoint."
 msgstr ""
 
-#: ./Idno/Core/Session.php:144
-msgid "Session funnybusiness: "
-msgstr ""
-
-#: ./Idno/Core/Session.php:543
+#: ./Idno/Core/Session.php:550
 msgid "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"
 msgstr ""
 
-#: ./Idno/Core/Time.php:97
-msgid "hour"
+#: ./Idno/Core/Themes.php:115
+msgid "The %s theme has been retired. Your site now uses Idno 2026."
 msgstr ""
 
 #: ./Idno/Core/Time.php:99
+msgid "hour"
+msgstr ""
+
+#: ./Idno/Core/Time.php:101
 msgid "hours"
 msgstr ""
 
-#: ./Idno/Core/Time.php:107
+#: ./Idno/Core/Time.php:109
 msgid "minute"
 msgstr ""
 
-#: ./Idno/Core/Time.php:109
+#: ./Idno/Core/Time.php:111
 msgid "minutes"
 msgstr ""
 
-#: ./Idno/Core/Time.php:115
+#: ./Idno/Core/Time.php:117
 msgid "ahead"
 msgstr ""
 
-#: ./Idno/Core/Time.php:115
+#: ./Idno/Core/Time.php:117
 msgid "behind"
 msgstr ""
 
@@ -118,19 +130,15 @@ msgstr ""
 msgid "Token was generated using an a cryptographically weak algorithm, this probably means your version of OpenSSL is broken or very old."
 msgstr ""
 
-#: ./Idno/Core/Webservice.php:450
+#: ./Idno/Core/Webservice.php:774
 msgid "Your version of PHP doesn't support CURLFile."
 msgstr ""
 
-#: ./Idno/Data/Mongo.php:41
-msgid "It looks like you don't have the new mongodb driver installed (<a href=\"https://secure.php.net/manual/en/set.mongodb.php\">https://secure.php.net/manual/en/set.mongodb.php</a>)\n\nMake sure you have it installed and configured, e.g. by running \"pecl install mongodb;\""
-msgstr ""
-
-#: ./Idno/Entities/GenericDataItem.php:45
+#: ./Idno/Entities/GenericDataItem.php:46
 msgid "GenericDataItem classes must have a datatype label set."
 msgstr ""
 
-#: ./Idno/Entities/Invitation.php:115
+#: ./Idno/Entities/Invitation.php:118
 msgid "You've been invited to join %s"
 msgstr ""
 
@@ -138,60 +146,58 @@ msgstr ""
 msgid "%s is not a parent or child of %s"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:67
+#: ./Idno/Files/FileSystem.php:81
 msgid "There is no error, the file uploaded with success"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:68
+#: ./Idno/Files/FileSystem.php:82
 msgid "The uploaded file exceeds the upload_max_filesize directive in php.ini"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:69
+#: ./Idno/Files/FileSystem.php:83
 msgid "The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:70
+#: ./Idno/Files/FileSystem.php:84
 msgid "The uploaded file was only partially uploaded"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:71
+#: ./Idno/Files/FileSystem.php:85
 msgid "No file was uploaded"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:72
+#: ./Idno/Files/FileSystem.php:86
 msgid "Missing a temporary folder"
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:73
+#: ./Idno/Files/FileSystem.php:87
 msgid "Failed to write file to disk."
 msgstr ""
 
-#: ./Idno/Files/FileSystem.php:74
+#: ./Idno/Files/FileSystem.php:88
 msgid "A PHP extension stopped the file upload."
 msgstr ""
 
-#: ./Idno/Files/LocalFileSystem.php:88
-msgid "There was a problem storing the file data."
-msgstr ""
-
-#: ./Idno/Files/LocalFileSystem.php:91
-msgid "There was a problem saving the file's metadata"
-msgstr ""
-
-#: ./Idno/Files/LocalFileSystem.php:100
+#: ./Idno/Legacy/FlysystemFileSystem.php:156
 msgid "Something went wrong saving your file."
 msgstr ""
 
-#: ./Idno/Files/LocalFileSystem.php:102
+#: ./Idno/Legacy/FlysystemFileSystem.php:158
 msgid "Check that your upload directory is writeable by the web server and try again."
 msgstr ""
 
 #: ./Idno/Pages/Account/Export.php:20
+#: ./templates/classic/account/menu.tpl.php:8
+#: ./templates/default/account/menu.html.twig:18
 msgid "Export Data"
 msgstr ""
 
-#: ./Idno/Pages/Account/Notifications.php:43
-msgid "Notifications"
+#: ./Idno/Pages/Account/Export/RSS.php:39
+msgid "There was a problem generating your export. Please try again later."
+msgstr ""
+
+#: ./Idno/Pages/Account/Export/WXR.php:43
+msgid "There was a problem generating your WXR export. Please try again later."
 msgstr ""
 
 #: ./Idno/Pages/Account/Password.php:26
@@ -202,23 +208,21 @@ msgstr ""
 msgid "Recover password"
 msgstr ""
 
-#: ./Idno/Pages/Account/Password.php:63
-msgid "Oh no! We couldn't find an account associated with that email address."
-msgstr ""
-
-#: ./Idno/Pages/Account/Password/Reset.php:27
+#: ./Idno/Pages/Account/Password/Reset.php:29
+#: ./templates/default/account/password/reset.html.twig:37
 msgid "Reset password"
 msgstr ""
 
-#: ./Idno/Pages/Account/Password/Reset.php:35
+#: ./Idno/Pages/Account/Password/Reset.php:38
+#: ./Idno/Pages/Account/Password/Reset.php:69
 msgid "The password reset code wasn't valid. They expire after three hours, so you might need to try again."
 msgstr ""
 
-#: ./Idno/Pages/Account/Password/Reset.php:58
+#: ./Idno/Pages/Account/Password/Reset.php:62
 msgid "Your password was reset!"
 msgstr ""
 
-#: ./Idno/Pages/Account/Password/Reset.php:63
+#: ./Idno/Pages/Account/Password/Reset.php:72
 msgid "Sorry, your passwords either don't match, or are too weak"
 msgstr ""
 
@@ -227,22 +231,27 @@ msgid "This site is closed to new users."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:31
+#: ./Idno/Pages/Account/Register.php:73
 msgid "Your invitation doesn't seem to be valid, or has expired."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:39
+#: ./Idno/Pages/Account/Register.php:50
 msgid "Create a new account"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:82
+#: ./Idno/Pages/Account/Register.php:84
+#: ./Idno/Pages/Admin/Users.php:140
 msgid "Please enter a username and email address."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:137
+#: ./Idno/Pages/Admin/Users.php:158
 msgid "Please create a username."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:140
+#: ./Idno/Pages/Admin/Users.php:161
 msgid "Your username is too long."
 msgstr ""
 
@@ -251,14 +260,17 @@ msgid "Usernames can only have letters, numbers and underscores."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:146
+#: ./Idno/Pages/Admin/Users.php:164
 msgid "Usernames can't contain a slash %s character."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:149
+#: ./Idno/Pages/Admin/Users.php:167
 msgid "Unfortunately, someone is already using that username. Please choose another."
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:152
+#: ./Idno/Pages/Admin/Users.php:170
 msgid "Hey, it looks like there's already an account with that email address. Did you forget your login?"
 msgstr ""
 
@@ -267,6 +279,7 @@ msgid "Please check that your passwords match and that your password is at least
 msgstr ""
 
 #: ./Idno/Pages/Account/Register.php:159
+#: ./Idno/Pages/Admin/Users.php:174
 msgid "That doesn't seem like it's a valid email address."
 msgstr ""
 
@@ -278,24 +291,45 @@ msgstr ""
 msgid "We couldn't register you."
 msgstr ""
 
+#: ./Idno/Pages/Account/Settings.php:20
+msgid "Account settings"
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:50
+msgid "Someone is already using %s as their email address."
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:56
+msgid "Your password has been updated."
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:59
+msgid "Sorry, your password is too weak"
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:66
+msgid "Your details were saved."
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings/Feedback.php:19
+#: ./templates/default/account/settings/feedback.html.twig:37
+msgid "Send feedback"
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings/Feedback.php:43
+msgid "Thanks! We received your feedback."
+msgstr ""
+
 #: ./Idno/Pages/Account/Settings/FeedbackConfirm.php:17
 msgid "Thank you for your feedback!"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Feedback.php:19
-msgid "Send feedback"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings/Feedback.php:44
-msgid "Thanks! We received your feedback."
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:37
-msgid "Sorry, could not find any users on that page, perhaps they need to mark up their profile in <a href=\"http://microformats.org/wiki/microformats-2\">Microformats</a>?"
+#: ./Idno/Pages/Account/Settings/Following.php:20
+msgid "Following settings"
 msgstr ""
 
 #: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:51
-msgid "Page did not contain any <a href=\"http://microformats.org/wiki/microformats-2\">Microformats</a> markup... doing my best with what I have!"
+msgid "Page did not contain any <a href=\\\"http://microformats.org/wiki/microformats-2\\\">Microformats</a> markup... doing my best with what I have!"
 msgstr ""
 
 #: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:61
@@ -334,55 +368,35 @@ msgstr ""
 msgid "No UUID, please try that again!"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Following.php:20
-msgid "Following settings"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings/Notifications.php:20
-msgid "Notification settings"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings/Notifications.php:39
-msgid "Your notification preferences were saved."
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings.php:20
-msgid "Account settings"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings.php:50
-msgid "Someone is already using %s as their email address."
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings.php:56
-msgid "Your password has been updated."
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings.php:59
-msgid "Sorry, your password is too weak"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings.php:66
-msgid "Your details were saved."
-msgstr ""
-
 #: ./Idno/Pages/Account/Settings/Tools.php:26
+#: ./templates/classic/account/menu.tpl.php:5
+#: ./templates/classic/account/settings/tools.tpl.php:9
+#: ./templates/default/account/settings/tools.html.twig:3
 msgid "Tools and Apps"
 msgstr ""
 
 #: ./Idno/Pages/Admin/About.php:20
+#: ./templates/default/admin/about.html.twig:5
 msgid "About Idno"
 msgstr ""
 
 #: ./Idno/Pages/Admin/Dependencies.php:20
+#: ./templates/classic/admin/dependencies.tpl.php:4
+#: ./templates/default/admin/dependencies.html.twig:4
 msgid "Dependencies"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Diagnostics.php:56
+#: ./Idno/Pages/Admin/Diagnostics.php:60
+#: ./templates/classic/admin/menu.tpl.php:14
+#: ./templates/default/admin/diagnostics.html.twig:4
 msgid "Diagnostics"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Email.php:17
+#: ./Idno/Pages/Admin/Email.php:24
+#: ./templates/classic/admin/menu.tpl.php:7
+#: ./templates/default/account/settings/following/mf2user.html.twig:67
+#: ./templates/default/admin/email.html.twig:1
+#: ./templates/default/admin/menu.html.twig:25
 msgid "Email"
 msgstr ""
 
@@ -394,11 +408,40 @@ msgstr ""
 msgid "There was a problem sending a test message to %s."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Export.php:18
+#: ./Idno/Pages/Admin/EmailTest.php:31
+msgid "The mail setting %s cannot be used. Check it on this page."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Export.php:23
 msgid "Export data"
 msgstr ""
 
+#: ./Idno/Pages/Admin/Export/Generate.php:28
+msgid "The full archive needs the PHP zip extension, which this server does not have."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Export/Generate.php:35
+msgid "An export is already being made. Please wait for it to finish: we will email you."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Export/Generate.php:47
+msgid "We couldn't start your export. Please try again."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Export/RSS.php:39
+msgid "There was a problem generating the export. Please try again later."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Export/WXR.php:39
+msgid "There was a problem generating the WXR export. Please try again later."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Home.php:21
+msgid "Administration"
+msgstr ""
+
 #: ./Idno/Pages/Admin/Homepage.php:25
+#: ./templates/classic/admin/menu.tpl.php:6
 msgid "Homepage"
 msgstr ""
 
@@ -406,40 +449,109 @@ msgstr ""
 msgid "The default homepage content types were saved."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Home.php:21
-msgid "Administration"
-msgstr ""
-
-#: ./Idno/Pages/Admin/Import.php:19
+#: ./Idno/Pages/Admin/Import.php:25
 msgid "Import data"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Import.php:35
+#: ./Idno/Pages/Admin/Import.php:45
+msgid "Choose where your file comes from: WordPress or Blogger."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Import.php:53
 msgid "You need to upload an import file to continue."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Import.php:37
+#: ./Idno/Pages/Admin/Import.php:59
+msgid "That file is larger than this server accepts for uploads. Export a shorter period, and import the files one after another."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Import.php:65
 msgid "We couldn't open the file you uploaded. Please try again."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Import.php:39
+#: ./Idno/Pages/Admin/Import.php:70
+msgid "That file is larger than %d MB, which is the most an import reads. Export a shorter period, and import the files one after another."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Import.php:80
+msgid "We couldn't keep the file you uploaded. Please try again."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Import.php:92
+msgid "We couldn't start your import. Please try again."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Import.php:94
+#: ./Idno/Pages/Admin/Import.php:101
 msgid "Your import has started. We'll email you when it's done."
 msgstr ""
 
+#: ./Idno/Pages/Admin/LegacyTables.php:55
+#: ./templates/classic/admin/legacytables.tpl.php:4
+#: ./templates/classic/admin/menu.tpl.php:12
+#: ./templates/default/admin/legacytables.html.twig:1
+#: ./templates/default/admin/menu.html.twig:48
+msgid "Legacy tables"
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:67
+msgid "Nothing was deleted: type delete in the box to confirm."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:70
+msgid "Nothing was deleted."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:72
+msgid "There were no legacy tables to delete."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:74
+msgid "Nothing was deleted: the upgrade from Idno 1.x is not complete."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:78
+msgid "Deleted %d legacy tables: %s."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:81
+msgid "Deleted before the error: %s."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:83
+msgid "A table outside the Idno 1.x tables refers to the legacy table %s (it has a foreign key into it), so that table cannot be deleted. Deal with the table that refers to it first (the server's error log names it), then delete the legacy tables again."
+msgstr ""
+
+#: ./Idno/Pages/Admin/LegacyTables.php:85
+msgid "Not every legacy table could be deleted. The error was logged; try again, or see the server's error log."
+msgstr ""
+
 #: ./Idno/Pages/Admin/Logs.php:19
+#: ./templates/classic/admin/logs.tpl.php:4
 msgid "Log capture"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Plugins.php:25
+#: ./Idno/Pages/Admin/Plugins.php:27
+#: ./templates/classic/admin/menu.tpl.php:3
+#: ./templates/classic/admin/plugins.tpl.php:5
+#: ./templates/classic/admin/plugins/plugin.tpl.php:119
+#: ./templates/default/admin/menu.html.twig:15
+#: ./templates/default/admin/plugins.html.twig:1
 msgid "Plugins"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Plugins.php:43
+#: ./Idno/Pages/Admin/Plugins.php:66
+#: ./Idno/Pages/Admin/Plugins.php:72
 msgid "The plugin was enabled."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Plugins.php:59
+#: ./Idno/Pages/Admin/Plugins.php:82
+#: ./Idno/Pages/Admin/Plugins.php:88
 msgid "The plugin was disabled."
+msgstr ""
+
+#: ./Idno/Pages/Admin/Plugins.php:136
+msgid "The plugin was enabled, but the indexes it declares could not be created. The site works without them; the error was logged."
 msgstr ""
 
 #: ./Idno/Pages/Admin/Statistics.php:16
@@ -447,102 +559,109 @@ msgid "Something went wrong, either no statistics were returned or it wasn't in 
 msgstr ""
 
 #: ./Idno/Pages/Admin/Statistics.php:28
+#: ./templates/classic/admin/statistics.tpl.php:4
+#: ./templates/default/admin/menu.html.twig:35
+#: ./templates/default/admin/statistics.html.twig:1
 msgid "Statistics"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Themes.php:24
+#: ./Idno/Pages/Admin/Themes.php:26
+#: ./templates/classic/admin/menu.tpl.php:4
+#: ./templates/classic/admin/themes.tpl.php:4
+#: ./templates/default/admin/menu.html.twig:10
+#: ./templates/default/admin/themes.html.twig:1
 msgid "Themes"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Themes.php:45
-msgid "The theme was enabled."
-msgstr ""
-
-#: ./Idno/Pages/Admin/Users.php:32
+#: ./Idno/Pages/Admin/Users.php:29
 msgid "User Management"
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:50
+#: ./Idno/Pages/Admin/Users.php:47
 msgid "%s was given administration rights."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:58
+#: ./Idno/Pages/Admin/Users.php:55
 msgid "%s was stripped of their administration rights."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:65
+#: ./Idno/Pages/Admin/Users.php:62
 msgid "%s was removed from your site."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:91
+#: ./Idno/Pages/Admin/Users.php:88
 msgid "%d invitations were sent."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:93
+#: ./Idno/Pages/Admin/Users.php:90
 msgid "Your invitation was sent."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:95
+#: ./Idno/Pages/Admin/Users.php:92
 msgid "Something went wrong and we couldn't send emails to your recipients."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:97
+#: ./Idno/Pages/Admin/Users.php:94
 msgid "No email addresses were found or all the people you invited are already members of this site."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:105
+#: ./Idno/Pages/Admin/Users.php:102
 msgid "The invitation was removed."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:119
+#: ./Idno/Pages/Admin/Users.php:116
 msgid "The invitation was resent."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:128
+#: ./Idno/Pages/Admin/Users.php:125
 msgid "You can't add any more users to your site."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:141
+#: ./Idno/Pages/Admin/Users.php:138
 msgid "Please make sure your passwords match and aren't empty."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:181
+#: ./Idno/Pages/Admin/Users.php:178
 msgid "User %s was created. You may wish to email them to let them know."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:204
+#: ./Idno/Pages/Admin/Users.php:201
 msgid "%d emails were blocked."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:206
+#: ./Idno/Pages/Admin/Users.php:203
 msgid "The email address was blocked."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:208
+#: ./Idno/Pages/Admin/Users.php:205
+#: ./Idno/Pages/Admin/Users.php:230
 msgid "No email addresses were found."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:229
+#: ./Idno/Pages/Admin/Users.php:226
 msgid "%d emails were unblocked."
 msgstr ""
 
-#: ./Idno/Pages/Admin/Users.php:231
+#: ./Idno/Pages/Admin/Users.php:228
 msgid "The email address was unblocked."
 msgstr ""
 
-#: ./Idno/Pages/Annotation/Delete.php:43
-msgid "The annotation was deleted."
+#: ./Idno/Pages/Drafts.php:35
+#: ./templates/default/shell/nav.html.twig:32
+msgid "Drafts"
 msgstr ""
 
 #: ./Idno/Pages/Entity/Attachment/Delete.php:21
 msgid "We couldn't find the post."
 msgstr ""
 
-#: ./Idno/Pages/Entity/Delete.php:48
+#: ./Idno/Pages/Entity/Delete.php:49
 msgid "We couldn't find the post to delete."
 msgstr ""
 
-#: ./Idno/Pages/Entity/Delete.php:56
+#: ./Idno/Pages/Entity/Delete.php:57
+#: ./Idno/Pages/Entity/View.php:137
+#: ./Idno/Pages/User/View.php:108
 msgid "%s was deleted."
 msgstr ""
 
@@ -579,18 +698,20 @@ msgid "You're following %s!"
 msgstr ""
 
 #: ./Idno/Pages/Following/Home.php:18
+#: ./templates/default/following/home.html.twig:3
 msgid "Following"
 msgstr ""
 
-#: ./Idno/Pages/Onboarding/Begin.php:24
+#: ./Idno/Pages/Onboarding/Begin.php:25
 msgid "Welcome to Idno"
 msgstr ""
 
-#: ./Idno/Pages/Onboarding/Connect.php:26
+#: ./Idno/Pages/Onboarding/Connect.php:27
 msgid "Connect some networks"
 msgstr ""
 
-#: ./Idno/Pages/Onboarding/Profile.php:23
+#: ./Idno/Pages/Onboarding/Profile.php:24
+#: ./templates/default/onboarding/profile.html.twig:3
 msgid "Create your profile"
 msgstr ""
 
@@ -606,43 +727,23 @@ msgstr ""
 msgid "URL missing"
 msgstr ""
 
-#: ./Idno/Pages/Service/Web/ImageProxy.php:86
-msgid "There was a problem decoding the url"
-msgstr ""
-
-#: ./Idno/Pages/Service/Web/ImageProxy.php:90
-msgid "No url specified"
-msgstr ""
-
-#: ./Idno/Pages/Service/Web/ImageProxy.php:236
-msgid "Could not save temporary file"
-msgstr ""
-
-#: ./Idno/Pages/Service/Web/ImageProxy.php:268
-msgid "Looks like something went wrong, image was zero bytes big!"
-msgstr ""
-
-#: ./Idno/Pages/Service/Web/UrlUnfurl.php:20
-msgid "You need to specify a working URL"
-msgstr ""
-
-#: ./Idno/Pages/Service/Web/UrlUnfurl.php:74
-msgid "Url %s could not be unfurled"
-msgstr ""
-
-#: ./Idno/Pages/Session/CurrentUser.php:38
+#: ./Idno/Pages/Session/CurrentUser.php:39
+#: ./Idno/Pages/User/View.php:72
 msgid "The %s profile for %s"
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:49
+#: ./Idno/Pages/Session/Login.php:53
+#: ./templates/classic/account/login.tpl.php:7
+#: ./templates/classic/account/login.tpl.php:21
+#: ./templates/default/account/login.html.twig:23
 msgid "Sign in"
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:74
+#: ./Idno/Pages/Session/Login.php:79
 msgid "Oops! It looks like your password isn't correct. Please try again."
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:79
+#: ./Idno/Pages/Session/Login.php:84
 msgid "Oops! We couldn't find your username or email address. Please check you typed it correctly and try again."
 msgstr ""
 
@@ -650,7 +751,7 @@ msgstr ""
 msgid "You've signed out. See you soon!"
 msgstr ""
 
-#: ./Idno/Pages/User/Edit.php:32
+#: ./Idno/Pages/User/Edit.php:33
 msgid "Edit profile: %s"
 msgstr ""
 
@@ -659,1530 +760,1964 @@ msgid "Webmention endpoint"
 msgstr ""
 
 #: ./Idno/Stats/Timer.php:41
+#: ./Idno/Stats/TotalTimer.php:46
 msgid "Timer %s has not been started."
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:8
+#: ./templates/classic/account/export.tpl.php:8
+#: ./templates/default/account/export.html.twig:2
 msgid "Export your data"
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:19
+#: ./templates/classic/account/export.tpl.php:19
+#: ./templates/default/account/export.html.twig:9
 msgid "You can download an RSS version of everything you've posted on this site. This file is suitable for importing into content management systems like WordPress, or another Idno site."
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:24
+#: ./templates/classic/account/export.tpl.php:24
+#: ./templates/classic/account/export.tpl.php:57
+#: ./templates/classic/admin/export.tpl.php:25
+#: ./templates/classic/admin/export.tpl.php:59
+#: ./templates/default/account/export.html.twig:15
+#: ./templates/default/account/export.html.twig:39
+#: ./templates/default/admin/export.html.twig:12
+#: ./templates/default/admin/export.html.twig:32
 msgid "Include private posts?"
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:28
+#: ./templates/classic/account/export.tpl.php:28
+#: ./templates/classic/account/export.tpl.php:61
+#: ./templates/classic/admin/export.tpl.php:29
+#: ./templates/classic/admin/export.tpl.php:63
+#: ./templates/classic/admin/home.tpl.php:84
+#: ./templates/classic/admin/home.tpl.php:140
+#: ./templates/classic/admin/home.tpl.php:163
+#: ./templates/classic/admin/home.tpl.php:191
+#: ./templates/classic/admin/home.tpl.php:244
+#: ./templates/classic/admin/home.tpl.php:279
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:67
 msgid "Yes"
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:29
+#: ./templates/classic/account/export.tpl.php:29
+#: ./templates/classic/account/export.tpl.php:62
+#: ./templates/classic/admin/export.tpl.php:30
+#: ./templates/classic/admin/export.tpl.php:64
+#: ./templates/classic/admin/home.tpl.php:85
+#: ./templates/classic/admin/home.tpl.php:141
+#: ./templates/classic/admin/home.tpl.php:164
+#: ./templates/classic/admin/home.tpl.php:192
+#: ./templates/classic/admin/home.tpl.php:245
+#: ./templates/classic/admin/home.tpl.php:280
 msgid "No"
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:34
+#: ./templates/classic/account/export.tpl.php:34
+#: ./templates/classic/account/export.tpl.php:67
+#: ./templates/default/account/export.html.twig:17
+#: ./templates/default/account/export.html.twig:41
 msgid "Platforms like WordPress may assume that all your posts should be displayed publicly. In order to protect your privacy, you may wish to just download your public posts."
 msgstr ""
 
-#: ./templates/default/account/export.tpl.php:38
+#: ./templates/classic/account/export.tpl.php:38
+#: ./templates/default/account/export.html.twig:21
 msgid "Download RSS Feed"
 msgstr ""
 
-#: ./templates/default/account/login.tpl.php:4
+#: ./templates/classic/account/export.tpl.php:49
+#: ./templates/default/account/export.html.twig:31
+msgid "Export as WordPress (WXR)"
+msgstr ""
+
+#: ./templates/classic/account/export.tpl.php:52
+#: ./templates/default/account/export.html.twig:33
+msgid "Download a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress."
+msgstr ""
+
+#: ./templates/classic/account/export.tpl.php:71
+#: ./templates/default/account/export.html.twig:45
+msgid "Download WXR File"
+msgstr ""
+
+#: ./templates/classic/account/login.tpl.php:4
+#: ./templates/default/account/login.html.twig:4
 msgid "Welcome back!"
 msgstr ""
 
-#: ./templates/default/account/login.tpl.php:14
+#: ./templates/classic/account/login.tpl.php:14
+#: ./templates/default/account/login.html.twig:11
 msgid "Your email address or username"
 msgstr ""
 
-#: ./templates/default/account/login.tpl.php:17
+#: ./templates/classic/account/login.tpl.php:17
+#: ./templates/classic/account/settings.tpl.php:55
+#: ./templates/default/account/login.html.twig:16
+#: ./templates/default/account/settings.html.twig:24
 msgid "Password"
 msgstr ""
 
-#: ./templates/default/account/login.tpl.php:36
+#: ./templates/classic/account/login.tpl.php:36
 msgid "New here? Register for an account."
 msgstr ""
 
-#: ./templates/default/account/login.tpl.php:40
+#: ./templates/classic/account/login.tpl.php:40
+#: ./templates/default/account/login.html.twig:33
+#: ./templates/email-text/account/password.txt.twig:1
+#: ./templates/email/account/password.html.twig:2
 msgid "Forgot your password?"
 msgstr ""
 
-#: ./templates/default/account/menu.tpl.php:3
+#: ./templates/classic/account/menu.tpl.php:3
+#: ./templates/default/account/menu.html.twig:5
+#: ./templates/default/shell/nav.html.twig:40
 msgid "Settings"
 msgstr ""
 
-#: ./templates/default/account/menu.tpl.php:6
-msgid "Email notifications"
-msgstr ""
-
-#: ./templates/default/account/notifications.tpl.php:6
-msgid "The notifications screen shows you who has interacted with your content."
-msgstr ""
-
-#: ./templates/default/account/notifications.tpl.php:25
-msgid "You don't have any notifications yet. But we love you anyway!"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:5
-msgid "Reset your password"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:7
-msgid "To change your password, enter your new password below:"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:16
-msgid "Your email address"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:17
-msgid "The address associated with your %s account."
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:23
-msgid "New password (7 characters or more)"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:29
-msgid "Retype password"
-msgstr ""
-
-#: ./templates/default/account/password/reset.tpl.php:30
-msgid "We ask you to enter the password twice to protect against typos."
-msgstr ""
-
-#: ./templates/default/account/password/sent.tpl.php:5
-msgid "Your password reset email has been sent"
-msgstr ""
-
-#: ./templates/default/account/password/sent.tpl.php:15
-msgid "Check your inbox! You'll find an email containing a special link that will help you reset your password."
-msgstr ""
-
-#: ./templates/default/account/password/sent.tpl.php:18
-msgid "Did you remember your password? That's okay too. You can <a href=\"%s\">click here to sign in.</a>"
-msgstr ""
-
-#: ./templates/default/account/password.tpl.php:9
-msgid "Forgot your password? Don't worry! It happens to the best of us."
-msgstr ""
-
-#: ./templates/default/account/password.tpl.php:10
-msgid "Just enter the email address associated with your %s account below, and we'll send you a top secret link to your email account so that you can create a new password."
-msgstr ""
-
-#: ./templates/default/account/password.tpl.php:27
-msgid "Send password reset email"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:5
-msgid "Hello there!"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:7
-msgid "Create a new account to get started."
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:14
-msgid "Your name"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:20
-msgid "Choose a handle"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:21
-msgid "Handles identify you throughout the site. Something simple is best: for example, <em>janedoe</em>."
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:23
-msgid "username"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:33
-msgid "Create a password"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:34
-msgid "At least 7 characters please."
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:37
-msgid "secret-password"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:42
-msgid "Your password again"
-msgstr ""
-
-#: ./templates/default/account/register.tpl.php:49
-msgid "Create Account"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback/confirm.tpl.php:5
-msgid "Message received!"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback/confirm.tpl.php:9
-msgid "Thanks for sending along your thoughts. We'll read them right away."
-msgstr ""
-
-#: ./templates/default/account/settings/feedback/confirm.tpl.php:22
-msgid "Feedback is a gift.  For more information about Idno, <a href=\"https://idno.co/\">please visit our homepage</a>"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback.tpl.php:5
-msgid "Share your feedback"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback.tpl.php:9
-msgid "Want to share something with the Idno team? We'd love to read your thoughts, suggestions, or ideas. We will personally read all of your feedback."
-msgstr ""
-
-#: ./templates/default/account/settings/feedback.tpl.php:21
-msgid "From"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback.tpl.php:29
-msgid "Feedback for the Idno team"
-msgstr ""
-
-#: ./templates/default/account/settings/feedback.tpl.php:32
-msgid "Let us know what you think."
-msgstr ""
-
-#: ./templates/default/account/settings/following/bookmarklet.tpl.php:3
-msgid "Add as friend..."
-msgstr ""
-
-#: ./templates/default/account/settings/following/mf2user.tpl.php:56
-msgid "Name"
-msgstr ""
-
-#: ./templates/default/account/settings/following/mf2user.tpl.php:65
-msgid "Nickname"
-msgstr ""
-
-#: ./templates/default/account/settings/following/mf2user.tpl.php:68
-msgid "Handle (for your reference)"
-msgstr ""
-
-#: ./templates/default/account/settings/following/mf2user.tpl.php:83
-msgid "Profile URL"
-msgstr ""
-
-#: ./templates/default/account/settings/following.tpl.php:5
-msgid "Following..."
-msgstr ""
-
-#: ./templates/default/account/settings/following.tpl.php:11
-msgid "Manage your subscriptions here. These users can also be given access to private content you produce on your site."
-msgstr ""
-
-#: ./templates/default/account/settings/following.tpl.php:16
-msgid "Use this bookmarklet to make it easy to add new friends."
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:17
-msgid "Set how you'd like to be notified when someone stars or comments on your content."
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:26
-msgid "Send email notifications"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:34
-msgid "Whenever someone interacts with my content"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:44
-msgid "Only when someone comments on my content"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:54
-msgid "Never"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:63
-msgid "Ignored Domains"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:64
-msgid "Do not send notifications for interactions originating from these domains (one domain per line)"
-msgstr ""
-
-#: ./templates/default/account/settings/notifications.tpl.php:75
-msgid "Save settings"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:13
-msgid "Bookmarklet"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:22
-msgid "The Idno bookmarklet is the best way to save links, reply to posts, and share articles."
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:23
-msgid "Just drag the bookmarklet button below into your browser's Bookmark Bar."
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:42
-msgid "Don't see a bookmarks bar?"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:45
-msgid "Sometimes web browsers have their bookmarked links bar hidden by default. Here's how to reveal it:"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:47
-msgid "Chrome"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:47
-msgid "Select <em>Always Show Bookmarks Bar</em> from the <em>View</em> menu."
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:48
-msgid "Firefox"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:48
-msgid "Select <em>View</em>, then <em>Toolbars</em>, and make sure"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:49
-msgid "Bookmarks Toolbar"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:49
-msgid "is checked."
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:50
-msgid "Internet Explorer"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:50
-msgid "Select <em>Tools</em>, then make sure <em>Favorites Bar</em> is checked."
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:65
-msgid "Your API key"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:76
-msgid "Revoke"
-msgstr ""
-
-#: ./templates/default/account/settings/tools.tpl.php:76
-msgid "Revoking this key will mean you must update any applications that use this key!"
-msgstr ""
-
-#: ./templates/default/account/settings.tpl.php:9
+#: ./templates/classic/account/settings.tpl.php:9
+#: ./templates/default/account/settings.html.twig:3
 msgid "Account Settings"
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:14
+#: ./templates/classic/account/settings.tpl.php:14
+#: ./templates/default/account/settings.html.twig:6
 msgid "Change your user account settings here. You may also want to <a href=\"%s\">edit your profile</a>."
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:45
-msgid "Site notifications will be sent here."
+#: ./templates/classic/account/settings.tpl.php:27
+#: ./templates/classic/account/settings.tpl.php:30
+#: ./templates/classic/entity/User/edit.tpl.php:37
+#: ./templates/default/account/register.html.twig:14
+#: ./templates/default/account/settings.html.twig:12
+#: ./templates/default/account/settings.html.twig:13
+#: ./templates/default/entity/User/edit.html.twig:29
+#: ./templates/default/onboarding/profile.html.twig:22
+msgid "Your name"
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:51
+#: ./templates/classic/account/settings.tpl.php:39
+#: ./templates/classic/account/settings.tpl.php:42
+#: ./templates/default/account/password/reset.html.twig:16
+#: ./templates/default/account/register.html.twig:27
+#: ./templates/default/account/settings.html.twig:17
+#: ./templates/default/account/settings.html.twig:18
+#: ./templates/default/onboarding/register.html.twig:19
+msgid "Your email address"
+msgstr ""
+
+#: ./templates/classic/account/settings.tpl.php:45
+#: ./templates/default/account/settings.html.twig:19
+msgid "Used for account recovery and communications."
+msgstr ""
+
+#: ./templates/classic/account/settings.tpl.php:51
+#: ./templates/default/account/settings.html.twig:23
 msgid "Your password"
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:58
+#: ./templates/classic/account/settings.tpl.php:58
+#: ./templates/default/account/settings.html.twig:25
 msgid "Leave this blank if you don't want to change it."
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:64
+#: ./templates/classic/account/settings.tpl.php:64
+#: ./templates/default/account/settings.html.twig:29
 msgid "Your timezone"
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:74
+#: ./templates/classic/account/settings.tpl.php:74
+#: ./templates/default/account/settings.html.twig:35
 msgid "Timezone"
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:80
+#: ./templates/classic/account/settings.tpl.php:80
+#: ./templates/default/account/settings.html.twig:38
 msgid "Specify your timezone."
 msgstr ""
 
-#: ./templates/default/account/settings.tpl.php:85
+#: ./templates/classic/account/settings.tpl.php:85
+#: ./templates/classic/admin/home.tpl.php:296
+#: ./templates/default/account/settings.html.twig:42
+#: ./templates/default/admin/home.html.twig:139
 msgid "Save updates"
 msgstr ""
 
-#: ./templates/default/admin/about.tpl.php:15
-msgid "Idno"
+#: ./templates/classic/account/settings/tools.tpl.php:13
+#: ./templates/default/account/settings/tools.html.twig:6
+msgid "Bookmarklet"
 msgstr ""
 
-#: ./templates/default/admin/about.tpl.php:15
-msgid "is a social publishing platform for groups and individuals."
+#: ./templates/classic/account/settings/tools.tpl.php:22
+#: ./templates/default/account/settings/tools.html.twig:8
+msgid "The Idno bookmarklet is the best way to save links, reply to posts, and share articles."
 msgstr ""
 
-#: ./templates/default/admin/about.tpl.php:17
-msgid "Open source project details"
+#: ./templates/classic/account/settings/tools.tpl.php:23
+#: ./templates/default/account/settings/tools.html.twig:11
+msgid "Just drag the bookmarklet button below into your browser's Bookmark Bar."
 msgstr ""
 
-#: ./templates/default/admin/about.tpl.php:20
-msgid "Version: %s+%s"
+#: ./templates/classic/account/settings/tools.tpl.php:42
+msgid "Don't see a bookmarks bar?"
 msgstr ""
 
-#: ./templates/default/admin/dependencies/build.tpl.php:2
-msgid "%s installed"
+#: ./templates/classic/account/settings/tools.tpl.php:45
+msgid "Sometimes web browsers have their bookmarked links bar hidden by default. Here's how to reveal it:"
 msgstr ""
 
-#: ./templates/default/admin/dependencies/plugin.tpl.php:33
-msgid "(v%s required)"
+#: ./templates/classic/account/settings/tools.tpl.php:47
+msgid "Chrome"
 msgstr ""
 
-#: ./templates/default/admin/dependencies.tpl.php:8
+#: ./templates/classic/account/settings/tools.tpl.php:47
+msgid "Select <em>Always Show Bookmarks Bar</em> from the <em>View</em> menu."
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:48
+msgid "Firefox"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:48
+msgid "Select <em>View</em>, then <em>Toolbars</em>, and make sure"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:49
+msgid "Bookmarks Toolbar"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:49
+msgid "is checked."
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:50
+msgid "Internet Explorer"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:50
+msgid "Select <em>Tools</em>, then make sure <em>Favorites Bar</em> is checked."
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:65
+#: ./templates/default/account/settings/tools.html.twig:24
+msgid "Your API key"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:76
+#: ./templates/default/account/settings/tools.html.twig:30
+msgid "Revoke"
+msgstr ""
+
+#: ./templates/classic/account/settings/tools.tpl.php:76
+#: ./templates/default/account/settings/tools.html.twig:29
+msgid "Revoking this key will mean you must update any applications that use this key!"
+msgstr ""
+
+#: ./templates/classic/admin/dependencies.tpl.php:8
+#: ./templates/default/admin/dependencies.html.twig:8
 msgid "The following are system components that are required for Idno to fully run. It's worth checking to make sure that they're all installed. If you need help installing any required packages, ask your web host or system administrator."
 msgstr ""
 
-#: ./templates/default/admin/dependencies.tpl.php:17
+#: ./templates/classic/admin/dependencies.tpl.php:17
+#: ./templates/default/admin/dependencies.html.twig:17
 msgid "PHP"
 msgstr ""
 
-#: ./templates/default/admin/dependencies.tpl.php:19
+#: ./templates/classic/admin/dependencies.tpl.php:19
+#: ./templates/default/admin/dependencies.html.twig:19
 msgid "Version %s or greater"
 msgstr ""
 
-#: ./templates/default/admin/dependencies.tpl.php:27
+#: ./templates/classic/admin/dependencies.tpl.php:27
+#: ./templates/default/admin/dependencies.html.twig:23
 msgid "PHP extensions required"
 msgstr ""
 
-#: ./templates/default/admin/dependencies.tpl.php:28
+#: ./templates/classic/admin/dependencies.tpl.php:28
+#: ./templates/default/admin/dependencies.html.twig:24
 msgid "These extend the way PHP works, and are required for functionality like database storage, webmentions, etc. Click an extension name to learn more about it, including installation instructions."
 msgstr ""
 
-#: ./templates/default/admin/diagnostics.tpl.php:9
-msgid "This page provides you with information that may help you or others diagnose any problems you may be experiencing with your Idno install."
-msgstr ""
-
-#: ./templates/default/admin/diagnostics.tpl.php:45
-msgid "Basic checks on installation discovered no problems."
-msgstr ""
-
-#: ./templates/default/admin/diagnostics.tpl.php:57
-msgid "Generate detailed report"
-msgstr ""
-
-#: ./templates/default/admin/email.tpl.php:5
+#: ./templates/classic/admin/email.tpl.php:5
 msgid "Email settings"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:9
-msgid "Idno tries to send email using your server's default email settings. If you'd like it to do something else - for example, if you'd like to send email using an external provider - enter the new SMTP settings below. You can also <a href=\"%s\">change your notification settings</a>."
+#: ./templates/classic/admin/email.tpl.php:9
+#: ./templates/default/admin/email.html.twig:3
+msgid "Idno tries to send email using your server's default email settings. If you'd like it to do something else - for example, if you'd like to send email using an external provider - enter the new SMTP settings below."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:20
+#: ./templates/classic/admin/email.tpl.php:12
+#: ./templates/default/admin/email.html.twig:6
+msgid "After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started."
+msgstr ""
+
+#: ./templates/classic/admin/email.tpl.php:23
+#: ./templates/default/admin/email.html.twig:13
 msgid "Fill in the site email address if you would like your site to send email."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:26
+#: ./templates/classic/admin/email.tpl.php:29
+#: ./templates/default/admin/email.html.twig:16
+#: ./templates/default/admin/email.html.twig:18
 msgid "Site email address"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:33
-msgid "This is the address that every notification will be sent from."
+#: ./templates/classic/admin/email.tpl.php:36
+#: ./templates/default/admin/email.html.twig:20
+msgid "This is the address that every email will be sent from."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:40
+#: ./templates/classic/admin/email.tpl.php:43
+#: ./templates/default/admin/email.html.twig:27
 msgid "You can often leave the following settings blank. However, you may wish to set them if you're using a third-party service to send email."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:48
+#: ./templates/classic/admin/email.tpl.php:51
+#: ./templates/default/admin/email.html.twig:30
+#: ./templates/default/admin/email.html.twig:32
 msgid "SMTP host"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:55
+#: ./templates/classic/admin/email.tpl.php:58
+#: ./templates/default/admin/email.html.twig:34
 msgid "This is the address of the server that will send email for you."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:62
+#: ./templates/classic/admin/email.tpl.php:65
+#: ./templates/default/admin/email.html.twig:38
+#: ./templates/default/admin/email.html.twig:40
 msgid "SMTP username"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:69
+#: ./templates/classic/admin/email.tpl.php:72
+#: ./templates/default/admin/email.html.twig:42
 msgid "If your mail server needs a username, enter it here."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:76
+#: ./templates/classic/admin/email.tpl.php:79
+#: ./templates/default/admin/email.html.twig:46
+#: ./templates/default/admin/email.html.twig:48
 msgid "SMTP password"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:84
+#: ./templates/classic/admin/email.tpl.php:87
+#: ./templates/default/admin/email.html.twig:50
 msgid "If your mail server needs a password, enter it here."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:91
+#: ./templates/classic/admin/email.tpl.php:94
+#: ./templates/default/admin/email.html.twig:54
 msgid "SMTP port"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:107
+#: ./templates/classic/admin/email.tpl.php:110
+#: ./templates/default/admin/email.html.twig:59
 msgid "This is normally 25 or 587."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:114
+#: ./templates/classic/admin/email.tpl.php:117
+#: ./templates/default/admin/email.html.twig:63
 msgid "Secure connection"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:135
+#: ./templates/classic/admin/email.tpl.php:138
+#: ./templates/default/admin/email.html.twig:69
 msgid "Select yes if you use secure logins to your mail server."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:157
+#: ./templates/classic/admin/email.tpl.php:145
+#: ./templates/default/admin/email.html.twig:74
+msgid "Save settings"
+msgstr ""
+
+#: ./templates/classic/admin/email.tpl.php:160
+#: ./templates/default/admin/email.html.twig:86
 msgid "Send a test message to"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:160
+#: ./templates/classic/admin/email.tpl.php:163
+#: ./templates/default/admin/email.html.twig:88
 msgid "To address"
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:164
+#: ./templates/classic/admin/email.tpl.php:167
+#: ./templates/default/admin/email.html.twig:90
 msgid "Check your email settings by sending a test email."
 msgstr ""
 
-#: ./templates/default/admin/email.tpl.php:170
+#: ./templates/classic/admin/email.tpl.php:173
+#: ./templates/default/admin/email.html.twig:94
 msgid "Test settings"
 msgstr ""
 
-#: ./templates/default/admin/export/download.tpl.php:2
-msgid "Download your data"
-msgstr ""
-
-#: ./templates/default/admin/export/download.tpl.php:3
-msgid "Generated"
-msgstr ""
-
-#: ./templates/default/admin/export/download.tpl.php:7
-msgid "You can also regenerate a new copy of your data archive."
-msgstr ""
-
-#: ./templates/default/admin/export/download.tpl.php:11
-msgid "Re-archive your data"
-msgstr ""
-
-#: ./templates/default/admin/export/generate.tpl.php:5
-msgid "Create archive"
-msgstr ""
-
-#: ./templates/default/admin/export/generate.tpl.php:18
-msgid "It may take a while to generate your archive. You can leave this page while it's working. Once the export file is complete, this page will update, and you'll be able to download the archive right here."
-msgstr ""
-
-#: ./templates/default/admin/export.tpl.php:9
+#: ./templates/classic/admin/export.tpl.php:9
 msgid "Export content"
 msgstr ""
 
-#: ./templates/default/admin/export.tpl.php:17
-msgid "Export your published Idno content as an RSS file. You can import this file into Idno or WordPress."
+#: ./templates/classic/admin/export.tpl.php:17
+#: ./templates/default/admin/export.html.twig:3
+msgid "Export your published Idno content as an RSS file. You can import this file into WordPress, or into another Idno site by choosing WordPress on the import page."
 msgstr ""
 
-#: ./templates/default/admin/export.tpl.php:20
+#: ./templates/classic/admin/export.tpl.php:20
+#: ./templates/default/admin/export.html.twig:7
 msgid "Generate RSS file"
 msgstr ""
 
-#: ./templates/default/admin/export.tpl.php:35
+#: ./templates/classic/admin/export.tpl.php:35
+#: ./templates/classic/admin/export.tpl.php:69
+#: ./templates/default/admin/export.html.twig:14
+#: ./templates/default/admin/export.html.twig:34
 msgid "Some platforms may assume that your content should be displayed publicly. To protect your privacy, you may wish to only download your public content."
 msgstr ""
 
-#: ./templates/default/admin/export.tpl.php:39
+#: ./templates/classic/admin/export.tpl.php:35
+#: ./templates/classic/admin/export.tpl.php:69
+#: ./templates/default/admin/export.html.twig:14
+#: ./templates/default/admin/export.html.twig:34
+msgid "As an administrator, including private posts includes every member's private posts and drafts too. Private posts and drafts are marked as such in the file."
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:39
+#: ./templates/default/admin/export.html.twig:17
 msgid "Download file"
 msgstr ""
 
-#: ./templates/default/admin/export/wait.tpl.php:4
-msgid "An archive of your data is being created. Please check again in a few minutes."
+#: ./templates/classic/admin/export.tpl.php:51
+#: ./templates/default/admin/export.html.twig:24
+msgid "Generate WordPress (WXR) file"
 msgstr ""
 
-#: ./templates/default/admin/home/description.tpl.php:2
-msgid "Site configuration"
+#: ./templates/classic/admin/export.tpl.php:54
+#: ./templates/default/admin/export.html.twig:26
+msgid "Export your content as a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress."
 msgstr ""
 
-#: ./templates/default/admin/home/description.tpl.php:6
-msgid "On this page you can change the basic settings for your site, like the site name and the number of posts visible on each page."
+#: ./templates/classic/admin/export.tpl.php:73
+#: ./templates/default/admin/export.html.twig:37
+msgid "Download WXR file"
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:6
-msgid "Homepage content"
+#: ./templates/classic/admin/export.tpl.php:85
+#: ./templates/default/admin/export.html.twig:44
+msgid "Full archive"
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:11
-msgid "Here you can choose what content visitors see on your site homepage. By default, all published content appears on the main page. If you want to hide some content types from the main page, you can turn them off below."
+#: ./templates/classic/admin/export.tpl.php:88
+#: ./templates/default/admin/export.html.twig:46
+msgid "A complete copy of your site as one zip file: every post and its files, the settings, and the records of the database. It is what you restore your site from."
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:16
-msgid "Turn off content types to hide them from the homepage of your site."
+#: ./templates/classic/admin/export.tpl.php:91
+#: ./templates/default/admin/export.html.twig:49
+msgid "Keep it as carefully as a database backup."
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:45
-msgid "On"
+#: ./templates/classic/admin/export.tpl.php:92
+#: ./templates/default/admin/export.html.twig:50
+msgid "The archive contains every account's password hash and the private keys that sign each user's posts to the fediverse: whoever has the archive can sign as any user. It also holds every private post. Only administrators can download it, and it is removed from the site when you make a new one and after a week. The settings in it (config.json) are left out by the name of the setting: review config.json before you share the archive."
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:46
-msgid "Off"
+#: ./templates/classic/admin/export.tpl.php:96
+#: ./templates/default/admin/export.html.twig:54
+msgid "The full archive needs the PHP zip extension, which this server does not have. Ask whoever runs the server to enable it (the zip extension of PHP), then come back to this page."
 msgstr ""
 
-#: ./templates/default/admin/homepage.tpl.php:109
-msgid "Save"
+#: ./templates/classic/admin/export.tpl.php:100
+#: ./templates/default/admin/export.html.twig:58
+msgid "An archive of your data is being created. Please check again in a few minutes: we will email you when it is ready."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:15
+#: ./templates/classic/admin/export.tpl.php:105
+#: ./templates/default/admin/export.html.twig:63
+msgid "Download your data"
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:106
+#: ./templates/default/admin/export.html.twig:64
+msgid "Generated"
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:110
+#: ./templates/default/admin/export.html.twig:67
+msgid "You can also make a new copy of your data archive. It replaces this one."
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:115
+#: ./templates/default/admin/export.html.twig:72
+msgid "Re-archive your data"
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:115
+#: ./templates/default/admin/export.html.twig:72
+msgid "Create archive"
+msgstr ""
+
+#: ./templates/classic/admin/export.tpl.php:124
+#: ./templates/default/admin/export.html.twig:77
+msgid "It may take a while to generate your archive. You can leave this page while it's working. Once the archive is complete we will email you, and you'll be able to download it right here."
+msgstr ""
+
+#: ./templates/classic/admin/home.tpl.php:15
+#: ./templates/default/admin/home.html.twig:7
 msgid "Site Details"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:20
+#: ./templates/classic/admin/home.tpl.php:20
+#: ./templates/classic/admin/home.tpl.php:23
+#: ./templates/default/admin/home.html.twig:10
+#: ./templates/default/admin/home.html.twig:12
 msgid "Site name"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:27
+#: ./templates/classic/admin/home.tpl.php:27
+#: ./templates/default/admin/home.html.twig:14
 msgid "Give your site a name!"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:35
+#: ./templates/classic/admin/home.tpl.php:35
+#: ./templates/default/admin/home.html.twig:18
 msgid "Site summary"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:38
+#: ./templates/classic/admin/home.tpl.php:38
+#: ./templates/default/admin/home.html.twig:20
 msgid "Site description"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:42
+#: ./templates/classic/admin/home.tpl.php:42
+#: ./templates/default/admin/home.html.twig:22
 msgid "What's your site about?"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:50
+#: ./templates/classic/admin/home.tpl.php:50
+#: ./templates/classic/admin/home.tpl.php:53
+#: ./templates/default/admin/home.html.twig:26
+#: ./templates/default/admin/home.html.twig:28
 msgid "Homepage title"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:57
+#: ./templates/classic/admin/home.tpl.php:57
 msgid "What should the browser display as the title on your homepage?<br>By default this is just your site title."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:65
+#: ./templates/classic/admin/home.tpl.php:65
+#: ./templates/default/admin/home.html.twig:33
 msgid "Items per page"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:71
+#: ./templates/classic/admin/home.tpl.php:71
 msgid "This is the number of content posts displayed on each page."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:79
+#: ./templates/classic/admin/home.tpl.php:79
 msgid "Single user"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:90
+#: ./templates/classic/admin/home.tpl.php:90
 msgid "Is this a single-user site? If so, your profile information will be shown at the top of the homepage."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:101
+#: ./templates/classic/admin/home.tpl.php:101
+#: ./templates/default/admin/home.html.twig:49
 msgid "Permalink Structure"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:118
+#: ./templates/classic/admin/home.tpl.php:118
 msgid "How permalinks for individual posts are constructed."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:128
+#: ./templates/classic/admin/home.tpl.php:128
+#: ./templates/default/admin/home.html.twig:67
 msgid "Registration and privacy"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:136
+#: ./templates/classic/admin/home.tpl.php:136
+#: ./templates/default/admin/home.html.twig:73
 msgid "Allow registration"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:146
+#: ./templates/classic/admin/home.tpl.php:146
 msgid "Allow registration if you want others to sign up for your site."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:159
+#: ./templates/classic/admin/home.tpl.php:159
+#: ./templates/default/admin/home.html.twig:82
 msgid "Make site private"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:168
+#: ./templates/classic/admin/home.tpl.php:168
 msgid "Content on a private site is only visible if you're logged in."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:186
+#: ./templates/classic/admin/home.tpl.php:186
+#: ./templates/default/admin/home.html.twig:92
 msgid "Per-post privacy"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:197
+#: ./templates/classic/admin/home.tpl.php:197
 msgid "Show per-post privacy settings."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:239
+#: ./templates/classic/admin/home.tpl.php:213
+#: ./templates/default/admin/home.html.twig:101
 msgid "Technical Settings"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:247
+#: ./templates/classic/admin/home.tpl.php:221
+#: ./templates/default/admin/home.html.twig:104
 msgid "PubSubHubbub hub"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:250
+#: ./templates/classic/admin/home.tpl.php:224
 msgid "PubSubHubbub hub address"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:254
+#: ./templates/classic/admin/home.tpl.php:228
 msgid "You can probably leave this as is."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:255
+#: ./templates/classic/admin/home.tpl.php:229
 msgid "Learn more about PuSH"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:265
+#: ./templates/classic/admin/home.tpl.php:239
 msgid "Avatar as icon"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:276
+#: ./templates/classic/admin/home.tpl.php:250
 msgid "This uses members' avatar images as the site favicon."
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:284
+#: ./templates/classic/admin/home.tpl.php:259
+#: ./templates/default/admin/home.html.twig:118
+msgid "Backup share image"
+msgstr ""
+
+#: ./templates/classic/admin/home.tpl.php:263
+#: ./templates/default/admin/home.html.twig:120
+msgid "Backup share image URL"
+msgstr ""
+
+#: ./templates/classic/admin/home.tpl.php:267
+#: ./templates/default/admin/home.html.twig:122
+msgid "Specify the URL of an image to use as your default social share image."
+msgstr ""
+
+#: ./templates/classic/admin/home.tpl.php:275
 msgid "Include permalinks"
 msgstr ""
 
-#: ./templates/default/admin/home.tpl.php:293
+#: ./templates/classic/admin/home.tpl.php:284
 msgid "Always add a link back to your site when you syndicate to external networks."
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:9
+#: ./templates/classic/admin/import.tpl.php:9
 msgid "Import content"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:12
-msgid "Import your content from other sites into Idno. All imported content will be treated as a post, with a title and body content."
+#: ./templates/classic/admin/import.tpl.php:12
+#: ./templates/default/admin/import.html.twig:3
+msgid "Import your content from other sites into Idno. All imported content will be treated as a post, with a title and body content. Posts that are private or drafts at their source stay private or drafts here, and nothing you import is announced to your followers."
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:27
-msgid "Upload a Idno RSS export file and turn it into Idno posts."
+#: ./templates/classic/admin/import.tpl.php:15
+#: ./templates/default/admin/import.html.twig:6
+msgid "Importing the same file twice creates the posts twice."
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:28
-msgid "How do I get my Idno RSS file?"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:32
-msgid "To get your Idno RSS file"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:35
-msgid "Log into your Idno site"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:36
-msgid "Click on Site Configuration"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:37
-msgid "Click on Export"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:38
-msgid "Download your RSS file"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:44
-msgid "Select Idno export file"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:50
-msgid "Import your data"
-msgstr ""
-
-#: ./templates/default/admin/import.tpl.php:64
+#: ./templates/classic/admin/import.tpl.php:27
+#: ./templates/default/admin/import.html.twig:10
 msgid "WordPress"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:67
+#: ./templates/classic/admin/import.tpl.php:30
+#: ./templates/default/admin/import.html.twig:13
 msgid "Upload a WordPress XML file and turn it into Idno posts."
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:68
+#: ./templates/classic/admin/import.tpl.php:30
+#: ./templates/default/admin/import.html.twig:13
+msgid "An RSS file exported from another Idno site can be imported here too."
+msgstr ""
+
+#: ./templates/classic/admin/import.tpl.php:31
 msgid "How do I get my WordPress XML file?"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:72
+#: ./templates/classic/admin/import.tpl.php:35
 msgid "To get your WordPress XML file"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:75
+#: ./templates/classic/admin/import.tpl.php:38
 msgid "Log into your WordPress site"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:76
+#: ./templates/classic/admin/import.tpl.php:39
 msgid "Click on Tools"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:78
+#: ./templates/classic/admin/import.tpl.php:40
+msgid "Click on Export"
+msgstr ""
+
+#: ./templates/classic/admin/import.tpl.php:41
 msgid "Click to export posts"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:79
+#: ./templates/classic/admin/import.tpl.php:42
 msgid "Click"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:79
+#: ./templates/classic/admin/import.tpl.php:42
 msgid "Download Export File"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:85
+#: ./templates/classic/admin/import.tpl.php:48
+#: ./templates/default/admin/import.html.twig:16
 msgid "Select WordPress export file"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:105
+#: ./templates/classic/admin/import.tpl.php:54
+#: ./templates/classic/admin/import.tpl.php:96
+#: ./templates/default/admin/import.html.twig:22
+#: ./templates/default/admin/import.html.twig:40
+msgid "Import your data"
+msgstr ""
+
+#: ./templates/classic/admin/import.tpl.php:68
+#: ./templates/default/admin/import.html.twig:28
 msgid "Blogger"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:108
+#: ./templates/classic/admin/import.tpl.php:71
+#: ./templates/default/admin/import.html.twig:31
 msgid "Upload a Blogger XML file and turn it into Idno posts."
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:108
+#: ./templates/classic/admin/import.tpl.php:71
 msgid "How do I get my Blogger XML file?"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:112
+#: ./templates/classic/admin/import.tpl.php:75
 msgid "To get your Blogger XML file"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:115
+#: ./templates/classic/admin/import.tpl.php:78
 msgid "Log into Blogger, and click on your blog title"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:116
+#: ./templates/classic/admin/import.tpl.php:79
 msgid "Click on Settings"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:117
+#: ./templates/classic/admin/import.tpl.php:80
 msgid "Click on Other"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:118
+#: ./templates/classic/admin/import.tpl.php:81
 msgid "Click on Export Posts at the top of your page"
 msgstr ""
 
-#: ./templates/default/admin/import.tpl.php:119
+#: ./templates/classic/admin/import.tpl.php:82
 msgid "Click on Export Blog"
 msgstr ""
 
-#: ./templates/default/admin/logs.tpl.php:9
+#: ./templates/classic/admin/logs.tpl.php:9
+#: ./templates/default/admin/logs.html.twig:3
 msgid "This page provides you with captured PHP logs. These contain sensitive information, so be very careful how you disclose the information and to whom."
 msgstr ""
 
-#: ./templates/default/admin/logs.tpl.php:19
+#: ./templates/classic/admin/logs.tpl.php:19
+#: ./templates/default/admin/logs.html.twig:10
 msgid "Refresh..."
 msgstr ""
 
-#: ./templates/default/admin/menu.tpl.php:8
+#: ./templates/classic/admin/menu.tpl.php:2
+#: ./templates/default/admin/home/description.html.twig:2
+msgid "Site configuration"
+msgstr ""
+
+#: ./templates/classic/admin/menu.tpl.php:8
+#: ./templates/classic/admin/users.tpl.php:4
+#: ./templates/default/admin/menu.html.twig:20
+#: ./templates/default/admin/users.html.twig:1
 msgid "Users"
 msgstr ""
 
-#: ./templates/default/admin/menu.tpl.php:9
+#: ./templates/classic/admin/menu.tpl.php:9
+#: ./templates/default/admin/export.html.twig:1
+#: ./templates/default/admin/menu.html.twig:59
 msgid "Export"
 msgstr ""
 
-#: ./templates/default/admin/menu.tpl.php:10
+#: ./templates/classic/admin/menu.tpl.php:10
+#: ./templates/default/admin/import.html.twig:1
+#: ./templates/default/admin/menu.html.twig:54
 msgid "Import"
 msgstr ""
 
-#: ./templates/default/admin/menu.tpl.php:13
+#: ./templates/classic/admin/menu.tpl.php:16
 msgid "Captured Logs"
 msgstr ""
 
-#: ./templates/default/admin/menu.tpl.php:15
+#: ./templates/classic/admin/menu.tpl.php:18
 msgid "About"
 msgstr ""
 
-#: ./templates/default/admin/plugins/plugin.tpl.php:36
-msgid "Enabled"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:38
-msgid "Disabled"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:58
-msgid "Idno Version"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:71
-msgid "Idno Build"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:84
-msgid "PHP Version"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:100
-msgid "Extensions"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:149
-msgid "Disable"
-msgstr ""
-
-#: ./templates/default/admin/plugins/plugin.tpl.php:162
-msgid "Enable"
-msgstr ""
-
-#: ./templates/default/admin/plugins.tpl.php:9
+#: ./templates/classic/admin/plugins.tpl.php:9
+#: ./templates/default/admin/plugins.html.twig:3
 msgid "Plugins allow you to add features to your site. These include new kinds of content, options to syndicate content to different sites, and features to change the way Idno behaves. To enable or disable a plugin, just click its enable or disable button."
 msgstr ""
 
-#: ./templates/default/admin/statistics.tpl.php:9
+#: ./templates/classic/admin/plugins/plugin.tpl.php:36
+msgid "Enabled"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:38
+msgid "Disabled"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:58
+msgid "Idno Version"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:71
+msgid "Idno Build"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:84
+msgid "PHP Version"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:100
+msgid "Extensions"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:149
+#: ./templates/default/admin/plugins/plugin.html.twig:35
+msgid "Disable"
+msgstr ""
+
+#: ./templates/classic/admin/plugins/plugin.tpl.php:162
+#: ./templates/classic/admin/themes/theme.tpl.php:43
+#: ./templates/default/admin/plugins/plugin.html.twig:43
+#: ./templates/default/admin/themes/theme.html.twig:36
+msgid "Enable"
+msgstr ""
+
+#: ./templates/classic/admin/statistics.tpl.php:9
+#: ./templates/default/admin/statistics.html.twig:3
 msgid "This page provides you with information and statistics about your Idno site."
 msgstr ""
 
-#: ./templates/default/admin/themes/theme.tpl.php:41
-msgid "(Selected)"
-msgstr ""
-
-#: ./templates/default/admin/themes/theme.tpl.php:48
-msgid "by"
-msgstr ""
-
-#: ./templates/default/admin/themes.tpl.php:7
+#: ./templates/classic/admin/themes.tpl.php:7
+#: ./templates/default/admin/themes.html.twig:3
 msgid "Themes allow you to change the way your site looks. The following themes are installed."
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:9
+#: ./templates/classic/admin/themes/theme.tpl.php:41
+msgid "(Selected)"
+msgstr ""
+
+#: ./templates/classic/admin/themes/theme.tpl.php:48
+#: ./templates/default/admin/plugins/plugin.html.twig:14
+#: ./templates/default/admin/themes/theme.html.twig:25
+msgid "by"
+msgstr ""
+
+#: ./templates/classic/admin/users.tpl.php:9
+#: ./templates/default/admin/users.html.twig:3
 msgid "View the users registered for your site, and invite new users to join."
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:17
+#: ./templates/classic/admin/users.tpl.php:17
+#: ./templates/default/admin/users.html.twig:7
 msgid "Manage site users"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:20
+#: ./templates/classic/admin/users.tpl.php:20
+#: ./templates/default/admin/users.html.twig:9
 msgid "Your site has"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:21
+#: ./templates/classic/admin/users.tpl.php:21
+#: ./templates/default/admin/users.html.twig:10
 msgid "users"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:23
+#: ./templates/classic/admin/users.tpl.php:23
+#: ./templates/default/admin/users.html.twig:10
 msgid "user"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:45
+#: ./templates/classic/admin/users.tpl.php:45
+#: ./templates/default/admin/users.html.twig:19
 msgid "Invite new users"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:48
+#: ./templates/classic/admin/users.tpl.php:48
+#: ./templates/default/admin/users.html.twig:21
 msgid "To invite new users to the site, enter one or more email addresses below."
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:54
+#: ./templates/classic/admin/users.tpl.php:54
+#: ./templates/default/admin/users.html.twig:27
 msgid "Send invite"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:111
+#: ./templates/classic/admin/users.tpl.php:111
+#: ./templates/default/admin/users.html.twig:37
 msgid "Invitations"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:130
+#: ./templates/classic/admin/users.tpl.php:130
+#: ./templates/default/admin/users.html.twig:44
 msgid "Sent"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:171
+#: ./templates/classic/admin/users.tpl.php:171
+#: ./templates/classic/admin/users.tpl.php:180
+#: ./templates/default/admin/users.html.twig:62
+#: ./templates/default/admin/users.html.twig:70
 msgid "Block email addresses"
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:174
+#: ./templates/classic/admin/users.tpl.php:174
+#: ./templates/default/admin/users.html.twig:64
 msgid "By blocking email addresses, you prevent people using those email addresses from registering on your site. Enter the email addresses you want to block below."
 msgstr ""
 
-#: ./templates/default/admin/users.tpl.php:196
+#: ./templates/classic/admin/users.tpl.php:196
+#: ./templates/default/admin/users.html.twig:80
 msgid "Blocked email addresses"
 msgstr ""
 
-#: ./templates/default/content/access.tpl.php:34
+#: ./templates/classic/content/access.tpl.php:34
+#: ./templates/default/content/access.html.twig:1
+#: ./templates/default/content/access.html.twig:2
 msgid "Public"
 msgstr ""
 
-#: ./templates/default/content/access.tpl.php:36
+#: ./templates/classic/content/access.tpl.php:36
+#: ./templates/default/content/access.html.twig:3
 msgid "Members only"
 msgstr ""
 
-#: ./templates/default/content/access.tpl.php:38
+#: ./templates/classic/content/access.tpl.php:38
+#: ./templates/default/content/access.html.twig:4
 msgid "Private"
 msgstr ""
 
-#: ./templates/default/content/annotation/edit.tpl.php:5
+#: ./templates/classic/content/annotation/edit.tpl.php:5
+#: ./templates/classic/content/edit.tpl.php:9
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:90
+#: ./templates/default/content/annotation/edit.html.twig:2
+#: ./templates/default/content/edit.html.twig:11
+#: ./templates/default/content/edit.html.twig:12
+#: ./templates/default/forms/components/usersearch/user.html.twig:44
 msgid "Delete"
 msgstr ""
 
-#: ./templates/default/content/edit.tpl.php:8
+#: ./templates/classic/content/edit.tpl.php:8
+#: ./templates/default/content/edit.html.twig:9
+#: ./templates/default/drafts.html.twig:22
 msgid "Edit"
 msgstr ""
 
-#: ./templates/default/content/edit.tpl.php:9
+#: ./templates/classic/content/edit.tpl.php:9
+#: ./templates/default/content/edit.html.twig:12
 msgid "Are you sure you want to permanently delete this entry?"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:26
+#: ./templates/classic/content/end.tpl.php:26
+#: ./templates/classic/content/feed/end.tpl.php:13
 msgid "published this"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:55
+#: ./templates/classic/content/end.tpl.php:55
 msgid "Star this!"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:61
+#: ./templates/classic/content/end.tpl.php:61
+#: ./templates/classic/content/feed/end.tpl.php:28
 msgid "star"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:64
+#: ./templates/classic/content/end.tpl.php:64
+#: ./templates/classic/content/feed/end.tpl.php:30
 msgid "stars"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:95
+#: ./templates/classic/content/end.tpl.php:95
+#: ./templates/classic/content/feed/end.tpl.php:48
 msgid "comment"
 msgstr ""
 
-#: ./templates/default/content/end.tpl.php:97
+#: ./templates/classic/content/end.tpl.php:97
+#: ./templates/classic/content/feed/end.tpl.php:50
 msgid "comments"
 msgstr ""
 
-#: ./templates/default/content/feed/end.tpl.php:106
+#: ./templates/classic/content/feed/end.tpl.php:106
 msgid "Also on"
 msgstr ""
 
-#: ./templates/default/content/notification/like.tpl.php:6
-msgid "liked"
-msgstr ""
-
-#: ./templates/default/content/notification/mention.tpl.php:6
-msgid "mentioned"
-msgstr ""
-
-#: ./templates/default/content/notification/reply.tpl.php:6
-msgid "replied to"
-msgstr ""
-
-#: ./templates/default/content/notification/reply.tpl.php:8
-msgid "Reply"
-msgstr ""
-
-#: ./templates/default/content/notification/rsvp.tpl.php:6
-msgid "RSVPed to"
-msgstr ""
-
-#: ./templates/default/content/notification/share.tpl.php:6
-msgid "shared"
-msgstr ""
-
-#: ./templates/default/content/unfurl.tpl.php:12
-msgid "Refresh preview"
-msgstr ""
-
-#: ./templates/default/content/unfurl.tpl.php:13
-msgid "Remove preview"
-msgstr ""
-
-#: ./templates/default/entity/annotations/comment/main.tpl.php:16
-msgid "Add a comment ..."
-msgstr ""
-
-#: ./templates/default/entity/annotations/comment/main.tpl.php:21
-msgid "Leave Comment"
-msgstr ""
-
-#: ./templates/default/entity/annotations/likes.tpl.php:26
-msgid "liked this post"
-msgstr ""
-
-#: ./templates/default/entity/annotations/mentions.tpl.php:20
-msgid "Mentioned in"
-msgstr ""
-
-#: ./templates/default/entity/annotations/rsvps.tpl.php:40
-msgid "Attending"
-msgstr ""
-
-#: ./templates/default/entity/annotations/rsvps.tpl.php:43
-msgid "Maybe attending"
-msgstr ""
-
-#: ./templates/default/entity/annotations/rsvps.tpl.php:46
-msgid "Not attending"
-msgstr ""
-
-#: ./templates/default/entity/annotations/rsvps.tpl.php:49
-msgid "Other responses"
-msgstr ""
-
-#: ./templates/default/entity/annotations/shares.tpl.php:23
-msgid "reshared this post"
-msgstr ""
-
-#: ./templates/default/entity/search.tpl.php:18
-msgid "Nothing found."
-msgstr ""
-
-#: ./templates/default/entity/share.tpl.php:9
-msgid "This content can't be shared right now."
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:3
-msgid "Edit your profile"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:6
-msgid "Your profile is how other users see you across the site. It's up to you how much or how little information you choose to provide."
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:23
-msgid "Select a user picture"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:49
-msgid "About you"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:59
-msgid "Your websites"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:60
-msgid "Other places on the web where people can find you."
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:81
-msgid "Remove"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:105
-msgid "Add more"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:112
-msgid "Cancel"
-msgstr ""
-
-#: ./templates/default/entity/User/edit.tpl.php:113
-msgid "Save Changes"
-msgstr ""
-
-#: ./templates/default/entity/User.tpl.php:61
+#: ./templates/classic/entity/User.tpl.php:62
 msgid "A profile helps you describe yourself to other people on the site and on the web. You haven't described yourself yet."
 msgstr ""
 
-#: ./templates/default/entity/User.tpl.php:62
+#: ./templates/classic/entity/User.tpl.php:63
 msgid "Click here to fill in your profile information."
 msgstr ""
 
-#: ./templates/default/file/picker/image.tpl.php:19
-msgid "Select an image"
+#: ./templates/classic/entity/User/edit.tpl.php:3
+#: ./templates/default/entity/User/edit.html.twig:7
+msgid "Edit your profile"
 msgstr ""
 
-#: ./templates/default/file/picker/image.tpl.php:29
-msgid "Upload this image"
+#: ./templates/classic/entity/User/edit.tpl.php:6
+msgid "Your profile is how other users see you across the site. It's up to you how much or how little information you choose to provide."
 msgstr ""
 
-#: ./templates/default/file/picker/image.tpl.php:49
-msgid "Choose a different image"
+#: ./templates/classic/entity/User/edit.tpl.php:23
+msgid "Select a user picture"
 msgstr ""
 
-#: ./templates/default/following/add.tpl.php:3
-msgid "Add the address of a site to follow"
+#: ./templates/classic/entity/User/edit.tpl.php:49
+#: ./templates/default/entity/User/edit.html.twig:36
+msgid "About you"
 msgstr ""
 
-#: ./templates/default/following/confirm.tpl.php:7
-msgid "Follow"
+#: ./templates/classic/entity/User/edit.tpl.php:59
+#: ./templates/default/entity/User/edit.html.twig:44
+msgid "Your websites"
 msgstr ""
 
-#: ./templates/default/following/confirm.tpl.php:12
-msgid "Here's the latest content."
+#: ./templates/classic/entity/User/edit.tpl.php:60
+#: ./templates/default/entity/User/edit.html.twig:45
+msgid "Other places on the web where people can find you."
 msgstr ""
 
-#: ./templates/default/following/home.tpl.php:13
-msgid "Follow another site"
+#: ./templates/classic/entity/User/edit.tpl.php:81
+#: ./templates/classic/entity/User/edit.tpl.php:97
+#: ./templates/classic/entity/User/edit.tpl.php:130
+#: ./templates/default/admin/users.html.twig:52
+#: ./templates/default/entity/User/edit.html.twig:53
+msgid "Remove"
 msgstr ""
 
-#: ./templates/default/following/home.tpl.php:31
-msgid "You're not following anyone yet."
+#: ./templates/classic/entity/User/edit.tpl.php:105
+msgid "Add more"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:27
+#: ./templates/classic/entity/User/edit.tpl.php:112
+#: ./templates/default/entity/User/edit.html.twig:75
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/classic/entity/User/edit.tpl.php:113
+#: ./templates/default/entity/User/edit.html.twig:72
+msgid "Save Changes"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/comment/main.tpl.php:17
+#: ./templates/default/entity/annotations/comment/main.html.twig:10
+msgid "Add a comment ..."
+msgstr ""
+
+#: ./templates/classic/entity/annotations/comment/main.tpl.php:22
+msgid "Leave Comment"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/likes.tpl.php:28
+#: ./templates/default/entity/annotations/likes.html.twig:13
+msgid "liked this post"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/mentions.tpl.php:22
+#: ./templates/default/entity/annotations/mentions.html.twig:10
+msgid "Mentioned in"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/rsvps.tpl.php:41
+#: ./templates/default/entity/annotations/rsvps.html.twig:20
+msgid "Attending"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/rsvps.tpl.php:44
+#: ./templates/default/entity/annotations/rsvps.html.twig:20
+msgid "Maybe attending"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/rsvps.tpl.php:47
+#: ./templates/default/entity/annotations/rsvps.html.twig:20
+msgid "Not attending"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/rsvps.tpl.php:50
+#: ./templates/default/entity/annotations/rsvps.html.twig:20
+msgid "Other responses"
+msgstr ""
+
+#: ./templates/classic/entity/annotations/shares.tpl.php:25
+#: ./templates/default/entity/annotations/shares.html.twig:14
+msgid "reshared this post"
+msgstr ""
+
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:27
+#: ./templates/default/forms/components/usersearch/user.html.twig:14
 msgid "Joined"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:35
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:35
 msgid "Last update posted"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:57
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:45
+#: ./templates/default/forms/components/usersearch/user.html.twig:23
+msgid "Never"
+msgstr ""
+
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:57
+#: ./templates/default/forms/components/usersearch/user.html.twig:27
 msgid "Remote member"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:62
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:62
+#: ./templates/default/forms/components/usersearch/user.html.twig:27
 msgid "Administrator"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:65
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:65
 msgid "Remove rights"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:71
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:71
 msgid "Standard member"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:72
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:72
+#: ./templates/default/forms/components/usersearch/user.html.twig:36
 msgid "Make admin"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:86
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:86
 msgid "Clear"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:86
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:86
+#: ./templates/default/forms/components/usersearch/user.html.twig:40
 msgid "Are you sure? The user will be able to log in and post again."
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:88
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:88
+#: ./templates/default/forms/components/usersearch/user.html.twig:42
 msgid "Block"
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:88
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:88
+#: ./templates/default/forms/components/usersearch/user.html.twig:42
 msgid "Are you sure? The user will be logged out and will no longer be able to log in or post."
 msgstr ""
 
-#: ./templates/default/forms/components/usersearch/user.tpl.php:90
+#: ./templates/classic/forms/components/usersearch/user.tpl.php:90
+#: ./templates/default/forms/components/usersearch/user.html.twig:44
 msgid "Are you sure? This will delete this user and all their content."
 msgstr ""
 
-#: ./templates/default/forms/input/image-file.tpl.php:61
+#: ./templates/classic/forms/input/image-file.tpl.php:61
+#: ./templates/default/forms/input/image-file.html.twig:23
 msgid "Are you sure you want to permanently delete this?"
 msgstr ""
 
-#: ./templates/default/forms/input/image-file.tpl.php:79
+#: ./templates/classic/forms/input/image-file.tpl.php:79
+#: ./templates/classic/forms/input/image-file.tpl.php:85
+#: ./templates/default/forms/input/image-file.html.twig:37
+#: ./templates/default/forms/input/image-file.html.twig:38
+#: ./templates/default/onboarding/profile.html.twig:65
 msgid "Choose different photo"
 msgstr ""
 
-#: ./templates/default/forms/input/image-file.tpl.php:82
+#: ./templates/classic/forms/input/image-file.tpl.php:82
+#: ./templates/default/forms/input/image-file.html.twig:38
 msgid "Select a photo"
 msgstr ""
 
-#: ./templates/default/forms/input/image-file.tpl.php:87
+#: ./templates/classic/forms/input/image-file.tpl.php:87
+#: ./templates/default/forms/input/image-file.html.twig:38
 msgid "Add photo"
 msgstr ""
 
-#: ./templates/default/forms/input/longtext.tpl.php:21
+#: ./templates/classic/forms/input/longtext.tpl.php:21
+#: ./templates/classic/forms/input/richtext.tpl.php:21
+#: ./templates/default/forms/input/longtext.html.twig:1
 msgid "Share something brilliant..."
 msgstr ""
 
-#: ./templates/default/forms/input/richtext.tpl.php:49
+#: ./templates/classic/forms/input/richtext.tpl.php:49
 msgid "Please complete this field."
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:28
+#: ./templates/classic/forms/usersearch.tpl.php:28
+#: ./templates/default/forms/usersearch.html.twig:7
 msgid "Search by name, email address, or username"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:95
+#: ./templates/classic/forms/usersearch.tpl.php:95
 msgid "By creation date"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:96
+#: ./templates/classic/forms/usersearch.tpl.php:96
 msgid "By name"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:105
+#: ./templates/classic/forms/usersearch.tpl.php:105
 msgid "Ascending"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:106
+#: ./templates/classic/forms/usersearch.tpl.php:106
 msgid "Descending"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:118
+#: ./templates/classic/forms/usersearch.tpl.php:118
+#: ./templates/default/forms/usersearch.html.twig:25
 msgid "Prev"
 msgstr ""
 
-#: ./templates/default/forms/usersearch.tpl.php:119
+#: ./templates/classic/forms/usersearch.tpl.php:119
+#: ./templates/default/admin/legacytables/body.html.twig:80
+#: ./templates/default/forms/usersearch.html.twig:28
 msgid "Next"
 msgstr ""
 
-#: ./templates/default/onboarding/begin.tpl.php:8
-msgid "Idno is your space for sharing content and discussing ideas."
-msgstr ""
-
-#: ./templates/default/onboarding/begin.tpl.php:13
-msgid "Take a picture"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.tpl.php:17
-msgid "Share a message"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.tpl.php:21
-msgid "Save your location"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.tpl.php:34
-msgid "Get started"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.tpl.php:42
-msgid "Already have an account? Sign in."
-msgstr ""
-
-#: ./templates/default/onboarding/connect.tpl.php:3
-msgid "Share to social"
-msgstr ""
-
-#: ./templates/default/onboarding/connect.tpl.php:6
-msgid "Connect your accounts to easily share content with people across the web."
-msgstr ""
-
-#: ./templates/default/onboarding/connect.tpl.php:14
-msgid "Continue"
-msgstr ""
-
-#: ./templates/default/onboarding/connect.tpl.php:19
-msgid "Don't worry, you can always connect these later."
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:16
-msgid "Add a photo of yourself"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:23
-msgid "Ben Franklin"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:27
-msgid "Your short bio"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:29
-msgid "I fly kites..."
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:34
-msgid "Your other websites"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:35
-msgid "(a blog, a portfolio, Twitter, Facebook, etc)"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.tpl.php:40
-msgid "Add another website"
-msgstr ""
-
-#: ./templates/default/onboarding/register.tpl.php:13
-msgid "Choose a username"
-msgstr ""
-
-#: ./templates/default/onboarding/register.tpl.php:26
-msgid "(at least 7 characters please)"
-msgstr ""
-
-#: ./templates/default/pages/403.tpl.php:10
-msgid "Click here to log in."
-msgstr ""
-
-#: ./templates/default/pages/403.tpl.php:21
-msgid "Hold on. You don't have access to this content."
-msgstr ""
-
-#: ./templates/default/pages/403.tpl.php:23
-msgid "It's nothing personal. You just don't have the right permissions to see what's here."
-msgstr ""
-
-#: ./templates/default/pages/403.tpl.php:25
-msgid "Find something else to view on the <a href=\"%s\">%s homepage</a>."
-msgstr ""
-
-#: ./templates/default/pages/404.tpl.php:5
-msgid "Oops! We couldn't find it."
-msgstr ""
-
-#: ./templates/default/pages/404.tpl.php:7
-msgid "Whatever you were looking for, it's not here. It might have been moved, deleted, or it doesn't exist. Or the robots ate it. That's always a possibility too."
-msgstr ""
-
-#: ./templates/default/pages/404.tpl.php:8
-msgid "Maybe you'll find something interesting if you head back to the <a href=\"%s\">%s homepage</a>."
-msgstr ""
-
-#: ./templates/default/pages/410.tpl.php:6
-msgid "Sorry, this content isn't here anymore."
-msgstr ""
-
-#: ./templates/default/pages/410.tpl.php:8
-msgid "You may be wondering where it went, but we can't tell you. It's a secret."
-msgstr ""
-
-#: ./templates/default/pages/410.tpl.php:10
-msgid "Maybe you'd like to head back to the <a href=\"%s\">%s homepage</a> instead."
-msgstr ""
-
-#: ./templates/default/pages/500.tpl.php:15
-msgid "<a href=\"#\" onclick=\"window.history.back();\">Click here to try again</a> or <a href=\"%s\">click here to go back to the homepage</a>."
-msgstr ""
-
-#: ./templates/default/pages/500.tpl.php:19
-msgid "Click here to see the technical details."
-msgstr ""
-
-#: ./templates/default/pages/500.tpl.php:32
-msgid "Oh no! Something went wrong."
-msgstr ""
-
-#: ./templates/default/pages/home/nocontent.tpl.php:10
+#: ./templates/classic/pages/home/nocontent.tpl.php:10
+#: ./templates/default/pages/home/nocontent.html.twig:8
 msgid "We couldn't find anything that matches your search."
 msgstr ""
 
-#: ./templates/default/robot/post.tpl.php:19
-msgid "Power down robots. I can take it from here."
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:7
-msgid "Check out my new @withknown site!"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:34
-msgid "Beep!"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:42
-msgid "Zeep!"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:50
-msgid "Beep boop!"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:60
-msgid "Beepity boop! That was a great picture. Did you see that you can also <a href=\"{{userurl}}/edit\">update your profile</a>?"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:67
-msgid "Boopity beep! Did you see that you can also <a href=\"{{userurl}}/edit\">update your profile</a>?"
-msgstr ""
-
-#: ./templates/default/robot/wizard.tpl.php:83
-msgid "01011001 01101111 00100000 01111001 01101111 00100000 01111001 01101111 \n\nThat's how you say hello where I come from. I wanted to remind you that you can also <a href=\"{{baseurl}}admin/themes/\">change the theme of your site</a>. If you ever have feedback, you can <a href=\"{{baseurl}}account/settings/feedback/\">send a message to my human creators</a>."
-msgstr ""
-
-#: ./templates/default/settings-shell/nav.tpl.php:6
-msgid "Toggle navigation"
-msgstr ""
-
-#: ./templates/default/settings-shell/toolbar/logged-in.tpl.php:18
-msgid "Site Configuration"
-msgstr ""
-
-#: ./templates/default/shell/pagination.tpl.php:28
+#: ./templates/classic/shell/pagination.tpl.php:35
+#: ./templates/default/drafts.html.twig:34
+#: ./templates/default/shell/pagination.html.twig:9
 msgid "Newer"
 msgstr ""
 
-#: ./templates/default/shell/pagination.tpl.php:29
+#: ./templates/classic/shell/pagination.tpl.php:36
+#: ./templates/default/drafts.html.twig:39
+#: ./templates/default/shell/pagination.html.twig:14
 msgid "Older"
 msgstr ""
 
-#: ./templates/default/shell/toolbar/content/all.tpl.php:4
-msgid "All content"
+#: ./templates/default/account-shell.html.twig:20
+msgid "Account"
 msgstr ""
 
-#: ./templates/default/shell/toolbar/content/default.tpl.php:4
-msgid "Default content"
+#: ./templates/default/account-shell.html.twig:25
+#: ./templates/default/admin-shell.html.twig:27
+msgid "Back to site"
 msgstr ""
 
-#: ./templates/default/shell/toolbar/content.tpl.php:26
-msgid "Filter content"
+#: ./templates/default/account/export.html.twig:7
+msgid "Export as RSS"
 msgstr ""
 
-#: ./templates/default/shell/toolbar/logged-in.tpl.php:16
-msgid "Profile"
-msgstr ""
-
-#: ./templates/default/shell/toolbar/logged-in.tpl.php:49
-msgid "Leave feedback"
-msgstr ""
-
-#: ./templates/default/shell/toolbar/logged-in.tpl.php:49
-msgid "Feedback"
-msgstr ""
-
-#: ./templates/default/shell/toolbar/logout.tpl.php:1
-msgid "Sign out"
-msgstr ""
-
-#: ./templates/default/shell/toolbar/main.tpl.php:1
-msgid "Skip to main content"
-msgstr ""
-
-#: ./templates/default/shell/toolbar/register.tpl.php:1
+#: ./templates/default/account/login.html.twig:38
 msgid "Register"
 msgstr ""
 
-#: ./templates/default/shell/toolbar/search.tpl.php:17
+#: ./templates/default/account/menu.html.twig:10
+msgid "Tools & Apps"
+msgstr ""
+
+#: ./templates/default/account/password.html.twig:6
+#: ./templates/default/account/password/reset.html.twig:5
+msgid "Reset your password"
+msgstr ""
+
+#: ./templates/default/account/password.html.twig:9
+msgid "Forgot your password? Don't worry! It happens to the best of us."
+msgstr ""
+
+#: ./templates/default/account/password.html.twig:10
+msgid "Just enter the email address associated with your %s account below, and we'll send you a top secret link to your email account so that you can create a new password."
+msgstr ""
+
+#: ./templates/default/account/password.html.twig:27
+msgid "Send password reset email"
+msgstr ""
+
+#: ./templates/default/account/password/reset.html.twig:7
+msgid "To change your password, enter your new password below:"
+msgstr ""
+
+#: ./templates/default/account/password/reset.html.twig:17
+msgid "The address associated with your %s account."
+msgstr ""
+
+#: ./templates/default/account/password/reset.html.twig:23
+msgid "New password (7 characters or more)"
+msgstr ""
+
+#: ./templates/default/account/password/reset.html.twig:29
+msgid "Retype password"
+msgstr ""
+
+#: ./templates/default/account/password/reset.html.twig:30
+msgid "We ask you to enter the password twice to protect against typos."
+msgstr ""
+
+#: ./templates/default/account/password/sent.html.twig:5
+msgid "Your password reset email has been sent"
+msgstr ""
+
+#: ./templates/default/account/password/sent.html.twig:15
+msgid "Check your inbox! You'll find an email containing a special link that will help you reset your password."
+msgstr ""
+
+#: ./templates/default/account/password/sent.html.twig:18
+msgid "Did you remember your password? That's okay too. You can <a href=\"%s\">click here to sign in.</a>"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:5
+#: ./templates/default/onboarding/register.html.twig:3
+msgid "Hello there!"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:7
+#: ./templates/default/onboarding/register.html.twig:5
+msgid "Create a new account to get started."
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:20
+msgid "Choose a handle"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:21
+msgid "Handles identify you throughout the site. Something simple is best: for example, <em>janedoe</em>."
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:23
+msgid "username"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:33
+#: ./templates/default/onboarding/register.html.twig:25
+msgid "Create a password"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:34
+msgid "At least 7 characters please."
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:37
+#: ./templates/default/account/register.html.twig:44
+msgid "secret-password"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:42
+#: ./templates/default/onboarding/register.html.twig:33
+msgid "Your password again"
+msgstr ""
+
+#: ./templates/default/account/register.html.twig:49
+msgid "Create Account"
+msgstr ""
+
+#: ./templates/default/account/settings/feedback.html.twig:5
+msgid "Share your feedback"
+msgstr ""
+
+#: ./templates/default/account/settings/feedback.html.twig:9
+msgid "Want to share something with the Idno team? We'd love to read your thoughts, suggestions, or ideas. We will personally read all of your feedback."
+msgstr ""
+
+#: ./templates/default/account/settings/feedback.html.twig:21
+msgid "From"
+msgstr ""
+
+#: ./templates/default/account/settings/feedback.html.twig:29
+msgid "Feedback for the Idno team"
+msgstr ""
+
+#: ./templates/default/account/settings/feedback.html.twig:32
+msgid "Let us know what you think."
+msgstr ""
+
+#: ./templates/default/account/settings/feedback/confirm.html.twig:5
+msgid "Message received!"
+msgstr ""
+
+#: ./templates/default/account/settings/feedback/confirm.html.twig:9
+msgid "Thanks for sending along your thoughts. We'll read them right away."
+msgstr ""
+
+#: ./templates/default/account/settings/feedback/confirm.html.twig:22
+msgid "Feedback is a gift.  For more information about Idno, <a href=\"https://idno.co/\">please visit our homepage</a>"
+msgstr ""
+
+#: ./templates/default/account/settings/following.html.twig:5
+msgid "Following..."
+msgstr ""
+
+#: ./templates/default/account/settings/following.html.twig:11
+msgid "Manage your subscriptions here. These users can also be given access to private content you produce on your site."
+msgstr ""
+
+#: ./templates/default/account/settings/following.html.twig:16
+msgid "Use this bookmarklet to make it easy to add new friends."
+msgstr ""
+
+#: ./templates/default/account/settings/following/bookmarklet.html.twig:1
+#: ./templates/default/account/settings/following/mf2user.html.twig:95
+msgid "Add as friend..."
+msgstr ""
+
+#: ./templates/default/account/settings/following/mf2user.html.twig:49
+msgid "Name"
+msgstr ""
+
+#: ./templates/default/account/settings/following/mf2user.html.twig:58
+msgid "Nickname"
+msgstr ""
+
+#: ./templates/default/account/settings/following/mf2user.html.twig:61
+msgid "Handle (for your reference)"
+msgstr ""
+
+#: ./templates/default/account/settings/following/mf2user.html.twig:76
+msgid "Profile URL"
+msgstr ""
+
+#: ./templates/default/admin/about.html.twig:15
+msgid "Idno"
+msgstr ""
+
+#: ./templates/default/admin/about.html.twig:15
+msgid "is a social publishing platform for groups and individuals."
+msgstr ""
+
+#: ./templates/default/admin/about.html.twig:17
+msgid "Open source project details"
+msgstr ""
+
+#: ./templates/default/admin/about.html.twig:20
+msgid "Version: %s+%s"
+msgstr ""
+
+#: ./templates/default/admin/dependencies/build.html.twig:1
+#: ./templates/default/admin/dependencies/idno.html.twig:1
+#: ./templates/default/admin/dependencies/php.html.twig:1
+msgid "%s installed"
+msgstr ""
+
+#: ./templates/default/admin/dependencies/plugin.html.twig:1
+msgid "(v%s required)"
+msgstr ""
+
+#: ./templates/default/admin/diagnostics.html.twig:9
+msgid "This page provides you with information that may help you or others diagnose any problems you may be experiencing with your Idno install."
+msgstr ""
+
+#: ./templates/default/admin/diagnostics.html.twig:23
+msgid "Basic checks on installation discovered no problems."
+msgstr ""
+
+#: ./templates/default/admin/diagnostics.html.twig:32
+msgid "Generate detailed report"
+msgstr ""
+
+#: ./templates/default/admin/email.html.twig:11
+msgid "Email Settings"
+msgstr ""
+
+#: ./templates/default/admin/email.html.twig:25
+msgid "SMTP Settings"
+msgstr ""
+
+#: ./templates/default/admin/email.html.twig:83
+msgid "Test Email"
+msgstr ""
+
+#: ./templates/default/admin/home.html.twig:1
+msgid "Site Settings"
+msgstr ""
+
+#: ./templates/default/admin/home.html.twig:43
+msgid "Single user site"
+msgstr ""
+
+#: ./templates/default/admin/home.html.twig:45
+msgid "Show profile info on homepage."
+msgstr ""
+
+#: ./templates/default/admin/home.html.twig:113
+msgid "Avatar as favicon"
+msgstr ""
+
+#: ./templates/default/admin/home.html.twig:129
+msgid "Include permalinks when syndicating"
+msgstr ""
+
+#: ./templates/default/admin/home/description.html.twig:5
+msgid "On this page you can change the basic settings for your site, like the site name and the number of posts visible on each page."
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:6
+msgid "Homepage content"
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:11
+msgid "Here you can choose what content visitors see on your site homepage. By default, all published content appears on the main page. If you want to hide some content types from the main page, you can turn them off below."
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:16
+msgid "Turn off content types to hide them from the homepage of your site."
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:39
+msgid "On"
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:40
+msgid "Off"
+msgstr ""
+
+#: ./templates/default/admin/homepage.html.twig:55
+msgid "Save"
+msgstr ""
+
+#: ./templates/default/admin/import.html.twig:34
+msgid "Select Blogger export file"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:10
+msgid "When this site was upgraded from Idno 1.x, the tables of the old database were kept, renamed legacy_ followed by their old name. The site no longer reads them. Keep them until you are sure the upgrade went well; then you can delete them here."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:14
+msgid "There is nothing here: this site has no legacy tables, and no rows were left out by an upgrade."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:20
+msgid "Tables of the Idno 1.x database"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:23
+msgid "Table"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:23
+msgid "Rows (approximate)"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:32
+msgid "These tables cannot be deleted now."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:36
+msgid "The row counts are the database's estimates."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:36
+msgid "Deleting these tables cannot be undone, and afterwards the upgrade can no longer be reversed. Make a backup of the database first if you might want them again. The rows that were not carried over (below) are kept."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:39
+msgid "Type delete to confirm:"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:43
+msgid "Delete the legacy tables"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:48
+msgid "The upgrade from Idno 1.x is not complete, so these tables cannot be deleted yet."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:55
+msgid "Rows that were not carried over"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:57
+msgid "%d rows of the Idno 1.x database could not be carried into the new database. Each is listed with the reason. Their full contents are kept in the database table idno_upgrade_rejects, which is never deleted (deleting the legacy tables does not delete it)."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:61
+msgid "Collection"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:61
+msgid "Address (uuid) in 1.x"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:61
+msgid "Reason"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:75
+msgid "Showing %d to %d of %d."
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:77
+msgid "Previous"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:89
+msgid "Tables created by an old Idno process"
+msgstr ""
+
+#: ./templates/default/admin/legacytables/body.html.twig:91
+msgid "These tables have the names of the Idno 1.x tables, but they were created after the upgrade, by a process still running the old version of Idno (a queue or cron service, for example). Nothing in them is part of this site, and the site never reads them. Stop that process. These tables are not deleted from here."
+msgstr ""
+
+#: ./templates/default/admin/logs.html.twig:1
+#: ./templates/default/admin/menu.html.twig:41
+msgid "Logs"
+msgstr ""
+
+#: ./templates/default/admin/menu.html.twig:5
+msgid "Dashboard"
+msgstr ""
+
+#: ./templates/default/admin/plugins/plugin.html.twig:48
+msgid "Always on"
+msgstr ""
+
+#: ./templates/default/admin/themes/theme.html.twig:34
+msgid "Active"
+msgstr ""
+
+#: ./templates/default/admin/users.html.twig:51
+msgid "Resend"
+msgstr ""
+
+#: ./templates/default/admin/users.html.twig:86
+msgid "Remove block"
+msgstr ""
+
+#: ./templates/default/content/edit.html.twig:3
+msgid "More actions"
+msgstr ""
+
+#: ./templates/default/content/syndication/links.html.twig:3
+msgid "Also on:"
+msgstr ""
+
+#: ./templates/default/drafts.html.twig:1
+msgid "Your Drafts"
+msgstr ""
+
+#: ./templates/default/drafts.html.twig:5
+msgid "No drafts yet."
+msgstr ""
+
+#: ./templates/default/drafts.html.twig:14
+msgid "Untitled"
+msgstr ""
+
+#: ./templates/default/entity/User.html.twig:16
+msgid "Edit profile"
+msgstr ""
+
+#: ./templates/default/entity/User.html.twig:28
+msgid "You haven't described yourself yet."
+msgstr ""
+
+#: ./templates/default/entity/User.html.twig:29
+msgid "Fill in your profile."
+msgstr ""
+
+#: ./templates/default/entity/User/edit.html.twig:13
+msgid "Profile photo"
+msgstr ""
+
+#: ./templates/default/entity/User/edit.html.twig:18
+msgid "Change photo"
+msgstr ""
+
+#: ./templates/default/entity/User/edit.html.twig:22
+msgid "JPG, PNG or GIF"
+msgstr ""
+
+#: ./templates/default/entity/User/edit.html.twig:38
+msgid "Tell people about yourself..."
+msgstr ""
+
+#: ./templates/default/entity/User/edit.html.twig:62
+#: ./templates/default/onboarding/profile.html.twig:40
+msgid "Add another website"
+msgstr ""
+
+#: ./templates/default/entity/annotations/comment/main.html.twig:17
+msgid "Comment"
+msgstr ""
+
+#: ./templates/default/entity/share.html.twig:3
+msgid "This content can't be shared right now."
+msgstr ""
+
+#: ./templates/default/entity/shell.html.twig:8
+msgid "Draft"
+msgstr ""
+
+#: ./templates/default/entity/shell.html.twig:9
+msgid "only visible to you"
+msgstr ""
+
+#: ./templates/default/entity/shell.html.twig:28
+msgid "Replied to"
+msgstr ""
+
+#: ./templates/default/file/picker/image.html.twig:19
+msgid "Select an image"
+msgstr ""
+
+#: ./templates/default/file/picker/image.html.twig:29
+msgid "Upload this image"
+msgstr ""
+
+#: ./templates/default/file/picker/image.html.twig:49
+msgid "Choose a different image"
+msgstr ""
+
+#: ./templates/default/following/add.html.twig:3
+msgid "Add the address of a site to follow"
+msgstr ""
+
+#: ./templates/default/following/confirm.html.twig:7
+msgid "Follow"
+msgstr ""
+
+#: ./templates/default/following/confirm.html.twig:12
+msgid "Here's the latest content."
+msgstr ""
+
+#: ./templates/default/following/home.html.twig:10
+msgid "Follow another site"
+msgstr ""
+
+#: ./templates/default/following/home.html.twig:18
+msgid "You're not following anyone yet."
+msgstr ""
+
+#: ./templates/default/forms/components/usersearch/user.html.twig:18
+msgid "Last post"
+msgstr ""
+
+#: ./templates/default/forms/components/usersearch/user.html.twig:27
+msgid "Member"
+msgstr ""
+
+#: ./templates/default/forms/components/usersearch/user.html.twig:34
+msgid "Remove admin"
+msgstr ""
+
+#: ./templates/default/forms/components/usersearch/user.html.twig:40
+msgid "Unblock"
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:8
+msgid "Idno is your space for sharing content and discussing ideas."
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:13
+msgid "Take a picture"
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:17
+msgid "Share a message"
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:21
+msgid "Save your location"
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:34
+msgid "Get started"
+msgstr ""
+
+#: ./templates/default/onboarding/begin.html.twig:42
+msgid "Already have an account? Sign in."
+msgstr ""
+
+#: ./templates/default/onboarding/connect.html.twig:3
+msgid "Share to social"
+msgstr ""
+
+#: ./templates/default/onboarding/connect.html.twig:6
+msgid "Connect your accounts to easily share content with people across the web."
+msgstr ""
+
+#: ./templates/default/onboarding/connect.html.twig:14
+msgid "Continue"
+msgstr ""
+
+#: ./templates/default/onboarding/connect.html.twig:19
+msgid "Don't worry, you can always connect these later."
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:16
+msgid "Add a photo of yourself"
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:23
+msgid "Ben Franklin"
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:27
+msgid "Your short bio"
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:29
+msgid "I fly kites..."
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:34
+msgid "Your other websites"
+msgstr ""
+
+#: ./templates/default/onboarding/profile.html.twig:35
+msgid "(a blog, a portfolio, Twitter, Facebook, etc)"
+msgstr ""
+
+#: ./templates/default/onboarding/register.html.twig:13
+msgid "Choose a username"
+msgstr ""
+
+#: ./templates/default/onboarding/register.html.twig:26
+msgid "(at least 7 characters please)"
+msgstr ""
+
+#: ./templates/default/pages/403.html.twig:3
+msgid "Click here to log in."
+msgstr ""
+
+#: ./templates/default/pages/403.html.twig:12
+msgid "Hold on. You don't have access to this content."
+msgstr ""
+
+#: ./templates/default/pages/403.html.twig:14
+msgid "It's nothing personal. You just don't have the right permissions to see what's here."
+msgstr ""
+
+#: ./templates/default/pages/403.html.twig:16
+msgid "Find something else to view on the <a href=\"%s\">%s homepage</a>."
+msgstr ""
+
+#: ./templates/default/pages/404.html.twig:5
+msgid "Oops! We couldn't find it."
+msgstr ""
+
+#: ./templates/default/pages/404.html.twig:7
+msgid "Whatever you were looking for, it's not here. It might have been moved, deleted, or it doesn't exist. Or the robots ate it. That's always a possibility too."
+msgstr ""
+
+#: ./templates/default/pages/404.html.twig:8
+msgid "Maybe you'll find something interesting if you head back to the <a href=\"%s\">%s homepage</a>."
+msgstr ""
+
+#: ./templates/default/pages/410.html.twig:6
+msgid "Sorry, this content isn't here anymore."
+msgstr ""
+
+#: ./templates/default/pages/410.html.twig:8
+msgid "You may be wondering where it went, but we can't tell you. It's a secret."
+msgstr ""
+
+#: ./templates/default/pages/410.html.twig:10
+msgid "Maybe you'd like to head back to the <a href=\"%s\">%s homepage</a> instead."
+msgstr ""
+
+#: ./templates/default/pages/500.html.twig:15
+msgid "<a href=\"#\" onclick=\"window.history.back();\">Click here to try again</a> or <a href=\"%s\">click here to go back to the homepage</a>."
+msgstr ""
+
+#: ./templates/default/pages/500.html.twig:19
+msgid "Click here to see the technical details."
+msgstr ""
+
+#: ./templates/default/shell/compose.html.twig:9
+#: ./templates/default/shell/nav.html.twig:70
+msgid "New Post"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:11
+msgid "Home"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:18
+msgid "Profile"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:25
+#: ./templates/default/shell/search.html.twig:9
+#: ./templates/default/shell/search.html.twig:19
+#: ./templates/default/shell/search.html.twig:22
 msgid "Search"
 msgstr ""
 
-#: ./templates/email/account/invite.tpl.php:2
+#: ./templates/default/shell/nav.html.twig:48
+msgid "Admin"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:54
+msgid "Log out"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:63
+msgid "Log in"
+msgstr ""
+
+#: ./templates/default/shell/search.html.twig:20
+msgid "Search posts..."
+msgstr ""
+
+#: ./templates/email-text/account/invite.txt.twig:1
+#: ./templates/email/account/invite.html.twig:2
 msgid "Join us!"
 msgstr ""
 
-#: ./templates/email/account/invite.tpl.php:6
-msgid "Hi there! Your friend <strong>%s</strong> has invited you to join <%s>"
-msgstr ""
-
-#: ./templates/email/account/invite.tpl.php:8
-msgid "You can use this space to publish your stories, share things that interest you, and discuss things that matter."
-msgstr ""
-
-#: ./templates/email/account/invite.tpl.php:10
-msgid "Get started with <strong>%s</strong> by setting up your account"
-msgstr ""
-
-#: ./templates/email/account/invite.tpl.php:13
-msgid "Sign up now"
-msgstr ""
-
-#: ./templates/email/account/password.tpl.php:6
-msgid "We heard you forgot your password. Don't worry. It happens to the best of us."
-msgstr ""
-
-#: ./templates/email/account/password.tpl.php:8
-msgid "You can reset your password by clicking the link below (or copy and paste it into your browser)."
-msgstr ""
-
-#: ./templates/email/shell.tpl.php:72
-msgid "Powered by"
-msgstr ""
-
-#: ./templates/email-text/account/invite.tpl.php:14
+#: ./templates/email-text/account/invite.txt.twig:6
 msgid "Hi there! Your friend *%s* has invited you to join %s"
 msgstr ""
 
-#: ./templates/email-text/account/invite.tpl.php:20
+#: ./templates/email-text/account/invite.txt.twig:9
+#: ./templates/email/account/invite.html.twig:9
+msgid "You can use this space to publish your stories, share things that interest you, and discuss things that matter."
+msgstr ""
+
+#: ./templates/email-text/account/invite.txt.twig:11
 msgid "Get started with *%s* by setting up your account"
 msgstr ""
 
-#: ./templates/email-text/account/invite.tpl.php:26
+#: ./templates/email-text/account/invite.txt.twig:14
+#: ./templates/email/account/invite.html.twig:14
+msgid "Sign up now"
+msgstr ""
+
+#: ./templates/email-text/account/invite.txt.twig:16
+#: ./templates/email/account/invite.html.twig:18
 msgid "If you have any questions at all, please don't hesitate to contact us by sending an email to %s"
 msgstr ""
 
-#: ./known.php:110
-msgid "Returns the current Idno version as defined in version.idno"
+#: ./templates/email-text/account/password.txt.twig:6
+#: ./templates/email/account/password.html.twig:6
+msgid "We heard you forgot your password. Don't worry. It happens to the best of us."
 msgstr ""
 
-#: ./known.php:119
-msgid "WARNING: Your build of Idno is behind the latest version from Github (%s - %s). If you're having problems, you may want to try updating to the latest version.\nUpdate now: https://github.com/idno/idno\n"
+#: ./templates/email-text/account/password.txt.twig:8
+#: ./templates/email/account/password.html.twig:8
+msgid "You can reset your password by clicking the link below (or copy and paste it into your browser)."
+msgstr ""
+
+#: ./templates/email/account/invite.html.twig:7
+msgid "Hi there! Your friend <strong>%s</strong> has invited you to join <%s>"
+msgstr ""
+
+#: ./templates/email/account/invite.html.twig:11
+msgid "Get started with <strong>%s</strong> by setting up your account"
+msgstr ""
+
+#: ./templates/email/shell.html.twig:63
+msgid "Powered by"
 msgstr ""
 
