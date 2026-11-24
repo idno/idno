@@ -220,6 +220,43 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
+     * A feed item's address is the followed site's word (its markup names it): the reader's permalink and the footer link to it only when
+     * it is an http or https address, and the item does not keep any other.
+     */
+    public function testAFeedItemsAddressThatIsAScriptLinksNowhere(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/following/') . <<<'PHP'
+        $draw = static function (string $url): string {
+            // (the template draws the item's own body with `object.draw()`, which is this template again for a real item)
+            $item = new class extends \Idno\Entities\Reader\FeedItem {
+                public function draw($feed_view = false, $suffix = '')
+                {
+                    return '<p>Body</p>';
+                }
+            };
+            $item->owner = \Idno\Entities\User::getByHandle('ada')->getUUID();
+            $item->created = 1_700_000_000;
+            $item->setBody('<p>Body</p>');
+            // Stored as an older release stored it: the draw must not trust what is in the database
+            $item->url = $url;
+            $template = clone \Idno\Core\Idno::site()->template();
+
+            return $template->__(['object' => $item])->draw('entity/FeedItem') . '|' . $template->__(['object' => $item])->draw('content/feed/end');
+        };
+
+        return json_encode(['hostile' => $draw('javascript:alert(1)'), 'normal' => $draw('https://feed.example/a?x=1&y=2')]);
+        PHP);
+        $drawn = json_decode((string) $out, true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertStringContainsString('<article', $drawn['hostile'], 'the item is drawn: the test is looking at it');
+        $this->assertStringNotContainsString('javascript:', $drawn['hostile'], 'in the reader\'s permalink and in the footer');
+        $this->assertSame(3, substr_count($drawn['normal'], 'href="https://feed.example/a?x=1&amp;y=2" rel="permalink"'), 'the item\'s permalink and the footer\'s (which the item draws and which is drawn again by itself)');
+        $this->assertStringContainsString('href="https://feed.example/a?x=1&amp;y=2#comments"', $drawn['normal'], 'the footer links to the item\'s comments');
+    }
+
+    /**
      * A webmention's author is whoever sent it: a name that closes the tag, an address and a picture that are scripts. On every list of
      * annotations (replies, likes, shares, mentions and RSVPs) they print as text, and the author links and shows no picture.
      */
@@ -299,8 +336,10 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         return $template->draw('file/picker/image');
         PHP);
 
-        $this->assertStringContainsString("html('Choose\\u0020a\\u0020different\\u0020image')", $drawn);
-        $this->assertStringNotContainsString("html('Choose a different image')", $drawn);
+        $this->assertStringContainsString("textContent = 'Choose\\u0020a\\u0020different\\u0020image'", $drawn);
+        $this->assertStringNotContainsString("= 'Choose a different image'", $drawn);
+        $this->assertStringNotContainsString('EXIF', $drawn, 'the script calls nothing that no page loads');
+        $this->assertStringNotContainsString('$(', $drawn, 'and needs no jQuery');
         $this->assertStringContainsString('Select an image', $drawn, 'the words of the page itself are as they were');
     }
 
@@ -705,6 +744,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             // The page cannot fetch the route here: the template is drawn with the card the page would give it, so that the escaping is still tested
             $this->markTestIncomplete('the page answered ' . $response->status . ': ' . substr(trim((string) preg_replace('/\s+/', ' ', strip_tags($response->body))), 0, 300) . $this->serverLog());
         }
+        $this->assertStringContainsString('&lt;/h1&gt;&lt;script&gt;x()&lt;/script&gt;', $response->body, 'the card was drawn, with its name as text: the checks below are not vacuous');
         $this->assertHostileCardIsInert($response->body);
     }
 
@@ -1026,6 +1066,72 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             }
         }
         $this->assertStringContainsString('See <a href="https://example.org/update">the update</a>', $out['diagnostics'], 'a diagnostics message is the HTML its writer made');
+    }
+
+    /**
+     * The themes page tells the template which themes have a `preview.png`: a theme folder with one is drawn with its picture, one without is not.
+     * (The wiring is the page's: the draw cases give the template that list by hand.)
+     */
+    public function testTheThemesPagePassesTheThemesThatHaveAPreview(): void
+    {
+        $this->seedSite();
+        $cookie = $this->loginAsAdmin();
+        $root = dirname(__DIR__, 2) . '/Themes';
+        $with = $root . '/ZzPreviewWith';
+        $without = $root . '/ZzPreviewWithout';
+        try {
+            foreach ([$with, $without] as $theme) {
+                mkdir($theme, 0777, true);
+                file_put_contents($theme . '/theme.ini', "[Theme description]\nname = '" . basename($theme) . "'\nversion = '1.0'\nauthor = 'Test'\n");
+            }
+            file_put_contents($with . '/preview.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
+
+            $response = $this->site()->request('GET', 'admin/themes/', ['Cookie' => $cookie]);
+        } finally {
+            foreach ([$with, $without] as $theme) {
+                foreach (glob($theme . '/*') ?: [] as $file) {
+                    unlink($file);
+                }
+                @rmdir($theme);
+            }
+        }
+
+        $this->assertSame(200, $response->status);
+        $this->assertStringContainsString('ZzPreviewWith/preview.png', $response->body, 'the theme with a picture is drawn with it');
+        $this->assertStringContainsString('ZzPreviewWithout', $response->body, 'the other theme is listed');
+        $this->assertStringNotContainsString('ZzPreviewWithout/preview.png', $response->body, 'and is drawn without one');
+    }
+
+    /**
+     * A plugin's or theme's author address comes from its `.ini` file (a download from anywhere): it links only when it is an http or https
+     * address.
+     */
+    public function testAPluginOrThemeAuthorAddressThatIsAScriptLinksNowhere(): void
+    {
+        $this->seedSite();
+
+        $out = $this->runInSite($this->pageCode('/admin/plugins/') . <<<'PHP'
+        $template = clone \Idno\Core\Idno::site()->template();
+        $draw = static function (string $name, array $vars) use ($template): string {
+            return (string) (clone $template)->__($vars)->draw($name);
+        };
+        $plugin = static fn (string $url): array => ['Plugin description' => ['name' => 'Zed', 'version' => '1', 'author' => 'Ann', 'author_url' => $url, 'description' => 'D'], 'shortname' => 'Zed'];
+        $theme = static fn (string $url): array => ['Theme description' => ['name' => 'Zed', 'version' => '1', 'author' => 'Ann', 'author_url' => $url, 'description' => 'D'], 'shortname' => 'Zed'];
+
+        return json_encode([
+            'plugin script' => $draw('admin/plugins', ['plugins_loaded' => [], 'plugins_visible' => [$plugin('javascript:alert(1)')]]),
+            'plugin http' => $draw('admin/plugins', ['plugins_loaded' => [], 'plugins_visible' => [$plugin('https://example.org/ann')]]),
+            'theme script' => $draw('admin/themes', ['themes_stored' => ['Zed' => $theme('javascript:alert(1)')], 'theme' => '']),
+            'theme http' => $draw('admin/themes', ['themes_stored' => ['Zed' => $theme('https://example.org/ann')], 'theme' => '']),
+        ]);
+        PHP);
+        $drawn = json_decode((string) $out, true, 512, JSON_THROW_ON_ERROR);
+
+        foreach (['plugin', 'theme'] as $kind) {
+            $this->assertStringContainsString('Ann', $drawn[$kind . ' script'], 'the author is drawn: the test is looking at it');
+            $this->assertStringNotContainsString('javascript:', $drawn[$kind . ' script'], $kind);
+            $this->assertStringContainsString('<a href="https://example.org/ann">Ann</a>', $drawn[$kind . ' http'], $kind . ': an http address links');
+        }
     }
 
     /**

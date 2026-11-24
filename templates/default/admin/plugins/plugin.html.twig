@@ -13,7 +13,7 @@
             <div class="idno-plugin-author">
                 {{ t('by') }}
                 {% if plugin_description['author_url'] ?? null %}
-                    <a href="{{ plugin_description['author_url'] }}">{{ plugin_description['author'] }}</a>
+                    <a href="{{ plugin_description['author_url']|http_url }}">{{ plugin_description['author'] }}</a>
                 {% else %}
                     {{ plugin_description['author'] }}
                 {% endif %}

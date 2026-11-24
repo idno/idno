@@ -37,7 +37,7 @@
             <span class="photo-filename" data-nexttext="{{ t('Choose different photo') }}">
                 {% if not entity_value(object, '_id') %}{{ t('Select a photo') }}{% elseif not is_multiple %}{{ t('Choose different photo') }}{% else %}{{ t('Add photo') }}{% endif %}
             </span>
-            {{ idno_include('forms/input/file', {name: name, id: id, accept: 'image/*', onchange: 'Template.activateImagePreview(this)', class: 'input-file'}) }}
+            {{ idno_include('forms/input/file', {name: name, id: id, accept: 'image/*', class: 'input-file'}) }}
         </label>
     </p>
 </div>

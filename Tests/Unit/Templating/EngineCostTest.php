@@ -102,9 +102,8 @@ final class EngineCostTest extends TestCase
         $this->assertSame($twig, $locator->locate('shell/x', 'default')?->path);
         unlink($twig);
 
-        $this->assertSame($twig, $loader->getCacheKey('default/shell/x.html.twig'), 'the file the locator found is the loader\'s: its path was not looked at again');
-        $this->assertSame($twig, $loader->getCacheKey('default/shell/x.html.twig'));
-        $this->assertTrue($loader->exists('default/shell/x.html.twig'));
+        $this->assertTrue($loader->exists('default/shell/x.html.twig'), 'the file the locator found is the loader\'s: its path was not looked at again');
+        $this->assertTrue($loader->isFresh('default/shell/x.html.twig', 0), 'and the answer needs no look at the file');
         $this->assertFalse($loader->exists('default/shell/gone.html.twig'));
         $this->file('core/templates/default/shell/gone.html.twig');
         $this->assertFalse($loader->exists('default/shell/gone.html.twig'), 'an answer is kept for the request, as the locator\'s is');
@@ -112,6 +111,63 @@ final class EngineCostTest extends TestCase
         $cascade->addBase($this->root);
         $this->expectException(LoaderError::class);
         $loader->getCacheKey('default/shell/x.html.twig');
+    }
+
+    public function testATemplateIsStatedAtMostOnceWhenFirstLoadedAndNeverAgainInTheSameProcess(): void
+    {
+        $source = $this->file('core/templates/default/shell/y.html.twig', 'plain');
+        $cache = $this->root . '/compiled';
+        $newEngine = function (TemplateCascade $cascade) use ($cache): TwigTemplateEngine {
+            $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new FilesystemCache($cache), 'auto_reload' => true]);
+
+            return new TwigTemplateEngine(static fn (): Environment => $twig);
+        };
+        $context = new class () implements PhpTemplateContext {
+            public function withVars(array $vars): static
+            {
+                return $this;
+            }
+
+            public function forgetVariables(array $names): void
+            {
+            }
+
+            public function phpTemplateScope(): string
+            {
+                return self::class;
+            }
+
+            public function draw($templateName, $returnBlank = true)
+            {
+                return '';
+            }
+
+            public function drawSlot($name)
+            {
+                return '';
+            }
+        };
+        $located = new LocatedTemplate($source, 'twig', 'default', $this->root . '/core', 'default/shell/y.html.twig');
+        $this->assertSame('plain', $newEngine(new TemplateCascade($this->root . '/core'))->render($located, [], $context), 'compiled once: the next engine finds the file');
+
+        // A page's template was found by the locator before it is drawn: the cascade knows the path
+        $cascade = new TemplateCascade($this->root . '/core');
+        $this->assertSame($source, (new TemplateLocator($cascade))->locate('shell/y', 'default')?->path);
+        $engine = $newEngine($cascade);
+        CountingFileWrapper::start();
+        try {
+            $first = $engine->render($located, [], $context);
+            $afterFirst = CountingFileWrapper::statsOf($source);
+            $second = $engine->render($located, [], $context);
+            $afterSecond = CountingFileWrapper::statsOf($source);
+        } finally {
+            CountingFileWrapper::stop();
+        }
+
+        $this->assertSame('plain', $first);
+        $this->assertSame('plain', $second);
+        $this->assertLessThanOrEqual(1, $afterFirst, 'the key and the freshness check look at the file once between them (auto_reload made one look before)');
+        $this->assertSame($afterFirst, $afterSecond, 'a template already loaded in the process is not looked at again');
     }
 
     public function testEveryFunctionAndFilterIsAMethodOfTheExtension(): void

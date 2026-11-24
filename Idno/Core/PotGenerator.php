@@ -165,9 +165,17 @@ class PotGenerator
             if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_VARIABLE || !in_array($tokens[$i][1], ['$title', '$category_title'], true)) {
                 continue;
             }
+            if (!$this->isPropertyDeclaration($tokens, $i)) {
+                continue;
+            }
             $equals = $this->skipWhitespace($tokens, $i + 1, $count);
             $string = $equals === null ? null : $this->skipWhitespace($tokens, $equals + 1, $count);
             if ($equals === null || $string === null || $tokens[$equals] !== '=' || !is_array($tokens[$string]) || $tokens[$string][0] !== T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            // A concatenation (`'a' . self::SUFFIX`) is not one string that can be translated
+            $after = $this->skipWhitespace($tokens, $string + 1, $count);
+            if ($after === null || !in_array($tokens[$after], [';', ','], true)) {
                 continue;
             }
             $decoded = $this->decodePhpString($tokens[$string][1]);
@@ -408,6 +416,32 @@ class PotGenerator
      * @param int $count Total token count
      * @return int|null Index of next meaningful token, or null if none found
      */
+    /**
+     * Whether the variable token at $index is declared as a property: a visibility, `static`, `var` or `readonly` before it (a type may come
+     * between), so a local variable of a method, an assignment to `$this->title` and a `self::$title` are not.
+     *
+     * @param array $tokens The file's tokens
+     */
+    private function isPropertyDeclaration(array $tokens, int $index): bool
+    {
+        for ($i = $index - 1; $i >= 0; $i--) {
+            $token = $tokens[$i];
+            if ($token === '?' || $token === '|') {
+                continue;
+            }
+            if (!is_array($token)) {
+                return false;
+            }
+            if (in_array($token[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT, T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED, T_ARRAY, T_CALLABLE], true)) {
+                continue;
+            }
+
+            return in_array($token[0], [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_VAR, T_READONLY], true);
+        }
+
+        return false;
+    }
+
     private function skipWhitespace(array $tokens, int $start, int $count): ?int
     {
         for ($i = $start; $i < $count; $i++) {

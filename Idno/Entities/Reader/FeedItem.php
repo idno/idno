@@ -231,13 +231,15 @@ namespace Idno\Entities\Reader {
         }
 
         /**
-         * Sets the URL of this feed item
+         * Sets the URL of this feed item. The address is the followed site's word, so it is kept only when it is an http or https
+         * address (as an annotation's is): a `javascript:` address is a link that runs a script. Any other is no address.
          *
          * @param $url
          */
         function setURL($url)
         {
-            $this->url = $url;
+            $url       = \Idno\Core\UrlValidator::httpUrl($url);
+            $this->url = $url === '' ? null : $url;
         }
 
         /**

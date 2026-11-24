@@ -42,9 +42,17 @@ interface TemplateHelpers
     public function siteIcons(): array;
 
     /**
-     * The value of a setting, whatever it is: the extension refuses the settings that are secrets before it asks.
+     * The value of a setting a template may read, null for any other (the settings that describe the server, secrets, an unknown name): an
+     * allow-list that core's and the bundled plugins' templates name, and a plugin extends for its own settings with allowSettings(). The
+     * extension also refuses the settings that are secrets before it asks.
      */
     public function setting(string $name): mixed;
+
+    /**
+     * Lets templates read the named settings of a plugin (a plugin's `Main` calls it with its own setting names). A name the redactor calls a
+     * secret, or that is not a plain name, is an \InvalidArgumentException.
+     */
+    public function allowSettings(string ...$names): void;
 
     public function canWrite(): bool;
 

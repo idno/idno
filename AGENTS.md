@@ -424,9 +424,8 @@ templates/                     Templates (Twig for web pages and mail, `.tpl.php
                                feeds, JSON, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
 css/, js/                      The shipped style sheets and scripts: Idno 2026's (`css/idno-2026.min.css`, `js/idno-2026.min.js`, built by Vite from
                                `frontend/`), the onboarding pages' and installer's (`css/idno-simple*.css`, built by Grunt from `css/scss/idno-simple.scss`,
-                               Bootstrap based), the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`) and
-                               `js/idno.js` / `js/idno.min.js` (Grunt's build of `js/src/`, no longer loaded by any core template; a few form templates
-                               call the `Template` and `ImageTools` objects it defines). `Tests/Unit/Templating/StaticAssetsTest` fails for a shipped file that
+                               Bootstrap based) and the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`).
+                               `Tests/Unit/Templating/StaticAssetsTest` (which also fails for a template that calls a global of a script nothing loads: `Template`, `ImageTools`, `EXIF`, `Modernizr`) fails for a shipped file that
                                nothing names (its `KEPT` list needs a reason for each exception) and for a template that names a file that is not there
 frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
                                files; built into css/idno-2026.min.css and js/idno-2026.min.js (committed, `npm --prefix frontend run
@@ -2691,10 +2690,21 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `TemplateName::normalise()` leaves as they are, with the suffix (`isLogicalName()`): `..`, a backslash, NUL, a trailing newline, a leading or
     doubled slash, an absolute path and `@Twig/...` are refused before any file is looked for, so `{% include %}`, `{% extends %}` and `source()` of
     any name reach only a file of a `templates/` directory of the cascade (`CascadeTwigLoaderTest`, `TwigEngineTest::testATemplateCanLoadOnlyAFileOfTheCascade`).
-    `getCacheKey()` is the resolved file, `isFresh()` compares modification times. A name is resolved once and the answer kept (until the cascade's
-    `generation()` changes, at most 2000 names: Twig asks `getCacheKey()` and `isFresh()` of every template it loads, and `auto_reload` is on), and the
-    paths it looks at are `TemplateCascade::isFile()`'s, which the locator has asked about already, so loading a template the locator found costs
-    one `filemtime()` and no search of the directories (with `auto_reload` on, as in debug mode, loading a compiled template costs a `filemtime()` of the source and one of the compiled file). The loader drops its names when a directory is added or `forgetFiles()` is called, and `isFresh()` asks the disk itself whether the file is still there (a template deleted under a long-lived worker is not fresh; `getSourceContext()` throws `LoaderError`). `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
+    `getCacheKey()` is the resolved file and its CONTENT VERSION (path, `stat()` modification time and size; a real `stat()` each call, with PHP's stat
+    cache cleared for the path first), and Twig names a compiled class after the key, so a file whose content changes always gets a class of its own, whatever
+    its date: a rollback to an artifact built earlier, an archive that keeps the build's dates (`rsync -a`, `tar`) and a `git checkout` of an older commit give a
+    file OLDER than the compiled copy of the one it replaced, which a check on dates alone would keep serving until `var/cache` was cleared (pinned by
+    `TwigAutoReloadTest`, a fresh process each render, and `CascadeTwigLoaderTest`). `isFresh()` therefore only asks whether the name still resolves (a compiled class
+    under a key is for exactly that version: no further `stat()`); a file deleted under a long-lived process has no key (`getCacheKey()` and `getSourceContext()`
+    throw `LoaderError`). The key's equal size and equal modification time with different content (two saves in one second of the same length) is not told apart.
+    Compiled classes of superseded versions stay in the cache directory until it is cleared; nothing reads them again. `TwigCacheWarmer` warms under the same keys
+    (the class is named after the key, not the name asked for), so a warmed template is a cache hit at run time (`TwigCacheWarmerTest`). A name is resolved once and
+    the answer kept (until the cascade's `generation()` changes, at most 2000 names), and the paths it looks at are `TemplateCascade::isFile()`'s, which the locator has asked
+    about already, so loading a template the locator found costs one `stat()` of the source (and Twig's of the compiled file under `auto_reload`, which is on) and no
+    search of the directories (`EngineCostTest::testATemplateIsStatedAtMostOnceWhenFirstLoadedAndNeverAgainInTheSameProcess`). The loader drops its names when a directory is
+    added or `forgetFiles()` is called. What a long-lived queue worker sees: the NAMES are remembered, the version is not (each `getCacheKey()` asks the disk), but
+    `TwigTemplateEngine` keeps every template it has loaded (at most 2000) for the life of the process, so a worker keeps the version of a template it first drew until it
+    restarts (it stops itself after an hour), whether the file changes or is deleted under it; a web request is a process of its own and always sees the file as it is. `Idno\Kernel\TwigTrimPass` (priority 9: after the bundle's
     extension pass, which tags what this removes, and before its loader and environment passes) removes the bundle's own filesystem loader from the chain (it would answer any file under `templates/`, `.tpl.php` source
     included), so this is the only loader, and removes `twig.error_renderer.html` (which would draw Symfony's production error page of a
     new-style controller from the bundle's `@Twig` templates: the page is what it was; the CLI never used it), `twig.mailer.message_listener` and
@@ -2755,7 +2765,10 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `syndication_selected`, `share_types`, `expand_urls`, `local_entity`, `local_file`, `access_groups_of`, `latest_post_of`, `entity_value`, `twitter_account_of`, `is_user`;
     filters: `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags`, `parse_users`, `http_url`, `identity_url`, `to_int`, `to_timestamp`, `ucfirst`, `decode_entities`, `display_url`, `fix_url`, `proxied_image`,
     `sample_text`. `current_url()`, `current_path()` and `referrer()` come from the `RequestStack` ('' with no request: a legacy page's request is
-    not on the stack, so they answer '' there until it is put on it); `setting()` answers null for a secret by `SettingsRedactor`'s rule (name or
+    not on the stack, so they answer '' there until it is put on it); `setting()` is an ALLOW-LIST (`LegacyTemplateHelpers::TEMPLATE_SETTINGS`, in groups with a reason each: exactly the names core's and the bundled plugins'
+    Twig templates read; any other name is null, so the database settings, `uploadpath`, `oops_notify` and every secret are never readable by a third-party template; a plugin
+    adds its own names with `TemplateHelpers::allowSettings()` from `registerPages()`, which refuses a name `SettingsRedactor` calls a secret; `LegacyTemplateHelpersTest` derives
+    the names the templates use from the file system, so a new `setting('x')` with no entry fails), and the extension still answers null for a secret by `SettingsRedactor`'s rule (name or
     value); `http_url` is `UrlValidator::httpUrl()`; `entity_value(object, name)` reads a stored attribute (an array by key) and never calls a method.
     `current_url_parts()` is `Page::currentUrl(true)` (`parse_url()` of the configured address with the request URI as `path`; `[]` with no request),
     `is_secure()` is `Page::isSSL()` (the adapter calls it), `page_icon()` is `Page::getIcon()`, and `leaked_user()` is the `user` variable of the SITE's
@@ -2966,8 +2979,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default`, `email` and `email-text` in core
   and the bundled plugins is a Twig file (`CoreTemplatesAreTwigTest`); the `.tpl.php` files that were beside them are deleted, and the `.tpl.php` engine stays for the `classic`
   and type-shell templates and for third-party plugins and themes.
-  The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) and `js/modernizr/` were deleted when nothing drew them. The Grunt build
-  (`Gruntfile.js`, `npm run grunt`) remains for the onboarding style sheet (`build-css`), the script of `js/src/` and the service worker (`build-js`), the language
+  The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) `js/modernizr/`, `js/idno.js` and `js/idno.min.js` (with their sources `js/src/classes/` and `js/src/lib/`) were deleted when nothing drew them. The Grunt build
+  (`Gruntfile.js`, `npm run grunt`) remains for the onboarding style sheet (`build-css`) and the service worker (`build-js`), the language
   catalogues (`build-lang`) and the linters (`test`); it does not build Idno 2026's files, which the `frontend/` build writes. The guide for plugin and theme authors,
   `docs/developers/plugins/upgrading.md` (what still works, what a `.tpl.php` template that a Twig template draws now gets, how to convert one), is pinned
   by `Tests/Kernel/UpgradingGuideTest` (its before and after draw the same markup; the example blocks are read from the guide); `.tpl.php` support ends in 3.0.
@@ -4070,7 +4083,7 @@ the CLI installer no longer writes one.
 
   Code that catches an exception and shows its message itself is not affected, except that
   a page which puts a caught exception's message in a session message (the visitor sees
-  it) passes it through `ExceptionMessage::forVisitor()` first: the admin's test mail page
+  it) passes it through `ExceptionMessage::forVisitor()` first, and escapes the result (`htmlspecialchars()`: a session message is printed as markup, so any text from a member, the request, a remote server or an exception is escaped by whoever adds the message): the admin's test mail page
   and the StandardSiteSync pages (the AT Protocol client's exceptions are all
   `TechnicalException`s). `Tests/Core/ExceptionMessageCallSitesTest` pins those call sites.
   The core classes the rule marks as technical are the timers, `Service`, entity mutation

@@ -61,7 +61,7 @@ return [
         ['expression' => 'shell.body', 'reason' => 'the page\'s body: HTML the page (or the templates it drew) already built and escaped; the shell only places it'],
     ],
     'templates/default/shell/messages/message.html.twig' => [
-        ['expression' => 'message.message', 'reason' => 'a session message is markup set by the code that added it (it may hold a link), which escapes member and request text with `esc_()`; the one known caller that passes an exception\'s visitor message is Idno\\Pages\\Admin\\EmailTest, through ExceptionMessage::forVisitor()'],
+        ['expression' => 'message.message', 'reason' => 'a session message is markup that the code which added it wrote (it may hold a link): fixed text is its own, and any member, request, remote or exception text in a message is escaped by the caller first (`esc_()`, `htmlspecialchars()`, the AT Protocol plugin\'s `Main::sessionMessage()`; every `addMessage()` and `addErrorMessage()` call of core and the bundled plugins was checked for this)'],
     ],
     'templates/default/shell/metatags.html.twig' => [
         ['expression' => 'title_className', 'reason' => 'an attribute string (` class="p-name"` or nothing) that shell_variables() builds from fixed text, as the old partial printed it'],
@@ -70,7 +70,7 @@ return [
         ['expression' => 'body', 'reason' => 'the page\'s body: HTML the page (or the templates it drew) already built and escaped; the shell only places it'],
     ],
     'templates/default/shell/simple/messages.html.twig' => [
-        ['expression' => 'message.message', 'reason' => 'a session message is markup set by the code that added it (it may hold a link), which escapes member and request text with `esc_()`; the one known caller that passes an exception\'s visitor message is Idno\\Pages\\Admin\\EmailTest, through ExceptionMessage::forVisitor(); autop() then wraps it in paragraphs and would escape it as text without this'],
+        ['expression' => 'message.message', 'reason' => 'a session message is markup that the code which added it wrote (it may hold a link): fixed text is its own, and any member, request, remote or exception text in a message is escaped by the caller first (`esc_()`, `htmlspecialchars()`, the AT Protocol plugin\'s `Main::sessionMessage()`; every `addMessage()` and `addErrorMessage()` call of core and the bundled plugins was checked for this); autop() then wraps it in paragraphs and would escape it as text without this'],
     ],
     'templates/default/shell/structured-data.html.twig' => [
         ['expression' => 'jsonld|json_encode(constant(\'JSON_PRETTY_PRINT\') b-or constant(\'JSON_UNESCAPED_SLASHES\') b-or constant(\'JSON_HEX_TAG\'))', 'reason' => 'JSON for a JSON-LD script (a data block that nothing runs): JSON_HEX_TAG turns every `<` and `>` of a value into an escape, so no value can end the script or open a comment; it keeps the document\'s own layout (pretty printed, slashes as written)'],

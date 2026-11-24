@@ -57,16 +57,76 @@ final class TwigAutoReloadTest extends TestCase
         return implode("\n", $lines);
     }
 
+    private function file(): string
+    {
+        return $this->root . '/plugin/templates/default/reload.html.twig';
+    }
+
+    /**
+     * @return array<string, int> each compiled template file and its modification time
+     */
+    private function compiled(): array
+    {
+        $found = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($this->root . '/cache', \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if (str_ends_with($file->getPathname(), '.php') && str_contains($file->getPathname(), '/twig/')) {
+                $found[$file->getPathname()] = $file->getMTime();
+            }
+        }
+
+        return $found;
+    }
+
     public function testAFileEditedOnDiskIsRenderedAgainInProduction(): void
     {
-        $file = $this->root . '/plugin/templates/default/reload.html.twig';
-
-        file_put_contents($file, 'first');
-        touch($file, time() - 100);
+        file_put_contents($this->file(), 'first');
+        touch($this->file(), time() - 100);
         $this->assertSame('first', $this->render());
 
-        file_put_contents($file, 'second');
-        touch($file, time() + 100);
+        file_put_contents($this->file(), 'second');
+        touch($this->file(), time() + 100);
         $this->assertSame('second', $this->render(), 'the edited file is compiled again');
+    }
+
+    public function testAFileWhoseDateIsOlderThanTheCompiledOneIsStillRenderedAgain(): void
+    {
+        // A rollback to an artifact built earlier, an archive that keeps the build's dates and a checkout of an older commit give a file
+        // older than the compiled copy of the one it replaced
+        file_put_contents($this->file(), 'first');
+        touch($this->file(), time() - 5_000);
+        $this->assertSame('first', $this->render());
+
+        file_put_contents($this->file(), 'a longer second');
+        touch($this->file(), time() - 9_000);
+        $this->assertSame('a longer second', $this->render(), 'another size, an older date than the file and than its compiled copy');
+    }
+
+    public function testAFileOfTheSameSizeAndAnOlderDateIsRenderedAgain(): void
+    {
+        file_put_contents($this->file(), 'first');
+        touch($this->file(), time() - 5_000);
+        $this->assertSame('first', $this->render());
+
+        file_put_contents($this->file(), 'third');
+        touch($this->file(), time() - 9_000);
+        $this->assertSame('third', $this->render(), 'the same size, another (older) date');
+    }
+
+    public function testAnUnchangedFileIsNotCompiledAgain(): void
+    {
+        file_put_contents($this->file(), 'first');
+        touch($this->file(), time() - 5_000);
+        $this->assertSame('first', $this->render());
+        $compiled = $this->compiled();
+        $this->assertNotSame([], $compiled);
+        foreach (array_keys($compiled) as $path) {
+            touch($path, time() + 3_600); // newer than any file Twig compares it with (the extensions' too), and a rewrite would set the time of the render
+        }
+        $before = $this->compiled();
+
+        $this->assertSame('first', $this->render());
+
+        $this->assertSame($before, $this->compiled(), 'no compiled file was written, replaced or added');
     }
 }

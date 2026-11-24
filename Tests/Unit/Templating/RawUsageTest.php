@@ -92,6 +92,51 @@ final class RawUsageTest extends TestCase
         return $found;
     }
 
+    /**
+     * `js_string()` makes a JavaScript string for a double-quoted HTML ATTRIBUTE (it escapes for the attribute as well, and is marked safe):
+     * in a `<script>` element its `&quot;` would be text, so a script uses `|e('js')` inside a quoted string.
+     */
+    public function testJsStringIsNeverUsedInsideAScriptElement(): void
+    {
+        $root = dirname(__DIR__, 3);
+        $offending = [];
+        foreach (self::twigFiles($root) as $relative => $path) {
+            foreach (self::jsStringCallsInScripts((string) file_get_contents($path)) as $call) {
+                $offending[] = $relative . ': ' . $call;
+            }
+        }
+
+        $this->assertSame([], $offending, 'js_string() in a <script>: use |e(\'js\') inside a quoted string');
+    }
+
+    public function testTheLintForJsStringFindsACallInsideAScript(): void
+    {
+        $this->assertSame([], self::jsStringCallsInScripts('<a onclick="go({{ js_string(x) }})">y</a> <script>var a = 1;</script>'), 'in an attribute: right');
+        $this->assertSame(['js_string(x)'], self::jsStringCallsInScripts('<script>var a = {{ js_string(x) }};</script>'));
+        $this->assertSame(['js_string(a ~ b)'], self::jsStringCallsInScripts("<p></p><script type=\"module\">\n  go({{ js_string(a ~ b) }});\n</script>"), 'with attributes, over lines');
+        $this->assertSame([], self::jsStringCallsInScripts('<script>var a = \'{{ x|e("js") }}\';</script> {{ js_string(y) }}'), 'an escape for JavaScript; a call after the element');
+        $this->assertSame([], self::jsStringCallsInScripts('<script src="a.js"></script><b onclick="{{ js_string(y) }}"></b>'), 'an element with no body');
+        $this->assertSame([], self::jsStringCallsInScripts('<script>{# {{ js_string(x) }} #}</script>'), 'a comment');
+    }
+
+    /**
+     * @return list<string> each `js_string(...)` call inside the body of a `<script>` element
+     */
+    private static function jsStringCallsInScripts(string $source): array
+    {
+        $source = preg_replace('/\{#.*?#\}/s', '', $source) ?? $source;
+        $found = [];
+        preg_match_all('~<script\b[^>]*>(.*?)</script>~is', $source, $scripts);
+        foreach ($scripts[1] as $body) {
+            preg_match_all('/(?<![\w.])js_string\s*\([^}]*?\)(?=\s*(?:\}\}|[|)]|~))/', $body, $calls);
+            foreach ($calls[0] as $call) {
+                $found[] = trim((string) preg_replace('/\s+/', ' ', $call));
+            }
+        }
+
+        return $found;
+    }
+
     public function testTheExpressionBeforeARawIsFound(): void
     {
         $this->assertSame(['body'], self::rawExpressions('<div>{{ body|raw }}</div>'));

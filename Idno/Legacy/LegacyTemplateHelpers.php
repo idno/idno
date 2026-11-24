@@ -10,6 +10,7 @@ use Idno\Core\Idno;
 use Idno\Core\Webservice;
 use Idno\Entities\AccessGroup;
 use Idno\Entities\File;
+use Idno\Portability\SettingsRedactor;
 use Idno\Templating\TemplateHelpers;
 
 /**
@@ -20,9 +21,57 @@ use Idno\Templating\TemplateHelpers;
  * Where a legacy method this wraps would hand markup to a template that is marked safe, what in the markup came from a member
  * or a remote site is escaped or neutralised here (`actionLink()`, `pagination()`): the notes on those methods. (The text linkers
  * are safe in the legacy methods themselves, which the `.tpl.php` templates also call.)
+ *
+ * `setting()` is an ALLOW-LIST: a template reads only the settings in TEMPLATE_SETTINGS (every name core's and the bundled plugins'
+ * Twig templates read, and a plugin adds the names of its own settings with allowSettings()). Any other name is null, whatever
+ * the setting holds: the stored settings also hold facts about the server (the database, the upload directory, who is told of an
+ * error) and secrets, which a template of a third-party plugin or theme must not be able to print.
  */
 final class LegacyTemplateHelpers implements TemplateHelpers
 {
+    /**
+     * The settings a template may read, in groups with the reason each group is there. A name the redactor calls a secret is never
+     * listed (`LegacyTemplateHelpersTest` checks this and that every name the bundled templates read is here).
+     */
+    public const TEMPLATE_SETTINGS = [
+        'the site\'s name, address and look, drawn in the page shell and the mails' => ['title', 'description', 'homepagetitle', 'url', 'items_per_page', 'permalink_structure', 'user_avatar_favicons', 'assets'],
+        'who may register, post and see the site' => ['open_registration', 'walled_garden', 'single_user', 'show_privacy', 'blocked_emails'],
+        'what the site says to the IndieWeb and when it shares' => ['hub', 'indieweb_citation', 'indieweb_reference', 'share_backup_url'],
+        'what the administration pages show and edit' => ['alwaysplugins', 'capture_logs', 'debug', 'from_email', 'smtp_host', 'smtp_port', 'smtp_secure'],
+    ];
+
+    /** @var array<string, true> the names a plugin allowed for its own settings, for this helper */
+    private array $pluginSettings = [];
+
+    public function allowSettings(string ...$names): void
+    {
+        foreach ($names as $name) {
+            if ($name === '' || preg_match('/\A[A-Za-z0-9_.\-]{1,128}\z/', $name) !== 1) {
+                throw new \InvalidArgumentException('A template setting name is 1 to 128 letters, digits, underscores, dots and hyphens');
+            }
+            if (SettingsRedactor::redact([$name => 'x'], null) === []) {
+                throw new \InvalidArgumentException('The setting ' . $name . ' is a secret by its name: a template cannot read it');
+            }
+        }
+        foreach ($names as $name) {
+            $this->pluginSettings[$name] = true;
+        }
+    }
+
+    private function settingAllowed(string $name): bool
+    {
+        if (isset($this->pluginSettings[$name])) {
+            return true;
+        }
+        foreach (self::TEMPLATE_SETTINGS as $group) {
+            if (in_array($name, $group, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function siteUrl(string $path = ''): string
     {
         return Idno::site()->config()->getDisplayURL() . $path;
@@ -63,6 +112,9 @@ final class LegacyTemplateHelpers implements TemplateHelpers
 
     public function setting(string $name): mixed
     {
+        if (!$this->settingAllowed($name)) {
+            return null;
+        }
         $settings = Idno::site()->config()->config;
 
         return is_array($settings) ? ($settings[$name] ?? null) : null;
@@ -256,12 +308,17 @@ final class LegacyTemplateHelpers implements TemplateHelpers
 
     /**
      * In an XHR request the markup is returned to the template that is drawing the control (nothing draws the shell there);
-     * otherwise it is registered with the shell's `shell/form-data` and nothing is returned.
+     * otherwise it is registered with the shell's `shell/form-data` and nothing is returned. With no current page (a console process:
+     * the queue worker's export draws entities with action links) nothing would ever draw or clear the registrations, so nothing is
+     * registered and nothing is returned.
      */
     public function formData(string $html): string
     {
         $page = Idno::site()->currentPage();
-        if ($page && $page->xhr) {
+        if (!$page) {
+            return '';
+        }
+        if ($page->xhr) {
             return $html;
         }
         Idno::site()->template()->extendTemplateWithContent('shell/form-data', $html);

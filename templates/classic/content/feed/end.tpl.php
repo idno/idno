@@ -11,7 +11,7 @@ if (!empty($item)) {
         <div class="permalink">
             <p>
                 <a href="<?php echo $item->getAuthorURL() ?>"><?php echo $item->getAuthorName() ?></a><?php echo \Idno\Core\Idno::site()->language()->_('published this') ?>
-                <a class="u-url url" href="<?php echo $item->getDisplayURL() ?>" rel="permalink">
+                <a class="u-url url" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($item->getDisplayURL())) ?>" rel="permalink">
                     <time class="dt-published"
                           datetime="<?php echo date('c', $item->created) ?>"><?php echo date('F j, Y', $item->created) ?></time>
                 </a>
@@ -33,15 +33,15 @@ if (!empty($item)) {
         if (\Idno\Core\Idno::site()->session()->isLoggedOn()) {
             echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'annotation/post', $heart_only, array('type' => 'like', 'object' => $vars['object']->getUUID()), array('method' => 'POST', 'class' => 'stars'));
             ?>
-                    <a class="stars" href="<?php echo $vars['object']->getDisplayURL() ?>#comments"><?php echo $heart_text ?></a>
+                    <a class="stars" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->getDisplayURL())) ?>#comments"><?php echo $heart_text ?></a>
                 <?php
         } else {
             ?>
-                    <a class="stars" href="<?php echo $vars['object']->getDisplayURL() ?>#comments"><?php echo $heart ?></a>
+                    <a class="stars" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->getDisplayURL())) ?>#comments"><?php echo $heart ?></a>
                 <?php
         }
         ?>
-            <a class="comments" href="<?php echo $vars['object']->getDisplayURL() ?>#comments"><i class="icon-comments"></i> <?php
+            <a class="comments" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->getDisplayURL())) ?>#comments"><i class="icon-comments"></i> <?php
 
                 //echo $replies;
             if ($replies == 1) {
@@ -51,10 +51,10 @@ if (!empty($item)) {
             }
 
             ?></a>
-            <a class="shares" href="<?php echo $vars['object']->getDisplayURL() ?>#comments"><?php if ($shares = $vars['object']->countAnnotations('share')) {
+            <a class="shares" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->getDisplayURL())) ?>#comments"><?php if ($shares = $vars['object']->countAnnotations('share')) {
                     echo '<i class="fa fa-retweet"></i> ' . $shares;
 } ?></a>
-            <a class="shares" href="<?php echo $vars['object']->getDisplayURL() ?>#comments"><?php if ($rsvps = $vars['object']->countAnnotations('rsvp')) {
+            <a class="shares" href="<?php echo htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->getDisplayURL())) ?>#comments"><?php if ($rsvps = $vars['object']->countAnnotations('rsvp')) {
                     echo '<i class="fa fa-calendar-o"></i> ' . $rsvps;
 } ?></a>
         </div>

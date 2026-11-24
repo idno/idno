@@ -73,6 +73,33 @@ final class TwigCacheWarmerTest extends TestCase
         $this->assertCount(5, $this->compiled(), 'core (three files), the plugin and the theme, and no .tpl.php');
     }
 
+    public function testAWarmedTemplateIsACacheHitWhenARequestDrawsIt(): void
+    {
+        $salt = bin2hex(random_bytes(4));
+        $this->file('project/templates/default/warm/core.html.twig', 'core ' . $salt);
+        $this->file('project/IdnoPlugins/Warm/templates/default/warm/plugin.html.twig', 'plugin ' . $salt);
+        $cascade = new TemplateCascade($this->root . '/project');
+        $twig = new Environment(new CascadeTwigLoader($cascade), ['cache' => new TolerantTwigCache($this->root . '/cache', static fn () => new CollectingLogger()), 'auto_reload' => true]);
+        (new TwigCacheWarmer($this->root . '/project', $cascade, static fn () => $twig, static fn () => new CollectingLogger()))->warmUp($this->root . '/cache');
+        $warmed = $this->compiled();
+        $this->assertCount(2, $warmed);
+
+        // A request: a new cascade, the loader asked for the logical names, and a cache that fails when anything is written
+        $requestCascade = new TemplateCascade($this->root . '/project');
+        $requestCascade->addBase($this->root . '/project/IdnoPlugins/Warm');
+        $cache = new class ($this->root . '/cache') extends \Twig\Cache\FilesystemCache {
+            public function write(string $key, string $content): void
+            {
+                throw new \LogicException('a warmed template is compiled again');
+            }
+        };
+        $request = new Environment(new CascadeTwigLoader($requestCascade), ['cache' => $cache, 'auto_reload' => true]);
+
+        $this->assertSame('core ' . $salt, $request->render('default/warm/core.html.twig'));
+        $this->assertSame('plugin ' . $salt, $request->render('default/warm/plugin.html.twig'));
+        $this->assertSame($warmed, $this->compiled(), 'nothing was compiled or written at run time');
+    }
+
     public function testNothingToCompileIsNotAnError(): void
     {
         $this->file('project/templates/default/x.tpl.php', '');

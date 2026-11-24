@@ -220,9 +220,10 @@ final class IdnoTwigExtensionTest extends TestCase
         $this->assertSame('tel:+15555550100', $identity('tel:+15555550100'));
         $this->assertSame('MAILTO:A@B.EXAMPLE', $identity('MAILTO:A@B.EXAMPLE'), 'any letter case');
         $this->assertSame('mailto:a@b', $identity(' mailto:a@b'), 'surrounding white space is removed');
-        foreach (['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x', 'ftp://a.example/', 'example.com', 'ada', '', 'mailto:a b@c', "mailto:a@b\nBcc: x@y", "sms:1\t2", "tel:\x001", '//host/x/'] as $bad) {
-            $this->assertSame('', $identity($bad) === '//host/x/' ? '' : $identity($bad), json_encode($bad));
+        foreach (['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,x', 'vbscript:x', 'ftp://a.example/', 'example.com', 'ada', '', 'mailto:a b@c', "mailto:a@b\nBcc: x@y", "sms:1\t2", "tel:\x001"] as $bad) {
+            $this->assertSame('', $identity($bad), json_encode($bad));
         }
+        $this->assertSame('//host/x/', $identity('//host/x/'), 'a scheme-relative address is an http(s) address as httpUrl() reads it (the page\'s own scheme applies)');
         $this->assertSame('', $identity(null));
         $this->assertSame('', $identity(['mailto:a@b']));
         $this->assertSame('mailto:a@b&quot;onx=', $this->render("{{ v|identity_url }}", ['v' => 'mailto:a@b"onx=']), 'a quote is kept and escaped when printed');

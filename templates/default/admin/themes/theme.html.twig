@@ -23,7 +23,7 @@
             </div>
             <div class="idno-plugin-author">
                 {{ t('by') }}
-                <a href="{{ desc['author_url'] }}">{{ desc['author'] }}</a>
+                <a href="{{ desc['author_url']|http_url }}">{{ desc['author'] }}</a>
             </div>
             {% if desc['description'] ?? null %}
                 <div class="idno-plugin-description">{{ desc['description'] }}</div>

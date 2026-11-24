@@ -51,15 +51,6 @@ module.exports = function (grunt) {
       },
       js: {
         files: {
-          'js/idno.es6': [
-	      'js/src/classes/Security.js',
-	      'js/src/classes/Logger.js',
-	      'js/src/lib/Idno.js',
-	      'js/src/classes/Image.js',
-	      'js/src/lib/Image.js',
-	      'js/src/classes/Template.js',
-	      'js/src/lib/Template.js',
-	  ],
           'js/service-worker.es6': [
 	      'js/src/ServiceWorker.js'
 	  ]
@@ -128,21 +119,10 @@ module.exports = function (grunt) {
       options: {
         // more options here if you want to override JSHint defaults
         globals: {
-          jQuery: true,
           console: true,
           module: true,
           document: true,
-          "$": false,
-          idno: false,
-          wwwroot: true,
-          base64ToArrayBuffer: true,
-
-          EXIF: true,
           self: true,
-
-          Security: true,
-          Template: true,
-          ImageTools: true,
         },
         node: true,
         browser: true,

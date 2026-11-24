@@ -73,6 +73,94 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertNull($helpers->contentTypeForPostType('no-such-type'));
     }
 
+    /**
+     * @return list<string> the names every `setting('...')` of a Twig template of core or a bundled plugin reads
+     */
+    private function settingsTheBundledTemplatesRead(): array
+    {
+        $root = dirname(__DIR__, 2);
+        $names = [];
+        $directories = [$root . '/templates', ...(glob($root . '/IdnoPlugins/*/templates') ?: [])];
+        foreach ($directories as $directory) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if (!$file->isFile() || !str_ends_with($file->getFilename(), '.twig')) {
+                    continue;
+                }
+                preg_match_all('/(?<![\w.])setting\(\s*([\'"])([^\'"]*)\1\s*\)/', (string) file_get_contents($file->getPathname()), $found);
+                array_push($names, ...$found[2]);
+                // Any other way to call it (a variable for the name) cannot be checked here: there is none
+                $this->assertDoesNotMatchRegularExpression('/(?<![\w.])setting\(\s*(?![\'"])/', (string) file_get_contents($file->getPathname()), $file->getPathname() . ' calls setting() with a name that is not a string literal');
+            }
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    public function testEverySettingABundledTemplateReadsIsAllowed(): void
+    {
+        $names = $this->settingsTheBundledTemplatesRead();
+        $this->assertNotEmpty($names);
+        $config = Idno::site()->config();
+        $was = $config->config;
+        try {
+            foreach ($names as $name) {
+                $config->config[$name] = 'value of ' . $name;
+                $this->assertSame('value of ' . $name, $this->helpers()->setting($name), $name . ' is read by a template of core or a bundled plugin: add it to LegacyTemplateHelpers::TEMPLATE_SETTINGS');
+                $this->assertSame([$name => 'x'], \Idno\Portability\SettingsRedactor::redact([$name => 'x'], null), $name . ' is a secret by the redactor\'s rule: that template must get the value another way');
+            }
+        } finally {
+            $config->config = $was;
+        }
+    }
+
+    public function testSettingsThatDescribeTheServerOrAreSecretAreNullWhateverTheyHold(): void
+    {
+        $config = Idno::site()->config();
+        $was = $config->config;
+        try {
+            foreach (['dbhost', 'dbname', 'dbuser', 'dbpass', 'uploadpath', 'site_secret', 'smtp_password', 'smtp_username', 'oops_notify', 'proxy_string', 'path', 'no_such_setting'] as $name) {
+                $config->config[$name] = 'a value';
+                $this->assertNull($this->helpers()->setting($name), $name);
+            }
+        } finally {
+            $config->config = $was;
+        }
+    }
+
+    public function testAPluginAllowsItsOwnSettingsAndNeverASecret(): void
+    {
+        $config = Idno::site()->config();
+        $was = $config->config;
+        $helpers = new LegacyTemplateHelpers();
+        try {
+            $config->config['myplugin_greeting'] = 'hello';
+            $config->config['myplugin_token'] = 'secret';
+            $this->assertNull($helpers->setting('myplugin_greeting'), 'not allowed until the plugin says so');
+
+            $helpers->allowSettings('myplugin_greeting');
+            $this->assertSame('hello', $helpers->setting('myplugin_greeting'));
+            $this->assertNull((new LegacyTemplateHelpers())->setting('myplugin_greeting'), 'what is allowed is for the helper that was told (the container\'s is the one templates use)');
+
+            try {
+                $helpers->allowSettings('myplugin_token');
+                $this->fail('a name the redactor calls a secret is refused');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('myplugin_token', $e->getMessage());
+            }
+            $this->assertNull($helpers->setting('myplugin_token'));
+            $this->expectException(\InvalidArgumentException::class);
+            $helpers->allowSettings('');
+        } finally {
+            $config->config = $was;
+        }
+    }
+
+    public function testTheContainersHelpersAreTheOneAPluginAllowsSettingsOn(): void
+    {
+        $this->assertSame(Idno::container()->get(TemplateHelpers::class), Idno::container()->get(TemplateHelpers::class), 'one shared service');
+        $this->assertTrue(method_exists(Idno::container()->get(TemplateHelpers::class), 'allowSettings'));
+    }
+
     public function testViewerWhenNobodyIsLoggedIn(): void
     {
         $helpers = $this->helpers();
@@ -84,6 +172,24 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertIsBool($helpers->canAddUsers());
         $this->assertIsBool($helpers->canMakeSitePrivate());
         $this->assertFalse($helpers->legacyTablesInMenu(), 'nobody is logged in: the menu entry of the legacy tables is not asked');
+    }
+
+    public function testCanAddUsersFollowsTheUsersAddCheckEvent(): void
+    {
+        $helpers = $this->helpers();
+        $this->assertTrue($helpers->canAddUsers(), 'nothing objects: users can be added');
+
+        $listener = static function (\Idno\Core\Event $event): void {
+            $event->setResponse(false);
+        };
+        $dispatcher = (new \ReflectionProperty(Idno::site()->events(), 'dispatcher'))->getValue(Idno::site()->events());
+        Idno::site()->events()->addListener('users/add/check', $listener);
+        try {
+            $this->assertFalse($helpers->canAddUsers(), 'a listener of `users/add/check` that answers false closes the site to new users');
+        } finally {
+            $dispatcher->removeListener('users/add/check', $listener);
+        }
+        $this->assertTrue($helpers->canAddUsers());
     }
 
     public function testPageFacts(): void
@@ -312,6 +418,26 @@ final class LegacyTemplateHelpersTest extends TestCase
             $this->assertSame('<form id="a"></form>', $slots->content('shell/form-data'), 'nothing more was registered');
         } finally {
             Idno::site()->currentPage()->xhr = false;
+            $template->useSlots(Idno::container()->get(SlotRegistry::class));
+        }
+    }
+
+    public function testFormDataWithNoCurrentPageRegistersNothingAndReturnsNothing(): void
+    {
+        // A console process (the queue worker's export draws entities with action links) has no page: nothing draws or clears the shell's
+        // registrations there, so they would only pile up for the life of the worker
+        $slots = new SlotRegistry();
+        $template = Idno::site()->template();
+        $template->useSlots($slots);
+        $property = new \ReflectionProperty(Idno::site(), 'currentPage');
+        $page = $property->getValue(Idno::site());
+        $property->setValue(Idno::site(), null);
+        try {
+            $this->assertFalse(Idno::site()->currentPage());
+            $this->assertSame('', $this->helpers()->formData('<form id="c"></form>'));
+            $this->assertEmpty($slots->content('shell/form-data'), 'nothing was registered');
+        } finally {
+            $property->setValue(Idno::site(), $page);
             $template->useSlots(Idno::container()->get(SlotRegistry::class));
         }
     }

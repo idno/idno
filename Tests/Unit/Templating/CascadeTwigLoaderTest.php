@@ -62,9 +62,9 @@ final class CascadeTwigLoaderTest extends TestCase
         $this->assertSame('default/x.html.twig', $loader->getSourceContext('default/x.html.twig')->getName());
         $this->assertSame('theme', $loader->getSourceContext('default/y.html.twig')->getCode());
         $this->assertSame('text', $loader->getSourceContext('default/only-core.txt.twig')->getCode());
-        $this->assertSame($plugin, $loader->getCacheKey('default/x.html.twig'), 'the cache key is the file');
+        $this->assertStringStartsWith($plugin . "\0", $loader->getCacheKey('default/x.html.twig'), 'the cache key names the file');
         $this->assertSame('core', $loader->getSourceContext('@core/default/x.html.twig')->getCode(), '@core is core\'s copy');
-        $this->assertSame($core, $loader->getCacheKey('@core/default/x.html.twig'));
+        $this->assertStringStartsWith($core . "\0", $loader->getCacheKey('@core/default/x.html.twig'));
     }
 
     public function testAtCoreFindsCoresFilesOnly(): void
@@ -164,46 +164,81 @@ final class CascadeTwigLoaderTest extends TestCase
         }
     }
 
-    public function testFreshnessComparesTheFilesModificationTime(): void
+    public function testTheCacheKeyNamesTheFileAndItsContentVersion(): void
     {
         $path = $this->file('core/templates/default/x.html.twig', 'core');
         touch($path, 1_000_000);
         $loader = $this->loader();
 
-        $this->assertTrue($loader->isFresh('default/x.html.twig', 1_000_000), 'compiled at the file\'s time or later');
-        $this->assertFalse($loader->isFresh('default/x.html.twig', 999_999), 'the file is newer than the compiled copy');
+        $key = $loader->getCacheKey('default/x.html.twig');
+
+        $this->assertStringContainsString($path, $key);
+        $this->assertSame($key, $loader->getCacheKey('default/x.html.twig'), 'an unchanged file keeps its key');
+        $this->assertSame($key, $this->loader()->getCacheKey('@core/default/x.html.twig'), 'whatever name reached it');
+    }
+
+    public function testAChangedFileAlwaysGetsANewKeyWhateverItsDate(): void
+    {
+        $path = $this->file('core/templates/default/x.html.twig', 'first');
+        touch($path, 1_000_000);
+        $loader = $this->loader();
+        $first = $loader->getCacheKey('default/x.html.twig');
+
+        file_put_contents($path, 'longer text');
+        touch($path, 500_000);
+        $older = $loader->getCacheKey('default/x.html.twig');
+
+        file_put_contents($path, 'third');
+        touch($path, 500_001);
+        $sameSize = $loader->getCacheKey('default/x.html.twig');
+
+        $this->assertNotSame($first, $older, 'a different size, an older date');
+        $this->assertNotSame($first, $sameSize, 'the same size, another date');
+        $this->assertNotSame($older, $sameSize);
+    }
+
+    public function testAFileIsFreshWhenItExistsBecauseItsKeyAlreadyHoldsItsVersion(): void
+    {
+        $path = $this->file('core/templates/default/x.html.twig', 'core');
+        touch($path, 1_000_000);
+        $loader = $this->loader();
+
+        $this->assertTrue($loader->isFresh('default/x.html.twig', 0), 'a compiled class under this key is for this very file');
         $this->assertFalse($loader->isFresh('default/gone.html.twig', time()));
     }
 
-    public function testATemplateDeletedWhileTheProcessRunsIsNotFreshAndIsNotFound(): void
+    public function testATemplateDeletedWhileTheProcessRunsHasNoKeyAndIsNotFound(): void
     {
         $path = $this->file('core/templates/default/x.html.twig', 'core');
         $loader = $this->loader();
         $this->assertSame('core', $loader->getSourceContext('default/x.html.twig')->getCode());
-        $this->assertTrue($loader->isFresh('default/x.html.twig', time() + 10));
+        $loader->getCacheKey('default/x.html.twig');
         unlink($path);
 
         $warnings = [];
         set_error_handler(static function (int $number, string $message) use (&$warnings): bool {
+            if ((error_reporting() & $number) === 0) {
+                return false; // silenced with @
+            }
             $warnings[] = $message;
 
             return true;
         });
         try {
-            $fresh = $loader->isFresh('default/x.html.twig', time() + 10);
-            $thrown = null;
-            try {
-                $loader->getSourceContext('default/x.html.twig');
-            } catch (LoaderError $e) {
-                $thrown = $e;
+            $thrown = [];
+            foreach (['getCacheKey', 'getSourceContext'] as $method) {
+                try {
+                    $loader->$method('default/x.html.twig');
+                } catch (LoaderError $e) {
+                    $thrown[] = $e;
+                }
             }
         } finally {
             restore_error_handler();
         }
 
-        $this->assertFalse($fresh, 'the remembered path is checked on the disk');
+        $this->assertCount(2, $thrown, 'the disk itself is asked, not the remembered answer');
         $this->assertSame([], $warnings, 'and no warning is raised for the missing file');
-        $this->assertInstanceOf(LoaderError::class, $thrown);
     }
 
     public function testTheLoaderForgetsItsNamesWhenTheCascadeForgetsItsFiles(): void

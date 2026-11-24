@@ -406,6 +406,18 @@ class Main extends Plugin
     }
 
     /**
+     * A session message with a value that is not fixed text in it. Session messages are printed as markup, so a value from a
+     * remote server, the request or an exception is escaped; the text around it is the plugin's own.
+     *
+     * @param string $format    fixed text with one %s
+     * @param string $untrusted the value for it
+     */
+    public static function sessionMessage(string $format, string $untrusted): string
+    {
+        return str_replace('%s', htmlspecialchars($untrusted, ENT_QUOTES), $format);
+    }
+
+    /**
      * Get the stored AT Protocol session for a specific user.
      */
     public static function getATProtoSessionForUser(User $user): array

@@ -37,7 +37,7 @@ class Backfill extends Page
                 'StandardSiteSync: Failed to create publication for backfill: ' . $e->getMessage()
             );
             \Idno\Core\Idno::site()->session()->addErrorMessage(
-                'Failed to create publication record: ' . \Idno\Core\ExceptionMessage::forVisitor($e)
+                \IdnoPlugins\StandardSiteSync\Main::sessionMessage('Failed to create publication record: %s', \Idno\Core\ExceptionMessage::forVisitor($e))
             );
             $this->forward($settingsUrl);
             return;

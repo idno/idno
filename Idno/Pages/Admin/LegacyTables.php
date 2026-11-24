@@ -80,7 +80,7 @@ namespace Idno\Pages\Admin {
                         \Idno\Core\Idno::site()->logging()->error('Could not delete the legacy tables: ' . \Idno\Upgrade\LegacyDataCopier::clean(get_class($e) . ': ' . $e->getMessage()));
                         $done = $tables->lastDropped() === [] ? '' : ' ' . $language->_('Deleted before the error: %s.', [implode(', ', $tables->lastDropped())]);
                         if ($e instanceof \Idno\Upgrade\LegacyTableReferenced) {
-                            $session->addErrorMessage($language->_('A table outside the Idno 1.x tables refers to the legacy table %s (it has a foreign key into it), so that table cannot be deleted. Deal with the table that refers to it first (the server\'s error log names it), then delete the legacy tables again.', [$e->table]) . $done);
+                            $session->addErrorMessage($language->_('A table outside the Idno 1.x tables refers to the legacy table %s (it has a foreign key into it), so that table cannot be deleted. Deal with the table that refers to it first (the server\'s error log names it), then delete the legacy tables again.', [htmlspecialchars((string) $e->table, ENT_QUOTES)]) . $done);
                         } else {
                             $session->addErrorMessage($language->_('Not every legacy table could be deleted. The error was logged; try again, or see the server\'s error log.') . $done);
                         }

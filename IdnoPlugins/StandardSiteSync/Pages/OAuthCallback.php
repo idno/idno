@@ -25,7 +25,7 @@ class OAuthCallback extends Page
         if (!empty($error)) {
             $errorDesc = $this->getInput('error_description');
             \Idno\Core\Idno::site()->session()->addErrorMessage(
-                'Authentication denied: ' . ($errorDesc ?: $error)
+                Main::sessionMessage('Authentication denied: %s', (string) ($errorDesc ?: $error))
             );
             $this->forward($settingsUrl);
             return;
@@ -67,14 +67,14 @@ class OAuthCallback extends Page
             Main::saveATProtoSessionForUser($user, $session);
 
             \Idno\Core\Idno::site()->session()->addMessage(
-                'Successfully connected to your AT Protocol PDS (' . $session['did'] . ').'
+                Main::sessionMessage('Successfully connected to your AT Protocol PDS (%s).', (string) $session['did'])
             );
         } catch (\Exception $e) {
             \Idno\Core\Idno::site()->logging()->error(
                 'StandardSiteSync: OAuth callback failed: ' . $e->getMessage()
             );
             \Idno\Core\Idno::site()->session()->addErrorMessage(
-                'Authentication failed: ' . \Idno\Core\ExceptionMessage::forVisitor($e)
+                Main::sessionMessage('Authentication failed: %s', \Idno\Core\ExceptionMessage::forVisitor($e))
             );
         }
 

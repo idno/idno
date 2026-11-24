@@ -54,9 +54,11 @@ namespace Idno\Pages\Search {
                 }
             }
 
-            // The rows draw their action links on the JSON template type this page sets, whose `forms/link` (the copy in `templates/classic/`)
-            // keeps each link's form in this global when the request is an XHR one (the search's script sends X-Requested-With); the Twig
-            // `forms/link` of a web page returns the form inline instead, through form_data(). So the forms of the links come here.
+            // The rows are drawn on a template of the default type, but the `action_link()` in a row draws its link through `Actions::createLink()`,
+            // which uses a copy of the SITE's template, and that one is on the JSON type (set above): its `forms/link` is the copy in
+            // `templates/classic/`, which keeps each link's form in this global when the request is an XHR one (the search's script sends
+            // X-Requested-With). So the forms of the links come here, and nothing else can fill the global on this page
+            // (`UserSearchActionLinksTest` fails without this read).
             global $template_postponed_link_actions;
             if (!empty($template_postponed_link_actions)) {
                 $results['rendered'] .= $template_postponed_link_actions;

@@ -91,6 +91,11 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return $this->settings[$name] ?? null;
     }
 
+    public function allowSettings(string ...$names): void
+    {
+        $this->note(__FUNCTION__, ...$names);
+    }
+
     public function canWrite(): bool
     {
         return true;

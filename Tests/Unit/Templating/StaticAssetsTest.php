@@ -20,8 +20,6 @@ final class StaticAssetsTest extends TestCase
      */
     private const KEPT = [
         'css/idno-simple.css' => 'The unminified build of css/idno-simple.min.css (the Grunt `dev` target), for reading the onboarding style sheet while changing it.',
-        'js/idno.js' => 'The script of the look Idno 2026 replaced, built by Grunt from js/src/. The templates `forms/input/image-file` and `file/picker/image` still call its globals (`Template`, `ImageTools`), and a third-party theme or plugin may load it by this name.',
-        'js/idno.min.js' => 'The minified build of js/idno.js, kept for the same reasons.',
     ];
 
     /** Built files that are not tracked, so no shipped file stands behind them. */
@@ -65,6 +63,26 @@ final class StaticAssetsTest extends TestCase
             $this->assertContains($file, $shipped, $file . ' is on the kept list but is not shipped');
             $this->assertContains($file, $unreferenced, $file . ' is on the kept list but something names it');
         }
+    }
+
+    /**
+     * The built-in look's script is the only one a page loads: a template that calls a global of an earlier script (`Template`,
+     * `ImageTools`, `EXIF`, `Modernizr`) throws a ReferenceError when the call runs.
+     */
+    public function testNoTemplateCallsAGlobalOfAScriptNothingLoads(): void
+    {
+        $offenders = [];
+        foreach ($this->referencingFiles(false) as $relative => $path) {
+            if (!str_ends_with($relative, '.twig')) {
+                continue;
+            }
+            $source = (string) file_get_contents($path);
+            if (preg_match('/\b(?:ImageTools|Modernizr|EXIF|base64ToArrayBuffer)\b|\bTemplate\.[a-z]/', $source) === 1) {
+                $offenders[] = $relative;
+            }
+        }
+
+        $this->assertSame([], $offenders);
     }
 
     public function testEveryReferencedAssetExists(): void

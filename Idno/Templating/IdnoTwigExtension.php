@@ -34,12 +34,14 @@ use Twig\TwigFunction;
  *
  * The functions marked safe return `Twig\Markup`, so another function can tell their output from a plain string.
  *
- * What is marked safe for HTML is exactly: `idno_include`, `slot`, `t_html`, `form_token`, `action_link`, `form_data` and
+ * What is marked safe for HTML is exactly: `idno_include`, `slot`, `t_html`, `form_token`, `action_link`, `form_data`, `js_string` and
  * `pagination` (functions); `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags` and `parse_users` (filters). The last
  * four work on text and so ESCAPE their input first (`pre_escape`: raw text is escaped, sanitized HTML and `Markup` are
  * kept). `action_link`'s label and `form_data`'s argument are kept only when they are `Markup` (a capture, or the output of a safe
  * function) and escaped otherwise, so a plain string can never become markup by passing through them. `action_link` refuses an
- * address that is not relative to the site or http(s). Nothing else is safe: everything else is escaped by Twig as any string is.
+ * address that is not relative to the site or http(s). `js_string` is for a DOUBLE-QUOTED HTML ATTRIBUTE that holds JavaScript (`onclick="..."`): it escapes the
+ * string for JavaScript and then for the attribute (`ENT_COMPAT`), so inside a `<script>` element its `&quot;` would be text: a script uses `|e('js')` inside a quoted
+ * string (`RawUsageTest` fails for a `js_string()` inside a `<script>` of core or a bundled plugin). Nothing else is safe: everything else is escaped by Twig as any string is.
  */
 final class IdnoTwigExtension extends AbstractExtension
 {
@@ -843,7 +845,8 @@ final class IdnoTwigExtension extends AbstractExtension
     }
 
     /**
-     * A value as one single-quoted JavaScript string, for an attribute that holds script (`onclick`, an Alpine `x-data`): the string is
+     * A value as one single-quoted JavaScript string, for a DOUBLE-QUOTED HTML ATTRIBUTE that holds script (`onclick`, an Alpine `x-data`); never for the
+     * inside of a `<script>` element, where `|e('js')` in a quoted string is the way. The string is
      * escaped for JavaScript (a backslash, a quote, a line break and the two line separators) and then for the double-quoted attribute it
      * is in, so it reads back as the same text and can end neither the string nor the attribute. It is markup (a `Markup`) because it is
      * already escaped.

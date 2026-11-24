@@ -26,6 +26,40 @@ class PotGeneratorTest extends TestCase
         $this->assertSame(3, $strings['Events'][0]['line']);
     }
 
+    public function testOnlyAPropertyDeclarationOfAContentTypeIsExtracted()
+    {
+        $code = <<<'PHP'
+        <?php
+        class Thing extends \Idno\Common\ContentType {
+            public $title = 'Declared';
+            protected static $category_title = 'Declared static';
+            var $title2 = 'x';
+            public ?string $typed = 'Not a title';
+            public string $title = 'Typed';
+            private static ?string $category_title = 'Private typed';
+
+            public function make()
+            {
+                $title = 'A local variable';
+                $category_title = 'Another local';
+                $this->title = 'An assignment';
+                self::$title = 'A static assignment';
+            }
+        }
+        PHP;
+        $this->generator->extractFromSource($code, 'Thing.php');
+
+        $this->assertSame(['Declared', 'Declared static', 'Typed', 'Private typed'], array_keys($this->generator->getStrings()));
+    }
+
+    public function testAConcatenationInADeclarationIsNotATranslatableString()
+    {
+        $code = "<?php class Thing extends ContentType { public \$title = 'Event' . self::SUFFIX; public \$category_title = 'A' . 'B'; public \$more = 1; }";
+        $this->generator->extractFromSource($code, 'Thing.php');
+
+        $this->assertSame([], $this->generator->getStrings());
+    }
+
     public function testATitlePropertyOfAClassThatIsNotAContentTypeIsNotExtracted()
     {
         $this->generator->extractFromSource("<?php class Page extends Base { public \$title = 'Not translated'; }", 'Page.php');

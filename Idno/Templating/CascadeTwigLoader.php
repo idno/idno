@@ -18,6 +18,18 @@ use Twig\Source;
  * as they are, joined by slashes, and ends in `.html.twig` or `.txt.twig`; so `..`, a backslash, a NUL byte, a leading
  * or doubled slash, a trailing newline and an absolute path are all refused before any file is looked for, and every
  * file is inside the `templates/` directory of a directory of the cascade (core's alone for `@core`).
+ *
+ * The cache key is the file and its CONTENT VERSION, `<path>`, the modification time and the size: Twig names a compiled
+ * class after the key, so a file whose content changes always gets a class of its own, whatever its date (a rollback to an
+ * older build, an archive that keeps the build's dates and a checkout of an older commit all give a file OLDER than the
+ * compiled one, which a freshness check on dates alone would keep serving). A key that holds the version makes a compiled class
+ * for it fresh by definition, so isFresh() only asks whether the name still resolves; a file deleted under a long-lived process
+ * has no key (the file is looked at on the disk, never in PHP's stat cache, each time a key is made).
+ *
+ * What a long-lived process sees: the names and paths are remembered (below), the version is not: every getCacheKey() is one
+ * `stat()`. But the engine (TwigTemplateEngine) keeps each template it has loaded for the life of the process, so a worker
+ * keeps the version it first drew until it restarts (it stops itself after an hour); a web request is a process of its own.
+ * Compiled classes of superseded versions stay in the cache directory until it is cleared (they are never read again).
  */
 final class CascadeTwigLoader implements LoaderInterface
 {
@@ -59,16 +71,21 @@ final class CascadeTwigLoader implements LoaderInterface
         if ($path === null) {
             throw new LoaderError(sprintf('Unable to find template "%s".', $this->printable($name)));
         }
+        // The disk, not PHP's stat cache (a long-lived process would keep an old answer for the last file it looked at): one stat()
+        clearstatcache(true, $path);
+        $stat = @stat($path);
+        if ($stat === false) {
+            throw new LoaderError(sprintf('Unable to find template "%s".', $this->printable($name)));
+        }
 
-        return $path;
+        return $path . "\0" . $stat['mtime'] . "\0" . $stat['size'];
     }
 
     public function isFresh(string $name, int $time): bool
     {
-        $path = $this->resolve($name);
-
-        // The disk itself, not the remembered answer: a file deleted while a long-lived process runs (a worker after a deploy) is not fresh
-        return $path !== null && is_file($path) && (int) filemtime($path) <= $time;
+        // The key (asked before this, for the same file) holds the file's version, so a compiled class under it is for this very content,
+        // whatever the dates: no further stat() here
+        return $this->resolve($name) !== null;
     }
 
     public function exists(string $name): bool

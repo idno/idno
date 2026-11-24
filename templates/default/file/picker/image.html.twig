@@ -35,34 +35,20 @@
     </div>
 </form>
 <script>
-    
-    
-    //if (typeof photoPreview !== function) {
     function photoPreview(input) {
-
-        if (input.files && input.files[0]) {
-            var reader = new FileReader();
-
-            reader.onload = function (e) {
-                
-                $('#photo-preview').html('<img src="" id="photopreview" style="height: 200px">');
-                $('#photo-filename').html('{{ t('Choose a different image')|e('js') }}');
-                $('#photopreview').attr('src', e.target.result);
-                
-                try {
-                    var exif = EXIF.readFromBinaryFile(base64ToArrayBuffer(this.result));
-
-                    ImageTools.exifRotateImg('#photopreview', exif.Orientation, '#photo-preview');
-                } catch (error) {
-                    console.error(error);
-                }
-                
-                $('#photopreview').show();
-                $('#upload-button').show();
-            }
-
-            reader.readAsDataURL(input.files[0]);
+        if (!input.files || !input.files[0]) {
+            return;
         }
+        var reader = new FileReader();
+        reader.onload = function (e) {
+            var image = document.createElement('img');
+            image.id = 'photopreview';
+            image.style.height = '200px';
+            image.src = e.target.result;
+            document.getElementById('photo-preview').replaceChildren(image);
+            document.getElementById('photo-filename').textContent = '{{ t('Choose a different image')|e('js') }}';
+            document.getElementById('upload-button').style.display = '';
+        };
+        reader.readAsDataURL(input.files[0]);
     }
-    //}
 </script>
