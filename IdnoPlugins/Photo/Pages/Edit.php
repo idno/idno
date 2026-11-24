@@ -31,9 +31,9 @@ namespace IdnoPlugins\Photo\Pages {
             $body = $t->__(['body' => $edit_body])->draw('entity/editwrapper');
 
             if (empty($object)) {
-                $title = \Idno\Core\Idno::site()->language()->_('Upload a picture');
+                $title = \Idno\Core\Idno::site()->language()->_('Upload a photo');
             } else {
-                $title = \Idno\Core\Idno::site()->language()->_('Edit picture details');
+                $title = \Idno\Core\Idno::site()->language()->_('Edit photo details');
             }
 
             if (!empty($this->xhr)) {

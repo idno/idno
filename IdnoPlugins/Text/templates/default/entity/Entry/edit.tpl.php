@@ -50,13 +50,13 @@ if (!empty($vars['url'])) {
                 if (empty($vars['object']->_id)) {
 
                     ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('New Post'); ?></h4>
+                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('New post'); ?></h4>
                     <?php
 
                 } else {
 
                     ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('Edit Post'); ?></h4>
+                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('Edit post'); ?></h4>
                     <?php
 
                 }
@@ -70,7 +70,7 @@ if (!empty($vars['url'])) {
                         
                 <div class="content-form">
                     <label for="subtitle"><?php echo \Idno\Core\Idno::site()->language()->_('Subtitle'); ?></label>
-                    <?php echo $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional sub title for this post'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'form-control'])->draw('forms/input/input'); ?>
+                    <?php echo $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional line under the title'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'form-control'])->draw('forms/input/input'); ?>
                 </div>
 
                 <?php echo $this->__([
@@ -104,7 +104,7 @@ if (!empty($vars['url'])) {
 
             <p>
                 <small><a id="inreplyto-add" href="#"
-                          onclick="$('#inreplyto').append('<span><input required type=&quot;url&quot; name=&quot;inreplyto[]&quot; value=&quot;&quot; placeholder=&quot;<?php echo addslashes(\Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to')); ?>&quot; class=&quot;form-control&quot; onchange=&quot;adjust_content(this.value)&quot; /> <small><a href=&quot;#&quot; onclick=&quot;$(this).parent().parent().remove(); return false;&quot;><icon class=&quot;fa fa-times&quot;></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;"><i class="fa fa-reply"></i>
+                          onclick="$('#inreplyto').append('<span><input required type=&quot;url&quot; name=&quot;inreplyto[]&quot; value=&quot;&quot; placeholder=&quot;<?php echo addslashes(\Idno\Core\Idno::site()->language()->_('Paste the link you\'re replying to')); ?>&quot; class=&quot;form-control&quot; onchange=&quot;adjust_content(this.value)&quot; /> <small><a href=&quot;#&quot; onclick=&quot;$(this).parent().parent().remove(); return false;&quot;><icon class=&quot;fa fa-times&quot;></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove link'); ?></a></small><br /></span>'); return false;"><i class="fa fa-reply"></i>
                         <?php echo \Idno\Core\Idno::site()->language()->_('Reply to a site'); ?></a></small>
             </p>
 
@@ -116,11 +116,11 @@ if (!empty($vars['url'])) {
                         ?>
                             <p>
                                 <input type="url" name="inreplyto[]"
-                                       placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to'); ?>"
+                                       placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Paste the link you\'re replying to'); ?>"
                                        class="form-control inreplyto" value="<?php echo htmlspecialchars($inreplyto) ?>" onchange="adjust_content(this.value)"/>
                                 <small><a href="#"
                                           onclick="$(this).parent().parent().remove(); return false;"><i class="fa fa-times"></i>
-                                      <?php echo \Idno\Core\Idno::site()->language()->_('Remove URL'); ?></a></small>
+                                      <?php echo \Idno\Core\Idno::site()->language()->_('Remove link'); ?></a></small>
                             </p>
                         <?php
                     }
@@ -165,10 +165,10 @@ if (!empty($vars['url'])) {
 
         // Make in reply to a little less painful
         $("#inreplyto-add").on('dragenter', function(e) {
-            var placeholder = '<?php echo addslashes(\Idno\Core\Idno::site()->language()->esc_('Add the URL that you\'re replying to')); ?>';
+            var placeholder = '<?php echo addslashes(\Idno\Core\Idno::site()->language()->esc_('Paste the link you\'re replying to')); ?>';
             e.stopPropagation();
             e.preventDefault();
-            $('#inreplyto').append('<span><input required type="url" name="inreplyto[]" value="" placeholder="' + placeholder + '" class="form-control" onchange="adjust_content(this.value)" /> <small><a href="#" onclick="$(this).parent().parent().remove(); return false;"><icon class="fa fa-times"></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove URL'); ?></a></small><br /></span>'); return false;
+            $('#inreplyto').append('<span><input required type="url" name="inreplyto[]" value="" placeholder="' + placeholder + '" class="form-control" onchange="adjust_content(this.value)" /> <small><a href="#" onclick="$(this).parent().parent().remove(); return false;"><icon class="fa fa-times"></icon> <?php echo \Idno\Core\Idno::site()->language()->esc_('Remove link'); ?></a></small><br /></span>'); return false;
         });
     });
 

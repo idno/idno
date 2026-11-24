@@ -39,7 +39,7 @@ if (empty($vars['feed_view'])) {
                     }
                     ?>
                             
-                        <?php echo \Idno\Core\Idno::site()->language()->_('Sorry, your browser does not support the video tag.'); ?>
+                        <?php echo \Idno\Core\Idno::site()->language()->_('Your browser doesn\'t support embedded video.'); ?>
                     </video>
                 </p>
                 <?php

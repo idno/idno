@@ -15,11 +15,7 @@ msgid "We couldn't delete %s."
 msgstr ""
 
 #: ./Pages/Edit.php:42
-msgid "Write an entry"
-msgstr ""
-
-#: ./Pages/Edit.php:44
-msgid "Edit entry"
+msgid "Write a post"
 msgstr ""
 
 #: ./templates/default/entity/Entry.tpl.php:39
@@ -27,11 +23,12 @@ msgid "%d min read"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:53
-msgid "New Post"
+msgid "New post"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:59
-msgid "Edit Post"
+#: ./Pages/Edit.php:44
+msgid "Edit post"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:67
@@ -47,15 +44,15 @@ msgid "Subtitle"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:73
-msgid "Optional sub title for this post"
+msgid "Optional line under the title"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:107
-msgid "Add the URL that you're replying to"
+msgid "Paste the link you're replying to"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:107
-msgid "Remove URL"
+msgid "Remove link"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:108
@@ -71,6 +68,6 @@ msgid "Publish"
 msgstr ""
 
 #: ./Entry.php:151
-msgid "You can't save an empty entry."
+msgid "Add some text before saving your post."
 msgstr ""
 

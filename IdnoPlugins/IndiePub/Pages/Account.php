@@ -14,7 +14,7 @@ class Account extends Page
         $t = Idno::site()->template();
         $body = $t->__([])->draw('account/indiepub');
         $t->__([
-            'title' => \Idno\Core\Idno::site()->language()->_('IndiePub Accounts'),
+            'title' => \Idno\Core\Idno::site()->language()->_('IndiePub accounts'),
             'body'  => $body,
         ])->drawPage();
     }

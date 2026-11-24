@@ -23,11 +23,11 @@ msgid "Edit audio details"
 msgstr ""
 
 #: ./templates/default/entity/Media/edit.tpl.php:13
-msgid "New Audio"
+msgid "New audio"
 msgstr ""
 
 #: ./templates/default/entity/Media/edit.tpl.php:15
-msgid "Edit Audio"
+msgid "Edit audio"
 msgstr ""
 
 #: ./templates/default/entity/Media/edit.tpl.php:25
@@ -59,7 +59,7 @@ msgid "Publish"
 msgstr ""
 
 #: ./templates/default/entity/Media.tpl.php:41
-msgid "Sorry, your browser does not support the video tag."
+msgid "Your browser doesn't support embedded video."
 msgstr ""
 
 #: ./Media.php:11
@@ -67,11 +67,11 @@ msgid "Untitled"
 msgstr ""
 
 #: ./Media.php:131
-msgid "Media wasn\'t attached."
+msgid "No file was attached."
 msgstr ""
 
 #: ./Media.php:134
-msgid "This doesn\'t seem to be a media file .. %s"
+msgid "This doesn\'t seem to be a media file: %s"
 msgstr ""
 
 #: ./Media.php:137

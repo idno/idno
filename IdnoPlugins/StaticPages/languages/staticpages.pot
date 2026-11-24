@@ -19,6 +19,7 @@ msgid "We couldn't delete %s."
 msgstr ""
 
 #: ./Pages/Edit.php:48
+#: ./templates/default/entity/StaticPage/edit.tpl.php:36
 msgid "Edit page"
 msgstr ""
 
@@ -27,11 +28,7 @@ msgid "Pages"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:30
-msgid "New Page"
-msgstr ""
-
-#: ./templates/default/entity/StaticPage/edit.tpl.php:36
-msgid "Edit Page"
+msgid "New page"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:44
@@ -43,7 +40,7 @@ msgid "Give it a title"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:57
-msgid "Share something brilliant..."
+msgid "Write your page content"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:58
@@ -55,7 +52,7 @@ msgid "Parent category"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:69
-msgid "No Category"
+msgid "No category"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:93
@@ -67,15 +64,15 @@ msgid "Hide advanced options"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:113
-msgid "Forward URL"
+msgid "Redirect address"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:115
-msgid "Website to forward users to"
+msgid "Address to send visitors to"
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:117
-msgid "Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content."
+msgid "Usually you should leave this blank. Add an address here to send visitors to another page instead of showing this page's content."
 msgstr ""
 
 #: ./templates/default/entity/StaticPage/edit.tpl.php:121
@@ -102,10 +99,6 @@ msgstr ""
 msgid "Delete"
 msgstr ""
 
-#: ./templates/default/entity/StaticPage.tpl.php:22
-msgid "Are you sure you want to permanently delete this entry?"
-msgstr ""
-
 #: ./templates/default/entity/StaticPage.tpl.php:47
 msgid "You are seeing this page because you are a site administrator. Other users will be forwarded to"
 msgstr ""
@@ -115,7 +108,7 @@ msgid "Save"
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:31
-msgid "Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates.  Common examples of pages include an about page, a contact page, or a resume."
+msgid "Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume."
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:41
@@ -147,6 +140,7 @@ msgid "Delete page"
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:103
+#: ./templates/default/entity/StaticPage.tpl.php:22
 msgid "Are you sure you want to permanently delete this page?"
 msgstr ""
 
@@ -155,7 +149,7 @@ msgid "Categories"
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:135
-msgid "If you plan on adding many pages, you may want to group them under categories.  However, you don’t have to assign a page to a category."
+msgid "If you plan on adding many pages, you may want to group them under categories. However, you don't have to assign a page to a category."
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:143
@@ -171,7 +165,7 @@ msgid "Add"
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:168
-msgid "Category Name"
+msgid "Category name"
 msgstr ""
 
 #: ./templates/default/staticpages/admin.tpl.php:169

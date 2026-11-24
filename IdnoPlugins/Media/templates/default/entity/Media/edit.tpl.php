@@ -10,9 +10,9 @@
                 <?php
 
                 if (empty($vars['object']->_id)) {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Audio'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New audio'); ?><?php
                 } else {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Audio'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit audio'); ?><?php
                 }
 
                 ?>

@@ -158,7 +158,7 @@ namespace IdnoPlugins\Photo {
                     if (\Idno\Entities\File::isImage($_file['tmp_name']) || \Idno\Entities\File::isSVG($_file['tmp_name'], $_file['name'])) {
 
                         if (!\Idno\Entities\File::isFileFreeFromScriptTags($_file['tmp_name'], $_file['name'])) {
-                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Image seems to contain malicious code and cannot be uploaded.'));
+                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('This image seems to contain malicious code, so it can\'t be uploaded.'));
                             return false;
                         }
 
@@ -210,11 +210,11 @@ namespace IdnoPlugins\Photo {
                             }
 
                         } else {
-                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Image wasn\'t attached.'));
+                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('No image was attached.'));
                             return false;
                         }
                     } else {
-                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('This doesn\'t seem to be an image...'));
+                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('This doesn\'t seem to be an image.'));
                         return false;
                     }
 

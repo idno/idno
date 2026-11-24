@@ -119,11 +119,11 @@ namespace IdnoPlugins\Event {
                     if ($access == 'PUBLIC') {
                         \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
                     }
-                    \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your RSVP was successfully saved.'));
+                    \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your RSVP was saved.'));
                     return true;
                 }
             } else {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('You can\'t save an RSVP with no status.'));
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Choose whether you\'re going before saving your RSVP.'));
             }
             return false;
 

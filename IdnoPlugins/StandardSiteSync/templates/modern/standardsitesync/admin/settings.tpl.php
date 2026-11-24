@@ -4,7 +4,7 @@
 </p>
 
 <div class="idno-admin-card">
-    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Site-Wide Setting') ?></h2>
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Site-wide setting') ?></h2>
     <p><?= \Idno\Core\Idno::site()->language()->_('Enable or disable standard.site sync for this site. When enabled, users can connect their own AT Protocol PDS accounts from their account settings.') ?></p>
 
     <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>admin/standardsitesync/" method="post">

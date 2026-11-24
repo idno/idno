@@ -19,7 +19,7 @@
                                 <a href="<?php echo $vars['object']->getEditURL() ?>" class="edit"><i class="fa fa-pencil"></i><?php echo \Idno\Core\Idno::site()->language()->_('Edit'); ?></a>
                             </span>
                             <span class="page-action">
-                        <?php echo \Idno\Core\Idno::site()->actions()->createLink($vars['object']->getDeleteURL(), '<i class="fa fa-trash-o"></i>'. \Idno\Core\Idno::site()->language()->_('Delete'), array(), array('method' => 'POST', 'class' => 'edit', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_("Are you sure you want to permanently delete this entry?"))); ?>
+                        <?php echo \Idno\Core\Idno::site()->actions()->createLink($vars['object']->getDeleteURL(), '<i class="fa fa-trash-o"></i>'. \Idno\Core\Idno::site()->language()->_('Delete'), array(), array('method' => 'POST', 'class' => 'edit', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_("Are you sure you want to permanently delete this page?"))); ?>
                             </span>
                         <?php
 
