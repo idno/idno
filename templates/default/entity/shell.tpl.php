@@ -20,6 +20,7 @@ if ($object) {
                 </div>
 
                 <div class="col-md-8 idno-content">
+                    <?php echo $this->draw('entity/moderated') ?>
                     <!--<div class="visible-xs">
                         <p class="p-author author h-card vcard">
                             <a href="<?php echo $owner->getDisplayURL() ?>" class="icon-container"><img

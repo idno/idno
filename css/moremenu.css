@@ -96,3 +96,14 @@
     white-space: nowrap;
 }
 .idno-more-status:empty { display: none; }
+
+/* The notice on a post the moderators have taken down (templates/default/entity/moderated.tpl.php) */
+.idno-moderated-banner {
+    margin: 0 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #fecaca;
+    border-radius: 0.5rem;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 0.875rem;
+}

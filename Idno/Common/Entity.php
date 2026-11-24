@@ -615,6 +615,68 @@ namespace Idno\Common {
             return $this->publish_status;
         }
 
+        /// Publish status of a post the moderators took down
+        const MODERATION_REMOVED = 'removed';
+
+        /// Publish status of a post hidden because its author was banned with all their posts
+        const MODERATION_HIDDEN = 'hidden';
+
+        /**
+         * Have the moderators taken this entity down? It is then hidden like any unpublished
+         * entity (see isHiddenByPublishStatus()), its author can no longer edit or delete it
+         * (see canEdit()), and saving it cannot change its publish status.
+         *
+         * @return bool
+         */
+        public function isModerated()
+        {
+            return in_array($this->moderation_status, [self::MODERATION_REMOVED, self::MODERATION_HIDDEN], true);
+        }
+
+        /**
+         * Why this entity is taken down: MODERATION_REMOVED, MODERATION_HIDDEN, or an empty
+         * string when it is not.
+         *
+         * @return string
+         */
+        public function getModerationStatus()
+        {
+            return $this->isModerated() ? $this->moderation_status : '';
+        }
+
+        /**
+         * Take this entity down. The publish status it had is kept for unmoderate(). The
+         * caller saves the entity (with $overrideAccess, or as an administrator).
+         *
+         * @param string $status MODERATION_REMOVED or MODERATION_HIDDEN
+         */
+        public function moderate($status = self::MODERATION_REMOVED)
+        {
+            if (!in_array($status, [self::MODERATION_REMOVED, self::MODERATION_HIDDEN], true)) {
+                throw new \InvalidArgumentException('Unknown moderation status.');
+            }
+            if (!$this->isModerated()) {
+                $prior = $this->getPublishStatus();
+                $this->moderation_prior_status = empty($prior) ? 'published' : $prior;
+            }
+            $this->moderation_status = $status;
+            $this->publish_status = $status;
+        }
+
+        /**
+         * Undo moderate(): the entity gets the publish status it had. The caller saves it.
+         */
+        public function unmoderate()
+        {
+            if (!$this->isModerated()) {
+                return;
+            }
+            $prior = $this->moderation_prior_status;
+            $this->moderation_status = '';
+            $this->moderation_prior_status = '';
+            $this->publish_status = empty($prior) ? 'published' : $prior;
+        }
+
         /**
          * Is this entity unpublished (a draft, for example) and so hidden from a given user?
          * An entity whose publish status is set and is not "published" can only be seen by its
@@ -699,6 +761,11 @@ namespace Idno\Common {
 
             // If you're not allowed to edit this entity, you shouldn't be able to save it
             if (!$overrideAccess && !$this->canEdit()) return false;
+
+            // An entity the moderators have taken down stays hidden whatever a form set
+            if ($this->isModerated()) {
+                $this->publish_status = $this->moderation_status;
+            }
 
             // Automatically add a slug (if one isn't set and this is a new entity)
 
@@ -1761,6 +1828,9 @@ namespace Idno\Common {
                 return true;
             }
 
+            // What the moderators have taken down can only be changed by administrators
+            if ($this->isModerated()) return false;
+
             if ($this->getOwnerID() == $user_id) return true;
 
             // Check against access groups
@@ -2504,6 +2574,39 @@ namespace Idno\Common {
         static function annotationAnchor($local_url)
         {
             return 'annotation-' . preg_replace('/[^A-Za-z0-9_-]/', '', basename((string) parse_url((string) $local_url, PHP_URL_PATH)));
+        }
+
+        /**
+         * Put back an annotation that was taken out with removeAnnotation(), under the local
+         * address it had and with the data it had. Nothing is announced: no event is
+         * triggered and nobody is notified. The caller saves the entity.
+         *
+         * @param  string $subtype    The type of annotation, eg 'reply'
+         * @param  string $local_url  The local address the annotation was stored under
+         * @param  array  $annotation The annotation as getAnnotation() returned it
+         * @return bool False if the address is not one of this entity's, or is in use
+         */
+        function restoreAnnotation($subtype, $local_url, array $annotation)
+        {
+            $subtype = (string) $subtype;
+            $local_url = (string) $local_url;
+            if ($subtype === '' || strpos($local_url, $this->getURL() . '/annotations/') !== 0) {
+                return false;
+            }
+            if ($this->getAnnotation($local_url)) {
+                return false;
+            }
+            $annotations = $this->annotations;
+            if (empty($annotations) || !is_array($annotations)) {
+                $annotations = [];
+            }
+            if (empty($annotations[$subtype]) || !is_array($annotations[$subtype])) {
+                $annotations[$subtype] = [];
+            }
+            $annotations[$subtype][$local_url] = $annotation;
+            $this->annotations = $annotations;
+
+            return true;
         }
 
         /**
