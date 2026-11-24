@@ -3938,6 +3938,12 @@ the CLI installer no longer writes one.
   no API signature and no router, so nothing there is affected (events run as the user a
   message names). Everywhere else a signed request acts as its user with no form token, and
   is never an admin (`User::isAdmin()`). `Tests/API/AccountPagesTest.php` checks this over HTTP.
+- User search: `/search/users/` (`Idno\Pages\Search\User`) draws, for each match, the member's email address
+  and the administrator's controls (make admin, block, delete), so it calls `adminGatekeeper()`, not
+  `gatekeeper()`; its only caller is the admin Users page. A member gets 403 for every template type, for a
+  search by email address and for a chosen `template`. Don't add a member-facing use (an @mention picker, say)
+  to it: write a separate page that returns handle, name, avatar and profile address only.
+  `Tests/Pages/Search/UserSearchAccessTest.php` checks this over HTTP.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Templating\PhpTemplateEngine` keeps the located
   `.tpl.php` path on a private static stack (pushed before the render, popped in a `finally`) and reads
