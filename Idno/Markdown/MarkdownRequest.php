@@ -7,8 +7,9 @@ namespace Idno\Markdown;
 /**
  * Whether a request for a post's permalink asks for its Markdown form: pure rules, on values the caller read.
  *
- * Three ways in: the suffix `.md` on the permalink's path, the query `?format=markdown` (or `?_t=markdown`), and an
- * `Accept` header that names `text/markdown` as the client's first choice.
+ * Three ways in: the suffix `.md` on the permalink's path, the query `?format=markdown` (or `?_t=markdown`, `?_t=md`), and an
+ * `Accept` header that names `text/markdown` as the client's first choice. (`?_t=markdown` also asks any other page for its
+ * Markdown form: that is the template type's doing, not this class's.)
  */
 final class MarkdownRequest
 {
@@ -45,7 +46,7 @@ final class MarkdownRequest
         if (is_string($format) && strtolower($format) === 'markdown') {
             return true;
         }
-        if (is_string($type) && strtolower($type) === 'markdown') {
+        if (is_string($type) && in_array(strtolower($type), ['markdown', 'md'], true)) {
             return true;
         }
         // A request that names another template type, or another format, has chosen: the Accept header is not asked

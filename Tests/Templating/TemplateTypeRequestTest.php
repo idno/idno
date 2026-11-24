@@ -24,8 +24,9 @@ final class TemplateTypeRequestTest extends RenderedSiteTestCase
         'activitypub' => '200 application/activity+json json',
         'email' => '200 text/html html',
         'email-text' => '200 text/html html',
-        // Only a post's permalink has a Markdown form (MarkdownOutputTest): on any other page the type is not chosen.
-        'markdown' => '200 text/html html',
+        // Any page as Markdown (MarkdownOutputTest), and the type's short name.
+        'markdown' => '200 text/markdown text',
+        'md' => '200 text/markdown text',
         // A type that is no directory, a path, a name the `_` rule strips to nothing, a name with a space, and none: the default type.
         'nope' => '200 text/html html',
         '../x' => '200 text/html html',
@@ -39,7 +40,7 @@ final class TemplateTypeRequestTest extends RenderedSiteTestCase
     {
         $this->seedSite();
         $actual = [];
-        foreach (['default', 'modern', 'rss', 'json', 'jsonp', 'jsonfeed', 'kml', 'activitypub', 'email', 'email-text', 'markdown', 'nope', '../x', '..%2Fx', '_ABC', 'a%20b', ''] as $type) {
+        foreach (['default', 'modern', 'rss', 'json', 'jsonp', 'jsonfeed', 'kml', 'activitypub', 'email', 'email-text', 'markdown', 'md', 'nope', '../x', '..%2Fx', '_ABC', 'a%20b', ''] as $type) {
             $actual[$type] = $this->describe('?_t=' . $type);
         }
 

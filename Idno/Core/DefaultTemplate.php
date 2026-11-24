@@ -208,6 +208,28 @@ namespace Idno\Core {
                 header('Content-type: text/html');
                 header('Access-Control-Allow-Origin: *');
             }
+            if (strtolower((string) $this->getTemplateType()) === 'markdown') {
+                $this->sendMarkdownHeaders();
+            }
+        }
+
+        /**
+         * Sends the headers of a Markdown document (the `markdown` type's shell sends none itself): the type, the
+         * cross-origin header every page has, and, for an answer that is not an error, the address of the page the
+         * document is a form of as its canonical link: the entity's, on its permalink, else this page's without `_t`.
+         */
+        function sendMarkdownHeaders()
+        {
+            header('Content-Type: text/markdown; charset=utf-8');
+            header('Access-Control-Allow-Origin: *');
+            if (http_response_code() !== 200) {
+                return;
+            }
+            $entity = $this->vars['markdown_entity'] ?? null;
+            $canonical = \Idno\Core\UrlValidator::httpUrl($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->getCurrentURLWithoutVar('_t'));
+            if ($canonical !== '' && !preg_match('/[<>\s]/', $canonical)) {
+                header('Link: <' . $canonical . '>; rel="canonical"', false);
+            }
         }
 
         /**
@@ -349,6 +371,7 @@ namespace Idno\Core {
                 if (!is_string($template)) {
                     $template = '';
                 }
+                $template = \Idno\Templating\TypeChain::requested($template);
                 if (!empty($template)) {
                     // A request never selects a mail type (the mail sender does)
                     if (\Idno\Templating\TypeChain::requestable($template)) {

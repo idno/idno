@@ -66,6 +66,9 @@ namespace Idno\Common {
                 header('X-Idno-Build-Fingerprint: ' . \Idno\Core\TokenProvider::truncateToken(\Idno\Core\Version::fingerprint()));
             }
             if ($template = $this->getInput('_t')) {
+                if (is_string($template)) {
+                    $template = \Idno\Templating\TypeChain::requested($template);
+                }
                 if (is_string($template) && \Idno\Templating\TypeChain::requestable($template) && \Idno\Core\Idno::site()->template()->templateTypeExists($template)) {
                     \Idno\Core\Idno::site()->template()->setTemplateType($template);
                 }
@@ -978,9 +981,10 @@ namespace Idno\Common {
         }
 
         /**
-         * Whether this request asks for the Markdown form of a post: the suffix `.md` on the permalink, `?format=markdown`
-         * or `?_t=markdown`, or an Accept header whose first choice is `text/markdown` (\Idno\Markdown\MarkdownRequest).
-         * Only a page that is a post's permalink asks; every other page ignores all three.
+         * Whether this request asks for the Markdown form of a post's permalink: the suffix `.md` on the permalink,
+         * `?format=markdown`, `?_t=markdown` (or `md`), or an Accept header whose first choice is `text/markdown`
+         * (\Idno\Markdown\MarkdownRequest). `?_t=markdown` asks any page for Markdown (Page::init() selects the type); the
+         * suffix, `format` and the header are a permalink's alone, and the permalink page asks this.
          *
          * @return bool
          */
@@ -1004,9 +1008,21 @@ namespace Idno\Common {
         }
 
         /**
+         * For a permalink page, first thing: selects the `markdown` template type when the request asks for the Markdown
+         * form (wantsMarkdown()), so that whatever the page answers from then on (the post, or the page that says it is
+         * gone or may not be read) is a Markdown document.
+         *
+         * @return bool whether the type was selected
+         */
+        function selectMarkdownIfWanted()
+        {
+            return $this->wantsMarkdown() && \Idno\Core\Idno::site()->template()->setTemplateType('markdown');
+        }
+
+        /**
          * Answers with the Markdown form of an entity: YAML front matter, then its content as Markdown (the `markdown`
-         * template type). Call it only once the page has decided that the viewer may read the entity. It does not return
-         * when the page is drawn.
+         * template type, whose headers DefaultTemplate::sendShellHeaders() sends). Call it only once the page has decided
+         * that the viewer may read the entity. It does not return when the page is drawn.
          *
          * @param  Entity $object
          * @return false when the site has no `markdown` template type
@@ -1018,14 +1034,7 @@ namespace Idno\Common {
                 return false;
             }
 
-            header('Content-Type: text/markdown; charset=utf-8');
-            header('Access-Control-Allow-Origin: *');
-            $canonical = \Idno\Core\UrlValidator::httpUrl($object->getURL());
-            if ($canonical !== '' && !preg_match('/[<>\s]/', $canonical)) {
-                header('Link: <' . $canonical . '>; rel="canonical"', false);
-            }
-
-            $t->__(['title' => $object->getTitle(), 'object' => $object])->drawPage();
+            $t->__(['title' => $object->getTitle(), 'object' => $object, 'markdown_entity' => $object])->drawPage();
         }
 
         /**

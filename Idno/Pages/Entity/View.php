@@ -18,6 +18,7 @@ namespace Idno\Pages\Entity {
         {
             // The same address answers as HTML or as Markdown, by the Accept header
             $this->sendVaryAccept();
+            $this->selectMarkdownIfWanted();
 
             if (!empty($this->arguments[0])) {
                 $object = \Idno\Common\Entity::getByID($this->arguments[0]);

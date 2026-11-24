@@ -32,6 +32,14 @@ final class TypeChain
     }
 
     /**
+     * The type a request means by a `?_t=` value: the value itself, except the short name `md`, which is `markdown`.
+     */
+    public static function requested(string $type): string
+    {
+        return strtolower($type) === 'md' ? 'markdown' : $type;
+    }
+
+    /**
      * Whether a request or code may select the type (a type that has a directory is the caller's check). `classic` is
      * reached by fallback only: a page is never drawn from it.
      */
@@ -43,11 +51,9 @@ final class TypeChain
     /**
      * Whether a REQUEST (`?_t=`) may select the type: what code may select (selectable()), except the mail types. A mail type is set
      * by the mail sender; a plain-text mail (`email-text`) is not escaped, so a web page drawn from it would print text as markup.
-     * Nor does a request select `markdown` this way: only a post's permalink page has a Markdown form, and that page selects the
-     * type itself (Page::wantsMarkdown()), so `?_t=markdown` on any other page is the page it would be without it.
      */
     public static function requestable(string $type): bool
     {
-        return self::selectable($type) && !in_array(strtolower($type), ['email', 'email-text', 'markdown'], true);
+        return self::selectable($type) && !in_array(strtolower($type), ['email', 'email-text'], true);
     }
 }

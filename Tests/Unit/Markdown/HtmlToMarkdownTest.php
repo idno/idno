@@ -87,6 +87,7 @@ final class HtmlToMarkdownTest extends TestCase
         $html = "<div class=\"well\">\n    <p>\n        <strong>A meetup</strong>\n    </p>\n    <p>\n        Location: <span>The Library</span>\n    </p>\n</div>\n<div>\n    <p>Body</p>\n</div>\n";
 
         $this->assertSame("**A meetup**\n\nLocation: The Library\n\nBody", $this->convert($html));
+        $this->assertSame("# Oops\n\n### Sign in", $this->convert("<h1>\n   Oops\n</h1><h3>\n Sign in</h3>"));
     }
 
     public function testCodeAndNestedListsKeepTheirWhiteSpace(): void

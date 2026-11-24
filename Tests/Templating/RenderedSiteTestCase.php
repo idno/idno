@@ -424,6 +424,15 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
             $this->page('non-html/json-' . $name . '.txt', $paths[$name] . '?_t=json', 200, 'application/json');
         }
         $this->page('non-html/jsonp-status.txt', $paths['status'] . '?_t=jsonp&callback=cb', 200, 'application/x-javascript');
+        // Pages as Markdown (`?_t=markdown`): the lists of posts, a page that lists nothing, and one that is not there.
+        $this->page('non-html/markdown-home.md', '?_t=markdown', 200, 'text/markdown');
+        $this->page('non-html/markdown-offset.md', '?_t=markdown&offset=10', 200, 'text/markdown');
+        $this->page('non-html/markdown-profile-ada.md', 'profile/' . self::ADMIN . '?_t=markdown', 200, 'text/markdown');
+        $this->page('non-html/markdown-tag-templates.md', 'tag/templates?_t=md', 200, 'text/markdown');
+        $this->page('non-html/markdown-search.md', '?q=hello&_t=markdown', 200, 'text/markdown');
+        $this->page('non-html/markdown-login.md', 'session/login?_t=markdown', 200, 'text/markdown');
+        $this->page('non-html/markdown-not-found.md', 'no-such-page?_t=markdown', 404, 'text/markdown');
+        $this->page('non-html/markdown-private-visitor.md', $paths['private'] . '?_t=markdown', 410, 'text/markdown');
         // The Markdown form of the permalink of each bundled content type, by its `.md` address.
         foreach (['status', 'article', 'photo', 'bookmark', 'event', 'reply', 'rsvp', 'checkin', 'media', 'page'] as $name) {
             $this->page('non-html/markdown-' . $name . '.md', $paths[$name] . '.md', 200, 'text/markdown');

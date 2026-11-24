@@ -82,6 +82,8 @@ final class MarkdownRequestTest extends TestCase
         $this->assertTrue(MarkdownRequest::wanted(false, 'markdown', null, 'text/html'));
         $this->assertTrue(MarkdownRequest::wanted(false, 'Markdown', null, null));
         $this->assertTrue(MarkdownRequest::wanted(false, null, 'markdown', 'text/html'));
+        $this->assertTrue(MarkdownRequest::wanted(false, null, 'md', 'text/html'));
+        $this->assertTrue(MarkdownRequest::wanted(false, null, 'MD', null));
         $this->assertTrue(MarkdownRequest::wanted(true, null, 'rss', null), 'the suffix wins over another type');
     }
 
@@ -89,6 +91,7 @@ final class MarkdownRequestTest extends TestCase
     {
         $this->assertFalse(MarkdownRequest::wanted(false, null, 'rss', 'text/markdown'));
         $this->assertFalse(MarkdownRequest::wanted(false, null, 'json', 'text/markdown'));
+        $this->assertFalse(MarkdownRequest::wanted(false, null, 'mdx', 'text/markdown'));
         $this->assertFalse(MarkdownRequest::wanted(false, 'html', null, 'text/markdown'));
         $this->assertFalse(MarkdownRequest::wanted(false, null, ['markdown'], 'text/markdown'));
         $this->assertFalse(MarkdownRequest::wanted(false, ['markdown'], null, 'text/markdown'));

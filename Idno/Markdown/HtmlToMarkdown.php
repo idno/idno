@@ -89,7 +89,7 @@ final class HtmlToMarkdown
 
     /**
      * The white space the HTML's own layout left behind, removed where it means nothing in Markdown: a line of only white
-     * space, one space before the first line of a block, one space at the end of a line (two are a line break), more than
+     * space, one space before the first line of a block, one space at the end of a line (two are a line break), more than one space after the marks of a heading, more than
      * one empty line between blocks. A fenced code block is left as it is.
      */
     private function tidy(string $markdown): string
@@ -112,6 +112,8 @@ final class HtmlToMarkdown
                         $line = substr($line, 1);
                     }
                     $line = (string) preg_replace('/(?<! ) $/', '', $line);
+                    // One space after the marks of a heading
+                    $line = (string) preg_replace('/^(#{1,6}) {2,}(?=\S)/', '$1 ', $line);
                 }
                 if ($line === '' && $previous === '') {
                     continue;

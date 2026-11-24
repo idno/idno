@@ -26,7 +26,7 @@ By default, Idno assumes we're talking HTML5 (referred to internally as the `def
 
 However, if you want to build an RSS feed, for example, your template type might be `rss`. Idno includes the template types `default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `markdown`, `email`, `email-text` and `activitypub`.
 
-On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type is one word (letters, digits, hyphens and underscores: `classic/` or `rss/` is not a type, and asks for none) and only exists if some `templates/` folder contains a folder of that name. A request cannot choose the mail types (`email`, `email-text`): the mail sender sets them, and a plain-text mail is not escaped. Nor does `?_t=markdown` choose the `markdown` type on just any page: only a post's permalink has a Markdown form (see "Markdown output" below).
+On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type is one word (letters, digits, hyphens and underscores: `classic/` or `rss/` is not a type, and asks for none) and only exists if some `templates/` folder contains a folder of that name. A request cannot choose the mail types (`email`, `email-text`): the mail sender sets them, and a plain-text mail is not escaped. `?_t=md` is short for `?_t=markdown` (see "Markdown output" below).
 
 Each template type contains its own set of templates. However, templates always fall back to the "default" template type, so that if you try to draw, for example, `page/navigation` in the `rss` template type, and it doesn't exist, `page/navigation` in the `default` template type will be called instead (if it exists).
 
@@ -34,17 +34,23 @@ Two more types are not ones you choose. `classic` holds the entity templates of 
 
 ## Markdown output
 
-Every post can also be fetched as a Markdown document: YAML front matter, then the post's content. It is meant for tools and people who want the text of a post without the page around it. The idea, and the standalone implementation that Idno's behaviour follows, are [John Evdemon's](https://github.com/jevdemon/idno-markdown) ([idno/idno#3407](https://github.com/idno/idno/issues/3407)).
+Every page can also be fetched as a Markdown document: YAML front matter, then the content. It is meant for tools (language models especially) and people who want the text of a page without the page around it. The idea of Markdown for posts, and the standalone implementation that Idno's behaviour for them follows, are [John Evdemon's](https://github.com/jevdemon/idno-markdown) ([idno/idno#3407](https://github.com/idno/idno/issues/3407)).
 
-There are three ways to ask for the Markdown form of a post whose permalink is `https://example.com/2026/hello-world`:
+**Any page**: add `?_t=markdown`, or the short form `?_t=md`.
+
+* The home page, a profile, a tag, a search: the page's title, then each post in full under a heading that links to it, and `Newer` / `Older` links to the rest of the list (which are Markdown too).
+* Any other page: its title and its text. Forms and their fields are left out.
+* An error page keeps its status (404, 403, 410) and says what the HTML page says.
+
+**A post** (or a static page), whose permalink is `https://example.com/2026/hello-world`, can be asked for in three more ways:
 
 * add `.md` to the address: `https://example.com/2026/hello-world.md`
-* add `?format=markdown` (or `?_t=markdown`): `https://example.com/2026/hello-world?format=markdown`
+* add `?format=markdown`: `https://example.com/2026/hello-world?format=markdown`
 * send an `Accept` header that prefers `text/markdown`: `curl -H 'Accept: text/markdown' https://example.com/2026/hello-world`
 
-The `Accept` header chooses Markdown when it names `text/markdown` and nothing else in it has a higher quality value, so `text/markdown, text/html` gets Markdown, while `text/html, text/markdown;q=0.9`, `*/*` and a browser's header get the HTML page. The permalink sends `Vary: Accept` with both forms.
+The `Accept` header chooses Markdown when it names `text/markdown` and nothing else in it has a higher quality value, so `text/markdown, text/html` gets Markdown, while `text/html, text/markdown;q=0.9`, `*/*` and a browser's header get the HTML page. A permalink sends `Vary: Accept` with both forms. These three ways are a permalink's only: on other pages use `?_t=markdown`.
 
-The answer is `text/markdown; charset=utf-8`, with a `Link: <permalink>; rel="canonical"` header:
+The answer is `text/markdown; charset=utf-8`, with a `Link: <address>; rel="canonical"` header that names the page the document is a form of. A post looks like this:
 
 ```markdown
 ---
@@ -64,14 +70,13 @@ Templates draw pages. **Hello** again.
 A second paragraph.
 ```
 
-The front matter uses the names of an RSS 2.0 item. `author` is left out when the post has no owner, `description` when there is none (or it would repeat the title), and `category` when the post has no tags. Every value is a double-quoted YAML string.
+A post's front matter uses the names of an RSS 2.0 item. `author` is left out when the post has no owner, `description` when there is none (or it would repeat the title), and `category` when the post has no tags. Any other page has `title`, `description` (when it has one) and `link`. Every value is a double-quoted YAML string.
 
 Things to know:
 
-* Only a post's permalink (and a static page's) has a Markdown form. On any other page `?_t=markdown`, `?format=markdown` and the `Accept` header change nothing, and `.md` on any other address is not an address.
-* The post's own access rules decide. A private post, a draft or a post that does not exist answers exactly as its HTML permalink does for the same viewer, never with Markdown.
+* The page's own access rules decide, as they do for HTML. A private post, a draft or a post that does not exist answers with the status its HTML permalink has for the same viewer, as a short Markdown document of that error page, and never with anything of the post. A list holds the posts its viewer may read.
 * Pictures are Markdown images, audio and video files are links, a bookmark links to its target, an event has its place and time and a check-in its place. Addresses are absolute. Scripts, styles, frames and forms are left out, and no HTML is in the document.
-* An old-style permalink whose route already takes anything after the id (`/entry/<id>/<anything>`) does not treat `.md` specially; use `?format=markdown` there.
+* `.md` on an address that is not a permalink is not an address. An old-style permalink whose route already takes anything after the id (`/entry/<id>/<anything>`) does not treat `.md` specially; use `?_t=markdown` there.
 * The web server needs no configuration: `.md` addresses that are not files reach Idno like any other address.
 
 ### Markdown for your own content type
@@ -86,6 +91,7 @@ class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
     function getContent()
     {
         $this->sendVaryAccept();
+        $this->selectMarkdownIfWanted();
         // ... find $object, and answer 410 or 403 if it is missing or the viewer may not read it ...
         if ($this->wantsMarkdown()) {
             $this->drawMarkdown($object);
@@ -95,7 +101,7 @@ class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
 }
 ```
 
-Implementing `MarkdownPermalink` is what makes `<address>.md` reach the page. Call `drawMarkdown()` only after the page has decided that the viewer may read the entity.
+Implementing `MarkdownPermalink` is what makes `<address>.md` reach the page. Call `drawMarkdown()` only after the page has decided that the viewer may read the entity. A page that is not a permalink needs nothing: `?_t=markdown` draws its body, and its list of posts if it passes `items` to its template as a feed page does.
 
 ## Template locations
 

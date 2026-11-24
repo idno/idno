@@ -9,8 +9,9 @@ use Tests\Acceptance\Browser;
 use Tests\Characterisation\SiteResponse;
 
 /**
- * A post's permalink as Markdown, over HTTP on a seeded site: the three ways to ask for it, the headers, what an Accept
- * header prefers, who may read it, the pages that have no Markdown form, and the front matter of hostile values.
+ * Markdown over HTTP on a seeded site. A post's permalink: the three ways to ask for it, the headers, what an Accept header
+ * prefers, who may read it, and the front matter of hostile values. Every other page: `?_t=markdown` (or `md`), and what
+ * does not ask (`.md`, `format`, the Accept header).
  * (The whole document of each bundled content type is a golden page: `fixtures/pages/non-html/markdown-*.md`.)
  */
 final class MarkdownOutputTest extends RenderedSiteTestCase
@@ -28,6 +29,7 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         foreach ([
             'format' => $this->get($paths['article'] . '?format=markdown'),
             'template type' => $this->get($paths['article'] . '?_t=markdown'),
+            'short template type' => $this->get($paths['article'] . '?_t=md'),
             'Accept' => $this->get($paths['article'], ['Accept' => 'text/markdown']),
             'suffix with a query' => $this->get($paths['article'] . '.md?utm_source=x'),
         ] as $way => $response) {
@@ -97,7 +99,7 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         $this->assertSame('markdown', $this->kind($this->get($paths['status'] . '.md', ['Accept' => 'text/html'])));
     }
 
-    public function testAPostTheViewerMayNotReadAnswersAsItsHtmlPermalinkDoes(): void
+    public function testAPostTheViewerMayNotReadIsNeverInTheMarkdown(): void
     {
         $paths = $this->seedSite();
         $ada = $this->loginAsAdmin();
@@ -107,16 +109,26 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
             foreach (['a visitor' => [], 'another member' => ['Cookie' => $bob]] as $who => $cookie) {
                 $html = $this->get($paths[$name], $cookie);
                 $this->assertContains($html->status, [403, 404, 410], $name . ' is closed to ' . $who);
+                $this->assertSame('html', $this->kind($html));
                 foreach ([
                     $this->get($paths[$name] . '.md', $cookie),
                     $this->get($paths[$name] . '?format=markdown', $cookie),
                     $this->get($paths[$name] . '?_t=markdown', $cookie),
+                    $this->get($paths[$name] . '?_t=md', $cookie),
                     $this->get($paths[$name], $cookie + ['Accept' => 'text/markdown']),
                 ] as $response) {
+                    // The same refusal as the HTML permalink's, as a Markdown document that says so and nothing of the post
                     $this->assertSame($html->status, $response->status, $name . ' for ' . $who);
-                    $this->assertSame('html', $this->kind($response), $name . ' for ' . $who);
-                    $this->assertStringNotContainsString($text, $response->body);
-                    $this->assertStringNotContainsString('rel="canonical"', (string) $response->header('Link'));
+                    $this->assertSame('markdown', $this->kind($response), $name . ' for ' . $who);
+                    [$fields, $body] = $this->parse($response->body);
+                    $this->assertNotContains('author', array_keys($fields));
+                    $this->assertNotContains('pubDate', array_keys($fields));
+                    $this->assertNotContains('guid', array_keys($fields));
+                    $this->assertStringNotContainsString($text, $response->body, $name . ' for ' . $who);
+                    $this->assertStringNotContainsString('.md', (string) ($fields['link'] ?? ''), 'the address of the page, not of its Markdown form');
+                    $this->assertStringNotContainsString('Ada', $body);
+                    $this->assertStringNotContainsString('rel="canonical"', (string) $response->header('Link'), 'an error has no canonical address');
+                    $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'));
                 }
             }
 
@@ -126,28 +138,78 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         }
     }
 
-    public function testAPostThatIsNotThereAnswersAsItsHtmlPermalinkDoes(): void
+    public function testAPostThatIsNotThereAnswersWithTheStatusOfItsHtmlPermalink(): void
     {
         $paths = $this->seedSite();
         $missing = dirname($paths['status']) . '/no-such-post-at-all';
 
         $html = $this->get($missing);
         $this->assertContains($html->status, [404, 410]);
-        foreach ([$this->get($missing . '.md'), $this->get($missing . '?format=markdown'), $this->get($missing, ['Accept' => 'text/markdown'])] as $response) {
+        foreach ([$this->get($missing . '.md'), $this->get($missing . '?format=markdown'), $this->get($missing . '?_t=markdown'), $this->get($missing, ['Accept' => 'text/markdown'])] as $response) {
             $this->assertSame($html->status, $response->status);
-            $this->assertSame('html', $this->kind($response));
+            $this->assertSame('markdown', $this->kind($response));
+            $this->assertStringStartsWith("---\n", $response->body);
+            $this->assertStringNotContainsString('rel="canonical"', (string) $response->header('Link'));
         }
     }
 
-    public function testOnlyAPermalinkHasAMarkdownForm(): void
+    public function testAnyPageAnswersMarkdownWhenTheTemplateTypeIsAskedFor(): void
+    {
+        $paths = $this->seedSite();
+        $base = $this->baseUrl();
+
+        // A list of posts: the page's title and address, then each post under a heading that links to it
+        foreach (['?_t=markdown' => $base, '?_t=md' => $base, 'profile/' . self::ADMIN . '?_t=markdown' => $base . 'profile/' . self::ADMIN, 'tag/templates?_t=markdown' => $base . 'tag/templates'] as $path => $address) {
+            $response = $this->get($path);
+            $this->assertMarkdown($response, $address, false);
+            [$fields, $body] = $this->parse($response->body);
+            $this->assertSame($address, $fields['link'], $path);
+            $this->assertNotSame('', $fields['title'], $path);
+            $this->assertStringContainsString('## [A longer article about templates](' . $base . $paths['article'] . ')', $body, $path);
+            $this->assertStringContainsString("Templates draw pages. **Hello** again.", $body, $path);
+            $this->assertStringContainsString('*Ada Admin, Mon, 02 Mar 2026 12:00:00 +0000*', $body, $path);
+            $this->assertStringNotContainsString('A private note only Ada can read.', $body, $path);
+            $this->assertStringNotContainsString('A draft note, not yet published.', $body, $path);
+            $this->assertDoesNotMatchRegularExpression('/<(?!https?:)[a-zA-Z\/!]/', $body, $path . ': no HTML is left');
+        }
+
+        // The list goes on: a link to the older page, which is Markdown too and links back
+        [, $home] = $this->parse($this->get('?_t=markdown')->body);
+        $this->assertSame(1, preg_match('/\[Older\]\(([^)]+)\)/', $home, $older), $home);
+        $this->assertStringNotContainsString('[Newer]', $home);
+        $this->assertStringStartsWith($base, $older[1]);
+        $second = $this->get(substr(html_entity_decode($older[1]), strlen($base)));
+        $this->assertSame('markdown', $this->kind($second));
+        $this->assertStringContainsString('An older note, number', $second->body);
+        $this->assertStringContainsString('[Newer](', $second->body);
+
+        // The owner's list has what the owner may read
+        $ada = $this->loginAsAdmin();
+        $this->assertStringContainsString('A private note only Ada can read.', $this->get('?_t=markdown', ['Cookie' => $ada])->body);
+
+        // A page that lists nothing is its title and its body, without the controls of its forms
+        $login = $this->get('session/login?_t=markdown');
+        $this->assertMarkdown($login, $base . 'session/login', false);
+        $this->assertDoesNotMatchRegularExpression('/<[a-zA-Z\/!]/', $this->parse($login->body)[1]);
+        $this->assertStringNotContainsString('__bTk', $login->body, 'no form token');
+
+        // A page that is not there, and one a visitor may not see, keep their status
+        $this->assertSame(404, $this->get('no-such-page?_t=markdown')->status);
+        $this->assertSame('markdown', $this->kind($this->get('no-such-page?_t=markdown')));
+        $admin = $this->get('admin/?_t=markdown');
+        $this->assertSame($this->get('admin/')->status, $admin->status);
+        $this->assertStringNotContainsString('rel="canonical"', (string) $admin->header('Link'));
+    }
+
+    public function testOnlyAPermalinkAnswersTheSuffixTheFormatAndTheAcceptHeader(): void
     {
         $paths = $this->seedSite();
 
-        // Asked of another page, the type is ignored: the page is what it is without it
+        // `format` and the Accept header ask a permalink only: another page is what it is without them
         foreach (['', 'profile/' . self::ADMIN, 'content/all/', 'session/login', 'tag/templates'] as $page) {
             $plain = $this->get($page);
             $this->assertSame('html', $this->kind($plain), $page);
-            foreach ([$this->get($page . '?_t=markdown'), $this->get($page . '?format=markdown'), $this->get($page, ['Accept' => 'text/markdown'])] as $response) {
+            foreach ([$this->get($page . '?format=markdown'), $this->get($page, ['Accept' => 'text/markdown'])] as $response) {
                 $this->assertSame($plain->status, $response->status, $page);
                 $this->assertSame('html', $this->kind($response), $page);
             }
@@ -165,6 +227,9 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         $head = $this->site()->request('HEAD', $paths['article'] . '.md');
         $this->assertSame(200, $head->status);
         $this->assertSame('text/markdown; charset=utf-8', strtolower((string) $head->header('Content-Type')));
+
+        // A mail type is still not a request's to choose
+        $this->assertSame('html', $this->kind($this->get('?_t=email-text')));
     }
 
     public function testEveryBundledContentTypeHasItsContentInTheMarkdown(): void
@@ -249,11 +314,13 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         };
     }
 
-    private function assertMarkdown(SiteResponse $response, string $canonical): void
+    private function assertMarkdown(SiteResponse $response, string $canonical, bool $variesByAccept = true): void
     {
         $this->assertSame(200, $response->status, substr($response->body, 0, 300));
         $this->assertSame('text/markdown; charset=utf-8', strtolower((string) $response->header('Content-Type')));
-        $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'));
+        if ($variesByAccept) {
+            $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'));
+        }
         $this->assertStringContainsString('<' . $canonical . '>; rel="canonical"', (string) $response->header('Link'));
         $this->assertStringStartsWith("---\n", $response->body);
         $this->assertStringEndsWith("\n", $response->body);

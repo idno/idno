@@ -223,7 +223,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   types a request may choose, and that `?_t[]=` asks for no type and is no server error) and by golden pages,
   `Tests/Templating/fixtures/pages/` (`twenty26/`: Idno 2026, the look of every site, for a visitor; `logged-in/`: the
   administrator; and `non-html/`: RSS, JSON Feed, JSON, JSONP, the
-  ActivityPub actor, KML, the JSON of each content type's permalink, its Markdown form (`markdown-<name>.md`, by the `.md` address) and the password reset mail's two parts), made by
+  ActivityPub actor, KML, the JSON of each content type's permalink, its Markdown form (`markdown-<name>.md`, by the `.md` address), the Markdown of the listing pages, the login page and two error pages (`?_t=markdown`) and the password reset mail's two parts), made by
   `RenderedPagesTest` (`IDNO_THEME=Twenty26`: the name the look had as a theme, resolved to the built-in look) and
   `RenderedPagesNoThemeTest` (no theme: the variable unset; the same goldens) on private
   synchronous sites (`RenderedSiteTestCase`: fixed handles, entity ids, user uuids, slugs, `created` and `updated`, a
@@ -2618,7 +2618,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   of its own type (`Tests/Characterisation/SettingsPagesJsonTest`). `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
   `Templates::setTemplateType()` and the `?_t=` check both refuse it) and for anything that is not one segment; `requestable($type)` is
-  `selectable()` less `email`, `email-text` and `markdown` (any letter case; `markdown` is selected by a post's permalink page itself: see "Markdown output"): a REQUEST (`?_t=`, in `Page::init()` and
+  `selectable()` less `email` and `email-text` (any letter case): a REQUEST (`?_t=`, in `Page::init()` and
   `DefaultTemplate::autodetectTemplateType()`) never selects a mail type, because a plain-text mail is not escaped and a web page drawn from it
   would print text as markup, while code (the mail sender's `setTemplateType('email')`) still can (`BuiltInLookTest::testAMailTypeCannotBeRequested`); `setTemplateType()` of `default` or `modern` in any letter case stores `default`
   (`getTemplateType()` never returns `modern`: a plugin that tested for it tests for `default`), so `?_t=modern` is the default type. What a
@@ -3019,23 +3019,27 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 
 #### Markdown output
 
-Every post can also be fetched as Markdown (proposed by John Evdemon, idno/idno#3407, whose standalone
-implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour). The pieces:
+Every page can be fetched as Markdown, and a post's permalink in three ways (proposed by John Evdemon, idno/idno#3407, whose
+standalone implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour of permalinks). The pieces:
 
-- Asking. A post's permalink answers with Markdown when the request has the suffix `.md` on the permalink's path, has
-  `?format=markdown` or `?_t=markdown`, or has an `Accept` header that names `text/markdown` with a quality above 0 that no
-  other range of the header exceeds (`Idno\Markdown\MarkdownRequest`, pure: `text/markdown, text/html` is Markdown, a tie going
-  to the type the client named; `text/html, text/markdown;q=0.9`, `*/*`, `text/*` and a browser's header are HTML; a header over
-  2000 bytes is not read). The suffix and the two query values ask whatever the header says; a request that names another `_t`
-  or `format` has chosen, and the header is not asked.
-- Only a permalink page has a Markdown form, and the PAGE selects the type: `Page::wantsMarkdown()` and
-  `Page::drawMarkdown($object)`, called by `Idno\Pages\Entity\View` and `IdnoPlugins\StaticPages\Pages\View` AFTER their
-  own checks (the entity exists, `canRead()`, the static page's forward), so a private post, a draft and a missing post answer
-  exactly as the HTML permalink does for that viewer (the same status, the HTML error page), never Markdown. `markdown` is NOT a
-  type a request can choose (`TypeChain::requestable('markdown')` is false; code can select it): on every other page
-  `?_t=markdown`, `?format=markdown` and the `Accept` header are ignored and the page is what it is without them
-  (`TemplateTypeRequestTest`, `MarkdownOutputTest::testOnlyAPermalinkHasAMarkdownForm`). A third-party permalink page gets a
-  Markdown form by calling the two methods the same way; do not make the type requestable.
+- Asking ANY page: `?_t=markdown`, or `?_t=md` (`TypeChain::requested()` is the one place the short name is read: `Page::init()`
+  and `DefaultTemplate::autodetectTemplateType()` pass a `_t` value through it). `markdown` is an ordinary requestable template
+  type (`TypeChain`: `markdown`, `classic`, `default`; `.tpl.php` only), so the page runs as it does for any type, with its own
+  gatekeepers, and its shell is `templates/markdown/shell.tpl.php`.
+- Asking a PERMALINK, three more ways: the suffix `.md` on its path, `?format=markdown`, or an `Accept` header that names
+  `text/markdown` with a quality above 0 that no other range of the header exceeds (`Idno\Markdown\MarkdownRequest`, pure:
+  `text/markdown, text/html` is Markdown, a tie going to the type the client named; `text/html, text/markdown;q=0.9`, `*/*`,
+  `text/*` and a browser's header are HTML; a header over 2000 bytes is not read). The suffix and the query values ask whatever
+  the header says; a request that names another `_t` or `format` has chosen, and the header is not asked. Only the two permalink
+  pages ask these (`Idno\Pages\Entity\View`, `IdnoPlugins\StaticPages\Pages\View`): on any other page `?format=markdown` and the
+  header change nothing and `.md` is no address (`MarkdownOutputTest::testOnlyAPermalinkAnswersTheSuffixTheFormatAndTheAcceptHeader`).
+- A permalink page calls `Page::sendVaryAccept()` and `Page::selectMarkdownIfWanted()` FIRST in `getContent()` (the type is
+  selected when `Page::wantsMarkdown()`), then makes its own checks (the entity exists, `canRead()`, the static page's
+  forward), then `Page::drawMarkdown($object)` when `wantsMarkdown()`. So a private post, a draft and a missing post answer with
+  the STATUS the HTML permalink has for that viewer (410, 403), as a Markdown document of that error page (its title and text),
+  and never with anything of the post: `drawMarkdown()` is the only thing that names the entity to the shell (the template
+  variable `markdown_entity`), and it is called only after the checks. A third-party permalink page does the same three calls and
+  implements `MarkdownPermalink` (next bullet).
 - The `.md` suffix is handled in ONE place, `PageHandler::serve()` (`routeMarkdownSuffix()`), before Toro routes: for a GET or
   HEAD whose path ends in `.md` (lower case, after a non-empty last segment), when the path AS GIVEN matches no route and the
   path without the suffix is routed to a page class that implements the marker interface `Idno\Common\MarkdownPermalink`, it
@@ -3043,31 +3047,44 @@ implementation, https://github.com/jevdemon/idno-markdown, was the reference for
   (`PageHandler::markdownSuffixRequested()`). Anything else is left exactly as it was, so no address that was served changes
   its meaning: `index.md`, `session/login.md`, `<permalink>.md.md`, `<permalink>.MD`, `<permalink>.md/` and a POST are the 404
   they were. A permalink route whose pattern already matches the suffixed path (the old `/entry/:id/.*` style routes) keeps
-  serving HTML there: `?format=markdown` is the way in for those. The one address that changes: `<permalink route>/<no such
-  slug>.md` was a 404 (no route) and is now what the permalink of a missing post is (410). `REQUEST_URI` keeps the suffix
-  (`Page::currentUrl()`); slug routes still match no dot.
-- The answer: `Content-Type: text/markdown; charset=utf-8`, `Link: <permalink>; rel="canonical"` (`Entity::getURL()`, only when
-  it is an http(s) address with no `<`, `>` or white space) and `Access-Control-Allow-Origin: *`, sent by `drawMarkdown()`, not
-  by a template; and `Vary: Accept` on EVERY answer of the two permalink pages (`Page::sendVaryAccept()`, first thing in
-  `getContent()`: the HTML page, the Markdown, the 403 and 410).
-- The document is the template type `markdown` (`TypeChain`: `markdown`, `classic`, `default`; `.tpl.php` only):
-  `templates/markdown/shell.tpl.php` writes YAML front matter with the field names of an RSS 2.0 item, in this order: `title`
-  (as an RSS item's: the entity's title, else five words of its description, else `New <type>`), `author` (the owner's name;
-  left out with no owner), `pubDate` (`DATE_RSS` of `created`), `description` (the `short_description`, else a sample of the
-  description with tags replaced by spaces; left out when empty or equal to the title), `link` (`getURL()`), `guid` (the uuid)
-  and `category` (a list: `getTags()` without `#`, no duplicates; left out when empty); then an empty line and the content: an
-  `In reply to` line for each http(s) `inreplyto`, and the entity's own HTML, `$object->draw(true)` (the feed view: `entity/<Class>`
-  of the `markdown` type, else the `classic` file a feed draws), through `sanitize_html()` and `HtmlToMarkdown`. There is no
-  `# title` heading: the title is in the front matter. Without an entity (an error page drawn after the type was selected)
-  the document is the page's title and its body, converted.
+  serving HTML there: `?format=markdown` or `?_t=markdown` is the way in for those. The one address that changes:
+  `<permalink route>/<no such slug>.md` was a 404 (no route) and is now what the permalink of a missing post is (410, as
+  Markdown). `REQUEST_URI` keeps the suffix (`Page::currentUrl()`); slug routes still match no dot.
+- The headers are `DefaultTemplate::sendMarkdownHeaders()`'s (called by `sendShellHeaders()`, so by every `drawPage()` of the
+  type; no template sends one): `Content-Type: text/markdown; charset=utf-8`, `Access-Control-Allow-Origin: *` (as every web
+  page has), and, only when the status is 200, `Link: <address>; rel="canonical"`: the entity's `getURL()` on its permalink,
+  else the page's own address without `_t` (only an http(s) address with no `<`, `>` or white space). `Vary: Accept` is on
+  EVERY answer of the two permalink pages (the HTML page, the Markdown, the 403 and 410) and on no other page, whose answer does
+  not depend on the header.
+- What the shell writes, always YAML front matter first:
+  - a permalink (`markdown_entity`): the field names of an RSS 2.0 item, in this order: `title` (as an RSS item's: the
+    entity's title, else five words of its description, else `New <type>`), `author` (the owner's name; left out with no owner),
+    `pubDate` (`DATE_RSS` of `created`), `description` (the `short_description`, else a sample of the description with tags
+    replaced by spaces; left out when empty or equal to the title), `link` (`getURL()`), `guid` (the uuid) and `category` (a
+    list: `getTags()` without `#`, no duplicates; left out when empty); then the content: an `In reply to` line for each http(s)
+    `inreplyto`, and the entity's own HTML, `$object->draw(true)` (the feed view: `entity/<Class>` of the `markdown` type, else the
+    `classic` file a feed draws), through `sanitize_html()` and `HtmlToMarkdown`. No `# title` heading: the title is in the
+    front matter;
+  - a page that lists posts (the template variable `items` holds entities and the status is 200: the home page, a profile, a
+    tag, a search, `content/all`): `title` (the page's, else the site's), `description` (the page's; left out when empty or
+    the title) and `link` (the page's address without `_t`); then `# title`, and for each item `## [title](permalink)`, a line
+    `*author, pubDate*` and its content as above (each item in full, as in the RSS feed; the list is the page's own, so it
+    holds what this viewer may read), and last a rule and `Newer` / `Older` links to the neighbouring pages of the list
+    (`offset`, `count` and the `items_per_page` setting), which keep `_t`. The page's `body` is not used;
+  - any other page (a form, a settings or admin page, an error page of any status): `title`, `description`, `link` and the
+    page's `body`, converted. The converter removes forms and their controls, so no field value and no form token is in the
+    document; a settings page is the text of its page and little else. The page's own access rules apply as for HTML: the
+    document holds nothing the HTML page does not show that viewer.
   Bundled types with a `markdown` entity template of their own, because the `classic` feed view lacks what matters or draws
   what must not be there: Media (a link to each file, labelled Audio or Video), Like (`Bookmarked:`, `Liked:` or `Reposted:`
   and a link to the target, only if http(s)), Checkin (the place name and the coordinates as the viewer may see them,
   `canSeePreciseLocation()`, linked to OpenStreetMap) and StaticPage (the body alone: the `classic` one draws the
   administrator's controls). Status, Reply, Entry, Photo, Event and RSVP draw their `classic` templates. These templates print
   HTML (escaped with `htmlspecialchars()`, addresses through `UrlValidator::httpUrl()`), never Markdown: the converter is the
-  one place Markdown is made. `templates/markdown/forms/output/tags.tpl.php` draws nothing, so no entity template's row of tag
-  links is in the document (the tags are `category`).
+  one place Markdown is made, and the shell builds its own headings and links as HTML for it too.
+  `templates/markdown/forms/output/tags.tpl.php` draws nothing, so no entity template's row of tag links is in a document.
+- Never put a secret in the Markdown shell from a template variable: unlike the JSON shell it prints only the title, the
+  description and the converted body, and it must stay so.
 - `Idno\Markdown\FrontMatter::render()` (pure) writes every value as a YAML DOUBLE-QUOTED scalar on one line, whatever it holds
   (`\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xNN` for the other C0 and C1 characters, `\L`, `\P`, `\uFEFF`; bytes that are not UTF-8
   replaced), so a value is never a comment, a list, a mapping, another key or the end of the block; a key must match
@@ -3083,9 +3100,11 @@ implementation, https://github.com/jevdemon/idno-markdown, was the reference for
   white space the HTML's layout left where it means nothing in Markdown (never inside a fenced code block). No HTML element
   is ever in the output.
 - Tests: `Tests/Unit/Markdown/` (the three classes, without the legacy application), `Tests/Templating/MarkdownOutputTest`
-  (over HTTP on a seeded private site: the ways in, the headers, the Accept table, a private post and a draft for a visitor,
-  another member and the owner, a missing post, the pages with no Markdown form, each bundled content type, hostile values)
-  and the golden pages `non-html/markdown-*.md`.
+  (over HTTP on a seeded private site: the ways into a permalink, the headers, the Accept table, a private post and a draft for
+  a visitor, another member and the owner, a missing post, any page by `?_t=`, the lists and their pages, what only a permalink
+  answers, each bundled content type, hostile values), `TemplateTypeRequestTest` and the golden pages `non-html/markdown-*.md`
+  (each content type's permalink, the home page and its second page, a profile, a tag, a search, the login page, a 404 and a
+  private post for a visitor).
 
 #### The cache
 
@@ -3825,7 +3844,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
 | **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
-| **Markdown** | Every post's permalink is also served as Markdown with YAML front matter: `<permalink>.md`, `?format=markdown`, or `Accept: text/markdown` (see "Markdown output") |
+| **Markdown** | Every page is also served as Markdown with YAML front matter by `?_t=markdown` (or `md`); a post's permalink also by `<permalink>.md`, `?format=markdown` or `Accept: text/markdown` (see "Markdown output") |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
 
 ## Code Style
