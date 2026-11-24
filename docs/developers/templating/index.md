@@ -24,13 +24,87 @@ The template type is the *kind* or *category* of template we're dealing with.
 
 By default, Idno assumes we're talking HTML5 (referred to internally as the `default` template type).
 
-However, if you want to build an RSS feed, for example, your template type might be `rss`. Idno includes the template types `default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `email`, `email-text` and `activitypub`.
+However, if you want to build an RSS feed, for example, your template type might be `rss`. Idno includes the template types `default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `markdown`, `email`, `email-text` and `activitypub`.
 
-On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type is one word (letters, digits, hyphens and underscores: `classic/` or `rss/` is not a type, and asks for none) and only exists if some `templates/` folder contains a folder of that name. A request cannot choose the mail types (`email`, `email-text`): the mail sender sets them, and a plain-text mail is not escaped.
+On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type is one word (letters, digits, hyphens and underscores: `classic/` or `rss/` is not a type, and asks for none) and only exists if some `templates/` folder contains a folder of that name. A request cannot choose the mail types (`email`, `email-text`): the mail sender sets them, and a plain-text mail is not escaped. `?_t=md` is short for `?_t=markdown` (see "Markdown output" below).
 
 Each template type contains its own set of templates. However, templates always fall back to the "default" template type, so that if you try to draw, for example, `page/navigation` in the `rss` template type, and it doesn't exist, `page/navigation` in the `default` template type will be called instead (if it exists).
 
 Two more types are not ones you choose. `classic` holds the entity templates of the look that Idno 2026 replaced, which a feed, JSON, ActivityPub, KML and mail still draw: every type other than `default` tries its own folder, then `classic`, then `default`, and a web page never draws `classic` (`?_t=classic` is refused). `modern` is deprecated: it was the type of the Twenty26 theme's templates. A `templates/modern/` folder of a plugin or theme is still drawn before `default` on web pages for one release (the first file drawn in a request logs a deprecation line); move its files to `templates/default/`. `?_t=modern` is the `default` type. A plain-text mail (`email-text`) draws `.txt.twig` and `.tpl.php` files only, in every type of its chain, never an `.html.twig` one.
+
+## Markdown output
+
+Every page can also be fetched as a Markdown document: YAML front matter, then the content. It is meant for tools (language models especially) and people who want the text of a page without the page around it. The idea of Markdown for posts, and the standalone implementation that Idno's behaviour for them follows, are [John Evdemon's](https://github.com/jevdemon/idno-markdown) ([idno/idno#3407](https://github.com/idno/idno/issues/3407)).
+
+**Any page**: add `?_t=markdown`, or the short form `?_t=md`.
+
+* The home page, a profile, a tag, a search: the page's title, then each post in full under a heading that links to it, and `Newer` / `Older` links to the rest of the list (which are Markdown too).
+* Any other page: its title and its text. Forms and their fields are left out.
+* A settings page (anything under `/admin/` or `/account/`): its title and a line saying it has no Markdown form. These pages hold keys, tokens and passwords, and none of their content is ever in a Markdown document.
+* The onboarding steps a new member clicks through stay HTML.
+* An error page keeps its status (404, 403, 410) and says what the HTML page says.
+
+**A post** (or a static page), whose permalink is `https://example.com/2026/hello-world`, can be asked for in three more ways:
+
+* add `.md` to the address: `https://example.com/2026/hello-world.md`
+* add `?format=markdown`: `https://example.com/2026/hello-world?format=markdown`
+* send an `Accept` header that prefers `text/markdown`: `curl -H 'Accept: text/markdown' https://example.com/2026/hello-world`
+
+The `Accept` header chooses Markdown when it names `text/markdown` and nothing else in it has a higher quality value, so `text/markdown, text/html` gets Markdown, while `text/html, text/markdown;q=0.9`, `*/*` and a browser's header get the HTML page. A permalink sends `Vary: Accept` with both forms. These three ways are a permalink's only: on other pages use `?_t=markdown`.
+
+The answer is `text/markdown; charset=utf-8`, with a `Link: <address>; rel="canonical"` header that names the page the document is a form of. A post looks like this:
+
+```markdown
+---
+title: "A longer article about templates"
+author: "Ada Admin"
+pubDate: "Mon, 02 Mar 2026 12:00:00 +0000"
+description: "Templates draw pages. Hello again. A second paragraph."
+link: "https://example.com/2026/a-longer-article-about-templates"
+guid: "https://example.com/view/5f3c..."
+category:
+  - "templates"
+  - "idno"
+---
+
+Templates draw pages. **Hello** again.
+
+A second paragraph.
+```
+
+A post's front matter uses the names of an RSS 2.0 item. `author` is left out when the post has no owner, `description` when there is none (or it would repeat the title), and `category` when the post has no tags. Any other page has `title`, `description` (when it has one) and `link`. Every value is a double-quoted YAML string.
+
+Things to know:
+
+* The page's own access rules decide, as they do for HTML. A private post, a draft or a post that does not exist answers with the status its HTML permalink has for the same viewer, as a short Markdown document of that error page, and never with anything of the post. A list holds the posts its viewer may read.
+* Pictures are Markdown images, audio and video files are links, a bookmark links to its target, an event has its place and time and a check-in its place. Addresses are absolute. Scripts, styles, frames and forms are left out, and no HTML is in the document.
+* `.md` on an address that is not a permalink is not an address. An old-style permalink (`/entry/<id>/<title>`) answers `.md` too.
+* A Markdown answer is sent with `X-Content-Type-Options: nosniff`.
+* The web server needs no configuration: `.md` addresses that are not files reach Idno like any other address.
+
+### Markdown for your own content type
+
+The Markdown is made from the HTML your entity template draws for a feed. The `markdown` template type falls back to `classic` and then `default`, like the feed types, so a content type that draws well in an RSS feed already has a Markdown form. To draw something else, add `templates/markdown/entity/<YourClass>.tpl.php` to your plugin. It prints simple, escaped HTML (paragraphs, links, images, lists); Idno converts it. It must not print Markdown itself, because its output is treated as HTML.
+
+A plugin whose entities have a permalink page of their own (not `\Idno\Pages\Entity\View`) gives it a Markdown form like this:
+
+```php
+class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
+{
+    function getContent()
+    {
+        $this->sendVaryAccept();
+        $this->selectMarkdownIfWanted();
+        // ... find $object, and answer 410 or 403 if it is missing or the viewer may not read it ...
+        if ($this->wantsMarkdown()) {
+            $this->drawMarkdown($object);
+        }
+        // ... draw the HTML page ...
+    }
+}
+```
+
+Implementing `MarkdownPermalink` is what makes `<address>.md` reach the page. Call `drawMarkdown()` only after the page has decided that the viewer may read the entity. A page that is not a permalink needs nothing: `?_t=markdown` draws its body, and its list of posts if it passes `items` to its template as a feed page does.
 
 ## Template locations
 

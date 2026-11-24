@@ -13,6 +13,8 @@ These changes are on the `dev` branch and will be part of the next release.
 * PHP 8.4 or later is now required
 * New built-in look, Idno 2026, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor. It is what a site with no theme draws; the `Twenty26` theme directory is gone
 * New StandardSiteSync plugin, which syncs posts to standard.site records on an AT Protocol PDS
+* Every post can also be fetched as Markdown with YAML front matter: add `.md` to its address, add `?format=markdown`, or send `Accept: text/markdown`. Proposed and first built by John Evdemon ([#3407](https://github.com/idno/idno/issues/3407))
+* Every other page can be fetched as Markdown too, with `?_t=markdown` or `?_t=md`: the home page, profiles, tags and searches list their posts in full
 * Link previews are now fetched by the server instead of the browser
 * The language tools (formerly the separate known-language-tools package) are part of core
 * MongoDB is no longer supported as a database. `php bin/console idno:import:mongo` moves a MongoDB site to MySQL, MariaDB or SQLite

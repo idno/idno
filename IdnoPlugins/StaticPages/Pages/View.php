@@ -5,13 +5,17 @@ namespace IdnoPlugins\StaticPages\Pages {
     /**
      * Default class to serve the homepage
      */
-    class View extends \Idno\Common\Page
+    class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
     {
 
         // Handle GET requests to the entity
 
         function getContent()
         {
+            // The same address answers as HTML or as Markdown, by the Accept header
+            $this->sendVaryAccept();
+            $this->selectMarkdownIfWanted();
+
             if (!empty($this->arguments[0])) {
                 $object = \Idno\Common\Entity::getByID($this->arguments[0]);
                 if (empty($object)) {
@@ -43,6 +47,12 @@ namespace IdnoPlugins\StaticPages\Pages {
             $this->setOwner($object->getOwner());
             $this->setPermalink(); // This is a permalink
             $this->setLastModifiedHeader($object->updated); // Say when this was last modified
+
+            // The page as Markdown, for a request that asks for it
+            if ($this->wantsMarkdown()) {
+                $this->drawMarkdown($object);
+            }
+
             $t = \Idno\Core\Idno::site()->template();
             $t->__(array(
 

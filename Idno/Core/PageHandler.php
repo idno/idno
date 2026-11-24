@@ -21,6 +21,9 @@ namespace Idno\Core {
         /// Page classes registered under /account/, as lower-case class names without a leading backslash
         private $account_pages = [];
 
+        /// Whether the request being served asked for a post's Markdown form with the `.md` suffix
+        private static $markdown_suffix = false;
+
         /**
          * Is this pattern for a page under /account/? Those are the account pages: where a
          * user's password, email address, API key and access tokens are managed.
@@ -51,6 +54,87 @@ namespace Idno\Core {
         }
 
         /**
+         * Whether the path of the request being served had the `.md` suffix of a post's Markdown form (and was routed
+         * without it).
+         */
+        public static function markdownSuffixRequested(): bool
+        {
+            return self::$markdown_suffix;
+        }
+
+        /**
+         * The handler Toro will choose for a path: the same lookup as Toro::serve()'s.
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return mixed the handler, or null when no route matches
+         */
+        public static function handlerFor($routes, string $path)
+        {
+            if (isset($routes[$path])) {
+                return $routes[$path];
+            }
+            // (Toro replaces its own three tokens in a pattern once more)
+            $tokens = [':string' => '([a-zA-Z]+)', ':number' => '([0-9]+)', ':alpha' => '([a-zA-Z0-9-_]+)'];
+            foreach ($routes as $pattern => $handler) {
+                $pattern = strtr((string) $pattern, $tokens);
+                if (preg_match('#^/?' . $pattern . '/?$#', $path)) {
+                    return $handler;
+                }
+            }
+
+            return null;
+        }
+
+        /**
+         * A GET or HEAD request for `<permalink>.md` is routed as a request for `<permalink>`, and remembered as one that
+         * asked for Markdown, when the path as given matches no route and the path without the suffix is served by a page
+         * that has a Markdown form (a \Idno\Common\MarkdownPermalink). A path ending in `.md` that a permalink page's route
+         * matches as given (one that takes anything after the id) is remembered the same way and routed as it is. Any
+         * other path is left exactly as it is, and is not a request for Markdown.
+         */
+        protected static function routeMarkdownSuffix($routes): void
+        {
+            self::$markdown_suffix = false;
+            if (!in_array(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? '')), ['GET', 'HEAD'], true)) {
+                return;
+            }
+
+            // The path Toro::serve() will route
+            $path = '/';
+            if (!empty($_SERVER['PATH_INFO'])) {
+                $path = $_SERVER['PATH_INFO'];
+            } else if (!empty($_SERVER['ORIG_PATH_INFO']) && $_SERVER['ORIG_PATH_INFO'] !== '/index.php') {
+                $path = $_SERVER['ORIG_PATH_INFO'];
+            } else if (!empty($_SERVER['REQUEST_URI'])) {
+                $path = (strpos($_SERVER['REQUEST_URI'], '?') > 0) ? strstr($_SERVER['REQUEST_URI'], '?', true) : $_SERVER['REQUEST_URI'];
+            }
+            if (!is_string($path)) {
+                return;
+            }
+
+            $stripped = \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path);
+            if ($stripped === null) {
+                return;
+            }
+            $hasMarkdown = static function ($handler): bool {
+                return is_string($handler) && is_a($handler, \Idno\Common\MarkdownPermalink::class, true);
+            };
+            $given = static::handlerFor($routes, $path);
+            if ($given !== null) {
+                // The path is an address already. When it is a permalink page's (a route that takes anything after the
+                // entity's id, `/entry/:id/.*`), the suffix asks that page for Markdown; the path is routed as it is
+                self::$markdown_suffix = $hasMarkdown($given);
+
+                return;
+            }
+            if ($hasMarkdown(static::handlerFor($routes, $stripped))) {
+                // Toro reads PATH_INFO first
+                $_SERVER['PATH_INFO'] = $stripped;
+                self::$markdown_suffix = true;
+            }
+        }
+
+        /**
          * Serve the current request. An API request (one authenticated by an API signature
          * or an access token rather than by a browser session) is refused on account pages,
          * so that an API key or token is not enough to take the account over.
@@ -59,6 +143,8 @@ namespace Idno\Core {
          */
         public static function serve($routes)
         {
+            static::routeMarkdownSuffix($routes);
+
             static::hook(
                 'before_handler', function ($params = array()) {
                     $site = \Idno\Core\Idno::site();

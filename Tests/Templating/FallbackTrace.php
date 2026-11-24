@@ -13,7 +13,7 @@ namespace Tests\Templating;
 final class FallbackTrace
 {
     /** The template types that are not a web page. */
-    public const TYPES = ['rss', 'json', 'jsonp', 'jsonfeed', 'activitypub', 'kml', 'email', 'email-text'];
+    public const TYPES = ['rss', 'json', 'jsonp', 'jsonfeed', 'activitypub', 'kml', 'markdown', 'email', 'email-text'];
 
     /**
      * @return array<string, list<array{string, string}>> type => list of [name, file], sorted

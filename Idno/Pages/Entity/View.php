@@ -9,13 +9,17 @@ namespace Idno\Pages\Entity {
     /**
      * Default class to serve the homepage
      */
-    class View extends \Idno\Common\Page
+    class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
     {
 
         // Handle GET requests to the entity
 
         function getContent()
         {
+            // The same address answers as HTML or as Markdown, by the Accept header
+            $this->sendVaryAccept();
+            $this->selectMarkdownIfWanted();
+
             if (!empty($this->arguments[0])) {
                 $object = \Idno\Common\Entity::getByID($this->arguments[0]);
                 if (empty($object)) {
@@ -56,6 +60,11 @@ namespace Idno\Pages\Entity {
             //                if ($cache = \Idno\Core\Idno::site()->cache()) {
             //                    $cache->store("{$this->arguments[0]}_modified_ts", $object->updated);
             //                }
+
+            // The post as Markdown, for a request that asks for it: the viewer may read it, or the answer was given above
+            if ($this->wantsMarkdown()) {
+                $this->drawMarkdown($object);
+            }
 
             $t = \Idno\Core\Idno::site()->template();
 

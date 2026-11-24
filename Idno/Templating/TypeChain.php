@@ -32,6 +32,14 @@ final class TypeChain
     }
 
     /**
+     * The type a request means by a `?_t=` value: the value itself, except the short name `md`, which is `markdown`.
+     */
+    public static function requested(string $type): string
+    {
+        return strtolower($type) === 'md' ? 'markdown' : $type;
+    }
+
+    /**
      * Whether a request or code may select the type (a type that has a directory is the caller's check). `classic` is
      * reached by fallback only: a page is never drawn from it.
      */

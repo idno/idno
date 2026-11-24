@@ -57,6 +57,7 @@
         "doctrine/migrations": "^3.9",
         "league/flysystem": "^3",
         "league/flysystem-async-aws-s3": "^3",
+        "league/html-to-markdown": "^5.2",
         "symfony/http-client": "^8.0",
         "symfony/mime": "^8.0",
         "symfony/messenger": "^8.0",
@@ -97,7 +98,8 @@
         "mapkyca/mapkyca-known-docker": "^1.0",
         "squizlabs/php_codesniffer": "4.*",
         "phpunit/phpunit": "^9.6",
-        "league/flysystem-memory": "^3"
+        "league/flysystem-memory": "^3",
+        "symfony/yaml": "^8.0"
     },
     "extra": {
         "unused": [

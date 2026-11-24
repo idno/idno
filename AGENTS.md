@@ -224,7 +224,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   types a request may choose, and that `?_t[]=` asks for no type and is no server error) and by golden pages,
   `Tests/Templating/fixtures/pages/` (`twenty26/`: Idno 2026, the look of every site, for a visitor; `logged-in/`: the
   administrator; and `non-html/`: RSS, JSON Feed, JSON, JSONP, the
-  ActivityPub actor, KML, the JSON of each content type's permalink and the password reset mail's two parts), made by
+  ActivityPub actor, KML, the JSON of each content type's permalink, its Markdown form (`markdown-<name>.md`, by the `.md` address), the Markdown of the listing pages, the login page and two error pages (`?_t=markdown`) and the password reset mail's two parts), made by
   `RenderedPagesTest` (`IDNO_THEME=Twenty26`: the name the look had as a theme, resolved to the built-in look) and
   `RenderedPagesNoThemeTest` (no theme: the variable unset; the same goldens) on private
   synchronous sites (`RenderedSiteTestCase`: fixed handles, entity ids, user uuids, slugs, `created` and `updated`, a
@@ -400,6 +400,9 @@ Idno/
   Security/                    Passwords (the password service on symfony/password-hasher) and what lets Symfony Security know who is
                                making a request (modern style): SessionUser, CurrentUserSource, CurrentUserAuthenticator,
                                StatelessAuthentication, ApiSignatureVerifier, DeniedResponder and ForbiddenPage. See "Security architecture"
+  Markdown/                    A post's Markdown form (modern style, NOT a scanned directory: nothing in it is a service):
+                               MarkdownRequest (whether a request asks for it), FrontMatter (the YAML block) and
+                               HtmlToMarkdown (the conversion). See "Markdown output"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -3098,6 +3101,111 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
 
+#### Markdown output
+
+Every page can be fetched as Markdown, and a post's permalink in three ways (proposed by John Evdemon, idno/idno#3407, whose
+standalone implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour of permalinks). The pieces:
+
+- Asking ANY page: `?_t=markdown`, or `?_t=md` (`TypeChain::requested()` is the one place the short name is read: `Page::init()`
+  and `DefaultTemplate::autodetectTemplateType()` pass a `_t` value through it). `markdown` is an ordinary requestable template
+  type (`TypeChain`: `markdown`, `classic`, `default`; `.tpl.php` only), so the page runs as it does for any type, with its own
+  gatekeepers, and its shell is `templates/markdown/shell.tpl.php`.
+- Asking a PERMALINK, three more ways: the suffix `.md` on its path, `?format=markdown`, or an `Accept` header that names
+  `text/markdown` with a quality above 0 that no other range of the header exceeds (`Idno\Markdown\MarkdownRequest`, pure:
+  `text/markdown, text/html` is Markdown, a tie going to the type the client named; `text/html, text/markdown;q=0.9`, `*/*`,
+  `text/*` and a browser's header are HTML; a header over 2000 bytes is not read). The suffix and the query values ask whatever
+  the header says; a request that names another `_t` or `format` has chosen, and the header is not asked. Only the two permalink
+  pages ask these (`Idno\Pages\Entity\View`, `IdnoPlugins\StaticPages\Pages\View`): on any other page `?format=markdown` and the
+  header change nothing and `.md` is no address (`MarkdownOutputTest::testOnlyAPermalinkAnswersTheSuffixTheFormatAndTheAcceptHeader`).
+- A permalink page calls `Page::sendVaryAccept()` and `Page::selectMarkdownIfWanted()` FIRST in `getContent()` (the type is
+  selected when `Page::wantsMarkdown()`), then makes its own checks (the entity exists, `canRead()`, the static page's
+  forward), then `Page::drawMarkdown($object)` when `wantsMarkdown()`. So a private post, a draft and a missing post answer with
+  the STATUS the HTML permalink has for that viewer (410, 403), as a Markdown document of that error page (its title and text),
+  and never with anything of the post: `drawMarkdown()` is the only thing that names the entity to the shell (the template
+  variable `markdown_entity`), and it is called only after the checks. A third-party permalink page does the same three calls and
+  implements `MarkdownPermalink` (next bullet).
+- The `.md` suffix is handled in ONE place, `PageHandler::serve()` (`routeMarkdownSuffix()`), before Toro routes: for a GET or
+  HEAD whose path ends in `.md` (lower case, after a non-empty last segment), when the path AS GIVEN matches no route and the
+  path without the suffix is routed to a page class that implements the marker interface `Idno\Common\MarkdownPermalink`, it
+  sets `$_SERVER['PATH_INFO']` (which Toro reads first) to the path without the suffix and remembers the request
+  (`PageHandler::markdownSuffixRequested()`). Anything else is left exactly as it was, so no address that was served changes
+  its meaning: `index.md`, `session/login.md`, `<permalink>.md.md`, `<permalink>.MD`, `<permalink>.md/` and a POST are the 404
+  they were. The older permalink routes take anything after the entity's id (`/entry/:id/.*`, `/bookmark/`, `/event/`, `/rsvp/`),
+  so a path ending in `.md` matches them AS GIVEN: when the page of the route that matches as given is a `MarkdownPermalink`,
+  the request is remembered as a Markdown one too and the path is routed unchanged (`/entry/<id>/title.md` is the post, as
+  Markdown; before, it was the same post as HTML). The other address that changes: `<permalink route>/<no such slug>.md` was a
+  404 (no route) and is now what the permalink of a missing post is (410, as Markdown). `PageHandler::handlerFor()` is the
+  router's own lookup, written again (Toro's is inline in `serve()`): `Tests/Unit/Markdown/RouteLookupTest` serves a table of
+  patterns and paths through `Toro::serve()` and fails if the two ever disagree. `REQUEST_URI` keeps the suffix (`Page::currentUrl()`); slug routes still match no dot.
+- The headers are `DefaultTemplate::sendMarkdownHeaders()`'s (called by `sendShellHeaders()`, so by every `drawPage()` of the
+  type; no template sends one): `Content-Type: text/markdown; charset=utf-8`, `X-Content-Type-Options: nosniff`,
+  `Access-Control-Allow-Origin: *` (as every web page has), and, only when the status is 200, `Link: <address>; rel="canonical"`: the entity's `getURL()` on its permalink,
+  else the page's own address without `_t` (only an http(s) address with no `<`, `>` or white space). `Vary: Accept` is on
+  EVERY answer of the two permalink pages (the HTML page, the Markdown, the 403 and 410, a HEAD and a 304) and on no other page,
+  whose answer does not depend on the header.
+- What the shell writes, always YAML front matter first:
+  - a permalink (`markdown_entity`): the field names of an RSS 2.0 item, in this order: `title` (as an RSS item's: the
+    entity's title, else five words of its description, else `New <type>`), `author` (the owner's name; left out with no owner),
+    `pubDate` (`DATE_RSS` of `created`), `description` (the `short_description`, else a sample of the description with tags
+    replaced by spaces; left out when empty or equal to the title), `link` (`getURL()`), `guid` (the uuid) and `category` (a
+    list: `getTags()` without `#`, no duplicates; left out when empty); then the content: an `In reply to` line for each http(s)
+    `inreplyto`, and the entity's own HTML, `$object->draw(true)` (the feed view: `entity/<Class>` of the `markdown` type, else the
+    `classic` file a feed draws), through `sanitize_html()` and `HtmlToMarkdown`. No `# title` heading: the title is in the
+    front matter;
+  - a page that lists posts (the template variable `items` holds entities and the status is 200: the home page, a profile, a
+    tag, a search, `content/all`): `title` (the page's, else the site's), `description` (the page's; left out when empty or
+    the title) and `link` (the page's address without `_t`); then `# title`, and for each item `## [title](permalink)`, a line
+    `*author, pubDate*` and its content as above (each item in full, as in the RSS feed; the list is the page's own, so it
+    holds what this viewer may read), and last a rule and `Newer` / `Older` links to the neighbouring pages of the list
+    (`offset`, `count` and the `items_per_page` setting), which keep `_t`. The page's `body` is not used;
+  - a SETTINGS page (`DefaultTemplate::isSettingsPage()`: an address under a root that has a shell of its own, `admin` and
+    `account`, or a page class registered for a route under `/account/`): `title`, `description`, `link` and ONE line saying the
+    page has no Markdown form. Its `body` is NEVER printed, for anyone: these pages hold stored secrets, and although the
+    converter removes forms and their fields, the `classic` templates this type falls back to print some in their TEXT (the
+    IndiePub account page printed each access token: found by
+    `MarkdownOutputTest::testTheSettingsPagesAsMarkdownHoldNoSecret`, which stores an SMTP user name and password, API keys,
+    access tokens, Bridgy keys, a webhook address and a stylesheet and asks for the email, tools, IndiePub, Bridgy, webhooks,
+    styles, settings and admin pages as the administrator, a member and a visitor). The registration and password pages are
+    under `/account/` and answer the same line. Keep a page that shows a secret under `/admin/` or `/account/`;
+  - any other page (a form, an error page of any status): `title`, `description`, `link` and the page's `body`, converted. The
+    converter removes forms and their controls, so no field value and no form token is in the document. The page's own access
+    rules apply as for HTML;
+  - NOT Markdown: the pages that draw `shell/simple` themselves (the onboarding steps, `begin/...`), which answer HTML whatever
+    type is asked for (`MarkdownOutputTest::testTheOnboardingPagesStayHtmlAndTheAccountFormsHaveNoMarkdownForm`).
+  Bundled types with a `markdown` entity template of their own, because the `classic` feed view lacks what matters or draws
+  what must not be there: Media (a link to each file, labelled Audio or Video), Like (`Bookmarked:`, `Liked:` or `Reposted:`
+  and a link to the target, only if http(s)), Checkin (the place name and the coordinates as the viewer may see them,
+  `canSeePreciseLocation()`, linked to OpenStreetMap) and StaticPage (the body alone: the `classic` one draws the
+  administrator's controls). Status, Reply, Entry, Photo, Event and RSVP draw their `classic` templates. These templates print
+  HTML (escaped with `htmlspecialchars()`, addresses through `UrlValidator::httpUrl()`), never Markdown: the converter is the
+  one place Markdown is made, and the shell builds its own headings and links as HTML for it too.
+  `templates/markdown/forms/output/tags.tpl.php` draws nothing, so no entity template's row of tag links is in a document.
+- Never put a secret in the Markdown shell from a template variable: unlike the JSON shell it prints only the title, the
+  description and the converted body, and it must stay so.
+- `Idno\Markdown\FrontMatter::render()` (pure) writes every value as a YAML DOUBLE-QUOTED scalar on one line, whatever it holds
+  (`\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xNN` for the other C0 and C1 characters, `\L`, `\P`, `\uFEFF`; bytes that are not UTF-8
+  replaced), so a value is never a comment, a list, a mapping, another key or the end of the block; a key must match
+  `[A-Za-z][A-Za-z0-9_]*`; null and an empty list are left out. The shell also reduces each value to one line of text first.
+  `Tests/Unit/Markdown/FrontMatterTest` reads the block back with symfony/yaml (a development dependency, for the tests only).
+- `Idno\Markdown\HtmlToMarkdown` (pure; built with the site's address) parses the HTML with `Dom\HTMLDocument`, removes
+  `script`, `style`, `iframe`, `noscript`, `template`, `object`, `embed`, forms and their controls, `svg`, `canvas`, `map`,
+  `head`, `title`, `link` and `meta` with what they hold, turns an `audio` or `video` element into a link to each of its files,
+  makes addresses absolute (`/x` against the site's origin, `x` against the site's address, `//host` with the site's scheme),
+  keeps a link only if it is http, https or mailto (else its text) and a picture only if it is http or https (else its
+  alternative text), and gives the rest to `league/html-to-markdown` (ATX headings, unknown elements stripped to their text,
+  tables converted; text is escaped by the library, `<` as `&lt;`, so no HTML element can come out of text), then removes the
+  white space the HTML's layout left where it means nothing in Markdown (never inside a fenced code block). No HTML element
+  is ever in the output.
+- Tests: `Tests/Unit/Markdown/` (the three classes, without the legacy application), `Tests/Templating/MarkdownOutputTest`
+  (over HTTP on a seeded private site: the ways into a permalink, the headers, the Accept table, a private post and a draft for
+  a visitor, another member and the owner, a missing post, any page by `?_t=`, the lists and their pages, what only a permalink
+  answers, each bundled content type, hostile values), `TemplateTypeRequestTest` and the golden pages `non-html/markdown-*.md`
+  (each content type's permalink, the home page and its second page, a profile, a tag, a search, the login page, a 404 and a
+  private post for a visitor; and for the logged-in administrator a post, a private post, the home page and the admin page: the
+  owner's document has none of the owner's controls). `markdown` is one of `FallbackTrace::TYPES`, so `NonHtmlReachTest` holds
+  it to the rule of the other non-HTML types (no `default` file is reached but a listed page body) and
+  `fixtures/fallback-trace.php` pins the `classic` files its pages draw.
+
 #### The cache
 
 Idno has ONE cache: `Psr\Cache\CacheItemPoolInterface` (aliased as `Symfony\Contracts\Cache\CacheInterface`), a public
@@ -3836,6 +3944,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
 | **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
+| **Markdown** | Every page is also served as Markdown with YAML front matter by `?_t=markdown` (or `md`); a post's permalink also by `<permalink>.md`, `?format=markdown` or `Accept: text/markdown` (see "Markdown output") |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
 
 ## Code Style
