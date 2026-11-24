@@ -223,7 +223,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   types a request may choose, and that `?_t[]=` asks for no type and is no server error) and by golden pages,
   `Tests/Templating/fixtures/pages/` (`twenty26/`: Idno 2026, the look of every site, for a visitor; `logged-in/`: the
   administrator; and `non-html/`: RSS, JSON Feed, JSON, JSONP, the
-  ActivityPub actor, KML, the JSON of each content type's permalink and the password reset mail's two parts), made by
+  ActivityPub actor, KML, the JSON of each content type's permalink, its Markdown form (`markdown-<name>.md`, by the `.md` address) and the password reset mail's two parts), made by
   `RenderedPagesTest` (`IDNO_THEME=Twenty26`: the name the look had as a theme, resolved to the built-in look) and
   `RenderedPagesNoThemeTest` (no theme: the variable unset; the same goldens) on private
   synchronous sites (`RenderedSiteTestCase`: fixed handles, entity ids, user uuids, slugs, `created` and `updated`, a
@@ -396,6 +396,9 @@ Idno/
   Templating/                  Template lookup and rendering (modern style): TemplateCascade, TemplateLocator,
                                TemplateRenderer, SlotRegistry, the two engines (PhpTemplateEngine, TwigTemplateEngine with CascadeTwigLoader and
                                IdnoTwigExtension) and their helpers. See "Templates"
+  Markdown/                    A post's Markdown form (modern style, NOT a scanned directory: nothing in it is a service):
+                               MarkdownRequest (whether a request asks for it), FrontMatter (the YAML block) and
+                               HtmlToMarkdown (the conversion). See "Markdown output"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -2615,7 +2618,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   of its own type (`Tests/Characterisation/SettingsPagesJsonTest`). `selectable($type)` is
   false for `classic` (in any letter case: `CLASSIC` is the directory `classic` on a file system that ignores case, and
   `Templates::setTemplateType()` and the `?_t=` check both refuse it) and for anything that is not one segment; `requestable($type)` is
-  `selectable()` less `email` and `email-text` (any letter case): a REQUEST (`?_t=`, in `Page::init()` and
+  `selectable()` less `email`, `email-text` and `markdown` (any letter case; `markdown` is selected by a post's permalink page itself: see "Markdown output"): a REQUEST (`?_t=`, in `Page::init()` and
   `DefaultTemplate::autodetectTemplateType()`) never selects a mail type, because a plain-text mail is not escaped and a web page drawn from it
   would print text as markup, while code (the mail sender's `setTemplateType('email')`) still can (`BuiltInLookTest::testAMailTypeCannotBeRequested`); `setTemplateType()` of `default` or `modern` in any letter case stores `default`
   (`getTemplateType()` never returns `modern`: a plugin that tested for it tests for `default`), so `?_t=modern` is the default type. What a
@@ -3013,6 +3016,76 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `StaticAssetsTest` (in the unit tier), `UpgradingGuideTest`, `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
+
+#### Markdown output
+
+Every post can also be fetched as Markdown (proposed by John Evdemon, idno/idno#3407, whose standalone
+implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour). The pieces:
+
+- Asking. A post's permalink answers with Markdown when the request has the suffix `.md` on the permalink's path, has
+  `?format=markdown` or `?_t=markdown`, or has an `Accept` header that names `text/markdown` with a quality above 0 that no
+  other range of the header exceeds (`Idno\Markdown\MarkdownRequest`, pure: `text/markdown, text/html` is Markdown, a tie going
+  to the type the client named; `text/html, text/markdown;q=0.9`, `*/*`, `text/*` and a browser's header are HTML; a header over
+  2000 bytes is not read). The suffix and the two query values ask whatever the header says; a request that names another `_t`
+  or `format` has chosen, and the header is not asked.
+- Only a permalink page has a Markdown form, and the PAGE selects the type: `Page::wantsMarkdown()` and
+  `Page::drawMarkdown($object)`, called by `Idno\Pages\Entity\View` and `IdnoPlugins\StaticPages\Pages\View` AFTER their
+  own checks (the entity exists, `canRead()`, the static page's forward), so a private post, a draft and a missing post answer
+  exactly as the HTML permalink does for that viewer (the same status, the HTML error page), never Markdown. `markdown` is NOT a
+  type a request can choose (`TypeChain::requestable('markdown')` is false; code can select it): on every other page
+  `?_t=markdown`, `?format=markdown` and the `Accept` header are ignored and the page is what it is without them
+  (`TemplateTypeRequestTest`, `MarkdownOutputTest::testOnlyAPermalinkHasAMarkdownForm`). A third-party permalink page gets a
+  Markdown form by calling the two methods the same way; do not make the type requestable.
+- The `.md` suffix is handled in ONE place, `PageHandler::serve()` (`routeMarkdownSuffix()`), before Toro routes: for a GET or
+  HEAD whose path ends in `.md` (lower case, after a non-empty last segment), when the path AS GIVEN matches no route and the
+  path without the suffix is routed to a page class that implements the marker interface `Idno\Common\MarkdownPermalink`, it
+  sets `$_SERVER['PATH_INFO']` (which Toro reads first) to the path without the suffix and remembers the request
+  (`PageHandler::markdownSuffixRequested()`). Anything else is left exactly as it was, so no address that was served changes
+  its meaning: `index.md`, `session/login.md`, `<permalink>.md.md`, `<permalink>.MD`, `<permalink>.md/` and a POST are the 404
+  they were. A permalink route whose pattern already matches the suffixed path (the old `/entry/:id/.*` style routes) keeps
+  serving HTML there: `?format=markdown` is the way in for those. The one address that changes: `<permalink route>/<no such
+  slug>.md` was a 404 (no route) and is now what the permalink of a missing post is (410). `REQUEST_URI` keeps the suffix
+  (`Page::currentUrl()`); slug routes still match no dot.
+- The answer: `Content-Type: text/markdown; charset=utf-8`, `Link: <permalink>; rel="canonical"` (`Entity::getURL()`, only when
+  it is an http(s) address with no `<`, `>` or white space) and `Access-Control-Allow-Origin: *`, sent by `drawMarkdown()`, not
+  by a template; and `Vary: Accept` on EVERY answer of the two permalink pages (`Page::sendVaryAccept()`, first thing in
+  `getContent()`: the HTML page, the Markdown, the 403 and 410).
+- The document is the template type `markdown` (`TypeChain`: `markdown`, `classic`, `default`; `.tpl.php` only):
+  `templates/markdown/shell.tpl.php` writes YAML front matter with the field names of an RSS 2.0 item, in this order: `title`
+  (as an RSS item's: the entity's title, else five words of its description, else `New <type>`), `author` (the owner's name;
+  left out with no owner), `pubDate` (`DATE_RSS` of `created`), `description` (the `short_description`, else a sample of the
+  description with tags replaced by spaces; left out when empty or equal to the title), `link` (`getURL()`), `guid` (the uuid)
+  and `category` (a list: `getTags()` without `#`, no duplicates; left out when empty); then an empty line and the content: an
+  `In reply to` line for each http(s) `inreplyto`, and the entity's own HTML, `$object->draw(true)` (the feed view: `entity/<Class>`
+  of the `markdown` type, else the `classic` file a feed draws), through `sanitize_html()` and `HtmlToMarkdown`. There is no
+  `# title` heading: the title is in the front matter. Without an entity (an error page drawn after the type was selected)
+  the document is the page's title and its body, converted.
+  Bundled types with a `markdown` entity template of their own, because the `classic` feed view lacks what matters or draws
+  what must not be there: Media (a link to each file, labelled Audio or Video), Like (`Bookmarked:`, `Liked:` or `Reposted:`
+  and a link to the target, only if http(s)), Checkin (the place name and the coordinates as the viewer may see them,
+  `canSeePreciseLocation()`, linked to OpenStreetMap) and StaticPage (the body alone: the `classic` one draws the
+  administrator's controls). Status, Reply, Entry, Photo, Event and RSVP draw their `classic` templates. These templates print
+  HTML (escaped with `htmlspecialchars()`, addresses through `UrlValidator::httpUrl()`), never Markdown: the converter is the
+  one place Markdown is made. `templates/markdown/forms/output/tags.tpl.php` draws nothing, so no entity template's row of tag
+  links is in the document (the tags are `category`).
+- `Idno\Markdown\FrontMatter::render()` (pure) writes every value as a YAML DOUBLE-QUOTED scalar on one line, whatever it holds
+  (`\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xNN` for the other C0 and C1 characters, `\L`, `\P`, `\uFEFF`; bytes that are not UTF-8
+  replaced), so a value is never a comment, a list, a mapping, another key or the end of the block; a key must match
+  `[A-Za-z][A-Za-z0-9_]*`; null and an empty list are left out. The shell also reduces each value to one line of text first.
+  `Tests/Unit/Markdown/FrontMatterTest` reads the block back with symfony/yaml (a development dependency, for the tests only).
+- `Idno\Markdown\HtmlToMarkdown` (pure; built with the site's address) parses the HTML with `Dom\HTMLDocument`, removes
+  `script`, `style`, `iframe`, `noscript`, `template`, `object`, `embed`, forms and their controls, `svg`, `canvas`, `map`,
+  `head`, `title`, `link` and `meta` with what they hold, turns an `audio` or `video` element into a link to each of its files,
+  makes addresses absolute (`/x` against the site's origin, `x` against the site's address, `//host` with the site's scheme),
+  keeps a link only if it is http, https or mailto (else its text) and a picture only if it is http or https (else its
+  alternative text), and gives the rest to `league/html-to-markdown` (ATX headings, unknown elements stripped to their text,
+  tables converted; text is escaped by the library, `<` as `&lt;`, so no HTML element can come out of text), then removes the
+  white space the HTML's layout left where it means nothing in Markdown (never inside a fenced code block). No HTML element
+  is ever in the output.
+- Tests: `Tests/Unit/Markdown/` (the three classes, without the legacy application), `Tests/Templating/MarkdownOutputTest`
+  (over HTTP on a seeded private site: the ways in, the headers, the Accept table, a private post and a draft for a visitor,
+  another member and the owner, a missing post, the pages with no Markdown form, each bundled content type, hostile values)
+  and the golden pages `non-html/markdown-*.md`.
 
 #### The cache
 
@@ -3752,6 +3825,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
 | **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
+| **Markdown** | Every post's permalink is also served as Markdown with YAML front matter: `<permalink>.md`, `?format=markdown`, or `Accept: text/markdown` (see "Markdown output") |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
 
 ## Code Style

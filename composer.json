@@ -63,7 +63,8 @@
         "symfony/doctrine-messenger": "^8.0",
         "symfony/mailer": "^8.0",
         "symfony/translation": "^8.0",
-        "symfony/twig-bundle": "^8.0"
+        "symfony/twig-bundle": "^8.0",
+        "league/html-to-markdown": "^5.2"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,
@@ -94,7 +95,8 @@
         "mapkyca/mapkyca-known-docker": "^1.0",
         "squizlabs/php_codesniffer": "4.*",
         "phpunit/phpunit": "^9.6",
-        "league/flysystem-memory": "^3"
+        "league/flysystem-memory": "^3",
+        "symfony/yaml": "^8.0"
     },
     "extra": {
         "unused": [

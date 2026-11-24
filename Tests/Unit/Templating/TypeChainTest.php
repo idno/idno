@@ -94,4 +94,17 @@ final class TypeChainTest extends TestCase
         $this->assertTrue(TypeChain::requestable('default'));
         $this->assertFalse(TypeChain::requestable('classic'));
     }
+
+    /**
+     * `?_t=markdown` does not select the Markdown type on any page: a post's permalink page selects it itself, for a request
+     * that asks for Markdown (Page::wantsMarkdown()), and no other page has a Markdown form.
+     */
+    public function testMarkdownIsNotRequestableButIsSelectable(): void
+    {
+        foreach (['markdown', 'MARKDOWN', 'Markdown'] as $type) {
+            $this->assertFalse(TypeChain::requestable($type), $type);
+            $this->assertTrue(TypeChain::selectable($type), $type);
+        }
+        $this->assertSame(['markdown', 'classic', 'default'], TypeChain::for('markdown'));
+    }
 }

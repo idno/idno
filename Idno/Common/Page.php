@@ -978,6 +978,57 @@ namespace Idno\Common {
         }
 
         /**
+         * Whether this request asks for the Markdown form of a post: the suffix `.md` on the permalink, `?format=markdown`
+         * or `?_t=markdown`, or an Accept header whose first choice is `text/markdown` (\Idno\Markdown\MarkdownRequest).
+         * Only a page that is a post's permalink asks; every other page ignores all three.
+         *
+         * @return bool
+         */
+        function wantsMarkdown()
+        {
+            return \Idno\Markdown\MarkdownRequest::wanted(
+                \Idno\Core\PageHandler::markdownSuffixRequested(),
+                $this->getInput('format'),
+                $this->getInput('_t'),
+                $_SERVER['HTTP_ACCEPT'] ?? null
+            );
+        }
+
+        /**
+         * Says that what this address answers depends on the request's Accept header. A permalink page sends it with
+         * every answer, whichever form it is.
+         */
+        function sendVaryAccept()
+        {
+            header('Vary: Accept', false);
+        }
+
+        /**
+         * Answers with the Markdown form of an entity: YAML front matter, then its content as Markdown (the `markdown`
+         * template type). Call it only once the page has decided that the viewer may read the entity. It does not return
+         * when the page is drawn.
+         *
+         * @param  Entity $object
+         * @return false when the site has no `markdown` template type
+         */
+        function drawMarkdown(Entity $object)
+        {
+            $t = \Idno\Core\Idno::site()->template();
+            if (!$t->setTemplateType('markdown')) {
+                return false;
+            }
+
+            header('Content-Type: text/markdown; charset=utf-8');
+            header('Access-Control-Allow-Origin: *');
+            $canonical = \Idno\Core\UrlValidator::httpUrl($object->getURL());
+            if ($canonical !== '' && !preg_match('/[<>\s]/', $canonical)) {
+                header('Link: <' . $canonical . '>; rel="canonical"', false);
+            }
+
+            $t->__(['title' => $object->getTitle(), 'object' => $object])->drawPage();
+        }
+
+        /**
          * Is this page a permalink for an object? This should be set to 'true'
          * if it is. Optionally, we can also associate the page with the object here.
          *

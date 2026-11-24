@@ -402,7 +402,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
     /**
      * The output that is not a web page, compared with the same golden files on every look: the site's feeds (the
      * home page, a second page of it, a profile, a tag, a search), the JSON of the home page and of the permalink of
-     * each bundled content type, JSONP, JSON Feed, the JSON of the login page, the actor document, KML, the same
+     * each bundled content type and its Markdown form, JSONP, JSON Feed, the JSON of the login page, the actor document, KML, the same
      * JSON for the logged-in administrator (owner controls are drawn) and the password reset mail.
      *
      * @param array<string, string> $paths from seedSite()
@@ -424,6 +424,10 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
             $this->page('non-html/json-' . $name . '.txt', $paths[$name] . '?_t=json', 200, 'application/json');
         }
         $this->page('non-html/jsonp-status.txt', $paths['status'] . '?_t=jsonp&callback=cb', 200, 'application/x-javascript');
+        // The Markdown form of the permalink of each bundled content type, by its `.md` address.
+        foreach (['status', 'article', 'photo', 'bookmark', 'event', 'reply', 'rsvp', 'checkin', 'media', 'page'] as $name) {
+            $this->page('non-html/markdown-' . $name . '.md', $paths[$name] . '.md', 200, 'text/markdown');
+        }
         $this->page('non-html/actor-ada.txt', 'actor/' . self::ADMIN, 200, 'application/activity+json', null, ['Accept' => 'application/activity+json']);
         $this->page('non-html/kml-home.xml', '?_t=kml', 200, 'application/vnd.google-earth.kml+xml');
         $this->page('non-html/json-home-logged-in.txt', '?_t=json', 200, 'application/json', $cookie);
