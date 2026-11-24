@@ -313,10 +313,5 @@
        /* Optimise DB */
        $.get(wwwroot() + 'service/db/optimise');
 
-       /* Vendor messages */
-       $.get(wwwroot() + 'service/vendor/messages', function(data, textstatus, xhr){
-           addMessage(data);
-       })
-
     });
 </script>
