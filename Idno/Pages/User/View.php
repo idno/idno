@@ -50,7 +50,8 @@ namespace Idno\Pages\User {
                     }
                 }
             } else {
-                $types  = ['IdnoPlugins\Status\Status', 'IdnoPlugins\Text\Entry'];
+                // The profile lists everything the member has published
+                $types = \Idno\Common\ContentType::getRegisteredClasses();
             }
             $offset = (int)$this->getInput('offset');
             $count  = \Idno\Common\Entity::countFromX($types, array('owner' => $user->getUUID(), 'publish_status' => 'published'));
@@ -78,7 +79,7 @@ namespace Idno\Pages\User {
 
         /**
          * The links from a member's profile to their posts of one kind: the profile itself,
-         * everything (/profile/<handle>/all), and one for each registered content type
+         * which lists everything (as /profile/<handle>/all does), and one for each registered content type
          * (/profile/<handle>/<category>, for example /profile/<handle>/videos) that the
          * member has published something of which the viewer may see. The kind in the
          * address of the page being drawn is always listed.
@@ -99,8 +100,7 @@ namespace Idno\Pages\User {
             $language = Idno::site()->language();
 
             $links = [
-                ['url' => $base, 'label' => $language->_('Overview'), 'icon' => '', 'active' => empty($current)],
-                ['url' => $base . '/all', 'label' => $language->_('All'), 'icon' => '', 'active' => in_array('all', $current, true)],
+                ['url' => $base, 'label' => $language->_('All'), 'icon' => '', 'active' => empty($current) || in_array('all', $current, true)],
             ];
             $seen = [];
             foreach (\Idno\Common\ContentType::getRegistered() as $contentType) {

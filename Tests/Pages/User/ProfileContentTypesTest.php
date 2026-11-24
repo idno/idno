@@ -7,7 +7,7 @@ namespace Tests\Pages\User {
     use Idno\Pages\User\View;
 
     /**
-     * A member's profile links to their posts of each kind (/profile/<handle>/<kind>), so
+     * A member's profile lists everything they have published, and links to their posts of each kind (/profile/<handle>/<kind>), so
      * that "this member's videos", say, is a page that can be linked to.
      */
     class ProfileContentTypesTest extends \Tests\IdnoTestCase
@@ -85,13 +85,13 @@ namespace Tests\Pages\User {
             $posts = $this->slugOf('IdnoPlugins\Text\Entry');
 
             $links = View::contentTypeLinks($user);
-            $this->assertSame([$base, $base . '/all'], array_column($links, 'url'), 'A member with no posts has no kinds to link to.');
+            $this->assertSame([$base], array_column($links, 'url'), 'A member with no posts has no kinds to link to.');
             $this->assertTrue($links[0]['active'], 'With no kind in the address, the profile itself is the current page.');
 
             $this->publishStatus();
 
             $links = View::contentTypeLinks($user);
-            $this->assertSame([$base, $base . '/all', $base . '/' . $statuses], array_column($links, 'url'));
+            $this->assertSame([$base, $base . '/' . $statuses], array_column($links, 'url'));
             $this->assertNotContains($base . '/' . $posts, array_column($links, 'url'));
             $this->assertCount(1, array_filter(array_column($links, 'active')));
         }
@@ -129,7 +129,7 @@ namespace Tests\Pages\User {
                 return $link['active'];
             }));
             $this->assertCount(1, $active);
-            $this->assertStringEndsWith('/all', $active[0]['url']);
+            $this->assertSame(Idno::site()->config()->getDisplayURL() . 'profile/' . $user->getHandle(), $active[0]['url'], '/all is the profile itself.');
         }
 
         public function testNoLinksWithoutAMember()
@@ -169,7 +169,7 @@ namespace Tests\Pages\User {
             $this->assertContains($address, $hrefs);
             $this->assertSame([$address], $current, 'The kind being shown should be marked as the current page.');
             $this->assertSame(array_column(View::contentTypeLinks($user), 'url'), $hrefs);
-            $this->assertCount(3, $hrefs);
+            $this->assertCount(2, $hrefs);
         }
 
         /**

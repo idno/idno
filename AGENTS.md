@@ -501,8 +501,8 @@ Each content plugin has an `Entry.php` entity class that defines
   keeps video files on the site is to store another value and attach the file, so that
   stored posts need no change. `IdnoPlugins/Video/Tests/` checks all of this.
 - A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
-  for example; `/profile/<handle>/all` for everything, `/content/<category>/` for the whole
-  site). The profile itself lists status updates and posts only.
+  for example; `/content/<category>/` for the whole site). The profile itself lists
+  everything the member has published, as `/profile/<handle>/all` does.
   `\Idno\Pages\User\View::contentTypeLinks()` gives the links a profile shows (the kinds
   the member has published, which costs one count per content type), and
   `entity/User/profile/types` draws them in both looks.

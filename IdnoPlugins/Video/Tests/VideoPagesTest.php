@@ -272,8 +272,11 @@ namespace IdnoPlugins\Video\Tests {
             $this->assertStringNotContainsString('Profile note ' . $marker, (string) $videos['content'], 'Only videos should be listed.');
             $this->assertStringContainsString('player.vimeo.com/video/76979871', (string) $videos['content']);
 
+            // The profile itself lists everything the member has published
             $front = Webservice::get($profile);
             $this->assertEquals(200, $front['response']);
+            $this->assertStringContainsString('Profile video ' . $marker, (string) $front['content'], 'The profile should list the member\'s videos.');
+            $this->assertStringContainsString('Profile note ' . $marker, (string) $front['content'], 'The profile should list the member\'s status updates.');
             $this->assertMatchesRegularExpression(
                 '~href="[^"]*/profile/' . preg_quote(static::$member->getHandle(), '~') . '/videos/?"~',
                 (string) $front['content'],

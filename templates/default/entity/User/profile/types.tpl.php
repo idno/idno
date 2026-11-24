@@ -3,7 +3,7 @@
     /*
      * Links from a member's profile to their posts of one kind: /profile/<handle>/<kind>,
      * where <kind> is the content type's category ("videos", "photos"...). The profile
-     * itself lists status updates and posts; /profile/<handle>/all lists everything.
+     * itself lists everything.
      *
      * Twenty26 draws the same links its own way (templates/modern, same name); both use
      * \Idno\Pages\User\View::contentTypeLinks().
