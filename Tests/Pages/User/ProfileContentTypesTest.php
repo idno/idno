@@ -183,8 +183,15 @@ namespace Tests\Pages\User {
 
             $profile = Webservice::get($links[0]['url']);
             $this->assertEquals(200, $profile['response'], 'The profile should load. If this is failing, you may need to set IDNO_DOMAIN.');
+            // The web server can know the site by another host name than this process does,
+            // so the links are compared by their paths
             foreach ($links as $link) {
-                $this->assertStringContainsString('href="' . htmlspecialchars($link['url']) . '"', (string) $profile['content']);
+                $path = parse_url($link['url'], PHP_URL_PATH);
+                $this->assertMatchesRegularExpression(
+                    '~href="https?://[^/"]+' . preg_quote(htmlspecialchars($path), '~') . '"~',
+                    (string) $profile['content'],
+                    "The profile should link to $path."
+                );
             }
 
             foreach (array_slice($links, 1) as $link) {
