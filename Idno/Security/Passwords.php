@@ -13,8 +13,9 @@ use Symfony\Component\PasswordHasher\PasswordHasherInterface;
  *
  * New hashes are bcrypt by Symfony's native hasher (which pre-hashes a password of more than 72 bytes or holding
  * a NUL byte, so that every byte of it counts). A hash made earlier by PHP's password_hash() from such a
- * password does not verify that way, so a hash the native hasher refuses is tried with
- * LegacyBcryptPasswordHasher, which is plain password_verify(). Passwords are trimmed before they are hashed or
+ * password does not verify that way, so such a typed password is also tried with
+ * LegacyBcryptPasswordHasher, which is plain password_verify(); a hash it alone verified is kept as it is
+ * (see verifyAndRehash()). Passwords are trimmed before they are hashed or
  * checked (the forms trim them too). Needs nothing of the legacy application.
  */
 final class Passwords
@@ -24,6 +25,9 @@ final class Passwords
      * that a site's existing hashes are not all rehashed for a cost change nobody asked for.
      */
     public const COST = 12;
+
+    /** How many bytes of a password a bcrypt hash made by password_hash() covers. */
+    private const BCRYPT_BYTES = 72;
 
     private readonly PasswordHasherInterface $hasher;
     private readonly PasswordHasherInterface $legacy;
@@ -62,8 +66,14 @@ final class Passwords
 
     /**
      * Checks a password and says whether its hash is to be replaced: null for a wrong password, the same hash
-     * when it is fine as it is, and a new hash (to be stored) when only the legacy hasher could verify it (a
-     * password PHP truncated, so that the hash does not tell byte 73 on) or the hash was made at another cost.
+     * when it is fine as it is, and a new hash (to be stored) when the hash was made at another cost or by
+     * another algorithm and the typed password covers all of what the old hash checked.
+     *
+     * A hash made by PHP's password_hash() from a password of more than 72 bytes, or holding a NUL byte, only ever
+     * covered the first 72 bytes (or the part before the NUL). When ONLY the legacy check verifies such a typed
+     * password, the rest of what was typed is unverified, so the login succeeds and the stored hash is returned
+     * unchanged, now and on every later login: a mistyped tail never becomes the password. Such a hash stays
+     * until the owner sets the password again.
      */
     public function verifyAndRehash(string $hash, #[\SensitiveParameter] string $plain): ?string
     {
@@ -74,16 +84,13 @@ final class Passwords
         if ($this->hasher->verify($hash, $plain)) {
             return $this->hasher->needsRehash($hash) ? $this->hasher->hash($plain) : $hash;
         }
-        if ($this->legacy->verify($hash, $plain)) {
-            try {
-                return $this->hasher->hash($plain);
-            } catch (InvalidPasswordException) {
-                // Too long for the hasher to make a new hash of: the password is right, and the old hash stays.
-                return $hash;
-            }
+        if (strlen($plain) <= self::BCRYPT_BYTES && !str_contains($plain, "\0")) {
+            // The native hasher has just run password_verify() on exactly this password: the legacy check
+            // would run the same bcrypt again, for the same answer.
+            return null;
         }
 
-        return null;
+        return $this->legacy->verify($hash, $plain) ? $hash : null;
     }
 
     /**

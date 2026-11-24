@@ -9,7 +9,7 @@ use Tests\Support\PrivateSiteTestCase;
 
 /**
  * Hashes that PHP's password_hash() made before Idno used Symfony's password hasher keep working for the
- * member's login, are replaced by a new hash at the first successful login, and are never replaced twice.
+ * member's login, are replaced by a new hash at the first successful login, and are never replaced twice. The hash of a password longer than 72 bytes or holding a NUL byte is never replaced (it covered only part of the password).
  * The legacy hashes are made of the raw password, as `User::setPassword()` made them, with bcrypt's own cost 10.
  */
 final class PasswordCompatibilityTest extends PrivateSiteTestCase
@@ -46,21 +46,23 @@ final class PasswordCompatibilityTest extends PrivateSiteTestCase
         // Before the upgrade: the member logs in with the password as typed.
         $this->loginCookie('ada', $typed);
         $after = $this->storedHash();
-        $this->assertNotSame($legacyHash, $after, 'the legacy hash is replaced at the first login');
-        $info = password_get_info($after);
-        $this->assertSame('2y', $info['algo']);
-        $this->assertSame(12, $info['options']['cost'], 'at the cost PHP always used here');
-
-        // After: the same password logs in again, and nothing is stored a second time.
         $this->loginCookie('ada', $typed);
         $this->assertSame($after, $this->storedHash(), 'the hash is replaced at most once');
 
         if ($onlyLegacyVerifies) {
-            // The legacy hash accepted any password that began alike (bcrypt read 72 bytes, or up to the NUL byte);
-            // the new one tells them apart.
-            $cut = strpos($typed, "\0") !== false ? substr($typed, 0, (int) strpos($typed, "\0")) : substr($typed, 0, 72);
-            $this->assertTrue($this->runInSite('return \Idno\Entities\User::getByHandle("ada")->checkPassword(' . $this->literal($typed) . ');'));
-            $this->assertFalse($this->runInSite('return \Idno\Entities\User::getByHandle("ada")->checkPassword(' . $this->literal($cut . 'other tail') . ');'));
+            // A hash that only covered 72 bytes (or the part before a NUL) is never replaced: what was typed after it
+            // was never checked, so it must not become the password.
+            $this->assertSame($legacyHash, $after, 'the old hash of such a password stays');
+            $cut = strpos($typed, "\0") !== false ? substr($typed, 0, (int) strpos($typed, "\0") + 1) : substr($typed, 0, 72);
+            $this->loginCookie('ada', $cut . 'other tail');
+            $this->assertSame($legacyHash, $this->storedHash(), 'a mistyped tail is accepted as before and stores nothing');
+            $this->loginCookie('ada', $typed);
+            $this->assertSame($legacyHash, $this->storedHash(), 'the real password still works');
+        } else {
+            $this->assertNotSame($legacyHash, $after, 'the legacy hash is replaced at the first login');
+            $info = password_get_info($after);
+            $this->assertSame('2y', $info['algo']);
+            $this->assertSame(12, $info['options']['cost'], 'at the cost PHP always used here');
         }
     }
 

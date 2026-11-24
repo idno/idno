@@ -32,7 +32,36 @@ final class QueryRedactorTest extends TestCase
             'an empty value' => ['access_token=', 'access_token=[redacted]'],
             'a flag with no value' => ['access_token&a=1', 'access_token&a=1'],
             'empty' => ['', ''],
+            'an opening bracket and a name after it' => ['access[token=abc', 'access[token=[redacted]'],
+            'a NUL byte ends the name' => ['access_token%00x=abc', 'access_token%00x=[redacted]'],
+            'an unclosed bracket makes another name' => ['access_token[=abc', 'access_token[=abc'],
+            'brackets and more name' => ['access[]token=abc', 'access[]token=abc'],
+            'an index and more name' => ['access_token[a]x=abc', 'access_token[a]x=[redacted]'],
         ];
+    }
+
+    /**
+     * What PHP itself reads as the `access_token` parameter decides, never this class's own idea of it: every
+     * query in the table above is run through parse_str(), and the value is redacted exactly when PHP found a
+     * parameter named access_token (in any letter case) in it.
+     *
+     * @dataProvider queries
+     */
+    public function testARedactionAgreesWithWhatPhpReadsAsAccessToken(string $query, string $expected): void
+    {
+        $this->addToAssertionCount(1);
+        $redacted = explode('&', QueryRedactor::query($query));
+        foreach (explode('&', $query) as $i => $pair) {
+            if (!str_contains($pair, '=')) {
+                continue; // no value to leak
+            }
+            parse_str($pair, $parsed);
+            $phpReadsIt = false;
+            foreach (array_keys($parsed) as $name) {
+                $phpReadsIt = $phpReadsIt || strtolower((string) $name) === 'access_token';
+            }
+            $this->assertSame($phpReadsIt, str_ends_with($redacted[$i], '=' . QueryRedactor::REPLACEMENT), $pair);
+        }
     }
 
     /**

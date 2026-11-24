@@ -77,13 +77,43 @@ final class PasswordsTest extends TestCase
         $this->assertSame($upgraded, $passwords->verifyAndRehash($upgraded, 'plain-one'), 'once is enough');
         $this->assertNull($passwords->verifyAndRehash($cost10, 'plain-two'));
 
-        $long = str_repeat('a', 100);
-        $legacyLong = password_hash($long, PASSWORD_BCRYPT, ['cost' => 4]);
-        $this->assertFalse($passwords->needsRehash($legacyLong), 'the hash alone does not tell: it is bcrypt of the right cost');
-        $replacement = $passwords->verifyAndRehash($legacyLong, $long);
-        $this->assertNotNull($replacement);
-        $this->assertNotSame($legacyLong, $replacement, 'a hash only the legacy hasher verified is replaced');
-        $this->assertFalse($passwords->verify($replacement, str_repeat('a', 72) . 'z'));
+    }
+
+    public function testAnOldHashOfALongPasswordIsNeverReplacedAndNeverTrustsTheTypedTail(): void
+    {
+        $passwords = $this->passwords();
+        $real = str_repeat('a', 72) . 'real-tail';
+        $old = password_hash($real, PASSWORD_BCRYPT, ['cost' => 4]);
+
+        $this->assertFalse($passwords->needsRehash($old), 'the hash alone does not tell: it is bcrypt of the right cost');
+        $this->assertSame($old, $passwords->verifyAndRehash($old, $real), 'typed correctly: accepted, hash unchanged');
+        $this->assertSame($old, $passwords->verifyAndRehash($old, str_repeat('a', 72) . 'a different tail'), 'typed with another tail: accepted as before, hash unchanged');
+        $this->assertSame($old, $passwords->verifyAndRehash($old, str_repeat('a', 72) . 'a different tail'), 'and on every later login');
+        $this->assertSame($old, $passwords->verifyAndRehash($old, $real), 'the real password still works');
+        $this->assertNull($passwords->verifyAndRehash($old, str_repeat('b', 80)), 'a different start is wrong');
+    }
+
+    public function testAnOldHashOfANulPasswordIsNeverReplaced(): void
+    {
+        $passwords = $this->passwords();
+        // PHP's password_hash() refuses a NUL byte now; an older one made the hash of the part before it.
+        $old = crypt('mid', '$2y$04$' . substr(strtr(base64_encode(random_bytes(16)), '+', '.'), 0, 22));
+
+        $this->assertSame($old, $passwords->verifyAndRehash($old, "mid\0dle"));
+        $this->assertSame($old, $passwords->verifyAndRehash($old, "mid\0other tail"), 'bcrypt stopped at the NUL byte');
+        $this->assertNull($passwords->verifyAndRehash($old, "mix\0dle"));
+    }
+
+    public function testAnOldHashOfAShortPasswordIsUpgradedOnce(): void
+    {
+        $passwords = $this->passwords();
+        $old = password_hash('short-one', PASSWORD_BCRYPT, ['cost' => 5]);
+
+        $new = $passwords->verifyAndRehash($old, 'short-one');
+        $this->assertNotNull($new);
+        $this->assertNotSame($old, $new);
+        $this->assertSame($new, $passwords->verifyAndRehash($new, 'short-one'));
+        $this->assertNull($passwords->verifyAndRehash($old, 'short-two'), 'a wrong short password is refused');
     }
 
     public function testAWrongOrMalformedHashVerifiesNothing(): void

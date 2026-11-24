@@ -3900,7 +3900,7 @@ the CLI installer no longer writes one.
   signature, an expected HMAC, an API key or an access token (`Tests/Kernel/SessionSecretsNotLoggedTest`,
   `Tests/Characterisation/SessionCookieTest`). An `access_token` in a query string also stays out of the fatal-error
   page's log line and the oops mail: `Idno\Core\QueryRedactor` (pure; `query()` and `uri()`) replaces its value with
-  `[redacted]` (`Tests/Unit/Core/QueryRedactorTest`, `Tests/Core/FatalErrorPageTest`, `MailFlowsTest::testOopsAlert`).
+  `[redacted]`, matching the name as PHP registers it (URL-decoded once, cut at a NUL byte, leading spaces stripped, `.` and space read as `_`, a `[` with a `]` after it ends the name, one without becomes `_`; the unit test checks every case against `parse_str()`) (`Tests/Unit/Core/QueryRedactorTest`, `Tests/Core/FatalErrorPageTest`, `MailFlowsTest::testOopsAlert`).
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
   unless its signature covers `(request-target)`, `host` and `date`, and, for any method
@@ -4105,11 +4105,19 @@ the CLI installer no longer writes one.
   `hash()` and `verify()` trim the password (the forms trim it too); `hash()` throws `\InvalidArgumentException` for an empty or
   over-4096-byte password. New hashes are bcrypt from Symfony's `NativePasswordHasher` at cost 12 (what PHP's `password_hash()` always used
   here: Symfony's own default of 13 would rehash every hash for nothing), which pre-hashes a password longer than 72 bytes or holding a NUL
-  byte, so every byte counts. Hashes PHP made directly from such a password do not verify that way, so a hash the native hasher refuses is
-  tried with `LegacyBcryptPasswordHasher` (plain `password_verify()`; it never makes a hash). Both are `$2y$` hashes that the hash alone does
-  not tell apart, so Symfony's `MigratingPasswordHasher` (which decides from `needsRehash()` of the new hasher) is not used: `verifyAndRehash($hash,
-  $plain): ?string` returns null for a wrong password, the same hash when it is fine, and a new hash when only the legacy hasher verified it
-  or the cost differs; `needsRehash($hash)` is the cost check alone. `User::setPassword()` and `checkPassword()` keep their return values
+  byte, so every byte counts. Hashes PHP made directly from such a password do not verify that way, so a typed password of more than 72 bytes
+  or holding a NUL byte that the native hasher refuses is also tried with `LegacyBcryptPasswordHasher` (plain `password_verify()`; it never
+  makes a hash; for a typed password of at most 72 bytes with no NUL the native check IS `password_verify()`, so the second check is skipped
+  and a wrong password costs one bcrypt). Both are `$2y$` hashes that the hash alone does not tell apart, so Symfony's
+  `MigratingPasswordHasher` (which decides from `needsRehash()` of the new hasher) is not used: `verifyAndRehash($hash, $plain): ?string`
+  returns null for a wrong password, the same hash when it is fine, and a new hash when the cost or algorithm differs and the typed password
+  is covered in full by the old hash (at most 72 bytes, no NUL). The rule for the rest: an old bcrypt hash only ever covered the first 72
+  bytes of a password (and the part before a NUL byte), so when ONLY the legacy check verifies a typed password over 72 bytes or holding a NUL
+  byte, the typed tail is unverified: the login succeeds and the stored hash is returned UNCHANGED, now and on every later login (a mistyped
+  tail never becomes the password and locks the owner out). Such a hash stays legacy until the owner sets the password again, and the
+  legacy check keeps accepting, for any bcrypt hash made before this release of a password over 72 bytes, a typed password whose first 72
+  bytes are the whole stored password (so that weakness does not end by an upgrade; it needs the password already). `needsRehash($hash)` is
+  the cost check alone. `User::setPassword()` and `checkPassword()` keep their return values
   (false for an empty password) and call the service (the container's, else one built with `new` where there is no container);
   `checkPassword()` stores a replacement hash with `save(true)` (the `updated` hooks of ActivityPub and StandardSiteSync ignore a `User`), a
   failure to store it is logged and never fails the check, and a replaced hash is not replaced again. A third-party plugin that calls
