@@ -44,7 +44,7 @@ msgid "Subtitle"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:73
-msgid "Optional line under the title"
+msgid "Add a short tagline (optional)"
 msgstr ""
 
 #: ./templates/default/entity/Entry/edit.tpl.php:107

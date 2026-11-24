@@ -59,7 +59,7 @@ if (!empty($vars['url'])) {
 
                 <div class="idno-form-field">
                     <label class="idno-label" for="subtitle"><?= \Idno\Core\Idno::site()->language()->_('Subtitle') ?></label>
-                    <?= $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional line under the title'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'idno-input idno-editor-subtitle'])->draw('forms/input/input') ?>
+                    <?= $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Add a short tagline (optional)'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'idno-input idno-editor-subtitle'])->draw('forms/input/input') ?>
                 </div>
 
                 <?= $this->__([
