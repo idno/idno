@@ -214,13 +214,43 @@ namespace Idno\Core {
         }
 
         /**
-         * Sends the headers of a Markdown document (the `markdown` type's shell sends none itself): the type, the
+         * Whether the page being served is one of the site's or the account's settings pages: its address is under one of
+         * the roots that have a shell of their own (`admin`, `account`: addUrlShellOverride()), or its class was registered
+         * for a route under `/account/`. These pages hold stored secrets (keys, tokens, passwords) in their forms and, in
+         * the older templates another type falls back to, in their text.
+         *
+         * @return bool
+         */
+        function isSettingsPage()
+        {
+            $page = \Idno\Core\Idno::site()->currentPage();
+            if (empty($page)) {
+                return false;
+            }
+            if (\Idno\Core\Idno::site()->routes()->isAccountPage($page)) {
+                return true;
+            }
+            $current = (string) $page->currentUrl();
+            foreach (array_keys($this->url_shell_overrides) as $root) {
+                $prefix = \Idno\Core\Idno::site()->config()->getDisplayURL() . $root;
+                if (stripos($current, $prefix) === 0 && in_array((string) substr($current, strlen($prefix), 1), ['', '/', '?', '#', '.'], true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * Sends the headers of a Markdown document (the `markdown` type's shell sends none itself): the type, `nosniff`, the
          * cross-origin header every page has, and, for an answer that is not an error, the address of the page the
          * document is a form of as its canonical link: the entity's, on its permalink, else this page's without `_t`.
          */
         function sendMarkdownHeaders()
         {
             header('Content-Type: text/markdown; charset=utf-8');
+            // (the document is text, whatever a browser might make of its first bytes)
+            header('X-Content-Type-Options: nosniff');
             header('Access-Control-Allow-Origin: *');
             if (http_response_code() !== 200) {
                 return;

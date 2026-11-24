@@ -73,7 +73,10 @@ namespace Idno\Core {
             if (isset($routes[$path])) {
                 return $routes[$path];
             }
+            // (Toro replaces its own three tokens in a pattern once more)
+            $tokens = [':string' => '([a-zA-Z]+)', ':number' => '([0-9]+)', ':alpha' => '([a-zA-Z0-9-_]+)'];
             foreach ($routes as $pattern => $handler) {
+                $pattern = strtr((string) $pattern, $tokens);
                 if (preg_match('#^/?' . $pattern . '/?$#', $path)) {
                     return $handler;
                 }
@@ -84,9 +87,10 @@ namespace Idno\Core {
 
         /**
          * A GET or HEAD request for `<permalink>.md` is routed as a request for `<permalink>`, and remembered as one that
-         * asked for Markdown, when the path as given matches no route (so no address that was served changes its meaning)
-         * and the path without the suffix is served by a page that has a Markdown form (a \Idno\Common\MarkdownPermalink).
-         * Any other path is left exactly as it is.
+         * asked for Markdown, when the path as given matches no route and the path without the suffix is served by a page
+         * that has a Markdown form (a \Idno\Common\MarkdownPermalink). A path ending in `.md` that a permalink page's route
+         * matches as given (one that takes anything after the id) is remembered the same way and routed as it is. Any
+         * other path is left exactly as it is, and is not a request for Markdown.
          */
         protected static function routeMarkdownSuffix($routes): void
         {
@@ -109,11 +113,21 @@ namespace Idno\Core {
             }
 
             $stripped = \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path);
-            if ($stripped === null || static::handlerFor($routes, $path) !== null) {
+            if ($stripped === null) {
                 return;
             }
-            $handler = static::handlerFor($routes, $stripped);
-            if (is_string($handler) && is_a($handler, \Idno\Common\MarkdownPermalink::class, true)) {
+            $hasMarkdown = static function ($handler): bool {
+                return is_string($handler) && is_a($handler, \Idno\Common\MarkdownPermalink::class, true);
+            };
+            $given = static::handlerFor($routes, $path);
+            if ($given !== null) {
+                // The path is an address already. When it is a permalink page's (a route that takes anything after the
+                // entity's id, `/entry/:id/.*`), the suffix asks that page for Markdown; the path is routed as it is
+                self::$markdown_suffix = $hasMarkdown($given);
+
+                return;
+            }
+            if ($hasMarkdown(static::handlerFor($routes, $stripped))) {
                 // Toro reads PATH_INFO first
                 $_SERVER['PATH_INFO'] = $stripped;
                 self::$markdown_suffix = true;

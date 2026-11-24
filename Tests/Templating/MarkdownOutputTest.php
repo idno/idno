@@ -135,6 +135,12 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
             $owner = $this->get($paths[$name] . '.md', ['Cookie' => $ada]);
             $this->assertMarkdown($owner, $this->baseUrl() . $paths[$name]);
             $this->assertStringContainsString($text, $owner->body, 'the owner reads the ' . $name);
+            // The owner's document is the post, with none of the controls the owner's page has
+            $this->assertStringContainsStringIgnoringCase('edit', $this->get($paths[$name], ['Cookie' => $ada])->body, 'the HTML page has the owner\'s controls');
+            foreach (['/edit', 'delete', 'Edit', '__bTk', 'annotation', 'Publish'] as $control) {
+                $this->assertStringNotContainsString($control, $owner->body, 'the owner\'s ' . $name . ' as Markdown');
+            }
+            $this->assertSame($text, trim($this->parse($owner->body)[1]), 'the content is the post\'s text and nothing else');
         }
     }
 
@@ -232,6 +238,88 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         $this->assertSame('html', $this->kind($this->get('?_t=email-text')));
     }
 
+    /**
+     * The older permalink routes take anything after the entity's id (`/entry/<id>/<anything>`), so a path that ends in `.md`
+     * is theirs as given: it is the same post, and the suffix asks for its Markdown.
+     */
+    public function testAnOldStylePermalinkAnswersTheSuffixToo(): void
+    {
+        $paths = $this->seedSite();
+        $base = $this->baseUrl();
+
+        foreach (['entry' => 'article', 'bookmark' => 'bookmark', 'event' => 'event', 'rsvp' => 'rsvp'] as $route => $name) {
+            $old = $route . '/' . $paths['ids'][$name] . '/some-old-title';
+            $this->assertSame('html', $this->kind($this->get($old)), $old);
+            $this->assertSame(200, $this->get($old)->status, $old);
+
+            $response = $this->get($old . '.md');
+            $this->assertMarkdown($response, $base . $paths[$name]);
+            $this->assertSame($this->get($paths[$name] . '.md')->body, $response->body, $old . '.md is the Markdown of the post');
+            $this->assertSame($response->body, $this->get($old . '?_t=md')->body);
+
+            // Not the suffix: another ending, and the suffix in the middle
+            $this->assertSame('html', $this->kind($this->get($old . '.markdown')), $old);
+            $this->assertSame('html', $this->kind($this->get($route . '/' . $paths['ids'][$name] . '/a.md/b')), $old);
+        }
+
+        // A post the visitor may not read, by its old address
+        // (the seeded private note's id)
+        $private = '00000000-0000-4000-8000-000000000019';
+        $refused = $this->get('entry/' . $private . '/x.md');
+        $this->assertSame($this->get('entry/' . $private . '/x')->status, $refused->status);
+        $this->assertContains($refused->status, [403, 410]);
+        $this->assertStringNotContainsString('A private note only Ada can read.', $refused->body);
+    }
+
+    public function testAHeadRequestAndANotModifiedAnswerSayTheyVaryByAccept(): void
+    {
+        $paths = $this->seedSite();
+
+        foreach ([$paths['article'], $paths['article'] . '.md', $paths['page'], $paths['page'] . '.md', dirname($paths['article']) . '/no-such-post'] as $path) {
+            $head = $this->site()->request('HEAD', $path);
+            $this->assertStringContainsStringIgnoringCase('accept', (string) $head->header('Vary'), 'HEAD ' . $path);
+        }
+
+        // A request the permalink answers 304 to (Page::lastModifiedGatekeeper() answers it when the date is NOT after the
+        // post's last change, 20 March 2026, which is the wrong way round and not this test's business)
+        foreach ([[$paths['article'], []], [$paths['article'] . '.md', []], [$paths['article'], ['Accept' => 'text/markdown']]] as [$path, $headers]) {
+            $response = $this->get($path, $headers + ['If-Modified-Since' => 'Thu, 01 Jan 2026 00:00:00 GMT']);
+            $this->assertSame(304, $response->status, $path);
+            $this->assertSame('', $response->body);
+            $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'), '304 ' . $path);
+        }
+    }
+
+    /**
+     * The onboarding pages draw a shell of their own (`shell/simple`), in HTML, whatever type is asked for: they are the steps a
+     * new member clicks through, and have no Markdown form. The registration and password pages are account pages: a line
+     * that says so, and none of their form.
+     */
+    public function testTheOnboardingPagesStayHtmlAndTheAccountFormsHaveNoMarkdownForm(): void
+    {
+        $this->seedSite();
+
+        foreach (['begin/', 'begin/register'] as $page) {
+            $plain = $this->get($page);
+            $asked = $this->get($page . '?_t=markdown');
+            $this->assertSame($plain->status, $asked->status, $page);
+            if ($asked->status === 200) {
+                $this->assertSame('html', $this->kind($asked), $page);
+            }
+        }
+
+        foreach (['account/register', 'account/password'] as $page) {
+            $asked = $this->get($page . '?_t=markdown');
+            if ($asked->status !== 200) {
+                $this->assertSame($this->get($page)->status, $asked->status, $page);
+                continue;
+            }
+            $this->assertSame('markdown', $this->kind($asked), $page);
+            $this->assertStringContainsString('has no Markdown form', $asked->body, $page);
+            $this->assertStringNotContainsString('__bTk', $asked->body);
+        }
+    }
+
     public function testEveryBundledContentTypeHasItsContentInTheMarkdown(): void
     {
         $paths = $this->seedSite();
@@ -296,6 +384,72 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
     }
 
     /**
+     * The settings pages hold secrets in the fields of their forms. As Markdown they are their text only: every stored secret
+     * is absent from the document, for the administrator, for a member and for a visitor.
+     */
+    public function testTheSettingsPagesAsMarkdownHoldNoSecret(): void
+    {
+        $this->seedSite();
+        $this->assertTrue($this->runInSite(<<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $site->plugins()->enable('Styles');
+
+        return true;
+        PHP));
+        $this->assertTrue($this->runInSite(<<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $config = $site->config();
+        $config->config['smtp_host'] = 'smtp.example.org';
+        $config->config['smtp_username'] = 'mailer-user-7731';
+        $config->config['smtp_password'] = 'mailer-secret-9142';
+        $config->webhook_syndication = [['title' => 'Chat room', 'url' => 'https://hooks.example/services/T000/key-hook-8812']];
+        $config->styles = ['css' => 'body.custom-sheet-5530 { color: red }'];
+        $config->save();
+        foreach (['ada' => 'A', 'bob' => 'B'] as $handle => $mark) {
+            $user = \Idno\Entities\User::getByHandle($handle);
+            $user->apikey = 'api-key-' . $mark . '-3391';
+            $user->indieauth_tokens = ['token-secret-' . $mark . '-6620' => ['client_id' => 'https://client.example/', 'redirect_uri' => 'https://client.example/cb', 'scope' => 'create', 'issued_at' => 1773000000]];
+            $user->bridgy = ['twitter' => ['status' => 'enabled', 'user' => $handle, 'key' => 'bridgy-key-' . $mark . '-4471']];
+            $user->save(true);
+        }
+
+        return true;
+        PHP));
+        $secrets = ['mailer-user-7731', 'mailer-secret-9142', 'key-hook-8812', 'custom-sheet-5530', 'api-key-A-3391', 'api-key-B-3391', 'token-secret-A-6620', 'token-secret-B-6620', 'bridgy-key-A-4471', 'bridgy-key-B-4471'];
+        $pages = ['admin/email/', 'account/settings/tools/', 'account/indiepub/', 'account/bridgy/', 'admin/webhooks/', 'admin/styles/', 'account/settings/', 'admin/'];
+
+        $ada = $this->loginAsAdmin();
+        $bob = (new Browser($this->site()))->login(self::MEMBER, self::PASSWORD);
+
+        // The test is looking at pages that hold the secrets: the HTML of the administrator's has each of these
+        foreach (['admin/email/' => 'mailer-secret-9142', 'account/indiepub/' => 'token-secret-A-6620', 'account/bridgy/' => 'bridgy-key-A-4471', 'admin/webhooks/' => 'key-hook-8812', 'admin/styles/' => 'custom-sheet-5530'] as $page => $secret) {
+            $this->assertStringContainsString($secret, $this->get($page, ['Cookie' => $ada])->body, $page . ' holds its secret as HTML');
+        }
+
+        $drawn = 0;
+        foreach (['the administrator' => ['Cookie' => $ada], 'a member' => ['Cookie' => $bob], 'a visitor' => []] as $who => $cookie) {
+            foreach ($pages as $page) {
+                foreach (['markdown', 'md'] as $type) {
+                    $html = $this->get($page, $cookie);
+                    $response = $this->get($page . '?_t=' . $type, $cookie);
+                    $this->assertSame($html->status, $response->status, $page . ' for ' . $who . ': the status of the HTML page');
+                    if ($response->status >= 300 && $response->status < 400) {
+                        continue;
+                    }
+                    $this->assertSame('markdown', $this->kind($response), $page . ' for ' . $who);
+                    foreach ($secrets as $secret) {
+                        $this->assertStringNotContainsString($secret, $response->body, $page . ' for ' . $who);
+                    }
+                    $this->assertDoesNotMatchRegularExpression('/<[a-zA-Z\/!]/', $this->parse($response->body)[1], $page . ' for ' . $who . ': no HTML is left');
+                    $this->assertStringNotContainsString('__bTk', $response->body, 'no form token');
+                    $drawn += $response->status === 200 ? 1 : 0;
+                }
+            }
+        }
+        $this->assertGreaterThanOrEqual(2 * count($pages), $drawn, 'the administrator was shown every page');
+    }
+
+    /**
      * @param array<string, string> $headers
      */
     private function get(string $path, array $headers = []): SiteResponse
@@ -321,6 +475,7 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
         if ($variesByAccept) {
             $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'));
         }
+        $this->assertSame('nosniff', strtolower((string) $response->header('X-Content-Type-Options')));
         $this->assertStringContainsString('<' . $canonical . '>; rel="canonical"', (string) $response->header('Link'));
         $this->assertStringStartsWith("---\n", $response->body);
         $this->assertStringEndsWith("\n", $response->body);

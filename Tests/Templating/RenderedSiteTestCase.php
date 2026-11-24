@@ -439,6 +439,11 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         }
         $this->page('non-html/actor-ada.txt', 'actor/' . self::ADMIN, 200, 'application/activity+json', null, ['Accept' => 'application/activity+json']);
         $this->page('non-html/kml-home.xml', '?_t=kml', 200, 'application/vnd.google-earth.kml+xml');
+        // The owner's Markdown: the post, and none of the owner's controls.
+        $this->page('non-html/markdown-status-logged-in.md', $paths['status'] . '.md', 200, 'text/markdown', $cookie);
+        $this->page('non-html/markdown-private-logged-in.md', $paths['private'] . '?_t=markdown', 200, 'text/markdown', $cookie);
+        $this->page('non-html/markdown-home-logged-in.md', '?_t=markdown', 200, 'text/markdown', $cookie);
+        $this->page('non-html/markdown-admin-logged-in.md', 'admin/?_t=markdown', 200, 'text/markdown', $cookie);
         $this->page('non-html/json-home-logged-in.txt', '?_t=json', 200, 'application/json', $cookie);
         $this->page('non-html/json-status-logged-in.txt', $paths['status'] . '?_t=json', 200, 'application/json', $cookie);
         // The JSON of a form page: the form's token (`csrf`) and its fields (`formFields`).

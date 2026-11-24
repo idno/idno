@@ -57,14 +57,14 @@
         "doctrine/migrations": "^3.9",
         "league/flysystem": "^3",
         "league/flysystem-async-aws-s3": "^3",
+        "league/html-to-markdown": "^5.2",
         "symfony/http-client": "^8.0",
         "symfony/mime": "^8.0",
         "symfony/messenger": "^8.0",
         "symfony/doctrine-messenger": "^8.0",
         "symfony/mailer": "^8.0",
         "symfony/translation": "^8.0",
-        "symfony/twig-bundle": "^8.0",
-        "league/html-to-markdown": "^5.2"
+        "symfony/twig-bundle": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,

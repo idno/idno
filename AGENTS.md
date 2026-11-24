@@ -3046,16 +3046,19 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
   sets `$_SERVER['PATH_INFO']` (which Toro reads first) to the path without the suffix and remembers the request
   (`PageHandler::markdownSuffixRequested()`). Anything else is left exactly as it was, so no address that was served changes
   its meaning: `index.md`, `session/login.md`, `<permalink>.md.md`, `<permalink>.MD`, `<permalink>.md/` and a POST are the 404
-  they were. A permalink route whose pattern already matches the suffixed path (the old `/entry/:id/.*` style routes) keeps
-  serving HTML there: `?format=markdown` or `?_t=markdown` is the way in for those. The one address that changes:
-  `<permalink route>/<no such slug>.md` was a 404 (no route) and is now what the permalink of a missing post is (410, as
-  Markdown). `REQUEST_URI` keeps the suffix (`Page::currentUrl()`); slug routes still match no dot.
+  they were. The older permalink routes take anything after the entity's id (`/entry/:id/.*`, `/bookmark/`, `/event/`, `/rsvp/`),
+  so a path ending in `.md` matches them AS GIVEN: when the page of the route that matches as given is a `MarkdownPermalink`,
+  the request is remembered as a Markdown one too and the path is routed unchanged (`/entry/<id>/title.md` is the post, as
+  Markdown; before, it was the same post as HTML). The other address that changes: `<permalink route>/<no such slug>.md` was a
+  404 (no route) and is now what the permalink of a missing post is (410, as Markdown). `PageHandler::handlerFor()` is the
+  router's own lookup, written again (Toro's is inline in `serve()`): `Tests/Unit/Markdown/RouteLookupTest` serves a table of
+  patterns and paths through `Toro::serve()` and fails if the two ever disagree. `REQUEST_URI` keeps the suffix (`Page::currentUrl()`); slug routes still match no dot.
 - The headers are `DefaultTemplate::sendMarkdownHeaders()`'s (called by `sendShellHeaders()`, so by every `drawPage()` of the
-  type; no template sends one): `Content-Type: text/markdown; charset=utf-8`, `Access-Control-Allow-Origin: *` (as every web
-  page has), and, only when the status is 200, `Link: <address>; rel="canonical"`: the entity's `getURL()` on its permalink,
+  type; no template sends one): `Content-Type: text/markdown; charset=utf-8`, `X-Content-Type-Options: nosniff`,
+  `Access-Control-Allow-Origin: *` (as every web page has), and, only when the status is 200, `Link: <address>; rel="canonical"`: the entity's `getURL()` on its permalink,
   else the page's own address without `_t` (only an http(s) address with no `<`, `>` or white space). `Vary: Accept` is on
-  EVERY answer of the two permalink pages (the HTML page, the Markdown, the 403 and 410) and on no other page, whose answer does
-  not depend on the header.
+  EVERY answer of the two permalink pages (the HTML page, the Markdown, the 403 and 410, a HEAD and a 304) and on no other page,
+  whose answer does not depend on the header.
 - What the shell writes, always YAML front matter first:
   - a permalink (`markdown_entity`): the field names of an RSS 2.0 item, in this order: `title` (as an RSS item's: the
     entity's title, else five words of its description, else `New <type>`), `author` (the owner's name; left out with no owner),
@@ -3071,10 +3074,20 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
     `*author, pubDate*` and its content as above (each item in full, as in the RSS feed; the list is the page's own, so it
     holds what this viewer may read), and last a rule and `Newer` / `Older` links to the neighbouring pages of the list
     (`offset`, `count` and the `items_per_page` setting), which keep `_t`. The page's `body` is not used;
-  - any other page (a form, a settings or admin page, an error page of any status): `title`, `description`, `link` and the
-    page's `body`, converted. The converter removes forms and their controls, so no field value and no form token is in the
-    document; a settings page is the text of its page and little else. The page's own access rules apply as for HTML: the
-    document holds nothing the HTML page does not show that viewer.
+  - a SETTINGS page (`DefaultTemplate::isSettingsPage()`: an address under a root that has a shell of its own, `admin` and
+    `account`, or a page class registered for a route under `/account/`): `title`, `description`, `link` and ONE line saying the
+    page has no Markdown form. Its `body` is NEVER printed, for anyone: these pages hold stored secrets, and although the
+    converter removes forms and their fields, the `classic` templates this type falls back to print some in their TEXT (the
+    IndiePub account page printed each access token: found by
+    `MarkdownOutputTest::testTheSettingsPagesAsMarkdownHoldNoSecret`, which stores an SMTP user name and password, API keys,
+    access tokens, Bridgy keys, a webhook address and a stylesheet and asks for the email, tools, IndiePub, Bridgy, webhooks,
+    styles, settings and admin pages as the administrator, a member and a visitor). The registration and password pages are
+    under `/account/` and answer the same line. Keep a page that shows a secret under `/admin/` or `/account/`;
+  - any other page (a form, an error page of any status): `title`, `description`, `link` and the page's `body`, converted. The
+    converter removes forms and their controls, so no field value and no form token is in the document. The page's own access
+    rules apply as for HTML;
+  - NOT Markdown: the pages that draw `shell/simple` themselves (the onboarding steps, `begin/...`), which answer HTML whatever
+    type is asked for (`MarkdownOutputTest::testTheOnboardingPagesStayHtmlAndTheAccountFormsHaveNoMarkdownForm`).
   Bundled types with a `markdown` entity template of their own, because the `classic` feed view lacks what matters or draws
   what must not be there: Media (a link to each file, labelled Audio or Video), Like (`Bookmarked:`, `Liked:` or `Reposted:`
   and a link to the target, only if http(s)), Checkin (the place name and the coordinates as the viewer may see them,
@@ -3104,7 +3117,10 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
   a visitor, another member and the owner, a missing post, any page by `?_t=`, the lists and their pages, what only a permalink
   answers, each bundled content type, hostile values), `TemplateTypeRequestTest` and the golden pages `non-html/markdown-*.md`
   (each content type's permalink, the home page and its second page, a profile, a tag, a search, the login page, a 404 and a
-  private post for a visitor).
+  private post for a visitor; and for the logged-in administrator a post, a private post, the home page and the admin page: the
+  owner's document has none of the owner's controls). `markdown` is one of `FallbackTrace::TYPES`, so `NonHtmlReachTest` holds
+  it to the rule of the other non-HTML types (no `default` file is reached but a listed page body) and
+  `fixtures/fallback-trace.php` pins the `classic` files its pages draw.
 
 #### The cache
 

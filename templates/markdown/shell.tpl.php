@@ -7,7 +7,9 @@
  *   the post's content.
  * - A page that lists posts (the home page, a profile, a tag, a search: the page gave its `items`): the page's title and
  *   address, then each post under a heading that links to it, and links to the newer and older pages of the list.
- * - Any other page (a form, a settings page, an error): the page's title and its body.
+ * - A settings page of the site or of an account (DefaultTemplate::isSettingsPage()): its title, and a line that says it has
+ *   no Markdown form. Its body is never printed: it holds stored secrets.
+ * - Any other page (a form, an error): the page's title and its body.
  *
  * Content is always HTML first (an entity's own, drawn as a feed draws it: `entity/<Class>` of this type, else the
  * `classic` one; or the page's body), purified, and converted by HtmlToMarkdown, the one place Markdown is made.
@@ -115,6 +117,14 @@ echo \Idno\Markdown\FrontMatter::render([
     'description' => $description !== '' && $description !== $title ? $description : null,
     'link' => $link !== '' ? $link : null,
 ]);
+
+if ($this->isSettingsPage()) {
+    // A settings page of the site or of an account is a page of forms, and the templates this type falls back to print
+    // stored keys and tokens in their text: it has no Markdown form beyond its title, whoever asks
+    echo "\n" . $converter->convert('<p>' . $site->language()->esc_('This page is a settings page and has no Markdown form. Open it in a browser.') . '</p>') . "\n";
+
+    return;
+}
 
 $items = [];
 foreach ((array) ($vars['items'] ?? []) as $item) {
