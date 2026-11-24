@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Tests\Fixtures;
 
 /**
- * Which template files core and the bundled plugins have, for the tests that follow the port to Twig: the web and mail
- * `.tpl.php` files (the types `default`, `email` and `email-text`; not `classic`, which stays, and not the feed, JSON, JSONP,
- * ActivityPub and KML types) by logical name `<base>:<type>/<name>` (base `core` or `IdnoPlugins/<Name>`), the Twig files
- * beside them, and the bundled plugins (the ones `.gitignore` makes an exception for: a plugin someone put in
- * IdnoPlugins/ is not bundled).
+ * Which template files core and the bundled plugins have, for the tests of their web and mail templates (the types `default`,
+ * `email` and `email-text`; not `classic`, which stays, and not the feed, JSON, JSONP, ActivityPub and KML types): the Twig
+ * files, and the files of any extension (`files()`) by logical name `<base>:<type>/<name>` (base `core` or `IdnoPlugins/<Name>`),
+ * and the bundled plugins (the ones `.gitignore` makes an exception for: a plugin someone put in IdnoPlugins/ is not bundled).
  */
 final class BundledTemplates
 {
@@ -40,20 +39,6 @@ final class BundledTemplates
             }
         }
         sort($names);
-
-        return $names;
-    }
-
-    /**
-     * @return list<string> every `.tpl.php` of the three types, by logical name `<base>:<type>/<name>`, sorted
-     */
-    public static function phpTemplates(string $projectDirectory): array
-    {
-        $names = [];
-        foreach (self::files($projectDirectory, '.tpl.php') as $logical => $path) {
-            $names[] = $logical;
-        }
-        sort($names, SORT_STRING);
 
         return $names;
     }

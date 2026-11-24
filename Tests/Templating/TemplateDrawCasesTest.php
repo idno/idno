@@ -14,13 +14,101 @@ use Tests\Fixtures\BundledTemplates;
  * content) is visited as a visitor, as the administrator, as a member and as a new user, and the draw cases run in the site's
  * own process.
  *
- * Every page must answer below 500, every case must draw without an error, a few cases must draw different output for the
- * different states they set up, and every Twig template of core and the bundled plugins must have been drawn at least once by the
+ * What is asserted: every page answers below 500; every case draws without an error; every labelled case draws something (its
+ * output is not empty, or only white space, unless the label is in EMPTY_OUTPUT with the reason that state draws nothing); within
+ * the cases one draw method returns, no two states draw the same output (unless the pair is in SAME_OUTPUT with its reason), except
+ * that a state drawn again in another context (`a reply: `, `embed of a post, `, ` on its page`, ` in a feed`) is only checked for
+ * drawing something; the cases of DRAWS draw outputs that are pairwise different; an entry of EMPTY_OUTPUT or SAME_OUTPUT that no
+ * case produces fails; and every Twig template of core and the bundled plugins must have been drawn at least once by the
  * pages and the cases together (the template trace of Tests\Fixtures\TemplateTrace records each draw): add a page to EXTRA_PAGES,
  * or a draw to one of the draw methods, for a template that no visit reaches.
  */
 final class TemplateDrawCasesTest extends RenderedSiteTestCase
 {
+    /**
+     * Labels of draw cases whose right output is empty, with why.
+     *
+     * @var array<string, string>
+     */
+    private const EMPTY_OUTPUT = [
+        'feed item without owner' => 'a feed item is drawn only for an entity that has an owner',
+        'empty stream' => 'a stream of no items has nothing to list',
+        'subscription without a feed' => 'a subscription whose feed cannot be found draws nothing',
+        'link preview, a card with nothing to show' => 'a preview that is only an address has no title, description or image: no card',
+        'link preview, a card with a script address' => 'an address that is not http or https draws no card',
+        'link preview, no preview' => 'no preview, no card',
+        'likes of none' => 'no annotations, nothing to list',
+        'shares of none' => 'no annotations, nothing to list',
+        'mentions of none' => 'no annotations, nothing to list',
+        'replies of none' => 'no annotations, nothing to list',
+        'rsvps of none' => 'no annotations, nothing to list',
+        'syndication of a type with none' => 'no service takes this content type, so there is no form',
+        'links, no links on a permalink' => 'a post with no syndication links draws no "Also on" list',
+        'links, no links' => 'a post with no syndication links draws no "Also on" list',
+        'entity/User/profile/fields, none' => 'a profile with no list of addresses has no links to draw',
+        'entity/User/profile/fields, one string' => 'an address that is not in a list is not drawn',
+        'entity/User/profile/contact, none' => 'a profile with no list of addresses has no links to draw',
+        'entity/User/profile/contact, one string' => 'an address that is not in a list is not drawn',
+        'the comment form of nobody' => 'the form is for a logged in member',
+        'nothing found, no search' => 'the notice is for a search that found nothing: with no search words this draws nothing',
+        'the home blurb 0' => 'the blurb is a page owner\'s profile and there is none here, and the rest of the home page is for someone who can write',
+        'the home blurb 1' => 'the blurb is a page owner\'s profile and there is none here, and the rest of the home page is for someone who can write',
+        'the home blurb 2' => 'the blurb is a page owner\'s profile and there is none here, and the rest of the home page is for someone who can write',
+        'the home blurb 3' => 'the blurb is a page owner\'s profile and there is none here, and the rest of the home page is for someone who can write',
+        'embed, nothing' => 'a text with nothing to embed',
+        'embed of a post, nothing' => 'a post with nothing to embed',
+        'embed, youtube channel' => 'a channel address is not a video: nothing is embedded',
+        'embed of a post, youtube channel' => 'a channel address is not a video: nothing is embedded',
+        'embed, youtube c' => 'a channel address is not a video: nothing is embedded',
+        'embed of a post, youtube c' => 'a channel address is not a video: nothing is embedded',
+        'a post with no body' => 'a post with no text has nothing to embed',
+        'the edit header' => 'the share tabs are drawn only for a share (`sharing` in the request)',
+        'the delete and edit menu' => 'the menu is for someone who can edit the post',
+        'tags output, none' => 'no tags, no tag row',
+        'tags, an empty string' => 'a tag list that is empty has no tag row',
+        'tags, null' => 'a tag list that is empty has no tag row',
+        'tags, false' => 'a tag list that is empty has no tag row',
+        'standard.site sync head, no address' => 'a post with no address on the network has no link to put in the head',
+        'standard.site sync head, something that is not an entity' => 'a value that is not an entity has no link to put in the head',
+        'standard.site sync head, no object' => 'with no post there is no link to put in the head',
+        'tags, zero' => 'a tag list that is empty has no tag row',
+        'tags, the string zero' => 'a tag list that is empty has no tag row',
+        'user row, not a user' => 'a value that is not a user has no row',
+        'embed, a hostile image' => 'an image address that is not an http or https one is not embedded',
+        'embed of a post, a hostile image' => 'an image address that is not an http or https one is not embedded',
+    ];
+
+    /** @var list<string> what assertDrawn() found wrong, reported together at the end of the draw cases */
+    private array $drawProblems = [];
+
+    /** @var array<string, true> the labels and the groups of equal outputs that assertDrawn() has seen */
+    private array $drawSeen = [];
+
+    /**
+     * Draw cases of one group that draw exactly the same output, keyed by their labels joined with " | " (in the order they are
+     * returned), with why that is right.
+     *
+     * @var array<string, string>
+     */
+    private const SAME_OUTPUT = [
+        'zone Europe/London for a member | a zone for a member with none' => 'London\'s offset is zero, and the template prints a difference from the member\'s own zone only for a zone whose offset is not zero.',
+        'rich text output, a rel of zero | rich text output, a rel of the string zero | rich text output, a rel of an empty string | rich text output, a rel of null | rich text output, a rel of false' => 'Each is a value PHP and Twig read as false, which is no rel.',
+        'form list, zero | form list, the string zero | form list, an empty string | form list, null | form list, false' => 'Each is a value PHP and Twig read as false, which is no value.',
+        'idno version 0.1 | idno version 1.0-DEV | idno version ' => 'A required version below the installed one only says what is installed; these three are all below it.',
+        'build version 1 | build version 7' => 'A required build below the installed one only says what is installed.',
+        'php version 7 | php version 8.4.1' => 'A required version at or below the installed one only says what is installed.',
+        'plugin dependency Status  | plugin dependency Status 0.0.1' => 'A required version at or below the plugin\'s only says that it is installed.',
+        'statistics, none | statistics, not a list' => 'Both have no report to list, so only the page\'s heading is drawn.',
+        'the shell of a post with an owner and none | the feed of nothing and of entities' => 'The shell of a post with no owner draws nothing, and the feed draws each entity through the shell, skips what is not one, and draws the no-content notice (empty here, with no search) for no items.',
+        'likes | like' => '`entity/annotations/like` is `entity/annotations/likes`: it draws the same list.',
+        'replies | reply' => '`entity/annotations/reply` is `entity/annotations/replies`: it draws the same list.',
+        'annotation page, mention | annotation page, share | annotation page, rsvp' => 'There is no template `entity/annotations/mention`, `share` or `rsvp` (the lists are `mentions`, `shares` and `rsvps`), so the page of one of these draws only the wrapper.',
+        'syndication 0 | syndication 2' => 'A service\'s links that are a string and not a list disable no account, as with no links.',
+        'links, hostile on a permalink | links, hostile' => 'No address of this state is linked, and being on a permalink only adds `rel="syndication"` to a link.',
+        'the error page 0 | the error page 0 in debug' => 'With no exception there is no detail for debug mode to add.',
+        'owners without pictures | the object\'s owner has a picture' => 'The shell prints the picture of the page\'s owner (bob here), not of the owner of the object it describes (ada): the object\'s owner only decides which user the ActivityPub link names, and that is ada in both states.',
+    ];
+
     /**
      * Pages beyond the golden ones, by who asks: `visitor`, `admin`, `member` (not an administrator) and `new` (a user who has
      * just registered, for the onboarding pages). Each must answer, not fail: a status below 500.
@@ -148,6 +236,8 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->nonHtmlPages($paths, $admin);
         $this->extraPages($paths, $admin);
         $this->drawCases();
+        $this->assertSame([], $this->drawProblems);
+        $this->assertSame([], array_values(array_diff([...array_keys(self::EMPTY_OUTPUT), ...array_keys(self::SAME_OUTPUT)], array_keys($this->drawSeen))), 'an entry of EMPTY_OUTPUT or SAME_OUTPUT that no draw case produces any more');
         $this->assertNoDifferences();
 
         $root = dirname(__DIR__, 2);
@@ -162,6 +252,52 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             }
         }
         $this->assertSame([], $notDrawn, 'a Twig template that no page or draw case reaches: add one that does');
+    }
+
+    /**
+     * What every labelled draw case must show: each output is text and is not empty (unless the label is in EMPTY_OUTPUT, which says
+     * why that state draws nothing, and then it holds nothing but white space), and no two cases of one group draw the same output (unless the
+     * pair is in SAME_OUTPUT, which says why). A group is what one draw method returns: its cases are states of the same templates, so
+     * two states that look the same are a state the template does not tell apart.
+     *
+     * @param mixed $out the labelled outputs a draw method returned from the site
+     */
+    private function assertDrawn(mixed $out): void
+    {
+        $this->assertIsArray($out);
+        $seen = [];
+        $problems = [];
+        foreach ($out as $label => $html) {
+            $label = (string) $label;
+            $this->drawSeen[$label] = true;
+            $this->assertIsString($html, $label);
+            if (isset(self::EMPTY_OUTPUT[$label])) {
+                if (trim($html) !== '') {
+                    $problems[] = $label . ' is meant to draw nothing (' . self::EMPTY_OUTPUT[$label] . ') and draws ' . strlen($html) . ' bytes';
+                }
+                continue;
+            }
+            if (trim($html) === '') {
+                $problems[] = $label . ' drew nothing';
+                continue;
+            }
+            // The same state drawn in another context (on its page, in a feed, as a reply) is checked for drawing something, not against
+            // the other states: a feed item may well be the same for two states that differ on the page
+            if (preg_match('~^a reply: |^embed of a post, | on its page$| in a feed$~', $label) !== 1) {
+                $seen[$html][] = $label;
+            }
+        }
+        foreach ($seen as $labels) {
+            if (count($labels) < 2) {
+                continue;
+            }
+            $key = implode(' | ', $labels);
+            $this->drawSeen[$key] = true;
+            if (trim(self::SAME_OUTPUT[$key] ?? '') === '') {
+                $problems[] = 'these states draw the same output, so the template does not tell them apart: ' . $key;
+            }
+        }
+        $this->drawProblems = [...$this->drawProblems, ...$problems];
     }
 
     /**
@@ -318,13 +454,14 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertCount(4, $out);
         $this->assertStringContainsString('<script type="application/ld+json">', (string) $out['owners without pictures']);
         // The page's owner is bob and the object's is ada: the last icon lookup was for the object, so the ActivityPub link is ada's
         $this->assertStringContainsString('/actor/ada"', (string) $out['owners without pictures']);
         $this->assertStringContainsString('/view/', (string) $out['a user that is not a user'], 'a user that is not a user is not one: the object\'s own address is linked');
         $this->assertStringNotContainsString('/actor/', (string) $out['a user that is not a user']);
+        $this->assertStringNotContainsString('ada.png', (string) $out['the object\'s owner has a picture'], 'the picture of the object\'s owner is not printed by the shell');
     }
 
     /**
@@ -448,7 +585,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('The item', (string) $out['feed item']);
         $this->assertStringContainsString('class="subscription"', str_replace('row subscription', 'subscription', (string) $out['subscription']));
         $this->assertStringContainsString('Cafe &quot;quoted&quot;', (string) $out['link preview, a card with a quote']);
@@ -642,7 +779,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('Hello world: a note', (string) $out['a note']);
         $this->assertStringContainsString('class="p-rsvp"', (string) $out['an RSVP that is yes']);
         $this->assertStringContainsString('dt-end', (string) $out['an event']);
@@ -713,7 +850,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('name="publish_status"', (string) $out['Status new']);
     }
 
@@ -766,7 +903,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         // The listing sorts by time: early, the two that tie, hostile, then late.
         $this->assertLessThan(strpos((string) $out['likes'], 'Late'), strpos((string) $out['likes'], 'Early'));
         $this->assertStringNotContainsString('<script>', (string) $out['replies']);
@@ -816,7 +953,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('class="syndication"', (string) $out['syndication 0']);
         $this->assertSame('', trim((string) $out['syndication of a type with none']));
     }
@@ -912,7 +1049,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('class="u-email"', (string) $out['entity/User/profile/fields, a list of addresses']);
     }
 
@@ -1015,6 +1152,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             $out['zone ' . $zone . ' for a member'] = $draw('forms/output/timezones', ['value' => $zone]);
         }
         $ada->timezone = '';
+        $site->session()->logUserOn($ada);
         $out['a zone for a member with none'] = $draw('forms/output/timezones', ['value' => 'Europe/London']);
 
         // Pictures of a post: its attachments, who may delete them
@@ -1068,7 +1206,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('class="idno-input input-text"', (string) $out['text']);
         $this->assertStringContainsString('<option value="g" selected>Green</option>', (string) $out['select']);
         $this->assertStringContainsString('name="__bTk"', (string) $out['a form']);
@@ -1109,7 +1247,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('required', (string) $out['input, booleans, zero'] . (string) $out['longtext, zero'] . 'required');
     }
 
@@ -1179,7 +1317,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('Register', (string) $out['login, open, a forwarding address']);
         $this->assertStringNotContainsString('account/register', (string) $out['login, closed, a forwarding address']);
         $this->assertStringContainsString('value="https://example.org/came-from?x=1&amp;y=&quot;2&quot;"', (string) $out['login, open, only a referrer']);
@@ -1325,7 +1463,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('hooks.example\/services\/T000\/B000\/secret', (string) $out['webhooks, some']);
         $this->assertStringContainsString('tok-aaaa', (string) $out['micropub accounts, two']);
         $this->assertStringContainsString('key-123', (string) $out['bridgy, connected']);
@@ -1529,7 +1667,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('label-danger', (string) $out['idno version 99999.0']);
         $this->assertStringContainsString('label-success', (string) $out['idno version 0.1']);
         $this->assertStringContainsString('value="p4ss"', (string) $out['email, settings 0']);
@@ -1584,7 +1722,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         return $out;
         PHP;
         $out = $this->runInSite($code);
-        $this->assertIsArray($out);
+        $this->assertDrawn($out);
         $this->assertStringContainsString('youtube-nocookie.com/embed/abc-1_', (string) $out['embed, youtube watch']);
     }
 }

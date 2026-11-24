@@ -36,7 +36,7 @@ php bin/console build-lang all
 
 This will parse all PHP files in the target and extract translatable strings into the appropriate ```.pot``` file: ```languages/source/idno.pot``` for core, and ```languages/DOMAIN.pot``` inside the plugin or theme, where the domain is the lower-case plugin or theme name.
 
-The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all ```->_()``` and ```->esc_()``` method calls.
+The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all ```->_()``` and ```->esc_()``` method calls. It also reads `t()` and `t_html()` in Twig templates (when the first argument is a string you wrote), and, in a class that extends `ContentType`, the strings of its `public $title = '...';` and `public $category_title = '...';`, which the content type translates when it is asked for them: write them as plain string literals so that translators see them.
 
 !!! note "Note"
     You can also run ```npm run grunt -- build-lang``` from the project root, which runs ```php idno.php build-lang all```. A plugin can include its own Gruntfile with a `build-lang` task, as `IdnoPlugins/Status/Gruntfile.js` does.

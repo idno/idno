@@ -5,7 +5,7 @@ namespace Tests\Core {
     use Idno\Core\DefaultTemplate;
 
     /**
-     * The error page (templates/default/pages/500.tpl.php) is what Page::exception() draws
+     * The error page (templates/default/pages/500.html.twig) is what Page::exception() draws
      * when an exception is thrown while a page is being served. The exception's message can
      * contain text taken from the request, so the page must print it, and in debug mode the
      * stack trace, as text and never as HTML. A technical message (see

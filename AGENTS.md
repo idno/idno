@@ -251,7 +251,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `.txt`. `Tests/Templating/fixtures/fallback-trace.php` has `traced`: for each type that is not a web page, the `classic`
   files it draws, derived from a real traced run; and `classic`: every file under `templates/classic/` of core and the
   bundled plugins, computed from the file system and asserted (`Tests/Unit/Templating/ClassicTemplatesTest`: each has a `default`
-  template of the same name beside it, a Twig file or a `.tpl.php`, only `.tpl.php` files are in `classic`, and the recorded list is the file system's). With
+  template of the same name beside it (a Twig file: `CoreTemplatesAreTwigTest` forbids a `.tpl.php` there), only `.tpl.php` files are in `classic`, and the recorded list is the file system's). With
   `IDNO_TEST_TEMPLATE_TRACE=<file>` in the site's environment every template draw appends `type<TAB>name<TAB>file`
   (file relative to the project, or `-`) to the file, through `Idno\Templating\TemplateRenderer::$trace`, a static `?\Closure` hook that
   only `Tests\Fixtures\TemplateTrace` (a `kernel.request` listener registered in `config/services_test.php`) sets, and
@@ -2106,7 +2106,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   reappeared tables, any other `legacy_` table (`legacy_other`).
 - `/admin/legacytables` (`Idno\Pages\Admin\LegacyTables`, a LEGACY page: it needs the admin
   gatekeeper and the CSRF check of `Page::post()`, which controllers do not have; route in
-  `Idno\Core\Admin::registerPages()`; templates `templates/default/admin/legacytables.tpl.php`,
+  `Idno\Core\Admin::registerPages()`; templates `templates/default/admin/legacytables.html.twig`,
   `templates/classic/admin/legacytables.tpl.php` and the shared
   `admin/legacytables/body`, which escapes every value from the database): GET (admins) changes
   nothing and lists the tables with their approximate counts (with the 1.x `entities` tables back
@@ -2116,7 +2116,7 @@ and nothing at all on a site whose database is not SQL, where every list is empt
   `Page::post()`'s token check, `adminGatekeeper()`, then only `confirm` exactly `delete` with a
   complete upgrade calls `drop()`; every outcome is a session message (what was deleted, or why
   nothing was) and a redirect to the page. The admin menu entry (both menus:
-  `templates/default/admin/menu.tpl.php`, `templates/classic/admin/menu.tpl.php`) is
+  `templates/default/admin/menu.html.twig`, `templates/classic/admin/menu.tpl.php`) is
   `LegacyTables::showInMenu()`: false without a statement unless a logged-in admin is viewing (the
   admin shell also draws the menu on the 403 page of an `/admin` URL); else `worthShowing()`, once
   per request. On an SQLite site (or one whose database is not SQL) the route exists, the entry never appears, and the page
@@ -2591,7 +2591,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `classic` also holds a
   copy of every `default` file those types reach by name from there (the syndication buttons, `forms/token`, `forms/action`, the annotation
   and profile partials, `pages/home/nocontent`, the output of a few form controls, the entity templates of Media and StaticPages): the
-  original in `default` is the web page's and may be changed or ported, the copy is what a feed draws.
+  original in `default` is the web page's (a Twig file) and may be changed, the copy is what a feed draws.
   `Tests/Unit/Templating/NonHtmlReachTest` works out, from the file system, the closure of template names each non-HTML type reaches:
   it starts from the type's own directory, `entity/<Class>` for each `#[AsEntity]` class, `entity/default` and the helper methods'
   names, follows the string literals passed to `draw()` (a literal prefix followed by `.`, as in `draw('content/syndication/icon/' . $service)`,
@@ -2788,7 +2788,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `pagination()` draws on a copy too and uses only the `control-id` and `source-url` of its variables; `shell/pagination` escapes what it prints (the
     count, offset and limit as integers, the control, the address of the links). Tests: `IdnoTwigExtensionTest` (a `TemplateHelpersDouble`, no legacy application),
     `Tests/Kernel/LegacyTemplateHelpersTest` (each adapter method on the rig's site), `Tests/Kernel/TemplateLinkersTest` (the three linkers against the HTML5 parser) and `RawUsageTest` (the first argument of `t_html(` in a core or bundled Twig file is a string literal). `Idno\Core\PotGenerator` also reads `.twig` files: the first
-    argument of `t(` and `t_html(` when it is a string literal (Twig's lexer; `PotGeneratorTest::testTwigTranslationCallsAreExtracted`).
+    argument of `t(` and `t_html(` when it is a string literal (Twig's lexer; `PotGeneratorTest::testTwigTranslationCallsAreExtracted`). It reads the string literals of `$title` and `$category_title` in a class that extends a `ContentType` too (`ContentType` translates them with `language()->get($this->title)` when asked, so no call names them; `PotGeneratorTest::testAContentTypesTitlesAreExtractedFromItsPropertyDeclarations`). A string that reaches `t()`/`_()` only through a variable (`t(label)` in `entity/edit/header`, `forms/input/form-list`) is extracted only where the caller writes it as a literal.
   - Tests: `Tests/Kernel/CascadeTest` and `TwigEngineTest` run cases of `Tests/Kernel/template_twig.php` (one subprocess each, on the fixture
     bases, whose Twig files are the `tw-*`, `mix-*`, `inc-*`, `slot-*` and `esc*` files), `Tests/Unit/Templating/CascadeTwigLoaderTest`,
     `IdnoTwigExtensionTest`, `TemplateLocatorTest`, `TemplateRendererTest`, `Tests/Kernel/TwigTrimTest`, `LegacyTemplateTranslationTest`, `LegacyTemplateHelpersTest`.
@@ -3926,7 +3926,16 @@ the CLI installer no longer writes one.
   variable. Never `include` a path held in a local variable of a scope that variables from outside are
   written into. `Tests/Core/TemplateIncludeTest.php` and the contract case in
   `Tests/Kernel/TemplateContractTest` check this.
-- Output in templates: a `.tpl.php` template escapes nothing by itself. Print every value
+- Output in templates: the templates of core and of the bundled plugins are Twig files, which autoescape (`.html.twig`: HTML;
+  `.txt.twig`, a plain-text mail, is not escaped and must print text only). What still matters in them: every `|raw`,
+  `autoescape false`, `filter raw`, `apply raw` and `source(` is on `Tests/Templating/fixtures/raw-allowlist.php` with its reason
+  (`Tests/Unit/Templating/RawUsageTest`), and `|raw` is never for a value a person or another site supplied; an address that
+  goes into `href` or `src` and came from a person or another site goes through `|http_url` (http or https, else an empty
+  string), also where it was checked when it was stored, because values stored before a check are not rewritten; a value inside
+  inline JavaScript uses `|e('js')`, or `js_string()` in an attribute; the first argument of `t_html()` is a string literal
+  (translations are trusted markup). The old rule stays for the templates that are still PHP, the `classic` ones that a feed,
+  JSON, ActivityPub, KML or mail draws and a third party's `.tpl.php` files: a `.tpl.php` template escapes nothing by itself.
+  Print every value
   that a person or another site supplied with `htmlspecialchars()`, in text and inside an
   attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe
   inside an attribute, because both keep the double quote. An address that goes into
@@ -3941,18 +3950,18 @@ the CLI installer no longer writes one.
   begins with "s".
 - Link previews: `LinkPreview::buildPreviewFromData()` keeps the link and the image
   (`og:image` of the fetched page) only when `UrlValidator::httpUrl()` accepts them, and
-  `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them
+  `templates/default/entity/LinkPreviewCard.html.twig` (and its `classic` copy, `LinkPreviewCard.tpl.php`), checks them
   again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
   checks this.
 - Following and the error mail: a feed's title and addresses
-  (`templates/default/following/confirm.tpl.php`, `templates/default/entity/Subscription.tpl.php`),
+  (`templates/default/following/confirm.html.twig`, `templates/default/entity/Subscription.html.twig`),
   an h-card's name, photo and address
-  (`templates/default/account/settings/following/mf2user.tpl.php`) and the User-Agent,
-  query string and referrer of a request (`templates/email/admin/oops.tpl.php`) come from
+  (`templates/default/account/settings/following/mf2user.html.twig`) and the User-Agent,
+  query string and referrer of a request (`templates/email/admin/oops.html.twig`) come from
   other sites or from the request, and are stored or passed on as they were sent, so the
-  templates escape them with `htmlspecialchars()` and put an address into `href` or `src`
-  only through `UrlValidator::httpUrl()`. The text part of the mail
-  (`templates/email-text/admin/oops.tpl.php`) is not HTML and is not escaped.
+  templates autoescape them and put an address into `href` or `src`
+  only through `|http_url`. The text part of the mail
+  (`templates/email-text/admin/oops.txt.twig`) is not HTML and is not escaped.
   `Tests/Core/RemoteFeedOutputTest.php` checks this.
 - SSRF protection: the plain client (`Webservice::send()` and its wrappers, the `idno.http_client`
   service) is for the site's own URLs and for services the site's ADMIN configured (the PuSH hub, a
@@ -4034,10 +4043,10 @@ the CLI installer no longer writes one.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
-  `Page::exception()`, which draws `templates/default/pages/500.tpl.php`. The page shows
+  `Page::exception()`, which draws `templates/default/pages/500.html.twig`. The page shows
   the exception's message, and the whole exception (message and stack trace) when `debug`
   is set in the configuration. Both are passed through `htmlspecialchars()`, because a
-  message can contain text taken from the request. So an exception message is plain text:
+  message can contain text taken from the request (the template autoescapes it). So an exception message is plain text:
   HTML in it is displayed, not rendered. `Tests/Core/ErrorPageTest.php` checks this.
 - Exception messages, friendly and technical: `\Idno\Core\ExceptionMessage::forVisitor()`
   decides what a visitor is told about an exception, and the error page and the JSON shells

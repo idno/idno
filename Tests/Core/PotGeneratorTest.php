@@ -15,6 +15,26 @@ class PotGeneratorTest extends TestCase
         $this->generator = new PotGenerator();
     }
 
+    public function testAContentTypesTitlesAreExtractedFromItsPropertyDeclarations()
+    {
+        $code = "<?php namespace IdnoPlugins\\Foo; class ContentType extends \\Idno\\Common\\ContentType {\n    public \$title = 'Event';\n    public \$category_title = \"Events\";\n    public \$other = 'Not a title';\n}";
+        $this->generator->extractFromSource($code, 'ContentType.php');
+        $strings = $this->generator->getStrings();
+
+        $this->assertSame(['Event', 'Events'], array_keys($strings));
+        $this->assertSame(2, $strings['Event'][0]['line']);
+        $this->assertSame(3, $strings['Events'][0]['line']);
+    }
+
+    public function testATitlePropertyOfAClassThatIsNotAContentTypeIsNotExtracted()
+    {
+        $this->generator->extractFromSource("<?php class Page extends Base { public \$title = 'Not translated'; }", 'Page.php');
+        $this->generator->extractFromSource("<?php class ContentType { public \$title = 'The base class'; }", 'Base.php');
+        $this->generator->extractFromSource("<?php class Other extends NotAContentTypeAtAll { public \$title = 'Nor this'; }", 'Other.php');
+
+        $this->assertSame([], $this->generator->getStrings());
+    }
+
     public function testExtractBasicSingleQuotedString()
     {
         $code = '<?php $language->_(\'Hello World\'); ?>';

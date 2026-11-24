@@ -7,7 +7,10 @@ namespace Idno\Core;
  * gettext .pot (Portable Object Template) files.
  *
  * Uses PHP's built-in token_get_all() for reliable parsing, looking
- * for ->_() and ->esc_() method calls used by the Idno i18n system, and,
+ * for ->_() and ->esc_() method calls used by the Idno i18n system, for the
+ * `$title` and `$category_title` of a class that extends a ContentType (the
+ * base class translates them when it is asked for them, so no call names
+ * them), and,
  * in Twig templates (.twig files), Twig's own lexer, looking for the
  * t() and t_html() functions.
  *
@@ -126,6 +129,51 @@ class PotGenerator
             }
 
             $i++;
+        }
+
+        $this->extractContentTypeTitles($tokens, $fileReference);
+    }
+
+    /**
+     * The `$title` and `$category_title` properties of a class that extends a content type are translated at run time by
+     * `ContentType::getTitle()` and `getCategoryTitle()`, so no `->_()` call holds the string: read the literal in the
+     * property's declaration (`public $title = 'Event';`) when the file declares a class that extends `ContentType`.
+     *
+     * @param array $tokens The file's tokens
+     * @param string $fileReference File path to use in #: references
+     */
+    private function extractContentTypeTitles(array $tokens, string $fileReference): void
+    {
+        $count = count($tokens);
+        $extendsContentType = false;
+        for ($i = 0; $i < $count; $i++) {
+            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_EXTENDS) {
+                continue;
+            }
+            $next = $this->skipWhitespace($tokens, $i + 1, $count);
+            if ($next !== null && is_array($tokens[$next]) && in_array($tokens[$next][0], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)
+                && preg_match('~(^|\\\\)ContentType$~', $tokens[$next][1]) === 1) {
+                $extendsContentType = true;
+                break;
+            }
+        }
+        if (!$extendsContentType) {
+            return;
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            if (!is_array($tokens[$i]) || $tokens[$i][0] !== T_VARIABLE || !in_array($tokens[$i][1], ['$title', '$category_title'], true)) {
+                continue;
+            }
+            $equals = $this->skipWhitespace($tokens, $i + 1, $count);
+            $string = $equals === null ? null : $this->skipWhitespace($tokens, $equals + 1, $count);
+            if ($equals === null || $string === null || $tokens[$equals] !== '=' || !is_array($tokens[$string]) || $tokens[$string][0] !== T_CONSTANT_ENCAPSED_STRING) {
+                continue;
+            }
+            $decoded = $this->decodePhpString($tokens[$string][1]);
+            if ($decoded !== null) {
+                $this->addString($decoded, $fileReference, $tokens[$string][2]);
+            }
         }
     }
 

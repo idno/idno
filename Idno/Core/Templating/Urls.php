@@ -222,7 +222,7 @@ namespace Idno\Core\Templating {
          */
         function fixURL($url)
         {
-            // Keep in sync with icon code in templates/default/entity/User/profile/fields.tpl.php
+            // Keep in sync with icon code in templates/default/entity/User/profile/fields.html.twig (and its `classic` copy)
             return (
                 substr($url, 0, 7) == 'http://' ||
                 substr($url, 0, 8) == 'https://' ||
