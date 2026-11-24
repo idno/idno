@@ -246,19 +246,14 @@ Third party libraries are licensed separately.
 * Steve Clay's AutoP, which is distributed under the MIT License. Source: https://code.google.com/p/mrclay/
 * Aaron Parecki's Webmention Client, which is distributed under the Apache 2.0 license. Source: https://github.com/aaronpk/mention-client
 * Barnaby Walters's Microformats 2 Parser, which is distributed under the MIT License. Source: https://github.com/indieweb/php-mf2
-* FitVids.js, which is distributed under the WTFPL License. Source: http://fitvidsjs.com/
 * Leaflet.js, which is distributed under the BSD 2-Clause License. Source: http://leafletjs.com/ 
 * Symfony Mailer, which is distributed under the MIT License. Source: https://github.com/symfony/mailer
 * Antwort, an email template which is distributed under the MIT License. Source: https://github.com/internations/antwort
 * Mention.js, a Bootstrap user at-mention library, which is distributed under the MIT License. Source: https://github.com/jakiestfu/Mention.js
-* MediaElement.js, a cross-browser media player, which is distributed under the MIT License. Source: https://github.com/johndyer/mediaelement
 * Simplepie, a feed parser, which is distributed under the BSD 3-Clause License. Source: https://github.com/simplepie/simplepie/
 * Bootstrap Toggle, which is distributed under the MIT License. Source: http://www.bootstraptoggle.com/
-* TinyMCE, a rich text editor, which is distributed under the GPL License (version 2 or later). Source: https://github.com/tinymce/tinymce
 * The Paypal Bootstrap Accessibility Plugin, which is distributed under the BSD 3-Clause License. Source: https://github.com/paypal/bootstrap-accessibility-plugin
 * HTMLPurifier, which is distributed under the LGPL License. Source: http://htmlpurifier.org
-* Wavesurfer, which is distrubuted under a Creative Commons Attribution 3.0 Unported License. Source: https://github.com/katspaugh/wavesurfer.js
-* Exif-js, which is distributed under the MIT Licence. Source: https://github.com/exif-js/exif-js
 * PHP-OGP, distributed under the GPL2 Licence. Source: https://github.com/mapkyca/php-ogp
 
 ## Thank you

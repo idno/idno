@@ -7,8 +7,10 @@
 {% if subscriptions is not empty %}
     <div class="row">
         <div class="col-md-10 col-md-offset-1">
-            <p id="follow-link"><a href="#" onclick="$('#follow-link').hide(); $('#follow-enclosure').slideDown(); return false;">+ {{ t('Follow another site') }}</a></p>
-            <div id="follow-enclosure" style="display:none">{{ idno_include('following/add') }}</div>
+            <details id="follow-enclosure">
+                <summary id="follow-link">+ {{ t('Follow another site') }}</summary>
+                {{ idno_include('following/add') }}
+            </details>
         </div>
     </div>
     {% for subscription in subscriptions %}{{ subscription.draw()|raw }}{% endfor %}{% else %}

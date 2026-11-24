@@ -1442,7 +1442,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
      * What the plugins' posts write inside a script, they write for a script: the address of an audio file (with an apostrophe in it),
      * the id of the check-in's map, the address a bookmark form asks for a title and the one the page editor's file picker opens.
      */
-    public function testThePluginPostsScriptsWriteTheirValuesForAScript(): void
+    public function testThePluginPostsScriptsAndPlayersWriteTheirValuesSafely(): void
     {
         $this->seedSite();
 
@@ -1465,28 +1465,25 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $checkin->body = '<p>Fine</p><script>alert(7)</script>';
         $like = new \IdnoPlugins\Like\Like();
         $like->setOwner($ada);
-        $page = new \IdnoPlugins\StaticPages\StaticPage();
-        $page->setOwner($ada);
 
         return [
             $template->__(['object' => $media])->draw('entity/Media'),
             $template->__(['object' => $checkin])->draw('entity/Checkin'),
             $template->__(['object' => $like])->draw('entity/Like/edit'),
-            $template->__(['object' => $page, 'category' => 'No Category'])->draw('entity/StaticPage/edit'),
             $site->config()->getDisplayURL(),
         ];
         PHP);
 
         $this->assertIsArray($out);
-        [$media, $checkin, $like, $page, $site] = $out;
-        $this->assertStringContainsString(".load('https\\u003A\\/\\/x.example\\/a\\u0027b.mp3');", $media, 'the apostrophe cannot end the string');
-        $this->assertStringContainsString(".load('');", $media, 'an address that is not http is no address');
+        [$media, $checkin, $like, $site] = $out;
+        $this->assertStringContainsString('src="https://x.example/a&#039;b.mp3"', $media, 'the apostrophe is escaped in the attribute');
+        $this->assertSame(1, substr_count($media, '<audio'), 'an address that is not http gets no player');
         $this->assertStringNotContainsString('javascript:', $media);
+        $this->assertStringNotContainsString('<script', $media, 'the browser\'s own player needs no script');
         $this->assertStringContainsString("L.map('map_00000000\\u002D0000\\u002D4000\\u002D8000\\u002D000000000021'", $checkin);
         $this->assertStringNotContainsString('alert(7)', $checkin, 'the body of the check-in is purified');
         $written = strtr($site, [':' => '\\u003A', '/' => '\\/']);
         $this->assertStringContainsString("fetch('" . $written . "like\\/callback\\/\\u003Furl\\u003D'", $like);
-        $this->assertStringContainsString("url: '" . $written . "filepicker\\/\\u003Ftype\\u003D'", $page);
     }
 
     /**

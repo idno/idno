@@ -5,8 +5,9 @@
 </div>
 <div class="row">
 <div class="col-md-10 col-md-offset-1">
-<p id="follow-link"><a href="#" onclick="$('#follow-link').hide(); $('#follow-enclosure').slideDown(); return false;">+ Follow another site</a></p>
-<div id="follow-enclosure" style="display:none"><form action="{site}/following/add" method="post">
+<details id="follow-enclosure">
+<summary id="follow-link">+ Follow another site</summary>
+<form action="{site}/following/add" method="post">
 <p>
 Add the address of a site to follow:<br>
 <input type="text" name="url" value="" placeholder="https:// ..." style="width: 100%"><br>
@@ -16,6 +17,7 @@ Add the address of a site to follow:<br>
 <input type="hidden" name="__bTk" value="{token}" />
 <input type="hidden" name="__bTa" value="following/add" />
 </p>
-</form></div>
+</form>
+</details>
 </div>
 </div>

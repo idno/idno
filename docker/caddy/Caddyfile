@@ -16,7 +16,7 @@
 	respond @denied_files 403
 
         # Rewrites
-        rewrite /js/canary.js /js/known.min.js
+        rewrite /js/canary.js /js/idno-2026.min.js
         @css path_regexp css ^/css/[0-9]+/(.*)$
         rewrite @css /css/{re.css.1}
         @js path_regexp js ^/js/[0-9]+/(.*)$

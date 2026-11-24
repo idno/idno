@@ -82,7 +82,6 @@
 <![endif]-->
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
-<script src="{site}/IdnoPlugins/Media/external/wavesurfer/dist/wavesurfer.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body class="idno_pages_homepage homepage logged-out">
@@ -147,37 +146,14 @@ Ada Admin
 </div>
 </div>
 <div class="idno-entry-body">
-<div class="audio-play-wrapper"><a href="#" id="player{1}" class="audio-play-button"><i class="fa fa-play"></i></a></div>
 <h2 class="p-name">
 <a href="{site}/2026/a-fixture-recording">A fixture recording</a>
 </h2>
-<div id="waveform{1}" class="waveform-player"></div>
-<script>
-                        var wavesurfer{1} = WaveSurfer.create({
-                            container: '#waveform{1}',
-                            waveColor: '#aaa',
-                            progressColor: '#333',
-                            cursorColor: '#aaa',
-                            height: 100
-                        });
-                        wavesurfer{1}.load('{site}\/file\/00000000000040008000000000000022\/sound.mp3');
-                        $('#waveform{1}').click(function() {
-                            wavesurfer{1}.play();
-                        });
-                        wavesurfer{1}.on('play', function() {
-                            $('#player{1}').html('<i class="fa fa-pause"></i>');
-                        });
-                        wavesurfer{1}.on('pause', function() {
-                            $('#player{1}').html('<i class="fa fa-play"></i>');
-                        });
-                        wavesurfer{1}.on('finish', function() {
-                            $('#player{1}').html('<i class="fa fa-play"></i>');
-                        });
-                        $('#player{1}').click(function() {
-                            wavesurfer{1}.playPause();
-                            return false;
-                        });
-                    </script>
+<p>
+<audio class="u-audio" controls preload="none" style="width: 100%" src="{site}/file/00000000000040008000000000000022/sound.mp3">
+Sorry, your browser does not support the audio tag.
+</audio>
+</p>
 <div class="e-content">
 <p>Listen to the recording.</p>
 </div>
@@ -707,30 +683,7 @@ Search
 </div>
 </div>
 </div>
-<!-- Flexible media player -->
-<script
-    src="{site}/vendor/npm-asset/mediaelement/build/mediaelement-and-player.min.js"></script>
-<link rel="stylesheet"
-      href="{site}/vendor/npm-asset/mediaelement/build/mediaelementplayer.min.css"/>
-<!-- Video shim -->
-<script src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
 <script src="{site}/js/idno-2026.min.js" defer></script>
-<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
-<script>
-        $('audio').mediaelementplayer({
-        features: ['playpause','progress','current','tracks','volume','fullscreen'],
-        alwaysShowControls: false,
-        pauseOtherPlayers: true,
-        enableAutosize: false,
-        mediaWidth: -1,
-        mediaHeight: -1
-    });
-</script>
-<style>
-    .known-media-element {
-        width: 100%;
-        height: 100%;
-    }
-</style><div class="blank-footer">
+<div class="blank-footer">
 </div></body>
 </html>

@@ -20,10 +20,7 @@ namespace Idno\Core {
             'open_registration'      => true, // Can anyone register for this system?
             'initial_plugins'        => array('Status', 'Text', 'Photo', 'IndiePub', 'ActivityPub'),
             'plugins'                => array(), // Default plugins
-            'assets'                 => [      // Assets to be included
-                                               'mediaelementplayer' => true,
-                                               'fitvids'            => true,
-            ],
+            'assets'                 => [],    // Assets to be included: the names of templates under assets/ (none ships)
             'themes'                 => array(),
             'antiplugins'            => array(),
             'alwaysplugins'          => array(),

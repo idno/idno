@@ -51,56 +51,6 @@ if (!empty($vars['label'])) {
         <br />
 </div>    
 
-<script>
-
-    $(document).ready(function () {
-        makeRichText('#<?php echo $unique_id?>');
-    });
-
-    function makeRichText(container) {
-        $(container).tinymce({
-            selector: 'textarea',
-            license_key: 'gpl',
-            statusbar: false,
-            <?php if (!empty($vars['wordcount'])) {
-                ?>statusbar: true, <?php
-            } else {
-                ?>statusbar: false,<?php
-            } ?>
-            branding: false,
-            menubar: false,
-            height: <?php echo $height?>,
-            min_height: <?php echo $height?>,
-            resize: true,
-            relative_urls : false,
-            remove_script_host : false,
-            convert_urls : true,
-            valid_children : "+body[style]",
-            invalid_elements: 'section',
-            valid_styles : 'font-style,color,text-align,text-decoration,float,display,margin-left,margin-right',
-            file_picker_callback: function (callback, value, meta) {
-                filePickerDialog(callback, value, meta);
-            },
-            toolbar: 'styles | bold italic | link image | blockquote bullist numlist | alignleft aligncenter alignright | emoticons | code',
-            plugins: 'code link image autoresize lists emoticons <?php
-            if (!empty($vars['wordcount'])) { echo " wordcount";
-            } ?>',
-        });
-    }
-
-    function filePickerDialog(callback, value, meta) {
-        tinymce.activeEditor.windowManager.openUrl({
-            title: 'File Manager',
-            //url: '<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>filepicker/?type=' + meta.filetype,
-            url: '<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>filepicker/?type=image',
-            width: 650,
-            height: 550,
-            onMessage: function(api, message) {
-                       callback(message.data.url);
-            }
-        });
-    }
-</script>
 <?php
 
 // Expose this control to the api

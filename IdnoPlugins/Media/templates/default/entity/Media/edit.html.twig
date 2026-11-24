@@ -1,42 +1,36 @@
 {{ idno_include('entity/edit/header') -}}
 <form action="{{ object.getURL() }}" method="post" enctype="multipart/form-data">
 
-    <div class="row">
+    <div class="idno-editor">
 
-        <div class="col-md-8 col-md-offset-2 edit-pane">
-
-                <h4>
-
+            <h4 class="idno-editor-heading">
                 {% if not entity_value(object, '_id') %}{{ t('New Audio') }}{% else %}{{ t('Edit Audio') }}{% endif %}
-                </h4>
+            </h4>
 
-            <p>
-
-                <label>
-                    <span class="btn btn-primary btn-file">
-                        <i class="fa fa-play-circle"></i> <span id="media-filename">{% if not entity_value(object, '_id') %}{{ t('Upload audio') }}{% else %}{{ t('Choose different audio') }}{% endif %}</span>
-                        {{ idno_include('forms/input/file', {
-                            name: 'media',
-                            id: 'media',
-                            accept: 'audio/*;video/*;capture=microphone',
-                            onchange: "$('#media-filename').html($(this).val())",
-                            class: 'col-md-9'
-                        }) }}
-                    </span>
-                </label>
-
-            </p>
-            <div class="content-form">
-                <label for="title">
-                    {{ t('Title') }}</label>
-                    {{ idno_include('forms/input/input', {
-                        name: 'title',
-                        id: 'title',
-                        placeholder: t('Give it a title'),
-                        value: entity_value(object, 'title'),
-                        class: 'form-control'
+            {# image-file-input is the look's rule that hides the native file field behind its label button #}
+            <div class="idno-form-field image-file-input">
+                <label class="idno-btn idno-btn-ghost" for="media" style="width:100%;justify-content:center;cursor:pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                    <span id="media-filename">{% if not entity_value(object, '_id') %}{{ t('Upload audio') }}{% else %}{{ t('Choose different audio') }}{% endif %}</span>
+                    {{ idno_include('forms/input/file', {
+                        name: 'media',
+                        id: 'media',
+                        accept: 'audio/*;video/*;capture=microphone',
+                        onchange: "var name = this.files && this.files.length ? this.files[0].name : this.value; document.getElementById('media-filename').textContent = name;",
+                        class: 'input-file'
                     }) }}
+                </label>
+            </div>
 
+            <div class="idno-form-field">
+                <label class="idno-label" for="title">{{ t('Title') }}</label>
+                {{ idno_include('forms/input/input', {
+                    name: 'title',
+                    id: 'title',
+                    placeholder: t('Give it a title'),
+                    value: entity_value(object, 'title'),
+                    class: 'idno-input'
+                }) }}
             </div>
 
             {{ idno_include('forms/input/richtext', {
@@ -53,13 +47,17 @@
             {% if not entity_value(object, '_id') %}{{ idno_include('forms/input/hidden', {name: 'forward-to', value: site_url('content/all/')}) }}{% endif %}
             {{ idno_include('content/extra') }}
             {{ idno_include('content/access') }}
-            <p class="button-bar ">
-                {{ form_token('/media/edit') }}
-                <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();" />
-                <input type="submit" class="btn btn-primary" value="{{ t('Publish') }}" />
 
-            </p>
-        </div>
+            {{ form_token('/media/edit') }}
+
+            <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                <button type="submit" class="idno-btn idno-btn-primary">
+                    {{ t('Publish') }}
+                </button>
+                <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="idno-btn idno-btn-ghost btn-cancel">
+                    {{ t('Cancel') }}
+                </a>
+            </div>
 
     </div>
 </form>

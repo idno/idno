@@ -16,7 +16,7 @@
     RewriteCond $1::%{REQUEST_URI} ^(.*)::(.*?)\1$
     RewriteRule ^(.*)$ - [ENV=BASE:%2]
 
-    RewriteRule ^js/canary\.js$ %{ENV:BASE}/js/known.min.js [L]
+    RewriteRule ^js/canary\.js$ %{ENV:BASE}/js/idno-2026.min.js [L]
 
     # The query string cache trick doesn't really work, so use rewrite rules instead
     RewriteRule ^js/[0-9]+/(.*)$ %{ENV:BASE}/js/$1 [L]    

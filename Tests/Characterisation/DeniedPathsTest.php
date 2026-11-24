@@ -53,6 +53,17 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * The installer's check that URL rewriting works asks for `js/canary.js`; the rules answer it with the look's script.
+         */
+        public function testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript(): void
+        {
+            $r = $this->site()->request('GET', 'js/canary.js');
+
+            $this->assertSame(200, $r->status);
+            $this->assertSame((string) file_get_contents(dirname(__DIR__, 2) . '/js/idno-2026.min.js'), $r->body);
+        }
+
+        /**
          * The front-end build's sources (`frontend/`: the package files, the Vite and PostCSS configuration, the
          * scripts and style sheets the built files come from) are never served, whether or not the file exists.
          */

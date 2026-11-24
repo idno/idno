@@ -30,6 +30,14 @@ if (preg_match('#^/((var|config|bin|tests|docs|data|frontend|warmup/cli)(/|$)|(i
     return true;
 }
 
+// The installer's check that URL rewriting works asks for js/canary.js, which the web server's rewrite rules answer
+// with the look's script (warmup/webserver-configs, .htaccess, docker/caddy/Caddyfile): it is a real, served file.
+if (rawurldecode($path) === '/js/canary.js' && is_file($root . '/js/idno-2026.min.js')) {
+    header('Content-Type: application/javascript');
+    readfile($root . '/js/idno-2026.min.js');
+    return true;
+}
+
 if ($file !== false
     && is_file($file)
     && str_starts_with($file, $root . DIRECTORY_SEPARATOR)

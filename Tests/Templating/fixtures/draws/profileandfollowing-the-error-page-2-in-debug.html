@@ -15,7 +15,7 @@ or
 <a href="{site}/">click here to go back to the homepage</a>.
 </p>
 <p>
-<small><a href="#" onclick="$('#details').show(); return false;">Click here to see the technical details.</a></small>
+<small><a href="#details" onclick="var d = document.getElementById('details'); d.style.display = 'block'; return false;">Click here to see the technical details.</a></small>
 </p>
 <div id="details" style="display:none">
 <pre>

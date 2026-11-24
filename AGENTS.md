@@ -560,6 +560,10 @@ pins the SQLite side in the unit tier (a test subclass whose root is a temporary
 `WebSettingsTest` the web installer's decision, `CliInstallerTest` `makeconfig` and the ownership notes,
 `Tests/Kernel/InstallerSchemaTest` the MySQL side (skips on SQLite). `ext-pdo_mysql` is a Composer `suggest`, not a
 `require`, as is `ext-pdo_sqlite`.
+The web installer's check that URL rewriting works (`WebInstaller::rewriteWorking()` and the settings page's own request) asks for `js/canary.js`, a file that does
+not exist: a working rewrite rule answers it with `js/idno-2026.min.js` (the look's script, so a 200), no rule leaves a 404. `.htaccess`, `warmup/webserver-configs/htaccess.dist`,
+`htaccess-2.4.dist`, `nginx.conf`, `docker/caddy/Caddyfile` and both routers carry the rule (it once named `js/known.min.js`, which was never shipped, so the check failed on every
+server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in every configuration and `DeniedPathsTest::testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript` the answer.
 
 ### Request lifecycle
 
@@ -2986,7 +2990,21 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default`, `email` and `email-text` in core
   and the bundled plugins is a Twig file (`CoreTemplatesAreTwigTest`); the `.tpl.php` files that were beside them are deleted, and the `.tpl.php` engine stays for the `classic`
   and type-shell templates and for third-party plugins and themes.
-  The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) `js/modernizr/`, `js/idno.js` and `js/idno.min.js` (with their sources `js/src/classes/` and `js/src/lib/`) were deleted when nothing drew them. The Grunt build
+  No jQuery in the built-in look. The look loads one script, `js/idno-2026.min.js` (Alpine.js, Tiptap, and the modules in `frontend/src/js/modules/`, among them
+  the @-mention autocomplete), and no jQuery or plugin of it: only the onboarding shell (`shell/simple`, and the `onboarding/*` bodies drawn only inside it) loads
+  jQuery. `Tests/Unit/Templating/NoJqueryInTheBuiltInLookTest` fails for a `templates/default/**/*.html.twig` file of core or a bundled plugin that calls `$(`, `$.`, `jQuery`, `mediaelementplayer`,
+  `tinymce` or `.modal(`/`.tooltip(`/`.popover(` (Alpine's `$el`, `$refs`, `$dispatch`, `${...}` and comments are not calls); a small behaviour is an inline script in plain DOM
+  JavaScript or Alpine attributes in the template, not a change to `frontend/src` (a rebuild is not byte-identical). What the inline scripts of the look do:
+  `entity/edit/footer` (every edit form: a second submit of a form is ignored while the first is sending, without disabling the buttons, which would drop the
+  submit button's own `publish_status`; an empty required rich-text field takes the cursor), `admin/diagnostics` (fetches the page with `X-Requested-With: XMLHttpRequest`,
+  which answers the report as text, into `#diagnostics-report-text`), `following/home` (a `<details id="follow-enclosure">`, no script) and the static page's
+  advanced options (Alpine). Media posts play in the browser's own `<audio controls>` / `<video controls>` (no waveform, no MediaElement.js, no WaveSurfer: the plugin's
+  `external/wavesurfer/` and its `shell/head` and `shell/footer` extensions are deleted); static pages are edited as HTML source in a plain `<textarea name="body">`,
+  because the body is HTML the administrator wrote (forms, ids, `<style>`, frames) that Tiptap, which only keeps the markup its schema knows, would rewrite on the first
+  edit; a browser submits that field's line breaks as CRLF. The `assets` setting names templates under `assets/` that every page draws; none ships (`mediaelementplayer`
+  and `fitvids`, jQuery plugins, are deleted, with their Composer packages `npm-asset/mediaelement`, `npm-asset/vanilla-fitvids`, `npm-asset/exif-js`, `npm-asset/tinymce--tinymce-jquery` and `tinymce/tinymce`), and a stored `assets` entry with no template draws nothing. `IdnoPlugins\Photo` no longer registers the `exif-js` asset.
+  The page-level checks are in `Tests/Characterisation/BuiltInLookScriptsTest`.
+  The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) `js/modernizr/`, `js/idno.js` and `js/idno.min.js` (with their sources `js/src/classes/`, `js/src/lib/` and `js/src/Idno.js`) were deleted when nothing drew them. The Grunt build
   (`Gruntfile.js`, `npm run grunt`) remains for the onboarding style sheet (`build-css`) and the service worker (`build-js`), the language
   catalogues (`build-lang`) and the linters (`test`); it does not build Idno 2026's files, which the `frontend/` build writes. The guide for plugin and theme authors,
   `docs/developers/plugins/upgrading.md` (what still works, what a `.tpl.php` template that a Twig template draws now gets, how to convert one), is pinned

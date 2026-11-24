@@ -24,26 +24,44 @@
         {% endif %}
         </div>
     
-        <div id="diagnostics-report" style="display: none;">
-            <small><pre style="overflow: auto; height: 500px;">
-                </pre></small>
+        <div id="diagnostics-report" hidden>
+            <small><pre id="diagnostics-report-text" style="overflow: auto; height: 500px;"></pre></small>
         </div>
 
-        <span class="btn btn-primary" id="diagnostics-report-run">{{ t('Generate detailed report') }}</span>
+        <button type="button" class="btn btn-primary" id="diagnostics-report-run">{{ t('Generate detailed report') }}</button>
 
     </div>
 
 </div>
 
 <script>
-    $(document).ready(function(){
-        $('#diagnostics-report-run').click(function(){
-            $(this).html("Generating...").attr('disabled', 'true');
-            
-            $('#diagnostics-report pre').load('{{ current_url()|e('js') }}', function(){
-                $('#diagnostics-report-run').hide();
-                $('#diagnostics-report').fadeIn();
-            });
+    (function () {
+        var button = document.getElementById('diagnostics-report-run');
+        var report = document.getElementById('diagnostics-report');
+        var text = document.getElementById('diagnostics-report-text');
+        if (!button || !report || !text) {
+            return;
+        }
+        button.addEventListener('click', function () {
+            button.textContent = '{{ t('Generating...')|e('js') }}';
+            button.disabled = true;
+            // The page answers an XMLHttpRequest with the report as plain text.
+            fetch('{{ current_url()|e('js') }}', {credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error(String(response.status));
+                    }
+                    return response.text();
+                })
+                .then(function (body) {
+                    text.textContent = body;
+                    button.hidden = true;
+                    report.hidden = false;
+                })
+                .catch(function () {
+                    button.textContent = '{{ t('Generate detailed report')|e('js') }}';
+                    button.disabled = false;
+                });
         });
-    });
+    })();
 </script>

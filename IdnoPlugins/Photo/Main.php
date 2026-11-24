@@ -22,13 +22,6 @@ namespace IdnoPlugins\Photo {
             \Idno\Core\Idno::site()->routes()->addRoute('/photo/delete/:id/?', '\IdnoPlugins\Photo\Pages\Delete');
         }
 
-        function registerEventHooks()
-        {
-            \Idno\Core\Idno::site()->events()->addListener('page/get', function (\Idno\Core\Event $event) {
-                \Idno\Core\Idno::site()->currentPage()->setAsset("exif-js", \Idno\Core\Idno::site()->config()->getStaticURL() . 'vendor/npm-asset/exif-js/exif.js', 'javascript');
-            });
-        }
-
         /**
          * Get the total file usage
          * @param bool $user

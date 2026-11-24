@@ -9,57 +9,15 @@ Title</label>
 <input type="text" name="title" id="title" placeholder="Give it a title"
                            value="" class="form-control"/>
 </p>
-<div class="idno-editor" x-data="tiptapEditor('editor-{1}')">
-<div class="idno-editor-toolbar">
-<button type="button" class="idno-editor-toolbar-btn" title="Bold" x-on:click="editor.chain().focus().toggleBold().run()" :class="{ 'active': editor?.isActive('bold') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Italic" x-on:click="editor.chain().focus().toggleItalic().run()" :class="{ 'active': editor?.isActive('italic') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Strikethrough" x-on:click="editor.chain().focus().toggleStrike().run()" :class="{ 'active': editor?.isActive('strike') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" x2="20" y1="12" y2="12"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Inline code" x-on:click="editor.chain().focus().toggleCode().run()" :class="{ 'active': editor?.isActive('code') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-</button>
-<div class="idno-editor-toolbar-divider"></div>
-<!-- Paragraph style dropdown -->
-<select class="idno-editor-toolbar-btn" style="width:auto;padding:0 0.5rem;font-size:var(--font-size-sm)"
-                x-on:change="setHeading($event.target.value)" x-ref="headingSelect">
-<option value="paragraph">Paragraph</option>
-<option value="1">Heading 1</option>
-<option value="2">Heading 2</option>
-<option value="3">Heading 3</option>
-</select>
-<div class="idno-editor-toolbar-divider"></div>
-<button type="button" class="idno-editor-toolbar-btn" title="Link" x-on:click="toggleLink()">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Image" x-on:click="addImage()">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-</button>
-<div class="idno-editor-toolbar-divider"></div>
-<button type="button" class="idno-editor-toolbar-btn" title="Blockquote" x-on:click="editor.chain().focus().toggleBlockquote().run()" :class="{ 'active': editor?.isActive('blockquote') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/><path d="M3 12v6"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Bullet list" x-on:click="editor.chain().focus().toggleBulletList().run()" :class="{ 'active': editor?.isActive('bulletList') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Numbered list" x-on:click="editor.chain().focus().toggleOrderedList().run()" :class="{ 'active': editor?.isActive('orderedList') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
-</button>
-<div class="idno-editor-toolbar-divider"></div>
-<button type="button" class="idno-editor-toolbar-btn" title="Code block" x-on:click="editor.chain().focus().toggleCodeBlock().run()" :class="{ 'active': editor?.isActive('codeBlock') }">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-</button>
-<button type="button" class="idno-editor-toolbar-btn" title="Horizontal rule" x-on:click="editor.chain().focus().setHorizontalRule().run()">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>
-</button>
-</div>
-<div class="idno-editor-content" id="editor-{1}-editor"></div>
-<textarea name="body" id="editor-{1}" style="display:none" ></textarea>
-</div>
+<p>
+<label for="body">
+Body
+<small>(HTML)</small></label>
+<textarea name="body" id="body" class="form-control" rows="24" spellcheck="false" autocapitalize="off" autocomplete="off"
+                              placeholder="Share something brilliant..."
+                              style="width: 100%; min-height: 28rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; tab-size: 4; white-space: pre; overflow: auto;">
+</textarea>
+</p>
 <div class="page-cat">
 <label>
 Parent category</label><br>
@@ -68,18 +26,13 @@ Parent category</label><br>
 </option>
 </select>
 </div>
-<p id="show-options">
-<small><a href="#" onclick="$('#moreoptions').toggle(); $('#show-options').hide(); return false;"><i
-                                class="fa fa-plus"></i>
-Show advanced options</a></small>
+<div x-data="{ open: false }">
+<p id="show-options" x-show="!open">
+<small><a href="#moreoptions" x-on:click.prevent="open = true">+ Show advanced options</a></small>
 </p>
-<div id="moreoptions"                         style="display:none"
-                    >
+<div id="moreoptions" x-show="open" x-cloak>
 <p id="hide-options">
-<small><a href="#"
-                                  onclick="$('#moreoptions').toggle(); $('#show-options').show(); return false;"><i
-                                    class="fa fa-minus"></i>
-Hide advanced options</a></small>
+<small><a href="#show-options" x-on:click.prevent="open = false">- Hide advanced options</a></small>
 </p>
 <div>
 <p>
@@ -94,15 +47,14 @@ Forward URL</label>
 <p style="margin-bottom: 20px">
 <strong>Show the page title as a heading?</strong><br>
 <label class="radio-inline">
-<input type="radio" name="hide_title" id="title-heading" value="0" checked>
+<input type="radio" name="hide_title" id="title-heading-yes" value="0" checked>
 Yes
 </label>
 <label class="radio-inline">
-<input type="radio" name="hide_title" id="title-heading" value="1" >
+<input type="radio" name="hide_title" id="title-heading-no" value="1" >
 No
 </label>
 </p>
-<div class="page-cat">
 </div>
 </div>
 <div class="access-control-block">
@@ -157,93 +109,86 @@ Private
 <input type="hidden" name="__bTs" value="{token-time}" />
 <input type="hidden" name="__bTk" value="{token}" />
 <input type="hidden" name="__bTa" value="/staticpages/edit" />
-<input type="button" class="btn btn-cancel" value="Cancel" onclick="hideContentCreateForm();"/>
+<a href="{site}/" class="btn btn-cancel">Cancel</a>
 <input type="submit" class="btn btn-primary" value="Publish"/>
 </p>
 </div>
 </div>
 </form>
 <script>
-
-        /*function postForm() {
-         var content = $('textarea[name="body"]').html($('#body').html());
-         console.log(content);
-         return content;
-         }*/
-
-        $(document).ready(function () {
-            makeRich('#body');
-        })
-        ;
-
-        function makeRich(container) {
-            $(container).tinymce({
-                selector: 'textarea',
-                theme: 'modern',
-                skin: 'light',
-                statusbar: false,
-                menubar: false,
-                toolbar: 'styleselect | bold italic | link image | blockquote bullist numlist | alignleft aligncenter alignright | code',
-                plugins: 'code link image autoresize',
-                relative_urls: false,
-                remove_script_host: false,
-                convert_urls: true,
-                file_picker_callback: function (callback, value, meta) {
-                    filePickerDialog(callback, value, meta);
-                }
-            });
-        }
-
-        function filePickerDialog(callback, value, meta) {
-            tinymce.activeEditor.windowManager.open({
-                title: 'File Manager',
-                url: '{site}\/filepicker\/\u003Ftype\u003D' + meta.filetype,
-                width: 650,
-                height: 550
-            }, {
-                oninsert: function (url) {
-                    callback(url);
-                }
-            });
-        }
-
-        //$('.selectpicker').selectpicker();
-
-    </script>
-<script>
-
-    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
-        $(".mentionable").mention({
-            delimiter: '@',
-            sensitive : true,
-            queryBy: ['name','username'],
-            users: data
-        });
-    });*/
-
-</script><script>
-    /* Handle submit button */
-    $(document).ready(function() {
-        $('div.page-body form').submit(function() {
-            
-            var richrequiredcomplete = true;
-            
-            $(this).find('textarea.validation-required').each(function(){
-                if ($(this).val().length == 0) {
-                    richrequiredcomplete = false;
-                }
-            });
-            
-            
-            // Fudge rich text completion for now.
-            if (richrequiredcomplete == true) {
-                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                $('.btn-cancel').hide();
-                $('#submit-spinner').show();
+    /* The edit form this footer follows: a second click on a submit button does not send the post twice (the guard is lifted
+       after 10 seconds and when the page is shown again), and an empty required rich-text field takes the cursor. The field is
+       checked here and not with the `required` attribute, because the browser cannot focus the hidden textarea behind the editor
+       and reports an error instead of a message. Buttons are not disabled: a disabled submit button would not send its own
+       value (publish_status). Without JavaScript the server refuses a post with no body. */
+    (function () {
+        var script = document.currentScript;
+        var form = null;
+        for (var node = script ? script.previousElementSibling : null; node; node = node.previousElementSibling) {
+            if (node.tagName === 'FORM') {
+                form = node;
+                break;
             }
+        }
+        if (!form && script) {
+            form = script.closest('form');
+        }
+        if (!form) {
+            return;
+        }
+
+        var timer = null;
+
+        function busy(on) {
+            clearTimeout(timer);
+            if (on) {
+                form.setAttribute('data-saving', 'true');
+                timer = setTimeout(function () {
+                    busy(false);
+                }, 10000);
+            } else {
+                form.removeAttribute('data-saving');
+            }
+            var spinner = document.getElementById('submit-spinner'); // drawn after this script
+            if (spinner) {
+                spinner.style.display = on ? '' : 'none';
+            }
+            form.querySelectorAll('.btn-cancel').forEach(function (cancel) {
+                cancel.style.display = on ? 'none' : '';
+            });
+        }
+
+        function isEmpty(html) {
+            if (/<(img|hr|iframe|video|audio)\b/i.test(html)) {
+                return false;
+            }
+            return html.replace(/<[^>]*>/g, '').replace(/&nbsp;|\s/g, '') === '';
+        }
+
+        form.addEventListener('submit', function (event) {
+            if (form.hasAttribute('data-saving')) {
+                event.preventDefault();
+                return;
+            }
+            var fields = form.querySelectorAll('textarea[data-required]');
+            for (var i = 0; i < fields.length; i++) {
+                if (isEmpty(fields[i].value)) {
+                    event.preventDefault();
+                    var editable = fields[i].parentElement ? fields[i].parentElement.querySelector('[contenteditable="true"]') : null;
+                    if (editable) {
+                        editable.focus();
+                    }
+                    return;
+                }
+            }
+            busy(true);
         });
-    });
+
+        // Back/forward restores the page as it was left: not a form that is still sending.
+        window.addEventListener('pageshow', function () {
+            busy(false);
+        });
+    })();
 </script>
 <div id="submit-spinner" class="spinner " style="display:none">
 <div class="bounce1"></div>

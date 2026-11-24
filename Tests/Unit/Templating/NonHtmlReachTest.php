@@ -137,8 +137,6 @@ final class NonHtmlReachTest extends TestCase
         'IdnoPlugins/IndiePub/templates/default/indiepub/shell/head.html.twig',
         'IdnoPlugins/Like/templates/default/entity/Like/icon.html.twig',
         'IdnoPlugins/Media/templates/default/entity/Media/icon.html.twig',
-        'IdnoPlugins/Media/templates/default/media/shell/footer.html.twig',
-        'IdnoPlugins/Media/templates/default/media/shell/head.html.twig',
         'IdnoPlugins/Photo/templates/default/entity/Photo/icon.html.twig',
         'IdnoPlugins/StandardSiteSync/templates/default/standardsitesync/head.html.twig',
         'IdnoPlugins/StaticPages/templates/default/staticpages/page.html.twig',

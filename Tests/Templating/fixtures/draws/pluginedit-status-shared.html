@@ -128,39 +128,79 @@ Cancel
     });
 </script>
 <script>
-
-    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
-        $(".mentionable").mention({
-            delimiter: '@',
-            sensitive : true,
-            queryBy: ['name','username'],
-            users: data
-        });
-    });*/
-
-</script><script>
-    /* Handle submit button */
-    $(document).ready(function() {
-        $('div.page-body form').submit(function() {
-            
-            var richrequiredcomplete = true;
-            
-            $(this).find('textarea.validation-required').each(function(){
-                if ($(this).val().length == 0) {
-                    richrequiredcomplete = false;
-                }
-            });
-            
-            
-            // Fudge rich text completion for now.
-            if (richrequiredcomplete == true) {
-                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                $('.btn-cancel').hide();
-                $('#submit-spinner').show();
+    /* The edit form this footer follows: a second click on a submit button does not send the post twice (the guard is lifted
+       after 10 seconds and when the page is shown again), and an empty required rich-text field takes the cursor. The field is
+       checked here and not with the `required` attribute, because the browser cannot focus the hidden textarea behind the editor
+       and reports an error instead of a message. Buttons are not disabled: a disabled submit button would not send its own
+       value (publish_status). Without JavaScript the server refuses a post with no body. */
+    (function () {
+        var script = document.currentScript;
+        var form = null;
+        for (var node = script ? script.previousElementSibling : null; node; node = node.previousElementSibling) {
+            if (node.tagName === 'FORM') {
+                form = node;
+                break;
             }
+        }
+        if (!form && script) {
+            form = script.closest('form');
+        }
+        if (!form) {
+            return;
+        }
+
+        var timer = null;
+
+        function busy(on) {
+            clearTimeout(timer);
+            if (on) {
+                form.setAttribute('data-saving', 'true');
+                timer = setTimeout(function () {
+                    busy(false);
+                }, 10000);
+            } else {
+                form.removeAttribute('data-saving');
+            }
+            var spinner = document.getElementById('submit-spinner'); // drawn after this script
+            if (spinner) {
+                spinner.style.display = on ? '' : 'none';
+            }
+            form.querySelectorAll('.btn-cancel').forEach(function (cancel) {
+                cancel.style.display = on ? 'none' : '';
+            });
+        }
+
+        function isEmpty(html) {
+            if (/<(img|hr|iframe|video|audio)\b/i.test(html)) {
+                return false;
+            }
+            return html.replace(/<[^>]*>/g, '').replace(/&nbsp;|\s/g, '') === '';
+        }
+
+        form.addEventListener('submit', function (event) {
+            if (form.hasAttribute('data-saving')) {
+                event.preventDefault();
+                return;
+            }
+            var fields = form.querySelectorAll('textarea[data-required]');
+            for (var i = 0; i < fields.length; i++) {
+                if (isEmpty(fields[i].value)) {
+                    event.preventDefault();
+                    var editable = fields[i].parentElement ? fields[i].parentElement.querySelector('[contenteditable="true"]') : null;
+                    if (editable) {
+                        editable.focus();
+                    }
+                    return;
+                }
+            }
+            busy(true);
         });
-    });
+
+        // Back/forward restores the page as it was left: not a form that is still sending.
+        window.addEventListener('pageshow', function () {
+            busy(false);
+        });
+    })();
 </script>
 <div id="submit-spinner" class="spinner " style="display:none">
 <div class="bounce1"></div>

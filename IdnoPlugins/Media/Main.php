@@ -20,9 +20,6 @@ namespace IdnoPlugins\Media {
             \Idno\Core\Idno::site()->routes()->addRoute('/media/edit/?', '\IdnoPlugins\Media\Pages\Edit');
             \Idno\Core\Idno::site()->routes()->addRoute('/media/edit/:id/?', '\IdnoPlugins\Media\Pages\Edit');
             \Idno\Core\Idno::site()->routes()->addRoute('/media/delete/:id/?', '\IdnoPlugins\Media\Pages\Delete');
-
-            \Idno\Core\Idno::site()->template()->extendTemplate('shell/head', 'media/shell/head');
-            \Idno\Core\Idno::site()->template()->extendTemplate('shell/footer', 'media/shell/footer');
         }
 
         /**

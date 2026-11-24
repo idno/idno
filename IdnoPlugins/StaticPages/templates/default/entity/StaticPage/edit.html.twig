@@ -21,15 +21,15 @@
 
 
 
-                {{ idno_include('forms/input/richtext', {
-                    name: 'body',
-                    value: entity_value(object, 'body'),
-                    wordcount: false,
-                    class: 'wysiwyg',
-                    height: 500,
-                    placeholder: t('Share something brilliant...'),
-                    label: t('Body')
-                }) }}
+                {# The body is HTML the administrator wrote (forms, ids, styles, frames): it is edited as source, so that nothing of it is rewritten by an editor that only knows some tags. #}
+                <p>
+                    <label for="body">
+                        {{ t('Body') }} <small>({{ t('HTML') }})</small></label>
+                    <textarea name="body" id="body" class="form-control" rows="24" spellcheck="false" autocapitalize="off" autocomplete="off"
+                              placeholder="{{ t('Share something brilliant...') }}"
+                              style="width: 100%; min-height: 28rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; tab-size: 4; white-space: pre; overflow: auto;">
+{{ entity_value(object, 'body') ?? '' }}</textarea>
+                </p>
 
                 {{ idno_include('entity/tags/input') }}
 
@@ -46,20 +46,14 @@
 
                 </div>
 
-                <p id="show-options">
-                    <small><a href="#" onclick="$('#moreoptions').toggle(); $('#show-options').hide(); return false;"><i
-                                class="fa fa-plus"></i>
-                            {{ t('Show advanced options') }}</a></small>
+                <div x-data="{ open: {{ (hide_title_value or forward_address) ? 'true' : 'false' }} }">
+                <p id="show-options" x-show="!open">
+                    <small><a href="#moreoptions" x-on:click.prevent="open = true">+ {{ t('Show advanced options') }}</a></small>
                 </p>
-                <div id="moreoptions" {% if not hide_title_value and not forward_address %}
-                        style="display:none"
-                    {% endif %}>
+                <div id="moreoptions" x-show="open" x-cloak>
 
                     <p id="hide-options">
-                        <small><a href="#"
-                                  onclick="$('#moreoptions').toggle(); $('#show-options').show(); return false;"><i
-                                    class="fa fa-minus"></i>
-                                {{ t('Hide advanced options') }}</a></small>
+                        <small><a href="#show-options" x-on:click.prevent="open = false">- {{ t('Hide advanced options') }}</a></small>
                     </p>
 
                     <div>
@@ -75,20 +69,16 @@
                     <p style="margin-bottom: 20px">
                         <strong>{{ t('Show the page title as a heading?') }}</strong><br>
                         <label class="radio-inline">
-                            <input type="radio" name="hide_title" id="title-heading" value="0" {% if not hide_title_value %}checked{% endif %}>
+                            <input type="radio" name="hide_title" id="title-heading-yes" value="0" {% if not hide_title_value %}checked{% endif %}>
                             Yes
                         </label>
                         <label class="radio-inline">
-                            <input type="radio" name="hide_title" id="title-heading" value="1" {% if hide_title_value %}checked{% endif %}>
+                            <input type="radio" name="hide_title" id="title-heading-no" value="1" {% if hide_title_value %}checked{% endif %}>
                             No
                         </label>
                     </p>
 
-                    <div class="page-cat">
-
-
-                    </div>
-
+                </div>
                 </div>
 
                 {{ idno_include('content/extra') }}
@@ -96,7 +86,7 @@
 
                 <p class="button-bar " style="text-align: right">
                     {{ form_token('/staticpages/edit') }}
-                    <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();"/>
+                    <a href="{{ entity_value(object, '_id') ? object.getDisplayURL() : site_url() }}" class="btn btn-cancel">{{ t('Cancel') }}</a>
                     <input type="submit" class="btn btn-primary" value="{{ t('Publish') }}"/>
                 </p>
 
@@ -104,51 +94,4 @@
 
         </div>
     </form>
-    <script>
-
-        /*function postForm() {
-         var content = $('textarea[name="body"]').html($('#body').html());
-         console.log(content);
-         return content;
-         }*/
-
-        $(document).ready(function () {
-            makeRich('#body');
-        })
-        ;
-
-        function makeRich(container) {
-            $(container).tinymce({
-                selector: 'textarea',
-                theme: 'modern',
-                skin: 'light',
-                statusbar: false,
-                menubar: false,
-                toolbar: 'styleselect | bold italic | link image | blockquote bullist numlist | alignleft aligncenter alignright | code',
-                plugins: 'code link image autoresize',
-                relative_urls: false,
-                remove_script_host: false,
-                convert_urls: true,
-                file_picker_callback: function (callback, value, meta) {
-                    filePickerDialog(callback, value, meta);
-                }
-            });
-        }
-
-        function filePickerDialog(callback, value, meta) {
-            tinymce.activeEditor.windowManager.open({
-                title: 'File Manager',
-                url: '{{ site_url('filepicker/?type=')|e('js') }}' + meta.filetype,
-                width: 650,
-                height: 550
-            }, {
-                oninsert: function (url) {
-                    callback(url);
-                }
-            });
-        }
-
-        //$('.selectpicker').selectpicker();
-
-    </script>
 {{ idno_include('entity/edit/footer') }}

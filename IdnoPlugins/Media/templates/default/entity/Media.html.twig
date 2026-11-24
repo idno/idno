@@ -1,49 +1,27 @@
-{% set player_id = random(9999) %}{% set rel = is_permalink() ? 'rel="in-reply-to"' : '' %}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}
+{% set rel = is_permalink() ? 'rel="in-reply-to"' : '' %}{% set post_tags = entity_value(object, 'tags') %}{% set tags_html = post_tags ? idno_include('forms/output/tags', {tags: post_tags}) : '' %}
 {% if not feed_view %}
-        <div class="audio-play-wrapper"><a href="#" id="player{{ player_id }}" class="audio-play-button"><i class="fa fa-play"></i></a></div>
         <h2 class="p-name">
              <a href="{{ object.getDisplayURL() }}">{{ object.getTitle()|striptags }}</a>
         </h2>
 {% endif %}
+{# The browser's own player: the file is the attachment's address, through the site's file route. #}
 {% if not feed_view %}{% set attachments = object.getAttachments() %}{% if attachments %}{% if ((entity_value(object, 'media_type') ?? '')|slice(0, 5)) == 'video' %}
                 <p style="text-align: center">
-                    <video class="u-video known-media-element" controls preload="none" style="width: 100%">
-                    {% for attachment in attachments %}
+                    <video class="u-video" controls preload="none" style="width: 100%">
+                    {% for attachment in attachments %}{% if attachment.url|http_url %}
                             <source src="{{ attachment.url|http_url }}" type="{{ attachment['mime-type'] ?? '' }}">
-                    {% endfor %}
+                    {% endif %}{% endfor %}
 
                         {{ t('Sorry, your browser does not support the video tag.') }}
                     </video>
                 </p>
-{% else %}{% for attachment in attachments %}
-                    <div id="waveform{{ player_id }}" class="waveform-player"></div>
-                    <script>
-                        var wavesurfer{{ player_id }} = WaveSurfer.create({
-                            container: '#waveform{{ player_id }}',
-                            waveColor: '#aaa',
-                            progressColor: '#333',
-                            cursorColor: '#aaa',
-                            height: 100
-                        });
-                        wavesurfer{{ player_id }}.load('{{ attachment.url|http_url|e('js') }}');
-                        $('#waveform{{ player_id }}').click(function() {
-                            wavesurfer{{ player_id }}.play();
-                        });
-                        wavesurfer{{ player_id }}.on('play', function() {
-                            $('#player{{ player_id }}').html('<i class="fa fa-pause"></i>');
-                        });
-                        wavesurfer{{ player_id }}.on('pause', function() {
-                            $('#player{{ player_id }}').html('<i class="fa fa-play"></i>');
-                        });
-                        wavesurfer{{ player_id }}.on('finish', function() {
-                            $('#player{{ player_id }}').html('<i class="fa fa-play"></i>');
-                        });
-                        $('#player{{ player_id }}').click(function() {
-                            wavesurfer{{ player_id }}.playPause();
-                            return false;
-                        });
-                    </script>
-{% endfor %}{% endif %}{% endif %}{% endif %}
+{% else %}{% for attachment in attachments %}{% if attachment.url|http_url %}
+                <p>
+                    <audio class="u-audio" controls preload="none" style="width: 100%" src="{{ attachment.url|http_url }}">
+                        {{ t('Sorry, your browser does not support the audio tag.') }}
+                    </audio>
+                </p>
+{% endif %}{% endfor %}{% endif %}{% endif %}{% endif %}
 <div class="e-content">
 {{ entity_value(object, 'body')|sanitize_html|parse_urls(rel)|parse_hashtags|autop }}{{ tags_html }}
 </div>

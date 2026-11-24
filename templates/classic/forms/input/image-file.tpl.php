@@ -95,7 +95,6 @@ if (!empty($vars['hide-existing'])) {
                 'name' => $vars['name'],
                 'id' => $vars['id'],
                 'accept' => 'image/*',
-                'onchange' => 'Template.activateImagePreview(this)',
                 'class' => 'input-file form-control col-md-9']
             )->draw('forms/input/file');
             ?>

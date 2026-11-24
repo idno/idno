@@ -48,5 +48,5 @@
         </button>
     </div>
     <div class="idno-editor-content" id="{{ unique_id }}-editor"></div>
-    <textarea name="{{ name }}" id="{{ unique_id }}" style="display:none" {{ required ? 'required' : '' }}>{{ value }}</textarea>
+    <textarea name="{{ name }}" id="{{ unique_id }}" style="display:none" {% if required %}data-required="true"{% endif %}>{{ value }}</textarea>
 </div>

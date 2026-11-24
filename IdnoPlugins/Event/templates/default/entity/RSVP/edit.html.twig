@@ -58,7 +58,7 @@
             {{ idno_include('content/access') }}
             <p class="button-bar">
                 {{ form_token('/status/edit') }}
-                <input type="button" class="btn btn-cancel" value="{{ t('Cancel') }}" onclick="hideContentCreateForm();" />
+                <a href="{{ site_url() }}" class="btn btn-cancel">{{ t('Cancel') }}</a>
                 <input type="submit" class="btn btn-primary" value="{{ t('Save') }}" />
 
             </p>

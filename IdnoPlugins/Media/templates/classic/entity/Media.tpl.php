@@ -50,32 +50,6 @@ if (empty($vars['feed_view'])) {
 
                 ?>
                     <div id="waveform<?php echo $player_id?>" class="waveform-player"></div>
-                    <script>
-                        var wavesurfer<?php echo $player_id?> = WaveSurfer.create({
-                            container: '#waveform<?php echo $player_id?>',
-                            waveColor: '#aaa',
-                            progressColor: '#333',
-                            cursorColor: '#aaa',
-                            height: 100
-                        });
-                        wavesurfer<?php echo $player_id?>.load('<?php echo $mainsrc?>');
-                        $('#waveform<?php echo $player_id?>').click(function() {
-                            wavesurfer<?php echo $player_id?>.play();
-                        });
-                        wavesurfer<?php echo $player_id?>.on('play', function() {
-                            $('#player<?php echo $player_id?>').html('<i class="fa fa-pause"></i>');
-                        });
-                        wavesurfer<?php echo $player_id?>.on('pause', function() {
-                            $('#player<?php echo $player_id?>').html('<i class="fa fa-play"></i>');
-                        });
-                        wavesurfer<?php echo $player_id?>.on('finish', function() {
-                            $('#player<?php echo $player_id?>').html('<i class="fa fa-play"></i>');
-                        });
-                        $('#player<?php echo $player_id?>').click(function() {
-                            wavesurfer<?php echo $player_id?>.playPause();
-                            return false;
-                        });
-                    </script>
                     <?php
             }
         }

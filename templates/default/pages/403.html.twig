@@ -1,9 +1,6 @@
 {# Display the login link, if the user is not currently logged in. If they're logged out, this is probably why they're denied. #}{% set login_url = login_url_for(current_url_parts().path) %}{% if not is_logged_in() %}
         <a id="soft-forward"
            href="{{ login_url }}">{{ t('Click here to log in.') }}</a>
-        <script>
-            $('#soft-forward').hide();  // JS users will be forwarded anyway
-        </script>
         {% else %}
         <div class="container result-403">
             <div class="row" style="margin-bottom: 2em; margin-top: 6em">

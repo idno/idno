@@ -81,7 +81,6 @@
 <![endif]-->
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
-<script src="{site}/IdnoPlugins/Media/external/wavesurfer/dist/wavesurfer.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body class="idnoplugins_status_pages_edit page-reply page-reply-edit page-reply-edit-00000000-0000-4000-8000-000000000016 logged-in">
@@ -250,39 +249,79 @@ Cancel
     });
 </script>
 <script>
-
-    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
-        $(".mentionable").mention({
-            delimiter: '@',
-            sensitive : true,
-            queryBy: ['name','username'],
-            users: data
-        });
-    });*/
-
-</script><script>
-    /* Handle submit button */
-    $(document).ready(function() {
-        $('div.page-body form').submit(function() {
-            
-            var richrequiredcomplete = true;
-            
-            $(this).find('textarea.validation-required').each(function(){
-                if ($(this).val().length == 0) {
-                    richrequiredcomplete = false;
-                }
-            });
-            
-            
-            // Fudge rich text completion for now.
-            if (richrequiredcomplete == true) {
-                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
-                $('.btn-cancel').hide();
-                $('#submit-spinner').show();
+    /* The edit form this footer follows: a second click on a submit button does not send the post twice (the guard is lifted
+       after 10 seconds and when the page is shown again), and an empty required rich-text field takes the cursor. The field is
+       checked here and not with the `required` attribute, because the browser cannot focus the hidden textarea behind the editor
+       and reports an error instead of a message. Buttons are not disabled: a disabled submit button would not send its own
+       value (publish_status). Without JavaScript the server refuses a post with no body. */
+    (function () {
+        var script = document.currentScript;
+        var form = null;
+        for (var node = script ? script.previousElementSibling : null; node; node = node.previousElementSibling) {
+            if (node.tagName === 'FORM') {
+                form = node;
+                break;
             }
+        }
+        if (!form && script) {
+            form = script.closest('form');
+        }
+        if (!form) {
+            return;
+        }
+
+        var timer = null;
+
+        function busy(on) {
+            clearTimeout(timer);
+            if (on) {
+                form.setAttribute('data-saving', 'true');
+                timer = setTimeout(function () {
+                    busy(false);
+                }, 10000);
+            } else {
+                form.removeAttribute('data-saving');
+            }
+            var spinner = document.getElementById('submit-spinner'); // drawn after this script
+            if (spinner) {
+                spinner.style.display = on ? '' : 'none';
+            }
+            form.querySelectorAll('.btn-cancel').forEach(function (cancel) {
+                cancel.style.display = on ? 'none' : '';
+            });
+        }
+
+        function isEmpty(html) {
+            if (/<(img|hr|iframe|video|audio)\b/i.test(html)) {
+                return false;
+            }
+            return html.replace(/<[^>]*>/g, '').replace(/&nbsp;|\s/g, '') === '';
+        }
+
+        form.addEventListener('submit', function (event) {
+            if (form.hasAttribute('data-saving')) {
+                event.preventDefault();
+                return;
+            }
+            var fields = form.querySelectorAll('textarea[data-required]');
+            for (var i = 0; i < fields.length; i++) {
+                if (isEmpty(fields[i].value)) {
+                    event.preventDefault();
+                    var editable = fields[i].parentElement ? fields[i].parentElement.querySelector('[contenteditable="true"]') : null;
+                    if (editable) {
+                        editable.focus();
+                    }
+                    return;
+                }
+            }
+            busy(true);
         });
-    });
+
+        // Back/forward restores the page as it was left: not a form that is still sending.
+        window.addEventListener('pageshow', function () {
+            busy(false);
+        });
+    })();
 </script>
 <div id="submit-spinner" class="spinner " style="display:none">
 <div class="bounce1"></div>
@@ -393,31 +432,8 @@ Search
 </template>
 </div>
 </div>
-<!-- Flexible media player -->
-<script
-    src="{site}/vendor/npm-asset/mediaelement/build/mediaelement-and-player.min.js"></script>
-<link rel="stylesheet"
-      href="{site}/vendor/npm-asset/mediaelement/build/mediaelementplayer.min.css"/>
-<!-- Video shim -->
-<script src="{site}/vendor/npm-asset/vanilla-fitvids/jquery.fitvids.js"></script>
 <script src="{site}/js/idno-2026.min.js" defer></script>
-<script src="{site}/vendor/npm-asset/exif-js/exif.js"></script>
-<script>
-        $('audio').mediaelementplayer({
-        features: ['playpause','progress','current','tracks','volume','fullscreen'],
-        alwaysShowControls: false,
-        pauseOtherPlayers: true,
-        enableAutosize: false,
-        mediaWidth: -1,
-        mediaHeight: -1
-    });
-</script>
-<style>
-    .known-media-element {
-        width: 100%;
-        height: 100%;
-    }
-</style><div class="blank-footer">
+<div class="blank-footer">
 </div><form action="{site}/session/logout" style="display: none; margin: 0; padding: 0" id="{form-1}" method="POST">
 <textarea name="json">[]</textarea>
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>

@@ -33,6 +33,14 @@ if (preg_match('#^/(\.git|\.github|Uploads|configuration)(/|$)#', $path)
     return true;
 }
 
+// The installer's check that URL rewriting works asks for js/canary.js, which the web server's rewrite rules answer
+// with the look's script (warmup/webserver-configs, .htaccess, docker/caddy/Caddyfile): it is a real, served file.
+if ($path === '/js/canary.js' && is_file($root . '/js/idno-2026.min.js')) {
+    header('Content-Type: application/javascript');
+    readfile($root . '/js/idno-2026.min.js');
+    return true;
+}
+
 // Cache-busted assets: /js/12345/foo.js -> /js/foo.js, /css/12345/foo.css -> /css/foo.css
 if (preg_match('#^/(js|css)/[0-9]+/(.+)$#', $path, $matches)) {
     $file = $root . '/' . $matches[1] . '/' . $matches[2];

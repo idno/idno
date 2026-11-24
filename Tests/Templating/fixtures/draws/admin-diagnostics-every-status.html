@@ -84,22 +84,40 @@ This page provides you with information that may help you or others diagnose any
 <div class="alert alert-success">G</div>
 <div class="alert alert-info">H</div>
 </div>
-<div id="diagnostics-report" style="display: none;">
-<small><pre style="overflow: auto; height: 500px;">
-                </pre></small>
+<div id="diagnostics-report" hidden>
+<small><pre id="diagnostics-report-text" style="overflow: auto; height: 500px;"></pre></small>
 </div>
-<span class="btn btn-primary" id="diagnostics-report-run">Generate detailed report</span>
+<button type="button" class="btn btn-primary" id="diagnostics-report-run">Generate detailed report</button>
 </div>
 </div>
 <script>
-    $(document).ready(function(){
-        $('#diagnostics-report-run').click(function(){
-            $(this).html("Generating...").attr('disabled', 'true');
-            
-            $('#diagnostics-report pre').load('{site}\/admin\/', function(){
-                $('#diagnostics-report-run').hide();
-                $('#diagnostics-report').fadeIn();
-            });
+    (function () {
+        var button = document.getElementById('diagnostics-report-run');
+        var report = document.getElementById('diagnostics-report');
+        var text = document.getElementById('diagnostics-report-text');
+        if (!button || !report || !text) {
+            return;
+        }
+        button.addEventListener('click', function () {
+            button.textContent = 'Generating...';
+            button.disabled = true;
+            // The page answers an XMLHttpRequest with the report as plain text.
+            fetch('{site}\/admin\/', {credentials: 'same-origin', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error(String(response.status));
+                    }
+                    return response.text();
+                })
+                .then(function (body) {
+                    text.textContent = body;
+                    button.hidden = true;
+                    report.hidden = false;
+                })
+                .catch(function () {
+                    button.textContent = 'Generate\u0020detailed\u0020report';
+                    button.disabled = false;
+                });
         });
-    });
+    })();
 </script>
