@@ -1080,7 +1080,9 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             // The adapter's handler read the row and wrote it back, in the same format.
             $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
             $statement->execute([$sessionId]);
-            $this->assertStringStartsWith('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '";secure|b:0;', (string) $statement->fetchColumn());
+            $written = (string) $statement->fetchColumn();
+            $this->assertStringStartsWith('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '";password_fingerprint|s:64:"', $written);
+            $this->assertStringContainsString('";secure|b:0;', $written);
         } finally {
             $this->deleteSession($sessionId);
         }
@@ -1749,7 +1751,10 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $sessionId = bin2hex(random_bytes(16));
         $time = time();
         $statement = Idno::site()->db()->getClient()->prepare('insert into idno_sessions (session_id, session_value, session_lifetime, session_time) values (?, ?, ?, ?)');
-        $statement->execute([$sessionId, 'user_uuid|s:' . strlen($userUuid) . ':"' . $userUuid . '";', $time + 604800, $time]);
+        // The password fingerprint of the user's marker: a session of a user who has a marker and carries no fingerprint is
+        // one a release before fingerprints made, and is ended (see Session::checkPasswordFingerprint()).
+        $fingerprint = hash('sha256', (string) \Idno\Entities\User::getByUUID($userUuid)->password_generation);
+        $statement->execute([$sessionId, 'user_uuid|s:' . strlen($userUuid) . ':"' . $userUuid . '";password_fingerprint|s:64:"' . $fingerprint . '";', $time + 604800, $time]);
 
         return $sessionId;
     }
