@@ -60,6 +60,9 @@ namespace Tests\Characterisation {
 
         public function testHeaderSetIsUnchangedForLegacyPages(): void
         {
+            // The home page sends Last-Modified only when it lists a post: this test must not depend on what an
+            // earlier test left on the site.
+            $this->createStatus($this->user(), 'Routing test ' . bin2hex(random_bytes(6)));
             $r = $this->site()->request('GET', '');
 
             $this->assertSame(200, $r->status);
@@ -97,6 +100,8 @@ namespace Tests\Characterisation {
 
         public function testHeadRequestReachesLegacy(): void
         {
+            // Last-Modified is the time of the newest post on the home page: there must be one.
+            $this->createStatus($this->user(), 'Routing test ' . bin2hex(random_bytes(6)));
             $get  = $this->site()->request('GET', '');
             $head = $this->site()->request('HEAD', '');
 
