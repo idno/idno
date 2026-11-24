@@ -435,7 +435,7 @@ data/                          Where an SQLite site's database file lives (data/
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
 templates/                     Templates (Twig for web pages and mail, `.tpl.php` for the other types), one directory per template type: `default` is Idno 2026, the built-in
                                look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
-                               feeds, JSON, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
+                               feeds, JSON, Markdown, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
 css/, js/                      The shipped style sheets and scripts: Idno 2026's (`css/idno-2026.min.css`, `js/idno-2026.min.js`, built by Vite from
                                `frontend/`), the onboarding pages' and installer's (`css/idno-simple*.css`, built by Grunt from `css/scss/idno-simple.scss`,
                                Bootstrap based) and the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`).
@@ -1513,7 +1513,7 @@ other new code may.
   `registerPages()`, and content types via `registerContentTypes()`. They hook
   into events (`saved`, `updated`, `deleted`, `syndicate`, etc.) using the
   Symfony EventDispatcher (wrapped by `Idno\Core\EventDispatcher`).
-- **Template system**: templates are Twig files (`.html.twig`, `.txt.twig`: all of core's and the bundled plugins' web and mail templates) or `.tpl.php` files (PHP: third-party templates, and the feed, JSON, ActivityPub and KML types), found and drawn by
+- **Template system**: templates are Twig files (`.html.twig`, `.txt.twig`: all of core's and the bundled plugins' web and mail templates) or `.tpl.php` files (PHP: third-party templates, and the feed, JSON, Markdown, ActivityPub and KML types), found and drawn by
   `Idno\Templating` (one cascade, two engines) and called through `Idno\Core\DefaultTemplate` (`Idno::site()->template()`). See "Templates".
 - **Async queue**: `Idno::site()->queue()` is `Idno\Legacy\MessengerEventQueue`. With
   `event_queue = 'AsynchronousQueue'` an event becomes a message on Symfony Messenger (`Idno\Queue\`,
@@ -2684,7 +2684,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   (`TemplateRenderer`, with the logger as a closure: the site's logger needs the legacy application; the "already logged" state is
   shared by the copies `withSlots()` makes), so one line a request; removed in 3.0 (the registration line below has a flag of its own, so neither
   hides the other). `classic` holds the entity templates of the look
-  Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, ActivityPub, KML and mail reach them by falling back
+  Idno 2026 replaced (the old Bootstrap-era `default` ones): feeds, JSON, JSONP, JSON Feed, Markdown, ActivityPub, KML and mail reach them by falling back
   from their own type, before `default`, so what they contain is what it was; a web page never draws `classic`. `classic` also holds a
   copy of every `default` file those types reach by name from there (the syndication buttons, `forms/token`, `forms/action`, the annotation
   and profile partials, `pages/home/nocontent`, the output of a few form controls, the entity templates of Media and StaticPages): the
@@ -2724,7 +2724,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 - `TemplateLocator::locate($name, $type, $fallbackToDefault = true)`: the order is the type, then the base, then the format:
   for each type of the chain, for each base, `<base>/templates/<type>/<name>.html.twig` (`.txt.twig` for `email-text`; only
   the types `default`, `email` and `email-text` have Twig files, `TemplateLocator::TWIG_EXTENSIONS`; the feed, JSON, JSONP, JSON Feed,
-  ActivityPub and KML types are `.tpl.php` only, whatever Twig file of their name exists) and then `<name>.tpl.php`, as a `LocatedTemplate`
+  Markdown, ActivityPub and KML types are `.tpl.php` only, whatever Twig file of their name exists) and then `<name>.tpl.php`, as a `LocatedTemplate`
   (`path`, `engine` `php` or `twig`, `type`, `base`, `logicalName` `<type>/<name>.<ext>`), or null. So a third-party
   `.tpl.php` override in a plugin or theme still beats a Twig file of the same name and type in core, and within one directory
   Twig wins. Every file it looks for is asked of `TemplateCascade::isFile()`. The answers are remembered (type, name, fallback) until the cascade's `generation()` changes: the files of a directory do not
@@ -2739,7 +2739,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   seen only after the cascade changes or the process restarts. A plain-text mail
   (`email-text`) looks for `.txt.twig` in EVERY directory of its chain (its own, `classic`, `default`) and never for `.html.twig`, which would
   escape its text as HTML: it draws `.txt.twig` or `.tpl.php` files only (`TemplateLocatorTest::testEmailTextNeverDrawsAnHtmlTwigFile`). The
-  feed, JSON and KML types still find a `default/<name>.html.twig` by fallback (they never draw one: `NonHtmlReachTest` pins that every `default` file they reach has a `classic` copy, or is a page body that leaves nothing on the page); a template of those types that
+  feed, JSON, Markdown and KML types still find a `default/<name>.html.twig` by fallback (they never draw one: `NonHtmlReachTest` pins that every `default` file they reach has a `classic` copy, or is a page body that leaves nothing on the page); a template of those types that
   is Twig must be a `.tpl.php` file in the type's own directory or in `classic`.
   `typeExists($type)`: some base has a `templates/<type>/` directory (a type is one segment: `classic/` is no type).
 - `SlotRegistry`: what `extendTemplate()`, `prependTemplate()`, `replaceTemplate()` and `extendTemplateWithContent()`
@@ -2921,7 +2921,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     (HTTPS and a member) is not drawn by the golden pages (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
   - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
     `drafts`: 58 files). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template (the old look's, or a third party's) left on the page's template object
-    by `__()` is gone for the Twig ones, and an HTML page that showed one changed by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, feed and KML pages draw `templates/classic/` copies of the
+    by `__()` is gone for the Twig ones, and an HTML page that showed one changed by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, Markdown, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
     `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPageBodyANonHtmlTypeCanReachIsAClassicFileOrAListedTwigFile` lists the other
     page bodies a non-HTML request can reach from a Twig file (which publish nothing on the page: a Twig body draws on a copy), and fails for a new one, which needs a `classic` copy if JSON needs what the old template left on the page; `non-html/json-profile-ada.txt` pins the profile page's JSON), and a user's profile page's Open Graph and Dublin Core describe the profile, not the last note of its feed
@@ -3102,7 +3102,9 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 
 #### Markdown output
 
-Every page can be fetched as Markdown, and a post's permalink in three ways (proposed by John Evdemon, idno/idno#3407, whose
+- Which pages stay out of Markdown is decided from how the page's route was registered: `PageHandler` records the page classes registered under a pattern starting `/?(account|admin)(/|$)` (`addRoute()`/`hijackRoute()`, `isSettingsPage($class)`; `isAccountPage()` stays for `/account/` only, which closes it to API requests), so `//admin/email` and a request seen as https on an http site are settings pages as `/admin/email` is. An explicit `_t` that is not Markdown wins over the `.md` suffix (`/permalink.md?_t=json` is JSON). On a page that is not a permalink the canonical `Link` header and the front matter `link` are the page's address WITHOUT its query string (`DefaultTemplate::markdownPageAddress()`): a reset code or an email address in the address is not echoed.
+
+Every page but a settings page can be fetched as Markdown, and a post's permalink in three ways (proposed by John Evdemon, idno/idno#3407, whose
 standalone implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour of permalinks). The pieces:
 
 - Asking ANY page: `?_t=markdown`, or `?_t=md` (`TypeChain::requested()` is the one place the short name is read: `Page::init()`
@@ -3943,7 +3945,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
 | **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
-| **Markdown** | Every page is also served as Markdown with YAML front matter by `?_t=markdown` (or `md`); a post's permalink also by `<permalink>.md`, `?format=markdown` or `Accept: text/markdown` (see "Markdown output") |
+| **Markdown** | A post's permalink and the listing, profile, login and error pages are also served as Markdown with YAML front matter by `?_t=markdown` (or `md`); a settings page (`/account`, `/admin`, however its address is written: decided from how its route was registered) answers a title and one line, and the onboarding pages stay HTML; a post's permalink also by `<permalink>.md`, `?format=markdown` or `Accept: text/markdown` (see "Markdown output") |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
 
 ## Code Style
@@ -4201,7 +4203,9 @@ the CLI installer no longer writes one.
   string), also where it was checked when it was stored, because values stored before a check are not rewritten; a value inside
   inline JavaScript uses `|e('js')`, or `js_string()` in an attribute; the first argument of `t_html()` is a string literal
   (translations are trusted markup). The old rule stays for the templates that are still PHP, the `classic` ones that a feed,
-  JSON, ActivityPub, KML or mail draws and a third party's `.tpl.php` files: a `.tpl.php` template escapes nothing by itself.
+  JSON, Markdown, ActivityPub, KML or mail draws and a third party's `.tpl.php` files: a `.tpl.php` template escapes nothing by itself. (Markdown is
+  the exception to the escaping rule in the other direction: its HTML is purified (`sanitize_html`) and then converted to Markdown text, so nothing is escaped at print time, and
+  a value that is not HTML goes through the converter's own escaping.)
   Print every value
   that a person or another site supplied with `htmlspecialchars()`, in text and inside an
   attribute alike; `strip_tags()` and `FILTER_SANITIZE_URL` do not make a value safe

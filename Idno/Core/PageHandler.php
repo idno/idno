@@ -21,6 +21,9 @@ namespace Idno\Core {
         /// Page classes registered under /account/, as lower-case class names without a leading backslash
         private $account_pages = [];
 
+        /// Page classes registered under /account/ or /admin/ (the settings pages), as lower-case class names without a leading backslash
+        private $settings_pages = [];
+
         /// Whether the request being served asked for a post's Markdown form with the `.md` suffix
         private static $markdown_suffix = false;
 
@@ -51,6 +54,35 @@ namespace Idno\Core {
             }
 
             return is_string($class) && isset($this->account_pages[strtolower(ltrim($class, '\\'))]);
+        }
+
+        /**
+         * Is this pattern for a page under /account/ or /admin/? Those are the settings pages: they hold stored secrets (keys,
+         * tokens, passwords) in their forms.
+         *
+         * @param  string $pattern A route pattern, as it is given to addRoute()
+         * @return bool
+         */
+        static function isSettingsPattern(string $pattern) : bool
+        {
+            return (bool) preg_match('#^/?(?:account|admin)(/|$)#i', $pattern);
+        }
+
+        /**
+         * Was this page class registered for a route under /account/ or /admin/ (a plugin's admin page too)? Decided from how the
+         * route was registered, never from the address of the request, which can be written in ways that a string comparison misses
+         * (`//admin/email`, a request seen as https on a site configured for http).
+         *
+         * @param  string|object $class
+         * @return bool
+         */
+        function isSettingsPage($class) : bool
+        {
+            if (is_object($class)) {
+                $class = get_class($class);
+            }
+
+            return is_string($class) && isset($this->settings_pages[strtolower(ltrim($class, '\\'))]);
         }
 
         /**
@@ -184,6 +216,9 @@ namespace Idno\Core {
             if (static::isAccountPattern($pattern) && class_exists($handler)) {
                 $this->account_pages[strtolower(ltrim($handler, '\\'))] = true;
             }
+            if (static::isSettingsPattern($pattern) && class_exists($handler)) {
+                $this->settings_pages[strtolower(ltrim($handler, '\\'))] = true;
+            }
             if (defined('IDNO_SUBDIRECTORY')) {
                 if (substr($pattern, 0, 1) != '/') {
                     $pattern = '/' . $pattern;
@@ -213,6 +248,9 @@ namespace Idno\Core {
         {
             if (static::isAccountPattern($pattern) && class_exists($handler)) {
                 $this->account_pages[strtolower(ltrim($handler, '\\'))] = true;
+            }
+            if (static::isSettingsPattern($pattern) && class_exists($handler)) {
+                $this->settings_pages[strtolower(ltrim($handler, '\\'))] = true;
             }
             $pattern = strtr($pattern, $this->routeTokens());
             if (class_exists($handler)) {

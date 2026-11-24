@@ -1,7 +1,7 @@
 ---
 title: "Fixture Site"
 description: "A social website powered by Idno"
-link: "{site}/?q=hello"
+link: "{site}/"
 ---
 
 # Fixture Site

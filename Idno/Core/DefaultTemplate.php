@@ -256,7 +256,7 @@ namespace Idno\Core {
             if (empty($page)) {
                 return false;
             }
-            if (\Idno\Core\Idno::site()->routes()->isAccountPage($page)) {
+            if (\Idno\Core\Idno::site()->routes()->isSettingsPage($page)) {
                 return true;
             }
             $current = (string) $page->currentUrl();
@@ -268,6 +268,20 @@ namespace Idno\Core {
             }
 
             return false;
+        }
+
+        /**
+         * The address of a page that is not a permalink, for the Markdown form's canonical link and front matter: the page's own
+         * address WITHOUT its query string and fragment (a reset code, an email address or a search in the address is not echoed).
+         *
+         * @return string
+         */
+        function markdownPageAddress()
+        {
+            $address = (string) $this->getCurrentURLWithoutVar('_t');
+            $cut     = strcspn($address, '?#');
+
+            return substr($address, 0, $cut);
         }
 
         /**
@@ -285,7 +299,7 @@ namespace Idno\Core {
                 return;
             }
             $entity = $this->vars['markdown_entity'] ?? null;
-            $canonical = \Idno\Core\UrlValidator::httpUrl($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->getCurrentURLWithoutVar('_t'));
+            $canonical = \Idno\Core\UrlValidator::httpUrl($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->markdownPageAddress());
             if ($canonical !== '' && !preg_match('/[<>\s]/', $canonical)) {
                 header('Link: <' . $canonical . '>; rel="canonical"', false);
             }

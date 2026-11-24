@@ -40,17 +40,21 @@ final class MarkdownRequest
      */
     public static function wanted(bool $suffix, mixed $format, mixed $type, mixed $accept): bool
     {
+        if (is_string($type) && in_array(strtolower($type), ['markdown', 'md'], true)) {
+            return true;
+        }
+        // A request that names another template type has chosen, over the suffix too: `/permalink.md?_t=json` is JSON
+        if ((is_string($type) && $type !== '') || is_array($type)) {
+            return false;
+        }
         if ($suffix) {
             return true;
         }
         if (is_string($format) && strtolower($format) === 'markdown') {
             return true;
         }
-        if (is_string($type) && in_array(strtolower($type), ['markdown', 'md'], true)) {
-            return true;
-        }
-        // A request that names another template type, or another format, has chosen: the Accept header is not asked
-        if ((is_string($type) && $type !== '') || is_array($type) || (is_string($format) && $format !== '') || is_array($format)) {
+        // A request that names another format has chosen: the Accept header is not asked
+        if ((is_string($format) && $format !== '') || is_array($format)) {
             return false;
         }
 

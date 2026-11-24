@@ -420,6 +420,12 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
 
         $ada = $this->loginAsAdmin();
         $bob = (new Browser($this->site()))->login(self::MEMBER, self::PASSWORD);
+        // The form token of each session, from the HTML of the same session: it is a secret too
+        $tokens = [];
+        foreach (['the administrator' => $ada, 'a member' => $bob] as $who => $cookie) {
+            $this->assertSame(1, preg_match('/name="__bTk" value="([0-9a-f]{64})"/', $this->get('account/settings/', ['Cookie' => $cookie])->body, $found), $who . ' has a token in the HTML');
+            $tokens[$who] = $found[1];
+        }
 
         // The test is looking at pages that hold the secrets: the HTML of the administrator's has each of these
         foreach (['admin/email/' => 'mailer-secret-9142', 'account/indiepub/' => 'token-secret-A-6620', 'account/bridgy/' => 'bridgy-key-A-4471', 'admin/webhooks/' => 'key-hook-8812', 'admin/styles/' => 'custom-sheet-5530'] as $page => $secret) {
@@ -442,11 +448,80 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
                     }
                     $this->assertDoesNotMatchRegularExpression('/<[a-zA-Z\/!]/', $this->parse($response->body)[1], $page . ' for ' . $who . ': no HTML is left');
                     $this->assertStringNotContainsString('__bTk', $response->body, 'no form token');
+                    if (isset($tokens[$who])) {
+                        $this->assertStringNotContainsString($tokens[$who], $response->body, $page . ' for ' . $who . ': not the session\'s token');
+                    }
                     $drawn += $response->status === 200 ? 1 : 0;
                 }
             }
         }
         $this->assertGreaterThanOrEqual(2 * count($pages), $drawn, 'the administrator was shown every page');
+    }
+
+    /**
+     * Which pages are settings pages is decided from how their route was registered, not from the address as written: a
+     * doubled slash (the router matches it) and a request seen as https on a site configured for http are still `/admin`.
+     */
+    public function testAnAdminPageIsASettingsPageWhateverWayItsAddressIsWritten(): void
+    {
+        $this->seedSite();
+        $this->assertTrue($this->runInSite(<<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $site->plugins()->enable('Styles');
+        $config = $site->config();
+        $config->config['smtp_host'] = 'smtp.example.org';
+        $config->config['smtp_username'] = 'mailer-user-7731';
+        $config->config['smtp_password'] = 'mailer-secret-9142';
+        $config->webhook_syndication = [['title' => 'Chat room', 'url' => 'https://hooks.example/services/T000/key-hook-8812']];
+        $config->styles = ['css' => 'body.custom-sheet-5530 { color: red }'];
+        $config->save();
+
+        return true;
+        PHP));
+        $ada = $this->loginAsAdmin();
+        $secrets = ['mailer-user-7731', 'mailer-secret-9142', 'key-hook-8812', 'custom-sheet-5530'];
+
+        foreach ([
+            '//admin/email/?_t=markdown' => [],
+            'admin/email/?_t=markdown' => ['X-Forwarded-Proto' => 'https'],
+            '//admin/webhooks/?_t=markdown' => [],
+            'admin/webhooks/?_t=markdown' => ['X-Forwarded-Proto' => 'https'],
+            'admin/styles/?_t=markdown' => ['X-Forwarded-Proto' => 'https'],
+            '//admin/styles/?_t=md' => [],
+        ] as $path => $headers) {
+            $response = $this->get($path, ['Cookie' => $ada] + $headers);
+
+            $this->assertSame(200, $response->status, $path);
+            $this->assertSame('markdown', $this->kind($response), $path);
+            $this->assertStringContainsString('This page is a settings page and has no Markdown form.', $response->body, $path);
+            foreach ($secrets as $secret) {
+                $this->assertStringNotContainsString($secret, $response->body, $path);
+            }
+        }
+    }
+
+    public function testAnExplicitTemplateTypeWinsOverTheMarkdownSuffix(): void
+    {
+        $paths = $this->seedSite();
+
+        $json = $this->get($paths['status'] . '.md?_t=json');
+
+        $this->assertStringStartsWith('application/json', (string) $json->header('Content-Type'));
+        $this->assertSame('markdown', $this->kind($this->get($paths['status'] . '.md?_t=markdown')));
+        $this->assertSame('markdown', $this->kind($this->get($paths['status'] . '.md')));
+    }
+
+    public function testAPageThatIsNotAPermalinkDoesNotEchoItsQueryString(): void
+    {
+        $this->seedSite();
+
+        $response = $this->get('content/all/?utm_x=find-me-secret-7788&_t=markdown');
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame($this->baseUrl() . 'content/all/', $this->parse($response->body)[0]['link'], 'the front matter\'s link has no query string');
+        $this->assertSame(1, preg_match('/<([^>]*)>; rel="canonical"/', (string) $response->header('Link'), $canonical));
+        $this->assertStringNotContainsString('find-me-secret-7788', $canonical[1], 'the canonical link');
+        $this->assertStringContainsString('<' . $this->baseUrl() . 'content/all/>; rel="canonical"', (string) $response->header('Link'));
     }
 
     /**

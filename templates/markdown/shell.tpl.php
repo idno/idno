@@ -106,10 +106,10 @@ if ($title === '') {
     $title = $oneLine($site->config()->getTitle());
 }
 $description = $oneLine($vars['description'] ?? '');
-$link = \Idno\Core\UrlValidator::httpUrl($this->getCurrentURLWithoutVar('_t'));
+$link = \Idno\Core\UrlValidator::httpUrl($this->markdownPageAddress());
 if (\Idno\Core\PageHandler::markdownSuffixRequested()) {
     // (a permalink that could not be shown, asked for as `<permalink>.md`)
-    $link = (string) preg_replace('/\.md(?=$|\?)/', '', $link, 1);
+    $link = (string) preg_replace('/\.md$/', '', $link, 1);
 }
 
 echo \Idno\Markdown\FrontMatter::render([

@@ -84,7 +84,12 @@ final class MarkdownRequestTest extends TestCase
         $this->assertTrue(MarkdownRequest::wanted(false, null, 'markdown', 'text/html'));
         $this->assertTrue(MarkdownRequest::wanted(false, null, 'md', 'text/html'));
         $this->assertTrue(MarkdownRequest::wanted(false, null, 'MD', null));
-        $this->assertTrue(MarkdownRequest::wanted(true, null, 'rss', null), 'the suffix wins over another type');
+        // Changed on purpose: an explicit template type that is not Markdown wins over the suffix
+        $this->assertFalse(MarkdownRequest::wanted(true, null, 'rss', null), 'another type wins over the suffix');
+        $this->assertFalse(MarkdownRequest::wanted(true, null, 'json', 'text/markdown'));
+        $this->assertFalse(MarkdownRequest::wanted(true, null, ['json'], null));
+        $this->assertTrue(MarkdownRequest::wanted(true, null, 'markdown', null));
+        $this->assertTrue(MarkdownRequest::wanted(true, null, '', null), 'an empty type has chosen nothing');
     }
 
     public function testAnotherTypeOrFormatIsAChoiceTheHeaderDoesNotOverride(): void
