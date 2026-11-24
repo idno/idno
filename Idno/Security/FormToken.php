@@ -1,0 +1,69 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Idno\Security;
+
+use Symfony\Component\Security\Csrf\CsrfToken;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Component\Security\Csrf\TokenStorage\TokenStorageInterface;
+
+/**
+ * The form token: ONE per session, token id `idno`, held by Symfony's CSRF token manager on the session's own
+ * storage. Every form carries it (`__bTk`), a legacy page checks it (`Bonita\Forms::validateToken()`) and a controller
+ * checks it with `#[IsCsrfTokenValid(FormToken::ID, tokenKey: FormToken::FIELD)]`: the same token, the same manager.
+ *
+ * What a form prints is the STORED value, 64 lower-case hex characters (HexTokenGenerator), not the manager's
+ * per-call randomised form: the token is stable for the session, as it always looked, and a script that is handed
+ * it later holds the same one. The manager accepts the plain value, so `#[IsCsrfTokenValid]` needs nothing special.
+ * The token is good for as long as the session is; logging in or out clears it (`forget()`), so it never
+ * outlives the session id it was made for.
+ */
+final class FormToken
+{
+    /** The token's id. */
+    public const ID = 'idno';
+
+    /** The request field a form posts it in. */
+    public const FIELD = '__bTk';
+
+    private const SHAPE = '/\A[0-9a-f]{64}\z/';
+
+    public function __construct(
+        private readonly CsrfTokenManagerInterface $manager,
+        private readonly TokenStorageInterface $storage,
+    )
+    {
+    }
+
+    /**
+     * The session's token, made on first use.
+     */
+    public function value(): string
+    {
+        $this->manager->getToken(self::ID);
+
+        return $this->storage->getToken(self::ID);
+    }
+
+    /**
+     * Whether $submitted is the session's token. Anything that is not a string of the token's shape (an array, a
+     * number, a randomised form, nothing) is simply not it.
+     */
+    public function isValid(mixed $submitted): bool
+    {
+        if (!is_string($submitted) || preg_match(self::SHAPE, $submitted) !== 1) {
+            return false;
+        }
+
+        return $this->manager->isTokenValid(new CsrfToken(self::ID, $submitted));
+    }
+
+    /**
+     * Forgets the session's token: the next form is drawn with a new one.
+     */
+    public function forget(): void
+    {
+        $this->manager->removeToken(self::ID);
+    }
+}

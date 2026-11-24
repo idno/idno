@@ -21,7 +21,9 @@ To do this, simply include form signing code with a unique, relative URL for you
 
     <?= \Idno\Core\Idno::site()->actions()->signForm('your/form/url') ?>
 
-The `postContent()` method in [the page handler class](pages.md) will seamlessly validate this token. Tokens expire after the number of seconds set by `form_token_expiry` in the site configuration (3600 by default).
+The `postContent()` method in [the page handler class](pages.md) will seamlessly validate this token. The token is the session's own: one for the whole session, the same in every form, checked from `__bTk` alone (the time and the action a form prints are ignored), and it changes when the member logs in. It does not expire by time, so `form_token_expiry` in the site configuration is ignored. Never put a token in a log line or a URL. A form drawn by an earlier release fails once with "Invalid token."; reloading the page gives a new one.
+
+A Symfony controller (see [Pages](pages.md)) that changes state for a logged-in browser checks the same token with `#[IsCsrfTokenValid(\Idno\Security\FormToken::ID, tokenKey: \Idno\Security\FormToken::FIELD)]` and `#[IsGranted('ROLE_USER')]`.
 
 An example of a complete form might be:
 

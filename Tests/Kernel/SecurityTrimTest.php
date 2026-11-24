@@ -13,7 +13,7 @@ use Symfony\Component\Console\Tester\ApplicationTester;
 /**
  * SecurityBundle brings the firewall, `#[IsGranted]` and three console commands that only describe or hash (nothing that
  * acts on a user or on the database). Idno keeps the legacy session as the source of truth and Symfony never writes it:
- * the container has no session, no CSRF token manager, no profiler hook and nothing that reads the kernel secret (remember
+ * the container has no session, no framework CSRF protection (the one token manager is Idno's, on the session PHP already has: Idno\Security\FormToken), no profiler hook and nothing that reads the kernel secret (remember
  * me, login links); the firewall is stateless and the schema gate's upgrade routes have no security at all. Checked in the
  * test container (PHPUnit's kernel) and in a freshly compiled prod container, with no legacy application.
  */
@@ -94,16 +94,18 @@ final class SecurityTrimTest extends TestCase
     /**
      * @dataProvider kernels
      */
-    public function testThereIsNoSessionNoCsrfNoProfilerHookAndNothingThatReadsTheKernelSecret(string $environment): void
+    public function testThereIsNoSessionNoProfilerHookAndNothingThatReadsTheKernelSecretAndTheOnlyCsrfManagerIsIdnos(string $environment): void
     {
         $kernel = $this->kernel($environment);
         $container = $kernel->getContainer();
         $source = $this->compiledContainer($kernel);
 
         $this->assertFalse($container->has('session.factory'), 'Symfony has no session');
-        $this->assertFalse($container->has('security.csrf.token_manager'));
-        $this->assertFalse($container->has('security.csrf.token_storage'));
-        foreach (['Symfony\\Component\\Security\\Csrf\\', 'SecurityDataCollector', 'RememberMeAuthenticator', 'LoginLinkHandler', 'NativeSessionTokenStorage', 'SessionTokenStorage', 'ContextListener', 'SessionAuthenticationStrategy(\'migrate\'', 'PdoSessionHandler(\'security'] as $needle) {
+        $this->assertTrue($container->has('security.csrf.token_manager'), '#[IsCsrfTokenValid] finds the manager by this id');
+        $this->assertInstanceOf(\Symfony\Component\Security\Csrf\CsrfTokenManager::class, $container->get('security.csrf.token_manager'));
+        $this->assertInstanceOf(\Idno\Security\SessionTokenStorage::class, $container->get('security.csrf.token_storage'), 'the session PHP has, never a Symfony one');
+        $this->assertInstanceOf(\Idno\Security\FormToken::class, $container->get(\Idno\Security\FormToken::class));
+        foreach (['SecurityDataCollector', 'RememberMeAuthenticator', 'LoginLinkHandler', 'NativeSessionTokenStorage', 'ContextListener', 'SessionAuthenticationStrategy(\'migrate\'', 'PdoSessionHandler(\'security'] as $needle) {
             $this->assertStringNotContainsString($needle, $source, $needle . ' is not in the container');
         }
     }

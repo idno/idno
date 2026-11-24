@@ -217,7 +217,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
   with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
   `docs/developers/release-checklist.md`.
-- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site, and `PrivateSiteAccessTest`, the home page, the stream and the login page by five kinds of caller on a private site of its own, `walled_garden` set through `IDNO_WALLED_GARDEN`: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and leaves the carried session intact), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (what a token is bound to: the action it names and the session, not the page that receives it; the expiry window; the token endpoint), `SessionCookieTest` (name, flags, `SameSite=Lax`, no P3P, a session with the `secure` flag still logs in) and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect, a token good for any page); a change of one is made on purpose, in the test that pins it.
+- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site, and `PrivateSiteAccessTest`, the home page, the stream and the login page by five kinds of caller on a private site of its own, `walled_garden` set through `IDNO_WALLED_GARDEN`: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and leaves the carried session intact), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (the session's one token: the time and action a form names are ignored, a token lasts the session, it changes with the session id at login and does not survive logout, a form from before the upgrade fails once; the token endpoint), `SessionCookieTest` (name, flags, `SameSite=Lax`, no P3P, a session with the `secure` flag still logs in) and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect); a change of one is made on purpose, in the test that pins it.
 - Template rendering is pinned by `Tests/Kernel/TemplateContractTest` (the cascade as `DefaultTemplate` keeps it, on
   the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
   process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
@@ -638,20 +638,20 @@ Symfony's error page.
 ### Adding a route (the new way)
 
 New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
-limit: **there is no CSRF protection for new-style controllers yet** (it arrives with the
-next change). Symfony Security does know who is making each request (see "Security
-architecture" below), so a controller may be read-only and still ask for a logged-in user
-or a role: `#[IsGranted('ROLE_USER')]` (any member) or `#[IsGranted('ROLE_ADMIN')]` (an
-administrator authenticated by the browser session: never one authenticated statelessly),
-or take the user with `Symfony\Bundle\SecurityBundle\Security`. A refusal is always
-`Idno\Security\DeniedResponder`'s (a 403, never a login redirect). Legacy `Page` classes
-get `gatekeeper()`/`adminGatekeeper()` and the CSRF token check on POST automatically; a
-controller gets no token check. Until it has one, any endpoint that accepts a
-state-changing request from a browser MUST remain a legacy `Idno\Common\Page`.
-New-style controllers are for public or authenticated read-only endpoints, or endpoints
-that authenticate each request themselves (e.g. a signed request or a bearer token; a
-controller that takes a bearer token checks it itself, since no firewall looks at
-`Authorization`).
+limit: **a controller that changes state for a logged-in browser must ask for both a user and the form token**:
+`#[IsGranted('ROLE_USER')]` (any member) or `#[IsGranted('ROLE_ADMIN')]` (an administrator authenticated by the
+browser session: never one authenticated statelessly) and `#[IsCsrfTokenValid(FormToken::ID, tokenKey: FormToken::FIELD)]`
+(`Idno\Security\FormToken`: the session's form token, posted as `__bTk`, the one every form carries and
+`Bonita\Forms::validateToken()` checks; see "Security"). `Tests/Fixtures/WhoAmIController` has the example
+(`POST /_test/csrf-member`), pinned by `Tests/Kernel/CsrfAdapterTest`. A failed token check is an
+`InvalidCsrfTokenException`, answered by `Idno\Security\DeniedResponder` (403) like every refusal; a token field that is
+an array is a malformed request to Symfony (400), never a server error. Symfony Security knows who is making each request
+(see "Security architecture" below), so a controller may also be read-only and ask for a user or a role, or take the user
+with `Symfony\Bundle\SecurityBundle\Security`. A refusal is always `DeniedResponder`'s (a 403, never a login redirect).
+Legacy `Page` classes get `gatekeeper()`/`adminGatekeeper()` and the form token check on POST automatically; a controller
+gets what its attributes ask for. A controller that accepts a request without a browser session (a signed request or a
+bearer token) authenticates it itself (no firewall looks at `Authorization`) and has no form token to ask for: it carries
+no `#[IsCsrfTokenValid]`.
 
 The one exception is `POST /_upgrade/step` (`Idno\Upgrade\UpgradeController`): it changes
 state without authentication or CSRF protection, because while the schema gate is closed nobody
@@ -1546,7 +1546,7 @@ callback, and often `exit`: Symfony's session listener would close the session a
   `access_denied_handler` both `Idno\Security\DeniedResponder`, no `access_control`. Nothing configured looks at a header, a cookie
   or a token; nothing is compiled from the configuration. The bundle brings the console commands `debug:firewall`,
   `debug:security:role-hierarchy` and `security:hash-password` (harmless: they describe or hash) and registers no session service,
-  no CSRF services, no profiler hook and nothing that reads `kernel.secret` (remember me, login links are not enabled); no trim pass
+  no session and no framework CSRF protection (the one CSRF token manager is Idno's own, below), no profiler hook and nothing that reads `kernel.secret` (remember me, login links are not enabled); no trim pass
   was needed, and `Tests/Kernel/SecurityTrimTest` pins all of it in the test and a freshly compiled prod container. The firewall
   runs for every request, legacy pages included (the catch-all route is not access-controlled): it only fills the token storage.
 - **`CurrentUserSource`** (`Idno\Security`, an interface) says who is making the request; `Idno\Legacy\LegacyCurrentUserSource` reads
@@ -2938,7 +2938,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     ones no page of core can reach from JSON (`button`, `submit`, `form-list`, the outputs `text`, `email`, `url`) have none, and a third-party page
     that draws one for JSON loses that field's documentation. (4) `forms/token` prints the three hidden inputs and keeps no `csrf` list (the list
     the JSON of a page prints comes from the `classic` copy, which `Actions::signForm()` draws on the site's template for a JSON request; nothing
-    reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`), so the Twig file neither calls `form_token()`
+    reads it on an HTML page). The token itself is `security_token(action, time)` (`Forms::token()`: the session's one token, the arguments ignored), so the Twig file neither calls `form_token()`
     nor `signForm()`: no recursion, and `form_token()` is `signForm()`, which draws this file. (5) `forms/link` registers its form with `form_data()`:
     in an XHR response (no shell draws the registered forms) the form is printed after the link, which fixes a link in content a script inserts
     (`BuiltInLookTest::testALinkActionInAnXhrResponseCarriesItsForm`); the old template kept it in a global (`$template_postponed_link_actions`) that only the admin user search's page, `Idno\Pages\Search\User`, read and appended to its results. That page draws its rows on the JSON type, whose `forms/link` is the `classic` copy, which still fills the global, so its read stays; the search's script sends `X-Requested-With` so that the page's request is an XHR one and the forms arrive (without the header they never did: `UserSearchActionLinksTest`).
@@ -3958,8 +3958,8 @@ the CLI installer no longer writes one.
   `P3P` header is sent, and `Session::validate()` is gone. `session_hash_function` is read and ignored. A session is
   never empty: `init()` writes `$_SESSION['secure']` (whether the session began over https), because the database
   session handler (Symfony's PdoSessionHandler, MySQL and MariaDB) destroys an empty session when it writes, so a
-  visitor with nothing else in the session would get a new id on the next request and the form token, an HMAC over
-  the session id, would no longer match (every form a visitor posts, a password reset for one, would fail with
+  visitor with nothing else in the session would get a new id on the next request and the form token, which is kept in
+  the session, would be lost with it (the token now makes the session non-empty by itself; `secure` stays) (every form a visitor posts, a password reset for one, would fail with
   "Invalid token"; SQLite's session files keep empty sessions, which is why only MySQL showed it:
   `MailFlowsTest::testThePasswordResetSentByTheWebServerIsRecordedAndReadOverHttp` proves it, as the test rig on
   MySQL). A signed API request's signature is compared with `hash_equals()`, and no log line at any level holds a
@@ -3980,8 +3980,23 @@ the CLI installer no longer writes one.
   must be safe to run twice. Only draft-cavage signatures are understood, not RFC 9421.
   `IdnoPlugins/ActivityPub/Tests/HTTPSignatureCoverageTest.php` checks this.
 - CSRF tokens on all form POSTs to legacy pages (inbox endpoints bypass via `post()` override).
-  New-style controllers have no authentication or CSRF protection yet (see "Adding a route");
-  the upgrade step `POST /_upgrade/step` changes state without either, under the conditions
+  The token is ONE per session (`Idno\Security\FormToken`, token id `idno`): Symfony's `CsrfTokenManager`
+  (`security.csrf.token_manager`, wired by hand in `config/services.php`, `framework.csrf_protection` stays off because it
+  needs `framework.session`) on `Idno\Security\SessionTokenStorage`, which keeps it in `$_SESSION` through
+  `NativeSessionTokenStorage` and, where no session is active (the console, the queue worker, a test in-process), in the
+  process, so drawing a form never starts a session or sends a header. The value a form prints and a request posts is the
+  STORED value, 64 lower-case hex characters made by `Idno\Security\HexTokenGenerator` (`bin2hex(random_bytes(32))`), not
+  the manager's per-call randomised form: it is stable for the session, and `PageNormaliser`, the golden pages and the JSON
+  `csrf` list see the shape they always did. `Bonita\Forms::token($action, $time)` returns it and ignores both arguments;
+  `Forms::validateToken()` is true for a stateless (API) request and otherwise checks `__bTk` alone (`hash_equals` through
+  the manager; a missing, array or odd value is simply invalid, never an error); `__bTs` and `__bTa` are still printed and
+  ignored, and a token is good for the session's lifetime (`form_token_expiry` is read by nothing). `Session::logUserOn()`
+  forgets the token when it regenerates the session id (`Forms::forgetToken()`), and `logUserOff()` empties the session,
+  so a token never outlives the id it was made for; the stored token also makes an anonymous session non-empty for the
+  database session handler. A form opened before the upgrade (the old keyed hash) fails once with "Invalid token." and
+  changes nothing. No log line holds a token or part of one (`Page::debugLogToken()` is gone). `site_secret` no longer
+  makes form tokens (it still signs ActivityPub quote stamps). New-style controllers check the same token with
+  `#[IsCsrfTokenValid]` (see "Adding a route"); the upgrade step `POST /_upgrade/step` changes state without either, under the conditions
   stated there (no input selects what it does, nothing while the schema gate is open, bounded and
   serialised work, `no-store`, a same-origin path redirect, encoded output)
 - Pages that override `post()`: `Page::post()` is what checks the form token, so a page

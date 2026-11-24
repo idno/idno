@@ -84,8 +84,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Templating' => ['CascadeTwigLoader.php', 'EmbedFinder.php', 'LocatedTemplate.php', 'MethodCallExpression.php', 'MethodCallNodeVisitor.php', 'OutputBuffers.php', 'ProfileLink.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
         // Passwords is the service; the legacy hasher is built by it. SessionUser and StatelessAuthentication are value
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
-        // adapters (wired below); the authenticator and the responder are wired by hand below.
-        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'LegacyBcryptPasswordHasher.php', 'SessionUser.php', 'StatelessAuthentication.php'],
+        // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
+        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'SessionUser.php', 'StatelessAuthentication.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -362,6 +362,24 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);
     $services->set(\Idno\Security\DeniedResponder::class)->args([service(\Idno\Security\ForbiddenPage::class)]);
+
+    // The form token (Idno\Security\FormToken): Symfony's CSRF token manager on the session's storage, by hand because
+    // framework.csrf_protection needs framework.session, which stays off (the legacy application owns PHP's session; the
+    // storage works on $_SESSION and never starts one). The two ids are the ones SecurityBundle looks for, so that
+    // #[IsCsrfTokenValid] on a controller checks this same token. The namespace is empty: the token is one per session,
+    // not one per scheme. Nothing is compiled in; a token is made when first asked for.
+    $services->set('security.csrf.token_storage', \Idno\Security\SessionTokenStorage::class)->public();
+    $services->set('security.csrf.token_manager', \Symfony\Component\Security\Csrf\CsrfTokenManager::class)
+        ->args([service(\Idno\Security\HexTokenGenerator::class), service('security.csrf.token_storage'), ''])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
+    $services->alias(\Symfony\Component\Security\Csrf\CsrfTokenManagerInterface::class, 'security.csrf.token_manager')->public();
+    $services->set(\Idno\Security\FormToken::class)
+        ->args([service('security.csrf.token_manager'), service('security.csrf.token_storage')])
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->public();
 
     // Templates (Idno\Templating): the directories they are found in (core's is the project directory; the theme's and
     // the plugins' are added at run time), what plugins registered for them, and the renderer. Public: legacy code

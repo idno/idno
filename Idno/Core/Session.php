@@ -602,6 +602,8 @@ namespace Idno\Core {
             $return = $this->refreshSessionUser($user);
             if (!$this->apiRequest) {
                 @session_regenerate_id(true);
+                // The form token belongs to the session id it was made for: the next form carries a new one.
+                \Idno\Core\Bonita\Forms::forgetToken();
             }
 
             // user/auth/success event needs to be triggered here

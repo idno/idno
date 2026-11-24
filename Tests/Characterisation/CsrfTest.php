@@ -14,8 +14,8 @@ use Tests\Support\LogsIn;
 /**
  * The form token (`__bTs` the time, `__bTk` the token, `__bTa` the action the form named), over HTTP, on the test
  * rig's site: what a state-changing POST must carry, what the site accepts as a token and what it refuses. The token
- * is a keyed hash of the action, the time and the session's id, so it belongs to one session. Every assertion is what
- * the site does today.
+ * is the session's own (`__bTk`, kept in the session, see Tests\Kernel\CsrfAdapterTest); the time (`__bTs`) and the
+ * action (`__bTa`) a form prints are no part of the check.
  */
 final class CsrfTest extends CharacterisationTestCase
 {
@@ -73,7 +73,7 @@ final class CsrfTest extends CharacterisationTestCase
         $this->assertTrue($this->statusExists($body), 'the status was published with the settings form\'s token');
     }
 
-    public function testTheTokenIsBoundToTheActionItNames(): void
+    public function testTheActionTheTokenNamesIsIgnored(): void
     {
         $cookie = $this->logIn($this->member());
         $token = $this->settingsToken($cookie);
@@ -81,32 +81,66 @@ final class CsrfTest extends CharacterisationTestCase
 
         $this->postSettings($cookie, $token, 'Changed With A Moved Action');
 
-        $this->assertSame('Csrf Test User', $this->titleOfMember());
+        $this->assertSame('Changed With A Moved Action', $this->titleOfMember(), 'the token is the session\'s: the action a form names is printed and no part of the check');
     }
 
-    public function testTokenOlderThanFormTokenExpiryIsRefused(): void
+    public function testTokenIsValidForTheSessionsLifetime(): void
     {
         $cookie = $this->logIn($this->member());
         $expiry = (int) Idno::site()->config()->form_token_expiry;
-        $this->assertSame(3600, $expiry, 'the default');
+        $this->assertSame(3600, $expiry, 'the setting is still there, and harmless: it is read and ignored');
+        $good = $this->settingsToken($cookie);
+
+        // The time a form carries is printed and ignored: a token is good for as long as the session is, however old
+        // or far ahead the time it names.
+        foreach ([time() - $expiry - 10, time() - 10 * $expiry, time() + $expiry + 60] as $i => $time) {
+            $this->postSettings($cookie, ['__bTs' => (string) $time] + $good, 'Changed At ' . $i);
+            $this->assertSame('Changed At ' . $i, $this->titleOfMember(), 'a token naming the time ' . $time);
+        }
+    }
+
+    public function testAFormOpenedBeforeTheUpgradeFailsOnceAndChangesNothing(): void
+    {
+        $cookie = $this->logIn($this->member());
         $action = $this->settingsToken($cookie)['__bTa'];
 
-        // The test's own token for the present is good (so the hash is made as the site makes it).
-        $now = time();
-        $this->postSettings($cookie, $this->tokenFor($cookie, $action, $now), 'Changed Once');
-        $this->assertSame('Changed Once', $this->titleOfMember());
+        // What a form drawn before the upgrade carries: the keyed hash of the action, the time and the session's id.
+        $old = $this->oldTokenFor($cookie, $action, time());
+        $this->postSettings($cookie, $old, 'Changed By An Old Form');
 
-        // Pins today: the time is the one the token carries, and the site accepts it for the expiry either way (an
-        // old one is refused, one just inside the window is not, and one from the future is not refused until it is
-        // as far ahead).
-        $this->postSettings($cookie, $this->tokenFor($cookie, $action, $now - $expiry - 10), 'Changed Late');
-        $this->assertSame('Changed Once', $this->titleOfMember(), 'a token older than the expiry is refused');
-        $this->postSettings($cookie, $this->tokenFor($cookie, $action, $now - $expiry + 60), 'Changed Inside');
-        $this->assertSame('Changed Inside', $this->titleOfMember(), 'one inside the window is accepted');
-        $this->postSettings($cookie, $this->tokenFor($cookie, $action, $now + $expiry - 60), 'Changed Ahead');
-        $this->assertSame('Changed Ahead', $this->titleOfMember(), 'one dated in the future is accepted just as well');
-        $this->postSettings($cookie, $this->tokenFor($cookie, $action, $now + $expiry + 60), 'Changed Far Ahead');
-        $this->assertSame('Changed Ahead', $this->titleOfMember(), 'unless it is further ahead than the expiry');
+        $this->assertSame('Csrf Test User', $this->titleOfMember());
+        $page = $this->site()->request('GET', 'account/settings', ['Cookie' => $cookie]);
+        $this->assertStringContainsString('Invalid token.', Browser::text($page->body), 'the member is told once');
+        // The form the page now shows carries the new token.
+        $this->postSettings($cookie, self::formToken($page->body, 'account/settings/'), 'Changed By The New Form');
+        $this->assertSame('Changed By The New Form', $this->titleOfMember());
+    }
+
+    public function testTheTokenChangesWhenTheSessionIdDoes(): void
+    {
+        $form = $this->site()->request('GET', 'session/login');
+        $visitorCookie = self::sessionCookie($form);
+        $visitorToken = self::formToken($form->body, 'session/login');
+        $password = bin2hex(random_bytes(12));
+        $this->member()->setPassword($password);
+        $this->member()->save(true);
+
+        $login = $this->site()->request('POST', 'session/login', ['Cookie' => $visitorCookie], $visitorToken + ['email' => $this->member()->handle, 'password' => $password]);
+        $this->assertSame(302, $login->status);
+        $cookie = self::sessionCookie($login);
+        $this->assertNotSame($visitorCookie, $cookie, 'logging in gives the session a new id');
+
+        $memberToken = $this->settingsToken($cookie);
+        $this->assertNotSame($visitorToken['__bTk'], $memberToken['__bTk'], 'and the member a new token');
+        $this->postSettings($cookie, $visitorToken, 'Changed With The Old Token');
+        $this->assertSame('Csrf Test User', $this->titleOfMember(), 'the token from before the login is refused');
+        $this->postSettings($cookie, $memberToken, 'Changed With The New Token');
+        $this->assertSame('Changed With The New Token', $this->titleOfMember());
+
+        $out = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $this->site()->baseUrl()], $memberToken);
+        $this->assertSame(302, $out->status);
+        $after = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
+        $this->assertNotSame($memberToken['__bTk'], self::formToken($after->body, 'session/login')['__bTk'], 'the token does not survive logging out');
     }
 
     public function testTokenFromAnotherSessionIsRefused(): void
@@ -131,31 +165,42 @@ final class CsrfTest extends CharacterisationTestCase
         $this->assertSame('Csrf Test User', $this->titleOfMember());
     }
 
-    public function testArrayTokenFieldsAreRefusedOrError(): void
+    public function testArrayTokenFieldsAreRefusedWithoutAnError(): void
     {
         $cookie = $this->logIn($this->member());
         $good = $this->settingsToken($cookie);
 
         $arrayKey = $this->postSettings($cookie, ['__bTk' => ['x']] + $good, 'Changed With An Array Key');
-        $arrayTime = $this->postSettings($cookie, ['__bTs' => ['1']] + $good, 'Changed With An Array Time');
-        $arrayAction = $this->postSettings($cookie, ['__bTa' => ['x']] + $good, 'Changed With An Array Action');
-        $wordTime = $this->postSettings($cookie, ['__bTs' => 'abc'] + $good, 'Changed With A Word For A Time');
-
-        // Pins today: the answer for each, and that nothing was changed.
+        $this->assertSame(302, $arrayKey->status, 'an array for the token is an invalid token, not a server error');
         $this->assertSame('Csrf Test User', $this->titleOfMember());
-        $this->assertSame([500, 500, 500, 500], [$arrayKey->status, $arrayTime->status, $arrayAction->status, $wordTime->status], 'each is a server error (PHP refuses the arithmetic and the hash on an array or a word)');
+
+        // The time and the action are no part of the check, so oddities in them do not matter.
+        foreach (['__bTs' => ['1'], '__bTa' => ['x']] as $field => $odd) {
+            $response = $this->postSettings($cookie, [$field => $odd] + $good, 'Changed With An Array ' . $field);
+            $this->assertSame(302, $response->status);
+            $this->assertSame('Changed With An Array ' . $field, $this->titleOfMember());
+        }
+        $word = $this->postSettings($cookie, ['__bTs' => 'abc'] + $good, 'Changed With A Word For A Time');
+        $this->assertSame(302, $word->status);
+        $this->assertSame('Changed With A Word For A Time', $this->titleOfMember());
     }
 
-    public function testMissingTokenFieldsAreRefused(): void
+    public function testOnlyAMissingTokenIsRefused(): void
     {
         $cookie = $this->logIn($this->member());
         $good = $this->settingsToken($cookie);
 
-        foreach (['__bTs', '__bTk', '__bTa'] as $drop) {
+        $fields = $good;
+        unset($fields['__bTk']);
+        $this->postSettings($cookie, $fields, 'Changed Without The Token');
+        $this->assertSame('Csrf Test User', $this->titleOfMember(), 'without __bTk');
+
+        // The time and the action are printed with the token and ignored when it is checked.
+        foreach (['__bTs', '__bTa'] as $drop) {
             $fields = $good;
             unset($fields[$drop]);
             $this->postSettings($cookie, $fields, 'Changed Without ' . $drop);
-            $this->assertSame('Csrf Test User', $this->titleOfMember(), 'without ' . $drop);
+            $this->assertSame('Changed Without ' . $drop, $this->titleOfMember(), 'without ' . $drop);
         }
     }
 
@@ -260,12 +305,12 @@ final class CsrfTest extends CharacterisationTestCase
     }
 
     /**
-     * The token the site makes for an action, a time and the session of the cookie: a keyed hash of the action, then
-     * the time, then the session's id (`Idno\Core\Bonita\Forms::token()`, with the id of the cookie's session).
+     * The token the site made before the form token was the session's own: a keyed hash of the action, then the time,
+     * then the session's id (the id of the cookie's session). No longer a token.
      *
      * @return array<string, string>
      */
-    private function tokenFor(string $cookie, string $action, int $time): array
+    private function oldTokenFor(string $cookie, string $action, int $time): array
     {
         $sessionId = substr($cookie, (int) strpos($cookie, '=') + 1);
         $hmac = hash_hmac('sha256', explode('?', $action)[0], (string) Main::getSiteSecret(), true);

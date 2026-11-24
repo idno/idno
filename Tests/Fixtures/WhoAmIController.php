@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Fixtures;
 
+use Idno\Security\FormToken;
 use Idno\Security\SessionUser;
 use Idno\Security\StatelessAuthentication;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -11,6 +12,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -48,6 +50,18 @@ final class WhoAmIController
     #[Route('/_test/member-only', name: 'idno_test_member_only')]
     #[IsGranted('ROLE_USER')]
     public function memberOnly(): JsonResponse
+    {
+        return $this->json(['member' => true]);
+    }
+
+    /**
+     * A state-changing route as a controller may now have one: a logged-in member, and the form token of the session in
+     * `__bTk` (the one every form carries), for Tests\Kernel\CsrfAdapterTest.
+     */
+    #[Route('/_test/csrf-member', name: 'idno_test_csrf_member', methods: ['POST'])]
+    #[IsGranted('ROLE_USER')]
+    #[IsCsrfTokenValid(FormToken::ID, tokenKey: FormToken::FIELD)]
+    public function csrfMember(): JsonResponse
     {
         return $this->json(['member' => true]);
     }

@@ -332,46 +332,6 @@ namespace Idno\Common {
             }
         }
 
-        protected function debugLogToken()
-        {
-
-            $ts = "";
-            if (empty($_REQUEST['__bTs'])) {
-                \Idno\Core\Idno::site()->logging()->error("__bTs timestamp is missing");
-            } else {
-                $ts = $_REQUEST['__bTs'];
-            }
-
-            $ta = "";
-            if (empty($_REQUEST['__bTa'])) {
-                \Idno\Core\Idno::site()->logging()->warning("__bTa action is missing");
-            } else {
-                $ta = $_REQUEST['__bTa'];
-            }
-
-            $tk = "";
-            if (empty($_REQUEST['__bTk'])) {
-                \Idno\Core\Idno::site()->logging()->error("__bTk token is missing");
-            } else {
-                $tk = $_REQUEST['__bTk'];
-            }
-
-            $debug = [
-                'time' => $ts,
-                'token' => \Idno\Core\TokenProvider::truncateToken($tk),
-                'action' => $ta,
-                'site_secret' => \Idno\Core\TokenProvider::truncateToken(\Idno\Core\Idno::site()->config()->site_secret),
-                'session_id' => \Idno\Core\TokenProvider::truncateToken(session_id()),
-                'expected-token' => \Idno\Core\TokenProvider::truncateToken(
-                    \Idno\Core\Bonita\Forms::token($ta, $ts)
-                ),
-                'expected-token-no-action' => \Idno\Core\TokenProvider::truncateToken(
-                    \Idno\Core\Bonita\Forms::token('', $ts)
-                )
-            ];
-            \Idno\Core\Idno::site()->logging()->error("Token was not valid:\n\nDebug:" . json_encode($debug));
-        }
-
         /**
          * Automatically matches JSON/XMLHTTPRequest POST requests.
          * Sets the template to JSON and then calls post().
@@ -414,8 +374,6 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->postContent();
             } else {
-
-                $this->debugLogToken();
 
                 \Idno\Core\Idno::site()->logging()->error(\Idno\Core\Idno::site()->language()->_('Invalid token.'));
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Invalid token.'));
@@ -641,8 +599,6 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->putContent();
             } else {
-                $this->debugLogToken();
-
                 throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
             }
 
@@ -732,8 +688,6 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->deleteContent();
             } else {
-                $this->debugLogToken();
-
                 throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
             }
 

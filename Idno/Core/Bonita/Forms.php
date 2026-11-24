@@ -19,45 +19,23 @@ namespace Idno\Core\Bonita {
          *  Gatekeeper function that validates input forms and prevents csrf attacks.
          *  Call this from your form action code.
          *
-         * @param  string  $targetURL                 The URL of the form action that brought us here.
+         *  The token is the session's own (`Idno\Security\FormToken`), posted as `__bTk`. The time (`__bTs`) and
+         *  the action (`__bTa`) a form prints are ignored, and so is $action: a token is good for as long as the
+         *  session is. A token that is missing, is not a string or is not the session's is simply invalid. A
+         *  stateless (API) request carries no form token and is always valid.
+         *
+         * @param  string  $action                    Unused; kept for the signature.
          * @param  boolean $haltExecutionOnBadRequest If set to true, the function halts all execution if the form doesn't validate. (True by default.)
          * @return true|false
          */
         public static function validateToken($action = '', $haltExecutionOnBadRequest = true)
         {
-            if (empty($_REQUEST['__bTs']) || empty($_REQUEST['__bTk'])) {
-                if ($haltExecutionOnBadRequest) {
-                    exit;
-                }
-
-                return false;
-            }
-            $time = $_REQUEST['__bTs'];
-            $token = $_REQUEST['__bTk'];
-            if (empty($action)) {
-                if (!empty($_REQUEST['__bTa'])) {
-                    $action = $_REQUEST['__bTa'];
-                } else {
-
-                    \Idno\Core\Idno::site()->logging()->debug("No action in token");
-
-                    if ($haltExecutionOnBadRequest) {
-                        exit;
-                    }
-
-                    return false;
-                }
+            if (\Idno\Core\Idno::site()->session()->isAPIRequest()) {
+                return true;
             }
 
-            if (abs(time() - $time) < \Idno\Core\Idno::site()->config()->form_token_expiry) {
-
-                // \Idno\Core\Idno::site()->logging()->debug("Token for $action has a valid time " . date('r', $time));
-
-                if (self::token($action, $time) == $token) {
-                    return true;
-                }
-            } else {
-                \Idno\Core\Idno::site()->logging()->debug("Token for $action has expired - ts = " . date('r', $time));
+            if (self::formToken()->isValid($_REQUEST[\Idno\Security\FormToken::FIELD] ?? null)) {
+                return true;
             }
             if ($haltExecutionOnBadRequest) {
                 exit;
@@ -82,33 +60,32 @@ namespace Idno\Core\Bonita {
         }
 
         /**
-         *    Generate a token based on a given action and UNIX timestamp.
+         *    The session's form token: 64 lower-case hex characters, the same for every form of the session. The
+         *    action and the time are ignored (they are printed with the token for the forms that always carried
+         *    them).
          *
-         * @param string $targetURL The URL of the form action we're using.
-         * @param int    $time      The current timestamp.
+         * @param string     $action Ignored.
+         * @param int|string $time   Ignored.
          *
-         * @return true|false
+         * @return string
          */
         public static function token($action, $time)
         {
+            return self::formToken()->value();
+        }
 
-            // Normalise action by stripping get line
-            $action = explode('?', $action)[0];
+        /**
+         *  Forgets the session's form token, so that the next form is drawn with a new one. Called when the session's
+         *  id changes (logging in) and nowhere else.
+         */
+        public static function forgetToken()
+        {
+            self::formToken()->forget();
+        }
 
-            $hmac = hash_hmac('sha256', $action, \Idno\Core\Bonita\Main::getSiteSecret(), true);
-            $hmac = hash_hmac('sha256', $time, $hmac, true);
-            $hmac = hash_hmac('sha256', session_id(), $hmac);
-
-            $debug = [
-                'action' => $action,
-                'time' => $time,
-                'site_secret' => \Idno\Core\TokenProvider::truncateToken(\Idno\Core\Idno::site()->config()->site_secret),
-                'session_id' => \Idno\Core\TokenProvider::truncateToken(session_id()),
-                'token' => \Idno\Core\TokenProvider::truncateToken($hmac),
-            ];
-            // \Idno\Core\Idno::site()->logging()->debug("Generating CSRF token for {$action} over: ". print_r($debug, true));
-
-            return $hmac;
+        private static function formToken(): \Idno\Security\FormToken
+        {
+            return \Idno\Core\Idno::container()->get(\Idno\Security\FormToken::class);
         }
 
         /**
