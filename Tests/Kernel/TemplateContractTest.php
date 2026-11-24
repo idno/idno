@@ -217,7 +217,8 @@ final class TemplateContractTest extends TestCase
         $this->assertSame(['docs' => 'notshell'], $result['overrides'], 'the root is trimmed of slashes');
         $this->assertSame('plugin-a:default/notshell|', $result['/docs/guide']);
         $this->assertSame('plugin-a:default/notshell|', $result['/docs/']);
-        $this->assertSame('plugin-a:default/shell|', $result['/docs'], 'the page must be below the root: `/docs` is not `/docs/`');
+        // Changed on purpose: the root itself counts (`/admin` and `/account` without a trailing slash are settings pages)
+        $this->assertSame('plugin-a:default/notshell|', $result['/docs'], 'the root without a trailing slash is the root');
         $this->assertSame('plugin-a:default/shell|', $result['/other/docs/']);
         $this->assertSame('plugin-a:default/shell|', $result['/Docs/guide'], 'case matters');
     }

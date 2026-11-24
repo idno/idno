@@ -208,11 +208,12 @@ namespace Idno\Core {
         {
             $type = strtolower((string) $this->getTemplateType());
             if (in_array($type, ['default', 'jsonp'], true)) {
-                $current = (string) \Idno\Core\Idno::site()->currentPage()->currentUrl();
+                $current = null;
                 foreach ($this->url_shell_overrides as $url => $page_shell) {
+                    $current ??= (string) \Idno\Core\Idno::site()->currentPage()->currentUrl();
                     $prefix = \Idno\Core\Idno::site()->config()->getDisplayURL() . $url;
-                    // The root itself (`/admin`), and everything under it (`/admin/`, `/admin/email`, `/admin?x`)
-                    if (stripos($current, $prefix) === 0 && in_array((string) substr($current, strlen($prefix), 1), ['', '/', '?', '#'], true)) {
+                    // The root itself (`/admin`), and everything under it (`/admin/`, `/admin/email`, `/admin?x`); case matters
+                    if (strpos($current, $prefix) === 0 && in_array((string) substr($current, strlen($prefix), 1), ['', '/', '?', '#'], true)) {
                         $shell = $page_shell;
                         if ($type === 'jsonp') {
                             // The HTML settings shell answers a request for a script: it is HTML, and never to be taken for a script.

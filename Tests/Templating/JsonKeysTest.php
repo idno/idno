@@ -29,6 +29,7 @@ final class JsonKeysTest extends RenderedSiteTestCase
      */
     private const SECRET_NAMED_KEYS_ALLOWED = [
         '*' => [
+            'formFields.current_password' => 'the DESCRIPTION of the current password field of the account form (type, name, id, label): no value',
             'formFields.password' => 'the DESCRIPTION of the password field of the account form (its type, name, id and label): the field has no value',
             'user_stats.*.has_keys' => 'a boolean: whether the user has an ActivityPub key pair (ActivityPub admin page); never a key',
         ],
