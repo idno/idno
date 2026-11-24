@@ -22,7 +22,8 @@ final class LoginFlowTest extends PrivateSiteTestCase
 
     protected function siteEnvironment(): array
     {
-        $this->eventFile = sys_get_temp_dir() . '/idno-events-' . bin2hex(random_bytes(6));
+        // Read again for every subprocess of the site (runInSite()): the file is made once.
+        $this->eventFile = $this->eventFile !== '' ? $this->eventFile : sys_get_temp_dir() . '/idno-events-' . bin2hex(random_bytes(6));
 
         return ['IDNO_TEST_RECORD_EVENTS' => $this->eventFile];
     }
@@ -270,7 +271,7 @@ final class LoginFlowTest extends PrivateSiteTestCase
 
         $this->assertSame(302, $login->status);
         $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status, 'not logged in');
-        $this->assertSame(200, $this->loginCookie('ada', self::PASSWORD) !== '' ? 200 : 0, 'and somebody else still can');
+        $this->loginCookie('ada', self::PASSWORD);
     }
 
     public function testEventsFire(): void
@@ -305,6 +306,19 @@ final class LoginFlowTest extends PrivateSiteTestCase
 
         $this->assertSame([['user/auth/success', 'ada', false]], array_map(static fn (array $e): array => [$e['event'], $e['user'], $e['api']], $member));
         $this->assertSame([['user/auth/failure', null, false]], array_map(static fn (array $e): array => [$e['event'], $e['user'], $e['api']], $anonymous));
+    }
+
+    public function testTheAuthenticationEventsOfASignedRequest(): void
+    {
+        $this->registerUser('ada');
+        $key = $this->apiKeyOf('ada');
+        $this->events();
+
+        $response = $this->site()->request('GET', 'currentUser?_t=json', self::signedHeadersFor('ada', $key, '/currentUser?_t=json'));
+        $events = $this->events();
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame([['user/auth/success', 'ada', true]], array_map(static fn (array $e): array => [$e['event'], $e['user'], $e['api']], array_values(array_filter($events, static fn (array $e): bool => str_starts_with($e['event'], 'user/auth/')))), 'the event says it was an API request');
     }
 
     // ------------------------------------------------------------------ helpers

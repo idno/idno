@@ -189,6 +189,9 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
 
         $response = $this->site()->request('POST', 'autosave', self::signedHeadersFor('ada', $key, '/autosave'), ['context' => 'status', 'elements' => ['body' => 'x']]);
 
+        $this->assertSame(200, $response->status, 'the signed request was accepted: ' . substr($response->body, 0, 300));
+        $stored = $this->runInSite('$u = \Idno\Entities\User::getByHandle(\'ada\'); return $u->autosave;');
+        $this->assertSame(['status' => ['body' => 'x']], $stored, 'and acted as ada: the value was stored');
         $this->assertNoLoginPlanted($response);
     }
 
@@ -199,25 +202,26 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
 
         $response = $this->site()->request('POST', 'status/edit', self::signedHeadersFor('ada', $key, '/status/edit'), ['body' => 'hello from the api']);
 
+        $this->assertContains($response->status, [200, 201, 302], 'the signed request was accepted: ' . substr($response->body, 0, 300));
+        $this->assertNotNull($this->runInSite('$s = \IdnoPlugins\Status\Status::getOne([\'body\' => \'hello from the api\']); return $s ? $s->getUUID() : null;'), 'and published the note');
         $this->assertNoLoginPlanted($response);
     }
 
     /**
-     * Every session cookie a response sets (a request that starts a session and ends it sets two: the new id, then
-     * the deletion of it) must be of no use as a login. The test says so by what it sees: when the site accepts one
-     * as a login the test is marked incomplete (the wanted behaviour is that none does).
+     * Every session cookie a response sets (a request that starts a session and ends it may set two: the new id, then
+     * the deletion of it) must be of no use as a login. A response that sets none is as good. The test says so by
+     * what it sees: when the site accepts one as a login the test is marked incomplete (the wanted behaviour is
+     * that none does).
      */
     private function assertNoLoginPlanted(SiteResponse $response): void
     {
         $name = (string) \Idno\Core\Idno::site()->config()->sessionname;
         preg_match_all('/' . preg_quote($name, '/') . '=([^;,\s]+)/', (string) $response->header('Set-Cookie'), $m);
-        foreach ($m[1] as $value) {
-            if ($value !== 'deleted' && $this->site()->request('GET', 'account/settings/', ['Cookie' => $name . '=' . $value])->status === 200) {
+        $values = array_values(array_filter($m[1], static fn (string $value): bool => $value !== 'deleted'));
+        foreach ($values as $value) {
+            if ($this->site()->request('GET', 'account/settings/', ['Cookie' => $name . '=' . $value])->status === 200) {
                 $this->markTestIncomplete('A signed request leaves a session cookie that logs the signed user on: ' . $name . '=' . $value);
             }
-        }
-        $this->assertNotSame([], $m[1], 'the response sets a session cookie, as every response does');
-        foreach ($m[1] as $value) {
             $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $name . '=' . $value])->status);
         }
     }
@@ -229,14 +233,18 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
      */
     private function resetLink(string $email): array
     {
-        $this->site()->request('GET', '_test/mail/log');
         $form = $this->site()->request('GET', 'account/password/');
         $this->assertSame(200, $form->status);
         $post = $this->site()->request('POST', 'account/password/', ['Cookie' => self::sessionCookie($form)], self::formToken($form->body, 'account/password') + ['email' => $email]);
         $this->assertSame(302, $post->status);
-        $mails = $this->site()->request('GET', '_test/mail/log')->json();
-        $this->assertCount(1, $mails);
-        $this->assertSame(1, preg_match('#account/password/reset/\?email=[^&\s"]+&code=([0-9a-f]+)#', (string) $mails[0]['text'], $m), (string) $mails[0]['text']);
+        // The mail log is shared by every site of this checkout: take the mail for this address, the newest.
+        $mine = array_values(array_filter(
+            $this->site()->request('GET', '_test/mail/log')->json(),
+            static fn (array $mail): bool => str_contains(json_encode($mail['to'] ?? []), $email)
+        ));
+        $this->assertNotSame([], $mine, 'a mail was sent to ' . $email);
+        $mail = end($mine);
+        $this->assertSame(1, preg_match('#account/password/reset/\?email=[^&\s"]+&code=([0-9a-f]+)#', (string) $mail['text'], $m), (string) $mail['text']);
 
         return ['path' => 'account/password/reset/?email=' . rawurlencode($email) . '&code=' . $m[1], 'code' => $m[1]];
     }

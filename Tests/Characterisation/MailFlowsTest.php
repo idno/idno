@@ -20,6 +20,8 @@ use Tests\IdnoTestCase;
  */
 final class MailFlowsTest extends CharacterisationTestCase
 {
+    use \Tests\Support\LogsIn;
+
     private static bool $listening = false;
 
     /** @var list<array<string, mixed>> */
@@ -248,15 +250,11 @@ final class MailFlowsTest extends CharacterisationTestCase
             $form = $this->site()->request('GET', 'account/password/');
             $this->assertSame(200, $form->status);
             $cookie = explode(';', (string) $form->header('Set-Cookie'))[0];
-            preg_match('/name="__bTs" value="([^"]*)"/', $form->body, $ts);
-            preg_match('/name="__bTk" value="([^"]*)"/', $form->body, $tk);
-            preg_match('/name="__bTa" value="([^"]*)"/', $form->body, $ta);
-            $this->assertNotEmpty($tk);
 
             $user = $this->user();
             $response = $this->site()->request('POST', 'account/password/', ['Cookie' => $cookie], [
-                'email' => $user->email, '__bTs' => $ts[1], '__bTk' => $tk[1], '__bTa' => $ta[1],
-            ]);
+                'email' => $user->email,
+            ] + self::formToken($form->body, 'account/password'));
             $this->assertSame(302, $response->status);
             $this->assertStringContainsString('sent=true', (string) $response->header('Location'));
         } finally {

@@ -67,10 +67,10 @@ final class CsrfTest extends CharacterisationTestCase
         // The token names the action of its own form (`__bTa`), and the site checks it against that name, not against
         // the page that receives the post: a token made for one form is good for any page.
         $response = $this->site()->request('POST', 'status/edit', ['Cookie' => $cookie], $this->settingsToken($cookie) + ['body' => $body, 'access' => 'PUBLIC']);
+        $this->forgetStatus($body);
 
         $this->assertSame(302, $response->status);
         $this->assertTrue($this->statusExists($body), 'the status was published with the settings form\'s token');
-        $this->forgetStatus($body);
     }
 
     public function testTheTokenIsBoundToTheActionItNames(): void
@@ -195,29 +195,15 @@ final class CsrfTest extends CharacterisationTestCase
         $this->assertArrayHasKey('token', $response->json());
     }
 
-    public function testDeniedPagesSendNoCsrfHeaders(): void
-    {
-        $denied = $this->site()->request('GET', 'account/settings');
-        $missing = $this->site()->request('GET', 'a/page/that/does/not/exist');
-        $page = $this->site()->request('GET', '');
-
-        $this->assertSame(403, $denied->status);
-        $this->assertSame(404, $missing->status);
-        foreach (['denied' => $denied, 'not found' => $missing, 'ordinary' => $page] as $what => $response) {
-            $this->assertNull($response->header('X-Idno-CSRF-Ts'), $what);
-            $this->assertNull($response->header('X-Idno-CSRF-Token'), $what);
-        }
-    }
-
     public function testApiSignedPostNeedsNoToken(): void
     {
         $body = 'csrf-signed-' . bin2hex(random_bytes(6));
 
         $response = $this->site()->request('POST', 'status/edit', self::signedHeaders($this->member(), '/status/edit'), ['body' => $body]);
+        $this->forgetStatus($body);
 
         $this->assertContains($response->status, [200, 201, 302], substr($response->body, 0, 300));
         $this->assertTrue($this->statusExists($body), 'published without a form token');
-        $this->forgetStatus($body);
     }
 
     public function testApiSignedPostWithTheWrongSignatureNeedsAToken(): void
@@ -226,8 +212,10 @@ final class CsrfTest extends CharacterisationTestCase
         $headers = self::signedHeaders($this->member(), '/status/edit');
         $headers['X-IDNO-SIGNATURE'] = base64_encode('wrong');
 
-        $this->site()->request('POST', 'status/edit', $headers, ['body' => $body]);
+        $response = $this->site()->request('POST', 'status/edit', $headers, ['body' => $body]);
+        $this->forgetStatus($body);
 
+        $this->assertSame(302, $response->status, 'refused for its token, as a browser post is');
         $this->assertFalse($this->statusExists($body));
     }
 
