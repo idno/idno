@@ -25,6 +25,9 @@ namespace Tests\API {
         /// File holding the cookies of the logged-in browser
         private static $cookies;
 
+        /// Whether the browser behind $cookies has logged in
+        private static $loggedIn = false;
+
         public static function setUpBeforeClass(): void
         {
             parent::setUpBeforeClass();
@@ -370,6 +373,11 @@ namespace Tests\API {
 
         private function logIn()
         {
+            if (static::$loggedIn) {
+                return;
+            }
+            static::$loggedIn = true;
+
             $form = $this->request('GET', '/session/login', null, [], true);
             $fields = $this->formFields($form['body']);
             $this->assertCount(3, $fields, 'The login page should have a form token. If this is failing, you may need to set IDNO_DOMAIN.');
