@@ -1574,11 +1574,9 @@ callback, and often `exit`: Symfony's session listener would close the session a
   whatever cookie it carries. A `user/auth/request` answer that is not a `User` authenticates nobody and the session's user stays;
   the Micropub endpoint also answers 401 unless the request is an API request AND a user is logged on. A plugin that logs a user on
   (or refreshes the session's user) and only then calls `setIsAPIRequest(true)` is put right: the user moves to the stateless slot and
-  `$_SESSION['user_uuid']` is put back to what the browser had (recorded at the start and at the end of `tryAuthUser()`); the
+  `$_SESSION['user_uuid']` and the session's password fingerprint are put back to what the browser had (recorded at the start and at the end of `tryAuthUser()`); the
   session id `logUserOn()` regenerated stays regenerated. A signed request that carries another member's browser cookie acts as the signed member for that request and leaves the
-  browser's session intact (`SessionDataAcrossLoginTest`), (`SessionUser::getRoles()` also withholds `ROLE_ADMIN` from a stateless one),
-  so a signed request that carries another member's browser cookie acts as the signed member for that request and leaves the
-  browser's session intact. `refreshSessionUser()` (Autosave, the `saved` listener, token issue) refreshes the user in memory on a
+  browser's session intact (`SessionDataAcrossLoginTest`); `SessionUser::getRoles()` also withholds `ROLE_ADMIN` from a stateless member. `refreshSessionUser()` (Autosave, the `saved` listener, token issue) refreshes the user in memory on a
   stateless request and never writes `$_SESSION['user_uuid']`; `logUserOff()` on one clears the memory and leaves the session and
   cookie alone; `logUserOn()` (browser login, registration, the worker) is as before for an ordinary request and, on a stateless
   one, holds the user in memory and does not regenerate the session id. `Session::authenticateStatelessly(User $user)` (public: holds
@@ -4456,8 +4454,9 @@ the CLI installer no longer writes one.
   is set in the configuration. `Tests/Core/ExceptionResponseTest.php` checks this by running
   `Tests/Core/fixtures/exception_response.php` in its own PHP process.
 - JSONP is readable by other sites: a page drawn with the `jsonp` template type
-  (`templates/jsonp/shell.tpl.php`) is a script that any site can load, and the browser may
-  send the session cookie with that request. Never put a secret in the template variables
+  (`templates/jsonp/shell.tpl.php`) is a script that other pages can load. The session cookie is `SameSite=Lax`, so a browser sends it with a script
+  request only from a page of the same site (a sibling subdomain, say), not from another site; but a script from a same-site page, or a cookie
+  with another policy, is enough to be careful. The rule stays: never put a secret in the template variables
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this. The form token is a secret too, and is never a template variable of a page
@@ -4528,6 +4527,15 @@ the CLI installer no longer writes one.
   update feed from a fixed host; if one is ever wanted, it must be off until the site's owner
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
   `Tests/Pages/Onboarding/VendorMessagesTest.php` checks this.
+- Known limits of the security model (stated plainly; none is fixed by the authentication changes):
+  - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.
+  - The form token is accepted from the query string as well as the body, and lasts as long as the session.
+  - Five POST handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
+    `IdnoPlugins/StaticPages/Pages/Admin/ReorderCategory.php`, `ReorderPage.php`) and rely on `SameSite=Lax` on the session cookie.
+  - IndieAuth access tokens are stored in plain text, never expire, and their scope is not enforced by the Micropub endpoint.
+  - `Page::isSSL()` trusts `X-Forwarded-Proto` from any client (there are no trusted proxies), and the login throttle counts by account
+    for that reason.
+  - Registration and the password reset request let someone learn whether a handle or an email address has an account.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions
