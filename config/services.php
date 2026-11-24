@@ -368,6 +368,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // storage works on $_SESSION and never starts one). The two ids are the ones SecurityBundle looks for, so that
     // #[IsCsrfTokenValid] on a controller checks this same token. The namespace is empty: the token is one per session,
     // not one per scheme. Nothing is compiled in; a token is made when first asked for.
+    $services->set(\Idno\Security\HexTokenGenerator::class);
     $services->set('security.csrf.token_storage', \Idno\Security\SessionTokenStorage::class)->public();
     $services->set('security.csrf.token_manager', \Symfony\Component\Security\Csrf\CsrfTokenManager::class)
         ->args([service(\Idno\Security\HexTokenGenerator::class), service('security.csrf.token_storage'), ''])

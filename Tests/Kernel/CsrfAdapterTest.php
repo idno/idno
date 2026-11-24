@@ -78,6 +78,19 @@ final class CsrfAdapterTest extends CharacterisationTestCase
         $this->assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', Forms::token('/x', 1));
     }
 
+    public function testTheFirstPageAfterALoginCarriesTheTokenThatIsStoredForTheSession(): void
+    {
+        // The page shell draws its forms after the session is closed (before it is sent): the token must already be in the session.
+        $cookie = $this->logIn($this->member());
+        $home = $this->site()->request('GET', '', ['Cookie' => $cookie]);
+        $homeToken = self::formToken($home->body, 'session/logout');
+        $settings = $this->site()->request('GET', 'account/settings', ['Cookie' => $cookie]);
+
+        $this->assertSame($homeToken['__bTk'], self::formToken($settings->body, 'account/settings/')['__bTk']);
+        $out = $this->site()->request('POST', '_test/csrf-member', ['Cookie' => $cookie], ['__bTk' => $homeToken['__bTk']]);
+        $this->assertSame(200, $out->status, 'and the session accepts it');
+    }
+
     public function testActionAndTimeAreIgnored(): void
     {
         $this->assertSame(Forms::token('/a', 1), Forms::token('/b?c=d', '99999999999'));

@@ -4007,8 +4007,10 @@ the CLI installer no longer writes one.
   `csrf` list see the shape they always did. `Bonita\Forms::token($action, $time)` returns it and ignores both arguments;
   `Forms::validateToken()` is true for a stateless (API) request and otherwise checks `__bTk` alone (`hash_equals` through
   the manager; a missing, array or odd value is simply invalid, never an error); `__bTs` and `__bTa` are still printed and
-  ignored, and a token is good for the session's lifetime (`form_token_expiry` is read by nothing). `Session::logUserOn()`
-  forgets the token when it regenerates the session id (`Forms::forgetToken()`), and `logUserOff()` empties the session,
+  ignored, and a token is good for the session's lifetime (`form_token_expiry` is read by nothing). The session makes its token at its first
+  request (`Session::init()`), because a page draws its forms after `session_write_close()` and a token made then cannot be stored
+  (`SessionTokenStorage` reads a closed session's `$_SESSION`); `Session::logUserOn()` replaces the token at once when it
+  regenerates the session id (`Forms::forgetToken()`), and `logUserOff()` empties the session,
   so a token never outlives the id it was made for; the stored token also makes an anonymous session non-empty for the
   database session handler. A form opened before the upgrade (the old keyed hash) fails once with "Invalid token." and
   changes nothing. No log line holds a token or part of one (`Page::debugLogToken()` is gone). `site_secret` no longer

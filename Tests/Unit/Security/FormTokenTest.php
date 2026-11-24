@@ -86,7 +86,7 @@ final class FormTokenTest extends TestCase
         $this->assertFalse($formToken->isValid($submitted));
     }
 
-    public function testForgettingGivesANewToken(): void
+    public function testForgettingGivesANewTokenAtOnce(): void
     {
         $formToken = $this->formToken();
         $old = $formToken->value();

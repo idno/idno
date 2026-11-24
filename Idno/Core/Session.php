@@ -122,6 +122,10 @@ namespace Idno\Core {
                 $_SESSION['secure'] = \Idno\Common\Page::isSSL();
             }
 
+            // The session holds its form token from the first request: a page draws its forms after the session is closed
+            // (`DefaultTemplate::drawPage()` closes it before the shell is drawn), and a token made then could not be stored.
+            \Idno\Core\Bonita\Forms::token('', 0);
+
             // Session login / logout
             Idno::site()->routes()->addRoute('/session/login', '\Idno\Pages\Session\Login', true);
             Idno::site()->routes()->addRoute('/session/logout', '\Idno\Pages\Session\Logout');

@@ -16,7 +16,7 @@ use Symfony\Component\Security\Csrf\TokenStorage\TokenStorageInterface;
  * What a form prints is the STORED value, 64 lower-case hex characters (HexTokenGenerator), not the manager's
  * per-call randomised form: the token is stable for the session, as it always looked, and a script that is handed
  * it later holds the same one. The manager accepts the plain value, so `#[IsCsrfTokenValid]` needs nothing special.
- * The token is good for as long as the session is; logging in or out clears it (`forget()`), so it never
+ * The token is good for as long as the session is; logging in replaces it (`forget()`) and logging out empties the session, so it never
  * outlives the session id it was made for.
  */
 final class FormToken
@@ -60,10 +60,11 @@ final class FormToken
     }
 
     /**
-     * Forgets the session's token: the next form is drawn with a new one.
+     * Replaces the session's token with a new one, at once (a page draws its forms after the session is closed, which
+     * is too late to store a token): the next form is drawn with it.
      */
     public function forget(): void
     {
-        $this->manager->removeToken(self::ID);
+        $this->manager->refreshToken(self::ID);
     }
 }

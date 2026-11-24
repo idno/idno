@@ -18,6 +18,10 @@ use Symfony\Component\Security\Csrf\TokenStorage\NativeSessionTokenStorage;
  * with action links) and a test in-process. NativeSessionTokenStorage would start a session there, which sends headers
  * and writes a session nobody asked for. This storage never starts one: with none active the token lives in this
  * object, so a process draws one token for as long as it lives, and nothing is written or sent.
+ *
+ * A web page draws its shell after the session is closed (`session_write_close()` before output) but `$_SESSION` is
+ * still there to read: a token the session holds is read from it, so what such a page prints is the session's token.
+ * (Nothing can be stored in a closed session: the session makes its token at its first request, see Session::init().)
  */
 final class SessionTokenStorage implements ClearableTokenStorageInterface
 {
@@ -36,11 +40,12 @@ final class SessionTokenStorage implements ClearableTokenStorageInterface
         if ($this->active()) {
             return $this->session->getToken($tokenId);
         }
-        if (!isset($this->process[$tokenId])) {
+        $token = $this->closed($tokenId);
+        if ($token === null) {
             throw new TokenNotFoundException('The CSRF token with ID ' . $tokenId . ' does not exist.');
         }
 
-        return $this->process[$tokenId];
+        return $token;
     }
 
     public function setToken(string $tokenId, #[\SensitiveParameter] string $token): void
@@ -55,7 +60,7 @@ final class SessionTokenStorage implements ClearableTokenStorageInterface
 
     public function hasToken(string $tokenId): bool
     {
-        return $this->active() ? $this->session->hasToken($tokenId) : isset($this->process[$tokenId]);
+        return $this->active() ? $this->session->hasToken($tokenId) : $this->closed($tokenId) !== null;
     }
 
     public function removeToken(string $tokenId): ?string
@@ -63,7 +68,7 @@ final class SessionTokenStorage implements ClearableTokenStorageInterface
         if ($this->active()) {
             return $this->session->removeToken($tokenId);
         }
-        $token = $this->process[$tokenId] ?? null;
+        $token = $this->closed($tokenId);
         unset($this->process[$tokenId]);
 
         return $token;
@@ -75,6 +80,16 @@ final class SessionTokenStorage implements ClearableTokenStorageInterface
             $this->session->clear();
         }
         $this->process = [];
+    }
+
+    /**
+     * The token held with no active session: the process's own, else the one a session that was closed still holds.
+     */
+    private function closed(string $tokenId): ?string
+    {
+        $held = $this->process[$tokenId] ?? $_SESSION[NativeSessionTokenStorage::SESSION_NAMESPACE][$tokenId] ?? null;
+
+        return is_string($held) ? $held : null;
     }
 
     private function active(): bool
