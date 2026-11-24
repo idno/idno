@@ -1211,7 +1211,7 @@ other new code may.
     tables and no complete upgrade on record costs more (the 1.x version is read), and so do the
     closed states that tell the owner to remove tables (the catalog read again once). Pinned by
     `UpgradeEndToEndTest::testTheHomepageStatementsArePinned` (the DBAL statements of a homepage
-    request: the catalog, the probe, then the legacy application's, 11 on the fixture site (Idno 2026 draws one lookup fewer than the look it replaced did, and the Twig shell one fewer again: the structured data partial no longer looks up an icon of the page's object that it never used), the same
+    request: the catalog, the probe, then the legacy application's, 10 on the fixture site (Idno 2026 draws one lookup fewer than the look it replaced did, the Twig shell one fewer again: the structured data partial no longer looks up an icon of the page's object that it never used, and the Twig entity templates one fewer again: two lookups of an entity by its uuid where there were three), the same
     after a completed upgrade, with its `legacy_` tables deleted, with 1.x tables recreated, with
     another application's `legacy_config`).
   New code never calls `db()`: inject `EntityRepository` (entities) or `RecordStore` (records).

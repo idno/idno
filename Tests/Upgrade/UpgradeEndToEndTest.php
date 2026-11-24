@@ -49,9 +49,11 @@ final class UpgradeEndToEndTest extends TestCase
     /**
      * The DBAL statements of an anonymous homepage request on the fixture site once upgraded (see
      * testTheHomepageStatementsArePinned): the catalog, the gate's probe, and the legacy application's. (One lookup fewer than the
-     * Bootstrap-era shell drew: the structured data partial's icon of the page's object, which it never used.)
+     * Bootstrap-era shell drew: the structured data partial's icon of the page's object, which it never used. And one fewer since the
+     * entity templates are drawn from Twig: two lookups of an entity by its uuid, where the `.tpl.php` templates made three for the
+     * same page.)
      */
-    private const HOMEPAGE_STATEMENTS = 11;
+    private const HOMEPAGE_STATEMENTS = 10;
 
     /** The most steps a whole upgrade of the fixture may take. */
     private const MAX_STEPS = 100;
