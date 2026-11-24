@@ -220,7 +220,12 @@ final class MailFlowsTest extends CharacterisationTestCase
     public function testOopsAlert(): void
     {
         Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
-        \Idno\Core\Logging::oopsAlert('Something broke', 'Oh no');
+        $_SERVER['QUERY_STRING'] = 'page=2&access_token=tok-5c1d9e';
+        try {
+            \Idno\Core\Logging::oopsAlert('Something broke', 'Oh no');
+        } finally {
+            unset($_SERVER['QUERY_STRING']);
+        }
 
         $mail = $this->theOneMail();
         $this->assertSame([['ops@example.net', '']], $mail['to']);
@@ -230,6 +235,8 @@ final class MailFlowsTest extends CharacterisationTestCase
         $this->assertWrappedInTheShellWithATextPart($mail);
         $this->assertStringContainsString('Something broke', $mail['html']);
         $this->assertStringContainsString('Something broke', $mail['text']);
+        $this->assertStringContainsString('page=2&amp;access_token=[redacted]', $mail['html']);
+        $this->assertStringNotContainsString('tok-5c1d9e', $mail['html'] . $mail['text'], 'an access token in the query string is not mailed');
     }
 
     /**

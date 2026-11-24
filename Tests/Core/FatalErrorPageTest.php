@@ -13,7 +13,8 @@ namespace Tests\Core {
 
         /// The error message and page address used by the helper script
         const MESSAGE = 'Could not open <script>alert(1)</script> for \'dbuser\'@"dbhost"';
-        const URI = '/probe?q=<script>alert(2)</script>';
+        const URI = '/probe?q=<script>alert(2)</script>&access_token=[redacted]';
+        const TOKEN = 'tok-9f3a7c';
 
         /**
          * Run Tests/Core/fixtures/fatal_error.php in its own PHP process.
@@ -47,6 +48,7 @@ namespace Tests\Core {
             $this->assertStringNotContainsString('<script', $page);
             $this->assertStringNotContainsString('alert(1)', $page, 'The error message should not be shown.');
             $this->assertStringNotContainsString('dbuser', $page, 'The error message should not be shown.');
+            $this->assertStringNotContainsString(self::TOKEN, $page);
             $this->assertStringNotContainsString('alert(2)', $page, 'The page address should not be shown.');
             $this->assertStringNotContainsString('probe', $page, 'The page address should not be shown.');
             $this->assertStringNotContainsString(dirname(__DIR__, 2), $page, 'File paths should not be shown.');
@@ -71,6 +73,7 @@ namespace Tests\Core {
             $this->assertStringContainsString('Stack trace', $logged);
             $this->assertStringContainsString($helper, $logged);
             $this->assertStringContainsString('on page probe.test' . self::URI, $logged);
+            $this->assertStringNotContainsString(self::TOKEN, $logged, 'An access token in the query string is not logged.');
         }
 
         public function testProductionPageShowsNoDetails()
@@ -97,9 +100,10 @@ namespace Tests\Core {
             // The message, twice: on its own, and in the technical details
             $escaped = 'Could not open &lt;script&gt;alert(1)&lt;/script&gt; for &#039;dbuser&#039;@&quot;dbhost&quot;';
             $this->assertSame(2, substr_count($page, $escaped), 'The error message should be shown as text.');
-            $this->assertStringContainsString('on page probe.test/probe?q=&lt;script&gt;alert(2)&lt;/script&gt;', $page, 'The page address should be shown as text.');
+            $this->assertStringContainsString('on page probe.test/probe?q=&lt;script&gt;alert(2)&lt;/script&gt;&amp;access_token=[redacted]', $page, 'The page address should be shown as text.');
             $this->assertStringContainsString('Stack trace', $page);
 
+            $this->assertStringNotContainsString(self::TOKEN, $page, 'An access token in the query string is not shown.');
             $this->assertStringNotContainsString('<script', $page);
             $this->assertStringNotContainsString('\'dbuser\'', $page);
             $this->assertStringNotContainsString('"dbhost"', $page);

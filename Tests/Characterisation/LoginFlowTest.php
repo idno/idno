@@ -222,6 +222,9 @@ final class LoginFlowTest extends PrivateSiteTestCase
 
         $name = (string) \Idno\Core\Idno::site()->config()->sessionname;
         $this->assertMatchesRegularExpression('/' . preg_quote($name, '/') . '=deleted; expires=/', (string) $logout->header('Set-Cookie'));
+        $header = (string) $logout->header('Set-Cookie');
+        $deleted = substr($header, (int) strpos($header, $name . '=deleted'));
+        $this->assertMatchesRegularExpression('/;\s*path=\/;\s*HttpOnly;\s*SameSite=Lax/i', $deleted, 'the expiring cookie carries the attributes of the one it replaces');
     }
 
     public function testLogoutMessage(): void

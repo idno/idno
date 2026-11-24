@@ -24,7 +24,7 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 
 // Text an attacker could put in an error message and in the page address
 define('FATAL_ERROR_TEST_MESSAGE', 'Could not open <script>alert(1)</script> for \'dbuser\'@"dbhost"');
-define('FATAL_ERROR_TEST_URI', '/probe?q=<script>alert(2)</script>');
+define('FATAL_ERROR_TEST_URI', '/probe?q=<script>alert(2)</script>&access_token=tok-9f3a7c');
 
 $mode = isset($argv[1]) ? $argv[1] : 'production';
 

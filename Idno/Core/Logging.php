@@ -370,7 +370,7 @@ namespace Idno\Core {
                             }
 
                             if (!empty($_SERVER['QUERY_STRING'])) {
-                                $vars['qs'] = $_SERVER['QUERY_STRING'];
+                                $vars['qs'] = \Idno\Core\QueryRedactor::query((string) $_SERVER['QUERY_STRING']);
                             }
 
                             if (!empty($_SERVER['HTTP_REFERER'])) {

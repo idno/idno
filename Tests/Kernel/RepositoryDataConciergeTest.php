@@ -1054,7 +1054,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->deleteSession($sessionId);
 
         $this->assertIsArray($row, 'a session row was written for the cookie');
-        $this->assertStringNotContainsString('secure|', $row['session_value'], 'the session no longer records whether it began over https');
+        $this->assertStringStartsWith('secure|b:0;', $row['session_value'], 'a session is never empty: the handler drops an empty one, and the form token is bound to the session id');
         $this->assertGreaterThan((int) $row['session_time'], (int) $row['session_lifetime']);
     }
 
@@ -1080,8 +1080,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             // The adapter's handler read the row and wrote it back, in the same format.
             $statement = Idno::site()->db()->getClient()->prepare('select session_value from idno_sessions where session_id = ?');
             $statement->execute([$sessionId]);
-            $this->assertStringStartsWith('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '";', (string) $statement->fetchColumn());
-            $this->assertStringNotContainsString('secure|', (string) $statement->fetchColumn());
+            $this->assertStringStartsWith('user_uuid|s:' . strlen($user->getUUID()) . ':"' . $user->getUUID() . '";secure|b:0;', (string) $statement->fetchColumn());
         } finally {
             $this->deleteSession($sessionId);
         }

@@ -75,6 +75,13 @@ namespace Idno\Core {
             session_name(Idno::site()->config()->sessionname);
             session_start();
 
+            // A session is never empty: the database session handler (Symfony's PdoSessionHandler) destroys an empty
+            // one when it writes, so a visitor with nothing else in the session would get a new id on the next
+            // request, and the form token, which is bound to the session id, would no longer match.
+            if (!isset($_SESSION['secure'])) {
+                $_SESSION['secure'] = \Idno\Common\Page::isSSL();
+            }
+
             // Session login / logout
             Idno::site()->routes()->addRoute('/session/login', '\Idno\Pages\Session\Login', true);
             Idno::site()->routes()->addRoute('/session/logout', '\Idno\Pages\Session\Logout');
@@ -403,9 +410,14 @@ namespace Idno\Core {
                     if (ini_get("session.use_cookies")) {
                         $params = session_get_cookie_params();
                         setcookie(
-                            session_name(), '', time() - 42000,
-                            $params["path"], $params["domain"],
-                            $params["secure"], $params["httponly"]
+                            session_name(), '', [
+                                'expires'  => time() - 42000,
+                                'path'     => $params["path"],
+                                'domain'   => $params["domain"],
+                                'secure'   => $params["secure"],
+                                'httponly' => $params["httponly"],
+                                'samesite' => 'Lax',
+                            ]
                         );
                     }
                 }

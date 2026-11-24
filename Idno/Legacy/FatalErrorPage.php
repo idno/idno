@@ -46,7 +46,10 @@ final class FatalErrorPage
                         $server_name = '';
                     }
                     if (!empty($_SERVER['REQUEST_URI'])) {
-                        $request_uri = $_SERVER['REQUEST_URI'];
+                        // An access token in the query string is a credential: never in the log or on the page.
+                        $request_uri = class_exists(\Idno\Core\QueryRedactor::class)
+                            ? \Idno\Core\QueryRedactor::uri((string) $_SERVER['REQUEST_URI'])
+                            : explode('?', (string) $_SERVER['REQUEST_URI'])[0];
                     } else {
                         $request_uri = '';
                     }
