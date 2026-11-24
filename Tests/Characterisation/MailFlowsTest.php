@@ -221,10 +221,11 @@ final class MailFlowsTest extends CharacterisationTestCase
     {
         Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
         $_SERVER['QUERY_STRING'] = 'page=2&access_token=tok-5c1d9e';
+        $_SERVER['HTTP_REFERER'] = 'https://other.example/p?a=1&access.token=tok-7f3a21';
         try {
             \Idno\Core\Logging::oopsAlert('Something broke', 'Oh no');
         } finally {
-            unset($_SERVER['QUERY_STRING']);
+            unset($_SERVER['QUERY_STRING'], $_SERVER['HTTP_REFERER']);
         }
 
         $mail = $this->theOneMail();
@@ -237,6 +238,8 @@ final class MailFlowsTest extends CharacterisationTestCase
         $this->assertStringContainsString('Something broke', $mail['text']);
         $this->assertStringContainsString('page=2&amp;access_token=[redacted]', $mail['html']);
         $this->assertStringNotContainsString('tok-5c1d9e', $mail['html'] . $mail['text'], 'an access token in the query string is not mailed');
+        $this->assertStringContainsString('access.token=[redacted]', $mail['html']);
+        $this->assertStringNotContainsString('tok-7f3a21', $mail['html'] . $mail['text'], 'an access token in the referrer is not mailed');
     }
 
     /**

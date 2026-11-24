@@ -63,13 +63,13 @@ final class SessionCookieTest extends PrivateSiteTestCase
         $this->assertMatchesRegularExpression('/;\s*SameSite=Lax\b/i', $this->sessionCookieHeader($response));
     }
 
-    public function testASessionThatHoldsTheRetiredSecureFlagStillLogsItsUserIn(): void
+    public function testASessionWrittenByAnEarlierReleaseStillLogsItsUserIn(): void
     {
         $this->addUser('ada', 'correct-horse-battery-9');
         $cookie = $this->loginCookie('ada', 'correct-horse-battery-9');
         $id = substr($cookie, strpos($cookie, '=') + 1);
 
-        // What a session written before the flag was removed holds: `secure|b:0;` after the rest.
+        // What a session written by an earlier release holds: `secure|b:0;` after the rest.
         $this->runInSite(
             '$id = ' . $this->literal($id) . ';
             $client = \Idno\Core\Idno::site()->db()->getClient();

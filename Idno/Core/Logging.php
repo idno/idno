@@ -374,7 +374,7 @@ namespace Idno\Core {
                             }
 
                             if (!empty($_SERVER['HTTP_REFERER'])) {
-                                $vars['referrer'] = $_SERVER['HTTP_REFERER'];
+                                $vars['referrer'] = \Idno\Core\QueryRedactor::uri((string) $_SERVER['HTTP_REFERER']);
                             }
 
                             $email = new Email();

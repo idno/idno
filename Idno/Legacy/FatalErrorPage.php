@@ -19,6 +19,19 @@ final class FatalErrorPage
     private static bool $registered = false;
 
     /**
+     * The request address as it may be logged and shown: its query redacted, or, when the redactor cannot be
+     * loaded (the error may be before the autoloader), cut at the question mark.
+     */
+    public static function requestAddress(string $uri, bool $redactorAvailable): string
+    {
+        if ($redactorAvailable) {
+            return \Idno\Core\QueryRedactor::uri($uri);
+        }
+
+        return explode('?', $uri)[0];
+    }
+
+    /**
      * Registers the shutdown function. Idempotent: it is registered at most once per process.
      */
     public static function register(): void
@@ -47,9 +60,7 @@ final class FatalErrorPage
                     }
                     if (!empty($_SERVER['REQUEST_URI'])) {
                         // An access token in the query string is a credential: never in the log or on the page.
-                        $request_uri = class_exists(\Idno\Core\QueryRedactor::class)
-                            ? \Idno\Core\QueryRedactor::uri((string) $_SERVER['REQUEST_URI'])
-                            : explode('?', (string) $_SERVER['REQUEST_URI'])[0];
+                        $request_uri = self::requestAddress((string) $_SERVER['REQUEST_URI'], class_exists(\Idno\Core\QueryRedactor::class));
                     } else {
                         $request_uri = '';
                     }
