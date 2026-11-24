@@ -59,10 +59,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // When the environment variable IDNO_TEST_RECORD_EVENTS names a file, the events of authentication append a line
     // each to it: see Tests\Fixtures\EventRecorder. The configurator runs when the legacy event dispatcher is built,
-    // before the request is authenticated. Inert otherwise.
+    // before the request is authenticated. Inert otherwise. The same configurator installs Tests\Fixtures\AuthHook (a stand-in for a plugin
+    // that authenticates on `user/auth/request`, active only when IDNO_TEST_AUTH_HOOK is set).
     $container->services()
         ->get(\Idno\Core\EventDispatcher::class)
-        ->configurator([\Tests\Fixtures\EventRecorder::class, 'install']);
+        ->configurator([\Tests\Fixtures\TestEventHooks::class, 'install']);
+
+    // /_test/whoami, /_test/admin-only and /_test/member-only: who Symfony Security says is making the request (takes the Security helper).
+    $container->services()
+        ->set(\Tests\Fixtures\WhoAmIController::class)
+        ->autowire()
+        ->autoconfigure();
 
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the

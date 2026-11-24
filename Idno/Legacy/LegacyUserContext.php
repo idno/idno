@@ -11,7 +11,8 @@ use Idno\Queue\UserContext;
 /**
  * The queue's UserContext over the legacy session: it logs the user on (Session::logUserOn(), which
  * triggers the logon events) and, whatever the work does, logs off afterwards (Session::logUserOff(),
- * which the legacy queue also called after every event, for events run as nobody too).
+ * which the legacy queue also called after every event, for events run as nobody too). A user a listener held
+ * statelessly (Session::authenticateStatelessly()) is forgotten before and after each message.
  */
 final class LegacyUserContext implements UserContext
 {
@@ -21,6 +22,8 @@ final class LegacyUserContext implements UserContext
 
     public function runAs(?string $uuid, callable $work): mixed
     {
+        // What an earlier message authenticated statelessly must not shadow the user this one runs as.
+        $this->session->resetStatelessAuthentication();
         try {
             if ($uuid !== null && $uuid !== '') {
                 // Read fresh, never from the entity cache: a worker lives long, and a user deleted since an
@@ -36,12 +39,15 @@ final class LegacyUserContext implements UserContext
 
             return $work();
         } finally {
+            $this->session->resetStatelessAuthentication();
             $this->session->logUserOff();
         }
     }
 
     public function ensureNobodyLoggedOn(): void
     {
+        // Neither a session user nor a stateless one (a listener may have authenticated one) stays for the next message.
+        $this->session->resetStatelessAuthentication();
         if ($this->session->currentUser() !== false) {
             $this->session->logUserOff();
         }

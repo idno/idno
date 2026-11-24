@@ -73,7 +73,7 @@ final class AuthMatrixTest extends CharacterisationTestCase
         $this->assertArrayHasKey('items', $response->json());
     }
 
-    public function testASignedRequestThatCarriesAnotherUsersSessionActsAsTheSignedUserAndEndsThatSession(): void
+    public function testASignedRequestThatCarriesAnotherUsersSessionActsAsTheSignedUserAndLeavesThatSessionIntact(): void
     {
         $admin = $this->admin();
         $member = $this->user();
@@ -84,7 +84,9 @@ final class AuthMatrixTest extends CharacterisationTestCase
 
         $this->assertSame(200, $response->status);
         $this->assertSame($member->getUUID(), $response->json()['user']['uuid'] ?? $response->json()['user']['id'] ?? null, 'the request acts as the signed user, not as the session');
-        $this->assertSame(403, $this->site()->request('GET', 'admin/', ['Cookie' => $cookie])->status, 'the session the request carried is gone afterwards');
+        // Changed on purpose: a stateless authentication holds its user in memory and never touches the session, so the browser's
+        // session survives a signed request that carried it (it used to be destroyed when the request ended).
+        $this->assertSame(200, $this->site()->request('GET', 'admin/', ['Cookie' => $cookie])->status, 'the session the request carried is intact afterwards');
     }
 
     public function testASignedRequestWithAWrongSignatureIsAnonymous(): void

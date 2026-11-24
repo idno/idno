@@ -217,7 +217,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
   with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
   `docs/developers/release-checklist.md`.
-- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site, and `PrivateSiteAccessTest`, the home page, the stream and the login page by five kinds of caller on a private site of its own, `walled_garden` set through `IDNO_WALLED_GARDEN`: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and ends the carried session), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (what a token is bound to: the action it names and the session, not the page that receives it; the expiry window; the token endpoint), `SessionCookieTest` (name, flags, `SameSite=Lax`, no P3P, a session with the `secure` flag still logs in) and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect, a token good for any page); a change of one is made on purpose, in the test that pins it.
+- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site, and `PrivateSiteAccessTest`, the home page, the stream and the login page by five kinds of caller on a private site of its own, `walled_garden` set through `IDNO_WALLED_GARDEN`: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and leaves the carried session intact), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (what a token is bound to: the action it names and the session, not the page that receives it; the expiry window; the token endpoint), `SessionCookieTest` (name, flags, `SameSite=Lax`, no P3P, a session with the `secure` flag still logs in) and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect, a token good for any page); a change of one is made on purpose, in the test that pins it.
 - Template rendering is pinned by `Tests/Kernel/TemplateContractTest` (the cascade as `DefaultTemplate` keeps it, on
   the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
   process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
@@ -397,6 +397,9 @@ Idno/
   Templating/                  Template lookup and rendering (modern style): TemplateCascade, TemplateLocator,
                                TemplateRenderer, SlotRegistry, the two engines (PhpTemplateEngine, TwigTemplateEngine with CascadeTwigLoader and
                                IdnoTwigExtension) and their helpers. See "Templates"
+  Security/                    Passwords (the password service on symfony/password-hasher) and what lets Symfony Security know who is
+                               making a request (modern style): SessionUser, CurrentUserSource, CurrentUserAuthenticator,
+                               StatelessAuthentication, ApiSignatureVerifier, DeniedResponder and ForbiddenPage. See "Security architecture"
   Translation/                 Translation without the gettext extension (modern style, NOT a scanned directory:
                                nothing in it is a service): CatalogueLoader (`.po`/`.mo` files into an array),
                                LocaleNegotiator (the locale of a request or console run). See "Translation"
@@ -635,14 +638,20 @@ Symfony's error page.
 ### Adding a route (the new way)
 
 New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
-limit: **there is no session authentication, access control or CSRF protection for
-new-style controllers yet** (Symfony Security arrives in a later phase). Legacy `Page`
-classes get the logged-in user, `gatekeeper()`/`adminGatekeeper()` and CSRF token checks
-on POST automatically; a controller gets none of them. Until then, any endpoint that needs
-a logged-in user, checks permissions, or accepts a state-changing request from a browser
-MUST remain a legacy `Idno\Common\Page`. New-style controllers are only for public,
-read-only endpoints, or endpoints that authenticate each request themselves (e.g. a signed
-request or a bearer token).
+limit: **there is no CSRF protection for new-style controllers yet** (it arrives with the
+next change). Symfony Security does know who is making each request (see "Security
+architecture" below), so a controller may be read-only and still ask for a logged-in user
+or a role: `#[IsGranted('ROLE_USER')]` (any member) or `#[IsGranted('ROLE_ADMIN')]` (an
+administrator authenticated by the browser session: never one authenticated statelessly),
+or take the user with `Symfony\Bundle\SecurityBundle\Security`. A refusal is always
+`Idno\Security\DeniedResponder`'s (a 403, never a login redirect). Legacy `Page` classes
+get `gatekeeper()`/`adminGatekeeper()` and the CSRF token check on POST automatically; a
+controller gets no token check. Until it has one, any endpoint that accepts a
+state-changing request from a browser MUST remain a legacy `Idno\Common\Page`.
+New-style controllers are for public or authenticated read-only endpoints, or endpoints
+that authenticate each request themselves (e.g. a signed request or a bearer token; a
+controller that takes a bearer token checks it itself, since no firewall looks at
+`Authorization`).
 
 The one exception is `POST /_upgrade/step` (`Idno\Upgrade\UpgradeController`): it changes
 state without authentication or CSRF protection, because while the schema gate is closed nobody
@@ -1521,6 +1530,63 @@ other new code may.
   characters, and only ever pass the slug to the database as a query value.
   `Tests/Pages/NonAsciiPermalinkTest.php` and `Tests/Characterisation/SlugRoutingTest` check this
   over HTTP.
+
+### Security architecture
+
+Symfony Security (`symfony/security-bundle`, `config/packages/security.php`) knows who is making each request; it
+authenticates nobody and never touches the session. The legacy application authenticates (`Idno\Core\Session`, while the
+kernel boots, before `kernel.request`) and the legacy session stays the source of truth: PHP's session is started by the legacy
+boot, `$_SESSION['user_uuid']` and `$_SESSION['secure']` (which keeps an anonymous session non-empty for the database session
+handler) are written as before, `framework.session` is OFF (legacy pages run after `kernel.response`, in `LegacyResponse`'s
+callback, and often `exit`: Symfony's session listener would close the session and swallow the cookie) and Symfony never writes it.
+
+- **Firewalls.** `upgrade` (`^/_upgrade/`, `security: false`: the legacy application is not booted there) and `main` (every
+  other path): `stateless: true`, not lazy, ONE authenticator, `Idno\Security\CurrentUserAuthenticator`, an in-memory user
+  provider that looks nothing up (the bundle requires one; the passport carries the user), `entry_point` and
+  `access_denied_handler` both `Idno\Security\DeniedResponder`, no `access_control`. Nothing configured looks at a header, a cookie
+  or a token; nothing is compiled from the configuration. The bundle brings the console commands `debug:firewall`,
+  `debug:security:role-hierarchy` and `security:hash-password` (harmless: they describe or hash) and registers no session service,
+  no CSRF services, no profiler hook and nothing that reads `kernel.secret` (remember me, login links are not enabled); no trim pass
+  was needed, and `Tests/Kernel/SecurityTrimTest` pins all of it in the test and a freshly compiled prod container. The firewall
+  runs for every request, legacy pages included (the catch-all route is not access-controlled): it only fills the token storage.
+- **`CurrentUserSource`** (`Idno\Security`, an interface) says who is making the request; `Idno\Legacy\LegacyCurrentUserSource` reads
+  `Idno::site()->session()->currentUser()` and builds a **`SessionUser`** (`UserInterface`: the uuid is the identifier, `ROLE_USER` for
+  every member, `ROLE_ADMIN` only when `User::isAdmin()` is true, which is false for a stateless authentication; an optional
+  fourth constructor argument and `isStateless()` carry the flag) from the entity the session already loaded: no database statement
+  is added to a request. It answers null, and never builds the session, when this kernel did not boot the legacy application
+  (`Kernel::legacyBooted()`: a `bootLegacy: false` kernel, or a closed schema gate), so a `bootLegacy: false` kernel handles a
+  public controller with the firewall in place. With the gate closed `UpgradeGateListener` (priority 300) answers before the firewall.
+- **Stateless authentication.** "API request" is a property of the REQUEST, held by the `Session` object (one process is one request
+  on the web): `Session::isAPIRequest()` is true when a stateless credential (a signed API request, a bearer token, a plugin's
+  hook) authenticated this request. `$_SESSION['is_api_request']` is never written or read. A stateless authentication holds its user
+  IN MEMORY (`currentUser()`, `isLoggedIn()` and `currentUserUUID()` return it, else the session's) and writes nothing to the session,
+  so a signed request that carries another member's browser cookie acts as the signed member for that request and leaves the
+  browser's session intact. `refreshSessionUser()` (Autosave, the `saved` listener, token issue) refreshes the user in memory on a
+  stateless request and never writes `$_SESSION['user_uuid']`; `logUserOff()` on one clears the memory and leaves the session and
+  cookie alone; `logUserOn()` (browser login, registration, the worker) is as before for an ordinary request and, on a stateless
+  one, holds the user in memory and does not regenerate the session id. `Session::authenticateStatelessly(User $user)` (public: holds
+  the user, sets the flag, triggers `user/auth/success` with `is api` true) is how `IdnoPlugins\IndiePub\Main::authenticate()`
+  authenticates a bearer token, and how a plugin authenticates by a credential of its own; a `user/auth/request` listener may also
+  simply return the `User` (a returned user nobody logged on is authenticated statelessly). `Session::setIsAPIRequest()` is
+  deprecated: it sets the request flag (never the session) and logs one deprecation line a process. `tryAuthUser()` keeps the
+  `user/auth/request` event and the `X-IDNO-*` / `X-KNOWN-*` signature check, which is now `Idno\Security\ApiSignatureVerifier`
+  (pure: the base64 HMAC-SHA256 of the request address with the member's API key, `hash_equals()`, the header trimmed, an empty key
+  never verifies); a request authenticated statelessly never also authenticates by the session. When a stateless request ends the
+  anonymous session it started is destroyed (an API client leaves no session row behind each request); a session that holds a member
+  (the browser's, carried by the request) is left alone. `Idno\Security\StatelessAuthentication` (`ATTRIBUTE`, `isStateless()`,
+  `mark()`) is set on the Symfony request by the authenticator, so a controller can ask. Bearer tokens stay LOCAL to the Micropub
+  endpoint: no firewall, matcher or listener looks at `Authorization` or `access_token`. Pinned by
+  `Tests/Characterisation/StatelessAuthenticationTest`, `TokenAgreementTest` and `Tests/Kernel/SessionStatelessTest`.
+- **Denied requests.** `Idno\Security\DeniedResponder` (access-denied handler and entry point): the legacy 403 page with status 403
+  (`Idno\Legacy\LegacyForbiddenPage`, behind the `Idno\Security\ForbiddenPage` interface: `pages/403` in the page shell, drawn on a
+  page that does nothing, as `Page::deniedContent()` does but returned, not echoed) for a caller that wants HTML, `{"error":"forbidden"}`
+  for one that wants JSON (`?_t=json`/`jsonp`, or an `Accept` that names JSON and no HTML), for a visitor and a member alike (never a
+  login redirect), and a plain-text 403 when the legacy application is not booted or the page fails to draw. Always `Cache-Control:
+  no-store`. Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
+  `Tests/Fixtures/WhoAmIController`).
+- **The queue worker.** It handles many messages in one process and has no request: `LegacyUserContext::runAs()` and
+  `ensureNobodyLoggedOn()` (and so `WorkerHygiene`) call `Session::resetStatelessAuthentication()` before and after each message, so
+  neither a session user nor a stateless user (a listener may authenticate one) is left behind or shadows the next message's user.
 
 ### Database
 
@@ -3922,8 +3988,8 @@ the CLI installer no longer writes one.
   that overrides it has no CSRF protection of its own and must not act on a session
   cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
   answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
-  sets after an access token (`Authorization: Bearer` or the `access_token` field) has
-  matched, and core sets after a signed API request; otherwise it answers 401 (a GET, for
+  makes so (`Session::authenticateStatelessly()`) after an access token (`Authorization: Bearer`
+  or the `access_token` field) has matched, and core makes so after a signed API request; otherwise it answers 401 (a GET, for
   `q=config`, `q=syndicate-to` and `q=source`, is held to the same rule). The
   IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
   on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
@@ -3939,7 +4005,7 @@ the CLI installer no longer writes one.
   The scope stored with a token is not enforced. The core signed API (`X-IDNO-USERNAME` /
   `X-IDNO-SIGNATURE`, made with the user's API key) is a separate, general credential: it
   authenticates a request to any page, and `User::isAdmin()` is false for every API
-  request, so neither credential passes `adminGatekeeper()`.
+  request (and `ROLE_ADMIN` is never granted to one), so neither credential passes `adminGatekeeper()`.
   `IdnoPlugins/IndiePub/Tests/AccessTokenReachTest.php` checks this over HTTP. A queue
   worker or console process has no request and so no token: events run as the user the
   message names (`LegacyUserContext`), and the `user/auth/request` event no longer has an
@@ -3948,10 +4014,10 @@ the CLI installer no longer writes one.
   (`Tests/Characterisation/AdminPortabilityPagesTest`).
 - A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
   overrides `post()` itself and authenticates the request another way. Never get the same
-  effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a
-  credential (an API signature or an access token): the flag turns off the token check in
-  `Page::post()` for whichever page the request reaches, and the session of the visitor who
-  sent it is destroyed when the request ends. In particular, don't decide what a request is
+  effect by calling `Session::setIsAPIRequest(true)` (deprecated; it logs one line) or
+  `authenticateStatelessly()` for a request that has not presented a credential (an API
+  signature or an access token): the flag turns off the token check in `Page::post()` for
+  whichever page the request reaches. In particular, don't decide what a request is
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
 - Command-line scripts, `var/`, `config/`, `bin/`, `frontend/`, `Tests/`, `docs/` and `warmup/CLI/` are

@@ -16,7 +16,25 @@ namespace Idno\Core {
 
         private $user;
 
+        /**
+         * The user a stateless credential authenticated for this request (a signed API request, a bearer token, a plugin's
+         * hook), held in memory only: it is never written to the session, and the browser session (if any) is untouched.
+         * One process is one request on the web; the worker and the console never have one between messages.
+         *
+         * @var \Idno\Entities\User|null
+         */
+        private $statelessUser = null;
+
+        /**
+         * Whether a stateless credential authenticated this request (the request is an API request).
+         *
+         * @var bool
+         */
+        private $apiRequest = false;
+
         private $storageHandler = false;
+
+        private $deprecationLogged = false;
 
         function init()
         {
@@ -94,33 +112,38 @@ namespace Idno\Core {
                     $eventdata = $event->data();
                     $object    = $eventdata['object'];
 
-                    if (empty($object) || empty($this->user)
-                        || !($object instanceof User) || !($this->user instanceof User)
+                    $current = $this->currentUser();
+                    if (empty($object) || empty($current)
+                        || !($object instanceof User) || !($current instanceof User)
                     ) {
                         return;
                     }
 
-                    if ($object->getUUID() != $this->user->getUUID()) {
+                    if ($object->getUUID() != $current->getUUID()) {
                         return;
                     }
 
-                    if (!empty($_SESSION['user_uuid'])) {
+                    // The browser session's user is checked against the session; a stateless user has no session entry.
+                    if (!$this->apiRequest && !empty($_SESSION['user_uuid'])) {
                         if ($object->getUUID() != $_SESSION['user_uuid']) {
                             return;
                         }
                     }
 
-                    $this->user = $this->refreshSessionUser($object);
+                    $this->refreshSessionUser($object);
 
                 }
             );
 
-            // If this is an API request, we need to destroy the session afterwards. See #1028
+            // A stateless request authenticated nobody in the session (nothing of it is written there), so there is nothing to
+            // log off at the end. The anonymous session the request started is destroyed, so that an API client does not leave
+            // a session behind for each request; a session that holds a member (the browser's, carried by the request) is left alone.
             register_shutdown_function(
                 function () {
                     $session = Idno::site()->session();
-                    if ($session && $session->isAPIRequest()) {
-                        $session->logUserOff();
+                    if ($session && $session->isAPIRequest() && empty($_SESSION['user_uuid'])) {
+                        $_SESSION = [];
+                        @session_destroy();
                     }
                 }
             );
@@ -169,7 +192,7 @@ namespace Idno\Core {
          */
         function isLoggedIn()
         {
-            if (!empty($this->user) && $this->user instanceof \Idno\Entities\User) {
+            if ($this->currentUser() instanceof \Idno\Entities\User) {
                 return true;
             }
 
@@ -191,13 +214,17 @@ namespace Idno\Core {
         }
 
         /**
-         * Returns the currently logged-in user, if any
+         * Returns the currently logged-in user, if any: the user a stateless credential authenticated for this
+         * request, else the browser session's
          *
          * @return \Idno\Entities\User
          */
 
         function currentUser()
         {
+            if (!empty($this->statelessUser)) {
+                return $this->statelessUser;
+            }
             if (!empty($this->user)) {
                 return $this->user;
             }
@@ -383,7 +410,8 @@ namespace Idno\Core {
         }
 
         /**
-         * Log the current session user off
+         * Log the current user off. On a stateless request (see isAPIRequest()) that clears the user held in memory
+         * and nothing else: the browser session, if the request carried one, and its cookie are left alone.
          *
          * @return true
          */
@@ -393,9 +421,15 @@ namespace Idno\Core {
 
             \Idno\Core\Idno::site()->events()->triggerEvent(
                 "user/logoff", array(
-                "user"   => !empty($this->user) ? $this->user : null,
+                "user"   => $this->currentUser() ?: null,
                 )
             );
+
+            if ($this->apiRequest) {
+                $this->statelessUser = null;
+
+                return true;
+            }
 
             unset($_SESSION['user_uuid']);
             unset($this->user);
@@ -406,20 +440,18 @@ namespace Idno\Core {
             // Really log the user off by destroying the cookie
             // See https://secure.php.net/manual/en/function.session-destroy.php
             if (!defined('IDNO_UNIT_TEST')) {
-                if (!$this->isAPIRequest()) { // #1365 - we need to destroy the session, but resetting cookie causes problems with the api
-                    if (ini_get("session.use_cookies")) {
-                        $params = session_get_cookie_params();
-                        setcookie(
-                            session_name(), '', [
-                                'expires'  => time() - 42000,
-                                'path'     => $params["path"],
-                                'domain'   => $params["domain"],
-                                'secure'   => $params["secure"],
-                                'httponly' => $params["httponly"],
-                                'samesite' => 'Lax',
-                            ]
-                        );
-                    }
+                if (ini_get("session.use_cookies")) {
+                    $params = session_get_cookie_params();
+                    setcookie(
+                        session_name(), '', [
+                            'expires'  => time() - 42000,
+                            'path'     => $params["path"],
+                            'domain'   => $params["domain"],
+                            'secure'   => $params["secure"],
+                            'httponly' => $params["httponly"],
+                            'samesite' => 'Lax',
+                        ]
+                    );
                 }
             }
 
@@ -479,8 +511,13 @@ namespace Idno\Core {
          */
         function tryAuthUser()
         {
-            // attempt to delegate auth to a plugin (note: plugin is responsible for calling setIsAPIRequest or not)
+            // attempt to delegate auth to a plugin. A plugin authenticates a request by returning the User (the request is then
+            // authenticated statelessly), or by calling authenticateStatelessly() itself.
             $return = \Idno\Core\Idno::site()->events()->triggerEvent('user/auth/request', [], false);
+            if ($return instanceof User && !$this->isLoggedIn()) {
+                $this->apiRequest = true;
+                $return = $this->refreshSessionUser($return);
+            }
 
             // auth standard API requests (check X-IDNO-* headers first, fall back to X-KNOWN-* for backwards compat)
             $apiUsername = $_SERVER['HTTP_X_IDNO_USERNAME'] ?? $_SERVER['HTTP_X_KNOWN_USERNAME'] ?? null;
@@ -501,13 +538,11 @@ namespace Idno\Core {
                     \Idno\Core\Idno::site()->logging()->debug("API auth found user by username: {$apiUsername} - " . $user->getName());
 
                     $key  = $user->getAPIkey();
-                    $hmac = trim($apiSignature);
-                    $compare_hmac = base64_encode(hash_hmac('sha256', ($_SERVER['REQUEST_URI']), (string) $key, true));
 
-                    if (hash_equals($compare_hmac, $hmac)) {
-                        $this->setIsAPIRequest(true);
+                    if ((new \Idno\Security\ApiSignatureVerifier())->verify((string) ($_SERVER['REQUEST_URI'] ?? ''), (string) $key, (string) $apiSignature)) {
+                        $this->apiRequest = true;
                         \Idno\Core\Idno::site()->logging()->debug("API auth verified signature for user: " . $user->getName());
-                        // TODO maybe this should set the current user without modifying $_SESSION?
+                        // The user is held in memory for this request: nothing is written to the session.
                         $return = $this->refreshSessionUser($user);
                     } else {
                         \Idno\Core\Idno::site()->logging()->debug("API auth failed signature validation for user: " . $user->getName());
@@ -518,8 +553,8 @@ namespace Idno\Core {
                 }
             }
 
-            // auth via session credentials
-            if (!$return) {
+            // auth via session credentials (a stateless request never authenticates by the session)
+            if (!$return && !$this->apiRequest) {
                 $this->refreshCurrentSessionuser();
                 $return = $this->currentUser();
             }
@@ -565,7 +600,9 @@ namespace Idno\Core {
                 return false;
             }
             $return = $this->refreshSessionUser($user);
-            @session_regenerate_id(true);
+            if (!$this->apiRequest) {
+                @session_regenerate_id(true);
+            }
 
             // user/auth/success event needs to be triggered here
             $return = \Idno\Core\Idno::site()->events()->triggerEvent(
@@ -585,7 +622,8 @@ namespace Idno\Core {
         }
 
         /**
-         * Refresh the user currently stored in the session
+         * Refresh the user currently stored in the session (on a stateless request: the user held in memory, which
+         * the session never learns of)
          *
          * @param  \Idno\Entities\User $user
          * @return \Idno\Entities\User
@@ -598,6 +636,13 @@ namespace Idno\Core {
                     $this->logUserOff();
 
                     return false;
+                }
+
+                if ($this->apiRequest) {
+                    // A stateless request: the user is held in memory, and the session is not written.
+                    $this->statelessUser = $user;
+
+                    return $user;
                 }
 
                 $_SESSION['user_uuid'] = $user->getUUID();
@@ -631,28 +676,66 @@ namespace Idno\Core {
         }
 
         /**
-         * Sets whether this session is an API request or a manual browse
+         * Sets whether this request is an API request.
          *
-         * @param boolean $is_api_request
+         * Deprecated: whether a request is an API request is a property of the request, and a stateless credential decides
+         * it: call authenticateStatelessly() to authenticate a request by a credential of your own, or return the User from a
+         * `user/auth/request` listener. This still sets the flag for the request (never the session), and logs one deprecation line.
+         *
+         * @deprecated
+         * @param      boolean $is_api_request
          */
         function setIsAPIRequest($is_api_request)
         {
-            $is_api_request             = (bool)$is_api_request;
-            $_SESSION['is_api_request'] = $is_api_request;
+            if (!$this->deprecationLogged) {
+                $this->deprecationLogged = true;
+                \Idno\Core\Idno::site()->logging()->warning('Deprecated: Session::setIsAPIRequest() is deprecated; use Session::authenticateStatelessly() or return the User from a user/auth/request listener.');
+            }
+            $this->apiRequest = (bool)$is_api_request;
         }
 
         /**
-         * Is this session an API request?
+         * Is this request an API request: one that a stateless credential (a signed request, a bearer token, a
+         * plugin's hook) authenticated, rather than the browser session?
          *
          * @return bool
          */
         function isAPIRequest()
         {
-            if (!empty($_SESSION['is_api_request'])) {
-                return true;
-            }
+            return $this->apiRequest;
+        }
 
-            return false;
+        /**
+         * Authenticates this request as $user by a stateless credential the caller has checked (a bearer token, a plugin's
+         * own): the user is held in memory for the request, the request becomes an API request (no form token is asked of
+         * it, account pages are closed to it, the user is never an administrator), and nothing is written to the session,
+         * which the request's browser session (if it carried one) keeps unchanged. Triggers `user/auth/success` (with
+         * `is api` true) when the user is held.
+         *
+         * @param \Idno\Entities\User $user
+         */
+        public function authenticateStatelessly(\Idno\Entities\User $user): void
+        {
+            $this->apiRequest = true;
+            $held = $this->refreshSessionUser($user);
+            if ($held) {
+                \Idno\Core\Idno::site()->events()->triggerEvent(
+                    "user/auth/success", array(
+                    "user"   => $held,
+                    "is api" => true,
+                    ), $held
+                );
+            }
+        }
+
+        /**
+         * Forgets any stateless authentication: the user held in memory and the API-request flag. The queue worker
+         * handles many messages in one process, and none may see what an earlier one authenticated.
+         */
+        public function resetStatelessAuthentication(): void
+        {
+            $this->statelessUser = null;
+            $this->apiRequest    = false;
         }
 
         /**

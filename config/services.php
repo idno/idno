@@ -82,9 +82,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry, the renderer, the Twig loader and the Twig engine are wired below.
         'Templating' => ['CascadeTwigLoader.php', 'EmbedFinder.php', 'LocatedTemplate.php', 'MethodCallExpression.php', 'MethodCallNodeVisitor.php', 'OutputBuffers.php', 'ProfileLink.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
-        // Passwords is the service; the legacy hasher is built by it.
-        'Security' => ['LegacyBcryptPasswordHasher.php'],
-        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        // Passwords is the service; the legacy hasher is built by it. SessionUser and StatelessAuthentication are value
+        // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
+        // adapters (wired below); the authenticator and the responder are wired by hand below.
+        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'LegacyBcryptPasswordHasher.php', 'SessionUser.php', 'StatelessAuthentication.php'],
+        'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -349,6 +351,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // The password service needs nothing of the legacy application; the legacy application's User entity fetches it.
     $services->set(\Idno\Security\Passwords::class)->public();
+
+    // Symfony Security knows who is making each request (config/packages/security.php): the legacy application authenticates
+    // the request while the kernel boots, the source reads the result from the legacy session (nothing when this kernel did not
+    // boot the legacy application: the session is never built here), the authenticator hands it to the firewall, and one responder
+    // answers every refusal. Nothing is looked up and nothing from the configuration is compiled in.
+    $services->set(\Idno\Legacy\LegacyCurrentUserSource::class)->args([service('kernel')]);
+    $services->alias(\Idno\Security\CurrentUserSource::class, \Idno\Legacy\LegacyCurrentUserSource::class);
+    $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
+    $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
+    $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);
+    $services->set(\Idno\Security\DeniedResponder::class)->args([service(\Idno\Security\ForbiddenPage::class)]);
 
     // Templates (Idno\Templating): the directories they are found in (core's is the project directory; the theme's and
     // the plugins' are added at run time), what plugins registered for them, and the renderer. Public: legacy code

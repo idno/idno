@@ -39,9 +39,11 @@ namespace IdnoPlugins\IndiePub {
          * administrator. The token is taken from the Authorization header (Bearer), or else
          * from the access_token field.
          *
-         * On success the token's user becomes the user of this request, and the request is
-         * marked as an API request, which means that no form token is asked of it and that
-         * the session is destroyed when it ends.
+         * On success the token's user becomes the user of this request (held in memory by
+         * \Idno\Core\Session::authenticateStatelessly(): nothing is written to the session, and a
+         * browser session the request carries is left as it is), and the request is an API
+         * request, which means that no form token is asked of it and that the user is never an
+         * administrator.
          *
          * Call this only from the page a token is meant for (the Micropub endpoint). It is
          * deliberately not called for every request: a token given to a Micropub client must
@@ -63,16 +65,14 @@ namespace IdnoPlugins\IndiePub {
 
                 $found = Token::findUserForToken($token);
                 if (!empty($found)) {
-                    \Idno\Core\Idno::site()->session()->setIsAPIRequest(true);
                     $user = $found['user'];
-                    \Idno\Core\Idno::site()->session()->refreshSessionUser($user);
+                    \Idno\Core\Idno::site()->session()->authenticateStatelessly($user);
 
                     return $user;
                 }
                 $user = \Idno\Entities\User::getOne(array('admin' => true));
                 if ($user && hash_equals((string) $user->getAPIkey(), $token)) {
-                    \Idno\Core\Idno::site()->session()->setIsAPIRequest(true);
-                    \Idno\Core\Idno::site()->session()->refreshSessionUser($user);
+                    \Idno\Core\Idno::site()->session()->authenticateStatelessly($user);
 
                     return $user;
                 }
