@@ -50,6 +50,7 @@ class ActivityBuilder
         'bookmark' => 'Note',
         'rsvp'     => 'Note',
         'media'    => 'Note',
+        'video'    => 'Note',  // Linked videos federate as Notes with a link
         'entity'   => 'Note',
     ];
 

@@ -31,6 +31,7 @@ namespace Idno\Pages\User {
             $this->setOwner($user);
             $this->setPermalink(true, $user); // This is a permalink
 
+            $friendly_types = array();
             if (!empty($this->arguments[1])) { // If we're on the friendly content-specific URL
                 if ($friendly_types = explode('/', $this->arguments[1])) {
                     $friendly_types = array_filter($friendly_types);
@@ -68,11 +69,60 @@ namespace Idno\Pages\User {
                 array(
 
                 'title'       => $user->getTitle(),
-                'body'        => $t->__(array('user' => $user, 'items' => $feed, 'count' => $count, 'offset' => $offset))->draw('entity/User/profile'),
+                'body'        => $t->__(array('user' => $user, 'items' => $feed, 'count' => $count, 'offset' => $offset, 'content' => array_values((array) $friendly_types)))->draw('entity/User/profile'),
                 'description' => \Idno\Core\Idno::site()->language()->_('The %s profile for %s', [\Idno\Core\Idno::site()->config()->title, $user->getTitle()])
 
                 )
             )->drawPage();
+        }
+
+        /**
+         * The links from a member's profile to their posts of one kind: the profile itself,
+         * everything (/profile/<handle>/all), and one for each registered content type
+         * (/profile/<handle>/<category>, for example /profile/<handle>/videos) that the
+         * member has published something of which the viewer may see. The kind in the
+         * address of the page being drawn is always listed.
+         *
+         * @param  \Idno\Entities\User|null $user    The member
+         * @param  mixed                    $current The kinds named in the address of the page being drawn
+         * @return array A list of 'url', 'label', 'icon' (a Lucide icon name, or an empty string) and 'active'
+         */
+        static function contentTypeLinks($user, $current = []): array
+        {
+            if (!($user instanceof User) || !$user->getHandle()) {
+                return [];
+            }
+
+            $current = array_values(array_filter((array) $current, 'is_string'));
+            $current = array_map('strtolower', $current);
+            $base = Idno::site()->config()->getDisplayURL() . 'profile/' . rawurlencode($user->getHandle());
+            $language = Idno::site()->language();
+
+            $links = [
+                ['url' => $base, 'label' => $language->_('Overview'), 'icon' => '', 'active' => empty($current)],
+                ['url' => $base . '/all', 'label' => $language->_('All'), 'icon' => '', 'active' => in_array('all', $current, true)],
+            ];
+            $seen = [];
+            foreach (\Idno\Common\ContentType::getRegistered() as $contentType) {
+                $slug = $contentType->getCategoryTitleSlug();
+                // The route for these pages takes letters and hyphens only
+                if (!preg_match('/^[a-z\-]+$/', $slug) || isset($seen[$slug]) || $slug === 'all') {
+                    continue;
+                }
+                $seen[$slug] = true;
+                $active = count($current) === 1 && $current[0] === $slug;
+                if (!$active && !\Idno\Common\Entity::countFromX($contentType->getEntityClass(), ['owner' => $user->getUUID(), 'publish_status' => 'published'])) {
+                    continue;
+                }
+                $links[] = [
+                    'url'    => $base . '/' . $slug,
+                    'label'  => $contentType->getCategoryTitle(),
+                    'icon'   => method_exists($contentType, 'getIconName') ? (string) $contentType->getIconName() : '',
+                    'active' => $active,
+                ];
+            }
+
+            return $links;
         }
 
         // Handle POST requests to the entity

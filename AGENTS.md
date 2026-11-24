@@ -118,6 +118,7 @@ Tests/                         Core unit tests
 | **Text** | Long-form articles | `Article` | `/entry/edit` |
 | **Photo** | Photos with captions | `Note` + attachment | `/photo/edit` |
 | **Media** | Audio/video uploads | `Note` + attachment | `/media/edit` |
+| **Video** | A video on a video sharing service, by its address | `Note` + link | `/video/edit` |
 | **Event** | Calendar events & RSVPs | `Event` | `/event/edit`, `/rsvp/edit` |
 | **Checkin** | Location check-ins | `Note` + location | `/checkin/edit` |
 | **Like** | Bookmarks / likes | `Note` | `/like/edit` |
@@ -481,6 +482,31 @@ Each content plugin has an `Entry.php` entity class that defines
   again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
   which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
   `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
+- Video posts (`IdnoPlugins/Video`): a member gives the address of a video on YouTube, Vimeo,
+  Dailymotion or TikTok. `VideoUrl::parse()` reads the provider and the id of the video out
+  of the address and makes no request to anything (so there is nothing to protect from
+  SSRF); an address it does not recognise is refused when the post is saved. It accepts
+  https only, a host from `VideoUrl::HOSTS` exactly (no userinfo, no port), and an id that
+  matches the provider's pattern (`VideoUrl::ID_PATTERNS`). The player is an `<iframe>`
+  whose address `VideoUrl::getEmbedUrl()` builds from fixed text and those checked values,
+  on a host in `VideoUrl::EMBED_HOSTS`; the address the member typed is never put in `src`.
+  The stored provider and id are checked again each time a post is drawn
+  (`Video::getVideo()` calls `VideoUrl::fromStored()`), and a record that fails gets no
+  player, only the link. The link to the video is printed only if
+  `UrlValidator::httpUrl()` accepts the stored address. Feeds, JSON and ActivityPub get the
+  link and the description, never the frame. Don't add a service whose player can be on
+  any host (PeerTube) without a list of hosts the site's admin has chosen, and don't fetch
+  anything (oEmbed, a thumbnail, a title) from an address a member gave except through
+  `Webservice::safeSend()`. `video_source` is `link` for these posts; a later version that
+  keeps video files on the site is to store another value and attach the file, so that
+  stored posts need no change. `IdnoPlugins/Video/Tests/` checks all of this.
+- A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
+  for example; `/profile/<handle>/all` for everything, `/content/<category>/` for the whole
+  site). The profile itself lists status updates and posts only.
+  `\Idno\Pages\User\View::contentTypeLinks()` gives the links a profile shows (the kinds
+  the member has published, which costs one count per content type), and
+  `entity/User/profile/types` draws them in both looks.
+  `Tests/Pages/User/ProfileContentTypesTest.php` checks this.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never
