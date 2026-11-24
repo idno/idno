@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Templating;
 
-use Tests\Acceptance\Browser;
 use Tests\Characterisation\SiteResponse;
 use Tests\Support\PrivateSiteTestCase;
 
@@ -214,7 +213,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      */
     protected function loginAsAdmin(): string
     {
-        return (new Browser($this->site()))->login(self::ADMIN, self::PASSWORD);
+        return $this->loginCookie(self::ADMIN, self::PASSWORD);
     }
 
     /**

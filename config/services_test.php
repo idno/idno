@@ -57,6 +57,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->tag('kernel.event_listener', ['event' => 'kernel.request', 'priority' => 1000]);
 
+    // When the environment variable IDNO_TEST_RECORD_EVENTS names a file, the events of authentication append a line
+    // each to it: see Tests\Fixtures\EventRecorder. The configurator runs when the legacy event dispatcher is built,
+    // before the request is authenticated. Inert otherwise.
+    $container->services()
+        ->get(\Idno\Core\EventDispatcher::class)
+        ->configurator([\Tests\Fixtures\EventRecorder::class, 'install']);
+
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
     // test environment; no request can set it.

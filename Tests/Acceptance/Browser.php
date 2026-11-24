@@ -7,6 +7,7 @@ namespace Tests\Acceptance;
 use PHPUnit\Framework\Assert;
 use Tests\Characterisation\SiteClient;
 use Tests\Characterisation\SiteResponse;
+use Tests\Support\LogsIn;
 
 /**
  * What a person does in a browser, over HTTP against a test site: read a form and its signed token, post it
@@ -16,10 +17,15 @@ use Tests\Characterisation\SiteResponse;
  */
 final class Browser
 {
-    private const SESSION_NAME = 'known_unittest';
+    use LogsIn;
 
     public function __construct(private readonly SiteClient $site)
     {
+    }
+
+    protected function site(): SiteClient
+    {
+        return $this->site;
     }
 
     /**
@@ -71,15 +77,7 @@ final class Browser
      */
     public function login(string $handle, string $password): string
     {
-        $form = $this->get('session/login');
-        Assert::assertSame(200, $form->status);
-        $cookie = self::cookie($form);
-        $response = $this->site->request('POST', 'session/login', ['Cookie' => $cookie], self::token($form->body, 'session/login') + ['email' => $handle, 'password' => $password]);
-        Assert::assertSame(302, $response->status, 'the login answers with a redirect');
-        $cookie = self::cookieOr($response, $cookie);
-        Assert::assertSame(200, $this->get('account/settings/', $cookie)->status, $handle . ' is logged in');
-
-        return $cookie;
+        return $this->loginCookie($handle, $password);
     }
 
     /**
@@ -109,19 +107,12 @@ final class Browser
      */
     public static function cookie(SiteResponse $response): string
     {
-        $found = self::cookieOr($response, null);
-        Assert::assertNotNull($found, 'a session cookie: ' . $response->header('Set-Cookie'));
-
-        return $found;
+        return self::sessionCookie($response);
     }
 
     public static function cookieOr(SiteResponse $response, ?string $default): ?string
     {
-        if (preg_match_all('/(?:^|[,;]\s*)(' . self::SESSION_NAME . ')=([^;,\s]+)/', (string) $response->header('Set-Cookie'), $m) > 0) {
-            return $m[1][0] . '=' . end($m[2]);
-        }
-
-        return $default;
+        return self::sessionCookieOrNull($response) ?? $default;
     }
 
     /**
@@ -131,21 +122,7 @@ final class Browser
      */
     public static function token(string $html, string $action): array
     {
-        foreach (preg_split('/<form\b/i', $html) ?: [] as $form) {
-            if (preg_match('/^[^>]*action="[^"]*' . preg_quote($action, '/') . '"/', $form) !== 1) {
-                continue;
-            }
-            $fields = [];
-            foreach (['__bTs', '__bTk', '__bTa'] as $field) {
-                if (preg_match('/name="' . $field . '" value="([^"]*)"/', $form, $m) === 1) {
-                    $fields[$field] = html_entity_decode($m[1], ENT_QUOTES);
-                }
-            }
-            if (count($fields) === 3) {
-                return $fields;
-            }
-        }
-        Assert::fail('No signed form posting to ' . $action . ' in the page.');
+        return self::formToken($html, $action);
     }
 
     /**

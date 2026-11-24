@@ -8,6 +8,8 @@ namespace Tests\Characterisation {
      */
     class SettingsPagesJsonTest extends CharacterisationTestCase
     {
+        use \Tests\Support\LogsIn;
+
         public function testJsonOnAnAdminPageIsDrawnWithTheJsonShell(): void
         {
             $cookie = $this->logIn($this->admin());
@@ -107,18 +109,6 @@ namespace Tests\Characterisation {
             $this->assertMatchesRegularExpression('/<div class="idno-account-shell">/', $page->body);
         }
 
-        /**
-         * Logs the user in through the login form, with a new password set for this test (the test users' passwords are
-         * random), and returns the session cookie (`name=value`).
-         */
-        private function logIn(\Idno\Entities\User $user): string
-        {
-            $password = bin2hex(random_bytes(12));
-            $user->setPassword($password);
-            $user->save(true);
-
-            return (new \Tests\Acceptance\Browser($this->site()))->login($user->handle, $password);
-        }
     }
 
 }

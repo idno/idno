@@ -31,6 +31,8 @@ use Tests\Storage\PrivateDatabase;
  */
 abstract class PrivateSiteTestCase extends TestCase
 {
+    use LogsIn;
+
     /** Seconds to wait for the web server to listen. */
     private const START_SECONDS = 20;
 
@@ -228,6 +230,33 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
+     * Adds a user to the site (the registration form is closed once the site has its first user) with the
+     * password, and returns the user's uuid. The email address is `<handle>@example.com` unless given.
+     */
+    protected function addUser(string $handle, string $password = 'correct-horse-battery-9', ?string $email = null, bool $admin = false): string
+    {
+        $uuid = $this->runInSite(
+            '$u = new \Idno\Entities\User(); $u->handle = ' . $this->literal($handle) . '; $u->email = ' . $this->literal($email ?? $handle . '@example.com')
+            . '; $u->setTitle(' . $this->literal(ucfirst($handle)) . '); $u->setPassword(' . $this->literal($password) . '); ' . ($admin ? '$u->setAdmin(true); ' : '')
+            . '$u->save(true); return $u->getUUID();'
+        );
+        $this->assertIsString($uuid);
+
+        return $uuid;
+    }
+
+    /**
+     * The API key of the user of the site with the handle (made and stored when the user has none).
+     */
+    protected function apiKeyOf(string $handle): string
+    {
+        $key = $this->runInSite('$u = \\Idno\\Entities\\User::getByHandle(' . $this->literal($handle) . '); return $u->getAPIkey();');
+        $this->assertIsString($key);
+
+        return $key;
+    }
+
+    /**
      * Publishes a public status through the status form over HTTP, as the logged-in user, and returns
      * its permalink (the Location of the redirect).
      *
@@ -247,40 +276,6 @@ abstract class PrivateSiteTestCase extends TestCase
         $this->assertNotSame('', $location);
 
         return $location;
-    }
-
-    /**
-     * The session cookie a response sets, as `name=value`.
-     */
-    protected function sessionCookie(\Tests\Characterisation\SiteResponse $response): string
-    {
-        $this->assertGreaterThan(0, preg_match_all('/(?:^|[,;]\s*)(known_unittest)=([^;,\s]+)/', (string) $response->header('Set-Cookie'), $m), 'a session cookie: ' . $response->header('Set-Cookie'));
-
-        return $m[1][0] . '=' . end($m[2]);
-    }
-
-    /**
-     * The CSRF token fields of the form in $html whose action ends with $action.
-     *
-     * @return array<string, string>
-     */
-    protected function formToken(string $html, string $action): array
-    {
-        foreach (preg_split('/<form\b/i', $html) ?: [] as $form) {
-            if (preg_match('/^[^>]*action="[^"]*' . preg_quote($action, '/') . '"/', $form) !== 1) {
-                continue;
-            }
-            $fields = [];
-            foreach (['__bTs', '__bTk', '__bTa'] as $field) {
-                if (preg_match('/name="' . $field . '" value="([^"]*)"/', $form, $m) === 1) {
-                    $fields[$field] = html_entity_decode($m[1], ENT_QUOTES);
-                }
-            }
-            if (count($fields) === 3) {
-                return $fields;
-            }
-        }
-        $this->fail('No signed form posting to ' . $action . ' in the page.');
     }
 
     /**

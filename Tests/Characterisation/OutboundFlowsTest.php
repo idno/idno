@@ -13,6 +13,8 @@ namespace Tests\Characterisation;
  */
 final class OutboundFlowsTest extends CharacterisationTestCase
 {
+    use \Tests\Support\LogsIn;
+
     /** @var list<string> */
     private array $sinks = [];
 
@@ -187,65 +189,4 @@ final class OutboundFlowsTest extends CharacterisationTestCase
         });
     }
 
-    /**
-     * Logs the user in through the login form, with a new password set for this test (the test
-     * users' passwords are random), and returns the session cookie (`name=value`).
-     */
-    private function logIn(\Idno\Entities\User $user): string
-    {
-        $password = bin2hex(random_bytes(12));
-        $user->setPassword($password);
-        $user->save(true);
-
-        $form = $this->site()->request('GET', 'session/login');
-        $cookie = $this->sessionCookie($form) ?? '';
-        $this->assertNotSame('', $cookie, 'the login form starts a session');
-        $login = $this->site()->request(
-            'POST',
-            'session/login',
-            ['Cookie' => $cookie],
-            $this->formToken($form->body, 'session/login') + ['email' => $user->handle, 'password' => $password],
-        );
-        $this->assertSame(302, $login->status, substr($login->body, 0, 2000));
-
-        return $this->sessionCookie($login) ?? $cookie;
-    }
-
-    /**
-     * The session cookie a response sets, as `name=value`, or null.
-     */
-    private function sessionCookie(SiteResponse $response): ?string
-    {
-        $name = (string) \Idno\Core\Idno::site()->config()->sessionname;
-        if (preg_match_all('/(?:^|[,;]\s*)' . preg_quote($name, '/') . '=([^;,\s]+)/', (string) $response->header('Set-Cookie'), $m) > 0) {
-            return $name . '=' . end($m[1]);
-        }
-
-        return null;
-    }
-
-    /**
-     * The CSRF token fields of the form in $html whose action ends with $action.
-     *
-     * @return array<string, string>
-     */
-    private function formToken(string $html, string $action): array
-    {
-        $forms = preg_split('/<form\b/i', $html) ?: [];
-        foreach ($forms as $form) {
-            if (preg_match('/^[^>]*action="[^"]*' . preg_quote($action, '/') . '"/', $form) !== 1) {
-                continue;
-            }
-            $fields = [];
-            foreach (['__bTs', '__bTk', '__bTa'] as $field) {
-                if (preg_match('/name="' . $field . '" value="([^"]*)"/', $form, $m) === 1) {
-                    $fields[$field] = html_entity_decode($m[1], ENT_QUOTES);
-                }
-            }
-            if (count($fields) === 3) {
-                return $fields;
-            }
-        }
-        $this->fail('No signed form posting to ' . $action . ' in the page.');
-    }
 }

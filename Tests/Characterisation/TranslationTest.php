@@ -10,6 +10,8 @@ namespace Tests\Characterisation {
      */
     class TranslationTest extends CharacterisationTestCase
     {
+        use \Tests\Support\LogsIn;
+
         private ?string $cookie = null;
 
         private function page(?string $acceptLanguage): \Tests\Characterisation\SiteResponse
@@ -18,19 +20,6 @@ namespace Tests\Characterisation {
             $headers = $acceptLanguage === null ? [] : ['Accept-Language' => $acceptLanguage];
 
             return $this->site()->request('GET', 'content/all/', $headers + ['Cookie' => $this->cookie]);
-        }
-
-        /**
-         * Logs the user in through the login form, with a new password set for this test (the test users' passwords are
-         * random), and returns the session cookie (`name=value`).
-         */
-        private function logIn(\Idno\Entities\User $user): string
-        {
-            $password = bin2hex(random_bytes(12));
-            $user->setPassword($password);
-            $user->save(true);
-
-            return (new \Tests\Acceptance\Browser($this->site()))->login($user->handle, $password);
         }
 
         public function testAFrenchRequestDrawsTheFrenchString(): void
