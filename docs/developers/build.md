@@ -15,11 +15,11 @@ To get going, install grunt, and the other developer dependencies:
 Grunt is run through the `grunt` script in `package.json`, so you don't need to install it globally: ```npm run grunt -- <task>```. The tasks are:
 
 * `build-js`: concatenates, transpiles (Babel) and minifies the javascript in `js/src`
-* `build-css`: compiles the SCSS in `css/scss` into `css/idno.css` and `css/idno.min.css` (and the `idno-simple` equivalents)
+* `build-css`: compiles `css/scss/idno-simple.scss` (the style sheet of the onboarding pages and the installer, which keep Bootstrap) into `css/idno-simple.css` and `css/idno-simple.min.css`
 * `build-lang`: regenerates the translation templates (see [Languages](languages/index.md))
 * `test`: runs `stylelint` and `jshint`
 * `watch`: rebuilds when your javascript or SCSS changes
-* the default task runs `build-js`, `build-css`, `build-lang`, `modernizr` and `test`
+* the default task runs `build-js`, `build-css`, `build-lang` and `test`
 
 ### Testing your changes
 
@@ -42,7 +42,7 @@ npm --prefix frontend run build
 
 ## Building SASS/CSS
 
-Idno uses SCSS to define the main style sheets, and as such you will need to build new stylesheets by running ```npm run grunt -- build-css``` (or the default task).
+Idno 2026's own style sheet is built by Vite (above). Grunt builds only the onboarding style sheet from SCSS: build it by running ```npm run grunt -- build-css``` (or the default task).
 
 The `stylelint` grunt task will report errors.  Many of these can be fixed automatically by running `node_modules/.bin/stylelint --fix` on the changed files.
 

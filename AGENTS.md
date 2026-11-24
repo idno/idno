@@ -422,6 +422,12 @@ data/                          Where an SQLite site's database file lives (data/
 templates/                     Templates (Twig for web pages and mail, `.tpl.php` for the other types), one directory per template type: `default` is Idno 2026, the built-in
                                look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
                                feeds, JSON, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
+css/, js/                      The shipped style sheets and scripts: Idno 2026's (`css/idno-2026.min.css`, `js/idno-2026.min.js`, built by Vite from
+                               `frontend/`), the onboarding pages' and installer's (`css/idno-simple*.css`, built by Grunt from `css/scss/idno-simple.scss`,
+                               Bootstrap based), the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`) and
+                               `js/idno.js` / `js/idno.min.js` (Grunt's build of `js/src/`, no longer loaded by any core template; a few form templates
+                               call the `Template` and `ImageTools` objects it defines). `Tests/Unit/Templating/StaticAssetsTest` fails for a shipped file that
+                               nothing names (its `KEPT` list needs a reason for each exception) and for a template that names a file that is not there
 frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
                                files; built into css/idno-2026.min.css and js/idno-2026.min.js (committed, `npm --prefix frontend run
                                build`); denied over HTTP like config/ (see Code Style)
@@ -2960,8 +2966,13 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   it drops 17 unused utilities and adds `col-12`, `contents` and `sr-only` from templates that are not Idno 2026's). Every file of `default`, `email` and `email-text` in core
   and the bundled plugins is a Twig file (`CoreTemplatesAreTwigTest`); the `.tpl.php` files that were beside them are deleted, and the `.tpl.php` engine stays for the `classic`
   and type-shell templates and for third-party plugins and themes.
+  The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) and `js/modernizr/` were deleted when nothing drew them. The Grunt build
+  (`Gruntfile.js`, `npm run grunt`) remains for the onboarding style sheet (`build-css`), the script of `js/src/` and the service worker (`build-js`), the language
+  catalogues (`build-lang`) and the linters (`test`); it does not build Idno 2026's files, which the `frontend/` build writes. The guide for plugin and theme authors,
+  `docs/developers/plugins/upgrading.md` (what still works, what a `.tpl.php` template that a Twig template draws now gets, how to convert one), is pinned
+  by `Tests/Kernel/UpgradingGuideTest` (its before and after draw the same markup; the example blocks are read from the guide); `.tpl.php` support ends in 3.0.
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
-  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
+  `TemplateRendererTest`, `CascadeTwigLoaderTest`, `IdnoTwigExtensionTest`), `Tests/Kernel/BuiltInLookTest`, `ClassicEscapingCoverageTest` (which escaping tests also run on the `classic` template a feed draws, through the rss chain), `StaticAssetsTest` (in the unit tier), `UpgradingGuideTest`, `TemplateServicesTest`, `TemplateCachesTest` (nothing under the upload path;
   Twig's cache is in the kernel's cache directory), and the
   contract and golden pages named under "Build & Test".
 

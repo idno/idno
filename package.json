@@ -13,11 +13,9 @@
         "grunt-contrib-csslint": "^2.0.0",
         "grunt-contrib-jshint": "^3.0.0",
         "grunt-contrib-watch": "^1.1.0",
-        "grunt-modernizr": "^3.0.2",
         "grunt-sass": "^3.1.0",
         "grunt-stylelint": "^0.16.0",
         "grunt-terser": "^2.0.0",
-        "modernizr": "^3.11.8",
         "stylelint": "^13.13.1",
         "stylelint-config-sass-guidelines": "^8.0.0",
         "terser": "5.7.2"

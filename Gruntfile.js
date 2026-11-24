@@ -34,14 +34,12 @@ module.exports = function (grunt) {
 	},
 	dev: {
 	    files: {
-	        'css/idno.css': 'css/scss/idno.scss',
-		'css/idno-simple.css': 'css/scss/idno-simple.scss'
+	        'css/idno-simple.css': 'css/scss/idno-simple.scss'
 	    },
 	},
 	dist: {
 	    files: {
-	        'css/idno.min.css': 'css/scss/idno.scss',
-		'css/idno-simple.min.css': 'css/scss/idno-simple.scss'
+	        'css/idno-simple.min.css': 'css/scss/idno-simple.scss'
 	    },
 	    options: {
 	      outputStyle: 'compressed'
@@ -116,22 +114,8 @@ module.exports = function (grunt) {
 	    }]
 	},
     },
-    modernizr: {
-      dist: {
-        "crawl": false,
-        "minify": true,
-        "uglify": true,
-        "options": [
-          "setClasses"
-        ],
-        "tests": [
-          "inputtypes"
-        ],
-        "dest": "js/modernizr/modernizr-custom.js"
-      }
-    },
     stylelint: {
-      all: ['css/scss/*.scss', 'css/scss/idno/*.scss']
+      all: ['css/scss/*.scss']
     },
     jshint: {
       // define the files to lint
@@ -192,7 +176,6 @@ module.exports = function (grunt) {
   grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-watch');
   grunt.loadNpmTasks('grunt-stylelint');
-  grunt.loadNpmTasks("grunt-modernizr");
 
 
   // Tests
@@ -212,5 +195,5 @@ module.exports = function (grunt) {
   // Default task(s).
   grunt.registerTask('build-js', ['concat', 'babel', 'terser']);
   grunt.registerTask('build-css', ['sass']);
-  grunt.registerTask('default', ['build-js', 'build-css', 'build-lang', 'modernizr', 'test']);
+  grunt.registerTask('default', ['build-js', 'build-css', 'build-lang', 'test']);
 };

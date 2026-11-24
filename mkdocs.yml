@@ -10,6 +10,8 @@ nav:
 - Home: 'index.md'
 - Installing and Upgrading Idno: 'install/index.md'
 - Plugins: 'plugins/index.md'
-- Idno for Developers: 'developers/index.md'
+- Idno for Developers:
+  - 'developers/index.md'
+  - Converting templates to Twig: 'developers/plugins/upgrading.md'
 - Open Source Community: 'community/index.md'
 - What's New in Idno?: 'changelog.md'

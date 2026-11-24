@@ -84,7 +84,7 @@ A syntax error or a missing template in a Twig file is an exception, not a blank
 
 ### Converting a template to Twig
 
-If you port a `.tpl.php` file of your own plugin or theme, the rules Idno's own ports follow are these:
+The guide for plugin and theme authors, with a complete before and after, is [Upgrading your plugin or theme's templates](../plugins/upgrading.md). In short, if you port a `.tpl.php` file of your own plugin or theme, the rules Idno's own ports follow are these:
 
 * Put the `.html.twig` file beside the original (`templates/<type>/<name>.html.twig`): within one folder it wins. Keep the original until you are sure of the port.
 * `$this->draw('x')` is `{{ idno_include('x') }}`, and `$this->__($vars)->draw('x')` is `{{ idno_include('x', {...}) }}`. A variable that a later template only saw because `__()` left it on the template object is passed explicitly: an included template draws on a copy.
