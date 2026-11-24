@@ -35,6 +35,7 @@ if (!empty($owner)) {
             ?>
                 <?php echo $this->draw('content/edit') ?>
                 <?php echo $this->draw('content/end/links') ?>
+                <?php echo $this->draw('content/menu') ?>
                 <?php
 
                 if (\Idno\Core\Idno::site()->currentPage()->isPermalink() && \Idno\Core\Idno::site()->config()->indieweb_citation) {

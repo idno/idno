@@ -83,6 +83,7 @@ if (!empty($owner)) {
 
                 <?= $this->draw('content/edit') ?>
                 <?= $this->draw('content/end/links') ?>
+                <?= $this->draw('content/menu') ?>
             </span>
 
             <?php if (\Idno\Core\Idno::site()->currentPage()->isPermalink() && \Idno\Core\Idno::site()->config()->indieweb_citation) { ?>

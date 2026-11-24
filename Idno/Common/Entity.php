@@ -2495,6 +2495,18 @@ namespace Idno\Common {
         }
 
         /**
+         * The id of the page anchor of an annotation on its post's page. A comment's link is
+         * that anchor: <post address>#annotation-<id>.
+         *
+         * @param  string $local_url The annotation's local address (the key it is stored under)
+         * @return string
+         */
+        static function annotationAnchor($local_url)
+        {
+            return 'annotation-' . preg_replace('/[^A-Za-z0-9_-]/', '', basename((string) parse_url((string) $local_url, PHP_URL_PATH)));
+        }
+
+        /**
          * Removes the annotation with the URL $annotation_url from this entity
          * @param string $annotation_url Annotation URL to remove
          */

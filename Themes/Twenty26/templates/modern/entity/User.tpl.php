@@ -22,6 +22,9 @@ $user = $vars['user'];
                 </a>
             <?php } ?>
         </div>
+        <div class="idno-profile-menu">
+            <?= $this->__(['user' => $user])->draw('entity/User/menu') ?>
+        </div>
     </div>
     <?php
     $description = $user->getDescription();

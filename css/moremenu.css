@@ -1,0 +1,98 @@
+/*
+ * The "More" menu of posts, comments and profiles (templates/default/shell/moremenu.tpl.php).
+ * Used by every look; the custom properties are the Twenty26 tokens, with fallbacks.
+ */
+.idno-more {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+}
+.idno-more > summary {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    color: var(--color-text-secondary, #6b7280);
+    cursor: pointer;
+}
+.idno-more > summary::-webkit-details-marker { display: none; }
+.idno-more > summary::marker { content: ""; }
+.idno-more > summary:hover,
+.idno-more[open] > summary {
+    background: var(--color-bg, #f3f4f6);
+    border-color: var(--color-border, #e5e7eb);
+    color: var(--color-text-strong, #111111);
+}
+.idno-more > summary:focus-visible {
+    outline: 2px solid var(--color-link, #2563eb);
+    outline-offset: 2px;
+}
+.idno-more-list {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 40;
+    min-width: 13.5rem;
+    padding: 0.375rem;
+    background: var(--color-surface, #ffffff);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    text-align: left;
+}
+.idno-more-item,
+.idno-more-list .idno-more-item:link,
+.idno-more-list .idno-more-item:visited {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    border: 0;
+    border-radius: 0.5rem;
+    background: none;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.3;
+    text-align: left;
+    text-decoration: none;
+    white-space: nowrap;
+    color: var(--color-text, #374151);
+    cursor: pointer;
+}
+.idno-more-item:hover,
+.idno-more-item:focus-visible {
+    background: var(--color-bg, #f3f4f6);
+    color: var(--color-text-strong, #111111);
+    outline: none;
+}
+.idno-more-item-danger,
+.idno-more-list .idno-more-item-danger:link,
+.idno-more-list .idno-more-item-danger:visited {
+    color: #b91c1c;
+}
+.idno-more-item-danger:hover,
+.idno-more-item-danger:focus-visible {
+    background: #fef2f2;
+    color: #991b1b;
+}
+.idno-more-separator {
+    height: 1px;
+    margin: 0.25rem 0;
+    background: var(--color-border-subtle, #f0f0f0);
+}
+.idno-more-status {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.25rem);
+    z-index: 41;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    background: #111111;
+    color: #ffffff;
+    font-size: 0.8125rem;
+    white-space: nowrap;
+}
+.idno-more-status:empty { display: none; }
