@@ -581,6 +581,10 @@ namespace Idno\Entities {
             if (!empty($password)) {
                 try {
                     $this->password = self::passwords()->hash((string)$password);
+                    // A real change of the password: the marker that the sessions of the user are bound to
+                    // (see Session::passwordFingerprint()). The replacement of a hash of the same password by a new one
+                    // (checkPassword()) leaves it alone.
+                    $this->password_generation = bin2hex(random_bytes(16));
                 } catch (\InvalidArgumentException $e) {
                     // Empty once trimmed, or longer than the hasher accepts
                     return false;

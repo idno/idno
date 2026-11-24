@@ -399,7 +399,7 @@ Idno/
                                IdnoTwigExtension) and their helpers. See "Templates"
   Security/                    Passwords (the password service on symfony/password-hasher) and what lets Symfony Security know who is
                                making a request (modern style): SessionUser, CurrentUserSource, CurrentUserAuthenticator,
-                               StatelessAuthentication, ApiSignatureVerifier, DeniedResponder and ForbiddenPage. See "Security architecture"
+                               StatelessAuthentication, ApiSignatureVerifier, DeniedResponder, ForbiddenPage and LoginThrottle. See "Security architecture"
   Markdown/                    A post's Markdown form (modern style, NOT a scanned directory: nothing in it is a service):
                                MarkdownRequest (whether a request asks for it), FrontMatter (the YAML block) and
                                HtmlToMarkdown (the conversion). See "Markdown output"
@@ -4331,6 +4331,49 @@ the CLI installer no longer writes one.
   `setPassword()` or `checkPassword()` gets all of this unchanged; one that calls `password_hash()`/`password_verify()` on `$user->password`
   itself still verifies (bcrypt), but does not upgrade. `RemoteUser::checkPassword()` is false as before. Tests: `Tests/Unit/Security/`,
   `Tests/Kernel/PasswordCompatibilityTest`.
+- Logging in (`Idno\Pages\Session\Login`). ONE failure message for an unknown login name and a wrong password: "Oops! That
+  username or password isn't right. Please try again." (JSON login too); the legacy events still fire as before (`login/failure`,
+  `login/failure/nouser`). For a login name nobody has, `Passwords::spendVerification()` does one bcrypt against a fixed cost-12
+  hash of nobody's password (an empty password costs nothing, as for a member), so an unknown name costs what a wrong password costs
+  and the time does not tell them apart (the remaining difference is a database lookup by email after the one by handle, which a
+  member found by handle does not make: not hidden).
+- Login throttling: `Idno\Security\LoginThrottle` (a public container service, built when first fetched; the login page fetches it
+  through `Idno::container()`) on `symfony/rate-limiter`'s FIXED WINDOW policy with `CacheStorage` over the site's ONE cache pool
+  (`Psr\Cache\CacheItemPoolInterface`; see "The cache"): 5 failures (`LIMIT`) per 300 seconds (`WINDOW_SECONDS`) for each LOGIN NAME, which
+  is what was typed in the login field, trimmed and lower-cased; the key is its SHA-256 (the name is never a cache key or file name).
+  It is for a login name, NOT an address: there are no trusted proxies yet, so behind a reverse proxy every client shares the
+  proxy's address. A handle and the email address of the same account are two names, with a count each (so an attacker gets
+  five attempts at each of them). The window opens at the first failure and its count is forgotten 300 seconds later, so
+  an attacker can keep a member's login refused for no longer than that after the last COUNTED attempt: an attempt that is refused is not counted,
+  and a successful login resets the count. An attempt made while the count is full is refused BEFORE the password is
+  checked, even a right one, with the same redirect as a failure and the message "Too many failed sign-in attempts ... Please wait a
+  few minutes". No lock is given to the limiter (a lock would need a store of its own), so concurrent attempts can let a few more
+  than five through. The limiter reads the real clock (it has no clock seam: `Tests/Unit/Security/LoginThrottleTest` moves the
+  pool's clock, which decides when a window's state is forgotten, with a `MockClock` on an `ArrayAdapter`). With the cache disabled
+  (a `NullAdapter`) nothing is stored and nothing is refused; a throttle that cannot be built or fails never refuses a login (one
+  warning). Every `PrivateSiteTestCase` site has a `cachepath` of its own (`IDNO_CACHEPATH`, in its temporary directory): the pool's
+  namespace is the host WITHOUT the port, so sites on one loopback address would otherwise share their counts. Tests:
+  `Tests/Unit/Security/LoginThrottleTest`, `Tests/Characterisation/LoginThrottlingTest`.
+- A change of password ends the user's OTHER sessions. `User::setPassword()` (a real change) writes a random `password_generation`
+  marker on the user; `Session::logUserOn()` stores in `$_SESSION['password_fingerprint']` the SHA-256 of that marker (nothing of
+  the password or its hash is in the session); where the browser session's user is loaded (`Session::refreshCurrentSessionuser()`, once
+  per request, from the user already loaded: no database statement is added, pinned by `UpgradeEndToEndTest::testTheHomepageStatementsArePinned`)
+  the fingerprint is compared with the user's current marker and a mismatch logs the session off as a logout does (`logUserOff()`: anonymous,
+  session data cleared). The marker is NOT the hash: `checkPassword()` replaces a hash of the same password at login (a cost
+  upgrade) and leaves the marker alone, so that never ends another session. Exceptions: a session with no fingerprint (made
+  before this release) is given the current one when first seen and stays logged in, whatever happened to the password before
+  (it cannot say); the session that changes the password (`Session`'s `save` listener, for the current user's own save) takes
+  the new fingerprint in the same request and stays logged in; a user who has never changed their password since the marker
+  was introduced has none (the fingerprint of an empty marker), so every session stays valid until the first real change; a
+  password reset ends every session of the user (the reset does not log anybody on). Stateless (API) requests have no session
+  fingerprint and are unaffected (the API key is the credential, and changing the password does not change it); the queue worker and
+  `logUserOn()` in a test work as before. Tests: `Tests/Characterisation/PasswordChangeEndsOtherSessionsTest`.
+- Logging out (`Idno\Pages\Session\Logout`, form token required, POST only): the redirect goes through `Login::sanitizeRedirectUrl()`
+  (the `Referer`, same-origin only, else the site's home page). `logUserOff()` destroys the session, then `Session::startNewSession()`
+  begins another (a new id, nothing of the old session's data, user or form token: the token is replaced and the session seeded
+  again) and the "You've signed out" message is added to THAT session, so the page the visitor lands on shows it once. The answer
+  sets the new session's cookie, which PHP uses in place of the expiring cookie `logUserOff()` sent (same name and attributes), and
+  the old id is dead. Tests: `LoginFlowTest`.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to

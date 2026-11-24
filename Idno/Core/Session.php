@@ -56,6 +56,19 @@ namespace Idno\Core {
 
         private $authFinished = false;
 
+        /**
+         * The session's password fingerprint when the request's authentication began (see $sessionUserAtAuth): put back with the
+         * user it belongs to when a login a plugin made is turned into a stateless authentication.
+         *
+         * @var string|null
+         */
+        private $fingerprintAtAuth = null;
+
+        /**
+         * The key of the session's fingerprint of the user's password marker (see passwordFingerprint()).
+         */
+        const PASSWORD_FINGERPRINT = 'password_fingerprint';
+
         function init()
         {
             ini_set('session.cookie_lifetime', 60 * 60 * 24 * 7); // Persistent cookies
@@ -115,16 +128,7 @@ namespace Idno\Core {
             $carried = $_COOKIE[session_name()] ?? null;
             $this->sessionStartedHere = !is_string($carried) || $carried !== session_id();
 
-            // A session is never empty: the database session handler (Symfony's PdoSessionHandler) destroys an empty
-            // one when it writes, so a visitor with nothing else in the session would get a new id on the next
-            // request, and the form token, which is bound to the session id, would no longer match.
-            if (!isset($_SESSION['secure'])) {
-                $_SESSION['secure'] = \Idno\Common\Page::isSSL();
-            }
-
-            // The session holds its form token from the first request: a page draws its forms after the session is closed
-            // (`DefaultTemplate::drawPage()` closes it before the shell is drawn), and a token made then could not be stored.
-            \Idno\Core\Bonita\Forms::token('', 0);
+            $this->seedSession();
 
             // Session login / logout
             Idno::site()->routes()->addRoute('/session/login', '\Idno\Pages\Session\Login', true);
@@ -158,6 +162,12 @@ namespace Idno\Core {
 
                     $this->refreshSessionUser($object);
 
+                    // The session that makes a change of the password keeps itself logged in: it takes the new marker
+                    // (any other session of the user carries the old one, and ends at its next request).
+                    if (!$this->apiRequest && !empty($_SESSION['user_uuid'])) {
+                        $_SESSION[self::PASSWORD_FINGERPRINT] = $this->passwordFingerprint($object);
+                    }
+
                 }
             );
 
@@ -174,6 +184,54 @@ namespace Idno\Core {
                     }
                 }
             );
+        }
+
+        /**
+         * Gives a session what every session holds from its first request.
+         */
+        private function seedSession()
+        {
+            // A session is never empty: the database session handler (Symfony's PdoSessionHandler) destroys an empty
+            // one when it writes, so a visitor with nothing else in the session would get a new id on the next
+            // request, and the form token, which is bound to the session id, would no longer match.
+            if (!isset($_SESSION['secure'])) {
+                $_SESSION['secure'] = \Idno\Common\Page::isSSL();
+            }
+
+            // The session holds its form token from the first request: a page draws its forms after the session is closed
+            // (`DefaultTemplate::drawPage()` closes it before the shell is drawn), and a token made then could not be stored.
+            \Idno\Core\Bonita\Forms::token('', 0);
+        }
+
+        /**
+         * After a logout: starts a new session (a new id, nothing of the old one) so that a message can wait in it for the
+         * page the visitor lands on. logUserOff() has destroyed the old session, and its cookie is expired; this one's own
+         * cookie follows it. Does nothing on a stateless request, which has no session to end.
+         */
+        function startNewSession()
+        {
+            if ($this->apiRequest) {
+                return;
+            }
+            session_id(session_create_id());
+            if (@session_start()) {
+                $_SESSION = [];
+                $this->sessionStartedHere = true;
+                \Idno\Core\Bonita\Forms::forgetToken();
+                $this->seedSession();
+            }
+        }
+
+        /**
+         * What a session holds to tell whether its user's password has changed since it was made: a hash of the user's
+         * password marker (`password_generation`, a random value only User::setPassword() writes: a real change of the
+         * password, never the replacement of an old hash of the same password by a new one). Nothing of the password
+         * or its hash: the marker is random. A user who has never changed their password since the marker was introduced
+         * has none, and the fingerprint is that of an empty one.
+         */
+        private function passwordFingerprint(User $user)
+        {
+            return hash('sha256', (string)$user->password_generation);
         }
 
         /**
@@ -542,6 +600,7 @@ namespace Idno\Core {
         {
             $this->authFinished = false;
             $this->sessionUserAtAuth = $_SESSION['user_uuid'] ?? null;
+            $this->fingerprintAtAuth = $_SESSION[self::PASSWORD_FINGERPRINT] ?? null;
             // attempt to delegate auth to a plugin. A plugin authenticates a request by returning the User (the request is then
             // authenticated statelessly), or by calling authenticateStatelessly() itself.
             $return = \Idno\Core\Idno::site()->events()->triggerEvent('user/auth/request', [], false);
@@ -638,6 +697,9 @@ namespace Idno\Core {
                 return false;
             }
             $return = $this->refreshSessionUser($user);
+            if ($return && !$this->apiRequest) {
+                $_SESSION[self::PASSWORD_FINGERPRINT] = $this->passwordFingerprint($return);
+            }
             if (!$this->apiRequest) {
                 @session_regenerate_id(true);
                 // The form token belongs to the session id it was made for: the next form carries a new one.
@@ -695,6 +757,26 @@ namespace Idno\Core {
         }
 
         /**
+         * Whether the browser session may go on as $user, once per request where the session's user is loaded: its
+         * fingerprint is that of the user's password marker. A session with no fingerprint (made before sessions had one)
+         * is given the current one, and stays. Costs no statement: the user is the one already loaded.
+         *
+         * @param  \Idno\Entities\User $user
+         * @return bool
+         */
+        private function checkPasswordFingerprint(User $user)
+        {
+            $current = $this->passwordFingerprint($user);
+            if (!isset($_SESSION[self::PASSWORD_FINGERPRINT]) || !is_string($_SESSION[self::PASSWORD_FINGERPRINT])) {
+                $_SESSION[self::PASSWORD_FINGERPRINT] = $current;
+
+                return true;
+            }
+
+            return hash_equals($_SESSION[self::PASSWORD_FINGERPRINT], $current);
+        }
+
+        /**
          * If we're logged in, refresh the current session user.
          */
         function refreshCurrentSessionuser()
@@ -702,6 +784,9 @@ namespace Idno\Core {
             if (!$this->currentUser() && !empty($_SESSION['user_uuid'])) {
                 if ($this->user = User::getByUUID($_SESSION['user_uuid'])) {
                     if (\Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
+                        $this->logUserOff();
+                    } else if (!$this->checkPasswordFingerprint($this->user)) {
+                        // The password was changed since this session was made: it is over, as a logout ends it.
                         $this->logUserOff();
                     }
                 }
@@ -747,6 +832,12 @@ namespace Idno\Core {
                         unset($_SESSION['user_uuid']);
                     } else {
                         $_SESSION['user_uuid'] = $this->sessionUserAtAuth;
+                    }
+                    // The fingerprint belongs to the user the session holds, not to the one the plugin logged on.
+                    if ($this->fingerprintAtAuth === null) {
+                        unset($_SESSION[self::PASSWORD_FINGERPRINT]);
+                    } else {
+                        $_SESSION[self::PASSWORD_FINGERPRINT] = $this->fingerprintAtAuth;
                     }
                     $this->user = null;
                 }

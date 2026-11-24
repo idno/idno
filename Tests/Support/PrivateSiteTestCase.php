@@ -324,6 +324,10 @@ abstract class PrivateSiteTestCase extends TestCase
             // The site's files go to a directory of the test's own (removed in tearDown): an archive or an upload made
             // by a test, with its test password hashes, never stays in the rig's shared upload directory.
             'IDNO_UPLOADPATH' => $this->uploadPath,
+            // The site's cache pool (the HSTS memory, the login throttle's counts) is a directory of its own, removed in
+            // tearDown: the pool's namespace is the host name without the port, so sites on one loopback address would share
+            // one pool, and a count made by one test would be read by another, or by the rig's site.
+            'IDNO_CACHEPATH' => $this->directory . '/cache',
             'IDNO_TEST_HTTP_ALLOW' => $origin,
             'PATH' => (string) getenv('PATH'),
         ];

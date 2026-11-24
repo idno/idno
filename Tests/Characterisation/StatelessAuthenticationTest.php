@@ -276,7 +276,7 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         $this->site()->request('GET', '_test/whoami', self::signedHeadersFor('ada', $key, '/_test/whoami') + ['Cookie' => $cookie]);
 
         $page = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
-        $this->assertStringContainsString("password isn't correct", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the visitor\'s session was not destroyed with it');
+        $this->assertStringContainsString("That username or password isn't right", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the visitor\'s session was not destroyed with it');
     }
 
     public function testASignedRequestWithoutACookieDestroysTheSessionItStarted(): void

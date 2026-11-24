@@ -113,7 +113,7 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $this->assertSame(302, $replay->status, 'a code that was used is of no use again');
     }
 
-    public function testPasswordResetLeavesOtherSessionsLoggedIn(): void
+    public function testPasswordResetEndsOtherSessions(): void
     {
         $this->registerUser('ada');
         $other = $this->loginCookie('ada', self::PASSWORD);
@@ -125,12 +125,12 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
             'email' => 'ada@example.com', 'code' => $reset['code'], 'password' => 'a-new-passphrase-77', 'password2' => 'a-new-passphrase-77',
         ]);
 
-        // Pins today: a session that was open when the password was reset is not ended.
+        // Changed on purpose: a session that was open when the password was reset is ended (see PasswordChangeEndsOtherSessionsTest).
         $this->assertSame(302, $post->status);
-        $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => $other])->status);
+        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $other])->status);
     }
 
-    public function testChangingYourOwnPasswordKeepsYouLoggedIn(): void
+    public function testChangingYourOwnPasswordKeepsYouLoggedInAndEndsTheOtherSessions(): void
     {
         $cookie = $this->registerUser('ada');
         $other = $this->loginCookie('ada', self::PASSWORD);
@@ -145,8 +145,8 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $settings = $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie]);
         $this->assertSame(200, $settings->status, 'still logged in');
         $this->assertStringContainsString('Your password has been updated.', Browser::text($settings->body));
-        // Pins today: nor is any other session of the user ended.
-        $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => $other])->status);
+        // Changed on purpose: every other session of the user is ended.
+        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $other])->status);
         $this->assertNull((new Browser($this->site()))->tryLogin('ada', self::PASSWORD), 'the old password is gone');
         $this->assertNotNull((new Browser($this->site()))->tryLogin('ada', 'a-new-passphrase-77'));
     }

@@ -93,7 +93,7 @@ final class ControllerAuthorizationTest extends CharacterisationTestCase
         $this->assertSame(403, $denied->status);
         $this->assertNull($denied->header('Access-Control-Allow-Origin'), 'a page of a controller is not readable by every site');
         $page = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
-        $this->assertStringContainsString("couldn't find your username", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the session was not used up by the denied page');
+        $this->assertStringContainsString("That username or password isn't right", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the session was not used up by the denied page');
     }
 
     public function testATemplateTypeThatIsNotHtmlOrJsonIsAnsweredInPlainText(): void

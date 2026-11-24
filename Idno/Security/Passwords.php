@@ -29,6 +29,11 @@ final class Passwords
     /** How many bytes of a password a bcrypt hash made by password_hash() covers. */
     private const BCRYPT_BYTES = 72;
 
+    /**
+     * A bcrypt hash (cost COST) of a password nobody has, for spendVerification().
+     */
+    private const NOBODY = '$2y$12$lxzVop/8EkaXiM5ddKyyv.ZZPo9rUXU1xQ82nuwv7QMMLUAImK0TS';
+
     private readonly PasswordHasherInterface $hasher;
     private readonly PasswordHasherInterface $legacy;
 
@@ -91,6 +96,19 @@ final class Passwords
         }
 
         return $this->legacy->verify($hash, $plain) ? $hash : null;
+    }
+
+    /**
+     * Does the work of checking a password (one bcrypt) against nobody's hash and says nothing: a login for a name that
+     * no member has calls it, so that it costs what a login for a member with a wrong password costs and the time it
+     * takes does not tell the two apart. An empty password costs nothing, as it costs nothing for a member.
+     */
+    public function spendVerification(#[\SensitiveParameter] string $plain): void
+    {
+        $plain = trim($plain);
+        if ($plain !== '') {
+            $this->hasher->verify(self::NOBODY, $plain);
+        }
     }
 
     /**

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-24 00:06+0000\n"
+"POT-Creation-Date: 2026-11-24 19:32+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -17,31 +17,31 @@ msgstr ""
 msgid "There was a problem syndicating."
 msgstr ""
 
-#: ./Idno/Common/Page.php:420
-#: ./Idno/Common/Page.php:421
+#: ./Idno/Common/Page.php:381
+#: ./Idno/Common/Page.php:382
 msgid "Invalid token."
 msgstr ""
 
-#: ./Idno/Common/Page.php:438
+#: ./Idno/Common/Page.php:399
 #: ./templates/default/pages/500.html.twig:6
 msgid "Something went wrong."
 msgstr ""
 
-#: ./Idno/Common/Page.php:646
-#: ./Idno/Common/Page.php:737
+#: ./Idno/Common/Page.php:605
+#: ./Idno/Common/Page.php:694
 msgid "The page you were on timed out."
 msgstr ""
 
-#: ./Idno/Common/Page.php:660
-#: ./Idno/Common/Page.php:751
+#: ./Idno/Common/Page.php:619
+#: ./Idno/Common/Page.php:708
 msgid "Couldn't say anything about execution, probably something went wrong"
 msgstr ""
 
-#: ./Idno/Common/Page.php:824
+#: ./Idno/Common/Page.php:781
 msgid "This content isn't here."
 msgstr ""
 
-#: ./Idno/Common/Page.php:840
+#: ./Idno/Common/Page.php:797
 msgid "This page can't be found."
 msgstr ""
 
@@ -62,11 +62,11 @@ msgstr ""
 msgid "Oh no! Something went wrong."
 msgstr ""
 
-#: ./Idno/Core/Idno.php:456
+#: ./Idno/Core/Idno.php:455
 msgid "Site entity for \"%s\" could not be created"
 msgstr ""
 
-#: ./Idno/Core/PageHandler.php:69
+#: ./Idno/Core/PageHandler.php:155
 msgid "Account pages are not available to API requests."
 msgstr ""
 
@@ -94,7 +94,7 @@ msgstr ""
 msgid "No result from endpoint."
 msgstr ""
 
-#: ./Idno/Core/Session.php:550
+#: ./Idno/Core/Session.php:649
 msgid "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"
 msgstr ""
 
@@ -660,7 +660,7 @@ msgid "We couldn't find the post to delete."
 msgstr ""
 
 #: ./Idno/Pages/Entity/Delete.php:57
-#: ./Idno/Pages/Entity/View.php:137
+#: ./Idno/Pages/Entity/View.php:146
 #: ./Idno/Pages/User/View.php:108
 msgid "%s was deleted."
 msgstr ""
@@ -685,7 +685,7 @@ msgstr ""
 msgid "There was a problem getting an upload URL for the newly minted file"
 msgstr ""
 
-#: ./Idno/Pages/File/Picker.php:57
+#: ./Idno/Pages/File/Picker.php:55
 msgid "You can only upload images."
 msgstr ""
 
@@ -715,11 +715,11 @@ msgstr ""
 msgid "Create your profile"
 msgstr ""
 
-#: ./Idno/Pages/Search/User.php:23
+#: ./Idno/Pages/Search/User.php:24
 msgid "Invalid sort type %s"
 msgstr ""
 
-#: ./Idno/Pages/Search/User.php:27
+#: ./Idno/Pages/Search/User.php:28
 msgid "Invalid sort order %s"
 msgstr ""
 
@@ -739,15 +739,16 @@ msgstr ""
 msgid "Sign in"
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:79
-msgid "Oops! It looks like your password isn't correct. Please try again."
+#: ./Idno/Pages/Session/Login.php:72
+msgid "Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:84
-msgid "Oops! We couldn't find your username or email address. Please check you typed it correctly and try again."
+#: ./Idno/Pages/Session/Login.php:96
+#: ./Idno/Pages/Session/Login.php:102
+msgid "Oops! That username or password isn't right. Please try again."
 msgstr ""
 
-#: ./Idno/Pages/Session/Logout.php:24
+#: ./Idno/Pages/Session/Logout.php:28
 msgid "You've signed out. See you soon!"
 msgstr ""
 
@@ -1998,12 +1999,14 @@ msgstr ""
 #: ./templates/classic/shell/pagination.tpl.php:35
 #: ./templates/default/drafts.html.twig:34
 #: ./templates/default/shell/pagination.html.twig:9
+#: ./templates/markdown/shell.tpl.php:170
 msgid "Newer"
 msgstr ""
 
 #: ./templates/classic/shell/pagination.tpl.php:36
 #: ./templates/default/drafts.html.twig:39
 #: ./templates/default/shell/pagination.html.twig:14
+#: ./templates/markdown/shell.tpl.php:173
 msgid "Older"
 msgstr ""
 
@@ -2221,8 +2224,13 @@ msgstr ""
 msgid "Basic checks on installation discovered no problems."
 msgstr ""
 
-#: ./templates/default/admin/diagnostics.html.twig:32
+#: ./templates/default/admin/diagnostics.html.twig:31
+#: ./templates/default/admin/diagnostics.html.twig:62
 msgid "Generate detailed report"
+msgstr ""
+
+#: ./templates/default/admin/diagnostics.html.twig:46
+msgid "Generating..."
 msgstr ""
 
 #: ./templates/default/admin/email.html.twig:11
@@ -2491,11 +2499,11 @@ msgstr ""
 msgid "Here's the latest content."
 msgstr ""
 
-#: ./templates/default/following/home.html.twig:10
+#: ./templates/default/following/home.html.twig:11
 msgid "Follow another site"
 msgstr ""
 
-#: ./templates/default/following/home.html.twig:18
+#: ./templates/default/following/home.html.twig:20
 msgid "You're not following anyone yet."
 msgstr ""
 
@@ -2591,15 +2599,15 @@ msgstr ""
 msgid "Click here to log in."
 msgstr ""
 
-#: ./templates/default/pages/403.html.twig:12
+#: ./templates/default/pages/403.html.twig:9
 msgid "Hold on. You don't have access to this content."
 msgstr ""
 
-#: ./templates/default/pages/403.html.twig:14
+#: ./templates/default/pages/403.html.twig:11
 msgid "It's nothing personal. You just don't have the right permissions to see what's here."
 msgstr ""
 
-#: ./templates/default/pages/403.html.twig:16
+#: ./templates/default/pages/403.html.twig:13
 msgid "Find something else to view on the <a href=\"%s\">%s homepage</a>."
 msgstr ""
 
@@ -2719,5 +2727,13 @@ msgstr ""
 
 #: ./templates/email/shell.html.twig:63
 msgid "Powered by"
+msgstr ""
+
+#: ./templates/markdown/shell.tpl.php:52
+msgid "In reply to"
+msgstr ""
+
+#: ./templates/markdown/shell.tpl.php:124
+msgid "This page is a settings page and has no Markdown form. Open it in a browser."
 msgstr ""
 

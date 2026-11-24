@@ -63,26 +63,94 @@ namespace Idno\Pages\Session {
             }
             $fwd = self::sanitizeRedirectUrl($fwd);
 
-            if ($user = \Idno\Entities\User::getByHandle($this->getInput('email'))) {
-            } else if ($user = \Idno\Entities\User::getByEmail($this->getInput('email'))) {
+            $login = (string)$this->getInput('email');
+            $password = trim((string)$this->getInput('password'));
+            $language = \Idno\Core\Idno::site()->language();
+
+            // Too many failures for this login name: refused before the password is looked at, even a right one.
+            if (!self::throttleAllows($login)) {
+                \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."));
+                $this->forwardToLogin($fwd);
+
+                return;
+            }
+
+            if ($user = \Idno\Entities\User::getByHandle($login)) {
+            } else if ($user = \Idno\Entities\User::getByEmail($login)) {
             } else {
-                \Idno\Core\Idno::site()->events()->triggerEvent('login/failure/nouser', array('method' => 'password', 'credentials' => array('email' => $this->getInput('email'))));
+                \Idno\Core\Idno::site()->events()->triggerEvent('login/failure/nouser', array('method' => 'password', 'credentials' => array('email' => $login)));
                 $this->setResponse(401);
+                // A login for a name nobody has costs what a wrong password for a member costs (one bcrypt), so that the time
+                // it takes does not say which names are members'.
+                self::passwords()->spendVerification($password);
             }
 
             if ($user instanceof \Idno\Entities\User) {
-                if ($user->checkPassword(trim($this->getInput('password')))) {
+                if ($user->checkPassword($password)) {
+                    self::throttleReset($login);
                     \Idno\Core\Idno::site()->events()->triggerEvent('login/success', array('user' => $user)); // Trigger an event for auditing
                     \Idno\Core\Idno::site()->session()->logUserOn($user);
                     $this->forwardToLogin($fwd);
                 } else {
-                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Oops! It looks like your password isn't correct. Please try again."));
+                    self::throttleFailure($login);
+                    \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Oops! That username or password isn't right. Please try again."));
                     \Idno\Core\Idno::site()->events()->triggerEvent('login/failure', array('user' => $user));
                     $this->forwardToLogin($fwd);
                 }
             } else {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Oops! We couldn't find your username or email address. Please check you typed it correctly and try again."));
+                self::throttleFailure($login);
+                \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Oops! That username or password isn't right. Please try again."));
                 $this->forwardToLogin($fwd);
+            }
+        }
+
+        /**
+         * The login throttle (Idno\Security\LoginThrottle): a login that cannot be counted (the cache is down) is not refused.
+         *
+         * @return \Idno\Security\LoginThrottle|null
+         */
+        private static function throttle()
+        {
+            try {
+                return \Idno\Core\Idno::container()->get(\Idno\Security\LoginThrottle::class);
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->warning('The login throttle is unavailable: ' . get_class($e));
+
+                return null;
+            }
+        }
+
+        private static function passwords()
+        {
+            return \Idno\Core\Idno::container()->get(\Idno\Security\Passwords::class);
+        }
+
+        private static function throttleAllows($login)
+        {
+            try {
+                $throttle = self::throttle();
+
+                return $throttle === null || $throttle->allows($login);
+            } catch (\Throwable $e) {
+                return true;
+            }
+        }
+
+        private static function throttleFailure($login)
+        {
+            try {
+                self::throttle()?->recordFailure($login);
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->warning('A failed login could not be counted: ' . get_class($e));
+            }
+        }
+
+        private static function throttleReset($login)
+        {
+            try {
+                self::throttle()?->reset($login);
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->warning('The count of failed logins could not be reset: ' . get_class($e));
             }
         }
 

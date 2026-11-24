@@ -24,6 +24,17 @@ final class PasswordsTest extends TestCase
         $this->assertTrue(password_verify('secret-words', $hash), 'the stored hash is of the trimmed password');
     }
 
+    public function testSpendingAVerificationCostsOneBcryptAtTheSitesCostAndSaysNothing(): void
+    {
+        $passwords = new Passwords();
+        $nobody = (new \ReflectionClassConstant(Passwords::class, 'NOBODY'))->getValue();
+
+        $this->assertSame(Passwords::COST, password_get_info($nobody)['options']['cost'], 'as dear as a member\'s hash');
+        $this->assertFalse(password_verify('anything', $nobody));
+        $this->assertNull($passwords->spendVerification('a password'));
+        $this->assertNull($passwords->spendVerification(''), 'an empty password costs nothing, as it does for a member');
+    }
+
     public function testEmptyIsRefused(): void
     {
         $passwords = $this->passwords();

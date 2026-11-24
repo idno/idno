@@ -56,15 +56,17 @@ final class LoginFlowTest extends PrivateSiteTestCase
         [$wrong, $wrongPage] = $this->failedLogin('ada', 'not the password');
         [$unknown, $unknownPage] = $this->failedLogin('nobody-here', self::PASSWORD);
 
-        // The two differ today (an attacker can tell a real handle from an invented one), and so do the statuses.
+        // The same message for both: an attacker cannot tell a real handle from an invented one (the 401 the page sets for an
+        // unknown user is replaced by the redirect, as it always was).
         $this->assertSame(302, $wrong->status);
         $this->assertStringContainsString('/session/login/?fwd=', (string) $wrong->header('Location'));
         $this->assertSame(302, $unknown->status, 'the 401 the page sets for an unknown user is replaced by the redirect');
         $this->assertStringContainsString('/session/login/?fwd=', (string) $unknown->header('Location'));
-        $this->assertStringContainsString("Oops! It looks like your password isn't correct. Please try again.", Browser::text($wrongPage->body));
-        $this->assertStringNotContainsString("couldn't find your username", Browser::text($wrongPage->body));
-        $this->assertStringContainsString("Oops! We couldn't find your username or email address. Please check you typed it correctly and try again.", Browser::text($unknownPage->body));
-        $this->assertStringNotContainsString("password isn't correct", Browser::text($unknownPage->body));
+        $message = "Oops! That username or password isn't right. Please try again.";
+        $this->assertStringContainsString($message, Browser::text($wrongPage->body));
+        $this->assertStringContainsString($message, Browser::text($unknownPage->body));
+        $this->assertStringNotContainsString("couldn't find your username", Browser::text($unknownPage->body));
+        $this->assertStringNotContainsString("password isn't correct", Browser::text($wrongPage->body));
     }
 
     /**
@@ -203,43 +205,69 @@ final class LoginFlowTest extends PrivateSiteTestCase
         $this->assertSame($this->baseUrl(), $logout->header('Location'));
     }
 
-    public function testLogoutRedirectsToAForeignRefererAsItIs(): void
+    public function testLogoutRedirectsToTheHomePageForAForeignOrOddReferer(): void
     {
-        $cookie = $this->registerUser('ada');
+        foreach (['https://other.example/phish', '//other.example', 'javascript:alert(1)', 'http://127.0.0.1@other.example/'] as $referer) {
+            $cookie = $this->registerUserOnce();
 
-        $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => 'https://other.example/phish'], $this->logoutToken($cookie));
+            $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $referer], $this->logoutToken($cookie));
 
-        // Pins today: the redirect is not made same-origin (sanitizeRedirectUrl() is not applied).
-        $this->assertSame(302, $logout->status);
-        $this->assertSame('https://other.example/phish', $logout->header('Location'));
+            // Changed on purpose: the redirect goes through Login::sanitizeRedirectUrl(), so it never leaves the site.
+            $this->assertSame(302, $logout->status);
+            $this->assertSame($this->baseUrl(), $logout->header('Location'), $referer);
+        }
     }
 
-    public function testLogoutClearsTheSessionCookie(): void
+    public function testLogoutReplacesTheSessionCookieWithTheNewSessions(): void
     {
         $cookie = $this->registerUser('ada');
 
         $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $this->baseUrl()], $this->logoutToken($cookie));
 
+        // Changed on purpose: the cookie is no longer expired. PHP replaces the expiring cookie with the cookie of the new
+        // session the message waits in (same name, same attributes), which overwrites the old one in the browser all the same.
         $name = (string) \Idno\Core\Idno::site()->config()->sessionname;
-        $this->assertMatchesRegularExpression('/' . preg_quote($name, '/') . '=deleted; expires=/', (string) $logout->header('Set-Cookie'));
         $header = (string) $logout->header('Set-Cookie');
-        $deleted = substr($header, (int) strpos($header, $name . '=deleted'));
-        $this->assertMatchesRegularExpression('/;\s*path=\/;\s*HttpOnly;\s*SameSite=Lax/i', $deleted, 'the expiring cookie carries the attributes of the one it replaces');
+        $this->assertStringNotContainsString($name . '=deleted', $header);
+        $this->assertNotSame($cookie, self::sessionCookie($logout), 'a different session id');
+        $this->assertMatchesRegularExpression('/' . preg_quote($name, '/') . '=[0-9a-z,-]{20,}; expires=[^;]+; Max-Age=\d+; path=\/; HttpOnly; SameSite=Lax/i', $header, 'with the attributes of the cookie it replaces');
     }
 
     public function testLogoutMessage(): void
     {
         $cookie = $this->registerUser('ada');
-        $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $this->baseUrl()], $this->logoutToken($cookie));
+        $token = $this->logoutToken($cookie);
+        $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $this->baseUrl()], $token);
         $this->assertSame(302, $logout->status);
 
-        $afterOld = $this->site()->request('GET', '', ['Cookie' => $cookie]);
-        $new = self::sessionCookieOrNull($afterOld);
-        $afterNew = $this->site()->request('GET', '', $new === null ? [] : ['Cookie' => $new]);
+        // Changed on purpose: the message waits in a new session, whose cookie the answer sets after the expiring one, and the
+        // page the visitor lands on shows it once.
+        $new = self::sessionCookie($logout);
+        $this->assertNotSame($cookie, $new, 'a new session id');
+        $landing = $this->site()->request('GET', '', ['Cookie' => $new]);
+        $this->assertStringContainsString("You've signed out. See you soon!", Browser::text($landing->body));
+        $again = $this->site()->request('GET', '', ['Cookie' => $new]);
+        $this->assertStringNotContainsString('signed out', Browser::text($again->body), 'shown once');
+        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $new])->status, 'the new session is nobody');
+        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status, 'and the old one is gone');
+        $oldAgain = $this->site()->request('GET', '', ['Cookie' => $cookie]);
+        $this->assertStringNotContainsString('signed out', Browser::text($oldAgain->body), 'the old id never sees the message');
+    }
 
-        // Pins today: the message is added after the session was destroyed, so nobody is shown it.
-        $this->assertStringNotContainsString('signed out', Browser::text($afterOld->body));
-        $this->assertStringNotContainsString('signed out', Browser::text($afterNew->body));
+    public function testLogoutLeavesNothingOfTheOldSessionToTheNewOne(): void
+    {
+        $cookie = $this->registerUser('ada');
+        $token = $this->logoutToken($cookie);
+
+        $logout = $this->site()->request('POST', 'session/logout', ['Cookie' => $cookie, 'Referer' => $this->baseUrl()], $token);
+        $new = self::sessionCookie($logout);
+        $page = $this->site()->request('GET', 'session/login', ['Cookie' => $new]);
+
+        $this->assertNotSame($token['__bTk'], self::formToken($page->body, 'session/login')['__bTk'], 'the form token is not the old one');
+        // The old token posted in the new session does not log anybody out or in: it is not that session's token.
+        $replay = $this->site()->request('POST', 'session/logout', ['Cookie' => $new], $token);
+        $this->assertSame(302, $replay->status);
+        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $new])->status);
     }
 
     public function testLogoutWithoutTokenDoesNothing(): void
@@ -355,6 +383,22 @@ final class LoginFlowTest extends PrivateSiteTestCase
         $this->assertSame(200, $page->status);
 
         return self::formToken($page->body, 'session/logout');
+    }
+
+    private int $logoutUsers = 0;
+
+    /**
+     * A new member (the first is registered, the others added) logged in, for a test that logs several out.
+     */
+    private function registerUserOnce(): string
+    {
+        $handle = 'member' . ++$this->logoutUsers;
+        if ($this->logoutUsers === 1) {
+            return $this->registerUser($handle);
+        }
+        $this->addUser($handle);
+
+        return $this->loginCookie($handle, self::PASSWORD);
     }
 
     private function nameOf(string $cookie): string

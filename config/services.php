@@ -85,7 +85,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Passwords is the service; the legacy hasher is built by it. SessionUser and StatelessAuthentication are value
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
-        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'SessionUser.php', 'StatelessAuthentication.php'],
+        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
         'Legacy' => ['FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -351,6 +351,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // The password service needs nothing of the legacy application; the legacy application's User entity fetches it.
     $services->set(\Idno\Security\Passwords::class)->public();
+
+    // Failed logins are counted on the site's one cache pool, which is built when first fetched (it needs the legacy
+    // application), so the throttle is built then too: the login page fetches it.
+    $services->set(\Idno\Security\LoginThrottle::class)->args([service(\Psr\Cache\CacheItemPoolInterface::class)])->public();
 
     // Symfony Security knows who is making each request (config/packages/security.php): the legacy application authenticates
     // the request while the kernel boots, the source reads the result from the legacy session (nothing when this kernel did not

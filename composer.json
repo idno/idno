@@ -67,7 +67,8 @@
         "symfony/twig-bundle": "^8.0",
         "symfony/password-hasher": "^8.0",
         "symfony/security-bundle": "^8.0",
-        "symfony/security-csrf": "^8.0"
+        "symfony/security-csrf": "^8.0",
+        "symfony/rate-limiter": "^8.0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,
