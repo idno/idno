@@ -20,8 +20,14 @@
         </div>
 
         <div class="idno-form-group">
-            <label for="inputPassword">{{ t('Your password') }}</label>
-            {{ idno_include('forms/input/password', {id: 'inputPassword', class: 'idno-input', name: 'password', placeholder: t('Password'), autocomplete: 'off', value: ''}) }}
+            <label for="inputCurrentPassword">{{ t('Your current password') }}</label>
+            {{ idno_include('forms/input/password', {id: 'inputCurrentPassword', class: 'idno-input', name: 'current_password', placeholder: t('Current password'), autocomplete: 'current-password', value: ''}) }}
+            <p class="idno-form-help">{{ t('Needed to change your email address or your password.') }}</p>
+        </div>
+
+        <div class="idno-form-group">
+            <label for="inputPassword">{{ t('Your new password') }}</label>
+            {{ idno_include('forms/input/password', {id: 'inputPassword', class: 'idno-input', name: 'password', placeholder: t('New password'), autocomplete: 'new-password', value: ''}) }}
             <p class="idno-form-help">{{ t("Leave this blank if you don't want to change it.") }}</p>
         </div>
 

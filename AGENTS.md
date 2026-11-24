@@ -4338,40 +4338,66 @@ the CLI installer no longer writes one.
   and the time does not tell them apart (the remaining difference is a database lookup by email after the one by handle, which a
   member found by handle does not make: not hidden).
 - Login throttling: `Idno\Security\LoginThrottle` (a public container service, built when first fetched; the login page fetches it
-  through `Idno::container()`) on `symfony/rate-limiter`'s FIXED WINDOW policy with `CacheStorage` over the site's ONE cache pool
-  (`Psr\Cache\CacheItemPoolInterface`; see "The cache"): 5 failures (`LIMIT`) per 300 seconds (`WINDOW_SECONDS`) for each LOGIN NAME, which
-  is what was typed in the login field, trimmed and lower-cased; the key is its SHA-256 (the name is never a cache key or file name).
-  It is for a login name, NOT an address: there are no trusted proxies yet, so behind a reverse proxy every client shares the
-  proxy's address. A handle and the email address of the same account are two names, with a count each (so an attacker gets
-  five attempts at each of them). The window opens at the first failure and its count is forgotten 300 seconds later, so
-  an attacker can keep a member's login refused for no longer than that after the last COUNTED attempt: an attempt that is refused is not counted,
-  and a successful login resets the count. An attempt made while the count is full is refused BEFORE the password is
-  checked, even a right one, with the same redirect as a failure and the message "Too many failed sign-in attempts ... Please wait a
-  few minutes". No lock is given to the limiter (a lock would need a store of its own), so concurrent attempts can let a few more
-  than five through. The limiter reads the real clock (it has no clock seam: `Tests/Unit/Security/LoginThrottleTest` moves the
-  pool's clock, which decides when a window's state is forgotten, with a `MockClock` on an `ArrayAdapter`). With the cache disabled
-  (a `NullAdapter`) nothing is stored and nothing is refused; a throttle that cannot be built or fails never refuses a login (one
-  warning). Every `PrivateSiteTestCase` site has a `cachepath` of its own (`IDNO_CACHEPATH`, in its temporary directory): the pool's
-  namespace is the host WITHOUT the port, so sites on one loopback address would otherwise share their counts. Tests:
-  `Tests/Unit/Security/LoginThrottleTest`, `Tests/Characterisation/LoginThrottlingTest`.
+  through `Idno::container()`; it takes a key string and nothing of the request) on `symfony/rate-limiter`'s FIXED WINDOW policy with
+  `CacheStorage` over the site's ONE cache pool (`Psr\Cache\CacheItemPoolInterface`; see "The cache"): 5 attempts (`LIMIT`) per 300
+  seconds (`WINDOW_SECONDS`) for each ACCOUNT. `Login::postContent()` resolves the name typed FIRST (handle, then email: the
+  database's own comparison, which on MySQL and MariaDB ignores case and accents, so `bén` and `BEN` are one handle) and counts
+  under `LoginThrottle::keyForAccount($uuid)`: the handle and the email address of one account share a count, however they are
+  spelled. A name no account has is counted under `keyForUnknownName($name)`: trimmed, NFKC-normalised (when `Normalizer` exists)
+  and lower-cased with `mb_strtolower`. Keys are SHA-256 hashes (a name is never a cache key or file name). Accepted: because the count
+  is for the account, someone can learn that a name exists by trying spellings (handles are public on profiles anyway). It is NOT per
+  address: there are no trusted proxies yet, so behind a reverse proxy every client shares the proxy's address.
+  `attempt($key)` RESERVES one attempt before the password is checked (so N parallel requests cannot get N guesses while the first
+  is still in bcrypt) and is false when the window is full: that attempt is refused BEFORE the password is looked at, even a right
+  one, with the same redirect as a failure and the message "Too many failed sign-in attempts ... Please wait a few minutes"; a
+  successful login calls `reset()`, and so does a password reset (a member who was locked out can sign in at once). The window opens
+  at the first attempt and its count is forgotten 300 seconds later; a refused attempt is not counted. Someone who knows a login
+  name can therefore keep that account locked by repeating failures every five minutes; the member waits five minutes or resets
+  the password. No lock is given to the limiter (a lock would need a store of its own), so concurrent cache writes can lose
+  a few increments and a burst can get a few more than five attempts through. The limiter reads the real clock (it has no clock seam:
+  `Tests/Unit/Security/LoginThrottleTest` moves the pool's clock, which decides when a window's state is forgotten, with a
+  `MockClock` on an `ArrayAdapter`). With the cache disabled (a `NullAdapter`) nothing is stored and nothing is refused; a throttle
+  that cannot be built or fails never refuses a login (one warning). The pool is pruned about once in every 300 attempts when it
+  can be (`PruneableInterface`; an injectable random seam), so the entries of names never tried again do not pile up. An operator
+  clears every count by deleting the pool directory (`cachepath`, else `<cache base>/pool`). Two installs with the same host name on
+  one cache base share counts (see "The cache"). Every `PrivateSiteTestCase` site has a `cachepath` of its own (`IDNO_CACHEPATH`, in its
+  temporary directory): the pool's namespace is the host WITHOUT the port, so sites on one loopback address would otherwise share their
+  counts. Tests: `Tests/Unit/Security/LoginThrottleTest`, `Tests/Characterisation/LoginThrottlingTest`.
+- Account settings (`Idno\Pages\Account\Settings`) ask for the member's CURRENT password (`current_password`) whenever the email address
+  submitted differs from the stored one or a new password is given: it is checked with `checkPassword()` under the same throttle key as a
+  login for the account (an attempt is reserved; a wrong one is a failed attempt and says the current password isn't right; the right one
+  resets the count), and when it is not right NOTHING is changed (the name too). A request that changes neither needs no password. The form
+  labels it and has `autocomplete="current-password"` (the new password `new-password`). A stolen session therefore cannot take the account
+  over. Tests: `Tests/Characterisation/AccountSettingsCurrentPasswordTest`.
 - A change of password ends the user's OTHER sessions. `User::setPassword()` (a real change) writes a random `password_generation`
-  marker on the user; `Session::logUserOn()` stores in `$_SESSION['password_fingerprint']` the SHA-256 of that marker (nothing of
+  marker on the user; `Session::logUserOn()` and `refreshSessionUser()` (whenever it puts a different user's uuid into the session: a plugin's
+  login) store in `$_SESSION['password_fingerprint']` the SHA-256 of that marker (nothing of
   the password or its hash is in the session); where the browser session's user is loaded (`Session::refreshCurrentSessionuser()`, once
   per request, from the user already loaded: no database statement is added, pinned by `UpgradeEndToEndTest::testTheHomepageStatementsArePinned`)
-  the fingerprint is compared with the user's current marker and a mismatch logs the session off as a logout does (`logUserOff()`: anonymous,
-  session data cleared). The marker is NOT the hash: `checkPassword()` replaces a hash of the same password at login (a cost
-  upgrade) and leaves the marker alone, so that never ends another session. Exceptions: a session with no fingerprint (made
-  before this release) is given the current one when first seen and stays logged in, whatever happened to the password before
-  (it cannot say); the session that changes the password (`Session`'s `save` listener, for the current user's own save) takes
-  the new fingerprint in the same request and stays logged in; a user who has never changed their password since the marker
-  was introduced has none (the fingerprint of an empty marker), so every session stays valid until the first real change; a
-  password reset ends every session of the user (the reset does not log anybody on). Stateless (API) requests have no session
-  fingerprint and are unaffected (the API key is the credential, and changing the password does not change it); the queue worker and
-  `logUserOn()` in a test work as before. Tests: `Tests/Characterisation/PasswordChangeEndsOtherSessionsTest`.
+  the fingerprint is compared with the user's current marker and a mismatch logs the session off as a logout does (`logUserOff()`) and starts
+  a fresh session as logout does (`startNewSession()`: a new id, no user, a new form token, the `secure` marker) with the message "Your
+  password was changed, so you have been signed out here. Please sign in again." (the blocked-email logoff next to it starts a fresh session too,
+  with no message). The marker is NOT the hash: `checkPassword()` replaces a hash of the same password at login (a cost
+  upgrade) and leaves the marker alone, so that never ends another session. A save of a `User` writes `password` and the marker ONLY when
+  `setPassword()` or `setPasswordHash()` or the hash upgrade changed them ON THAT OBJECT (private flags); otherwise an existing user takes both
+  from the stored record just before it is written (one read per user save, never per request; a new user has no record), because `Entity::save()`
+  writes the whole document and a `User` loaded before another request changed the password (an autosave) would write the old hash and marker
+  back. So code that writes `$user->password` directly (not through `setPassword()` or `setPasswordHash($hash)`, which stores a ready hash and writes no
+  marker) ends no sessions and is not stored by a save; the session's `save` listener stamps the new fingerprint only for a save
+  that carried a password change (`hasUnsavedPasswordChange()`), so a stale object's save does not keep its session alive. Adoption:
+  a session with no fingerprint (made before this release) is given the current one and stays ONLY when the user has no marker (no
+  real change since markers began); when the user has a marker a session that cannot say it came after the change is logged off. The
+  session that changes the password takes the new fingerprint in the same request and stays logged in; a user who has never
+  changed their password since the marker was introduced has none (the fingerprint of an empty marker), so every session stays valid
+  until the first real change; a password reset ends every session of the user (the reset does not log anybody on). Stateless (API)
+  requests have no session fingerprint and are unaffected (the API key is the credential, and changing the password does not change
+  it); the queue worker and `logUserOn()` in a test work as before. Tests: `Tests/Characterisation/PasswordChangeEndsOtherSessionsTest`,
+  `Tests/Kernel/UserPasswordSaveTest`.
 - Logging out (`Idno\Pages\Session\Logout`, form token required, POST only): the redirect goes through `Login::sanitizeRedirectUrl()`
   (the `Referer`, same-origin only, else the site's home page). `logUserOff()` destroys the session, then `Session::startNewSession()`
   begins another (a new id, nothing of the old session's data, user or form token: the token is replaced and the session seeded
-  again) and the "You've signed out" message is added to THAT session, so the page the visitor lands on shows it once. The answer
+  again) and the "You've signed out" message is added to THAT session, so the page the visitor lands on shows it once. A logout by a
+  signed (API) request adds no message (it could land in a browser session the request carried). The answer
   sets the new session's cookie, which PHP uses in place of the expiring cookie `logUserOff()` sent (same name and attributes), and
   the old id is dead. Tests: `LoginFlowTest`.
 - Redirect targets taken from user input must go through
@@ -4433,7 +4459,7 @@ the CLI installer no longer writes one.
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this. The form token is a secret too, and is never a template variable of a page
   nor a value of one (`FormToken::scrub()` in both shells; `SettingsRedactor` calls a key naming `csrf` or `xsrf` a secret, so the diagnostics
   report's `$_SESSION` has no token): `Tests/Characterisation/FormTokenNotPrintedTest` takes a session's real token from its HTML form and finds it in no JSON, JSONP,
-  Markdown or diagnostics output. An `/account/` or `/admin/` page asked for as JSONP answers the HTML settings shell, which no other site can use as a script.
+  Markdown or diagnostics output. An `/account` or `/admin` page (with or without a trailing slash) asked for as JSONP answers the HTML settings shell with `Content-Type: text/html; charset=utf-8` and `X-Content-Type-Options: nosniff`: it is never a script.
 - `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
   that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
   only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`

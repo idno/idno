@@ -35,6 +35,27 @@ namespace Idno\Pages\Account {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"));
             }*/
 
+            // Changing the email address or the password takes the member's CURRENT password: a stolen session alone cannot take
+            // the account over. It is counted as a login for the account is (a wrong one is a failed attempt), and when it is not
+            // right nothing is changed.
+            $language = \Idno\Core\Idno::site()->language();
+            if ((!empty($email) && $email != $user->email) || !empty($password)) {
+                $key = \Idno\Pages\Session\Login::throttleKeyFor($user);
+                if (!\Idno\Pages\Session\Login::throttleAttempt($key)) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."));
+                    $this->forward($_SERVER['HTTP_REFERER'] ?? '');
+
+                    return;
+                }
+                if (!$user->checkPassword(trim((string)$this->getInput('current_password')))) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Your current password isn't right, so nothing was changed. Please enter it to change your email address or password."));
+                    $this->forward($_SERVER['HTTP_REFERER'] ?? '');
+
+                    return;
+                }
+                \Idno\Pages\Session\Login::throttleReset($key);
+            }
+
             if (!empty($name)) {
                 $user->setTitle($name);
             }

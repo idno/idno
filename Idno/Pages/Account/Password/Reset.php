@@ -59,6 +59,8 @@ namespace Idno\Pages\Account\Password {
                             $user->setPassword($password);
                             $user->clearPasswordRecoveryCode();
                             $user->save(true);
+                            // A member who was locked out of signing in can sign in at once.
+                            \Idno\Pages\Session\Login::throttleReset(\Idno\Pages\Session\Login::throttleKeyFor($user));
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your password was reset!"));
                             $this->forward(\Idno\Core\Idno::site()->config()->getURL());
                             return;

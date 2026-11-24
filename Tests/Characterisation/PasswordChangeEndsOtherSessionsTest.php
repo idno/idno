@@ -25,7 +25,7 @@ final class PasswordChangeEndsOtherSessionsTest extends PrivateSiteTestCase
 
         $page = $this->settings($cookie);
         $post = $this->site()->request('POST', 'account/settings/', ['Cookie' => $cookie, 'Referer' => $this->baseUrl() . 'account/settings/'], self::formToken($page->body, 'account/settings/') + [
-            'name' => 'Ada', 'email' => 'ada@example.com', 'password' => self::NEW_PASSWORD,
+            'name' => 'Ada', 'email' => 'ada@example.com', 'current_password' => self::PASSWORD, 'password' => self::NEW_PASSWORD,
         ]);
         $cookie = self::sessionCookieOrNull($post) ?? $cookie;
 
@@ -71,33 +71,57 @@ final class PasswordChangeEndsOtherSessionsTest extends PrivateSiteTestCase
         $this->assertSame(200, $this->settings($this->loginCookie('ada', self::NEW_PASSWORD))->status, 'a login with the new password works');
     }
 
-    public function testASessionFromBeforeTheFingerprintStaysLoggedInAndIsThenBoundToIt(): void
+    public function testASessionFromBeforeTheFingerprintStaysLoggedInWhenTheUserHasNoMarkerAndIsThenBoundToIt(): void
     {
-        $this->registerUser('ada');
-        $old = $this->sessionWithoutFingerprint('ada');
-        $this->assertSame(200, $this->settings($old)->status, 'adopted: it stays logged in');
+        $this->addUserWithoutMarker('old');
+        $session = $this->sessionWithoutFingerprint('old');
+        $this->assertSame(200, $this->settings($session)->status, 'adopted: the user has never changed the password since markers began');
+        $this->assertSame(200, $this->settings($session)->status);
 
-        $actor = $this->loginCookie('ada', self::PASSWORD);
-        $page = $this->settings($actor);
-        $this->site()->request('POST', 'account/settings/', ['Cookie' => $actor, 'Referer' => $this->baseUrl() . 'account/settings/'], self::formToken($page->body, 'account/settings/') + [
-            'name' => 'Ada', 'email' => 'ada@example.com', 'password' => self::NEW_PASSWORD,
-        ]);
+        $this->runInSite('$u = \Idno\Entities\User::getByHandle("old"); $u->setPassword("a-new-passphrase-77"); $u->save(true); return true;');
 
-        $this->assertSame(403, $this->settings($old)->status, 'once adopted it is bound as every other session is');
+        $this->assertSame(403, $this->settings($session)->status, 'once adopted it is bound as every other session is');
     }
 
-    public function testAnUnadoptedSessionIsEndedByAChangeToo(): void
+    public function testASessionFromBeforeTheFingerprintOfAUserWhoHasAMarkerIsEnded(): void
     {
         $this->registerUser('ada');
-        $old = $this->sessionWithoutFingerprint('ada');
-        $actor = $this->loginCookie('ada', self::PASSWORD);
-        $page = $this->settings($actor);
-        $this->site()->request('POST', 'account/settings/', ['Cookie' => $actor, 'Referer' => $this->baseUrl() . 'account/settings/'], self::formToken($page->body, 'account/settings/') + [
-            'name' => 'Ada', 'email' => 'ada@example.com', 'password' => self::NEW_PASSWORD,
-        ]);
+        $stolen = $this->sessionWithoutFingerprint('ada');
 
-        // A session that carries no fingerprint cannot say it is from before the change, so it is adopted as it is.
-        $this->assertSame(200, $this->settings($old)->status, 'documented: a session with no fingerprint is adopted when first seen, after the change as well');
+        $this->assertSame(403, $this->settings($stolen)->status, 'it cannot say it came after the last change of the password, so it is over');
+    }
+
+    public function testAnEndedSessionLeavesTheBrowserWithAFreshSessionAMessageAndALoginFormThatWorks(): void
+    {
+        $this->registerUser('ada');
+        $old = $this->loginCookie('ada', self::PASSWORD);
+        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->setPassword("a-new-passphrase-77"); $u->save(true); return true;');
+
+        $page = $this->site()->request('GET', 'session/login', ['Cookie' => $old]);
+        $fresh = self::sessionCookie($page);
+
+        $this->assertSame(200, $page->status);
+        $this->assertNotSame($old, $fresh, 'a new session');
+        $this->assertStringContainsString('Your password was changed, so you have been signed out here. Please sign in again.', \Tests\Acceptance\Browser::text($page->body));
+        $login = $this->site()->request('POST', 'session/login', ['Cookie' => $fresh], self::formToken($page->body, 'session/login') + ['email' => 'ada', 'password' => 'a-new-passphrase-77']);
+        $this->assertSame(302, $login->status);
+        $this->assertSame(200, $this->settings(self::sessionCookieOrNull($login) ?? $fresh)->status, 'the form of the page the old browser landed on logs in');
+        $again = $this->site()->request('GET', 'session/login', ['Cookie' => $old]);
+        $this->assertStringNotContainsString('Your password was changed', \Tests\Acceptance\Browser::text($this->site()->request('GET', '', ['Cookie' => self::sessionCookie($again)])->body), 'the message is shown once');
+    }
+
+    public function testAnAutosaveAfterAChangeOfPasswordDoesNotRevertIt(): void
+    {
+        $a = $this->registerUser('ada');
+        $b = $this->loginCookie('ada', self::PASSWORD);
+        $page = $this->settings($b);
+        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->setPassword("a-new-passphrase-77"); $u->save(true); return true;');
+
+        $this->site()->request('POST', 'autosave', ['Cookie' => $a, 'X-Requested-With' => 'XMLHttpRequest'], ['context' => 'status', 'elements' => ['body' => 'a draft']]);
+
+        $this->assertSame(403, $this->settings($a)->status, 'the session that did not change the password is over');
+        $this->assertNotSame('', $this->loginCookie('ada', 'a-new-passphrase-77'), 'and the new password still works');
+        $this->assertNotSame('', $page->body);
     }
 
     public function testTheHashUpgradeAtLoginDoesNotEndTheOtherSessions(): void
@@ -121,7 +145,7 @@ final class PasswordChangeEndsOtherSessionsTest extends PrivateSiteTestCase
         $key = $this->apiKeyOf('ada');
         $page = $this->settings($cookie);
         $this->site()->request('POST', 'account/settings/', ['Cookie' => $cookie, 'Referer' => $this->baseUrl() . 'account/settings/'], self::formToken($page->body, 'account/settings/') + [
-            'name' => 'Ada', 'email' => 'ada@example.com', 'password' => self::NEW_PASSWORD,
+            'name' => 'Ada', 'email' => 'ada@example.com', 'current_password' => self::PASSWORD, 'password' => self::NEW_PASSWORD,
         ]);
 
         $response = $this->site()->request('GET', 'currentUser?_t=json', self::signedHeadersFor('ada', $key, '/currentUser?_t=json'));
@@ -177,11 +201,20 @@ final class PasswordChangeEndsOtherSessionsTest extends PrivateSiteTestCase
         return (string) \Idno\Core\Idno::site()->config()->sessionname . '=' . $id;
     }
 
+    private function addUserWithoutMarker(string $handle): void
+    {
+        $hash = (new \Idno\Security\Passwords())->hash(self::PASSWORD);
+        $this->runInSite(
+            '$u = new \Idno\Entities\User(); $u->handle = ' . $this->literal($handle) . '; $u->email = ' . $this->literal($handle . '@example.com')
+            . '; $u->setTitle("Old"); $u->setPasswordHash(' . $this->literal($hash) . '); $u->save(true); return true;'
+        );
+    }
+
     private function setStoredHash(string $handle, string $password, int $cost): void
     {
         $this->runInSite('
             $user = \Idno\Entities\User::getByHandle(' . $this->literal($handle) . ');
-            $user->password = password_hash(' . $this->literal($password) . ', PASSWORD_BCRYPT, ["cost" => ' . $cost . ']);
+            $user->setPasswordHash(password_hash(' . $this->literal($password) . ', PASSWORD_BCRYPT, ["cost" => ' . $cost . ']));
             $user->save(true);
             return true;
         ');

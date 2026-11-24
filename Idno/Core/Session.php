@@ -164,7 +164,9 @@ namespace Idno\Core {
 
                     // The session that makes a change of the password keeps itself logged in: it takes the new marker
                     // (any other session of the user carries the old one, and ends at its next request).
-                    if (!$this->apiRequest && !empty($_SESSION['user_uuid'])) {
+                    // Only when THIS object changed it: a save of a stale object (an autosave) writes the stored marker, and
+                    // a session that did not change the password must not take the new fingerprint with it.
+                    if (!$this->apiRequest && !empty($_SESSION['user_uuid']) && $object->hasUnsavedPasswordChange()) {
                         $_SESSION[self::PASSWORD_FINGERPRINT] = $this->passwordFingerprint($object);
                     }
 
@@ -184,6 +186,17 @@ namespace Idno\Core {
                     }
                 }
             );
+        }
+
+        /**
+         * A value taken from a request, for a log line: control characters replaced and at most 200 bytes.
+         *
+         * @param  mixed $value
+         * @return string
+         */
+        private static function forLog($value)
+        {
+            return substr((string)preg_replace('/[\x00-\x1F\x7F]/', '?', (string)$value), 0, 200);
         }
 
         /**
@@ -629,7 +642,7 @@ namespace Idno\Core {
                     $user = \Idno\Entities\User::getByEmail($apiUsername);
                 }
                 if (!empty($user)) {
-                    \Idno\Core\Idno::site()->logging()->debug("API auth found user by username: {$apiUsername} - " . $user->getName());
+                    \Idno\Core\Idno::site()->logging()->debug("API auth found user by username: " . self::forLog($apiUsername) . " - " . $user->getName());
 
                     $key  = $user->getAPIkey();
 
@@ -643,7 +656,7 @@ namespace Idno\Core {
                         \Idno\Core\Idno::site()->logging()->debug("Please read http://docs.idno.co/en/latest/developers/plugins/api/ for further details.");
                     }
                 } else {
-                    \Idno\Core\Idno::site()->logging()->debug("API User given in X_IDNO_USERNAME ('{$apiUsername}') could not be found.");
+                    \Idno\Core\Idno::site()->logging()->debug("API User given in X_IDNO_USERNAME ('" . self::forLog($apiUsername) . "') could not be found.");
                 }
             }
 
@@ -665,7 +678,7 @@ namespace Idno\Core {
                         $ip      = trim($proxies[0]);
                     }
 
-                    \Idno\Core\Idno::site()->logging()->error("API Login failure from $ip");
+                    \Idno\Core\Idno::site()->logging()->error("API Login failure from " . self::forLog($ip));
                 }
             }
 
@@ -747,6 +760,11 @@ namespace Idno\Core {
                     return $user;
                 }
 
+                // A user put into the session by this call (a plugin's login) carries their fingerprint with them: the
+                // session would otherwise be ended at its next request.
+                if (($_SESSION['user_uuid'] ?? null) !== $user->getUUID()) {
+                    $_SESSION[self::PASSWORD_FINGERPRINT] = $this->passwordFingerprint($user);
+                }
                 $_SESSION['user_uuid'] = $user->getUUID();
                 $this->user            = $user;
 
@@ -768,6 +786,12 @@ namespace Idno\Core {
         {
             $current = $this->passwordFingerprint($user);
             if (!isset($_SESSION[self::PASSWORD_FINGERPRINT]) || !is_string($_SESSION[self::PASSWORD_FINGERPRINT])) {
+                // A session made before sessions had a fingerprint can only be told from one made after the password changed
+                // when the user has no marker yet (no real change since): then it is adopted. A user who has a marker has
+                // changed the password, and a session that cannot say it came after is ended.
+                if ((string)$user->password_generation !== '') {
+                    return false;
+                }
                 $_SESSION[self::PASSWORD_FINGERPRINT] = $current;
 
                 return true;
@@ -785,9 +809,13 @@ namespace Idno\Core {
                 if ($this->user = User::getByUUID($_SESSION['user_uuid'])) {
                     if (\Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
                         $this->logUserOff();
+                        $this->startNewSession(); // a session of the visitor's own, with a form token that later requests accept
                     } else if (!$this->checkPasswordFingerprint($this->user)) {
-                        // The password was changed since this session was made: it is over, as a logout ends it.
+                        // The password was changed since this session was made: it is over, as a logout ends it, and the
+                        // visitor is told on the page they land on.
                         $this->logUserOff();
+                        $this->startNewSession();
+                        $this->addMessage(\Idno\Core\Idno::site()->language()->_("Your password was changed, so you have been signed out here. Please sign in again."));
                     }
                 }
             } else if ($this->isLoggedIn()) {

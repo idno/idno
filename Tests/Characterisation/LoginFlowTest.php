@@ -270,6 +270,20 @@ final class LoginFlowTest extends PrivateSiteTestCase
         $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $new])->status);
     }
 
+    public function testALogoutBySignedRequestLeavesTheCarriedBrowserSessionWithoutAMessage(): void
+    {
+        $this->registerUser('ada');
+        $this->addUser('grace');
+        $grace = $this->loginCookie('grace', self::PASSWORD);
+
+        $response = $this->site()->request('POST', 'session/logout', self::signedHeadersFor('ada', $this->apiKeyOf('ada'), '/session/logout') + ['Cookie' => $grace, 'Referer' => $this->baseUrl()], []);
+
+        $this->assertContains($response->status, [200, 302]);
+        $page = $this->site()->request('GET', '', ['Cookie' => $grace]);
+        $this->assertStringNotContainsString('signed out', Browser::text($page->body), 'the message of a logout that was not grace\'s');
+        $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => $grace])->status, 'and grace is still signed in');
+    }
+
     public function testLogoutWithoutTokenDoesNothing(): void
     {
         $cookie = $this->registerUser('ada');

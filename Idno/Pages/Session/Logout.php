@@ -25,7 +25,10 @@ namespace Idno\Pages\Session {
             // The old session is gone (its data, its user, its form token and its id); the message waits in a new one, which
             // the page the visitor lands on shows.
             $session->startNewSession();
-            $session->addMessage(\Idno\Core\Idno::site()->language()->_("You've signed out. See you soon!"));
+            // (a signed request has no session of its own to tell, and could land the message in a browser session it carried)
+            if (!$session->isAPIRequest()) {
+                $session->addMessage(\Idno\Core\Idno::site()->language()->_("You've signed out. See you soon!"));
+            }
             $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
 
             return $result;

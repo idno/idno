@@ -37,7 +37,7 @@ final class LoginThrottlingTest extends PrivateSiteTestCase
     public function testTheLoginNameIsTheKeyNotTheCase(): void
     {
         $this->registerUser('ada');
-        foreach (['ada', 'ADA', ' Ada ', 'aDa', 'ada'] as $typed) {
+        foreach (['ada', 'ADA', 'Ada', 'aDa', 'ada'] as $typed) {
             $this->attempt($typed, 'not the password');
         }
 
@@ -72,11 +72,77 @@ final class LoginThrottlingTest extends PrivateSiteTestCase
         }
 
         [, $unknown] = $this->attempt('nobody-here', self::PASSWORD);
-        [, $adaByEmail] = $this->attempt('ada@example.com', 'not the password');
+        [, $adaByEmail] = $this->attempt('ada@example.com', self::PASSWORD);
 
         $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($unknown->body), 'the same message for a name nobody has');
-        $this->assertStringNotContainsString('Too many failed sign-in attempts', Browser::text($adaByEmail->body), 'an email address is another login name than the handle');
+        $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($adaByEmail->body), 'the handle and the email address of one account share a count');
         $this->assertNotSame('', $this->loginCookie('grace', self::PASSWORD));
+    }
+
+    public function testAnAccountsSpellingsShareOneCountOnADatabaseThatFoldsAccentsAndCase(): void
+    {
+        if (!in_array(\Idno\Storage\ConnectionParameters::driverFamily(\Idno\Core\Idno::container()->get(\Idno\Config\BootConfig::class)->all()), ['mysql'], true)) {
+            $this->markTestSkipped('Only MySQL and MariaDB compare handles ignoring accents and case.');
+        }
+        $this->registerUser('ben');
+        for ($i = 0; $i < 5; $i++) {
+            $this->attempt('ben', 'not the password');
+        }
+
+        foreach (["b\u{e9}n", "B\u{ca}N", 'BEN', 'ben@example.com'] as $spelling) {
+            [, $page] = $this->attempt($spelling, self::PASSWORD);
+            $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($page->body), $spelling);
+        }
+    }
+
+    public function testAnUnknownNameIsFoldedForTheCount(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->attempt($i % 2 === 0 ? 'Nobody' : ' NOBODY ', 'x');
+        }
+
+        [, $page] = $this->attempt('nobody', 'x');
+
+        $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($page->body));
+    }
+
+    public function testAParallelBurstCannotGetMoreGuessesThanTheLimit(): void
+    {
+        $this->registerUser('ada');
+        $form = $this->site()->request('GET', 'session/login');
+        $cookie = self::sessionCookie($form);
+        $fields = self::formToken($form->body, 'session/login') + ['email' => 'ada', 'password' => 'not the password'];
+        $accepted = 0;
+
+        // The attempt is reserved before the password is checked: after five, none is checked, whatever is in flight.
+        for ($i = 0; $i < 9; $i++) {
+            $post = $this->site()->request('POST', 'session/login', ['Cookie' => $cookie], $fields);
+            $page = $this->site()->request('GET', substr((string) $post->header('Location'), strlen($this->baseUrl())), ['Cookie' => self::sessionCookieOrNull($post) ?? $cookie]);
+            $accepted += str_contains(Browser::text($page->body), "That username or password isn't right") ? 1 : 0;
+        }
+
+        $this->assertSame(5, $accepted);
+    }
+
+    public function testAPasswordResetClearsTheAccountsCount(): void
+    {
+        $this->registerUser('ada');
+        for ($i = 0; $i < 5; $i++) {
+            $this->attempt('ada', 'not the password');
+        }
+        [, $locked] = $this->attempt('ada', self::PASSWORD);
+        $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($locked->body));
+
+        $form = $this->site()->request('GET', 'account/password/');
+        $this->site()->request('POST', 'account/password/', ['Cookie' => self::sessionCookie($form)], self::formToken($form->body, 'account/password') + ['email' => 'ada@example.com']);
+        $mine = array_values(array_filter($this->site()->request('GET', '_test/mail/log')->json(), static fn (array $m): bool => str_contains(json_encode($m['to'] ?? []), 'ada@example.com')));
+        $this->assertSame(1, preg_match('#account/password/reset/\?email=[^&\s"]+&code=([0-9a-f]+)#', (string) end($mine)['text'], $m));
+        $page = $this->site()->request('GET', 'account/password/reset/?email=' . rawurlencode('ada@example.com') . '&code=' . $m[1]);
+        $this->site()->request('POST', 'account/password/reset', ['Cookie' => self::sessionCookie($page)], self::formToken($page->body, 'account/password/reset') + [
+            'email' => 'ada@example.com', 'code' => $m[1], 'password' => 'a-new-passphrase-77', 'password2' => 'a-new-passphrase-77',
+        ]);
+
+        $this->assertNotSame('', $this->loginCookie('ada', 'a-new-passphrase-77'), 'the member signs in at once');
     }
 
     public function testJsonLoginIsThrottledToo(): void

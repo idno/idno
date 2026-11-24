@@ -41,7 +41,7 @@ final class PasswordCompatibilityTest extends PrivateSiteTestCase
     public function testALegacyHashLogsInOverHttpIsUpgradedOnceAndLogsInAgain(string $typed, string $legacyHash, bool $onlyLegacyVerifies): void
     {
         $this->addUser('ada', 'placeholder-words-1');
-        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->password = ' . $this->literal($legacyHash) . '; $u->save(true); return true;');
+        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->setPasswordHash(' . $this->literal($legacyHash) . '); $u->save(true); return true;');
 
         // Before the upgrade: the member logs in with the password as typed.
         $this->loginCookie('ada', $typed);
@@ -99,7 +99,7 @@ final class PasswordCompatibilityTest extends PrivateSiteTestCase
         $legacy = password_hash('correct-horse-battery-9', PASSWORD_BCRYPT, ['cost' => 10]);
         $result = $this->runInSite(
             '$u = new class extends \Idno\Entities\User { function save($overrideAccess = true) { throw new \RuntimeException("the database is gone"); } };
-            $u->password = ' . $this->literal($legacy) . ';
+            $u->setPasswordHash(' . $this->literal($legacy) . ');
             return ["ok" => $u->checkPassword("correct-horse-battery-9"), "wrong" => $u->checkPassword("nope")];'
         );
 
@@ -111,7 +111,7 @@ final class PasswordCompatibilityTest extends PrivateSiteTestCase
         // The ActivityPub and StandardSiteSync `updated` hooks ignore a User; the upgrade stores through save(true), as a
         // password change does, so it adds no kind of event beyond what that already fires.
         $this->addUser('ada', 'placeholder-words-1');
-        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->password = ' . $this->literal(password_hash('x-words-12345', PASSWORD_BCRYPT, ['cost' => 10])) . '; $u->save(true); return true;');
+        $this->runInSite('$u = \Idno\Entities\User::getByHandle("ada"); $u->setPasswordHash(' . $this->literal(password_hash('x-words-12345', PASSWORD_BCRYPT, ['cost' => 10])) . '); $u->save(true); return true;');
         $count = $this->runInSite(
             '$n = 0; \Idno\Core\Idno::site()->events()->addListener("syndicate", function () use (&$n) { $n++; });
             \Idno\Core\Idno::site()->events()->addListener("webmention/send", function () use (&$n) { $n++; });

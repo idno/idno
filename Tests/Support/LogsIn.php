@@ -34,7 +34,7 @@ trait LogsIn
         $password = bin2hex(random_bytes(12));
         // Not setPassword(): that is a change of the password, which ends the user's other sessions, and a test that logs
         // one user in twice means two live sessions.
-        $user->password = (new \Idno\Security\Passwords())->hash($password);
+        $user->setPasswordHash((new \Idno\Security\Passwords())->hash($password));
         $user->save(true);
 
         return $this->loginCookie($user->handle, $password);

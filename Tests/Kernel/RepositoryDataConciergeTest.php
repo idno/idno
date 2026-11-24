@@ -1203,7 +1203,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             foreach (array_filter($sessions) as $sessionId) {
                 $this->deleteSession($sessionId);
             }
-            $user->password = $previousPassword;
+            $user->setPasswordHash((string) $previousPassword);
             $user->save(true);
         }
     }

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-24 19:32+0000\n"
+"POT-Creation-Date: 2026-11-24 20:22+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -37,11 +37,11 @@ msgstr ""
 msgid "Couldn't say anything about execution, probably something went wrong"
 msgstr ""
 
-#: ./Idno/Common/Page.php:781
+#: ./Idno/Common/Page.php:778
 msgid "This content isn't here."
 msgstr ""
 
-#: ./Idno/Common/Page.php:797
+#: ./Idno/Common/Page.php:791
 msgid "This page can't be found."
 msgstr ""
 
@@ -94,8 +94,12 @@ msgstr ""
 msgid "No result from endpoint."
 msgstr ""
 
-#: ./Idno/Core/Session.php:649
+#: ./Idno/Core/Session.php:671
 msgid "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"
+msgstr ""
+
+#: ./Idno/Core/Session.php:818
+msgid "Your password was changed, so you have been signed out here. Please sign in again."
 msgstr ""
 
 #: ./Idno/Core/Themes.php:115
@@ -214,15 +218,15 @@ msgid "Reset password"
 msgstr ""
 
 #: ./Idno/Pages/Account/Password/Reset.php:38
-#: ./Idno/Pages/Account/Password/Reset.php:69
+#: ./Idno/Pages/Account/Password/Reset.php:71
 msgid "The password reset code wasn't valid. They expire after three hours, so you might need to try again."
 msgstr ""
 
-#: ./Idno/Pages/Account/Password/Reset.php:62
+#: ./Idno/Pages/Account/Password/Reset.php:64
 msgid "Your password was reset!"
 msgstr ""
 
-#: ./Idno/Pages/Account/Password/Reset.php:72
+#: ./Idno/Pages/Account/Password/Reset.php:74
 msgid "Sorry, your passwords either don't match, or are too weak"
 msgstr ""
 
@@ -295,19 +299,28 @@ msgstr ""
 msgid "Account settings"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings.php:50
+#: ./Idno/Pages/Account/Settings.php:45
+#: ./Idno/Pages/Session/Login.php:81
+msgid "Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:51
+msgid "Your current password isn't right, so nothing was changed. Please enter it to change your email address or password."
+msgstr ""
+
+#: ./Idno/Pages/Account/Settings.php:71
 msgid "Someone is already using %s as their email address."
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings.php:56
+#: ./Idno/Pages/Account/Settings.php:77
 msgid "Your password has been updated."
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings.php:59
+#: ./Idno/Pages/Account/Settings.php:80
 msgid "Sorry, your password is too weak"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings.php:66
+#: ./Idno/Pages/Account/Settings.php:87
 msgid "Your details were saved."
 msgstr ""
 
@@ -739,16 +752,12 @@ msgstr ""
 msgid "Sign in"
 msgstr ""
 
-#: ./Idno/Pages/Session/Login.php:72
-msgid "Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."
-msgstr ""
-
-#: ./Idno/Pages/Session/Login.php:96
-#: ./Idno/Pages/Session/Login.php:102
+#: ./Idno/Pages/Session/Login.php:93
+#: ./Idno/Pages/Session/Login.php:105
 msgid "Oops! That username or password isn't right. Please try again."
 msgstr ""
 
-#: ./Idno/Pages/Session/Logout.php:28
+#: ./Idno/Pages/Session/Logout.php:30
 msgid "You've signed out. See you soon!"
 msgstr ""
 
@@ -851,9 +860,8 @@ msgid "Your email address or username"
 msgstr ""
 
 #: ./templates/classic/account/login.tpl.php:17
-#: ./templates/classic/account/settings.tpl.php:55
+#: ./templates/classic/account/settings.tpl.php:68
 #: ./templates/default/account/login.html.twig:16
-#: ./templates/default/account/settings.html.twig:24
 msgid "Password"
 msgstr ""
 
@@ -912,32 +920,46 @@ msgstr ""
 
 #: ./templates/classic/account/settings.tpl.php:51
 #: ./templates/default/account/settings.html.twig:23
-msgid "Your password"
+msgid "Your current password"
+msgstr ""
+
+#: ./templates/classic/account/settings.tpl.php:55
+#: ./templates/default/account/settings.html.twig:24
+msgid "Current password"
 msgstr ""
 
 #: ./templates/classic/account/settings.tpl.php:58
 #: ./templates/default/account/settings.html.twig:25
-msgid "Leave this blank if you don't want to change it."
+msgid "Needed to change your email address or your password."
 msgstr ""
 
 #: ./templates/classic/account/settings.tpl.php:64
-#: ./templates/default/account/settings.html.twig:29
+msgid "Your password"
+msgstr ""
+
+#: ./templates/classic/account/settings.tpl.php:71
+#: ./templates/default/account/settings.html.twig:31
+msgid "Leave this blank if you don't want to change it."
+msgstr ""
+
+#: ./templates/classic/account/settings.tpl.php:77
+#: ./templates/default/account/settings.html.twig:35
 msgid "Your timezone"
 msgstr ""
 
-#: ./templates/classic/account/settings.tpl.php:74
-#: ./templates/default/account/settings.html.twig:35
+#: ./templates/classic/account/settings.tpl.php:87
+#: ./templates/default/account/settings.html.twig:41
 msgid "Timezone"
 msgstr ""
 
-#: ./templates/classic/account/settings.tpl.php:80
-#: ./templates/default/account/settings.html.twig:38
+#: ./templates/classic/account/settings.tpl.php:93
+#: ./templates/default/account/settings.html.twig:44
 msgid "Specify your timezone."
 msgstr ""
 
-#: ./templates/classic/account/settings.tpl.php:85
+#: ./templates/classic/account/settings.tpl.php:98
 #: ./templates/classic/admin/home.tpl.php:296
-#: ./templates/default/account/settings.html.twig:42
+#: ./templates/default/account/settings.html.twig:48
 #: ./templates/default/admin/home.html.twig:139
 msgid "Save updates"
 msgstr ""
@@ -2123,6 +2145,14 @@ msgstr ""
 
 #: ./templates/default/account/register.html.twig:49
 msgid "Create Account"
+msgstr ""
+
+#: ./templates/default/account/settings.html.twig:29
+msgid "Your new password"
+msgstr ""
+
+#: ./templates/default/account/settings.html.twig:30
+msgid "New password"
 msgstr ""
 
 #: ./templates/default/account/settings/feedback.html.twig:5

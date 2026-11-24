@@ -137,7 +137,7 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $page = $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie]);
 
         $post = $this->site()->request('POST', 'account/settings/', ['Cookie' => $cookie, 'Referer' => $this->baseUrl() . 'account/settings/'], self::formToken($page->body, 'account/settings/') + [
-            'name' => 'Ada', 'email' => 'ada@example.com', 'password' => 'a-new-passphrase-77',
+            'name' => 'Ada', 'email' => 'ada@example.com', 'current_password' => self::PASSWORD, 'password' => 'a-new-passphrase-77',
         ]);
         $cookie = self::sessionCookieOrNull($post) ?? $cookie;
 

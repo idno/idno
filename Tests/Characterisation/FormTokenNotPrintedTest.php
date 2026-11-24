@@ -48,6 +48,19 @@ final class FormTokenNotPrintedTest extends PrivateSiteTestCase
         $this->assertArrayNotHasKey('csrf', $json);
     }
 
+    public function testTheSettingsShellAnsweredToAJsonpRequestIsHtmlAndNeverASniffableScript(): void
+    {
+        $cookie = $this->registerUser('ada');
+
+        foreach (['account/settings/', 'account', 'admin', 'admin/email/'] as $path) {
+            $response = $this->site()->request('GET', $path . '?_t=jsonp&callback=steal', ['Cookie' => $cookie]);
+
+            $this->assertSame('text/html; charset=utf-8', strtolower((string) $response->header('Content-Type')), $path);
+            $this->assertSame('nosniff', strtolower((string) $response->header('X-Content-Type-Options')), $path);
+            $this->assertStringStartsNotWith('steal(', $response->body, $path);
+        }
+    }
+
     public function testAJsonpCallerGetsNoToken(): void
     {
         $cookie = $this->registerUser('ada');

@@ -12,6 +12,13 @@
             "id": "inputEmail",
             "description": "Your email address"
         },
+        "current_password": {
+            "type": "password",
+            "name": "current_password",
+            "id": "inputCurrentPassword",
+            "autocomplete": "off",
+            "description": "Current password"
+        },
         "password": {
             "type": "password",
             "name": "password",

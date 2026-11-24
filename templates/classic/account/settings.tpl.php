@@ -48,6 +48,19 @@
 
             <div class="form-group">
                 <div class="col-md-3">
+                    <label class="control-label" for="inputCurrentPassword"><?php echo \Idno\Core\Idno::site()->language()->_('Your current password'); ?><br>
+                    </label>
+                </div>
+                <div class="col-md-4">
+                    <?php echo $this->__(['id' => 'inputCurrentPassword', 'class' => 'input col-md-4 form-control', 'name' => 'current_password', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Current password'), 'autocomplete' => 'current-password', 'value' => ''])->draw('forms/input/password'); ?>
+                </div>
+                <div class="col-md-5 config-desc">
+                    <?php echo \Idno\Core\Idno::site()->language()->_('Needed to change your email address or your password.'); ?>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="col-md-3">
                     <label class="control-label" for="inputPassword"><?php echo \Idno\Core\Idno::site()->language()->_('Your password'); ?><br>
                     </label>
                 </div>

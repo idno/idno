@@ -21,10 +21,18 @@ placeholder="Your email address"     value="ada@example.com"
 <p class="idno-form-help">Used for account recovery and communications.</p>
 </div>
 <div class="idno-form-group">
-<label for="inputPassword">Your password</label>
+<label for="inputCurrentPassword">Your current password</label>
 <input
-type="password" name="password" id="inputPassword" autocomplete="off"     class="idno-input idno-input"
-placeholder="Password"     value=""
+type="password" name="current_password" id="inputCurrentPassword" autocomplete="current-password"     class="idno-input idno-input"
+placeholder="Current password"     value=""
+    />
+<p class="idno-form-help">Needed to change your email address or your password.</p>
+</div>
+<div class="idno-form-group">
+<label for="inputPassword">Your new password</label>
+<input
+type="password" name="password" id="inputPassword" autocomplete="new-password"     class="idno-input idno-input"
+placeholder="New password"     value=""
     />
 <p class="idno-form-help">Leave this blank if you don&#039;t want to change it.</p>
 </div>

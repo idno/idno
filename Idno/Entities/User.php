@@ -24,6 +24,22 @@ namespace Idno\Entities {
          * they don't have owners
          */
 
+        /**
+         * Whether this object changed the password's hash (setPassword(), setPasswordHash(), the upgrade of a hash in checkPassword())
+         * since it was loaded or last saved: only then does a save write the hash. Not stored (a PHP property, not an attribute).
+         *
+         * @var bool
+         */
+        private $passwordHashChanged = false;
+
+        /**
+         * Whether this object changed the password itself (setPassword()), and so the marker that the user's sessions are
+         * bound to: only then does a save write the marker.
+         *
+         * @var bool
+         */
+        private $passwordMarkerChanged = false;
+
         function __construct()
         {
 
@@ -581,10 +597,12 @@ namespace Idno\Entities {
             if (!empty($password)) {
                 try {
                     $this->password = self::passwords()->hash((string)$password);
+                    $this->passwordHashChanged = true;
                     // A real change of the password: the marker that the sessions of the user are bound to
                     // (see Session::passwordFingerprint()). The replacement of a hash of the same password by a new one
                     // (checkPassword()) leaves it alone.
                     $this->password_generation = bin2hex(random_bytes(16));
+                    $this->passwordMarkerChanged = true;
                 } catch (\InvalidArgumentException $e) {
                     // Empty once trimmed, or longer than the hasher accepts
                     return false;
@@ -594,6 +612,32 @@ namespace Idno\Entities {
             }
 
             return false;
+        }
+
+        /**
+         * Stores a ready-made hash of the user's password (an import, a migration): the password is not changed, so no marker
+         * is written and no session of the user ends. A save writes it, as it writes the hash setPassword() makes.
+         *
+         * @param  string $hash
+         * @return true
+         */
+        function setPasswordHash($hash)
+        {
+            $this->password = (string)$hash;
+            $this->passwordHashChanged = true;
+
+            return true;
+        }
+
+        /**
+         * Whether this object has changed the user's password and not yet saved it: a save of it is the change of the password
+         * (the session that makes it takes the new fingerprint).
+         *
+         * @return bool
+         */
+        function hasUnsavedPasswordChange()
+        {
+            return $this->passwordMarkerChanged;
         }
 
         /**
@@ -617,6 +661,7 @@ namespace Idno\Entities {
             if ($result !== $current) {
                 try {
                     $this->password = $result;
+                    $this->passwordHashChanged = true;
                     $this->save(true);
                 } catch (\Throwable $e) {
                     \error_log('Idno: could not store a password hash that was upgraded: ' . get_class($e));
@@ -1141,7 +1186,28 @@ namespace Idno\Entities {
          */
         function save($overrideAccess = true)
         {
-            return parent::save($overrideAccess);
+            // Entity::save() writes the whole document, so an object loaded before another request changed the password (an
+            // autosave, a settings form) would write the OLD hash and marker back. The hash and the marker are written only
+            // when THIS object changed them; otherwise an existing user takes both from the stored record, just before it is
+            // written (one read for each save of a user, never for a request). A new user has no stored record.
+            if (!empty($this->_id) && !($this->passwordHashChanged && $this->passwordMarkerChanged)) {
+                $stored = \Idno\Core\Idno::site()->db()->getRecord($this->_id);
+                if (is_array($stored)) {
+                    if (!$this->passwordHashChanged) {
+                        $this->password = $stored['password'] ?? null;
+                    }
+                    if (!$this->passwordMarkerChanged) {
+                        $this->password_generation = $stored['password_generation'] ?? null;
+                    }
+                }
+            }
+            $result = parent::save($overrideAccess);
+            if ($result) {
+                $this->passwordHashChanged   = false;
+                $this->passwordMarkerChanged = false;
+            }
+
+            return $result;
         }
 
         /**
