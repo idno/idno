@@ -172,18 +172,7 @@ namespace Idno\Core {
          */
         function drawPage($echo = true, $shell = 'shell')
         {
-            // Detect page, and see if we need to use a different shell. The override is for web pages: JSON, a feed or any other type
-            // has the shell of its own type. JSONP keeps the override, as it always had: its shell is a script that any site can load, and
-            // these pages hold the account's and the site's settings, so they are never drawn as one.
-            if (in_array(strtolower((string) $this->getTemplateType()), ['default', 'jsonp'], true)) {
-                foreach ($this->url_shell_overrides as $url => $page_shell) {
-
-                    if (strpos(\Idno\Core\Idno::site()->currentPage()->currentUrl(), \Idno\Core\Idno::site()->config()->getDisplayURL() . $url.'/') === 0) {
-                        $shell = $page_shell;
-                    }
-
-                }
-            }
+            $shell = $this->shellForPage($shell);
 
             // Get messages and flush session
             $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
@@ -195,6 +184,39 @@ namespace Idno\Core {
 
             return parent::drawPage($echo, $shell);
 
+        }
+
+        /**
+         * Draws the page in its shell as drawPage() does, but with none of its side effects: the session's messages are
+         * neither shown nor used up, the session is left open and no header is sent. For a caller that makes a Response
+         * of its own (a controller's 403 page).
+         */
+        function drawPageWithoutSideEffects($echo = true, $shell = 'shell')
+        {
+            $shell = $this->shellForPage($shell);
+            $this->messages = [];
+
+            return parent::drawPage($echo, $shell);
+        }
+
+        /**
+         * The shell a page is drawn in: the override is for web pages: JSON, a feed or any other type has the shell of its own
+         * type. JSONP keeps the override, as it always had: its shell is a script that any site can load, and these pages hold
+         * the account's and the site's settings, so they are never drawn as one.
+         */
+        private function shellForPage($shell)
+        {
+            if (in_array(strtolower((string) $this->getTemplateType()), ['default', 'jsonp'], true)) {
+                foreach ($this->url_shell_overrides as $url => $page_shell) {
+
+                    if (strpos(\Idno\Core\Idno::site()->currentPage()->currentUrl(), \Idno\Core\Idno::site()->config()->getDisplayURL() . $url.'/') === 0) {
+                        $shell = $page_shell;
+                    }
+
+                }
+            }
+
+            return $shell;
         }
 
         /**

@@ -195,6 +195,23 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $this->assertNoLoginPlanted($response);
     }
 
+    public function testASignedRequestThatCarriesAnotherMembersCookieLeavesThatSessionIntactAndPlantsNoLogin(): void
+    {
+        $cookie = $this->registerUser('ada');
+        $this->addUser('bob');
+        $key = $this->apiKeyOf('bob');
+
+        $response = $this->site()->request('POST', 'autosave', self::signedHeadersFor('bob', $key, '/autosave') + ['Cookie' => $cookie], ['context' => 'status', 'elements' => ['body' => 'by bob']]);
+
+        $this->assertSame(200, $response->status, substr($response->body, 0, 300));
+        $this->assertSame(['status' => ['body' => 'by bob']], $this->runInSite('$u = \Idno\Entities\User::getByHandle(\'bob\'); return $u->autosave;'), 'acted as bob');
+        $this->assertNull($this->runInSite('$u = \Idno\Entities\User::getByHandle(\'ada\'); return $u->autosave ?: null;'), 'and not as ada');
+        $this->assertNoLoginPlanted($response);
+        $who = $this->site()->request('GET', '_test/whoami', ['Cookie' => $cookie])->json();
+        $this->assertSame('ada', $who['handle'], 'the carried session still holds ada, and only ada');
+        $this->assertFalse($who['stateless']);
+    }
+
     public function testAnApiRequestThatForwardsLeavesNoLoginBehindEither(): void
     {
         $this->registerUser('ada');
@@ -210,8 +227,7 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
     /**
      * Every session cookie a response sets (a request that starts a session and ends it may set two: the new id, then
      * the deletion of it) must be of no use as a login. A response that sets none is as good. The test says so by
-     * what it sees: when the site accepts one as a login the test is marked incomplete (the wanted behaviour is
-     * that none does).
+     * what it sees: a cookie the site accepts as a login fails the test.
      */
     private function assertNoLoginPlanted(SiteResponse $response): void
     {
@@ -220,7 +236,7 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $values = array_values(array_filter($m[1], static fn (string $value): bool => $value !== 'deleted'));
         foreach ($values as $value) {
             if ($this->site()->request('GET', 'account/settings/', ['Cookie' => $name . '=' . $value])->status === 200) {
-                $this->markTestIncomplete('A signed request leaves a session cookie that logs the signed user on: ' . $name . '=' . $value);
+                $this->fail('A signed request leaves a session cookie that logs the signed user on: ' . $name . '=' . $value);
             }
             $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $name . '=' . $value])->status);
         }

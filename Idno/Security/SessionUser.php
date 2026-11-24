@@ -46,6 +46,6 @@ final class SessionUser implements UserInterface
      */
     public function getRoles(): array
     {
-        return $this->admin ? ['ROLE_USER', 'ROLE_ADMIN'] : ['ROLE_USER'];
+        return $this->admin && !$this->stateless ? ['ROLE_USER', 'ROLE_ADMIN'] : ['ROLE_USER'];
     }
 }

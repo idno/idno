@@ -13,7 +13,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
         {
             // An access token counts here and at no other page
             \IdnoPlugins\IndiePub\Main::authenticate();
-            if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {
+            if (!\Idno\Core\Idno::site()->session()->isAPIRequest() || !\Idno\Core\Idno::site()->session()->isLoggedIn()) {
                 $this->error(401, 'unauthorized', 'A valid access token is required');
             }
             $this->gatekeeper();
@@ -62,7 +62,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             // enough, because a browser also sends it with requests made by other sites.
             // An access token counts here and at no other page.
             \IdnoPlugins\IndiePub\Main::authenticate();
-            if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {
+            if (!\Idno\Core\Idno::site()->session()->isAPIRequest() || !\Idno\Core\Idno::site()->session()->isLoggedIn()) {
                 $this->error(401, 'unauthorized', 'A valid access token is required');
             }
             $this->gatekeeper();

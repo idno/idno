@@ -36,6 +36,26 @@ namespace Idno\Core {
 
         private $deprecationLogged = false;
 
+        /**
+         * Whether this request started the session it runs in (it carried no session cookie, or one for a session that does
+         * not exist): only such a session is destroyed when an API request ends. The anonymous session of a browser that
+         * carried its cookie (a message waiting for it, a login half done) is not ours to destroy.
+         *
+         * @var bool
+         */
+        private $sessionStartedHere = false;
+
+        /**
+         * The user the browser session held when the request's authentication began or, once tryAuthUser() has finished,
+         * when it ended (null: nobody). A plugin that logs a user on and only then calls setIsAPIRequest() is put right
+         * against it (see setIsAPIRequest()).
+         *
+         * @var string|null
+         */
+        private $sessionUserAtAuth = null;
+
+        private $authFinished = false;
+
         function init()
         {
             ini_set('session.cookie_lifetime', 60 * 60 * 24 * 7); // Persistent cookies
@@ -92,6 +112,8 @@ namespace Idno\Core {
 
             session_name(Idno::site()->config()->sessionname);
             session_start();
+            $carried = $_COOKIE[session_name()] ?? null;
+            $this->sessionStartedHere = !is_string($carried) || $carried !== session_id();
 
             // A session is never empty: the database session handler (Symfony's PdoSessionHandler) destroys an empty
             // one when it writes, so a visitor with nothing else in the session would get a new id on the next
@@ -136,12 +158,13 @@ namespace Idno\Core {
             );
 
             // A stateless request authenticated nobody in the session (nothing of it is written there), so there is nothing to
-            // log off at the end. The anonymous session the request started is destroyed, so that an API client does not leave
-            // a session behind for each request; a session that holds a member (the browser's, carried by the request) is left alone.
+            // log off at the end. The session the request itself started is destroyed, so that an API client does not leave
+            // a session behind for each request; a session the request carried (the browser's, a member's or a visitor's
+            // with a message waiting) is left alone.
             register_shutdown_function(
                 function () {
                     $session = Idno::site()->session();
-                    if ($session && $session->isAPIRequest() && empty($_SESSION['user_uuid'])) {
+                    if ($session && $session->isAPIRequest() && $session->sessionStartedHere) {
                         $_SESSION = [];
                         @session_destroy();
                     }
@@ -214,16 +237,18 @@ namespace Idno\Core {
         }
 
         /**
-         * Returns the currently logged-in user, if any: the user a stateless credential authenticated for this
-         * request, else the browser session's
+         * Returns the currently logged-in user, if any: on an API request the user a stateless credential authenticated
+         * for it (nobody when there is none), else the browser session's
          *
          * @return \Idno\Entities\User
          */
 
         function currentUser()
         {
-            if (!empty($this->statelessUser)) {
-                return $this->statelessUser;
+            // A request that is an API request (it skips the form token) is the stateless user or nobody, never the
+            // browser session's user, whatever cookie it carries and whatever became of the stateless user.
+            if ($this->apiRequest) {
+                return !empty($this->statelessUser) ? $this->statelessUser : false;
             }
             if (!empty($this->user)) {
                 return $this->user;
@@ -511,9 +536,15 @@ namespace Idno\Core {
          */
         function tryAuthUser()
         {
+            $this->authFinished = false;
+            $this->sessionUserAtAuth = $_SESSION['user_uuid'] ?? null;
             // attempt to delegate auth to a plugin. A plugin authenticates a request by returning the User (the request is then
             // authenticated statelessly), or by calling authenticateStatelessly() itself.
             $return = \Idno\Core\Idno::site()->events()->triggerEvent('user/auth/request', [], false);
+            if (!($return instanceof User)) {
+                // Only a User authenticates a request: any other answer (a truthy string, say) is no authentication.
+                $return = false;
+            }
             if ($return instanceof User && !$this->isLoggedIn()) {
                 $this->apiRequest = true;
                 $return = $this->refreshSessionUser($return);
@@ -581,6 +612,9 @@ namespace Idno\Core {
                 "is api" => $this->isAPIRequest(),
                 ), $return
             );
+
+            $this->sessionUserAtAuth = $_SESSION['user_uuid'] ?? null;
+            $this->authFinished = true;
 
             return $return;
         }
@@ -694,6 +728,25 @@ namespace Idno\Core {
                 \Idno\Core\Idno::site()->logging()->warning('Deprecated: Session::setIsAPIRequest() is deprecated; use Session::authenticateStatelessly() or return the User from a user/auth/request listener.');
             }
             $this->apiRequest = (bool)$is_api_request;
+
+            // A plugin that logged a user on (or refreshed the session's user) before it called this meant that user to
+            // authenticate the request: hold them in memory and put the session's user back as the browser had it, so that
+            // no login is planted in the session and the request is that user or nobody.
+            if ($this->apiRequest && empty($this->statelessUser)) {
+                $held = $_SESSION['user_uuid'] ?? null;
+                if (!empty($held) && $held !== $this->sessionUserAtAuth) {
+                    $user = !empty($this->user) && $this->user->getUUID() === $held ? $this->user : User::getByUUID($held);
+                    if ($user instanceof User) {
+                        $this->statelessUser = $user;
+                    }
+                    if ($this->sessionUserAtAuth === null) {
+                        unset($_SESSION['user_uuid']);
+                    } else {
+                        $_SESSION['user_uuid'] = $this->sessionUserAtAuth;
+                    }
+                    $this->user = null;
+                }
+            }
         }
 
         /**

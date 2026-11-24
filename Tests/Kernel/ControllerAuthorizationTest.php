@@ -75,6 +75,36 @@ final class ControllerAuthorizationTest extends CharacterisationTestCase
         $this->assertSame(['error' => 'forbidden'], $this->site()->request('GET', '_test/admin-only?_t=json')->json());
     }
 
+    public function testAnArrayForTheTemplateTypeIsStill403ForAVisitorAndAMember(): void
+    {
+        foreach ([[], ['Cookie' => $this->logIn($this->user())]] as $headers) {
+            $this->assertSame(403, $this->site()->request('GET', '_test/admin-only?_t[]=x', $headers)->status);
+        }
+    }
+
+    public function testTheDeniedPageSendsNoCrossOriginHeaderAndLeavesThePendingMessagesAlone(): void
+    {
+        $form = $this->site()->request('GET', 'session/login');
+        $cookie = self::sessionCookie($form);
+        $this->site()->request('POST', 'session/login', ['Cookie' => $cookie], self::formToken($form->body, 'session/login') + ['email' => 'nobody-' . bin2hex(random_bytes(3)), 'password' => 'x']);
+
+        $denied = $this->site()->request('GET', '_test/admin-only', ['Cookie' => $cookie]);
+
+        $this->assertSame(403, $denied->status);
+        $this->assertNull($denied->header('Access-Control-Allow-Origin'), 'a page of a controller is not readable by every site');
+        $page = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
+        $this->assertStringContainsString("couldn't find your username", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the session was not used up by the denied page');
+    }
+
+    public function testATemplateTypeThatIsNotHtmlOrJsonIsAnsweredInPlainText(): void
+    {
+        $response = $this->site()->request('GET', '_test/admin-only?_t=rss');
+
+        $this->assertSame(403, $response->status);
+        $this->assertStringContainsString('text/plain', (string) $response->header('Content-Type'));
+        $this->assertStringNotContainsString('<rss', $response->body);
+    }
+
     public function testWithoutTheLegacyApplicationTheAnswerIsPlain403(): void
     {
         $kernel = new Kernel('test', true, bootLegacy: false);

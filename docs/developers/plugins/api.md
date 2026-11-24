@@ -137,12 +137,16 @@ As an API developer, you might find the following [postman collection](https://g
 
 ## Authenticating a request from a plugin
 
-A request that carries an API signature is authenticated by core. A plugin that accepts a credential of its own (a header, a token) authenticates the request in one of two ways, from a listener of the `user/auth/request` event or from its own page:
+A request that carries an API signature is authenticated by core. A plugin that accepts a credential of its own authenticates the request in one of two ways, from a listener of the `user/auth/request` event or from its own page:
 
 ```php
-// In a listener of 'user/auth/request': return the User you have authenticated.
+// In a listener of 'user/auth/request': return the User you have authenticated, and only for a credential of
+// your own that a browser does not send by itself (here a header your clients set).
 \Idno\Core\Idno::site()->events()->addListener('user/auth/request', function (\Idno\Core\Event $event) {
-    $user = my_plugin_find_user_for_my_credential($_SERVER['HTTP_X_MY_CREDENTIAL'] ?? '');
+    if (empty($_SERVER['HTTP_X_MY_CREDENTIAL'])) {
+        return; // no credential of yours on this request: authenticate nobody
+    }
+    $user = my_plugin_find_user_for_my_credential($_SERVER['HTTP_X_MY_CREDENTIAL']);
     if ($user instanceof \Idno\Entities\User) {
         $event->setResponse($user);
     }
@@ -152,4 +156,4 @@ A request that carries an API signature is authenticated by core. A plugin that 
 \Idno\Core\Idno::site()->session()->authenticateStatelessly($user);
 ```
 
-Either way the user is held in memory for that request only: nothing is written to the session, a browser session the request carries is left as it is, no form token is asked of the request, the account pages answer it with a 403, and the user is never an administrator for it. Do not call `Session::setIsAPIRequest()` (deprecated: it logs a line and only sets the request's flag) and do not authenticate every request from a listener on a header that other pages take: a token should reach the page it is meant for. Check the credential yourself, in constant time (`hash_equals()`).
+Either way the user is held in memory for that request only: nothing is written to the session, a browser session the request carries is left as it is, no form token is asked of the request, the account pages answer it with a 403, and the user is never an administrator for it. A stateless request skips the form token check, so authenticate ONLY for a credential that a browser does not send by itself: a signature or token in a header or a parameter that your plugin defines. Never authenticate by an ambient credential (HTTP Basic, `REMOTE_USER`, a client certificate, a cookie), which a page on another site can make a browser send. A listener answer that is not a `User` authenticates nobody. A request authenticated statelessly is that user or nobody: it is never the user of a browser session it happens to carry. Do not call `Session::setIsAPIRequest()` (deprecated: it logs a line and only sets the request's flag) and do not authenticate every request from a listener on a header that other pages take: a token should reach the page it is meant for. Check the credential yourself, in constant time (`hash_equals()`).

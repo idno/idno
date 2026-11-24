@@ -1549,6 +1549,11 @@ callback, and often `exit`: Symfony's session listener would close the session a
   no session and no framework CSRF protection (the one CSRF token manager is Idno's own, below), no profiler hook and nothing that reads `kernel.secret` (remember me, login links are not enabled); no trim pass
   was needed, and `Tests/Kernel/SecurityTrimTest` pins all of it in the test and a freshly compiled prod container. The firewall
   runs for every request, legacy pages included (the catch-all route is not access-controlled): it only fills the token storage.
+  The `upgrade` firewall is for the routes the gate's listener lets through while the gate is closed; with the gate OPEN a request to
+  `/_upgrade/step` runs with the legacy application booted (and answers `current`). The firewall decides when the request reaches the
+  controller, so Twig's `is_granted()` and `app.user` (the bundle's) describe that moment and must not be used in the templates a
+  legacy page draws (they run later, and after a login or logoff in the same request they would be stale): use `is_admin()`,
+  `is_logged_in()` and `current_user()`, which read the legacy session.
 - **`CurrentUserSource`** (`Idno\Security`, an interface) says who is making the request; `Idno\Legacy\LegacyCurrentUserSource` reads
   `Idno::site()->session()->currentUser()` and builds a **`SessionUser`** (`UserInterface`: the uuid is the identifier, `ROLE_USER` for
   every member, `ROLE_ADMIN` only when `User::isAdmin()` is true, which is false for a stateless authentication; an optional
@@ -1559,7 +1564,16 @@ callback, and often `exit`: Symfony's session listener would close the session a
 - **Stateless authentication.** "API request" is a property of the REQUEST, held by the `Session` object (one process is one request
   on the web): `Session::isAPIRequest()` is true when a stateless credential (a signed API request, a bearer token, a plugin's
   hook) authenticated this request. `$_SESSION['is_api_request']` is never written or read. A stateless authentication holds its user
-  IN MEMORY (`currentUser()`, `isLoggedIn()` and `currentUserUUID()` return it, else the session's) and writes nothing to the session,
+  IN MEMORY and writes nothing to the session. STRUCTURALLY, on an API request `currentUser()` (and so `isLoggedIn()`, `currentUserUUID()`
+  and the `CurrentUserSource`) is the stateless user or NOBODY, never the browser session's user: the request skips the form token, so
+  it must never be the cookie's user, whatever happens to the stateless user (`authenticateStatelessly()` of a member who cannot be
+  logged on, such as one whose address is blocked, leaves the request anonymous and still stateless, and so does `logUserOff()`) and
+  whatever cookie it carries. A `user/auth/request` answer that is not a `User` authenticates nobody and the session's user stays;
+  the Micropub endpoint also answers 401 unless the request is an API request AND a user is logged on. A plugin that logs a user on
+  (or refreshes the session's user) and only then calls `setIsAPIRequest(true)` is put right: the user moves to the stateless slot and
+  `$_SESSION['user_uuid']` is put back to what the browser had (recorded at the start and at the end of `tryAuthUser()`); the
+  session id `logUserOn()` regenerated stays regenerated. A signed request that carries another member's browser cookie acts as the signed member for that request and leaves the
+  browser's session intact (`SessionDataAcrossLoginTest`), (`SessionUser::getRoles()` also withholds `ROLE_ADMIN` from a stateless one),
   so a signed request that carries another member's browser cookie acts as the signed member for that request and leaves the
   browser's session intact. `refreshSessionUser()` (Autosave, the `saved` listener, token issue) refreshes the user in memory on a
   stateless request and never writes `$_SESSION['user_uuid']`; `logUserOff()` on one clears the memory and leaves the session and
@@ -1572,8 +1586,9 @@ callback, and often `exit`: Symfony's session listener would close the session a
   `user/auth/request` event and the `X-IDNO-*` / `X-KNOWN-*` signature check, which is now `Idno\Security\ApiSignatureVerifier`
   (pure: the base64 HMAC-SHA256 of the request address with the member's API key, `hash_equals()`, the header trimmed, an empty key
   never verifies); a request authenticated statelessly never also authenticates by the session. When a stateless request ends the
-  anonymous session it started is destroyed (an API client leaves no session row behind each request); a session that holds a member
-  (the browser's, carried by the request) is left alone. `Idno\Security\StatelessAuthentication` (`ATTRIBUTE`, `isStateless()`,
+  session it STARTED (it carried no cookie, or one for a session that does not exist: `Session::init()` records it after
+  `session_start()`) is destroyed (an API client leaves no session row behind each request); a session the request carried (a member's,
+  or a visitor's with a message waiting) is left alone. `Idno\Security\StatelessAuthentication` (`ATTRIBUTE`, `isStateless()`,
   `mark()`) is set on the Symfony request by the authenticator, so a controller can ask. Bearer tokens stay LOCAL to the Micropub
   endpoint: no firewall, matcher or listener looks at `Authorization` or `access_token`. Pinned by
   `Tests/Characterisation/StatelessAuthenticationTest`, `TokenAgreementTest` and `Tests/Kernel/SessionStatelessTest`.
@@ -1581,8 +1596,10 @@ callback, and often `exit`: Symfony's session listener would close the session a
   (`Idno\Legacy\LegacyForbiddenPage`, behind the `Idno\Security\ForbiddenPage` interface: `pages/403` in the page shell, drawn on a
   page that does nothing, as `Page::deniedContent()` does but returned, not echoed) for a caller that wants HTML, `{"error":"forbidden"}`
   for one that wants JSON (`?_t=json`/`jsonp`, or an `Accept` that names JSON and no HTML), for a visitor and a member alike (never a
-  login redirect), and a plain-text 403 when the legacy application is not booted or the page fails to draw. Always `Cache-Control:
-  no-store`. Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
+  login redirect), and a plain-text 403 when the legacy application is not booted, the page fails to draw or the template type is
+  neither a web page nor JSON (`?_t=rss`: no feed shell with the wrong content type; `?_t[]=x` is read from `query->all()` and is
+  no type). The page is drawn with `DefaultTemplate::drawPageWithoutSideEffects()`: the session's messages are neither shown nor
+  used up and no header (the cross-origin one) is sent. Always `Cache-Control: no-store`. Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
   `Tests/Fixtures/WhoAmIController`).
 - **The queue worker.** It handles many messages in one process and has no request: `LegacyUserContext::runAs()` and
   `ensureNobodyLoggedOn()` (and so `WorkerHygiene`) call `Session::resetStatelessAuthentication()` before and after each message, so

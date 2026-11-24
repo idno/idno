@@ -28,4 +28,10 @@ final class SessionUserTest extends TestCase
     {
         $this->assertTrue((new SessionUser('u', 'ada', false, true))->isStateless());
     }
+
+    public function testAStatelessAdministratorIsNoAdministratorWhateverTheCallerSaid(): void
+    {
+        $this->assertSame(['ROLE_USER'], (new SessionUser('u', 'h', true, true))->getRoles());
+        $this->assertSame(['ROLE_USER', 'ROLE_ADMIN'], (new SessionUser('u', 'h', true, false))->getRoles());
+    }
 }

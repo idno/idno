@@ -192,4 +192,106 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         $this->assertSame('root', $this->whoAmI(['Cookie' => $adminCookie])['handle'], 'and the carried session is intact');
         $this->assertNull($this->whoAmI()['uuid'], 'nobody else is ada');
     }
+
+    public function testARequestFlaggedAsApiActsAsNobodyWhateverCookieItCarries(): void
+    {
+        [$adminCookie] = $this->twoUsers();
+
+        $flagged = $this->whoAmI(['X-Test-Plugin-Auth' => 'flag:', 'Cookie' => $adminCookie]);
+
+        $this->assertNull($flagged['uuid'], 'a request that skips the form token is never the cookie\'s user');
+        $this->assertSame([], $flagged['roles']);
+        $this->assertSame('root', $this->whoAmI(['Cookie' => $adminCookie])['handle'], 'the cookie\'s session is intact');
+    }
+
+    public function testAPluginThatLoggedAUserOnAndThenFlaggedTheRequestAuthenticatesItWithoutPlantingALogin(): void
+    {
+        [$adminCookie] = $this->twoUsers();
+
+        $without = $this->whoAmI(['X-Test-Plugin-Auth' => 'logon-flag:ada']);
+        $this->assertSame('ada', $without['handle']);
+        $this->assertTrue($without['stateless']);
+
+        $response = $this->site()->request('GET', '_test/whoami', ['X-Test-Plugin-Auth' => 'logon-flag:ada', 'Cookie' => $adminCookie]);
+        $with = $response->json();
+        $this->assertSame('ada', $with['handle'], 'authenticated for the request');
+        $this->assertTrue($with['stateless']);
+        $this->assertSame(['ROLE_USER'], $with['roles']);
+        // Logging a user on regenerates the session's id before the plugin flags the request, so the carried session
+        // goes on under the id the response sets: it holds its own user, not ada.
+        $this->assertSame('root', $this->whoAmI(['Cookie' => self::sessionCookieOrNull($response) ?? $adminCookie])['handle'], 'the session still holds its own user, not ada');
+        $this->assertNull($this->whoAmI()['uuid'], 'and nobody is ada');
+    }
+
+    public function testAHookAnswerThatIsNoUserLeavesTheSessionsUserAndTheRequestNotStateless(): void
+    {
+        [$adminCookie] = $this->twoUsers();
+
+        $me = $this->whoAmI(['X-Test-Plugin-Auth' => 'nonuser:x', 'Cookie' => $adminCookie]);
+
+        $this->assertSame('root', $me['handle']);
+        $this->assertFalse($me['stateless']);
+    }
+
+    public function testAnAdminsCookieWithAWrongSignatureStaysTheSessionAndAPostStillNeedsTheFormToken(): void
+    {
+        [$adminCookie, $key] = $this->twoUsers();
+        $headers = self::signedHeadersFor('ada', $key, '/status/edit/');
+        $headers['X-IDNO-SIGNATURE'] = base64_encode('wrong');
+
+        $me = $this->whoAmI($headers + ['Cookie' => $adminCookie]);
+        $this->assertSame('root', $me['handle'], 'the session\'s user');
+        $this->assertFalse($me['stateless']);
+
+        $marker = 'wrong signature ' . bin2hex(random_bytes(4));
+        $this->site()->request('POST', 'status/edit/', $headers + ['Cookie' => $adminCookie], ['body' => $marker, 'access' => 'PUBLIC']);
+        $this->assertNull($this->runInSite('$s = \IdnoPlugins\Status\Status::getOne([\'body\' => ' . $this->literal($marker) . ']); return $s ? $s->getUUID() : null;'), 'refused for its form token');
+    }
+
+    public function testATokenForABlockedMemberAtMicropubNeitherActsAsTheCookiesUserNorPostsAnything(): void
+    {
+        $this->registerUser('root');
+        $this->addUser('ada');
+        $adaCookie = $this->loginCookie('ada', 'correct-horse-battery-9');
+        $key = $this->apiKeyOf('root');
+        // The first administrator's API key is a bearer token; that member's address is then blocked.
+        $this->runInSite('$c = \Idno\Core\Idno::site()->config(); $c->blocked_emails = [\'root@example.com\']; $c->save(); return true;');
+
+        $marker = 'blocked bearer ' . bin2hex(random_bytes(4));
+        $response = $this->site()->request('POST', 'micropub/endpoint', ['Cookie' => $adaCookie, 'Authorization' => 'Bearer ' . $key], ['h' => 'entry', 'content' => $marker]);
+
+        $this->assertSame(401, $response->status, $response->body);
+        $this->assertNull($this->runInSite('$s = \IdnoPlugins\Status\Status::getOne([\'body\' => ' . $this->literal($marker) . ']); return $s ? $s->getUUID() : null;'), 'nothing was posted as ada');
+    }
+
+    public function testAnAnonymousBrowserSessionWithAPendingMessageSurvivesASignedRequestThatCarriesIt(): void
+    {
+        $this->registerUser('root');
+        $this->addUser('ada');
+        $key = $this->apiKeyOf('ada');
+        $form = $this->site()->request('GET', 'session/login');
+        $cookie = self::sessionCookie($form);
+        $this->site()->request('POST', 'session/login', ['Cookie' => $cookie], self::formToken($form->body, 'session/login') + ['email' => 'ada', 'password' => 'not the password']);
+
+        $this->site()->request('GET', '_test/whoami', self::signedHeadersFor('ada', $key, '/_test/whoami') + ['Cookie' => $cookie]);
+
+        $page = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
+        $this->assertStringContainsString("password isn't correct", \Tests\Acceptance\Browser::text($page->body), 'the message waiting in the visitor\'s session was not destroyed with it');
+    }
+
+    public function testASignedRequestWithoutACookieDestroysTheSessionItStarted(): void
+    {
+        $this->registerUser('root');
+        $this->addUser('ada');
+        $key = $this->apiKeyOf('ada');
+        $directory = $this->runInSite('return session_save_path() ?: sys_get_temp_dir();');
+        if (!is_string($directory) || !is_dir($directory)) {
+            $this->markTestSkipped('sessions are not files here');
+        }
+        $before = count(glob(rtrim($directory, '/') . '/sess_*') ?: []);
+
+        $this->site()->request('GET', '_test/whoami', self::signedHeadersFor('ada', $key, '/_test/whoami'));
+
+        $this->assertSame($before, count(glob(rtrim($directory, '/') . '/sess_*') ?: []), 'no session file is left behind by an API client');
+    }
 }

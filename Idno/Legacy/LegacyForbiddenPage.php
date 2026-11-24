@@ -14,7 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
  * The legacy 403 page (templates `pages/403` in the page shell, as Page::deniedContent() draws it), as a Response
  * instead of output and an exit. It needs a current page for the shell: a page that does nothing (the home page, as
  * PageHandler uses to refuse an API request) is made for that. Null when this kernel did not boot the legacy
- * application.
+ * application, and for a template type other than the web page's (the caller answers in plain text). Drawing it
+ * uses up no message of the session and sends no header.
  */
 final class LegacyForbiddenPage implements ForbiddenPage
 {
@@ -32,7 +33,13 @@ final class LegacyForbiddenPage implements ForbiddenPage
         $page->setResponse(403);
         $site->template()->autodetectTemplateType();
         $template = $site->template();
-        $html = $template->__(['body' => $template->draw('pages/403'), 'title' => ''])->drawPage(false);
+        if (strtolower((string) $template->getTemplateType()) !== 'default') {
+            // A feed, KML or any other type has no 403 page of its own to draw here: the responder answers it plainly.
+            return null;
+        }
+        // Drawn without the side effects of drawing a page for the visitor: the messages waiting in the session stay
+        // there, and no header (the cross-origin one) is sent from here.
+        $html = $template->__(['body' => $template->draw('pages/403'), 'title' => ''])->drawPageWithoutSideEffects(false);
 
         return new Response((string) $html, 403, ['Content-Type' => 'text/html; charset=UTF-8']);
     }

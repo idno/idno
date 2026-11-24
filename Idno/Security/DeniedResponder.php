@@ -59,7 +59,7 @@ final class DeniedResponder implements AuthenticationEntryPointInterface, Access
      */
     private static function wantsJson(Request $request): bool
     {
-        $type = $request->query->get('_t');
+        $type = $request->query->all()['_t'] ?? null;
         if (is_string($type) && in_array(strtolower($type), ['json', 'jsonp'], true)) {
             return true;
         }
