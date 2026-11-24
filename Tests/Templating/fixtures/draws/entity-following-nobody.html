@@ -1,0 +1,23 @@
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<h1>Following</h1>
+</div>
+</div>
+<div class="row">
+<div class="col-md-10 col-md-offset-1">
+<p>
+You&#039;re not following anyone yet.
+</p>
+<form action="{site}/following/add" method="post">
+<p>
+Add the address of a site to follow:<br>
+<input type="text" name="url" value="" placeholder="https:// ..." style="width: 100%"><br>
+<input type="submit" class="btn btn-primary" value="Add" style="width: 15%">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="following/add" />
+</p>
+</form>
+</div>
+</div>

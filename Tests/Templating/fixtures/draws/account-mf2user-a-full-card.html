@@ -1,0 +1,64 @@
+<form action="{site}/account/settings/following/bookmarklet" method="post" class="form-horizontal">
+<div class="row idno-entry following-user">
+<div class="col-md-1 col-md-offset-1 owner h-card hidden-sm">
+<p>
+<span class="u-url icon-container"><img class="u-photo" src="https://example.org/grace.png" /></span><br />
+Grace Hopper
+</p>
+</div>
+<div class="col-md-8 idno-object idno-content">
+<div class="visible-sm">
+<p class="p-author author h-card vcard">
+<img class="u-logo logo u-photo photo" src="https://example.org/grace.png" alt="Grace Hopper" />
+<span class="p-name fn">Grace Hopper</span>
+</p>
+</div>
+<div class="e-content entry-content">
+<input type="hidden" name="urls[]" value="https://example.org/grace" />
+<input type="hidden" name="urls[]" value="https://example.org/grace2" />
+<input type="hidden" name="photo" value="https://example.org/grace.png" />
+<div class="control-group">
+<label class="control-label" for="inputName">Name</label>
+<div class="controls">
+<input id="inputName" type="text" class="col-md-4" name="name" required
+                   value="Grace Hopper">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputNickname">Nickname</label>
+<div class="controls">
+<input id="inputNickname" type="text" class="col-md-4" name="nickname" required placeholder="Handle (for your reference)"
+                   value="grace">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputEmail">Email</label>
+<div class="controls">
+<input id="inputName" type="email" class="col-md-4" name="email" required
+                   value="grace@example.org">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputUrl">Profile URL</label>
+<div class="controls">
+<select name="uuid">
+<option>https://example.org/grace</option>
+<option>https://example.org/grace2</option>
+</select>
+</div>
+</div>
+<div class="control-group">
+<div class="controls">
+<button type="submit" class="btn">Add as friend...</button>
+</div>
+</div>
+</div>
+<div class="footer">
+</div>
+</div>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/following/bookmarklet" />
+</form>

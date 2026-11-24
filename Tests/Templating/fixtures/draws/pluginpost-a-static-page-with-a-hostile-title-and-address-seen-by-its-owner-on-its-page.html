@@ -1,0 +1,22 @@
+<div>
+<div class="row edit-page-actions">
+<div class="col-md-12">
+<span class="page-action">
+<a href="{site}/admin/staticpages/"><i class="fa fa-cog"></i>Manage pages</a>
+</span>
+<span class="page-action">
+<a href="{site}/staticpage/edit/00000000-0000-4000-8000-0000000000bb" class="edit"><i class="fa fa-pencil"></i>Edit</a>
+</span>
+<span class="page-action">
+<a data-form-id="{form-1}"  class="edit"   href="{site}/staticpage/delete/00000000-0000-4000-8000-0000000000bb" onclick="if (confirm('Are you sure you want to permanently delete this entry?')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } "><i class="fa fa-trash-o"></i>Delete</a>
+</span>
+</div>
+</div>
+<h1 class="p-name">&lt;script&gt;alert(1)&lt;/script&gt;</h1>
+<h2>
+You are seeing this page because you are a site administrator. Other users will be forwarded to
+<a href="">javascript:alert(3)</a>.
+</h2>
+<p>Body</p>
+<p><script>alert(2)</script></p>
+</div>

@@ -1,0 +1,30 @@
+<h1 class="idno-admin-page-title">Standard.site Sync</h1>
+<p class="idno-admin-description">
+Automatically share your writing with the wider web. When you connect your account, everything you publish here will also appear on apps like
+<a href="https://leaflet.pub">Leaflet</a>,
+<a href="https://frontpage.fyi">Frontpage</a>, and other readers that support
+<a href="https://standard.site">standard.site</a>.</p>
+<p class="idno-admin-description">
+Your content stays on your site &mdash; syncing just makes it discoverable in more places.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Get started</h2>
+<p>To start syncing, enter the handle for your AT Protocol account (this is usually your Bluesky handle, like
+<strong>yourname.bsky.social</strong>). You'll be taken to your server to approve the connection, then brought back here.</p>
+<form action="{site}/account/settings/standardsitesync/" method="post" style="margin-top:1rem;">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/standardsitesync/" />
+<input type="hidden" name="action" value="connect">
+<div class="idno-form-group">
+<label class="idno-label" for="atproto-handle">Your handle</label>
+<div style="display:flex;gap:0.5rem;align-items:start;">
+<input type="text" id="atproto-handle" name="handle" placeholder="yourname.bsky.social" class="idno-input" style="max-width:20rem;" required>
+<button type="submit" class="idno-btn idno-btn-primary">Connect</button>
+</div>
+<p class="idno-form-help">Don't have one? You can create a free account at
+<a href="https://bsky.app">bsky.app</a>
+or any AT Protocol provider.</p>
+</div>
+</form>
+</div>

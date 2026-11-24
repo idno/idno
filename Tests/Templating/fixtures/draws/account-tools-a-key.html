@@ -1,0 +1,46 @@
+<h1 class="idno-admin-page-title">
+Tools and Apps</h1>
+<div class="idno-admin-card">
+<h2>Bookmarklet</h2>
+<p>
+The Idno bookmarklet is the best way to save links, reply to posts, and share articles.
+</p>
+<p>
+Just drag the bookmarklet button below into your browser&#039;s Bookmark Bar.
+</p>
+<p>
+<p style="padding-top: 15px; padding-bottom: 15px;"><a class="bookmarklet" href="javascript:(function(){window.open('{site}/share?share_url='+encodeURIComponent(location.href)+'&share_title\='+encodeURIComponent(document.title));})();" class="btn">Fixture Site</a>
+</p>
+</p>
+</div>
+<div class="idno-admin-card" style="margin-top: 1.5rem;">
+<h2>API</h2>
+<div class="idno-form-group">
+<label>Your API key</label>
+<form id="apikey_form"><span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/tools/" />
+<input type="text" id="apikey" class="idno-input" name="apikey" value="Click to show" readonly>
+</form>
+<div style="margin-top: 0.5rem;"><a data-form-id="{form-1}"  class="idno-btn-disable"   href="{site}/account/settings/tools/" onclick="if (confirm('Revoking this key will mean you must update any applications that use this key!')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } ">Revoke</a>
+</div>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var input = document.getElementById('apikey');
+        if (!input) return;
+        input.addEventListener('click', function() {
+            var form = document.getElementById('apikey_form');
+            var params = new URLSearchParams(new FormData(form)).toString();
+            fetch('{site}\/account\/settings\/tools\/?' + params, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                input.value = data;
+            });
+        });
+    });
+</script>

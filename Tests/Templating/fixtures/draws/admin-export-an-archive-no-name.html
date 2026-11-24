@@ -1,0 +1,75 @@
+<h1 class="idno-admin-page-title">Export</h1>
+<p class="idno-admin-description">
+Export your published Idno content as an RSS file. You can import this file into WordPress, or into another Idno site by choosing WordPress on the import page.
+</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Generate RSS file</h2>
+<form action="{site}/admin/export/rss" method="post">
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="allposts" id="allposts" value="1">
+<label for="allposts">Include private posts?</label>
+</div>
+<p class="idno-form-help">Some platforms may assume that your content should be displayed publicly. To protect your privacy, you may wish to only download your public content. As an administrator, including private posts includes every member&#039;s private posts and drafts too. Private posts and drafts are marked as such in the file.</p>
+</div>
+<div class="idno-form-group">
+<button type="submit" class="idno-btn idno-btn-primary">Download file</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/export/rss" />
+</form>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Generate WordPress (WXR) file</h2>
+<p>
+Export your content as a WordPress eXtended RSS (WXR) file. This format includes additional metadata such as post dates, slugs, and comments, and is the standard format for importing into WordPress.
+</p>
+<form action="{site}/admin/export/wxr" method="post">
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="allposts" id="allposts_wxr" value="1">
+<label for="allposts_wxr">Include private posts?</label>
+</div>
+<p class="idno-form-help">Some platforms may assume that your content should be displayed publicly. To protect your privacy, you may wish to only download your public content. As an administrator, including private posts includes every member&#039;s private posts and drafts too. Private posts and drafts are marked as such in the file.</p>
+</div>
+<div class="idno-form-group">
+<button type="submit" class="idno-btn idno-btn-primary">Download WXR file</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/export/wxr" />
+</form>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Full archive</h2>
+<p>
+A complete copy of your site as one zip file: every post and its files, the settings, and the records of the database. It is what you restore your site from.
+</p>
+<p class="idno-form-help" role="alert">
+<strong>Keep it as carefully as a database backup.</strong>
+The archive contains every account&#039;s password hash and the private keys that sign each user&#039;s posts to the fediverse: whoever has the archive can sign as any user. It also holds every private post. Only administrators can download it, and it is removed from the site when you make a new one and after a week. The settings in it (config.json) are left out by the name of the setting: review config.json before you share the archive.
+</p>
+<p>
+<a class="idno-btn idno-btn-primary" href="{site}/file/abc+123%2Fx/archive.zip">Download your data</a><br>
+<small>Generated
+<time class="dt-published" datetime="2026-03-08T20:00:00+00:00">2026-03-08T20:00:00+00:00</time></small>
+</p>
+<p>
+You can also make a new copy of your data archive. It replaces this one.
+</p>
+<form action="{site}/admin/export/generate/" method="post">
+<div class="idno-form-group">
+<button type="submit" class="idno-btn idno-btn-primary">Re-archive your data</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/export/generate" />
+</form>
+<p class="idno-form-help">
+It may take a while to generate your archive. You can leave this page while it&#039;s working. Once the archive is complete we will email you, and you&#039;ll be able to download it right here.
+</p>
+</div>

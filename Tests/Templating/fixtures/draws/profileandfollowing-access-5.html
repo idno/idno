@@ -1,0 +1,64 @@
+
+<div class="access-control-block">
+<input type="hidden" name="access" id="access-control-id-acl-{id-1}" value="{site}/view/00000000-0000-4000-8000-000000000901"/>
+<div class="idno-access-dropdown" x-data="{&quot;open&quot;:false,&quot;selected&quot;:&quot;{site}\/view\/00000000-0000-4000-8000-000000000901&quot;,&quot;label&quot;:&quot;Friends &amp; \&quot;family\&quot;&quot;,&quot;icon&quot;:&quot;users&quot;}">
+<button type="button" class="idno-access-trigger" @click="open = !open">
+<template x-if="icon === 'globe'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+</template>
+<template x-if="icon === 'users'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+</template>
+<template x-if="icon === 'lock'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+</template>
+<template x-if="icon === 'cog'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</template>
+<span x-text="label"></span>
+<svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+</button>
+<div class="idno-access-menu" x-show="open" @click.outside="open = false" x-cloak>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;PUBLIC&quot; }"
+                            @click="selected = &quot;PUBLIC&quot;; label = &quot;Public&quot;; icon = &quot;globe&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;PUBLIC&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+Public
+<svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;SITE&quot; }"
+                            @click="selected = &quot;SITE&quot;; label = &quot;Members only&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;SITE&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+Members only
+<svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot; }"
+                            @click="selected = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; label = &quot;Private&quot;; icon = &quot;lock&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+Private
+<svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;{site}\/view\/00000000-0000-4000-8000-000000000902&quot; }"
+                            @click="selected = &quot;{site}\/view\/00000000-0000-4000-8000-000000000902&quot;; label = &quot;Editors&quot;; icon = &quot;cog&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;{site}\/view\/00000000-0000-4000-8000-000000000902&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+Editors
+<svg class="check" x-show="selected === &quot;{site}\/view\/00000000-0000-4000-8000-000000000902&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;{site}\/view\/00000000-0000-4000-8000-000000000901&quot; }"
+                            @click="selected = &quot;{site}\/view\/00000000-0000-4000-8000-000000000901&quot;; label = &quot;Friends &amp; \&quot;family\&quot;&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;{site}\/view\/00000000-0000-4000-8000-000000000901&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+Friends &amp; &quot;family&quot;
+<svg class="check" x-show="selected === &quot;{site}\/view\/00000000-0000-4000-8000-000000000901&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+</div>
+</div>
+</div>

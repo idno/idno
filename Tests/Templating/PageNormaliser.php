@@ -12,7 +12,7 @@ namespace Tests\Templating;
 final class PageNormaliser
 {
     /**
-     * @param bool $html whether the body is an HTML document: only then is the white space that touches a tag collapsed and the character forms made one
+     * @param bool $html whether the body is an HTML document: only then is the white space that touches a tag collapsed
      */
     public static function normalise(string $body, string $baseUrl, bool $html = false): string
     {
@@ -24,6 +24,8 @@ final class PageNormaliser
             $body = str_replace($variant, '{site}', $body);
         }
         $body = str_replace($host, '{site-host}', $body);
+        // The file of a draw case in a private site's directory, in a debug error page (`/tmp/idno-site-7c0b449bf12b/script-8e5ec737.php`).
+        $body = preg_replace('#[^\s"\'<>]*/idno-site-[0-9a-f]{12}/script-[0-9a-f]{8}\.php#', '{script}', $body) ?? $body;
         // The port written on its own, as the number the page's script is given (`"host":"127.0.0.1","port":8089`).
         $body = preg_replace('/("host":"' . preg_quote((string) parse_url($baseUrl, PHP_URL_HOST), '/') . '","port":)' . preg_quote((string) parse_url($baseUrl, PHP_URL_PORT), '/') . '\b/', '$1{site-port}', $body) ?? $body;
 
@@ -103,18 +105,12 @@ final class PageNormaliser
         return self::html($body);
     }
 
-    /** The named character references a browser reads without their semicolon (HTML's legacy ones). */
-    private const LEGACY_ENTITIES = 'AElig|AMP|Aacute|Acirc|Agrave|Aring|Atilde|Auml|COPY|Ccedil|ETH|Eacute|Ecirc|Egrave|Euml|GT|Iacute|Icirc|Igrave|Iuml|LT|Ntilde|Oacute|Ocirc|Ograve|Oslash|Otilde|Ouml|QUOT|REG|THORN|Uacute|Ucirc|Ugrave|Uuml|Yacute|aacute|acirc|acute|aelig|agrave|amp|aring|atilde|auml|brvbar|ccedil|cedil|cent|copy|curren|deg|divide|eacute|ecirc|egrave|eth|euml|frac12|frac14|frac34|gt|iacute|icirc|iexcl|igrave|iquest|iuml|laquo|lt|macr|micro|middot|nbsp|not|ntilde|oacute|ocirc|ograve|ordf|ordm|oslash|otilde|ouml|para|plusmn|pound|quot|raquo|reg|sect|shy|sup1|sup2|sup3|szlig|thorn|times|uacute|ucirc|ugrave|uml|uuml|yacute|yen|yuml';
-
     /**
-     * What a template port may change in an HTML page and nothing else: white space that touches a tag is one line break
-     * (how a template is indented is not what it renders), and the several ways to write the same character are one:
-     * `&amp;` and `&` (but not where what follows could begin an entity: `#`, a name and its semicolon, or a legacy name
-     * such as `copy` that a browser reads without one, so `&amp;lt;` and `&amp;copy` stay different from `&lt;` and `&copy`);
-     * `&#039;`, `&#39;`, `&apos;` and `'` in text and in a double-quoted attribute value only (in any other place the entity
-     * is what keeps an attribute whole: `title='x&#039; onclick=...'` is not `title='x' onclick=...'`); `&quot;` and
-     * `&#34;` and `"` in text only. The contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched, up to the
-     * end of the page when the element is not closed. A comment is one token whatever it holds (what it holds is normalised as markup, see comment()).
+     * What is changed in an HTML page and nothing else: white space that touches a tag is one line break (how a template is
+     * indented is not what it renders). Character references are NOT touched (`&amp;`, `&#039;`, `&quot;` and the characters they
+     * stand for are all different: a golden records how a template escapes). The contents of `<script>`, `<style>`, `<pre>` and
+     * `<textarea>` are untouched, up to the end of the page when the element is not closed. A comment is one token whatever it
+     * holds (what it holds is normalised as markup, see comment()).
      */
     private static function html(string $body): string
     {
@@ -153,15 +149,12 @@ final class PageNormaliser
         $out = '';
         foreach ($tokens as $i => [$kind, $value]) {
             if ($kind === 'text') {
-                $value = self::characters($value, true, true);
                 if ($i > 0) {
                     $value = preg_replace('/^\s+/', "\n", $value) ?? $value;
                 }
                 if ($i < $last) {
                     $value = preg_replace('/\s+$/', "\n", $value) ?? $value;
                 }
-            } elseif ($kind === 'tag') {
-                $value = self::tag($value);
             } elseif ($kind === 'comment') {
                 $value = self::comment($value);
             }
@@ -173,7 +166,7 @@ final class PageNormaliser
 
     /**
      * A comment's contents are the page's own markup commented out: what stands before its first tag is kept, and the rest
-     * is normalised as a page is (white space that touches a tag; its tags' character forms), never reading past the comment.
+     * is normalised as a page is (white space that touches a tag), never reading past the comment.
      */
     private static function comment(string $comment): string
     {
@@ -184,25 +177,5 @@ final class PageNormaliser
         }
 
         return '<!--' . substr($inner, 0, $at) . substr(self::html('<i>' . substr($inner, $at) . 'x'), 3, -1) . '-->';
-    }
-
-    /**
-     * A tag with its character forms made one by where they are: apostrophe entities only in a double-quoted value.
-     */
-    private static function tag(string $tag): string
-    {
-        return preg_replace_callback('/"[^"]*"|\'[^\']*\'|[^"\']+|["\']/s', static fn (array $m): string => self::characters($m[0], false, str_starts_with($m[0], '"') && strlen($m[0]) > 1), $tag) ?? $tag;
-    }
-
-    private static function characters(string $value, bool $text, bool $apostrophes): string
-    {
-        if ($apostrophes) {
-            $value = preg_replace('/&(?:#0*39|apos);/', "'", $value) ?? $value;
-        }
-        if ($text) {
-            $value = preg_replace('/&(?:quot|#0*34);/', '"', $value) ?? $value;
-        }
-
-        return preg_replace('/&amp;(?!#|[A-Za-z][A-Za-z0-9]*;|(?:' . self::LEGACY_ENTITIES . '))/', '&', $value) ?? $value;
     }
 }

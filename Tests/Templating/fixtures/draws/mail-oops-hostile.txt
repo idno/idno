@@ -1,0 +1,12 @@
+Ooops!
+======
+
+An error occured on your Idno site https://example.org/!
+
+<script>x()</script>
+
+Logged in user was a&b
+Agent: <a href=//evil>x</a>
+QS: a=<i>&b="x" 
+
+Referrer: https://evil.example/"><b>

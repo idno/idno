@@ -1,0 +1,112 @@
+<h1 class="idno-admin-page-title">Plugins</h1>
+<p class="idno-admin-description">
+Plugins allow you to add features to your site. These include new kinds of content, options to syndicate content to different sites, and features to change the way Idno behaves. To enable or disable a plugin, just click its enable or disable button.
+</p>
+<div class="idno-admin-card" id="plugin-ab">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Ab
+<span class="idno-plugin-version">2.0</span>
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Ab">
+<input type="hidden" name="container" value="plugin-ab">
+<input type="hidden" name="plugin_action" value="install">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-enable">Enable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-twin">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Mid
+<span class="idno-plugin-version">9</span>
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Twin">
+<input type="hidden" name="container" value="plugin-twin">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-zed">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Zed
+<span class="idno-plugin-version">1.0</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://example.org/z">&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</a>
+</div>
+<div class="idno-plugin-description">
+&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Zed">
+<input type="hidden" name="container" value="plugin-zed">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('submit', function(e) {
+            var form = e.target.closest('form');
+            if (!form || !form.querySelector('[name="plugin_action"]')) return;
+            e.preventDefault();
+
+            var container = form.querySelector('[name="container"]');
+            if (!container) return;
+            var containerId = container.value;
+
+            var formData = new URLSearchParams(new FormData(form)).toString();
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Re-fetch the page to get updated plugin card HTML
+                fetch(form.action)
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(html, 'text/html');
+                    var updated = doc.getElementById(containerId);
+                    var current = document.getElementById(containerId);
+                    if (updated && current) {
+                        current.innerHTML = updated.innerHTML;
+                    }
+                });
+            });
+        });
+    });
+</script>

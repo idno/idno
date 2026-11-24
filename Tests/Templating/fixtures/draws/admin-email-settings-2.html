@@ -1,0 +1,68 @@
+<h1 class="idno-admin-page-title">Email</h1>
+<p class="idno-admin-description">
+Idno tries to send email using your server&#039;s default email settings. If you&#039;d like it to do something else - for example, if you&#039;d like to send email using an external provider - enter the new SMTP settings below.
+</p>
+<p class="idno-admin-description">
+After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started.
+</p>
+<form action="{site}/admin/email" method="post">
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Email Settings</h2>
+<p>Fill in the site email address if you would like your site to send email.</p>
+<div class="idno-form-group">
+<label class="idno-label" for="from_email">Site email address</label>
+<input type="text" id="from_email" name="from_email" class="idno-input"
+                       placeholder="Site email address"
+                       value="">
+<p class="idno-form-help">This is the address that every email will be sent from.</p>
+</div>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">SMTP Settings</h2>
+<p>You can often leave the following settings blank. However, you may wish to set them if you&#039;re using a third-party service to send email.</p>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_host">SMTP host</label>
+<input type="text" id="smtp_host" name="smtp_host" class="idno-input"
+                       placeholder="SMTP host"
+                       value="">
+<p class="idno-form-help">This is the address of the server that will send email for you.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_username">SMTP username</label>
+<input type="text" id="smtp_username" name="smtp_username" class="idno-input"
+                       placeholder="SMTP username"
+                       value="">
+<p class="idno-form-help">If your mail server needs a username, enter it here.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_password">SMTP password</label>
+<input type="password" id="smtp_password" name="smtp_password" class="idno-input"
+                       placeholder="SMTP password"
+                       value="">
+<p class="idno-form-help">If your mail server needs a password, enter it here.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_port">SMTP port</label>
+<input type="text" id="smtp_port" name="smtp_port" class="idno-input"
+                       placeholder="25"
+                       value="25">
+<p class="idno-form-help">This is normally 25 or 587.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_secure">Secure connection</label>
+<select name="smtp_secure" id="smtp_secure" class="idno-input">
+<option value="" selected>No</option>
+<option value="tls" >Yes (TLS)</option>
+<option value="ssl" >Yes (SSL)</option>
+</select>
+<p class="idno-form-help">Select yes if you use secure logins to your mail server.</p>
+</div>
+</div>
+<div style="margin-top:var(--spacing-section)">
+<button type="submit" class="idno-btn idno-btn-primary">Save settings</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/email" />
+</form>

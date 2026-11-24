@@ -245,12 +245,47 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      */
     protected function golden(string $golden, string $body, bool $html = false): void
     {
-        $file = dirname(__DIR__) . '/Templating/fixtures/pages/' . $golden;
         $actual = PageNormaliser::normalise($body, $this->baseUrl(), $html);
         ++$this->compared;
         if (!$this->compareGoldens) {
             return;
         }
+        $this->compareFile($golden, dirname(__DIR__) . '/Templating/fixtures/pages/' . $golden, $actual);
+    }
+
+    /** @var array<string, true> the draw golden files this run has named */
+    private array $drawFiles = [];
+
+    /**
+     * Compares the output of a draw case (normalised) with its file in `fixtures/draws/`, or writes it when IDNO_TEST_CAPTURE_GOLDENS=1. The
+     * file is named after the case: `<case name>` reduced to lower case letters and digits joined by hyphens (`.html`, or `.txt` for text; never
+     * `.json`, which git ignores); two cases that reduce to one name get a short hash of their names added.
+     */
+    protected function drawGolden(string $caseName, string $body, bool $html): void
+    {
+        $slug = substr(trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($caseName)), '-'), 0, 100);
+        $extension = $html ? '.html' : '.txt';
+        $name = $slug . $extension;
+        if (isset($this->drawFiles[$name])) {
+            $name = $slug . '-' . substr(md5($caseName), 0, 6) . $extension;
+        }
+        if (isset($this->drawFiles[$name])) {
+            $this->differences[] = 'draws/' . $name . ': two draw cases have this name: ' . $caseName;
+
+            return;
+        }
+        $this->drawFiles[$name] = true;
+        ++$this->compared;
+        // The attachment host of two cases is a made-up one written with the site's port, which is different in each run
+        $body = str_replace('cdn.example:' . parse_url($this->baseUrl(), PHP_URL_PORT), 'cdn.example:{site-port}', $body);
+        $this->compareFile('draws/' . $name, dirname(__DIR__) . '/Templating/fixtures/draws/' . $name, PageNormaliser::normalise($body, $this->baseUrl(), $html));
+    }
+
+    /**
+     * Compares $actual with the file, or writes it in a capture run (two looks that render a shared golden differently are a difference).
+     */
+    private function compareFile(string $golden, string $file, string $actual): void
+    {
         if (self::capturing()) {
             $this->written[] = $golden;
             if (isset(self::$captured[$golden]) && self::$captured[$golden] !== $actual) {

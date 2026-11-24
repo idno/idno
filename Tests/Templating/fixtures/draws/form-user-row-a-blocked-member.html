@@ -1,0 +1,29 @@
+
+<div class="idno-user-row idno-entities-user">
+<div class="idno-user-info">
+<img src="{site}/gfx/users/default-01.png" alt="" class="idno-user-avatar">
+<div class="idno-user-details">
+<a href="{site}/profile/bob" class="idno-user-name">Bob Member</a>
+<span class="idno-user-handle">bob</span>
+<span class="idno-user-email">bob@example.com</span>
+</div>
+</div>
+<div class="idno-user-meta">
+<div class="idno-user-meta-item">
+<strong>Joined</strong>
+<time datetime="2026-01-02T09:00:00+00:00">Jan 2, 2026</time>
+</div>
+<div class="idno-user-meta-item">
+<strong>Last post</strong>
+<time datetime="2026-03-20T12:00:00+00:00">Mar 20, 2026</time>
+</div>
+<div class="idno-user-meta-item">
+<span>Member</span>
+</div>
+</div>
+<div class="idno-user-actions">
+<a data-form-id="{form-1}"  class="idno-user-action-link"   href="{site}/admin/users" onclick="document.getElementById('{form-1}').submit(); return false; ">Make admin</a>
+<a data-form-id="{form-2}"  class="idno-user-action-link"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user will be able to log in and post again.')) { document.getElementById('{form-2}').submit(); return false; } else { return false; } ">Unblock</a>
+<a data-form-id="{form-3}"  class="idno-user-action-link idno-user-action-danger"   href="{site}/admin/users" onclick="if (confirm('Are you sure? This will delete this user and all their content.')) { document.getElementById('{form-3}').submit(); return false; } else { return false; } ">Delete</a>
+</div>
+</div>

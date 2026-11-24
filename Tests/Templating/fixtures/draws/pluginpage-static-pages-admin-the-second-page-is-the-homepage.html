@@ -1,0 +1,178 @@
+
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h1 class="idno-admin-page-title">Pages</h1>
+<a href="{site}/staticpages/edit/" class="idno-btn idno-btn-primary">
++ Add new page
+</a>
+</div>
+<p class="idno-admin-description">
+Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">All Pages</h2>
+<table style="width:100%;border-collapse:collapse;">
+<thead>
+<tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+<th style="width:30px;padding:0.5rem;"></th>
+<th style="text-align:left;padding:0.5rem;font-weight:600;">Title</th>
+<th style="text-align:left;padding:0.5rem;font-weight:600;">Category</th>
+<th style="text-align:right;padding:0.5rem;font-weight:600;">Actions</th>
+</tr>
+</thead>
+<tbody class="sortable-pages" data-category="No Category">
+<tr draggable="true" data-page-id="00000000-0000-4000-8000-000000000023" style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.pageId); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handlePageDrop(event, this);">
+<td style="padding:0.5rem;color:var(--color-muted,#9ca3af);cursor:grab;">⋮⋮</td>
+<td style="padding:0.5rem;">
+<a href="{site}/pages/about-this-site">About this site</a>
+</td>
+<td style="padding:0.5rem;font-size:0.875rem;color:var(--color-muted,#6b7280);">No Category</td>
+<td style="padding:0.5rem;text-align:right;font-size:0.875rem;white-space:nowrap;">
+<span style="opacity:0.3;">
+<a data-form-id="{form-1}"   title="Make homepage"  href="{site}/staticpage/homepage/set/00000000-0000-4000-8000-000000000023" onclick="if (confirm('Are you sure you want to make this page your homepage?')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } ">🏠</a>
+</span>
+<a href="{site}/staticpage/edit/00000000-0000-4000-8000-000000000023" style="margin-left:0.5rem;" title="Edit page">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+</a>
+<span style="margin-left:0.5rem;color:var(--color-danger,#dc2626);">
+<a data-form-id="{form-2}"   title="Delete page"  href="{site}/staticpage/delete/00000000-0000-4000-8000-000000000023" onclick="if (confirm('Are you sure you want to permanently delete this page?')) { document.getElementById('{form-2}').submit(); return false; } else { return false; } "><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+</a>
+</span>
+</td>
+</tr>
+</tbody>
+<tbody class="sortable-pages" data-category="Docs">
+<tr draggable="true" data-page-id="0000000000004000800000000000aa01" style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.pageId); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handlePageDrop(event, this);">
+<td style="padding:0.5rem;color:var(--color-muted,#9ca3af);cursor:grab;">⋮⋮</td>
+<td style="padding:0.5rem;">
+<a href="{site}/staticpage/0000000000004000800000000000aa01">A &lt;b&gt;hostile&lt;/b&gt; &quot;page&quot;</a>
+</td>
+<td style="padding:0.5rem;font-size:0.875rem;color:var(--color-muted,#6b7280);">Docs</td>
+<td style="padding:0.5rem;text-align:right;font-size:0.875rem;white-space:nowrap;">
+<a data-form-id="{form-3}"   title="Remove as homepage"  href="{site}/staticpage/homepage/clear/0000000000004000800000000000aa01" onclick="if (confirm('Are you sure you want to remove this page from your homepage?')) { document.getElementById('{form-3}').submit(); return false; } else { return false; } ">🏠</a>
+<a href="{site}/staticpage/edit/0000000000004000800000000000aa01" style="margin-left:0.5rem;" title="Edit page">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+</a>
+<span style="margin-left:0.5rem;color:var(--color-danger,#dc2626);">
+<a data-form-id="{form-4}"   title="Delete page"  href="{site}/staticpage/delete/0000000000004000800000000000aa01" onclick="if (confirm('Are you sure you want to permanently delete this page?')) { document.getElementById('{form-4}').submit(); return false; } else { return false; } "><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+</a>
+</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Categories Section -->
+<div class="idno-admin-card" x-data="{ showAddCategory: false }">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h2 class="idno-admin-card-title">Categories</h2>
+<button type="button" @click="showAddCategory = !showAddCategory" class="idno-btn" style="font-size:0.875rem;">
++ Add category
+</button>
+</div>
+<p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
+If you plan on adding many pages, you may want to group them under categories. However, you don&#039;t have to assign a page to a category.
+</p>
+<div x-show="showAddCategory" x-cloak style="margin-top:0.75rem;">
+<form action="{site}/admin/staticpages/add/" method="post" style="display:flex;gap:0.5rem;align-items:start;">
+<input type="text" name="category" placeholder="Name of category to add" class="idno-input" style="max-width:20rem;" required>
+<button type="submit" class="idno-btn idno-btn-primary">Add</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/staticpages/add" />
+</form>
+</div>
+<table style="width:100%;border-collapse:collapse;margin-top:1rem;">
+<thead>
+<tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+<th style="width:30px;padding:0.5rem;"></th>
+<th style="text-align:left;padding:0.5rem;font-weight:600;">Category Name</th>
+<th style="text-align:left;padding:0.5rem;font-weight:600;">Pages</th>
+<th style="text-align:right;padding:0.5rem;font-weight:600;">Actions</th>
+</tr>
+</thead>
+<tbody id="sortable-categories">
+<tr style="border-bottom:1px solid var(--color-border,#e5e7eb);"                x-data="{ editing: false }">
+<td style="padding:0.5rem;color:var(--color-muted,#9ca3af);"></td>
+<td style="padding:0.5rem;">
+<span x-show="!editing">No Category</span>
+</td>
+<td style="padding:0.5rem;">1</td>
+<td style="padding:0.5rem;text-align:right;font-size:0.875rem;">
+</td>
+</tr>
+<tr draggable="true" data-category="Docs"
+                style="border-bottom:1px solid var(--color-border,#e5e7eb);cursor:grab;"
+                ondragstart="this.style.opacity='0.4'; event.dataTransfer.setData('text/plain', this.dataset.category); event.dataTransfer.effectAllowed='move';"
+                ondragend="this.style.opacity='1';"
+                ondragover="event.preventDefault(); this.style.borderTop='2px solid var(--color-primary,#2563eb)';"
+                ondragleave="this.style.borderTop='';"
+                ondrop="event.preventDefault(); this.style.borderTop=''; handleCategoryDrop(event, this);"                x-data="{ editing: false }">
+<td style="padding:0.5rem;color:var(--color-muted,#9ca3af);">⋮⋮</td>
+<td style="padding:0.5rem;">
+<span x-show="!editing">Docs</span>
+<form x-show="editing" x-cloak action="{site}/admin/staticpages/edit/" method="post" style="display:flex;gap:0.5rem;">
+<input type="text" name="new_category" value="Docs" class="idno-input" style="width:auto;">
+<input type="hidden" name="category" value="Docs">
+<button type="submit" class="idno-btn idno-btn-primary" style="font-size:0.75rem;">Save</button>
+<button type="button" @click="editing = false" class="idno-btn" style="font-size:0.75rem;">Cancel</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/staticpages/edit" />
+</form>
+</td>
+<td style="padding:0.5rem;">1</td>
+<td style="padding:0.5rem;text-align:right;font-size:0.875rem;">
+<a href="#" @click.prevent="editing = true" style="margin-right:0.5rem;">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+</a>
+<span style="color:var(--color-danger,#dc2626);">
+<a data-form-id="{form-5}"   href="{site}/admin/staticpages/delete/" onclick="if (confirm('Are you sure you want to permanently delete this category?')) { document.getElementById('{form-5}').submit(); return false; } else { return false; } "><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+</a>
+</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<script>
+function handlePageDrop(event, targetRow) {
+    var draggedId = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-page-id="' + draggedId + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-page-id]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{site}\/admin\/staticpages\/reorder\/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ page: draggedId, position: newIndex })
+    });
+}
+
+function handleCategoryDrop(event, targetRow) {
+    var draggedCategory = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-category="' + draggedCategory + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-category]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{site}\/admin\/staticpages\/reorder\/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ category: draggedCategory, position: newIndex })
+    });
+}
+</script>

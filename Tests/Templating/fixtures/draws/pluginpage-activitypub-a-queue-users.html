@@ -1,0 +1,73 @@
+<h1 class="idno-admin-page-title">ActivityPub Federation</h1>
+<p class="idno-admin-description">
+ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms. When users publish content, it is automatically delivered to their followers on the fediverse.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Status</h2>
+<div style="display:flex;gap:2rem;margin-top:0.5rem;">
+<div class="idno-admin-stat">
+<div class="idno-admin-stat-value">3</div>
+<div class="idno-admin-stat-label">Total Users</div>
+</div>
+<div class="idno-admin-stat">
+<div class="idno-admin-stat-value">5</div>
+<div class="idno-admin-stat-label">AP Followers</div>
+</div>
+</div>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Users</h2>
+<table style="width:100%;border-collapse:collapse;">
+<thead>
+<tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
+<th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">User</th>
+<th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">Handle</th>
+<th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">AP Followers</th>
+<th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;">Keys</th>
+</tr>
+</thead>
+<tbody>
+<tr style="border-bottom:1px solid var(--color-border,#e5e7eb);">
+<td style="padding:0.5rem 0.5rem;">Ada</td>
+<td style="padding:0.5rem 0.5rem;"><code>ada</code></td>
+<td style="padding:0.5rem 0.5rem;">5</td>
+<td style="padding:0.5rem 0.5rem;">
+<span style="color:var(--color-success,#16a34a);">✓ Generated</span>
+</td>
+</tr>
+<tr style="border-bottom:1px solid var(--color-border,#e5e7eb);">
+<td style="padding:0.5rem 0.5rem;">Bob</td>
+<td style="padding:0.5rem 0.5rem;"><code>bob</code></td>
+<td style="padding:0.5rem 0.5rem;">0</td>
+<td style="padding:0.5rem 0.5rem;">
+<span style="color:var(--color-warning,#eab308);">⏳ Pending</span>
+</td>
+</tr>
+<tr style="border-bottom:1px solid var(--color-border,#e5e7eb);">
+<td style="padding:0.5rem 0.5rem;">&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</td>
+<td style="padding:0.5rem 0.5rem;"><code>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</code></td>
+<td style="padding:0.5rem 0.5rem;">0</td>
+<td style="padding:0.5rem 0.5rem;">
+<span style="color:var(--color-success,#16a34a);">✓ Generated</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Configuration</h2>
+<p>ActivityPub is enabled. To disable it, go to the Plugins page and deactivate the ActivityPub plugin.</p>
+<dl style="margin-top:0.75rem;">
+<div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+<dt style="font-weight:600;min-width:8rem;">WebFinger:</dt>
+<dd><code>{site}/.well-known/webfinger</code></dd>
+</div>
+<div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+<dt style="font-weight:600;min-width:8rem;">Shared Inbox:</dt>
+<dd><code>{site}/inbox</code></dd>
+</div>
+<div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
+<dt style="font-weight:600;min-width:8rem;">NodeInfo:</dt>
+<dd><code>{site}/.well-known/nodeinfo</code></dd>
+</div>
+</dl>
+</div>

@@ -1,0 +1,62 @@
+
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h1 class="idno-admin-page-title">Pages</h1>
+<a href="{site}/staticpages/edit/" class="idno-btn idno-btn-primary">
++ Add new page
+</a>
+</div>
+<p class="idno-admin-description">
+Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.</p>
+<!-- Categories Section -->
+<div class="idno-admin-card" x-data="{ showAddCategory: false }">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+<h2 class="idno-admin-card-title">Categories</h2>
+<button type="button" @click="showAddCategory = !showAddCategory" class="idno-btn" style="font-size:0.875rem;">
++ Add category
+</button>
+</div>
+<p style="font-size:0.875rem;color:var(--color-muted,#6b7280);">
+If you plan on adding many pages, you may want to group them under categories. However, you don&#039;t have to assign a page to a category.
+</p>
+<div x-show="showAddCategory" x-cloak style="margin-top:0.75rem;">
+<form action="{site}/admin/staticpages/add/" method="post" style="display:flex;gap:0.5rem;align-items:start;">
+<input type="text" name="category" placeholder="Name of category to add" class="idno-input" style="max-width:20rem;" required>
+<button type="submit" class="idno-btn idno-btn-primary">Add</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/staticpages/add" />
+</form>
+</div>
+</div>
+<script>
+function handlePageDrop(event, targetRow) {
+    var draggedId = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-page-id="' + draggedId + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-page-id]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{site}\/admin\/staticpages\/reorder\/page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ page: draggedId, position: newIndex })
+    });
+}
+
+function handleCategoryDrop(event, targetRow) {
+    var draggedCategory = event.dataTransfer.getData('text/plain');
+    var tbody = targetRow.closest('tbody');
+    var draggedRow = tbody.querySelector('[data-category="' + draggedCategory + '"]');
+    if (!draggedRow || draggedRow === targetRow) return;
+    tbody.insertBefore(draggedRow, targetRow);
+    var rows = tbody.querySelectorAll('[data-category]');
+    var newIndex = Array.prototype.indexOf.call(rows, draggedRow);
+    fetch('{site}\/admin\/staticpages\/reorder\/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ category: draggedCategory, position: newIndex })
+    });
+}
+</script>

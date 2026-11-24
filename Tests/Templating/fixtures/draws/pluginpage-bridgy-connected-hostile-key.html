@@ -1,0 +1,32 @@
+<h1 class="idno-admin-page-title">Social Interactions</h1>
+<p class="idno-admin-description">
+<a href="https://www.brid.gy">Bridgy</a>
+is a service that pulls social interactions - such as likes and retweets - back to your website.</p>
+<p class="idno-admin-description">
+If you send content from Idno to Facebook or Twitter, use Bridgy to save comments and interactions from those networks to the original post on your Idno site.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Twitter + Bridgy</h2>
+<p>Bridgy is pulling in replies, favorites, and retweets from Twitter. Click to disable.</p>
+<form action="https://www.brid.gy/delete/start" method="post" style="margin-top:1rem;">
+<input type="hidden" name="feature" value="listen">
+<input type="hidden" name="key" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;">
+<input type="hidden" name="callback" value="{site}/account/bridgy/disabled/?service=twitter">
+<button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);">
+Disconnect Twitter + Bridgy
+</button>
+</form>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('{site}\/account\/bridgy\/check\/', {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.changed) {
+            window.location.reload();
+        }
+    })
+    .catch(function() { /* silently ignore check failures */ });
+});
+</script>

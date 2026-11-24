@@ -1,0 +1,62 @@
+
+<div class="audio-play-wrapper"><a href="#" id="player{1}" class="audio-play-button"><i class="fa fa-play"></i></a></div>
+<h2 class="p-name">
+<a href="{site}/media/edit/">Hostile</a>
+</h2>
+<div id="waveform{1}" class="waveform-player"></div>
+<script>
+                        var wavesurfer{1} = WaveSurfer.create({
+                            container: '#waveform{1}',
+                            waveColor: '#aaa',
+                            progressColor: '#333',
+                            cursorColor: '#aaa',
+                            height: 100
+                        });
+                        wavesurfer{1}.load('https\u003A\/\/x.example\/a\u0027b.mp3');
+                        $('#waveform{1}').click(function() {
+                            wavesurfer{1}.play();
+                        });
+                        wavesurfer{1}.on('play', function() {
+                            $('#player{1}').html('<i class="fa fa-pause"></i>');
+                        });
+                        wavesurfer{1}.on('pause', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        wavesurfer{1}.on('finish', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        $('#player{1}').click(function() {
+                            wavesurfer{1}.playPause();
+                            return false;
+                        });
+                    </script>
+<div id="waveform{1}" class="waveform-player"></div>
+<script>
+                        var wavesurfer{1} = WaveSurfer.create({
+                            container: '#waveform{1}',
+                            waveColor: '#aaa',
+                            progressColor: '#333',
+                            cursorColor: '#aaa',
+                            height: 100
+                        });
+                        wavesurfer{1}.load('');
+                        $('#waveform{1}').click(function() {
+                            wavesurfer{1}.play();
+                        });
+                        wavesurfer{1}.on('play', function() {
+                            $('#player{1}').html('<i class="fa fa-pause"></i>');
+                        });
+                        wavesurfer{1}.on('pause', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        wavesurfer{1}.on('finish', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        $('#player{1}').click(function() {
+                            wavesurfer{1}.playPause();
+                            return false;
+                        });
+                    </script>
+<div class="e-content">
+<p>H</p>
+</div>

@@ -1,0 +1,64 @@
+<h1 class="idno-admin-page-title">Legacy tables</h1>
+<p class="explanation idno-admin-description">
+When this site was upgraded from Idno 1.x, the tables of the old database were kept, renamed legacy_ followed by their old name. The site no longer reads them. Keep them until you are sure the upgrade went well; then you can delete them here.</p>
+<div class="idno-admin-card" id="legacytables-tables">
+<h2 class="idno-admin-card-title">Tables of the Idno 1.x database</h2>
+<table class="table">
+<thead>
+<tr><th>Table</th><th>Rows (approximate)</th></tr>
+</thead>
+<tbody>
+<tr><td><code>legacy_entities</code></td><td>1200</td></tr>
+<tr><td><code>legacy_config</code></td><td>3</td></tr>
+<tr><td><code>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</code></td><td>1</td></tr>
+</tbody>
+</table>
+<form action="{site}/admin/legacytables/" method="post">
+<p>
+The row counts are the database&#039;s estimates.            Deleting these tables cannot be undone, and afterwards the upgrade can no longer be reversed. Make a backup of the database first if you might want them again. The rows that were not carried over (below) are kept.
+</p>
+<p>
+<label for="legacytables-confirm">Type delete to confirm:</label>
+<input type="text" name="confirm" id="legacytables-confirm" value="" autocomplete="off" class="form-control idno-input">
+</p>
+<p>
+<button type="submit" class="btn btn-danger idno-btn idno-btn-danger">Delete the legacy tables</button>
+</p>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/legacytables/" />
+</form>
+</div>
+<div class="idno-admin-card" id="legacytables-rejects">
+<h2 class="idno-admin-card-title">Rows that were not carried over</h2>
+<p>
+2 rows of the Idno 1.x database could not be carried into the new database. Each is listed with the reason. Their full contents are kept in the database table idno_upgrade_rejects, which is never deleted (deleting the legacy tables does not delete it).
+</p>
+<table class="table">
+<thead>
+<tr><th>Collection</th><th>Address (uuid) in 1.x</th><th>Reason</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>entities</td>
+<td><code>https://example.org/a</code></td>
+<td>not JSON</td>
+</tr>
+<tr>
+<td>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</td>
+<td><code>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</code></td>
+<td>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="idno-admin-card" id="legacytables-reappeared">
+<h2 class="idno-admin-card-title">Tables created by an old Idno process</h2>
+<p>
+These tables have the names of the Idno 1.x tables, but they were created after the upgrade, by a process still running the old version of Idno (a queue or cron service, for example). Nothing in them is part of this site, and the site never reads them. Stop that process. These tables are not deleted from here.
+</p>
+<ul>
+<li><code>reader</code></li>
+</ul>
+</div>

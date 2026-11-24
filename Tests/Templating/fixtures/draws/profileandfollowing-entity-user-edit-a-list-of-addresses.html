@@ -1,0 +1,71 @@
+
+<form action="{site}/profile/ada" method="post" enctype="multipart/form-data">
+<div class="idno-editor">
+<h4 class="idno-editor-heading">Edit your profile</h4>
+<!-- Avatar section -->
+<div class="idno-form-field" x-data="{ preview: null, icon: &quot;{site}\/gfx\/users\/default-04.png&quot; }" x-cloak>
+<div style="display:flex;align-items:center;gap:1rem">
+<img :src="preview || icon"
+                     alt="Profile photo"
+                     style="width:80px;height:80px;border-radius:50%;object-fit:cover">
+<div>
+<label for="avatar" class="idno-btn idno-btn-ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:0.375rem">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+Change photo
+</label>
+<input type="file" name="avatar" id="avatar" accept="image/*" style="display:none"
+                           @change="if ($event.target.files[0]) { const r = new FileReader(); r.onload = e => preview = e.target.result; r.readAsDataURL($event.target.files[0]); }">
+<p class="idno-form-help">JPG, PNG or GIF</p>
+</div>
+</div>
+</div>
+<!-- Name field -->
+<div class="idno-form-field">
+<label class="idno-label" for="name">Your name</label>
+<input class="idno-input" type="text" id="name" name="name"
+                   value="Ada Admin">
+</div>
+<!-- Bio field -->
+<div class="idno-form-field">
+<label class="idno-label" for="body">About you</label>
+<textarea class="idno-textarea" name="profile[description]" id="body"
+                      placeholder="Tell people about yourself..."
+            ></textarea>
+</div>
+<!-- Websites section -->
+<div class="idno-form-field" x-data="{ urls: [&quot;https:\/\/example.org\/ada&quot;,&quot;@ada_l&quot;,&quot;https:\/\/www.github.com\/ada\/&quot;,&quot;https:\/\/twitter.com\/ada_l\/&quot;,&quot;mailto:ada@example.com&quot;,&quot;http:\/\/SMS:+15555550100&quot;,&quot;tel:+15555550100&quot;,&quot;sip:ada@example.com&quot;,&quot;facetime:ada@example.com&quot;,&quot;skype:ada&quot;,&quot;xmpp:ada@example.com&quot;,&quot;bitcoin:abc&quot;,&quot;ethereum:0x1&quot;,&quot;spotify:user:ada&quot;,&quot;ssb:abc&quot;,&quot;ssh:\/\/example.org&quot;,&quot;http:\/\/example.org\/bare&quot;,&quot;https:\/\/medium.com\/@ada&quot;,&quot;http:\/\/javascript:alert(1)&quot;,&quot;https:\/\/example.org\/?a=1&amp;b=&lt;i&gt;2&lt;\/i&gt;&quot;] }" x-cloak>
+<label class="idno-label">Your websites</label>
+<p class="idno-form-help" style="margin-bottom:0.5rem">Other places on the web where people can find you.</p>
+<template x-for="(url, index) in urls" :key="index">
+<div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem">
+<input type="url" name="profile[url][]" class="idno-input"
+                           x-model="urls[index]" placeholder="https://">
+<button type="button" @click="urls.splice(index, 1)" x-show="urls.length > 1"
+                            style="background:none;border:none;cursor:pointer;color:var(--color-text-muted);padding:0.25rem;flex-shrink:0"
+                            title="Remove">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+</button>
+</div>
+</template>
+<button type="button" @click="urls.push('')"
+                    style="background:none;border:none;cursor:pointer;color:var(--color-accent);font-size:var(--font-size-sm);display:inline-flex;align-items:center;gap:0.25rem;padding:0">
+<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+Add another website
+</button>
+</div>
+<!-- CSRF token -->
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/profile/ada" />
+<!-- Action buttons -->
+<div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+<button type="submit" class="idno-btn idno-btn-primary">
+Save Changes
+</button>
+<a href="{site}/profile/ada" class="idno-btn idno-btn-ghost">
+Cancel
+</a>
+</div>
+</div>
+</form>

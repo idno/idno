@@ -1,0 +1,427 @@
+<h1 class="idno-admin-page-title">Plugins</h1>
+<p class="idno-admin-description">
+Plugins allow you to add features to your site. These include new kinds of content, options to syndicate content to different sites, and features to change the way Idno behaves. To enable or disable a plugin, just click its enable or disable button.
+</p>
+<div class="idno-admin-card" id="plugin-activitypub">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+ActivityPub
+<span class="idno-plugin-version">0.1.0</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://withknown.com">Known</a>
+</div>
+<div class="idno-plugin-description">
+ActivityPub federation support. Allows profiles to be followed from Mastodon and other compatible platforms, and delivers posts to followers.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="ActivityPub">
+<input type="hidden" name="container" value="plugin-activitypub">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-media">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Audio
+<span class="idno-plugin-version">1.0.2</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Upload audio or music and turn your site into a podcast.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Media">
+<input type="hidden" name="container" value="plugin-media">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-like">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Bookmark
+<span class="idno-plugin-version">1.0.2</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Bookmark a page in Idno.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Like">
+<input type="hidden" name="container" value="plugin-like">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-bridgy">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Bridgy
+<span class="idno-plugin-version">1.0.1</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Receive comments from external services on your Idno site.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Bridgy">
+<input type="hidden" name="container" value="plugin-bridgy">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-checkin">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Checkin
+<span class="idno-plugin-version">1.1.3</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+An easy way to check into a geographic location.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Checkin">
+<input type="hidden" name="container" value="plugin-checkin">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-styles">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Custom CSS
+<span class="idno-plugin-version">1.0.0</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+A custom CSS stylesheet editor to modify the visual style of your site.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Styles">
+<input type="hidden" name="container" value="plugin-styles">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-event">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Events
+<span class="idno-plugin-version">1.0.2</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+A lightweight way to post or reply to events.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Event">
+<input type="hidden" name="container" value="plugin-event">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-indiepub">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+IndiePub
+<span class="idno-plugin-version">0.10</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Support IndieAuth and Micropub for single-user Idno sites. Must be used with a single-user theme.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="IndiePub">
+<input type="hidden" name="container" value="plugin-indiepub">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-photo">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Photos
+<span class="idno-plugin-version">1.0.4</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Simple photo uploader for Idno.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Photo">
+<input type="hidden" name="container" value="plugin-photo">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-standardsitesync">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+StandardSiteSync
+<span class="idno-plugin-version">0.1.0</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://withknown.com">Known</a>
+</div>
+<div class="idno-plugin-description">
+Sync your writing to standard.site records on an AT Protocol PDS. Supports OAuth authentication, automatic sync of new content, and one-click backfill of existing posts.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="StandardSiteSync">
+<input type="hidden" name="container" value="plugin-standardsitesync">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-staticpages">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Static pages
+<span class="idno-plugin-version">1.0.1</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Host static pages in Idno.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="StaticPages">
+<input type="hidden" name="container" value="plugin-staticpages">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-status">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Status updates
+<span class="idno-plugin-version">1.0.6</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Simple status updates for Idno.
+</div>
+</div>
+<div class="idno-plugin-action">
+<span class="idno-plugin-always-on">Always on</span>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-text">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Text posts
+<span class="idno-plugin-version">1.0.9</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+A lightweight blogging engine.
+</div>
+</div>
+<div class="idno-plugin-action">
+<form action="{site}/admin/plugins/" method="post">
+<input type="hidden" name="plugin" value="Text">
+<input type="hidden" name="container" value="plugin-text">
+<input type="hidden" name="plugin_action" value="uninstall">
+<button type="submit" class="idno-btn idno-btn-sm idno-btn-disable">Disable</button>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/admin/plugins/" />
+</form>
+</div>
+</div>
+</div>
+<div class="idno-admin-card" id="plugin-webhooks">
+<div class="idno-plugin-row">
+<div class="idno-plugin-info">
+<div class="idno-plugin-name">
+Webhooks
+<span class="idno-plugin-version">1.0.1</span>
+</div>
+<div class="idno-plugin-author">
+by
+<a href="https://idno.co">Idno</a>
+</div>
+<div class="idno-plugin-description">
+Syndicate via Webhooks.
+</div>
+</div>
+<div class="idno-plugin-action">
+<span class="idno-plugin-always-on">Always on</span>
+</div>
+</div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('submit', function(e) {
+            var form = e.target.closest('form');
+            if (!form || !form.querySelector('[name="plugin_action"]')) return;
+            e.preventDefault();
+
+            var container = form.querySelector('[name="container"]');
+            if (!container) return;
+            var containerId = container.value;
+
+            var formData = new URLSearchParams(new FormData(form)).toString();
+            fetch(form.action, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                // Re-fetch the page to get updated plugin card HTML
+                fetch(form.action)
+                .then(function(r) { return r.text(); })
+                .then(function(html) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(html, 'text/html');
+                    var updated = doc.getElementById(containerId);
+                    var current = document.getElementById(containerId);
+                    if (updated && current) {
+                        current.innerHTML = updated.innerHTML;
+                    }
+                });
+            });
+        });
+    });
+</script>

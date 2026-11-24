@@ -1,0 +1,30 @@
+
+<div>
+<h2 class="idno-entry-title p-name">
+<a href="{site}/view/00000000-0000-4000-8000-0000000000aa">Checked into Nowhere</a>
+</h2>
+<span class="p-location u-checkin h-card">
+<data class="p-name" value="Nowhere"></data>
+<data class="p-latitude" value=""></data>
+<data class="p-longitude" value=""></data>
+</span>
+<div id="map_00000000-0000-4000-8000-0000000000aa" style="height: 250px; border-radius: var(--radius-sm); overflow: hidden; margin: var(--spacing-gap) 0;"></div>
+<div class="idno-entry-body e-content entry-content">
+<p>No map</p>
+</div>
+</div>
+<script>
+            (function () {
+                var map = L.map('map_00000000\u002D0000\u002D4000\u002D8000\u002D0000000000aa', {
+                    touchZoom: false,
+                    scrollWheelZoom: false
+                }).setView([, ], 16);
+                var layer = new L.StamenTileLayer("toner-lite");
+                map.addLayer(layer);
+                var marker = L.marker([, ]);
+                marker.addTo(map);
+                map.scrollWheelZoom.disable();
+                map.touchZoom.disable();
+                map.doubleClickZoom.disable();
+            })();
+        </script>

@@ -267,10 +267,13 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertIsArray($out);
         $seen = [];
         $problems = [];
+        // What a draw method is called is the group of its cases: `drawEntityCases` is `entity`
+        $group = strtolower((string) preg_replace('/^draw|Cases$/', '', (string) (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 2)[1]['function'] ?? 'draw')));
         foreach ($out as $label => $html) {
             $label = (string) $label;
             $this->drawSeen[$label] = true;
             $this->assertIsString($html, $label);
+            $this->drawGolden($group . '--' . $label, $html, true);
             if (isset(self::EMPTY_OUTPUT[$label])) {
                 if (trim($html) !== '') {
                     $problems[] = $label . ' is meant to draw nothing (' . self::EMPTY_OUTPUT[$label] . ') and draws ' . strlen($html) . ' bytes';
@@ -343,7 +346,15 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
      */
     private function drawCases(): void
     {
-        $this->assertNotEmpty($this->drawMails());
+        $mails = $this->drawMails();
+        $this->assertNotEmpty($mails);
+        foreach ($mails as $name => $mail) {
+            // The mails that have a golden page are compared there
+            if (!in_array($name, self::GOLDEN_MAILS, true)) {
+                $this->drawGolden('mail--' . $name, $mail['html'], true);
+                $this->drawGolden('mail--' . $name, $mail['text'], false);
+            }
+        }
         $this->drawIdentityLinks();
         $this->drawIconLeakCases();
         $this->drawEntityCases();
@@ -379,6 +390,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $drawn = $this->runInSite(str_replace('%DRAWS%', $this->literal(json_encode(self::DRAWS, JSON_THROW_ON_ERROR)), $code));
         $this->assertIsArray($drawn);
         $this->assertCount(count(self::DRAWS), $drawn);
+        foreach (self::DRAWS as $i => [$type, $name]) {
+            $this->drawGolden('draws--' . ($i + 1) . ' ' . $type . ' ' . $name, (string) $drawn[$i], $type !== 'email-text');
+        }
         $this->assertSame(count(self::DRAWS), count(array_unique($drawn)), 'each draw case draws something of its own: the states differ in what they show');
     }
 
@@ -552,7 +566,12 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ] as $label => $preview) {
             $out['link preview, ' . $label] = $draw('entity/LinkPreviewCard', ['preview' => $preview]);
         }
-        foreach ([[], [$status, $status->getOwner()]] as $drafts) {
+        // The time of update of the post and of the user used as a second "draft" is now (a save of the post, a login of the user, since the seed fixed
+        // them): fixed again, in memory
+        $status->updated = 1773000000;
+        $owner = $status->getOwner();
+        $owner->updated = 1773000000;
+        foreach ([[], [$status, $owner]] as $drafts) {
             $out['drafts ' . count($drafts)] = $draw('drafts', ['drafts' => $drafts, 'total' => 25, 'count' => 10, 'offset' => 10]);
         }
         $draft = new \IdnoPlugins\Status\Status();
@@ -991,11 +1010,13 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['a profile'] = $draw('entity/User', ['object' => $user]) . $draw('entity/User', ['user' => $bob]);
         $site->session()->logUserOn($user);
         $group = new \Idno\Entities\AccessGroup();
+        $group->_id = '00000000-0000-4000-8000-000000000901'; // an id of its own makes the same address every run
         $group->title = 'Friends & "family"';
         $group->owner = $user->getUUID();
         $group->access_group_type = 'FOLLOWING';
         $group->save(true);
         $other = new \Idno\Entities\AccessGroup();
+        $other->_id = '00000000-0000-4000-8000-000000000902';
         $other->title = 'Editors';
         $other->owner = $user->getUUID();
         $other->save(true);
@@ -1196,6 +1217,14 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         // A row of the user search, for another member and for oneself, with a member blocked
         $site->session()->logUserOn($ada);
         $out['user row, another member'] = $draw('forms/components/usersearch/user', ['user' => $bob]);
+        // The row shows the time of the member's latest post: one this script made was saved now, so the stored time is fixed first
+        $latest = \Idno\Core\Idno::container()->get(\Idno\Templating\TemplateHelpers::class)->latestPostOf($ada);
+        if ($latest) {
+            $store = \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class);
+            $record = $store->findById('entities', (string) $latest->getID());
+            $record['updated'] = 1773000000;
+            $store->save('entities', $record);
+        }
         $out['user row, oneself'] = $draw('forms/components/usersearch/user', ['user' => $ada]);
         $out['user row, not a user'] = $draw('forms/components/usersearch/user', ['user' => 'nobody']);
         $site->config()->blocked_emails = [$bob->email];

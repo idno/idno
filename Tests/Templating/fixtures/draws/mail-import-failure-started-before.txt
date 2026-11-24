@@ -1,0 +1,8 @@
+Sorry, your data import was unsuccessful.
+=========================================
+
+This import was started before and did not finish, so it was not run again: running it
+again would import its posts twice. Some posts may already have been imported. Check
+your posts first; if posts are missing, upload the file again.
+
+Visit your site: {site}/

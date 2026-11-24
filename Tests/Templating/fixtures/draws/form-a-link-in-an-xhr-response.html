@@ -1,0 +1,8 @@
+<a data-form-id="{form-1}"   href="/status/delete" onclick="document.getElementById('{form-1}').submit(); return false; ">Remove</a>
+<form action="/status/delete" style="display: none; margin: 0; padding: 0" id="{form-1}" method="POST">
+<textarea name="json">{&quot;uuid&quot;:&quot;abc&quot;}</textarea>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/status/delete" />
+</form>

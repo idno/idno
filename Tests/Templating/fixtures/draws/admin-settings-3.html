@@ -1,0 +1,124 @@
+<h1 class="idno-admin-page-title">Site Settings</h1>
+<h1>
+Site configuration</h1>
+<div class="explanation">
+<p>On this page you can change the basic settings for your site, like the site name and the number of posts visible on each page.
+</p>
+</div>
+<form action="{site}/admin/" class="admin" method="post">
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Site Details</h2>
+<div class="idno-form-group">
+<label class="idno-label" for="name">Site name</label>
+<input type="text" id="name" name="title" class="idno-input"
+                       placeholder="Site name"
+                       value="Fixture Site">
+<p class="idno-form-help">Give your site a name!</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="description">Site summary</label>
+<input type="text" id="description" name="description" class="idno-input"
+                       placeholder="Site description"
+                       value="A social website powered by Idno">
+<p class="idno-form-help">What&#039;s your site about?</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="homepage-title">Homepage title</label>
+<input type="text" id="homepage-title" name="homepagetitle" class="idno-input"
+                       placeholder="Homepage title"
+                       value="">
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="items_per_page">Items per page</label>
+<input type="text" id="items_per_page" name="items_per_page" class="idno-input"
+                       placeholder="10"
+                       value="10">
+</div>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" id="single_user" name="single_user" value="true"
+                           checked>
+<label for="single_user">Single user site</label>
+</div>
+<p class="idno-form-help">Show profile info on homepage.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label">Permalink Structure</label>
+<div class="idno-checkbox-group">
+<input type="radio" name="permalink_structure" value="/:year/:slug"
+                            >
+<label>/:year/:slug (default)</label>
+</div>
+<div class="idno-checkbox-group">
+<input type="radio" name="permalink_structure" value="/:year/:month/:slug"
+                            >
+<label>/:year/:month/:slug</label>
+</div>
+<div class="idno-checkbox-group">
+<input type="radio" name="permalink_structure" value="/:year/:month/:day/:slug"
+                            >
+<label>/:year/:month/:day/:slug</label>
+</div>
+</div>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Registration and privacy</h2>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="open_registration" value="true"
+                           checked>
+<label>Allow registration</label>
+</div>
+</div>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="walled_garden" value="true"
+                           >
+<label>Make site private</label>
+</div>
+</div>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="show_privacy" value="true"
+                           >
+<label>Per-post privacy</label>
+</div>
+</div>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Technical Settings</h2>
+<div class="idno-form-group">
+<label class="idno-label" for="hub">PubSubHubbub hub</label>
+<input type="url" id="hub" name="hub" class="idno-input"
+                       value="https://withknown.superfeedr.com/">
+</div>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="user_avatar_favicons" value="true"
+                           checked>
+<label>Avatar as favicon</label>
+</div>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="share_backup_url">Backup share image</label>
+<input type="url" id="share_backup_url" name="share_backup_url" class="idno-input"
+                       placeholder="Backup share image URL"
+                       value="">
+<p class="idno-form-help">Specify the URL of an image to use as your default social share image.</p>
+</div>
+<div class="idno-form-group">
+<div class="idno-checkbox-group">
+<input type="checkbox" name="indieweb_reference" value="true"
+                           >
+<label>Include permalinks when syndicating</label>
+</div>
+</div>
+</div>
+<div style="margin-top:var(--spacing-section)">
+<button type="submit" class="idno-btn idno-btn-primary">Save updates</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/" />
+</form>

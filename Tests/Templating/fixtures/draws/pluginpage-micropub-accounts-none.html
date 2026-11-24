@@ -1,0 +1,34 @@
+<h1 class="idno-admin-page-title">Micropub Accounts</h1>
+<p class="idno-admin-description">
+Manage third-party apps authorized to post to your site via Micropub.</p>
+<div class="idno-admin-card">
+<p>There are currently no micropub accounts associated with this site.</p>
+</div>
+<div x-data="{ showAddForm: false }">
+<p style="margin-top:1rem;">
+<a href="#" @click.prevent="showAddForm = !showAddForm" style="font-size:0.875rem;">
+Add Micropub Account
+</a>
+</p>
+<div class="idno-admin-card" x-show="showAddForm" x-cloak style="margin-top:0.75rem;">
+<h2 class="idno-admin-card-title">Add Micropub Account</h2>
+<p>To manually add a micropub client account and generate an API token, enter the details below.</p>
+<form action="{site}/account/indiepub/add" method="post" style="margin-top:0.75rem;">
+<div class="idno-form-group">
+<label class="idno-label" for="indiepub-client-id">Client ID</label>
+<input type="text" id="indiepub-client-id" name="client_id" class="idno-input" required>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="indiepub-redirect-uri">Redirect URI</label>
+<input type="text" id="indiepub-redirect-uri" name="redirect_uri" class="idno-input" required>
+</div>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Save</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="account/indiepub/add" />
+</form>
+</div>
+</div>

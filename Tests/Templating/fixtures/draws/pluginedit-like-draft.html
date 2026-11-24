@@ -1,0 +1,227 @@
+<form action="{site}/bookmark/00000000-0000-4000-8000-0000000000cc/a-page" method="post">
+<div class="idno-editor">
+<h4 class="idno-editor-heading">
+Edit Bookmark
+<span class="idno-badge-draft">Draft</span>
+</h4>
+<div class="idno-form-field">
+<label class="idno-label" for="body">
+Link Address</label>
+<input
+type="url" name="body" id="body" required     class="idno-input idno-input bookmark-url"
+placeholder="https://...."     value="https://example.org/page?a=1&amp;b=2"
+    />
+</div>
+<div class="bookmark-spinner-container">
+<div id="spinner_{1}" class="spinner bookmark-title-spinner" style="display:none">
+<div class="bounce1"></div>
+<div class="bounce2"></div>
+<div class="bounce3"></div>
+</div>
+</div>
+<div class="bookmark-title-container idno-form-field"
+                >
+<label class="idno-label" for="title">
+Title
+</label>
+<input
+type="text" name="title" id="title" required     class="idno-input idno-input bookmark-title"
+placeholder="Page name"     value="A &quot;page&quot;"
+    />
+</div>
+<div class="idno-editor" x-data="tiptapEditor('editor-{1}')">
+<div class="idno-editor-toolbar">
+<button type="button" class="idno-editor-toolbar-btn" title="Bold" x-on:click="editor.chain().focus().toggleBold().run()" :class="{ 'active': editor?.isActive('bold') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Italic" x-on:click="editor.chain().focus().toggleItalic().run()" :class="{ 'active': editor?.isActive('italic') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="10" y1="4" y2="4"/><line x1="14" x2="5" y1="20" y2="20"/><line x1="15" x2="9" y1="4" y2="20"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Strikethrough" x-on:click="editor.chain().focus().toggleStrike().run()" :class="{ 'active': editor?.isActive('strike') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><line x1="4" x2="20" y1="12" y2="12"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Inline code" x-on:click="editor.chain().focus().toggleCode().run()" :class="{ 'active': editor?.isActive('code') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<!-- Paragraph style dropdown -->
+<select class="idno-editor-toolbar-btn" style="width:auto;padding:0 0.5rem;font-size:var(--font-size-sm)"
+                x-on:change="setHeading($event.target.value)" x-ref="headingSelect">
+<option value="paragraph">Paragraph</option>
+<option value="1">Heading 1</option>
+<option value="2">Heading 2</option>
+<option value="3">Heading 3</option>
+</select>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Link" x-on:click="toggleLink()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Image" x-on:click="addImage()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Blockquote" x-on:click="editor.chain().focus().toggleBlockquote().run()" :class="{ 'active': editor?.isActive('blockquote') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 6H3"/><path d="M21 12H8"/><path d="M21 18H8"/><path d="M3 12v6"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Bullet list" x-on:click="editor.chain().focus().toggleBulletList().run()" :class="{ 'active': editor?.isActive('bulletList') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Numbered list" x-on:click="editor.chain().focus().toggleOrderedList().run()" :class="{ 'active': editor?.isActive('orderedList') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" x2="21" y1="6" y2="6"/><line x1="10" x2="21" y1="12" y2="12"/><line x1="10" x2="21" y1="18" y2="18"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></svg>
+</button>
+<div class="idno-editor-toolbar-divider"></div>
+<button type="button" class="idno-editor-toolbar-btn" title="Code block" x-on:click="editor.chain().focus().toggleCodeBlock().run()" :class="{ 'active': editor?.isActive('codeBlock') }">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 9.5 8 12l2 2.5"/><path d="m14 9.5 2 2.5-2 2.5"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+</button>
+<button type="button" class="idno-editor-toolbar-btn" title="Horizontal rule" x-on:click="editor.chain().focus().setHorizontalRule().run()">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>
+</button>
+</div>
+<div class="idno-editor-content" id="editor-{1}-editor"></div>
+<textarea name="description" id="editor-{1}" style="display:none" >Notes &lt;b&gt;b&lt;/b&gt;</textarea>
+</div>
+<p class="syndication">
+<span class="syndication-toggle">
+<input type="checkbox" class="checkbox" disabled name="syndication[]" id="syndication_zzedit_adal_toggle" value="zzedit::ada_l" data-toggle="toggle" data-onstyle="info" data-on="&lt;i class=&quot;fa fa-share-square-o&quot;&gt;&lt;/i&gt;
+&nbsp;Ada&nbsp;L" data-off="&lt;i class=&quot;fa fa-share-square-o&quot;&gt;&lt;/i&gt;
+&nbsp;Ada&nbsp;L" >
+</span>
+</p>
+<div class="access-control-block">
+<input type="hidden" name="access" id="access-control-id-acl-{id-1}" value="PUBLIC"/>
+<div class="idno-access-dropdown" x-data="{&quot;open&quot;:false,&quot;selected&quot;:&quot;PUBLIC&quot;,&quot;label&quot;:&quot;Public&quot;,&quot;icon&quot;:&quot;globe&quot;}">
+<button type="button" class="idno-access-trigger" @click="open = !open">
+<template x-if="icon === 'globe'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+</template>
+<template x-if="icon === 'users'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+</template>
+<template x-if="icon === 'lock'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+</template>
+<template x-if="icon === 'cog'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</template>
+<span x-text="label"></span>
+<svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+</button>
+<div class="idno-access-menu" x-show="open" @click.outside="open = false" x-cloak>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;PUBLIC&quot; }"
+                            @click="selected = &quot;PUBLIC&quot;; label = &quot;Public&quot;; icon = &quot;globe&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;PUBLIC&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+Public
+<svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;SITE&quot; }"
+                            @click="selected = &quot;SITE&quot;; label = &quot;Members only&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;SITE&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+Members only
+<svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot; }"
+                            @click="selected = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; label = &quot;Private&quot;; icon = &quot;lock&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+Private
+<svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+</div>
+</div>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/like/edit" />
+<div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+<button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
+Publish
+</button>
+<button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
+Save as Draft
+</button>
+<a href="{site}/bookmark/00000000-0000-4000-8000-0000000000cc/a-page" class="idno-btn idno-btn-ghost">
+Cancel
+</a>
+</div>
+</div>
+</form>
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><script>
+    /* Handle submit button */
+    $(document).ready(function() {
+        $('div.page-body form').submit(function() {
+            
+            var richrequiredcomplete = true;
+            
+            $(this).find('textarea.validation-required').each(function(){
+                if ($(this).val().length == 0) {
+                    richrequiredcomplete = false;
+                }
+            });
+            
+            
+            // Fudge rich text completion for now.
+            if (richrequiredcomplete == true) {
+                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                $('.btn-cancel').hide();
+                $('#submit-spinner').show();
+            }
+        });
+    });
+</script>
+<div id="submit-spinner" class="spinner " style="display:none">
+<div class="bounce1"></div>
+<div class="bounce2"></div>
+<div class="bounce3"></div>
+</div>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var urlInput = document.querySelector('.bookmark-url');
+        if (urlInput) {
+            urlInput.addEventListener('change', function () {
+                if (urlInput.value) {
+                    var spinner = document.querySelector('.bookmark-title-spinner');
+                    if (spinner) spinner.style.display = '';
+                    fetch('{site}\/like\/callback\/\u003Furl\u003D' + encodeURIComponent(urlInput.value))
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            var title = document.querySelector('.bookmark-title');
+                            if (title) title.value = data.value;
+                            var spinnerContainer = document.querySelector('.bookmark-spinner-container');
+                            if (spinnerContainer) spinnerContainer.innerHTML = ' ';
+                            var titleContainer = document.querySelector('.bookmark-title-container');
+                            if (titleContainer) titleContainer.style.display = '';
+                            var unfurl = urlInput.closest('form').querySelector('.unfurl');
+                            if (unfurl && typeof Unfurl !== 'undefined') {
+                                unfurl.setAttribute('data-url', urlInput.value);
+                                Unfurl.unfurl(unfurl);
+                            }
+                        })
+                        .catch(function() {
+                            var spinnerContainer = document.querySelector('.bookmark-spinner-container');
+                            if (spinnerContainer) spinnerContainer.innerHTML = ' ';
+                            var titleContainer = document.querySelector('.bookmark-title-container');
+                            if (titleContainer) titleContainer.style.display = '';
+                        });
+                }
+            });
+        }
+    });
+</script>

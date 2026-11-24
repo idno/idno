@@ -1,0 +1,31 @@
+<h1 class="idno-admin-page-title">Legacy tables</h1>
+<p class="explanation idno-admin-description">
+When this site was upgraded from Idno 1.x, the tables of the old database were kept, renamed legacy_ followed by their old name. The site no longer reads them. Keep them until you are sure the upgrade went well; then you can delete them here.</p>
+<div class="idno-admin-card" id="legacytables-rejects">
+<h2 class="idno-admin-card-title">Rows that were not carried over</h2>
+<p>
+250 rows of the Idno 1.x database could not be carried into the new database. Each is listed with the reason. Their full contents are kept in the database table idno_upgrade_rejects, which is never deleted (deleting the legacy tables does not delete it).
+</p>
+<table class="table">
+<thead>
+<tr><th>Collection</th><th>Address (uuid) in 1.x</th><th>Reason</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>entities</td>
+<td><code>https://example.org/a</code></td>
+<td>not JSON</td>
+</tr>
+<tr>
+<td>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</td>
+<td><code>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</code></td>
+<td>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</td>
+</tr>
+</tbody>
+</table>
+<p>
+Showing 101 to 102 of 250.
+<a href="{site}/admin/legacytables/?offset=0">Previous</a>
+<a href="{site}/admin/legacytables/?offset=200">Next</a>
+</p>
+</div>

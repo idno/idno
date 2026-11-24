@@ -1,0 +1,161 @@
+<h1 class="idno-admin-page-title">Users</h1>
+<p class="idno-admin-description">
+View the users registered for your site, and invite new users to join.
+</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Manage site users</h2>
+<p>
+Your site has
+<strong>2</strong>
+users.
+</p>
+<div id="user-search_2" class="users-search "
+     x-data="userSearch('{site}/search/users/', 'forms/components/usersearch/user')"
+     x-init="search()">
+<form @submit.prevent="search()" x-ref="form">
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+<input name="query" type="text" class="idno-input" style="flex: 1;"
+                   placeholder="Search by name, email address, or username"
+                   @change="search()"
+                   x-model="query">
+<button type="submit" class="idno-btn-primary">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+</button>
+<input type="hidden" name="template" value="forms/components/usersearch/user">
+<input type="hidden" name="sort" value="created">
+<input type="hidden" name="order" value="desc">
+<input type="hidden" name="offset" x-bind:value="offset">
+<input type="hidden" name="limit" value="100">
+</div>
+</form>
+<div class="results pane" x-html="resultsHtml"></div>
+<div class="pager" style="display: flex; gap: 1rem; margin-top: 0.75rem;">
+<span :class="{ 'pagination-disabled': offset <= 0 }">
+<a href="#" @click.prevent="prevPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">&laquo; Prev</a>
+</span>
+<span :class="{ 'pagination-disabled': offset + limit >= totalCount }">
+<a href="#" @click.prevent="nextPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">Next &raquo;</a>
+</span>
+</div>
+</div>
+<script>
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('userSearch', function(sourceUrl, renderTemplate) {
+            return {
+                query: '',
+                offset: 0,
+                limit: 100,
+                totalCount: 0,
+                resultsHtml: '',
+
+                search() {
+                    var self = this;
+                    var params = new URLSearchParams({
+                        query: this.query,
+                        template: renderTemplate,
+                        sort: 'created',
+                        order: 'desc',
+                        offset: this.offset,
+                        limit: this.limit
+                    });
+                    fetch(sourceUrl + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.totalCount = data.count || 0;
+                        self.resultsHtml = data.rendered || '';
+                    });
+                },
+
+                prevPage() {
+                    if (this.offset > 0) {
+                        this.offset = Math.max(0, this.offset - this.limit);
+                        this.search();
+                    }
+                },
+
+                nextPage() {
+                    if (this.offset + this.limit < this.totalCount) {
+                        this.offset += this.limit;
+                        this.search();
+                    }
+                }
+            };
+        });
+    });
+</script>
+</div>
+<div class="idno-admin-card">
+<form action="{site}/admin/users" method="post">
+<h2 class="idno-admin-card-title">Invite new users</h2>
+<p>
+To invite new users to the site, enter one or more email addresses below.
+</p>
+<div class="idno-form-group">
+<textarea name="invitation_emails" class="idno-input" placeholder="friend@email.com"></textarea>
+</div>
+<div class="idno-form-group">
+<button type="submit" class="idno-btn idno-btn-primary">Send invite</button>
+<input type="hidden" name="action" value="invite_users">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/users" />
+</div>
+</form>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Invitations</h2>
+<div class="idno-admin-list-item">
+<div>
+<strong>friend@example.org</strong>
+<br>
+<small>
+<strong>Sent</strong>
+<time datetime="Sun, 08 Mar 2026 20:00:00 +0000"
+                              class="dt-published">Sun, 08 Mar 2026 20:00:00 +0000</time>
+</small>
+</div>
+<div>
+<small>
+<a data-form-id="{form-1}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user will receive a second email.')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } ">Resend</a>
+<a data-form-id="{form-2}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user won\'t be able to register.')) { document.getElementById('{form-2}').submit(); return false; } else { return false; } ">Remove</a>
+</small>
+</div>
+</div>
+<div class="idno-admin-list-item">
+<div>
+<strong>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</strong>
+<br>
+<small>
+<strong>Sent</strong>
+<time datetime="Tue, 14 Nov 2023 22:13:20 +0000"
+                              class="dt-published">Tue, 14 Nov 2023 22:13:20 +0000</time>
+</small>
+</div>
+<div>
+<small>
+<a data-form-id="{form-3}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user will receive a second email.')) { document.getElementById('{form-3}').submit(); return false; } else { return false; } ">Resend</a>
+<a data-form-id="{form-4}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user won\'t be able to register.')) { document.getElementById('{form-4}').submit(); return false; } else { return false; } ">Remove</a>
+</small>
+</div>
+</div>
+</div>
+<div class="idno-admin-card">
+<form action="{site}/admin/users" method="post">
+<h2 class="idno-admin-card-title">Block email addresses</h2>
+<p>
+By blocking email addresses, you prevent people using those email addresses from registering on your site. Enter the email addresses you want to block below.
+</p>
+<div class="idno-form-group">
+<textarea name="blocked_emails" class="idno-input" placeholder="user@email.com"></textarea>
+</div>
+<div class="idno-form-group">
+<button type="submit" class="idno-btn idno-btn-primary">Block email addresses</button>
+<input type="hidden" name="action" value="block_emails">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/users" />
+</div>
+</form>
+</div>

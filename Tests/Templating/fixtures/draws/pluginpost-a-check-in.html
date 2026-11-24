@@ -1,0 +1,34 @@
+
+<div>
+<h2 class="idno-entry-title p-name">
+<a href="{site}/view/00000000-0000-4000-8000-0000000000aa">Checked into The Library</a>
+</h2>
+<span class="p-location u-checkin h-card">
+<data class="p-name" value="The Library"></data>
+<data class="p-latitude" value="51.5072"></data>
+<data class="p-longitude" value="-0.1276"></data>
+</span>
+<div id="map_00000000-0000-4000-8000-0000000000aa" style="height: 250px; border-radius: var(--radius-sm); overflow: hidden; margin: var(--spacing-gap) 0;"></div>
+<div class="idno-entry-body e-content entry-content">
+<p>A quiet
+<b>afternoon</b>
+<a href="https://example.org/b" target="_blank">https://<wbr></wbr>example.org/<wbr></wbr>b</a>
+<a href="{site}/tag/books" class="p-category" rel="tag">#books</a></p>
+<i class="fa fa-tag"></i><a href="{site}/tag/%23books" class="p-category" rel="tag">#books</a>
+</div>
+</div>
+<script>
+            (function () {
+                var map = L.map('map_00000000\u002D0000\u002D4000\u002D8000\u002D0000000000aa', {
+                    touchZoom: false,
+                    scrollWheelZoom: false
+                }).setView([51.5072, -0.1276], 16);
+                var layer = new L.StamenTileLayer("toner-lite");
+                map.addLayer(layer);
+                var marker = L.marker([51.5072, -0.1276]);
+                marker.addTo(map);
+                map.scrollWheelZoom.disable();
+                map.touchZoom.disable();
+                map.doubleClickZoom.disable();
+            })();
+        </script>

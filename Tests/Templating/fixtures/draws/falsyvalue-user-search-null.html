@@ -1,0 +1,74 @@
+<div id="user-search_64" class="users-search "
+     x-data="userSearch('{site}/search/users/', 'forms/components/usersearch/user')"
+     x-init="search()">
+<form @submit.prevent="search()" x-ref="form">
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+<input name="query" type="text" class="idno-input" style="flex: 1;"
+                   placeholder="Search by name, email address, or username"
+                   @change="search()"
+                   x-model="query">
+<button type="submit" class="idno-btn-primary">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+</button>
+<input type="hidden" name="template" value="forms/components/usersearch/user">
+<input type="hidden" name="sort" value="created">
+<input type="hidden" name="order" value="desc">
+<input type="hidden" name="offset" x-bind:value="offset">
+<input type="hidden" name="limit" value="100">
+</div>
+</form>
+<div class="results pane" x-html="resultsHtml"></div>
+<div class="pager" style="display: flex; gap: 1rem; margin-top: 0.75rem;">
+<span :class="{ 'pagination-disabled': offset <= 0 }">
+<a href="#" @click.prevent="prevPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">&laquo; Prev</a>
+</span>
+<span :class="{ 'pagination-disabled': offset + limit >= totalCount }">
+<a href="#" @click.prevent="nextPage()" style="font-size: var(--font-size-sm); color: var(--color-text-secondary); text-decoration: none;">Next &raquo;</a>
+</span>
+</div>
+</div>
+<script>
+    document.addEventListener('alpine:init', function() {
+        Alpine.data('userSearch', function(sourceUrl, renderTemplate) {
+            return {
+                query: '',
+                offset: 0,
+                limit: 100,
+                totalCount: 0,
+                resultsHtml: '',
+
+                search() {
+                    var self = this;
+                    var params = new URLSearchParams({
+                        query: this.query,
+                        template: renderTemplate,
+                        sort: 'created',
+                        order: 'desc',
+                        offset: this.offset,
+                        limit: this.limit
+                    });
+                    fetch(sourceUrl + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(data) {
+                        self.totalCount = data.count || 0;
+                        self.resultsHtml = data.rendered || '';
+                    });
+                },
+
+                prevPage() {
+                    if (this.offset > 0) {
+                        this.offset = Math.max(0, this.offset - this.limit);
+                        this.search();
+                    }
+                },
+
+                nextPage() {
+                    if (this.offset + this.limit < this.totalCount) {
+                        this.offset += this.limit;
+                        this.search();
+                    }
+                }
+            };
+        });
+    });
+</script>

@@ -1,0 +1,25 @@
+<div class="image-file-input">
+<div class="photo-preview-existing">
+<div class="idno-image-existing">
+<span class="idno-image-delete delete-control">
+<a data-form-id="{form-1}"  class="edit"   href="{site}/attachment/00000000-0000-4000-8000-000000000013/00000000000040008000000000000013/" onclick="if (confirm('Are you sure you want to permanently delete this?')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } "><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></a>
+</span>
+<img src="http:alert(1)" class="existing"/>
+</div>
+</div>
+<div class="photo-preview" id="photo-{1}_preview">
+<img id="photo-{1}_img" src="" class="preview" style="display:none; width: 400px;" />
+</div>
+<p>
+<label class="idno-btn idno-btn-ghost" for="photo-{1}" style="width:100%;justify-content:center;cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+<span class="photo-filename" data-nexttext="Choose different photo">
+Choose different photo
+</span>
+<input
+type="file" name="photo" id="photo-{1}" accept="image/*"     class="idno-input input-file"
+    value=""
+    />
+</label>
+</p>
+</div>

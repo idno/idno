@@ -1,0 +1,35 @@
+<div style="max-width:24rem;margin:2rem auto">
+<div class="idno-editor" style="text-align:center">
+<h4 class="idno-editor-heading">
+Welcome back!
+</h4>
+<form action="{site}/session/login" method="post">
+<div class="idno-form-field">
+<input type="text" name="email" autofocus
+                       class="idno-input" style="text-align:left"
+                       placeholder="Your email address or username">
+</div>
+<div class="idno-form-field">
+<input type="password" name="password"
+                       class="idno-input" style="text-align:left"
+                       placeholder="Password">
+</div>
+<!-- Captcha control -->
+<div class="idno-form-field">
+<button type="submit" class="idno-btn idno-btn-primary" style="width:100%">
+Sign in
+</button>
+<input type="hidden" name="fwd" value="https://example.org/came-from?x=1&amp;y=&quot;2&quot;">
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/session/login" />
+</form>
+<div style="margin-top:1rem;font-size:var(--font-size-sm);color:var(--color-text-muted)">
+<a href="{site}/account/password" style="color:inherit">
+Forgot your password?
+</a>
+</div>
+</div>
+</div>

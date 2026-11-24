@@ -1,0 +1,49 @@
+<h1 class="idno-admin-page-title">Standard.site Sync</h1>
+<p class="idno-admin-description">
+Automatically share your writing with the wider web. When you connect your account, everything you publish here will also appear on apps like
+<a href="https://leaflet.pub">Leaflet</a>,
+<a href="https://frontpage.fyi">Frontpage</a>, and other readers that support
+<a href="https://standard.site">standard.site</a>.</p>
+<p class="idno-admin-description">
+Your content stays on your site &mdash; syncing just makes it discoverable in more places.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">You&#039;re connected!</h2>
+<p>New posts you publish will automatically be synced. You don&#039;t need to do anything else.</p>
+<details style="margin-top:1rem;">
+<summary style="cursor:pointer;font-size:0.875rem;color:var(--color-muted,#6b7280);">Show technical details</summary>
+<dl style="margin-top:0.5rem;font-size:0.875rem;">
+<div style="display:flex;gap:0.5rem;margin-bottom:0.25rem;">
+<dt style="font-weight:600;">Your identity:</dt>
+<dd><code>did:plc:abc123</code></dd>
+</div>
+<div style="display:flex;gap:0.5rem;">
+<dt style="font-weight:600;">Server:</dt>
+<dd><code>https://pds.example</code></dd>
+</div>
+</dl>
+</details>
+<form action="{site}/account/settings/standardsitesync/disconnect/" method="post" style="margin-top:1.5rem;">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/standardsitesync/disconnect/" />
+<button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);"
+                onclick="return confirm('Are you sure you want to disconnect? Your posts will stop syncing.');">
+Disconnect
+</button>
+</form>
+</div>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Sync older posts</h2>
+<p>Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it&#039;s safe to run this more than once.</p>
+<form action="{site}/account/settings/standardsitesync/backfill/" method="post" style="margin-top:1rem;">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/standardsitesync/backfill/" />
+<button type="submit" class="idno-btn idno-btn-primary"
+                onclick="return confirm('This will sync all your existing posts. Continue?');">
+Sync all my posts
+</button>
+</form>
+</div>

@@ -1,0 +1,29 @@
+<div class="row">
+<div class="span6 offset3 well text-center">
+<h2 class="text-center">
+Authenticate
+</h2>
+<form action="{site}/indieauth/approve" method="post">
+<p>
+You are logged in as ada.
+</p>
+<p>
+Authenticate to https://client.example/?
+</p>
+<div class="control-group">
+<div class="controls">
+<button type="submit" class="btn btn-primary">
+Authenticate
+</button>
+<a class="btn btn-cancel"
+                       href="https://client.example/cb">Cancel</a>
+</div>
+</div>
+<input type="hidden" name="me" value="http://127.0.0.1/" /><input type="hidden" name="client_id" value="https://client.example/" /><input type="hidden" name="redirect_uri" value="https://client.example/cb" /><input type="hidden" name="scope" value="" /><input type="hidden" name="state" value="s1" /><input type="hidden" name="code_challenge" value="abc" /><input type="hidden" name="code_challenge_method" value="S256" />
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/indiepub/auth" />
+</form>
+</div>
+</div>

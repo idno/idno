@@ -1,0 +1,140 @@
+<form action="{site}/rsvp/edit/" method="post">
+<div class="row">
+<div class="col-md-8 col-md-offset-2 edit-pane">
+<h4>
+New RSVP
+</h4>
+<div class="content-form">
+<label id="in-reply-to" for="reply">
+What&#039;s the URL of the event you&#039;re responding to?</label>
+<input
+type="url" name="inreplyto" id="reply"     class="idno-input form-control"
+placeholder="The website address of the event"     value=""
+    />
+</div>
+<div class="content-form">
+<label for="rsvp">
+Are you going?</label>
+<select
+name="rsvp" id="rsvp" required     class="idno-select form-control">
+<option></option>
+<option value="yes" >Yes: I am attending this event</option>
+<option value="no" >No: I am not attending this event</option>
+<option value="maybe" >Maybe: I might attend this event</option>
+</select>
+</div>
+<div class="content-form">
+<label for="body">
+Any comments?</label>
+<textarea name="body"  placeholder="Say something here..." style="height:126px"
+          class="bodyInput mentionable idno-textarea form-control event" id="body{1}" ></textarea>
+</div>
+<input
+type="hidden" name="forward-to" id="forward-to_22"     class="idno-input input-hidden"
+    value="{site}/content/all/"
+    />
+<p class="syndication">
+<span class="syndication-toggle">
+<input type="checkbox" class="checkbox"  name="syndication[]" id="syndication_zzedit_adal_toggle" value="zzedit::ada_l" data-toggle="toggle" data-onstyle="info" data-on="&lt;i class=&quot;fa fa-share-square-o&quot;&gt;&lt;/i&gt;
+&nbsp;Ada&nbsp;L" data-off="&lt;i class=&quot;fa fa-share-square-o&quot;&gt;&lt;/i&gt;
+&nbsp;Ada&nbsp;L" >
+</span>
+</p>
+<div class="access-control-block">
+<input type="hidden" name="access" id="access-control-id-acl-{id-1}" value="PUBLIC"/>
+<div class="idno-access-dropdown" x-data="{&quot;open&quot;:false,&quot;selected&quot;:&quot;PUBLIC&quot;,&quot;label&quot;:&quot;Public&quot;,&quot;icon&quot;:&quot;globe&quot;}">
+<button type="button" class="idno-access-trigger" @click="open = !open">
+<template x-if="icon === 'globe'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+</template>
+<template x-if="icon === 'users'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+</template>
+<template x-if="icon === 'lock'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+</template>
+<template x-if="icon === 'cog'">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+</template>
+<span x-text="label"></span>
+<svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+</button>
+<div class="idno-access-menu" x-show="open" @click.outside="open = false" x-cloak>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;PUBLIC&quot; }"
+                            @click="selected = &quot;PUBLIC&quot;; label = &quot;Public&quot;; icon = &quot;globe&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;PUBLIC&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+Public
+<svg class="check" x-show="selected === &quot;PUBLIC&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;SITE&quot; }"
+                            @click="selected = &quot;SITE&quot;; label = &quot;Members only&quot;; icon = &quot;users&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;SITE&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+Members only
+<svg class="check" x-show="selected === &quot;SITE&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+<button type="button"
+                            class="idno-access-option"
+                            :class="{ 'active': selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot; }"
+                            @click="selected = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; label = &quot;Private&quot;; icon = &quot;lock&quot;; document.getElementById('access-control-id-acl-{id-1}').value = &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;; open = false">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+Private
+<svg class="check" x-show="selected === &quot;https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001&quot;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+</button>
+</div>
+</div>
+</div>
+<p class="button-bar">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/status/edit" />
+<input type="button" class="btn btn-cancel" value="Cancel" onclick="hideContentCreateForm();" />
+<input type="submit" class="btn btn-primary" value="Save" />
+</p>
+</div>
+</div>
+</form>
+<script>
+
+    /*$.getJSON(known.config.displayUrl + 'search/mentions.json', function(data) {
+        $(".mentionable").mention({
+            delimiter: '@',
+            sensitive : true,
+            queryBy: ['name','username'],
+            users: data
+        });
+    });*/
+
+</script><script>
+    /* Handle submit button */
+    $(document).ready(function() {
+        $('div.page-body form').submit(function() {
+            
+            var richrequiredcomplete = true;
+            
+            $(this).find('textarea.validation-required').each(function(){
+                if ($(this).val().length == 0) {
+                    richrequiredcomplete = false;
+                }
+            });
+            
+            
+            // Fudge rich text completion for now.
+            if (richrequiredcomplete == true) {
+                    $('input[type=submit]').attr('disabled', 'yes').hide(); //val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                //$('input[type=submit]').attr('disabled', 'yes').val('Saving...').removeClass('btn-primary').addClass('btn-link');
+                $('.btn-cancel').hide();
+                $('#submit-spinner').show();
+            }
+        });
+    });
+</script>
+<div id="submit-spinner" class="spinner " style="display:none">
+<div class="bounce1"></div>
+<div class="bounce2"></div>
+<div class="bounce3"></div>
+</div>

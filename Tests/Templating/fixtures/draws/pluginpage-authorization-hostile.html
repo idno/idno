@@ -1,0 +1,29 @@
+<div class="row">
+<div class="span6 offset3 well text-center">
+<h2 class="text-center">
+Authorize
+</h2>
+<form action="{site}/indieauth/approve" method="post">
+<p>
+You are logged in as ada.
+</p>
+<p>
+Authorize &quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039; to access this site with the following permission(s)?<br />&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;
+</p>
+<div class="control-group">
+<div class="controls">
+<button type="submit" class="btn btn-primary">
+Authorize
+</button>
+<a class="btn btn-cancel"
+                       href="">Cancel</a>
+</div>
+</div>
+<input type="hidden" name="me" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;" /><input type="hidden" name="client_id" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;" /><input type="hidden" name="redirect_uri" value="javascript:alert(1)" /><input type="hidden" name="scope" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;" /><input type="hidden" name="state" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;" /><input type="hidden" name="code_challenge" value="" /><input type="hidden" name="code_challenge_method" value="" />
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/indiepub/auth" />
+</form>
+</div>
+</div>

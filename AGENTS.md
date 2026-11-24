@@ -231,13 +231,11 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   ids are the only variable things). A page is compared after `Tests\Templating\PageNormaliser`, which replaces only
   the site's address, the form token and its time (only a value of the token's shape), ids made by `uniqid()`,
   `md5(rand())` and `rand()` (numbered by first appearance), the base64 address in an annotation's delete link, the
-  built assets' modification-time cache-buster and the password reset code, and, for an HTML page only, makes white space
-  that touches a tag one line break, `&amp;` and `&` one character (not where what follows could begin an entity: `#`, a name
-  and its semicolon, or a legacy name such as `copy` that a browser reads without one, so `&amp;lt;` and `&amp;copy` stay different
-  from `&lt;` and `&copy`), `&#039;`, `&#39;` and `&apos;` and `'` one in text and in a double-quoted attribute value only (in a
-  single-quoted or unquoted value the entity keeps the attribute whole), and, in text (never inside a tag), `&quot;` and `&#34;`
-  and `"` one; the contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched (an unclosed one: everything after
-  its opening tag), a comment is one token whatever it holds (what stands before its first tag kept, the rest normalised as markup); every replacement is in
+  built assets' modification-time cache-buster, the password reset code and the file of a draw case in a debug error page, and, for an HTML page only, makes white space
+  that touches a tag one line break; the contents of `<script>`, `<style>`, `<pre>` and `<textarea>` are untouched (an unclosed one: everything after
+  its opening tag), a comment is one token whatever it holds (what stands before its first tag kept, the rest normalised as markup). It does NOT fold
+  the spellings of a character (`&amp;` and `&`, `&#039;`, `&#39;`, `&apos;` and `'`, `&quot;` and `"` are different pages): a golden records how a template escapes, so a change
+  in escaping shows. every replacement is in
   `Tests/Unit/Templating/PageNormaliserTest` with a near-miss it must not touch, and a new one needs a reason there. The
   JSON goldens of the form pages (`json-account-settings-logged-in`, `json-status-edit-logged-in`) pin `csrf` and `formFields`
   (the second replaces the time of the note that does not exist yet, in that page's test, not in the normaliser), and every mail
@@ -264,6 +262,15 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   what a golden does not draw; the `.tpl.php` files they replaced are gone, and nothing compares a Twig file with another rendering.
   `Tests/Unit/Templating/CoreTemplatesAreTwigTest` holds the end state: no `.tpl.php` is left under a `default`, `email` or `email-text`
   directory of core or a bundled plugin, and a locator over core and every bundled plugin resolves a Twig file for every name that has one there.
+  The draw cases are goldens too: `TemplateDrawCasesTest` writes the normalised output of each labelled case (every `draw*Cases()` group, the mails that
+  have no golden page, and `DRAWS`) to `Tests/Templating/fixtures/draws/<group>-<case label>.html` (`.txt` for the plain text of a mail; never `.json`, which git
+  ignores) and compares it on every run, with `IDNO_TEST_CAPTURE_GOLDENS=1` writing them by the page goldens' rules (`RenderedSiteTestCase::drawGolden()`). A case that
+  is not the same twice is made so in the case (a fixed `_id` for an entity it creates, a fixed stored time), never skipped. `Tests/Templating/JsonKeysTest` requests
+  `?_t=json` of every page of the visitor, member and administrator lists, pins the sorted top-level keys of each answer in `Tests/Templating/fixtures/json-keys.php`
+  (a page that is not JSON by its status), and fails for a key at any depth that `SettingsRedactor` calls a secret, except the form token and the few names listed in
+  `SECRET_NAMED_KEYS_ALLOWED` with why. `Tests/Templating/CanarySweepTest` creates each bundled content type and an annotation of each kind with `"><x-canary a='1`
+  in every string a member or a remote party can set, draws the streams, permalinks and the owner's edit pages, and fails for an `x-canary` element (parsed with
+  `Dom\HTMLDocument`) or an attribute the canary started.
   `Tests/Templating/TemplateDrawCasesTest` is a smoke test of what no golden page draws: it visits `EXTRA_PAGES` (admin, account,
   onboarding, error and empty pages, as visitor, administrator, member and new user) and the golden pages' own visits (without comparing
   them), then draws in the site the mails, the entity, form, account, admin and plugin cases with hostile values, empty states and

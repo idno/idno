@@ -61,6 +61,12 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame('"time": 1795368191, "token": ""', $this->normalise('"time": 1795368191, "token": ""'), 'an empty token is not replaced');
     }
 
+    public function testTheScriptOfADrawCaseInADebugErrorPage(): void
+    {
+        $this->assertSame('an error in {script}:83', $this->normalise('an error in /private/var/folders/vj/T/idno-site-7c0b449bf12b/script-8e5ec737.php:83'), 'the file of a draw case (a private site\'s directory and a random name)');
+        $this->assertSame('/srv/idno-site/script-1.php', $this->normalise('/srv/idno-site/script-1.php'), 'any other path is the content');
+    }
+
     public function testTheIdOfTheSecurityTokenSpan(): void
     {
         $this->assertSame('<span class="known-security-token" style="display: none;" id="tid{id}"></span>', $this->normalise('<span class="known-security-token" style="display: none;" id="tid7e0e34fd2c905cf759119a4cabd9e1b2"></span>'));
@@ -167,40 +173,16 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame("<p>\n<!-- a  b -->\nx", $this->html("<p> <!-- a  b --> x"), 'a comment\'s own text is a tag\'s');
     }
 
-    public function testAmpersandApostropheAndTextQuoteFormsAreOne(): void
+    public function testCharacterReferencesAreLeftExactlyAsWritten(): void
     {
-        $this->assertSame('<p>a & b</p>', $this->html('<p>a &amp; b</p>'));
-        $this->assertSame('<a href="?a=1&b=2">', $this->html('<a href="?a=1&amp;b=2">'), 'in an attribute too');
-        $this->assertSame("<p>it's it's it's</p>", $this->html('<p>it&#039;s it&#39;s it&apos;s</p>'));
-        $this->assertSame('<p>say "hi" "hi"</p>', $this->html('<p>say &quot;hi&quot; &#34;hi&#34;</p>'), 'a quote in text');
-        $this->assertSame('<p>&lt;b&gt; &amp;lt; &nbsp;</p>', $this->html('<p>&lt;b&gt; &amp;lt; &nbsp;</p>'), 'a double-escaped entity stays distinguishable from a single one; other entities are kept');
-        $this->assertSame('<a title="a&quot;b" alt="c&#34;d">', $this->html('<a title="a&quot;b" alt="c&#34;d">'), 'a quote inside a tag would end the attribute: kept');
-        $this->assertSame('<p>&amp;copy;</p>', $this->html('<p>&amp;copy;</p>'), 'an ampersand that begins what reads as an entity is kept (a double escape is a difference)');
-    }
-
-    public function testAnApostropheEntityIsFoldedInTextAndInADoubleQuotedValueOnly(): void
-    {
-        $this->assertSame('<a title="it\'s">it\'s</a>', $this->html('<a title="it&#039;s">it&#39;s</a>'));
-
-        $breakout = "<a title='x&#039; onclick=alert(1) '>";
-        $this->assertSame($breakout, $this->html($breakout), 'in a single-quoted value the entity is what keeps the attribute whole');
-        $this->assertNotSame($this->html("<a title='x' onclick=alert(1) '>"), $this->html($breakout), 'an attribute breakout is not the same as the entity');
-        $unquoted = '<a title=x&#039;onclick=alert(1)>';
-        $this->assertSame($unquoted, $this->html($unquoted), 'nor in an unquoted value');
-        $this->assertNotSame($this->html("<a title=x'onclick=alert(1)>"), $this->html($unquoted));
-        $this->assertSame("<a title='a&apos;b' alt=\"c'd\">", $this->html("<a title='a&apos;b' alt=\"c&apos;d\">"), 'each value by its own quotes');
-    }
-
-    public function testAnAmpersandIsFoldedOnlyWhereItCannotBeginAnEntity(): void
-    {
-        foreach (['&lt;', '&quot;', '&#39;', '&#x27;', '&copy', '&copy;', '&nbsp', '&amp;'] as $entity) {
-            $double = '&amp;' . substr($entity, 1);
-            $this->assertSame('<p>' . $double . '</p>', $this->html('<p>' . $double . '</p>'), $double . ' is not folded');
-            $this->assertNotSame($this->html('<p>' . $entity . '</p>'), $this->html('<p>' . $double . '</p>'), $double . ' stays different from ' . $entity);
+        // A golden records how a template escapes: the several spellings of one character are different pages
+        foreach (['<p>a &amp; b</p>', '<p>a & b</p>', '<p>it&#039;s it&#39;s it&apos;s it\'s</p>', '<p>say &quot;hi&quot; &#34;hi&#34; "hi"</p>', '<p>&lt;b&gt; &amp;lt; &nbsp; &amp;copy;</p>', '<a href="?a=1&amp;b=2">', '<a href="?a=1&b=2">', '<a title="it&#039;s" alt="a&quot;b">', "<a title='x&#039; onclick=alert(1) '>", '<a title=x&#039;onclick=alert(1)>', "<a title='a&apos;b' alt=\"c&apos;d\">"] as $page) {
+            $this->assertSame($page, $this->html($page), $page);
         }
-        $this->assertSame('<p>a & b, R&D, AT&T</p>', $this->html('<p>a &amp; b, R&amp;D, AT&amp;T</p>'));
-        $this->assertSame('<a href="?a=1&b=2&c=3">', $this->html('<a href="?a=1&amp;b=2&amp;c=3">'));
-        $this->assertSame('<a href="?a=1&amp;copy=2">', $this->html('<a href="?a=1&amp;copy=2">'), 'a legacy name without its semicolon is read as an entity by a browser: kept');
+        $this->assertNotSame($this->html('<p>a &amp; b</p>'), $this->html('<p>a & b</p>'), 'an escaped and an unescaped ampersand are different pages');
+        $this->assertNotSame($this->html("<p>it&#039;s</p>"), $this->html("<p>it's</p>"), 'an apostrophe entity and an apostrophe are different pages');
+        $this->assertNotSame($this->html('<p>&quot;x&quot;</p>'), $this->html('<p>"x"</p>'), 'a quote entity and a quote are different pages');
+        $this->assertNotSame($this->html('<a href="?a=1&amp;b=2">'), $this->html('<a href="?a=1&b=2">'), 'in an attribute too');
     }
 
     public function testACommentIsOneTokenWhateverItHolds(): void
@@ -216,7 +198,7 @@ final class PageNormaliserTest extends TestCase
         foreach (['script', 'style', 'pre', 'textarea'] as $name) {
             $this->assertSame("<p>a</p>\n<$name x=\"1\">  &amp;  <b>  &quot;  ", $this->html("<p>a</p>  <$name x=\"1\">  &amp;  <b>  &quot;  "), $name);
         }
-        $this->assertSame("<p>\nit's\n</p>", $this->html("<p>  it&#39;s  </p>"), 'the same page with nothing unclosed is normalised');
+        $this->assertSame("<p>\nit&#39;s\n</p>", $this->html("<p>  it&#39;s  </p>"), 'the same page with nothing unclosed is normalised (its white space only)');
     }
 
     public function testScriptStylePreAndTextareaAreUntouched(): void
@@ -229,7 +211,7 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame($pre, $this->html($pre));
         $textarea = '<textarea>  &#039;x&#039;  </textarea>';
         $this->assertSame($textarea, $this->html($textarea));
-        $this->assertSame("<script src=\"a?b&c\">\n</script>\n<b>&</b>", $this->html("<script src=\"a?b&amp;c\">\n</script>  <b>&amp;</b>"), 'the tag that opens one is a tag; what follows it is not');
+        $this->assertSame("<script src=\"a?b&amp;c\">\n</script>\n<b>&amp;</b>", $this->html("<script src=\"a?b&amp;c\">\n</script>  <b>&amp;</b>"), 'the tag that opens one is a tag; what follows it is not');
         $this->assertSame('&amp; &quot; "', PageNormaliser::normalise('&amp; &quot; "', self::BASE, false), 'only an HTML page is widened');
     }
 

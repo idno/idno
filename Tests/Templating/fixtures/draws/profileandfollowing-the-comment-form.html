@@ -1,0 +1,24 @@
+
+<div class="idno-comment-form">
+<a href="{site}/profile/ada" class="u-url">
+<img class="idno-annotation-avatar u-photo"
+                 src="{site}/gfx/users/default-04.png"
+                 alt="Ada Admin" />
+</a>
+<form action="{site}/annotation/post" method="post">
+<textarea name="body"
+                      placeholder="Add a comment ..."
+                      class="idno-textarea mentionable ctrl-enter-submit"></textarea>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="annotation/post" />
+<input type="hidden" name="object" value="{site}/view/00000000-0000-4000-8000-000000000011">
+<input type="hidden" name="type" value="reply">
+<div class="idno-comment-form-actions">
+<button type="submit" class="idno-btn idno-btn-primary idno-btn-sm">
+Comment
+</button>
+</div>
+</form>
+</div>

@@ -1,0 +1,61 @@
+<form action="{site}/account/settings/following/bookmarklet" method="post" class="form-horizontal">
+<div class="row idno-entry following-user">
+<div class="col-md-1 col-md-offset-1 owner h-card hidden-sm">
+<p>
+<span class="u-url icon-container"><img class="u-photo" src="{site}/gfx/users/default-05.png" /></span><br />
+x
+</p>
+</div>
+<div class="col-md-8 idno-object idno-content">
+<div class="visible-sm">
+<p class="p-author author h-card vcard">
+<img class="u-logo logo u-photo photo" src="{site}/gfx/users/default-05.png" alt="x" />
+<span class="p-name fn">x</span>
+</p>
+</div>
+<div class="e-content entry-content">
+<input type="hidden" name="urls[]" value="javascript:alert(1)" />
+<input type="hidden" name="photo" value="{site}/gfx/users/default-05.png" />
+<div class="control-group">
+<label class="control-label" for="inputName">Name</label>
+<div class="controls">
+<input id="inputName" type="text" class="col-md-4" name="name" required
+                   value="x">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputNickname">Nickname</label>
+<div class="controls">
+<input id="inputNickname" type="text" class="col-md-4" name="nickname" required placeholder="Handle (for your reference)"
+                   value="">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputEmail">Email</label>
+<div class="controls">
+<input id="inputName" type="email" class="col-md-4" name="email" required
+                   value="">
+</div>
+</div>
+<div class="control-group">
+<label class="control-label" for="inputUrl">Profile URL</label>
+<div class="controls">
+<a href="" target="_blank">javascript:alert(1)</a>
+<input type="hidden" name="uuid" value="javascript:alert(1)" />
+</div>
+</div>
+<div class="control-group">
+<div class="controls">
+<button type="submit" class="btn">Add as friend...</button>
+</div>
+</div>
+</div>
+<div class="footer">
+</div>
+</div>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/settings/following/bookmarklet" />
+</form>

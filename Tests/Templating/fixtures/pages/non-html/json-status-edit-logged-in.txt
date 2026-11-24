@@ -4,7 +4,7 @@
         "uuid": false,
         "content": "",
         "formattedContent": "",
-        "displayName": {},
+        "displayName": "Status update",
         "objectType": "note",
         "published": "{now}",
         "updated": "{now}",

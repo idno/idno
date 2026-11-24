@@ -1,0 +1,24 @@
+<h1 class="idno-admin-page-title">Standard.site Sync</h1>
+<p class="idno-admin-description">
+Sync your writing to
+<a href="https://standard.site">standard.site</a>
+records on an AT Protocol Personal Data Server (PDS). This makes your content discoverable across the AT Protocol network via apps like Leaflet, Frontpage, and others that support the standard.site lexicons.</p>
+<div class="idno-admin-card">
+<h2 class="idno-admin-card-title">Site-Wide Setting</h2>
+<p>Enable or disable standard.site sync for this site. When enabled, users can connect their own AT Protocol PDS accounts from their account settings.</p>
+<form action="{site}/admin/standardsitesync/" method="post">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/standardsitesync/" />
+<div class="idno-form-group" style="margin-top:1rem;">
+<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+<input type="checkbox" name="sync_enabled" value="1" checked>
+Enable standard.site sync
+</label>
+</div>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Save</button>
+</div>
+</form>
+</div>

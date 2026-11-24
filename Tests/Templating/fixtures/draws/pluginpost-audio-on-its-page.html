@@ -1,0 +1,38 @@
+
+<div class="audio-play-wrapper"><a href="#" id="player{1}" class="audio-play-button"><i class="fa fa-play"></i></a></div>
+<h2 class="p-name">
+<a href="{site}/media/edit/">A recording</a>
+</h2>
+<div id="waveform{1}" class="waveform-player"></div>
+<script>
+                        var wavesurfer{1} = WaveSurfer.create({
+                            container: '#waveform{1}',
+                            waveColor: '#aaa',
+                            progressColor: '#333',
+                            cursorColor: '#aaa',
+                            height: 100
+                        });
+                        wavesurfer{1}.load('{site}\/file\/00000000000040008000000000000022\/sound.mp3');
+                        $('#waveform{1}').click(function() {
+                            wavesurfer{1}.play();
+                        });
+                        wavesurfer{1}.on('play', function() {
+                            $('#player{1}').html('<i class="fa fa-pause"></i>');
+                        });
+                        wavesurfer{1}.on('pause', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        wavesurfer{1}.on('finish', function() {
+                            $('#player{1}').html('<i class="fa fa-play"></i>');
+                        });
+                        $('#player{1}').click(function() {
+                            wavesurfer{1}.playPause();
+                            return false;
+                        });
+                    </script>
+<div class="e-content">
+<p>Listen
+<a href="https://example.org/r" target="_blank" rel="in-reply-to">https://<wbr></wbr>example.org/<wbr></wbr>r</a>
+<a href="{site}/tag/sound" class="p-category" rel="tag">#sound</a></p>
+<i class="fa fa-tag"></i><a href="{site}/tag/%23audio" class="p-category" rel="tag">#audio</a>
+</div>
