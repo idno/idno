@@ -490,6 +490,13 @@ Each content plugin has an `Entry.php` entity class that defines
   `$body` as HTML, so escape anything put into it that is not fixed text.
   `Tests/Core/FatalErrorPageTest.php` checks this by running
   `Tests/Core/fixtures/fatal_error.php` in its own PHP process.
+- No vendor messages: a site fetches no text from a third party to show its administrator. The
+  `Idno\Core\Vendor` client, which POSTed the Idno version to idno.co and whose reply onboarding
+  added to the session messages and the admin home page appended to the page as markup, is gone,
+  with its `/service/vendor/messages` page and the `noping` setting. Don't add a notice, news or
+  update feed from a fixed host; if one is ever wanted, it must be off until the site's owner
+  configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
+  `Tests/Pages/Onboarding/VendorMessagesTest.php` checks this.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions
