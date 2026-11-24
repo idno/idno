@@ -23,18 +23,13 @@ namespace Idno\Core {
             ini_set('session.cookie_lifetime', 60 * 60 * 24 * 7); // Persistent cookies
             ini_set('session.gc_maxlifetime', 60 * 60 * 24 * 7); // Garbage collection to match
 
-            header('P3P: CP="CAO PSA OUR"');
             ini_set('session.use_only_cookies', true); // Only cookies for session
             ini_set('session.cookie_httponly', true); // Restrict cookies to HTTP only (help reduce XSS attack profile)
+            ini_set('session.cookie_samesite', 'Lax'); // Not sent with cross-site POSTs: the general defence for handlers that skip the form token
             ini_set('session.use_strict_mode', true); // Help mitigate session fixation
             ini_set("session.use_trans_sid", false); // Prevent transparent IDs
             if (\Idno\Common\Page::isSSL()) {
                 ini_set('session.cookie_secure', true); // Set secure cookies when site is secure
-            }
-
-            // Using a more secure hashing algorithm for session IDs, if available
-            if (($hash = Idno::site()->config()->session_hash_function) && (in_array($hash, hash_algos()))) {
-                ini_set('session.hash_function', $hash);
             }
 
             $sessions_handled = false;
@@ -80,23 +75,6 @@ namespace Idno\Core {
             session_name(Idno::site()->config()->sessionname);
             session_start();
 
-            // Flag insecure sessions (so we can check state changes etc)
-            if (!isset($_SESSION['secure'])) {
-                $_SESSION['secure'] = \Idno\Common\Page::isSSL();
-            }
-
-            // Validate session
-            try {
-                $this->validate();
-            } catch (\Exception $ex) {
-                // Session didn't validate, log & destroy
-                \Idno\Core\Idno::site()->logging()->error('Error validating session', ['error' => $ex->getMessage()]);
-                header('X-IDNO-DEBUG: Tilt!');
-
-                $_SESSION = [];
-                session_destroy();
-            }
-
             // Session login / logout
             Idno::site()->routes()->addRoute('/session/login', '\Idno\Pages\Session\Login', true);
             Idno::site()->routes()->addRoute('/session/logout', '\Idno\Pages\Session\Logout');
@@ -139,15 +117,6 @@ namespace Idno\Core {
                     }
                 }
             );
-        }
-
-        /**
-         * Validate the session.
-         *
-         * @throws \Exception if the session is invalid.
-         */
-        protected function validate()
-        {
         }
 
         /**
@@ -521,17 +490,15 @@ namespace Idno\Core {
 
                     $key  = $user->getAPIkey();
                     $hmac = trim($apiSignature);
-                    //$compare_hmac = base64_encode(hash_hmac('sha256', explode('?', $_SERVER['REQUEST_URI'])[0], $key, true));
-                    $compare_hmac = base64_encode(hash_hmac('sha256', ($_SERVER['REQUEST_URI']), $key, true));
+                    $compare_hmac = base64_encode(hash_hmac('sha256', ($_SERVER['REQUEST_URI']), (string) $key, true));
 
-                    if ($hmac == $compare_hmac) {
+                    if (hash_equals($compare_hmac, $hmac)) {
                         $this->setIsAPIRequest(true);
                         \Idno\Core\Idno::site()->logging()->debug("API auth verified signature for user: " . $user->getName());
                         // TODO maybe this should set the current user without modifying $_SESSION?
                         $return = $this->refreshSessionUser($user);
                     } else {
                         \Idno\Core\Idno::site()->logging()->debug("API auth failed signature validation for user: " . $user->getName());
-                        \Idno\Core\Idno::site()->logging()->debug("Expected signature formed over base64_encode(hash_hmac('sha256', '{$_SERVER['REQUEST_URI']}', \$key, true)) = '$compare_hmac', but got '$hmac'. ");
                         \Idno\Core\Idno::site()->logging()->debug("Please read http://docs.idno.co/en/latest/developers/plugins/api/ for further details.");
                     }
                 } else {

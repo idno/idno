@@ -71,7 +71,6 @@ namespace Tests\Characterisation {
                     'expires',
                     'last-modified',
                     'link',
-                    'p3p',
                     'pragma',
                     'set-cookie',
                     'x-clacks-overhead',

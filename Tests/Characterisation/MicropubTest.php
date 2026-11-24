@@ -11,7 +11,6 @@ namespace Tests\Characterisation {
     {
 
         private const UNAUTHORIZED = "{\n    \"error\": \"unauthorized\",\n    \"error_description\": \"A valid access token is required\",\n    \"messages\": []\n}";
-        private const FORBIDDEN = "{\n    \"error\": \"forbidden\",\n    \"error_description\": \"\",\n    \"messages\": []\n}";
 
         private function auth(): array
         {
@@ -45,8 +44,9 @@ namespace Tests\Characterisation {
         {
             $r = $this->site()->request('GET', 'micropub/endpoint?q=config');
 
-            $this->assertSame(403, $r->status);
-            $this->assertSame(self::FORBIDDEN, $r->body);
+            // A GET, like a POST, is answered only for an API request: 401, not the gatekeeper's 403.
+            $this->assertSame(401, $r->status);
+            $this->assertSame(self::UNAUTHORIZED, $r->body);
         }
 
         public function testConfigWithToken(): void
@@ -72,8 +72,8 @@ namespace Tests\Characterisation {
         {
             $r = $this->site()->request('GET', 'micropub/endpoint?q=syndicate-to', ['Accept' => 'application/json']);
 
-            $this->assertSame(403, $r->status);
-            $this->assertSame(self::FORBIDDEN, $r->body);
+            $this->assertSame(401, $r->status);
+            $this->assertSame(self::UNAUTHORIZED, $r->body);
         }
 
         public function testCreateNoteFormEncoded(): void

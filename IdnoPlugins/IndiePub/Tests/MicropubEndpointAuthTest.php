@@ -189,6 +189,19 @@ namespace IdnoPlugins\IndiePub\Tests {
             $this->assertMatchesRegularExpression('#^Location: http://client\.example\.com/callback\?code=[0-9a-f]+&state=#mi', $result['headers']);
         }
 
+        public function testGetWithABrowserSessionAndNoTokenIs401()
+        {
+            $this->logIn();
+
+            foreach (['config', 'syndicate-to', 'source'] as $query) {
+                $result = $this->request('GET', 'micropub/endpoint?q=' . $query);
+
+                $this->assertEquals(401, $result['status'], 'q=' . $query . ': a session cookie is not a credential for the endpoint.');
+                $this->assertEquals('unauthorized', json_decode($result['body'], true)['error'] ?? null);
+            }
+            $this->assertTrue($this->isLoggedIn(), 'The request must not end the session.');
+        }
+
         // -----------------------------------------------------------------
         // A Micropub client
         // -----------------------------------------------------------------

@@ -217,7 +217,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
   with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
   `docs/developers/release-checklist.md`.
-- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and ends the carried session), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (what a token is bound to: the action it names and the session, not the page that receives it; the expiry window; the token endpoint), `SessionCookieTest` and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect, a token good for any page); a change of one is made on purpose, in the test that pins it.
+- Authentication, sessions and form tokens are pinned over HTTP in `Tests/Characterisation`: `AuthMatrixTest` (seven pages by six kinds of caller on the rig's site: anonymous, member and administrator by session, member and administrator by API signature, and an administrator's session carrying a member's signature, which acts as the member and ends the carried session), `LoginFlowTest` (the login form, the two failure messages, `fwd`, `_t=json`, logout and its unsanitised redirect to the Referer, a blocked address, the events of authentication through `Tests\Fixtures\EventRecorder`), `CsrfTest` (what a token is bound to: the action it names and the session, not the page that receives it; the expiry window; the token endpoint), `SessionCookieTest` (name, flags, `SameSite=Lax`, no P3P, an old session with `secure` still logs in) and `SessionDataAcrossLoginTest` (registration, onboarding, password reset and change, the IndieAuth approval, and that a signed request leaves no login behind). The helpers they share are the trait `Tests\Support\LogsIn` (used by `PrivateSiteTestCase`, `Tests\Acceptance\Browser` and the characterisation tests that log in): a test never keeps its own copy of "log in over HTTP", "read the session cookie" or "read a form's token", and reads the session cookie's name from the configuration. `Tests\Fixtures\EventRecorder` (test environment only, wired in `config/services_test.php` as the configurator of the legacy event dispatcher) appends the authentication events to the file `IDNO_TEST_RECORD_EVENTS` names; inert otherwise. Each assertion is what the site does today, defects included (a logout message that is never shown, an unsanitised logout redirect, a token good for any page); a change of one is made on purpose, in the test that pins it.
 - Template rendering is pinned by `Tests/Kernel/TemplateContractTest` (the cascade as `DefaultTemplate` keeps it, on
   the fixture bases of `Tests/Fixtures/Templates/`, one subprocess a case because `Bonita\Main`'s paths are
   process-static: `Tests/Kernel/template_contract.php`), by `Tests/Templating/TemplateTypeRequestTest` (which `?_t=`
@@ -675,7 +675,7 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   (it is filled for `POST`). Read the raw body with `$request->getContent()` and parse it
   yourself (e.g. `parse_str()` or `json_decode()`).
 - Do not assume a clean header slate: the legacy application boots before routing, and
-  the headers it has already set (`Set-Cookie`, `Expires`, `P3P`, `Link`, a
+  the headers it has already set (`Set-Cookie`, `Expires`, `Link`, a
   `Cache-Control`, `Pragma: no-cache`) are sent with your response, alongside the response's own headers
   (so there can be two `Cache-Control` headers).
 - Mark it `#[AsController]` (or register it as a service) when it needs constructor
@@ -3887,6 +3887,12 @@ the CLI installer no longer writes one.
   `IdnoPlugins/Event/Tests/RSVPOutputTest::testLinkingTheSanitizedBodyAddsNothingToTheMarkup` through a real template; `Tests/Core/ParseHashtagsTest.php`
   pins every spelling of those entities (named, decimal, hex, leading zeros, either case of `x`) while named letters such as `&auml;` still decode so that
   `#Äpfel` links. Don't `html_entity_decode()` text that is going to be printed as HTML.
+- The session cookie is HttpOnly, Secure over https and `SameSite=Lax` (`Idno\Core\Session::init()`: the general
+  defence for the handlers that skip the form token). No `P3P` header is sent, `Session::validate()` and the session's
+  `secure` flag are gone (a stored session that holds one still logs its user in), and `session_hash_function` is
+  read and ignored. A signed API request's signature is compared with `hash_equals()`, and no log line at any level
+  holds a signature, an expected HMAC, an API key or an access token
+  (`Tests/Kernel/SessionSecretsNotLoggedTest`, `Tests/Characterisation/SessionCookieTest`).
 - HTTP Signatures (draft-cavage-http-signatures) for all ActivityPub federation
 - What an incoming signature must cover: `HTTPSignature::verify()` refuses a request
   unless its signature covers `(request-target)`, `host` and `date`, and, for any method
@@ -3909,7 +3915,8 @@ the CLI installer no longer writes one.
   cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
   answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
   sets after an access token (`Authorization: Bearer` or the `access_token` field) has
-  matched, and core sets after a signed API request; otherwise it answers 401. The
+  matched, and core sets after a signed API request; otherwise it answers 401 (a GET, for
+  `q=config`, `q=syndicate-to` and `q=source`, is held to the same rule). The
   IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
   on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
   over HTTP with a logged-in browser.

@@ -5,15 +5,18 @@ declare(strict_types=1);
 namespace Tests\Characterisation;
 
 use Idno\Core\Idno;
+use Tests\Support\LogsIn;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
  * The session cookie and its headers as the site sends them today: the cookie's name (from the site's
- * configuration), its flags and its lifetime, when it is marked Secure, and the P3P header that goes with it. The
- * missing SameSite attribute is pinned as it is.
+ * configuration), its flags and its lifetime, when it is marked Secure, its SameSite attribute (Lax), and that no P3P
+ * header is sent.
  */
 final class SessionCookieTest extends PrivateSiteTestCase
 {
+    use LogsIn;
+
     public function testCookieNameHttpOnlyAndLifetime(): void
     {
         $response = $this->site()->request('GET', 'session/login');
@@ -46,19 +49,41 @@ final class SessionCookieTest extends PrivateSiteTestCase
         $this->assertMatchesRegularExpression('/;\s*secure\b/i', $this->sessionCookieHeader($secure), 'over https it is');
     }
 
-    public function testP3PHeaderIsSent(): void
+    public function testNoP3PHeaderIsSent(): void
     {
         $response = $this->site()->request('GET', 'session/login');
 
-        $this->assertSame('CP="CAO PSA OUR"', $response->header('P3P'));
+        $this->assertNull($response->header('P3P'));
     }
 
-    public function testNoSameSiteAttribute(): void
+    public function testSameSiteIsLax(): void
     {
         $response = $this->site()->request('GET', 'session/login');
 
-        // Pins today: PHP's default for session.cookie_samesite is empty and the site never sets one.
-        $this->assertDoesNotMatchRegularExpression('/samesite/i', $this->sessionCookieHeader($response));
+        $this->assertMatchesRegularExpression('/;\s*SameSite=Lax\b/i', $this->sessionCookieHeader($response));
+    }
+
+    public function testASessionThatHoldsTheRetiredSecureFlagStillLogsItsUserIn(): void
+    {
+        $this->addUser('ada', 'correct-horse-battery-9');
+        $cookie = $this->loginCookie('ada', 'correct-horse-battery-9');
+        $id = substr($cookie, strpos($cookie, '=') + 1);
+
+        // What a session written before the flag was removed holds: `secure|b:0;` after the rest.
+        $this->runInSite(
+            '$id = ' . $this->literal($id) . ';
+            $client = \Idno\Core\Idno::site()->db()->getClient();
+            if ($client instanceof \Pdo\Mysql) {
+                $client->prepare("update idno_sessions set session_value = concat(session_value, ?) where session_id = ?")->execute(["secure|b:0;", $id]);
+            } else {
+                $path = (string) (\Idno\Core\Idno::site()->config()->session_path ?: sys_get_temp_dir());
+                $file = rtrim($path, "/") . "/sess_" . $id;
+                file_put_contents($file, "secure|b:0;", FILE_APPEND);
+            }
+            return true;'
+        );
+
+        $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status, 'the user is still logged in');
     }
 
     /**

@@ -424,6 +424,10 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 
 * **Outbound requests are made by Symfony's HTTP client.** No Idno or bundled plugin code calls curl directly any more. A remote server whose certificate does not verify is no longer talked to, requests have time and size limits, URLs that members type are refused on private networks, and the `cookie_jar` setting does nothing. The list is under "Outbound requests: `Webservice`", below; `proxy_string`, `proxy_type`, `disable_ssl_verify` and `http_allow_private` (new; see below) are read from `config.ini` or the environment only, and the first three still work.
 
+* **The session cookie is `SameSite=Lax`.** A browser no longer sends it with a cross-site POST. The `P3P` header is no longer sent, and the session no longer holds a `secure` flag (a session written earlier that has one still works).
+* **`session_hash_function` is ignored.** PHP has ignored `session.hash_function` since 7.1; the setting is read and dropped, and no longer has a default.
+* **Micropub `GET` needs a token.** `micropub/endpoint?q=config`, `q=syndicate-to` and `q=source` answer 401 `unauthorized` unless the request carries an access token or an API signature, as a `POST` always has; a logged-in browser's session cookie is not enough.
+
 ### Removed in 2.0
 
 * Known hub integration removed; the `idno_hub` and `known_hub` settings are ignored.

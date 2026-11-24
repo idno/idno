@@ -13,6 +13,9 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
         {
             // An access token counts here and at no other page
             \IdnoPlugins\IndiePub\Main::authenticate();
+            if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {
+                $this->error(401, 'unauthorized', 'A valid access token is required');
+            }
             $this->gatekeeper();
             if ($query = trim($this->getInput('q'))) {
                 $account_strings = \Idno\Core\Idno::site()->syndication()->getServiceAccountStrings();
@@ -46,9 +49,9 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
         {
             \Idno\Core\Idno::site()->template()->setTemplateType('json');
 
-            \Idno\Core\Idno::site()->logging()->debug("MicroPub endpoint pinged", $_REQUEST);
+            \Idno\Core\Idno::site()->logging()->debug("MicroPub endpoint pinged");
             if (isset($_SERVER['CONTENT_TYPE']) && $_SERVER['CONTENT_TYPE'] == 'application/json') {
-                \Idno\Core\Idno::site()->logging()->debug("JSON Payload", json_decode(file_get_contents('php://input'), true));
+                \Idno\Core\Idno::site()->logging()->debug("JSON Payload", array_diff_key((array) json_decode(file_get_contents('php://input'), true), ['access_token' => true]));
             }
 
             //fail-by-default in case of unhandled errors

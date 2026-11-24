@@ -110,7 +110,7 @@ namespace IdnoPlugins\IndiePub\Tests {
             $this->assertArrayHasKey('media-endpoint', (array) json_decode($result['body'], true));
 
             $anonymous = $this->request('GET', 'micropub/endpoint?q=config', null, [], false);
-            $this->assertEquals(403, $anonymous['status'], 'Without a token the endpoint answers nothing.');
+            $this->assertEquals(401, $anonymous['status'], 'Without a token the endpoint answers nothing.');
         }
 
         public function testTokenIsVerifiedAtTheTokenEndpoint()
