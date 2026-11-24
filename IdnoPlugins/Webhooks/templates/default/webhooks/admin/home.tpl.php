@@ -15,7 +15,7 @@
         </p>
         <ul>
             <li><strong><em><?php echo \Idno\Core\Idno::site()->language()->_('text'); ?></em></strong>: <?php echo \Idno\Core\Idno::site()->language()->_('the text of the update'); ?></li>
-            <li><strong><em><?php echo \Idno\Core\Idno::site()->language()->_('username'); ?></em></strong>: <?php echo \Idno\Core\Idno::site()->language()->_('the username of the account-holder'); ?></li>
+            <li><strong><em><?php echo \Idno\Core\Idno::site()->language()->_('username'); ?></em></strong>: <?php echo \Idno\Core\Idno::site()->language()->_('the username of the account holder'); ?></li>
             <li><strong><em>icon_url</em></strong>: <?php echo \Idno\Core\Idno::site()->language()->_("the URL of the user's icon"); ?></li>
             <li><strong><em>content_type</em></strong>: <?php echo \Idno\Core\Idno::site()->language()->_('the type of content being sent'); ?></li>
         </ul>
@@ -26,7 +26,7 @@
 <div class="row">
     <div class="col-md-10 col-md-offset-1">
 
-        <h3><?php echo \Idno\Core\Idno::site()->language()->_('Create a new Webhook'); ?></h3>
+        <h3><?php echo \Idno\Core\Idno::site()->language()->_('Create a new webhook'); ?></h3>
 
         <form action="" method="post">
 
@@ -45,7 +45,7 @@
                         <input type="text" name="webhooks[]" value="<?php echo htmlspecialchars($webhook['url'])?>" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Webhook URL'); ?>" class="form-control">
                     </div>
                     <div class="col-md-3" style="margin-top: 0.75em">
-                        <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this Webhook'); ?></a></small>
+                        <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this webhook'); ?></a></small>
                     </div>
                 </div>
                         <?php
@@ -63,17 +63,17 @@
                     <input type="text" value="" name="webhooks[]" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Webhook URL'); ?>" class="form-control">
                 </div>
                 <div class="col-md-3" style="margin-top: 0.75em">
-                    <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this Webhook'); ?></a></small>
+                    <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this webhook'); ?></a></small>
                 </div>
             </div>
             <div id="morefields"></div>
             
                 <p style="margin-top:1em; margin-bottom:1.5em">
-                    <a href="#" onclick="$('#morefields').append($('#field_template').html());"><i class="fa fa-plus"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Add another Webhook'); ?></a>
+                    <a href="#" onclick="$('#morefields').append($('#field_template').html());"><i class="fa fa-plus"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Add another webhook'); ?></a>
                 </p>
             <p>
                 <?php echo \Idno\Core\Idno::site()->actions()->signForm('/admin/webhooks/') ?>
-                <input class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Save Webhooks'); ?>" type="submit">
+                <input class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Save webhooks'); ?>" type="submit">
             </p>
 
         </form>
@@ -86,7 +86,7 @@
             <input type="text" value="" name="webhooks[]" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Webhook URL'); ?>"  class="form-control">
         </div>
                 <div class="col-md-3" style="margin-top: 0.75em">
-            <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this Webhook'); ?></a></small>
+            <small><a href="#" onclick="$(this).closest('.row').remove(); return false;"><i class="fa fa-times"></i> <?php echo \Idno\Core\Idno::site()->language()->_('Remove this webhook'); ?></a></small>
         </div>
             </div>
         </div>

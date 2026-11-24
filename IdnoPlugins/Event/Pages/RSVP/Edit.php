@@ -28,7 +28,7 @@ namespace IdnoPlugins\Event\Pages\RSVP {
             ))->draw('entity/RSVP/edit');
 
             if (empty($object)) {
-                $title = \Idno\Core\Idno::site()->language()->_('Write an RSVP');
+                $title = \Idno\Core\Idno::site()->language()->_('New RSVP');
             } else {
                 $title = \Idno\Core\Idno::site()->language()->_('Edit RSVP');
             }

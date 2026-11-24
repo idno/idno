@@ -28,7 +28,7 @@
         </h1>
 
         <p class="explanation">
-            <?php echo \Idno\Core\Idno::site()->language()->_('Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates.  Common examples of pages include an about page, a contact page, or a resume.'); ?>
+            <?php echo \Idno\Core\Idno::site()->language()->_('Pages are a great way to add content to your site that you want to keep separate from your stream of normal posts and updates. Common examples of pages include an about page, a contact page, or a resume.'); ?>
         </p>
 
     </div>
@@ -132,7 +132,7 @@
         </h2>
 
         <p class="explanation">
-            <?php echo \Idno\Core\Idno::site()->language()->_('If you plan on adding many pages, you may want to group them under categories.  However, you don’t have to assign a page to a category.'); ?>
+            <?php echo \Idno\Core\Idno::site()->language()->_('If you plan on adding many pages, you may want to group them under categories. However, you don\'t have to assign a page to a category.'); ?>
         </p>
     </div>
 </div>
@@ -165,7 +165,7 @@
                 <table style="width: 100%; margin-bottom: 3em">
                     <thead>
                         <tr class="pages">
-                            <td width="35%"><?php echo \Idno\Core\Idno::site()->language()->_('Category Name'); ?></td>
+                            <td width="35%"><?php echo \Idno\Core\Idno::site()->language()->_('Category name'); ?></td>
                             <td width="35%"><?php echo \Idno\Core\Idno::site()->language()->_('Count'); ?></td>
                             <td width="15%">&nbsp;</td>
                             <td width="15%">&nbsp;</td>

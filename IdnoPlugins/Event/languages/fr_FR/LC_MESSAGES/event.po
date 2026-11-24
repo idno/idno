@@ -36,19 +36,12 @@ msgstr "%s a été supprimé."
 msgid "We couldn't delete %s."
 msgstr "On n’a pas pu supprimer %s."
 
-#: Pages/RSVP/Edit.php:31
-msgid "Write an RSVP"
-msgstr "Écrire un RSVP"
-
 #: Pages/RSVP/Edit.php:33
 msgid "Edit RSVP"
 msgstr "Modifier le RSVP"
 
-#: Pages/Edit.php:42
-msgid "Write an event"
-msgstr "Écrire un évènement"
-
 #: Pages/Edit.php:44
+#: templates/default/entity/Event/edit.tpl.php:12
 msgid "Edit event"
 msgstr "Modifier l’évènement"
 
@@ -60,11 +53,8 @@ msgstr "Lieu"
 msgid "Ends"
 msgstr "Se termine"
 
-#: templates/default/entity/Event.tpl.php:53
-msgid "Time Zone"
-msgstr "Fuseau horaire"
-
 #: templates/default/entity/RSVP/edit.tpl.php:12
+#: Pages/RSVP/Edit.php:31
 msgid "New RSVP"
 msgstr "Nouveau RSVP"
 
@@ -97,8 +87,8 @@ msgid "Any comments?"
 msgstr "Des commentaires ?"
 
 #: templates/default/entity/RSVP/edit.tpl.php:62
-msgid "Say something here..."
-msgstr "Dites quelque chose ici…"
+msgid "Add a comment (optional)"
+msgstr "Ajoutez un commentaire (facultatif)"
 
 #: templates/default/entity/RSVP/edit.tpl.php:76
 msgid "Cancel"
@@ -109,12 +99,9 @@ msgid "Save"
 msgstr "Enregistrer"
 
 #: templates/default/entity/Event/edit.tpl.php:10
-msgid "New Event"
+#: Pages/Edit.php:42
+msgid "New event"
 msgstr "Nouvel évènement"
-
-#: templates/default/entity/Event/edit.tpl.php:12
-msgid "Edit Event"
-msgstr "Éditer évènement"
 
 #: templates/default/entity/Event/edit.tpl.php:21
 msgid "Event name"
@@ -133,7 +120,7 @@ msgid "Start day and time"
 msgstr "Jour et heure de début"
 
 #: templates/default/entity/Event/edit.tpl.php:49
-msgid "Type in the start day and time?"
+msgid "Enter the start day and time"
 msgstr "Entrez la date et l’heure de début."
 
 #: templates/default/entity/Event/edit.tpl.php:55
@@ -141,10 +128,11 @@ msgid "End day and time"
 msgstr "Date et heure de fin"
 
 #: templates/default/entity/Event/edit.tpl.php:59
-msgid "Type in the end day and time"
+msgid "Enter the end day and time"
 msgstr "Entre la date et l’heure de fin"
 
 #: templates/default/entity/Event/edit.tpl.php:66
+#: templates/default/entity/Event.tpl.php:53
 msgid "Time zone"
 msgstr "Fuseau horaire"
 
@@ -161,11 +149,11 @@ msgid "Description"
 msgstr "Description"
 
 #: RSVP.php:96
-msgid "Your RSVP was successfully saved."
+msgid "Your RSVP was saved."
 msgstr "Votre RSVP a été enregistré avec succès."
 
 #: RSVP.php:100
-msgid "You can't save an RSVP with no status."
+msgid "Choose whether you're going before saving your RSVP."
 msgstr "Vous ne pouvez pas sauvegarder un RSVP sans statut."
 
 #: Event.php:10
@@ -173,5 +161,5 @@ msgid "Untitled"
 msgstr "Sans titre"
 
 #: Event.php:88
-msgid "You can't save an event with no description."
+msgid "Add a description before saving your event."
 msgstr "Vous ne pouvez pas sauvegarder un évènement sans description."

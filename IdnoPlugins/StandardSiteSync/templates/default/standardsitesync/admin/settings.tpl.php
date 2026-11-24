@@ -9,7 +9,7 @@
         </p>
 
         <div class="well">
-            <h3><?php echo \Idno\Core\Idno::site()->language()->_('Site-Wide Setting'); ?></h3>
+            <h3><?php echo \Idno\Core\Idno::site()->language()->_('Site-wide setting'); ?></h3>
             <p class="explanation">
                 <?php echo \Idno\Core\Idno::site()->language()->_('Enable or disable standard.site sync for this site. When enabled, users can connect their own AT Protocol PDS accounts from their account settings.'); ?>
             </p>

@@ -27,11 +27,11 @@ msgid "IndiePub"
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:12
-msgid "Micropub Accounts"
+msgid "Micropub accounts"
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:20
-msgid "There are currently no micropub accounts associated with this site."
+msgid "There are currently no Micropub accounts connected to this site."
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:28
@@ -55,15 +55,15 @@ msgid "Token"
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:43
-msgid "Revoke Access"
+msgid "Revoke access"
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:53
-msgid "Add Micropub Account"
+msgid "Add Micropub account"
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:60
-msgid "To manually add a micropub client account and generate an API token, enter the details below."
+msgid "To add a Micropub client account manually and generate an API token, enter the details below."
 msgstr ""
 
 #: ./templates/default/account/indiepub.tpl.php:75
@@ -79,7 +79,7 @@ msgid "Redirect URI can't be blank."
 msgstr ""
 
 #: ./Pages/Account.php:17
-msgid "IndiePub Accounts"
+msgid "IndiePub accounts"
 msgstr ""
 
 #: ./Pages/Revoke.php:21

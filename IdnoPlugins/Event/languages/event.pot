@@ -22,19 +22,12 @@ msgstr ""
 msgid "We couldn't delete %s."
 msgstr ""
 
-#: ./Pages/RSVP/Edit.php:31
-msgid "Write an RSVP"
-msgstr ""
-
 #: ./Pages/RSVP/Edit.php:33
 msgid "Edit RSVP"
 msgstr ""
 
-#: ./Pages/Edit.php:42
-msgid "Write an event"
-msgstr ""
-
 #: ./Pages/Edit.php:44
+#: ./templates/default/entity/Event/edit.tpl.php:12
 msgid "Edit event"
 msgstr ""
 
@@ -46,11 +39,8 @@ msgstr ""
 msgid "Ends"
 msgstr ""
 
-#: ./templates/default/entity/Event.tpl.php:53
-msgid "Time Zone"
-msgstr ""
-
 #: ./templates/default/entity/RSVP/edit.tpl.php:12
+#: ./Pages/RSVP/Edit.php:31
 msgid "New RSVP"
 msgstr ""
 
@@ -83,7 +73,7 @@ msgid "Any comments?"
 msgstr ""
 
 #: ./templates/default/entity/RSVP/edit.tpl.php:62
-msgid "Say something here..."
+msgid "Add a comment (optional)"
 msgstr ""
 
 #: ./templates/default/entity/RSVP/edit.tpl.php:76
@@ -95,11 +85,8 @@ msgid "Save"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:10
-msgid "New Event"
-msgstr ""
-
-#: ./templates/default/entity/Event/edit.tpl.php:12
-msgid "Edit Event"
+#: ./Pages/Edit.php:42
+msgid "New event"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:21
@@ -119,7 +106,7 @@ msgid "Start day and time"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:49
-msgid "Type in the start day and time?"
+msgid "Enter the start day and time"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:55
@@ -127,10 +114,11 @@ msgid "End day and time"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:59
-msgid "Type in the end day and time"
+msgid "Enter the end day and time"
 msgstr ""
 
 #: ./templates/default/entity/Event/edit.tpl.php:66
+#: ./templates/default/entity/Event.tpl.php:53
 msgid "Time zone"
 msgstr ""
 
@@ -147,11 +135,11 @@ msgid "Description"
 msgstr ""
 
 #: ./RSVP.php:96
-msgid "Your RSVP was successfully saved."
+msgid "Your RSVP was saved."
 msgstr ""
 
 #: ./RSVP.php:100
-msgid "You can\'t save an RSVP with no status."
+msgid "Choose whether you\'re going before saving your RSVP."
 msgstr ""
 
 #: ./Event.php:10
@@ -159,6 +147,6 @@ msgid "Untitled"
 msgstr ""
 
 #: ./Event.php:88
-msgid "You can\'t save an event with no description."
+msgid "Add a description before saving your event."
 msgstr ""
 

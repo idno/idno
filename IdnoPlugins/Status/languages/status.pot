@@ -27,15 +27,12 @@ msgid "What are you up to?"
 msgstr ""
 
 #: ./Pages/Edit.php:39
+#: ./templates/default/entity/Status/edit.tpl.php:32
 msgid "Edit status update"
 msgstr ""
 
 #: ./templates/default/entity/Status/edit.tpl.php:30
-msgid "New Status Update"
-msgstr ""
-
-#: ./templates/default/entity/Status/edit.tpl.php:32
-msgid "Edit Status Update"
+msgid "New status update"
 msgstr ""
 
 #: ./templates/default/entity/Status/edit.tpl.php:48
@@ -47,11 +44,11 @@ msgid "Reply to a site"
 msgstr ""
 
 #: ./templates/default/entity/Status/edit.tpl.php:93
-msgid "Add the URL that you're replying to"
+msgid "Paste the link you're replying to"
 msgstr ""
 
 #: ./templates/default/entity/Status/edit.tpl.php:97
-msgid "Remove URL"
+msgid "Remove link"
 msgstr ""
 
 #: ./templates/default/entity/Status/edit.tpl.php:114

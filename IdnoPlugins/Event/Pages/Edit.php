@@ -39,7 +39,7 @@ namespace IdnoPlugins\Event\Pages {
             $body = $t->__(['body' => $edit_body])->draw('entity/editwrapper');
 
             if (empty($object)) {
-                $title = \Idno\Core\Idno::site()->language()->_('Write an event');
+                $title = \Idno\Core\Idno::site()->language()->_('New event');
             } else {
                 $title = \Idno\Core\Idno::site()->language()->_('Edit event');
             }

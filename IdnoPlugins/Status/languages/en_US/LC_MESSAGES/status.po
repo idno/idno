@@ -1,2 +1,2 @@
-msgid "Add the URL that you're replying to"
+msgid "Paste the link you're replying to"
 msgstr "Add the URL that you're replying to"

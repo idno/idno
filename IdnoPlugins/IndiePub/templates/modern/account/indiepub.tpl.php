@@ -3,14 +3,14 @@
     $baseURL = Idno::site()->config()->getDisplayURL();
     $user = Idno::site()->session()->currentUser();
 ?>
-<h1 class="idno-admin-page-title"><?= Idno::site()->language()->_('Micropub Accounts') ?></h1>
+<h1 class="idno-admin-page-title"><?= Idno::site()->language()->_('Micropub accounts') ?></h1>
 <p class="idno-admin-description">
     <?= Idno::site()->language()->_('Manage third-party apps authorized to post to your site via Micropub.') ?>
 </p>
 
 <?php if (empty($user->indieauth_tokens)) { ?>
 <div class="idno-admin-card">
-    <p><?= Idno::site()->language()->_('There are currently no micropub accounts associated with this site.') ?></p>
+    <p><?= Idno::site()->language()->_('There are currently no Micropub accounts connected to this site.') ?></p>
 </div>
 <?php } else { ?>
     <?php foreach ((array)$user->indieauth_tokens as $token => $details) { ?>
@@ -31,7 +31,7 @@
             <input name="token" type="hidden" value="<?= htmlspecialchars($token) ?>">
             <button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);"
                     onclick="return confirm('<?= Idno::site()->language()->_('Are you sure you want to revoke this token?') ?>');">
-                <?= Idno::site()->language()->_('Revoke Access') ?>
+                <?= Idno::site()->language()->_('Revoke access') ?>
             </button>
             <?= Idno::site()->actions()->signForm('account/indiepub/revoke') ?>
         </form>
@@ -42,13 +42,13 @@
 <div x-data="{ showAddForm: false }">
     <p style="margin-top:1rem;">
         <a href="#" @click.prevent="showAddForm = !showAddForm" style="font-size:0.875rem;">
-            <?= Idno::site()->language()->_('Add Micropub Account') ?>
+            <?= Idno::site()->language()->_('Add Micropub account') ?>
         </a>
     </p>
 
     <div class="idno-admin-card" x-show="showAddForm" x-cloak style="margin-top:0.75rem;">
-        <h2 class="idno-admin-card-title"><?= Idno::site()->language()->_('Add Micropub Account') ?></h2>
-        <p><?= Idno::site()->language()->_('To manually add a micropub client account and generate an API token, enter the details below.') ?></p>
+        <h2 class="idno-admin-card-title"><?= Idno::site()->language()->_('Add Micropub account') ?></h2>
+        <p><?= Idno::site()->language()->_('To add a Micropub client account manually and generate an API token, enter the details below.') ?></p>
 
         <form action="<?= $baseURL ?>account/indiepub/add" method="post" style="margin-top:0.75rem;">
             <div class="idno-form-group">

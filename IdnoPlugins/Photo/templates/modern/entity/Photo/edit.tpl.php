@@ -16,9 +16,9 @@
                 <h4 class="idno-editor-heading">
                     <?php
                     if (empty($vars['object']->_id)) {
-                        echo \Idno\Core\Idno::site()->language()->_('New Photo');
+                        echo \Idno\Core\Idno::site()->language()->_('New photo');
                     } else {
-                        echo \Idno\Core\Idno::site()->language()->_('Edit Photo');
+                        echo \Idno\Core\Idno::site()->language()->_('Edit photo');
                         if ($vars['object']->getPublishStatus() === 'draft') {
                             echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
                         }
@@ -80,7 +80,7 @@
                         <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
                     </button>
                     <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                        <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
                     </button>
                     <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                         <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

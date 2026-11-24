@@ -171,7 +171,7 @@ namespace IdnoPlugins\Like {
                     }
                     if (empty($title)) {
                         error_log("No title");
-                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('You need to specify a title.'));
+                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Add a title before saving your bookmark.'));
                         return false;
                     }
 
@@ -200,11 +200,11 @@ namespace IdnoPlugins\Like {
                     }
                 } else {
                     \Idno\Core\Idno::site()->logging()->error("No URL");
-                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('You can\'t bookmark an empty URL.'));
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Add a link to bookmark.'));
                 }
             } else {
                 \Idno\Core\Idno::site()->logging()->error("Invalid URL");
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('That doesn\'t look like a valid URL.'));
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('That doesn\'t look like a valid link address.'));
             }
             return false;
 

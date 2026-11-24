@@ -15,19 +15,19 @@ msgid "We couldn't delete your photo."
 msgstr ""
 
 #: ./Pages/Edit.php:34
-msgid "Upload a picture"
+msgid "Upload a photo"
 msgstr ""
 
 #: ./Pages/Edit.php:36
-msgid "Edit picture details"
+msgid "Edit photo details"
 msgstr ""
 
 #: ./templates/default/entity/Photo/edit.tpl.php:22
-msgid "New Photo"
+msgid "New photo"
 msgstr ""
 
 #: ./templates/default/entity/Photo/edit.tpl.php:24
-msgid "Edit Photo"
+msgid "Edit photo"
 msgstr ""
 
 #: ./templates/default/entity/Photo/edit.tpl.php:50
@@ -59,11 +59,11 @@ msgid "Untitled"
 msgstr ""
 
 #: ./Photo.php:178
-msgid "Image wasn\'t attached."
+msgid "No image was attached."
 msgstr ""
 
 #: ./Photo.php:182
-msgid "This doesn\'t seem to be an image..."
+msgid "This doesn\'t seem to be an image."
 msgstr ""
 
 #: ./Photo.php:199

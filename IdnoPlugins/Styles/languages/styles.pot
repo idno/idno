@@ -1,5 +1,5 @@
 #: ./Pages/Admin.php:29
-msgid "Site Styles"
+msgid "Site styles"
 msgstr ""
 
 #: ./templates/default/styles/admin/menu.tpl.php:1

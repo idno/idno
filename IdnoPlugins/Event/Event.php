@@ -95,7 +95,7 @@ namespace IdnoPlugins\Event {
                     }
                 }
             } else {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('You can\'t save an event with no description.'));
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Add a description before saving your event.'));
             }
             return false;
 

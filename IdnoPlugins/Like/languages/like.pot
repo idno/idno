@@ -19,23 +19,17 @@ msgid "We couldn't delete %s."
 msgstr ""
 
 #: ./Pages/Edit.php:15
+#: ./templates/default/entity/Like/edit.tpl.php:13
 msgid "Edit bookmark"
 msgstr ""
 
 #: ./Pages/Edit.php:18
+#: ./templates/default/entity/Like/edit.tpl.php:11
 msgid "New bookmark"
 msgstr ""
 
-#: ./templates/default/entity/Like/edit.tpl.php:11
-msgid "New Bookmark"
-msgstr ""
-
-#: ./templates/default/entity/Like/edit.tpl.php:13
-msgid "Edit Bookmark"
-msgstr ""
-
 #: ./templates/default/entity/Like/edit.tpl.php:21
-msgid "Link Address"
+msgid "Link address"
 msgstr ""
 
 #: ./templates/default/entity/Like/edit.tpl.php:57
@@ -63,14 +57,14 @@ msgid "Save"
 msgstr ""
 
 #: ./Like.php:178
-msgid "You need to specify a title."
+msgid "Add a title before saving your bookmark."
 msgstr ""
 
 #: ./Like.php:197
-msgid "You can\'t bookmark an empty URL."
+msgid "Add a link to bookmark."
 msgstr ""
 
 #: ./Like.php:201
-msgid "That doesn\'t look like a valid URL."
+msgid "That doesn\'t look like a valid link address."
 msgstr ""
 

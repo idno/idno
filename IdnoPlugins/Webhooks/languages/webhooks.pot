@@ -35,7 +35,7 @@ msgid "username"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:18
-msgid "the username of the account-holder"
+msgid "the username of the account holder"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:19
@@ -47,7 +47,7 @@ msgid "the type of content being sent"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:29
-msgid "Create a new Webhook"
+msgid "Create a new webhook"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:42
@@ -59,14 +59,14 @@ msgid "Webhook URL"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:48
-msgid "Remove this Webhook"
+msgid "Remove this webhook"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:72
-msgid "Add another Webhook"
+msgid "Add another webhook"
 msgstr ""
 
 #: ./templates/default/webhooks/admin/home.tpl.php:76
-msgid "Save Webhooks"
+msgid "Save webhooks"
 msgstr ""
 

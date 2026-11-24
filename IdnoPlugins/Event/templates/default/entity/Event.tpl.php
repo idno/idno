@@ -50,7 +50,7 @@ $timeformat = 'l, jS F Y h:i A';
     ?>
     <?php if (!empty($vars['object']->timezone)) { ?>
     <p>
-        <?php echo \Idno\Core\Idno::site()->language()->_('Time Zone'); ?>:
+        <?php echo \Idno\Core\Idno::site()->language()->_('Time zone'); ?>:
         <?php echo $this->__(['value' => $vars['object']->timezone])->draw('forms/output/timezones'); ?>
     </p>
     <?php } ?>
