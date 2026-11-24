@@ -14,11 +14,6 @@ namespace Idno\Pages\Onboarding {
 
             $this->gatekeeper();
 
-            $user = \Idno\Core\Idno::site()->session()->currentUser();
-            if ($messages = \Idno\Core\Vendor::getMessages()) {
-                \Idno\Core\Idno::site()->session()->addMessage($messages);
-            }
-
             $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL());
 
         }
