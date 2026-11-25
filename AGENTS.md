@@ -760,7 +760,9 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   what it was, so a plugin's `hijackRoute()`, its `addRoute()` of the identical pattern or of an exact key, a pattern it registered before core's and one after core's all do what they
   always did, by the legacy router's own rules, and `LegacyRouteOverride` only asks the legacy router which page it would choose. A page registered after the plugins keeps that
   registration in the component that made it. A page that is a permalink says `markdownPermalink: true`, and the route follows the convention. `Tests/Kernel/SitePageClaimsTest` and
-  `PageRoutesTest` fail for a page that does not (see "Legacy pages and routes").
+  `PageRoutesTest` fail for a page that does not (see "Legacy pages and routes"). The guard is a snapshot: `Tests/Kernel/fixtures/core-routes.php` is the WHOLE core route table as it was at
+  commit `69af0d425` (every key core and the components it builds register, in order, with a marker where the plugins' routes are registered), and the test fails when a key is gone, has changed
+  side of the marker or moved. To remove a route on purpose, delete its key from `routes` and list it in `omitted` with the reason, in the same change.
 - It must return a `Symfony\Component\HttpFoundation\Response`, and must take its input
   from the `Request` (inject it as an argument), never from `$_GET`, `$_POST`,
   `$_SERVER` or other superglobals, and must not call `header()`, `echo` or `exit`.
@@ -1128,9 +1130,9 @@ class core still registers for the path, if any) and the legacy router share the
   page) never takes the moved path: the controller's route matched first, and the placeholder holds the place in the table. A malformed `Host` request, which the legacy router serves,
   finds the shell where there is one and the 404 page where the page is only a controller. `Tests/Kernel/SitePageClaimsTest` enforces it over the real route collection and the booted
   site's real table (core and the plugins the site enables): every site page route declares `legacyPatterns`; each is registered with a placeholder (a route that replaces no class) or a
-  class the route lists in `replaces`, before the plugins' routes or after them as core registered it (the late ones are listed in the test); the router's choice for a path the route
-  serves is that placeholder or shell; a declared pattern matches a path the route serves; a page that replaces a `MarkdownPermalink` says `markdownPermalink`; and the keys of core's own
-  registrations, in order, are a recorded snapshot of the tree before any page moved (less `/bookmarklet\.js`), so a page that moves cannot silently drop or reorder one. Synthetic tables and
+  class the route lists in `replaces`, before the plugins' routes or after them as the snapshot says (derived from the marker, not listed); a route that declares `[]` fails if a snapshot pattern matches one of its paths (it must declare that
+  pattern); the router's choice for a path the route serves is a placeholder or shell registered under one of the route's OWN declared patterns; a declared pattern matches a path the route serves; a page that replaces a `MarkdownPermalink` says `markdownPermalink`; and the keys of the WHOLE core table, in order and on the same side of the plugins' marker, are `Tests/Kernel/fixtures/core-routes.php`, generated from the tree before any page moved (less `/bookmarklet\.js` and
+  StaticPages' own routes, each listed with its reason), whichever component registers them (`Idno`, `Account`, `Admin`, `Webfinger`, `Webmention`, `PubSubHubbub`), so a page that moves cannot silently drop, reorder or re-side one. Synthetic tables and
   controllers prove each check can fail. It sees the plugins the rig enables only (Styles and StandardSiteSync are not among them).
 - Cost: the listener does nothing for any request that is not a site page's (a check of the request and one attribute lookup, cached per controller), and
   builds nothing when the legacy application is not booted (the dispatcher is a service closure: `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`;

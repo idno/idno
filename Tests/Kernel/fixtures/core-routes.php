@@ -1,0 +1,115 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * The legacy route table's core registrations as they were at commit 69af0d425, before any page moved to a controller: every key that core and the
+ * components it builds registered, in the order the table held them, with the marker `@plugins` at the point where the plugins' routes are registered
+ * (the plugins are built at the end of `Idno::registerPages()`: the keys after the marker are those of the components `LegacyBootstrap::boot()` builds
+ * after `Idno`: Account, Admin, Webfinger, Webmention, PubSubHubbub). Keys are as the table holds them (the tokens replaced), the four of the permalink
+ * route written `{permalink}`.
+ *
+ * Generated from that commit's code, not by hand: check the commit out, install its `vendor/`, configure a site with every plugin in `antiplugins`
+ * and list `array_keys(iterator_to_array(Idno::site()->routes()))` after `Idno/start.php` has booted it; the keys that follow the first fixture page registered
+ * on `plugins/loaded` (the three `draw-legacy` pages of the test environment, replaced here by the marker) are the late ones.
+ *
+ * `SitePageClaimsTest` holds the booted application's table to it: each key must still be there, in this order, on the same side of the marker
+ * (a kept legacy page, a shell and a placeholder all count as the key being there). A route removed on purpose is deleted from `routes` and listed
+ * in `omitted` with its reason, in the same change.
+ */
+
+return [
+    'routes' => [
+        '/session/login',
+        '/session/logout',
+        '/currentUser/?',
+        '/following/?',
+        '/following/add/?',
+        '/following/confirm/?',
+        '/following/refresh/?',
+        '/stream/?',
+        '/?',
+        '/feed\\.xml',
+        '/feed/?',
+        '/rss\\.xml',
+        '/content/([A-Za-z\\-\\/]+)+',
+        '/view/([A-Za-z0-9\\-]+)/?',
+        '/s/([A-Za-z0-9\\-]+)/?',
+        '{permalink}/?',
+        '/edit/([A-Za-z0-9\\-]+)/?',
+        '/delete/([A-Za-z0-9\\-]+)/?',
+        '/withdraw/([A-Za-z0-9\\-]+)/?',
+        '/attachment/([A-Za-z0-9\\-]+)/([A-Za-z0-9\\-]+)/?',
+        '/view/([A-Za-z0-9\\-]+)/annotations/([A-Za-z0-9\\-]+)?',
+        '{permalink}/annotations/([A-Za-z0-9\\-]+)?',
+        '{permalink}/annotations/([A-Za-z0-9\\-]+)/delete/?',
+        '{permalink}/annotation/delete/?',
+        '/annotation/post/?',
+        '/share/?',
+        '/chrome/manifest\\.json',
+        '/service-worker(\\.min)?\\.js',
+        '/file/mint/?',
+        '/file/upload/?',
+        '/file/picker/?',
+        '/filepicker/?',
+        '/file/(([A-Za-z0-9\\-]+))(/.*)?',
+        '/profile/([^\\/]+)/?',
+        '/profile/([^\\/]+)/edit/?',
+        '/profile/([^\\/]+)/([A-Za-z\\-\\/]+)+',
+        '/actor/([^\\/]+)/?',
+        '/search/?',
+        '/search/mentions\\.json',
+        '/tag/([^\\s]+)\\/?',
+        '/search/users/?',
+        '/robots\\.txt',
+        '/autosave/?',
+        '/drafts/?',
+        '/begin/?',
+        '/begin/register/?',
+        '/begin/profile/?',
+        '/begin/connect/?',
+        '/begin/connect\\-forwarder/?',
+        '/begin/publish/?',
+        '/service/db/optimise/?',
+        '/service/security/csrftoken/?',
+        '/service/system/log/?',
+        '/service/geo/geocoder/?',
+        '@plugins',
+        '/account/settings/?',
+        '/account/settings/tools/?',
+        '/account/settings/following/?',
+        '/account/settings/following/bookmarklet/?',
+        '/account/register/?',
+        '/account/password/?',
+        '/account/password/reset/?',
+        '/account/settings/feedback/?',
+        '/account/settings/feedback/confirm/?',
+        '/account/export/?',
+        '/account/export/rss/?',
+        '/account/export/wxr/?',
+        '/admin/?',
+        '/admin/plugins/?',
+        '/admin/themes/?',
+        '/admin/dependencies/?',
+        '/admin/homepage/?',
+        '/admin/email/?',
+        '/admin/emailtest/?',
+        '/admin/about/?',
+        '/admin/users/?',
+        '/admin/export/?',
+        '/admin/export/generate/?',
+        '/admin/export/rss/?',
+        '/admin/export/wxr/?',
+        '/admin/import/?',
+        '/admin/diagnostics/?',
+        '/admin/statistics/?',
+        '/admin/legacytables/?',
+        '/\\.well\\-known/webfinger/?',
+        '/webmention/?',
+        '/pubsub/callback/([A-Za-z0-9\\-]+)/([A-Za-z0-9\\-]+)/?',
+    ],
+    'omitted' => [
+        '/bookmarklet\\.js' => 'removed outright when its page moved: the address answered an HTML fragment under a .js name and nothing linked it; it has no registration, so a plugin\'s broader pattern, or the 404 page, answers it',
+        '/content/default/?' => 'registered by the StaticPages plugin, not core: removed when a static page became the home page through the homepage/replace event',
+    ],
+];
