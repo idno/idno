@@ -41,7 +41,6 @@ Every page can also be fetched as a Markdown document: YAML front matter, then t
 * The home page, a profile, a tag, a search: the page's title, then each post in full under a heading that links to it, and `Newer` / `Older` links to the rest of the list (which are Markdown too).
 * Any other page: its title and its text. Forms and their fields are left out.
 * A settings page (anything under `/admin/` or `/account/`): its title and a line saying it has no Markdown form. These pages hold keys, tokens and passwords, and none of their content is ever in a Markdown document.
-* The onboarding steps a new member clicks through stay HTML.
 * An error page keeps its status (404, 403, 410) and says what the HTML page says.
 
 **A post** (or a static page), whose permalink is `https://example.com/2026/hello-world`, can be asked for in three more ways:

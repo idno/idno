@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Pages\Onboarding {
+namespace Tests\Pages\Admin {
 
     use Idno\Core\Idno;
 

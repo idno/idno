@@ -200,7 +200,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|onboarding|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.html\.twig$#', $file) === 1) {
+                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.html\.twig$#', $file) === 1) {
                     $reached[$file] = true;
                 }
             }

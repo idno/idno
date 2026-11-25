@@ -18,7 +18,7 @@ use Idno\Entities\User;
 interface HomeStream
 {
     /**
-     * Whether the site has any user. A site with none has no home page: its visitor is sent to the onboarding.
+     * Whether the site has any user. A site with none has no home page: its visitor is told the site is being set up (a 503).
      */
     public function siteHasUsers(): bool;
 

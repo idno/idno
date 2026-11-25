@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-24 20:22+0000\n"
+"POT-Creation-Date: 2026-11-25 19:47+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -13,35 +13,38 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ./Idno/Common/Entity.php:794
+#: ./Idno/Common/Entity.php:823
 msgid "There was a problem syndicating."
 msgstr ""
 
-#: ./Idno/Common/Page.php:381
-#: ./Idno/Common/Page.php:382
+#: ./Idno/Common/Page.php:391
+#: ./Idno/Common/Page.php:392
+#: ./Idno/Legacy/LegacyPageLifecycle.php:149
+#: ./Idno/Legacy/LegacyPageLifecycle.php:150
 msgid "Invalid token."
 msgstr ""
 
-#: ./Idno/Common/Page.php:399
+#: ./Idno/Common/Page.php:409
 #: ./templates/default/pages/500.html.twig:6
 msgid "Something went wrong."
 msgstr ""
 
-#: ./Idno/Common/Page.php:605
-#: ./Idno/Common/Page.php:694
+#: ./Idno/Common/Page.php:615
+#: ./Idno/Common/Page.php:704
+#: ./Idno/Legacy/LegacyPageLifecycle.php:147
 msgid "The page you were on timed out."
 msgstr ""
 
-#: ./Idno/Common/Page.php:619
-#: ./Idno/Common/Page.php:708
+#: ./Idno/Common/Page.php:629
+#: ./Idno/Common/Page.php:718
 msgid "Couldn't say anything about execution, probably something went wrong"
 msgstr ""
 
-#: ./Idno/Common/Page.php:778
+#: ./Idno/Common/Page.php:788
 msgid "This content isn't here."
 msgstr ""
 
-#: ./Idno/Common/Page.php:791
+#: ./Idno/Common/Page.php:801
 msgid "This page can't be found."
 msgstr ""
 
@@ -49,11 +52,11 @@ msgstr ""
 msgid "Plugin %s doesn't have a version"
 msgstr ""
 
-#: ./Idno/Console/Application.php:257
+#: ./Idno/Console/Application.php:274
 msgid "Returns the current Idno version as defined in version.idno"
 msgstr ""
 
-#: ./Idno/Console/Application.php:266
+#: ./Idno/Console/Application.php:283
 msgid "WARNING: Your build of Idno is behind the latest version from Github (%s - %s). If you're having problems, you may want to try updating to the latest version.\nUpdate now: https://github.com/idno/idno\n"
 msgstr ""
 
@@ -62,11 +65,12 @@ msgstr ""
 msgid "Oh no! Something went wrong."
 msgstr ""
 
-#: ./Idno/Core/Idno.php:455
+#: ./Idno/Core/Idno.php:446
 msgid "Site entity for \"%s\" could not be created"
 msgstr ""
 
-#: ./Idno/Core/PageHandler.php:155
+#: ./Idno/Core/PageHandler.php:323
+#: ./Idno/Legacy/LegacyPageLifecycle.php:96
 msgid "Account pages are not available to API requests."
 msgstr ""
 
@@ -94,11 +98,11 @@ msgstr ""
 msgid "No result from endpoint."
 msgstr ""
 
-#: ./Idno/Core/Session.php:671
+#: ./Idno/Core/Session.php:673
 msgid "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"
 msgstr ""
 
-#: ./Idno/Core/Session.php:818
+#: ./Idno/Core/Session.php:820
 msgid "Your password was changed, so you have been signed out here. Please sign in again."
 msgstr ""
 
@@ -230,68 +234,67 @@ msgstr ""
 msgid "Sorry, your passwords either don't match, or are too weak"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:27
+#: ./Idno/Pages/Account/Register.php:26
 msgid "This site is closed to new users."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:31
-#: ./Idno/Pages/Account/Register.php:73
+#: ./Idno/Pages/Account/Register.php:30
+#: ./Idno/Pages/Account/Register.php:71
 msgid "Your invitation doesn't seem to be valid, or has expired."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:39
-#: ./Idno/Pages/Account/Register.php:50
+#: ./Idno/Pages/Account/Register.php:37
 msgid "Create a new account"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:84
+#: ./Idno/Pages/Account/Register.php:82
 #: ./Idno/Pages/Admin/Users.php:140
 msgid "Please enter a username and email address."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:137
+#: ./Idno/Pages/Account/Register.php:120
 #: ./Idno/Pages/Admin/Users.php:158
 msgid "Please create a username."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:140
+#: ./Idno/Pages/Account/Register.php:123
 #: ./Idno/Pages/Admin/Users.php:161
 msgid "Your username is too long."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:143
+#: ./Idno/Pages/Account/Register.php:126
 msgid "Usernames can only have letters, numbers and underscores."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:146
+#: ./Idno/Pages/Account/Register.php:129
 #: ./Idno/Pages/Admin/Users.php:164
 msgid "Usernames can't contain a slash %s character."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:149
+#: ./Idno/Pages/Account/Register.php:132
 #: ./Idno/Pages/Admin/Users.php:167
 msgid "Unfortunately, someone is already using that username. Please choose another."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:152
+#: ./Idno/Pages/Account/Register.php:135
 #: ./Idno/Pages/Admin/Users.php:170
 msgid "Hey, it looks like there's already an account with that email address. Did you forget your login?"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:155
+#: ./Idno/Pages/Account/Register.php:138
 msgid "Please check that your passwords match and that your password is at least 7 characters long."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:159
+#: ./Idno/Pages/Account/Register.php:142
 #: ./Idno/Pages/Admin/Users.php:174
 msgid "That doesn't seem like it's a valid email address."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:163
+#: ./Idno/Pages/Account/Register.php:146
 msgid "You've registered! You're ready to get started. Why not add a post to say hello?"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:167
+#: ./Idno/Pages/Account/Register.php:150
 msgid "We couldn't register you."
 msgstr ""
 
@@ -659,6 +662,11 @@ msgstr ""
 msgid "The email address was unblocked."
 msgstr ""
 
+#: ./Idno/Pages/Admin/Welcome.php:36
+#: ./templates/default/admin/welcome.html.twig:1
+msgid "Your site is ready"
+msgstr ""
+
 #: ./Idno/Pages/Drafts.php:35
 #: ./templates/default/shell/nav.html.twig:32
 msgid "Drafts"
@@ -674,7 +682,7 @@ msgstr ""
 
 #: ./Idno/Pages/Entity/Delete.php:57
 #: ./Idno/Pages/Entity/View.php:146
-#: ./Idno/Pages/User/View.php:108
+#: ./Idno/Pages/User/View.php:105
 msgid "%s was deleted."
 msgstr ""
 
@@ -715,29 +723,12 @@ msgstr ""
 msgid "Following"
 msgstr ""
 
-#: ./Idno/Pages/Onboarding/Begin.php:25
-msgid "Welcome to Idno"
-msgstr ""
-
-#: ./Idno/Pages/Onboarding/Connect.php:27
-msgid "Connect some networks"
-msgstr ""
-
-#: ./Idno/Pages/Onboarding/Profile.php:24
-#: ./templates/default/onboarding/profile.html.twig:3
-msgid "Create your profile"
-msgstr ""
-
 #: ./Idno/Pages/Search/User.php:24
 msgid "Invalid sort type %s"
 msgstr ""
 
 #: ./Idno/Pages/Search/User.php:28
 msgid "Invalid sort order %s"
-msgstr ""
-
-#: ./Idno/Pages/Service/Security/CSRFToken.php:16
-msgid "URL missing"
 msgstr ""
 
 #: ./Idno/Pages/Session/CurrentUser.php:39
@@ -899,7 +890,6 @@ msgstr ""
 #: ./templates/default/account/settings.html.twig:12
 #: ./templates/default/account/settings.html.twig:13
 #: ./templates/default/entity/User/edit.html.twig:29
-#: ./templates/default/onboarding/profile.html.twig:22
 msgid "Your name"
 msgstr ""
 
@@ -909,7 +899,6 @@ msgstr ""
 #: ./templates/default/account/register.html.twig:27
 #: ./templates/default/account/settings.html.twig:17
 #: ./templates/default/account/settings.html.twig:18
-#: ./templates/default/onboarding/register.html.twig:19
 msgid "Your email address"
 msgstr ""
 
@@ -1957,7 +1946,6 @@ msgstr ""
 #: ./templates/classic/forms/input/image-file.tpl.php:85
 #: ./templates/default/forms/input/image-file.html.twig:37
 #: ./templates/default/forms/input/image-file.html.twig:38
-#: ./templates/default/onboarding/profile.html.twig:65
 msgid "Choose different photo"
 msgstr ""
 
@@ -2103,12 +2091,10 @@ msgid "Did you remember your password? That's okay too. You can <a href=\"%s\">c
 msgstr ""
 
 #: ./templates/default/account/register.html.twig:5
-#: ./templates/default/onboarding/register.html.twig:3
 msgid "Hello there!"
 msgstr ""
 
 #: ./templates/default/account/register.html.twig:7
-#: ./templates/default/onboarding/register.html.twig:5
 msgid "Create a new account to get started."
 msgstr ""
 
@@ -2125,7 +2111,6 @@ msgid "username"
 msgstr ""
 
 #: ./templates/default/account/register.html.twig:33
-#: ./templates/default/onboarding/register.html.twig:25
 msgid "Create a password"
 msgstr ""
 
@@ -2139,7 +2124,6 @@ msgid "secret-password"
 msgstr ""
 
 #: ./templates/default/account/register.html.twig:42
-#: ./templates/default/onboarding/register.html.twig:33
 msgid "Your password again"
 msgstr ""
 
@@ -2432,6 +2416,62 @@ msgstr ""
 msgid "Remove block"
 msgstr ""
 
+#: ./templates/default/admin/welcome.html.twig:2
+msgid "You are signed in as %s, the administrator of this site."
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:3
+msgid "What to do next"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:7
+msgid "Write your first post"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:8
+msgid "Opens the new post form. What you publish appears on your home page."
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:12
+msgid "Review your site settings"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:13
+msgid "The description of the site, and who can sign up."
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:16
+msgid "Set up email"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:17
+msgid "A mail server is set. You can send yourself a test message there."
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:17
+msgid "Until a mail server is entered there, the site cannot send mail, including password reset messages."
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:20
+msgid "Background tasks"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:22
+msgid "Background tasks are switched on. Keep this command running on the server:"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:24
+msgid "Only needed to connect this site with Mastodon and the rest of the Fediverse. Add this line to the file configuration/config.ini:"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:26
+msgid "and keep this command running on the server, in the folder Idno is in (your host may call it a worker or a daemon):"
+msgstr ""
+
+#: ./templates/default/admin/welcome.html.twig:31
+msgid "Go to your site"
+msgstr ""
+
 #: ./templates/default/content/edit.html.twig:3
 msgid "More actions"
 msgstr ""
@@ -2481,7 +2521,6 @@ msgid "Tell people about yourself..."
 msgstr ""
 
 #: ./templates/default/entity/User/edit.html.twig:62
-#: ./templates/default/onboarding/profile.html.twig:40
 msgid "Add another website"
 msgstr ""
 
@@ -2551,78 +2590,6 @@ msgstr ""
 
 #: ./templates/default/forms/components/usersearch/user.html.twig:40
 msgid "Unblock"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:8
-msgid "Idno is your space for sharing content and discussing ideas."
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:13
-msgid "Take a picture"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:17
-msgid "Share a message"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:21
-msgid "Save your location"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:34
-msgid "Get started"
-msgstr ""
-
-#: ./templates/default/onboarding/begin.html.twig:42
-msgid "Already have an account? Sign in."
-msgstr ""
-
-#: ./templates/default/onboarding/connect.html.twig:3
-msgid "Share to social"
-msgstr ""
-
-#: ./templates/default/onboarding/connect.html.twig:6
-msgid "Connect your accounts to easily share content with people across the web."
-msgstr ""
-
-#: ./templates/default/onboarding/connect.html.twig:14
-msgid "Continue"
-msgstr ""
-
-#: ./templates/default/onboarding/connect.html.twig:19
-msgid "Don't worry, you can always connect these later."
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:16
-msgid "Add a photo of yourself"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:23
-msgid "Ben Franklin"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:27
-msgid "Your short bio"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:29
-msgid "I fly kites..."
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:34
-msgid "Your other websites"
-msgstr ""
-
-#: ./templates/default/onboarding/profile.html.twig:35
-msgid "(a blog, a portfolio, Twitter, Facebook, etc)"
-msgstr ""
-
-#: ./templates/default/onboarding/register.html.twig:13
-msgid "Choose a username"
-msgstr ""
-
-#: ./templates/default/onboarding/register.html.twig:26
-msgid "(at least 7 characters please)"
 msgstr ""
 
 #: ./templates/default/pages/403.html.twig:3

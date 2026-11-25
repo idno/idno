@@ -260,7 +260,9 @@ final class ControllerPage extends Page
     }
 
     /**
-     * A conditional request is answered by the controller's response (Response::isNotModified()), not by exiting here.
+     * Does nothing: a legacy page answered a conditional request here with a 304 and exited, and a controller's page does not exit. A site
+     * page does not answer a conditional request with a 304 (the `Last-Modified` the page asks for is added to its response after the
+     * controller returns).
      */
     public function lastModifiedGatekeeper($timestamp)
     {

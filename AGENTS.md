@@ -1089,7 +1089,10 @@ regex patterns, see `Idno\Core\PageHandler`), and they implement `getContent()` 
 `postContent()` / `putContent()` / `deleteContent()`. They are reached through the
 catch-all described above. Do not add new ones; add a controller instead, except where "Adding a
 route" says an endpoint must stay a legacy page (a logged-in user, a permission check or a
-state-changing browser request): the admin page `/admin/legacytables` is one, for that reason.
+state-changing browser request): the admin page `/admin/legacytables` is one, for that reason. So is
+`/admin/welcome/` (`Idno\Pages\Admin\Welcome`, registered in `Idno\Core\Admin::registerPages()`): the page a new administrator lands on
+after the installation, a GET that needs `adminGatekeeper()`. It is a legacy page, like every admin page: the admin pages are legacy pages,
+and this one is drawn in their shell and menu with their gatekeeper.
 
 **Shells.** A page whose logic moved to a service that a controller calls is kept for one major version as a deprecated SHELL: a class under `Idno\Pages\`
 that extends `Idno\Legacy\PageShell`, is marked `@deprecated`, and has no logic of its own. Each ported page has ONE implementation, in the service the controller
@@ -1299,7 +1302,7 @@ page class `name` is kept and core still registers it for the path) and the lega
 exist to be removed as the legacy code is replaced. New code must not depend on anything
 in `Idno\Legacy\`; depend on the interfaces in `Idno\Config\` and on injected services.
 The only classes outside `Idno\Legacy\` (and outside the legacy `Idno\Core`, `Idno\Common`,
-... code) that reference it are `Idno\Kernel` and `Idno\Http\FrontController`, for wiring;
+... code) that reference it in code is `Idno\Kernel`, for wiring (others name an adapter in a docblock only);
 the entry points (`index.php`, `bin/console`, `Idno/start.php`) and the kernel configuration
 (`config/services.php`, `config/routes.php`, `config/packages/monolog.php`) wire it too. No
 other new code may.
@@ -1349,7 +1352,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   controller page registers its work on the context (`PageContext::afterResponse()`) and forwards, the listener runs it on `kernel.terminate`
   (no time limit; a failure goes to `reportException()`), and the PageRedirect is turned into the response by `PageRequestListener::onException()`
   (`kernel.exception`, priority 10, which calls `allowCustomResponseCode()`: without it Symfony makes a 500 of the 200 an API request's forward or
-  the empty answer of work after the response is; `Tests/Kernel/PageRedirectKernelTest` goes through the real kernel; a forward that went on, then one that exits: the second wins); `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
+  the empty answer of work after the response is; `Tests/Kernel/PageRedirectKernelTest` goes through the real kernel; a forward that went on, then one that exits: the second wins); `lastModifiedGatekeeper()` does nothing (a site page answers no conditional request with a 304) and
   `data()` is always empty (the context reads a JSON payload on demand). The Markdown members work from the request: `wantsMarkdown()` (the
   request's `Accept`, `format`, `_t` and the context's suffix flag), `sendVaryAccept()` (a `Vary: Accept` added to the context),
   `selectMarkdownIfWanted()`, and `drawMarkdown()`, which RETURNS the document (a legacy page echoed it and exited) and records the Markdown
@@ -1573,7 +1576,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `Tests/Kernel/PageListenersWithoutLegacyTest` (no legacy application: nothing changes). Two differences from a legacy page remain, neither of them a caching header: the order of lines of DIFFERENT names (PHP's lines first, then the response's), and
   `Date`, which the response always carries and which therefore comes after PHP's lines, where the server wrote its own first. (OPTIONS had a third, its `Content-Type`:
   it is the same now.) Every call to PHP's header functions on the controller path (`LegacyPageDrawer`, `LegacyPageLifecycle`, the reconciler) goes through `HeaderQueue`
-  (and `ini_get`/`ini_set` of `default_mimetype`: `HeaderQueue::defaultMimetype()`); `HeaderSeamTest` scans every file of `Idno/Http/` and the page-path adapters of `Idno/Legacy/` for a direct call, with `PhpHeaders` and `FrontController` (the install redirect, before any kernel) allowed; the drawer asks `listed()` again before it reads PHP's list back, because a draw may have flushed output.
+  (and `ini_get`/`ini_set` of `default_mimetype`: `HeaderQueue::defaultMimetype()`); `HeaderSeamTest` scans every file of `Idno/Http/` and the page-path adapters of `Idno/Legacy/` for a direct call, with only `PhpHeaders` allowed (the install redirect is `InstallGateListener`'s response); the drawer asks `listed()` again before it reads PHP's list back, because a draw may have flushed output.
 
 ### Kernel and services
 
@@ -2021,9 +2024,10 @@ the tag pages and the small public endpoints are served through them (and the fi
   creatable types and the titles are asked in that order, `Last-Modified` is the first item's, the body `pages/home` is drawn with `items`, `contentTypes`,
   `offset`, `count`, `subject` and `content`, and the shell with `title`, `description`, `content` and `body`. It reads `q`, `offset` and `types` through
   `PageContext::input()`. A new code path takes `HomeStream` by constructor injection; it is a legacy-backed service (it needs the legacy application) until the
-  listing moves to `EntityRepository`. `Tests/Unit/Http/Controller/HomePagesTest` pins the flow on doubles; `Tests/Kernel/LegacyHomeStreamTest` compares the stream with
-  the home page's own code, written out in the test, for every viewer (visitor, member, administrator), friendly path, query, requested types and offset on a seeded
-  site with private posts and a draft, and runs it on an empty site, a single-user site and a single-user site with no administrator.
+  listing moves to `EntityRepository`. `Tests/Unit/Http/Controller/HomePagesTest` pins the flow on doubles; `Tests/Kernel/LegacyHomeStreamTest` pins what the stream gives on a
+  seeded site with private posts and a draft (each friendly path with and without a search; the pages of each viewer, visitor, member and administrator, at three offsets,
+  with and without a hashtag; requested types with and without a search; drafts and private posts; titles; creatable types), and runs it on an empty site, a single-user
+  site and a single-user site with no administrator.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
@@ -5359,7 +5363,7 @@ no installer writes one.
   with its `/service/vendor/messages` page and the `noping` setting. Don't add a notice, news or
   update feed from a fixed host; if one is ever wanted, it must be off until the site's owner
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
-  `Tests/Pages/Onboarding/VendorMessagesTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
+  `Tests/Pages/Admin/VendorMessagesTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
 - Known limits of the security model (stated plainly; none is fixed by the authentication changes):
   - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.
   - The form token is accepted from the query string as well as the body, and lasts as long as the session.
@@ -5374,8 +5378,12 @@ no installer writes one.
   - `framework.handle_all_throwables` is off: an `\Error` is the site's 500 page only inside a site page's controller or its own events; anywhere else it ends at `FatalErrorPage`.
   - The legacy route table decides what a plugin's registration does for a moved path, so a plugin's page registered after core's with another pattern does not take it, and a plugin that extends a deleted page
     class stops the site booting until it is disabled.
-- The first administrator: an uninstalled site can be installed by whoever reaches it first (decided: no code to
-  paste), but the site's first administrator can only be created by the browser that wrote the configuration
+  - A site page does not answer a conditional request (`If-Modified-Since`) with a 304: `lastModifiedGatekeeper()` does nothing, and the `Last-Modified` a
+    page asks for is added to the response after the controller returns. Its answer is always the whole page.
+  - Every state-changing method of a site page needs the session's form token (or a signed API request): a site page cannot take a POST from another
+    server (a webmention, a WebSub callback, an inbox), so such an endpoint stays a legacy page or a plain controller.
+- The first administrator: an uninstalled site can be installed as a NEW site by whoever reaches it first (no code to
+  paste; adopting a database that already holds a site needs the code `Idno\Install\InstallCode` writes on the server), but the site's first administrator can only be created by the browser that wrote the configuration
   (the `idno_setup` cookie against the hash in `configuration/setup-pending`: `Idno\Install\SetupToken`,
   `SetupGateListener`), by the one-time link `idno:setup:link` prints, or by `idno:admin:create` on the server.
   Registration never grants administrator, and a site with no user lets nobody register. Don't add another way

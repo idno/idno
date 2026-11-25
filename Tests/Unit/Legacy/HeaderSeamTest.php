@@ -14,8 +14,8 @@ final class HeaderSeamTest extends TestCase
 {
     private const FUNCTIONS = ['header', 'header_remove', 'headers_list', 'headers_sent', 'http_response_code', 'ini_get', 'ini_set'];
 
-    /** Files that may call them: the seam's own implementation, and the entry point that sends the install redirect before any kernel exists */
-    private const ALLOWED = ['Idno/Legacy/PhpHeaders.php', 'Idno/Http/FrontController.php'];
+    /** The file that may call them: the seam's own implementation */
+    private const ALLOWED = ['Idno/Legacy/PhpHeaders.php'];
 
     /** The adapters of the page path in `Idno/Legacy/`; the rest of that directory is the legacy application's own code */
     private const LEGACY_PAGE_PATH = '/^(ControllerPage|BarePage|LegacyPage\w+|LegacyHeaderReconciler|LegacyForbiddenPage)\.php$/';

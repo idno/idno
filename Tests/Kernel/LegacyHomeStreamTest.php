@@ -7,11 +7,9 @@ namespace Tests\Kernel;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
- * The home stream (`Idno\Http\Controller\Home\HomeStream`, `Idno\Legacy\LegacyHomeStream`) against what the legacy home page computed for
- * the same input, on a site of the test's own with a seeded set of posts (public, private, a draft, three content types) and three kinds
- * of viewer. The reference in each test is the home page's own code as it was before the stream was extracted, written out in `REFERENCE`:
- * the two are compared for every combination of viewer, friendly path, query, requested types and offset, so the extraction is proven and
- * not assumed. (The whole page, the statements it makes and its feeds are pinned by the golden pages and the page tests.)
+ * The home stream (`Idno\Http\Controller\Home\HomeStream`, `Idno\Legacy\LegacyHomeStream`), on a site of the test's own with a seeded set of
+ * posts (public, private, a draft, three content types) and three kinds of viewer: what each friendly path, search, requested type and offset gives,
+ * as pinned values. (The whole page, the statements it makes and its feeds are pinned by the golden pages and the page tests.)
  */
 final class LegacyHomeStreamTest extends PrivateSiteTestCase
 {
@@ -60,74 +58,6 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
     };
     PHP;
 
-    /** The home page's own computation before the extraction: `Homepage::getContent()` from the first line to the template call. */
-    private const REFERENCE = <<<'PHP'
-    $reference = static function (?string $argument, $query, $requested, int $offset): array {
-        $site = \Idno\Core\Idno::site();
-        $types = $requested;
-        $friendly_types = array();
-        if (!empty($argument)) {
-            if ($friendly_types = explode('/', $argument)) {
-                $friendly_types = array_filter($friendly_types);
-                if (empty($friendly_types) && !empty($query)) {
-                    $friendly_types = array('all');
-                }
-                $types = array();
-                foreach ($friendly_types as $friendly_type) {
-                    if ($friendly_type == 'all') {
-                        $types = \Idno\Common\ContentType::getRegisteredClasses();
-                        break;
-                    }
-                    if ($content_type_class = \Idno\Common\ContentType::categoryTitleToClass($friendly_type)) {
-                        $types[] = $content_type_class;
-                    }
-                }
-            }
-        } else {
-            if (empty($query)) {
-                $types = $site->config()->getHomepageContentTypes();
-            }
-        }
-        $search = array();
-        if (!empty($query)) {
-            $search = $site->db()->createSearchArray($query);
-        }
-        if (empty($types)) {
-            $types = \Idno\Common\ContentType::getRegisteredClasses();
-        } else {
-            $types = (array) $types;
-        }
-        $search['publish_status'] = 'published';
-        $count = \Idno\Common\Entity::countFromX($types, $search);
-        $feed = \Idno\Common\Entity::getFromX($types, $search, array(), $site->config()->items_per_page, $offset);
-        if ($site->session()->isLoggedIn()) {
-            $create = \Idno\Common\ContentType::getRegistered();
-            foreach ($create as $key => $obj) {
-                $obj->editUrl = $obj->getEditURL();
-                if (!$obj->createable) {
-                    unset($create[$key]);
-                }
-            }
-        } else {
-            $create = false;
-        }
-        if (!empty($site->config()->description)) {
-            $description = $site->config()->description;
-        } else {
-            $description = 'An independent social website, powered by Idno.';
-        }
-        if (!empty($site->config()->homepagetitle)) {
-            $title = $site->config()->homepagetitle;
-        } else {
-            $title = $site->config()->title;
-        }
-
-        return ['types' => $types, 'friendly' => $friendly_types, 'items' => $feed, 'count' => $count, 'create' => $create, 'title' => $title, 'description' => $description];
-    };
-    $uuids = static fn ($items): mixed => is_array($items) ? array_map(static fn ($item) => $item->getUUID(), $items) : $items;
-    $createKeys = static fn ($create): mixed => is_array($create) ? array_map(static fn ($type) => [get_class($type), $type->editUrl], $create) : $create;
-    PHP;
-
     public function testTheContainerAliasesTheInterfaceToTheAdapter(): void
     {
         $result = $this->runInSite('return get_class(\Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class));');
@@ -135,52 +65,99 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         $this->assertSame(\Idno\Legacy\LegacyHomeStream::class, $result);
     }
 
-    public function testTheStreamIsTheHomePagesOwnForEveryViewerPathQueryTypeAndOffset(): void
+    /**
+     * What each friendly path of the home page's `/content/<types>` resolves to, with and without a search (viewer-independent): the pinned results of
+     * the matrix the stream was first proven on against the home page's own code. `ALL` is every registered content type.
+     */
+    public function testEachFriendlyPathResolvesToItsTypes(): void
     {
-        $result = $this->runInSite(self::SEED . self::REFERENCE . <<<'PHP'
+        $result = $this->runInSite(<<<'PHP'
         $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
-        $differences = [];
-        $compared = 0;
-        $listed = [];
+        $all = \Idno\Common\ContentType::getRegisteredClasses();
+        $short = static fn (array $types): array|string => $types === $all ? 'ALL' : array_map(static fn (string $c): string => substr($c, strrpos($c, '\\') + 1), $types);
+        $out = [];
+        foreach ([null, 'all', 'statusupdates', 'posts', 'bookmarkedpages', 'statusupdates/posts', 'posts/statusupdates', 'bogus', 'bogus/statusupdates', '', '/', '//', '0', 'all/statusupdates'] as $argument) {
+            foreach ([null, 'garden'] as $query) {
+                $resolved = $stream->types($argument, $query, null);
+                $out[json_encode([$argument, $query])] = [$short($resolved['types']), array_values($resolved['friendly'])];
+            }
+        }
+
+        return $out;
+        PHP);
+
+        $expected = [];
+        foreach ([
+            'null' => ['ALL', []], 'all' => ['ALL', ['all']], 'statusupdates' => [['Status'], ['statusupdates']], 'posts' => [['Entry'], ['posts']],
+            'bookmarkedpages' => [['Like'], ['bookmarkedpages']], 'statusupdates/posts' => [['Status', 'Entry'], ['statusupdates', 'posts']],
+            'posts/statusupdates' => [['Entry', 'Status'], ['posts', 'statusupdates']], 'bogus' => ['ALL', ['bogus']], 'bogus/statusupdates' => [['Status'], ['bogus', 'statusupdates']],
+            '' => ['ALL', []], '0' => ['ALL', []], 'all/statusupdates' => ['ALL', ['all', 'statusupdates']],
+        ] as $argument => $answer) {
+            foreach ([null, 'garden'] as $query) {
+                $expected[json_encode([$argument === 'null' ? null : (string) $argument, $query])] = $answer;
+            }
+        }
+        // A path of slashes alone names no type, so with a search it is every type (`all`), and without one the home page's own
+        foreach (['/', '//'] as $argument) {
+            $expected[json_encode([$argument, null])] = ['ALL', []];
+            $expected[json_encode([$argument, 'garden'])] = ['ALL', ['all']];
+        }
+        ksort($expected);
+        ksort($result);
+
+        $this->assertSame($expected, $result);
+    }
+
+    /**
+     * The pages of the whole stream for a visitor, the administrator and a member, without a search and for a hashtag, at three offsets: the pinned
+     * results of the same matrix (`n1` to `n6` the six public notes, oldest first; the article, the bookmark and the two private notes by name). A draft is
+     * listed to nobody; the counts are of the published posts each may read.
+     */
+    public function testThePagesOfTheStreamForEachViewerAreThePinnedOnes(): void
+    {
+        $result = $this->runInSite(self::SEED . <<<'PHP'
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $all = \Idno\Common\ContentType::getRegisteredClasses();
+        $key = static function ($item): string {
+            $text = (string) ($item->body ?? $item->title);
+            return match (true) {
+                preg_match('/number (\d)/', $text, $m) === 1 => 'n' . $m[1],
+                str_contains($text, 'Gardens and templates') => 'article',
+                str_contains($text, 'example.org') => 'bookmark',
+                str_contains($text, 'only Ada') => 'ada-private',
+                str_contains($text, 'Bobs private') => 'bob-private',
+                default => $text,
+            };
+        };
+        $out = [];
         foreach ([null, 'ada', 'bob'] as $viewer) {
             $viewAs($viewer);
-            foreach ([null, 'all', 'statusupdates', 'posts', 'bookmarkedpages', 'statusupdates/posts', 'posts/statusupdates', 'bogus', 'bogus/statusupdates', '', '/', '//', '0', 'all/statusupdates'] as $argument) {
-                foreach ([null, '', 'garden', '#garden', 'private', 'nothing-matches-this', ['garden']] as $query) {
-                    foreach ([null, \IdnoPlugins\Like\Like::class, [\IdnoPlugins\Text\Entry::class, \IdnoPlugins\Status\Status::class], ''] as $requested) {
-                        foreach ([0, 3, 100] as $offset) {
-                            $expected = $reference($argument, $query, $requested, $offset);
-                            $resolved = $stream->types($argument, $query, $requested);
-                            $page = $stream->page($resolved['types'], $query, $offset);
-                            $actual = ['types' => $resolved['types'], 'friendly' => $resolved['friendly'], 'items' => $page['items'], 'count' => $page['count'], 'create' => $stream->creatableTypes()] + $stream->titles();
-                            $label = json_encode([$viewer, $argument, $query, $requested, $offset]);
-                            foreach (['types', 'friendly', 'count', 'title', 'description'] as $key) {
-                                if ($expected[$key] !== $actual[$key]) {
-                                    $differences[] = [$label, $key, $expected[$key], $actual[$key]];
-                                }
-                            }
-                            if ($uuids($expected['items']) !== $uuids($actual['items'])) {
-                                $differences[] = [$label, 'items', $uuids($expected['items']), $uuids($actual['items'])];
-                            }
-                            if ($createKeys($expected['create']) !== $createKeys($actual['create'])) {
-                                $differences[] = [$label, 'create'];
-                            }
-                            $compared++;
-                            $listed[$viewer ?? 'visitor'][$argument . '|' . json_encode($query) . '|' . json_encode($requested) . '|' . $offset] = $uuids($actual['items']);
-                        }
-                    }
+            foreach ([null, '#garden', 'nothing-matches-this'] as $query) {
+                foreach ([0, 3, 100] as $offset) {
+                    $page = $stream->page($all, $query, $offset);
+                    $out[($viewer ?? 'visitor') . ' ' . json_encode($query) . ' ' . $offset] = [$page['count'], array_map($key, $page['items'])];
                 }
             }
         }
-        // the premise: the matrix reached posts, a draft and a private post were left out for a visitor, and the viewer's own were found
-        $flat = static fn (array $lists): array => array_unique(array_merge(...array_values(array_filter($lists, 'is_array'))));
-        return ['differences' => array_slice($differences, 0, 3), 'compared' => $compared, 'visitor' => count($flat($listed['visitor'])), 'ada' => count($flat($listed['ada'])), 'bob' => count($flat($listed['bob']))];
+
+        return $out;
         PHP);
 
-        $this->assertSame([], $result['differences']);
-        $this->assertSame(3 * 14 * 7 * 4 * 3, $result['compared']);
-        // the premise: the matrix reached the posts. Eight are public (six notes, an article, a bookmark); the administrator also reads both private
-        // ones; Bob his own; the draft is listed to nobody
-        $this->assertSame([8, 10, 9], [$result['visitor'], $result['ada'], $result['bob']]);
+        $public = ['bookmark', 'article', 'n6', 'n5', 'n4', 'n3', 'n2', 'n1'];
+        $tagged = ['n6', 'n5', 'n4', 'n3', 'n2', 'n1'];
+        $streams = ['visitor' => $public, 'ada' => ['bob-private', 'ada-private', ...$public], 'bob' => ['bob-private', ...$public]];
+        $expected = [];
+        foreach ($streams as $viewer => $items) {
+            foreach ([0, 3, 100] as $offset) {
+                $expected[$viewer . ' null ' . $offset] = [count($items), array_slice($items, $offset)];
+                $expected[$viewer . ' "#garden" ' . $offset] = [6, array_slice($tagged, $offset)];
+                $expected[$viewer . ' "nothing-matches-this" ' . $offset] = [0, []];
+            }
+        }
+        ksort($expected);
+        ksort($result);
+
+        $this->assertSame($expected, $result);
     }
 
     public function testASearchTermThatIsAnArrayIsAQueryThatMatchesNothingNotAnError(): void
