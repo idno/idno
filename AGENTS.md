@@ -58,14 +58,14 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
   Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
   minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
-  Rough times: the unit tier about ten seconds; the whole suite about 14.5 minutes on SQLite (measured
+  Rough times: the unit tier about ten seconds; the whole suite about 18.5 minutes on SQLite (measured
   on a development machine; the MySQL and MariaDB runs have not been timed since the suite reached its present size).
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
-  whole suite runs in one process: on SQLite it peaks at about 275 MB (6,500 tests, 388 skipped, about 18 minutes; the largest classes each leave 20 MB or
-  less behind, about 20 MB: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
+  whole suite runs in one process: on SQLite it peaks at about 275 MB (6,500 tests, 388 skipped; the largest classes each leave about 20 MB or
+  less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
   built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
   (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` and its listener
   `Tests\Support\MemoryGuardListener` (both listed in `phpunit.xml`, so not in the unit tier; the listener forwards the suite
@@ -677,7 +677,7 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
 
 Three kinds of request therefore take three paths through the kernel:
 
-- A LEGACY PAGE (`Idno\Common\Page`, a plugin's or a core page not yet moved): router, the catch-all, `LegacyController`, a `LegacyResponse`; the page runs while the response is sent, writes
+- A LEGACY PAGE (`Idno\Common\Page`, a plugin's, or a core page that is still a legacy class): router, the catch-all, `LegacyController`, a `LegacyResponse`; the page runs while the response is sent, writes
   with `header()`/`echo`/`exit`, and its exceptions are the legacy handler's (`Page::exception()`, the 500 page).
 - A SITE PAGE (a controller with `#[SitePage]`: the home page, the feeds, the search, the tag pages, `robots.txt`, the manifest, the service worker, WebFinger, the mention search, the form token endpoint):
   1. Symfony's router matches the controller's route (`RouterListener`, priority 32); 2. `LegacyRouteOverride` (31) asks the legacy router which page it would choose for the path and hands the request to the
@@ -745,7 +745,7 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
 - Put a controller class with a `#[Symfony\Component\Routing\Attribute\Route]`
   attribute in a directory that `config/routes.php` imports attribute routes from
   (today `Idno/Upgrade/`, `Idno/Legacy/` and `Idno/Http/Controller/`, where the controllers of site pages go: the directory is
-  imported with a `FileExistenceResource`, skipped while it does not exist and noticed when it is created; `Idno/Http` is in
+  imported with a `FileExistenceResource`, skipped while it does not exist; `Idno/Http` is in
   `CodeFingerprint::SERVICE_DIRECTORIES`; a directory outside them is added to `config/routes.php` AND to
   `CodeFingerprint::SERVICE_DIRECTORIES` so the container and route cache are rebuilt when it changes).
 - It always wins over the legacy catch-all, whatever the path: that route has priority
@@ -755,14 +755,8 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   (`/foo/` for `/foo`, and the reverse) with a 301 redirect to the route's own path. A route that is a SITE PAGE (a
   `#[SitePage]` controller, see "Legacy pages and routes") is the exception to both: it follows the route convention below, so that
   no spelling of an address is redirected, and the legacy router's own choice for the path still wins where a plugin took it. A page that
-  moves to a controller keeps core's registration of its legacy pattern(s) where and when core made it, with the placeholder `Idno\Legacy\ControllerRoute` in place of a class it
-  deletes (the shell's own class, listed in `replaces`, when it keeps one), and declares them in `legacyPatterns` (`[]` when core registered none): the legacy route table stays exactly
-  what it was, so a plugin's `hijackRoute()`, its `addRoute()` of the identical pattern or of an exact key, a pattern it registered before core's and one after core's all do what they
-  always did, by the legacy router's own rules, and `LegacyRouteOverride` only asks the legacy router which page it would choose. A page registered after the plugins keeps that
-  registration in the component that made it. A page that is a permalink says `markdownPermalink: true`, and the route follows the convention. `Tests/Kernel/SitePageClaimsTest` and
-  `PageRoutesTest` fail for a page that does not (see "Legacy pages and routes"). The guard is a snapshot: `Tests/Kernel/fixtures/core-routes.php` is the WHOLE core route table as it was at
-  commit `69af0d425` (every key core and the components it builds register, in order, with a marker where the plugins' routes are registered), and the test fails when a key is gone, has changed
-  side of the marker or moved. To remove a route on purpose, delete its key from `routes` and list it in `omitted` with the reason, in the same change.
+  moves to a controller keeps core's registration of its legacy pattern(s) (the placeholder, or its kept shell) and declares them in `legacyPatterns`; "Legacy pages and routes" has the rule and the
+  recorded table that guards it (`Tests/Kernel/SitePageClaimsTest`, `Tests/Kernel/fixtures/core-routes.php`), and `PageRoutesTest` holds every site page route to the convention. To remove a route on purpose, delete its key from `routes` in that fixture and list it in `omitted` with the reason, in the same change.
 - It must return a `Symfony\Component\HttpFoundation\Response`, and must take its input
   from the `Request` (inject it as an argument), never from `$_GET`, `$_POST`,
   `$_SERVER` or other superglobals, and must not call `header()`, `echo` or `exit`.
@@ -777,7 +771,7 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   site page (`#[SitePage]`) `Idno\Legacy\LegacyHeaderReconciler` makes the headers the ones a legacy page sends, line for line: the
   `Cache-Control`, `Pragma` and `Expires` of the session are PHP's and the response's own are taken off it, so one `Cache-Control` line
   goes out; a page that wants other caching calls `PageContext::setCaching()` (see "Kernel and services"); `Last-Modified` is the
-  response's. Such a page never carries `X-Robots-Tag` in debug mode.
+  response's. Symfony's debug-mode `X-Robots-Tag: noindex` is taken off such a page's response, unless the page set a tag itself.
 - Mark it `#[AsController]` (or register it as a service) when it needs constructor
   injection; services are autowired from the container.
 - A controller that draws a page of the site marks the class or the method with `#[Idno\Http\Page\SitePage(name: <the legacy page class>, ...)]`:
@@ -796,20 +790,34 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   `Idno\Http\Page\PageContext` (a controller argument typed so; `PageContextResolver`) and returns a `Response`:
 
       #[Route('/{lead}about{slash}', name: 'idno_about', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-      #[SitePage(name: 'Idno\Pages\About', legacyPatterns: ['/about/?'])]
+      #[SitePage(name: 'Idno\Pages\About', legacyPatterns: [])]
       public function about(PageContext $page): Response
       {
           return $this->renderer->page($page, ['title' => 'About', 'body' => $this->renderer->template('pages/about', [])]);
       }
 
+  That is a NEW page (the address never had a page): it declares `replaces: []` (the default) and `legacyPatterns: []`, registers nothing with the legacy router, and `name` is the label its body class and page
+  events carry (`SitePageFixtureController` is the same). A page that MOVES out of a legacy class declares what core registered for it instead:
+
+      #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'], legacyPatterns: ['/?'])]    // the class is kept as a shell
+      #[SitePage(name: 'Idno\Pages\Feed', legacyPatterns: ['/feed\.xml', '/feed/?', '/rss\.xml'])]            // the class was deleted: the placeholder is registered
+
+  Core keeps registering each pattern, where and when it always did, for the kept shell's class or for the placeholder `Idno\Legacy\ControllerRoute` (the invariant under "Legacy pages and routes", which
+  has the rule once); `SitePageClaimsTest` fails for a declared pattern that is not registered that way, for `legacyPatterns` left undeclared (null), and for a key of `Tests/Kernel/fixtures/core-routes.php`
+  (the recorded core table) that is gone or moved.
+
   The arguments of `#[SitePage]` (`Idno\Http\Page\SitePage`): `name` (the page class a template, the body class and the page events' `page_class` know the page by: for a deleted class,
   its name), `replaces` (the shell class that remains registered for the path; `[]` when the class was deleted), `publicOnPrivateSite` (served to a visitor of a walled garden; the default refuses
-  them), `accountPage` (under `/account/`: closed to API requests), `settingsPage` (under `/account/` or `/admin/`: stays out of Markdown), `defaultType` (the template type when the request
-  names none: `rss` for the feeds), `methods` (GET by default; HEAD comes with GET and OPTIONS always; list POST, PUT, DELETE or PATCH to serve them: the lifecycle then checks the session's
-  form token before the page hears of the method, an API request needs none, and a method not listed is a 405), `markdownPermalink` (the page is a post's permalink and answers its `.md` form) and
+  them), `accountPage` (under `/account/`: a signed API request is refused with the 403; it is a settings page too), `settingsPage` (under `/admin/`: holds stored secrets, so its Markdown form is a title and one line and a JSONP request is answered as HTML), `defaultType` (the template type when the request
+  names none: `rss` for the feeds), `methods` (the methods the page serves, `['GET']` by default; HEAD is served when GET is listed and OPTIONS always; a method not listed is a 405, so a page that adds POST, PUT, DELETE or PATCH
+  lists `GET` again: `['POST']` alone serves no GET), `markdownPermalink` (the page is a post's permalink and answers its `.md` form) and
   `legacyPatterns` (the patterns core registered with the legacy router for the addresses, `[]` for none: required, checked by `SitePageClaimsTest`). The route follows the convention (`{lead}`,
-  `{slash}`, the methods the page declares plus HEAD and OPTIONS, `utf8: false` where a parameter may hold any byte: `PageRoutesTest`). Core's registration of the pattern stays in the component that
-  made it with `Idno\Legacy\ControllerRoute` in place of the class that was deleted (or the kept shell's own class, named in `replaces`): the invariant under "Legacy pages and routes".
+  `{slash}`, the methods the page declares plus HEAD and OPTIONS, `utf8: false` where a parameter may hold any byte: `PageRoutesTest`). A route under `/account` MUST set `accountPage` and one under
+  `/admin` `settingsPage` (or `accountPage`): the flags default to off, so a forgotten one would leave the page open, and `SitePageRoutesTest` fails for the route that forgets it.
+  FORM TOKEN: a site page that lists a state-changing method has the session's form token checked by its lifecycle before `page/<method>` fires (a signed API request needs none, as for a legacy
+  page), so it carries NO `#[IsCsrfTokenValid]`; that attribute is for plain controllers. A MEMBER OR AN ADMINISTRATOR: the lifecycle has no gatekeeper of its own; a site page asks with `#[IsGranted('ROLE_USER')]`
+  or `#[IsGranted('ROLE_ADMIN')]` on the method, as any controller does. The page is begun first (`page/ready` has fired), and the refusal is the firewall's `DeniedResponder` 403. No core site page needs one;
+  the fixtures `WhoAmIController` show the attributes on plain controllers.
   Draw through `PageRenderer` only (`page()`, `template()`, `notFound()`, `gone()`, `denied()`, `error()`, `redirect()`), never `drawPage()`, `header()`, `echo` or `exit`; set what the page is
   about on the context (`setOwner()`, `setPermalink()`, `addHeader()`); caching is asked ONLY with `PageContext::setCaching()` (a `Cache-Control`, `Pragma` or `Expires` on the `Response`, and Symfony's
   `#[Cache]`, are refused in debug mode and ignored otherwise). A plugin replaces the home page with the event `homepage/replace`, not a route. A legacy `Page` class still works for a third-party plugin.
@@ -960,7 +968,7 @@ calls; a shell declares only `getContent()`, `postContent()`, `putContent()`, `d
 `SHELL` constant (its own class), and each handler is one `return $this->delegate(...)` (or `$this->delegateWebmention(...)`) of that service. So a third-party
 page that extends a shell and a plugin's `hijackRoute()` or `addRoute()` of its route still
 serve the page, through the same service, and nothing has to be kept in sync. The list of shells is `Tests/Unit/Http/PageShellsTest::SHELLS` (it scans `Idno/Pages/`
-for classes that extend `PageShell`, and holds each to the rule); today it is `Idno\Pages\Homepage`. Shells are removed in 3.0.
+for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pages\Homepage`. Shells are removed in 3.0.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
   request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
   holds: its `arguments`, the inputs it was given with `setInput()`, its owner, entity, permalink flag and status, and `SitePage(name: static::class)` (so the body class
@@ -984,8 +992,7 @@ for classes that extend `PageShell`, and holds each to the rule); today it is `I
 **Feeds, search and tags.** The home page's stream under other addresses is `HomepageController` too, with no class of its own to keep: the three page classes that served the feeds, the search and the tags
 are deleted (not shells: nothing ever extended them; `docs/developers/plugins/upgrading.md` has the table of every deleted class), and the legacy route table keeps a placeholder at each one's place. Each action is one call of
 `HomePages` and its `#[SitePage(name: 'Idno\Pages\Homepage')]` gives the home page's body class and page events, so a feed or a tag page fires `page/ready`, `page/head` and `page/get` ONCE,
-with `page_class` `Idno\Pages\Homepage` (the feed page used to fire them for its own class and then again for the home page it built, and the tag page fired a trailing `page/ready`, and
-the feed's `Link` headers were sent twice: all fixed; `PageContractTest`). `replaces` is empty (no shell is shadowed). The routes follow the convention (GET, HEAD, OPTIONS; `{lead}` and
+with `page_class` `Idno\Pages\Homepage` (one set of events and one set of `Link` headers for each request: `PageContractTest`). `replaces` is empty (no shell is shadowed). The routes follow the convention (GET, HEAD, OPTIONS; `{lead}` and
 `{slash}`; `Tests/Unit/Http/PageRouteConvention` exempts `idno_tag` from the trailing `{slash}` and from nothing else: the exemption requires no `{slash}` in the path, the path to end with its last parameter, and that parameter's requirement to take slashes; `PageRouteConventionTest` pins what it still fails on):
 - `feed()`: `idno_feed_xml` (`/feed.xml`), `idno_feed` (`/feed`), `idno_rss_xml` (`/rss.xml`), `#[SitePage(defaultType: 'rss')]`: the stream drawn in the `rss` type unless the request names
   another (`?_t=json`; an `Accept` header does not choose, as before). It is not the root, so `homepage/replace` is not asked.
@@ -1013,7 +1020,7 @@ as `application/javascript` (the unminified address read `js/service-worker.js`,
 token (`FormToken::value()`) with `Cache-Control: no-store` through `setCaching()` (the session's `Expires` and `Pragma` stay as on every page, no `Last-Modified`), and still answers only an XHR request (the drawn 403 otherwise);
 WebFinger answers a `resource` that is not text with the 404 page (was a 500 page), and `links` is always a list (`LegacyWebfingerDirectory`: the `webfinger` event's response when it is an array, else `[]`; it printed `true` when no listener returned a list); `robots.txt` is `text/plain; charset=UTF-8`; other methods and a malformed `Host` are the legacy router's 404 page; a webmention to any of these paths is
 `target_not_found` (`WebmentionToADeletedPageTest`); an XHR GET gets the headers of the same request that is not XHR. A plugin that extends a deleted class stops the site booting until it is disabled (`docs/install/upgrade.md`,
-`docs/developers/plugins/upgrading.md`). `Tests\Fixtures\LegacyPlainPage` (`/_test/legacy-plain`, `?throw=1` to fail) is the legacy page the lifecycle tests hold a controller's page to now that `robots.txt` is a controller's.
+`docs/developers/plugins/upgrading.md`). `Tests\Fixtures\LegacyPlainPage` (`/_test/legacy-plain`, `?throw=1` to fail) is the legacy page the lifecycle tests hold a controller's page to.
 
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
@@ -1107,10 +1114,10 @@ class core still registers for the path, if any) and the legacy router share the
   always did for one case: a spelling Toro routed to core's page whose plain form a plugin took with an EXACT key (the plugin registered `/feed.xml`; `//feed.xml` reached core's feed and now
   reaches the placeholder, the 404 page; likewise `//tag/x` with an exact `/tag/x`). The controller's page is never served for an address a plugin took, in any spelling, and a plugin's page serves
   exactly the spellings the legacy router itself resolves to it.
-  The shell itself is shadowed for GET, HEAD and OPTIONS only. What changes: an encoded spelling of a path nobody took (`/x%61`, `/%2Fx`, `/x%2F`) is now served by the controller as the
+  The shell itself is shadowed for GET, HEAD and OPTIONS only. Differences from the legacy router alone: an encoded spelling of a path nobody took (`/x%61`, `/%2Fx`, `/x%2F`) is served by the controller as the
   plain spelling is, where a server that gave the legacy router only the raw path answered a 404; the controller also serves `/index.php` (Symfony's path is `/` there; the legacy router
   had no page for it), unless a plugin took `/`; a dot segment (`/y/../x`) is no spelling Symfony matches, so it stays the legacy router's.
-  `LegacyDispatcher::routes()` writes the subdirectory's alias of the home page into the router's table when asked: it did at dispatch, and now a moment earlier, once.
+  `LegacyDispatcher::routes()` writes the subdirectory's alias of the home page into the router's table once, whoever asks first (the dispatcher and `LegacyRouteOverride` both ask).
   Each `#[SitePage]` still declares `legacyPatterns`, the patterns core registered for its addresses exactly as `addRoute()` received them (`[]` when core registered none): it plays
   no part at run time (an undeclared page cannot fail open: the override asks the table), and `SitePageClaimsTest` holds the table to it.
 - The `.md` suffix. A GET or HEAD whose path ends in `.md` is the Markdown form of a permalink where the legacy router would treat it as one
@@ -1242,7 +1249,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   A test that listens for an event removes its listener (`Idno\Core\EventDispatcher::removeListener()`). Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
 - The page lifecycle of a controller (`Idno\Http\Page\PageLifecycle`, an interface; `Idno\Legacy\LegacyPageLifecycle` the adapter, aliased
   and public in `config/services.php` so that a test can ask whether it was built): what a legacy page did around its handler, in the same
-  order. `PageRequestListener` (`#[AsEventListener]` on `kernel.controller` at priority 0, so before `IsGrantedAttributeListener` at 20;
+  order. `PageRequestListener` (`#[AsEventListener]` on `kernel.controller` at priority 0, so before Symfony's attribute listeners (`ControllerAttributesListener`, which runs `#[IsGranted]` at -10000);
   constructor: the kernel and the lifecycle as a SERVICE CLOSURE) does nothing unless the request is the main one, `Kernel::legacyBooted()` and
   `SitePage::of($event->getController())` is not null: a plain controller, a sub-request, the legacy catch-all, `/_upgrade/step`, a `bootLegacy:
   false` kernel and a kernel with the schema gate closed never build the lifecycle and install no PHP error handler
@@ -1316,7 +1323,7 @@ the tag pages and the small public endpoints are served through them (and the fi
     503), on the plain-text answer too. Any other HTTP exception below 500 (a bad request, a method not allowed) is left to Symfony,
     which logs and answers it as it does for any controller.
   - an `\Error` (a `TypeError`, a call on null): Symfony dispatches nothing for it, so `PageRequestListener::onControllerArguments()` (`kernel.controller_arguments`, priority
-    -10100: after the attribute listeners such as `#[IsGranted]`, which read the controller's own signature) replaces the controller of a site page, for the main request with the
+    -10100: after the attribute listeners such as `#[IsGranted]` (-10000), which read the controller's own signature) replaces the controller of a site page, for the main request with the
     legacy application booted, by one that calls it with its resolved arguments and throws `Idno\Http\Page\PageError` for an `\Error`, carrying the original as `previous` and as
     `$error`. The listener unwraps it, so the logged class, message, file and line are the ORIGINAL error's, and the answer is the same as for an exception: reported once and drawn as the
     500 page (the message under `ExceptionMessage::forVisitor()`'s rules: an `\Error` is technical, so shown only when `debug` is set). Other controllers and the legacy catch-all keep
@@ -1444,7 +1451,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `Kernel::legacyBooted()` says whether it did. Pass `bootLegacy: false` to the constructor to boot
   the kernel alone, as some tests do: such a kernel never asks the gate, and the gate's listener
   does nothing in it.
-- `framework.handle_all_throwables` is FALSE (`config/packages/framework.php`) and stays so: Symfony dispatches `kernel.exception` for an `\Exception` only, and an `\Error` thrown
+- `framework.handle_all_throwables` is FALSE (`config/packages/framework.php`): Symfony dispatches `kernel.exception` for an `\Exception` only, and an `\Error` thrown
   outside a site page's controller (a `kernel.request` listener, any other controller) ends at `FatalErrorPage`, as before. A site page's controller is the one place an `\Error`
   is made an exception (see "Errors on a site page").
 - The listeners around site pages (`LegacyRouteOverride`, `PageRequestListener`, `PageExceptionListener`, `LegacyHeaderReconciler`, `LegacyFallbackListener`) take what needs the legacy application as SERVICE
@@ -2099,7 +2106,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `$kernel->handle(Request::create(...))` (fine as long as the controller does not need
   legacy services; a controller that takes `Psr\Log\LoggerInterface` does need them, since that
   logger is backed by the legacy application: construct it directly with a `Psr\Log\NullLogger`
-  in a unit test instead, until the level filter moves into Monolog in a later phase), or test it black-box over HTTP. Do not boot a second kernel with
+  in a unit test instead: the level filter is the legacy `Idno\Core\Logging`'s), or test it black-box over HTTP. Do not boot a second kernel with
   legacy and expect its legacy services to be `Idno::site()`'s (see above). Legacy pages
   are tested black-box only, through the characterisation harness
   (`Tests/Characterisation/`, `$this->site()->request(...)` against the test rig).
@@ -4637,8 +4644,7 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
   `bootLegacy: false` kernel, nor by anything Symfony instantiates during kernel boot (such as a
   `kernel.request` listener built at boot); `LegacyServiceFactory::logging()` throws a
   `\LogicException` saying so. In a unit test, pass a `Psr\Log\NullLogger` (or a test double) to the
-  class's constructor directly. The restriction goes away when the level filter moves into Monolog
-  in a later phase.
+  class's constructor directly. The restriction is that the site's level filter is the legacy `Idno\Core\Logging`'s.
 - Never put request data or other untrusted input into a log message without replacing control
   characters and bounding its length (see `Idno\Legacy\LegacyFallbackListener`).
 - `\Idno\Core\Idno::site()->logging()` is the legacy accessor for the same object; do not use

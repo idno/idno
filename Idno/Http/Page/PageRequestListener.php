@@ -48,7 +48,7 @@ final class PageRequestListener
     }
 
     /**
-     * Before `kernel.controller_arguments`, where Symfony Security's `#[IsGranted]` is checked (priority 20): a page is begun
+     * Before the attribute listeners (`ControllerAttributesListener`, priority -10000 on `kernel.controller` and `kernel.controller_arguments`), where Symfony Security's `#[IsGranted]` is checked: a page is begun
      * before the security attributes of its controller are asked, as a legacy page was begun before its gatekeepers.
      */
     #[AsEventListener(event: KernelEvents::CONTROLLER, priority: 0)]

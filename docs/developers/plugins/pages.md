@@ -196,7 +196,7 @@ In each case, execution is halted.
 
 ## Pages served by controllers
 
-Core's own home page, feeds, search, tag pages and small public endpoints are not `Page` classes: each is a Symfony controller that calls a service, and the page classes your plugin extends or registers keep working beside them. A page of your own is still a `\Idno\Common\Page` class, as above. Read this section to see how core does it, or to replace the home page.
+Core's own home page, feeds, search, tag pages and small public endpoints are not `Page` classes: each is a Symfony controller that calls a service, and the page classes your plugin extends or registers keep working beside them. A page of your own is still a `\Idno\Common\Page` class, as above: the container imports controller routes only from core's directories (`Idno/Upgrade`, `Idno/Legacy`, `Idno/Http/Controller`), so a plugin does not add a controller route. Read this section to see how core does it, or to replace the home page.
 
 The home page is the worked example. `Idno\Http\Controller\HomepageController` declares the routes and the page:
 
@@ -207,11 +207,12 @@ The home page is the worked example. `Idno\Http\Controller\HomepageController` d
         return $this->pages->home($page, root: true);
     }
 
-`#[SitePage]` (`Idno\Http\Page\SitePage`) says which page this is: its `name` is what the body class and the page events (`page/ready`, `page/head`, `page/get`) know it by, `replaces` the deprecated shell class that stays registered for the path, `publicOnPrivateSite` whether a visitor of a private site may see it, and `methods` what it serves besides GET, HEAD and OPTIONS (a state-changing method is answered only with the session's form token). The controller takes a `PageContext`, the request's input, owner and headers. The logic is in a service, `Idno\Http\Controller\Home\HomePages`, which asks the site for what it needs through an interface (`HomeStream`) and draws through `Idno\Http\Page\PageRenderer`:
+`#[SitePage]` (`Idno\Http\Page\SitePage`) says which page this is: its `name` is what the body class and the page events (`page/ready`, `page/head`, `page/get`) know it by, `replaces` the deprecated shell class that stays registered for the path, `legacyPatterns` the patterns core registered for it with the legacy router (`[]` for a page that is new), `publicOnPrivateSite` whether a visitor of a private site may see it, and `methods` the methods it serves: `['GET']` by default, HEAD comes with GET and OPTIONS is always served, and a method not listed is refused with a 405. A page that adds POST, PUT, DELETE or PATCH lists `GET` as well (`['GET', 'POST']`; `['POST']` alone serves no GET), and a state-changing method is answered only with the session's form token. The controller takes a `PageContext`, the request's input, owner and headers. The logic is in a service, `Idno\Http\Controller\Home\HomePages`, which asks the site for what it needs through an interface (`HomeStream`) and draws through `Idno\Http\Page\PageRenderer`:
 
     return $this->renderer->page($page, [
-        'title' => $title,
-        'body'  => $this->renderer->template('content/stream', ['items' => $items]),
+        'title'       => $titles['title'],
+        'description' => $titles['description'],
+        'body'        => $this->renderer->template('pages/home', ['items' => $items, 'contentTypes' => $create, 'offset' => $offset, 'count' => $count, 'subject' => $query, 'content' => $friendlyTypes]),
     ]);
 
 The renderer also makes the answers a page gives where a legacy page called `deniedContent()`, `noContent()`, `goneContent()` or `forward()`: `denied()`, `notFound()`, `gone()` and `redirect()`. A controller page never calls `header()`, `echo` or `exit`; ask for caching with `$page->setCaching([...])`, and add other headers with `$page->addHeader()`.
