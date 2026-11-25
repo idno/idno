@@ -71,7 +71,7 @@ if (!empty($vars['hide-existing'])) {
         ?>
     </div>
     <div class="photo-preview" id="<?php echo $vars['id']; ?>_preview">
-        <img id="<?php echo $vars['id']; ?>_img" src="" class="preview" style="display:none; width: 400px;" />
+        <img id="<?php echo $vars['id']; ?>_img" alt="" class="preview" style="display:none; width:100%; max-width:400px; border-radius:8px; margin-bottom:0.75rem;" />
     </div>
     <p>
         <label class="idno-btn idno-btn-ghost" for="<?php echo $vars['id']; ?>" style="width:100%;justify-content:center;cursor:pointer">
@@ -94,11 +94,59 @@ if (!empty($vars['hide-existing'])) {
                 [
                 'name' => $vars['name'],
                 'id' => $vars['id'],
-                'accept' => 'image/*',
-                'onchange' => 'Template.activateImagePreview(this)',
+                'accept' => \Idno\Core\Upload::imageAccept(),
                 'class' => 'input-file']
             )->draw('forms/input/file');
             ?>
         </label>
     </p>
 </div>
+<?php
+// The preview and the button's text, in plain JavaScript (Twenty26 loads no jQuery). Drawn once
+// a page; it reads everything from the elements, and holds no value from the post.
+global $idno_image_file_script_drawn;
+if (empty($idno_image_file_script_drawn)) {
+    $idno_image_file_script_drawn = true;
+    ?>
+<script>
+    (function () {
+        if (window.idnoImageFileInput) {
+            return;
+        }
+        window.idnoImageFileInput = true;
+        document.addEventListener('change', function (event) {
+            var input = event.target;
+            if (!input || input.type !== 'file') {
+                return;
+            }
+            var holder = input.closest('.image-file-input');
+            if (!holder) {
+                return;
+            }
+            var preview = holder.querySelector('img.preview');
+            var label = holder.querySelector('.photo-filename');
+            var file = input.files && input.files.length ? input.files[0] : null;
+            if (label) {
+                if (!label.hasAttribute('data-choose')) {
+                    label.setAttribute('data-choose', label.textContent.trim());
+                }
+                // textContent, so a file name is never read as markup
+                label.textContent = file ? file.name : label.getAttribute('data-choose');
+            }
+            if (preview) {
+                if (preview.src && preview.src.indexOf('blob:') === 0) {
+                    URL.revokeObjectURL(preview.src);
+                }
+                if (file && window.URL && URL.createObjectURL) {
+                    preview.src = URL.createObjectURL(file);
+                    preview.style.display = 'block';
+                } else {
+                    preview.removeAttribute('src');
+                    preview.style.display = 'none';
+                }
+            }
+        });
+    })();
+</script>
+    <?php
+}

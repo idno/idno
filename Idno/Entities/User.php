@@ -1189,7 +1189,18 @@ namespace Idno\Entities {
                 $this->setName($name);
             }
             if (!empty($_FILES['avatar'])) {
-                if (in_array($_FILES['avatar']['type'], array('image/png', 'image/jpg', 'image/jpeg', 'image/gif'))) {
+                $avatar_error = isset($_FILES['avatar']['error']) ? intval($_FILES['avatar']['error']) : UPLOAD_ERR_OK;
+                if ($avatar_error !== UPLOAD_ERR_OK && $avatar_error !== UPLOAD_ERR_NO_FILE) {
+                    // PHP refused the picture (too large, cut short): the rest of the profile is
+                    // saved, and the member is told why the picture did not change
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(
+                        \Idno\Core\Upload::errorMessage($avatar_error, (string) ($_FILES['avatar']['name'] ?? ''))
+                        . ' ' . \Idno\Core\Idno::site()->language()->_('Your picture was not changed.')
+                    );
+                } else if ($avatar_error === UPLOAD_ERR_OK && !empty($_FILES['avatar']['tmp_name']) && !in_array($_FILES['avatar']['type'], array('image/png', 'image/jpg', 'image/jpeg', 'image/gif'))) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Your picture was not changed: a profile picture can be JPEG, PNG or GIF.'));
+                }
+                if ($avatar_error === UPLOAD_ERR_OK && !empty($_FILES['avatar']['tmp_name']) && in_array($_FILES['avatar']['type'], array('image/png', 'image/jpg', 'image/jpeg', 'image/gif'))) {
                     if (getimagesize($_FILES['avatar']['tmp_name'])) {
                         if ($icon = \Idno\Entities\File::createThumbnailFromFile($_FILES['avatar']['tmp_name'], $_FILES['avatar']['name'], 300, true)) {
                             $this->icon = (string)$icon;

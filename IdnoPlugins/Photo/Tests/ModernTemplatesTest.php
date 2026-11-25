@@ -72,6 +72,32 @@ namespace IdnoPlugins\Photo\Tests {
             $this->assertStringContainsString('class="idno-editor-field-label"', $html, 'The description has its label.');
             $this->assertStringContainsString('name="__bTa" value="/photo/edit"', $html);
         }
+
+        public function testTheFormNeedsNoScriptThatTwenty26DoesNotLoad()
+        {
+            $html = $this->drawModern('entity/Photo/edit', ['object' => new Photo()]);
+
+            // Twenty26 loads neither jQuery nor the default look's Template object: a call to
+            // either stops the script that shows the chosen photo
+            preg_match_all('~<script\b[^>]*>(.*?)</script>~s', $html, $scripts);
+            $this->assertNotEmpty($scripts[1], 'The form shows the chosen photo with a script of its own.');
+            foreach ($scripts[1] as $script) {
+                $this->assertStringNotContainsString('$(', $script);
+                $this->assertStringNotContainsString('jQuery', $script);
+                $this->assertStringNotContainsString('Template.', $script);
+            }
+            $this->assertDoesNotMatchRegularExpression('~\son[a-z]+="[^"]*(Template\.|\$\(|jQuery)~', $html, 'No inline handler calls them either.');
+
+            // The file inputs are inside the form, with the name the server reads
+            $form = substr($html, 0, (int) strpos($html, '</form>'));
+            $this->assertSame(10, preg_match_all('~<input\b[^>]*type="file"[^>]*>~', $form, $inputs));
+            foreach ($inputs[0] as $input) {
+                $this->assertStringContainsString('name="photo[]"', $input);
+                $this->assertStringContainsString('accept="' . \Idno\Core\Upload::imageAccept() . '"', $input);
+            }
+            $this->assertStringContainsString('data-upload-limits', $form, 'The form states what the server accepts.');
+            $this->assertStringContainsString('data-upload-error', $form);
+        }
     }
 
 }

@@ -35,9 +35,9 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
                         <?php echo \Idno\Core\Idno::site()->language()->_('Change photo'); ?>
                     </label>
-                    <input type="file" name="avatar" id="avatar" accept="image/*" style="display:none"
+                    <input type="file" name="avatar" id="avatar" accept="image/jpeg,image/png,image/gif" style="display:none"
                            @change="if ($event.target.files[0]) { const r = new FileReader(); r.onload = e => preview = e.target.result; r.readAsDataURL($event.target.files[0]); }">
-                    <p class="idno-form-help"><?php echo \Idno\Core\Idno::site()->language()->_('JPG, PNG or GIF'); ?></p>
+                    <?php echo $this->__(['kinds' => \Idno\Core\Upload::typeList(['JPEG', 'PNG', 'GIF']), 'several' => false, 'required' => ''])->draw('forms/upload/limits'); ?>
                 </div>
             </div>
         </div>

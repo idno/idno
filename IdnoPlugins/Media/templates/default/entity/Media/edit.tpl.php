@@ -38,6 +38,7 @@
                 </label>
 
             </p>
+            <?php echo $this->__(['kinds' => \Idno\Core\Upload::typeList(['MP3', 'M4A', 'WAV', 'OGG', 'MP4', 'MOV', 'WebM']), 'several' => false, 'required' => ''])->draw('forms/upload/limits'); ?>
             <div class="content-form">
                 <label for="title">
                     <?php echo \Idno\Core\Idno::site()->language()->_('Title'); ?></label>

@@ -36,6 +36,7 @@
                     'class' => 'idno-file-input-control'
                 ])->draw('forms/input/file') ?>
             </label>
+            <?= $this->__(['kinds' => \Idno\Core\Upload::typeList(['MP3', 'M4A', 'WAV', 'OGG', 'MP4', 'MOV', 'WebM']), 'several' => false, 'required' => ''])->draw('forms/upload/limits') ?>
         </div>
 
         <div class="idno-form-field">

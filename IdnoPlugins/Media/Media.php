@@ -138,24 +138,19 @@ namespace IdnoPlugins\Media {
 
                     return false;
                 }
-            } else if ($new) {
+            } else {
 
-                $errcode = null;
-                if (!empty($_FILES['media']['error']))
-                    $errcode = $_FILES['media']['error'];
+                // No file arrived. PHP may have refused one (too large, cut short): say so,
+                // whether the post is new or an existing one whose file was to be replaced
+                $errcode = isset($_FILES['media']['error']) && is_scalar($_FILES['media']['error']) ? intval($_FILES['media']['error']) : UPLOAD_ERR_NO_FILE;
+                $name = isset($_FILES['media']['name']) && is_string($_FILES['media']['name']) ? $_FILES['media']['name'] : '';
 
-                $errmsg = \Idno\Files\FileSystem::getUploadErrorCodeMessage($errcode);
-                if (!empty($errcode) && !empty($errmsg)) {
-
-                    // No file is ok, if this is not new
-                    if (intval($errcode) == UPLOAD_ERR_NO_FILE && !$new) {
-                        $errmsg = null;
-                    }
-                } else {
-                    $errmsg = \Idno\Core\Idno::site()->language()->_('We couldn\'t access your media for an unknown reason. Please try again.');
+                if ($errcode !== UPLOAD_ERR_OK && $errcode !== UPLOAD_ERR_NO_FILE) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Upload::errorMessage($errcode, $name));
+                    return false;
                 }
-                if (!empty($errmsg)) {
-                    \Idno\Core\Idno::site()->session()->addErrorMessage($errmsg);
+                if ($new) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('An audio or video post needs a file, and none arrived, so nothing was saved. Choose a file and try again.'));
                     return false;
                 }
             }

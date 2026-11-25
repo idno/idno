@@ -54,10 +54,17 @@ namespace Idno\Pages\File {
                             exit;
                         }
                     } else {
-                        Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("You can only upload images."));
+                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("You can only upload images."));
                     }
+                } else if (\Idno\Core\Upload::requestWasTooLarge()) {
+                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Upload::requestTooLargeMessage());
+                } else {
+                    $code = isset($_FILES['file']['error']) && is_scalar($_FILES['file']['error']) ? intval($_FILES['file']['error']) : UPLOAD_ERR_NO_FILE;
+                    $message = \Idno\Core\Upload::errorMessage($code, isset($_FILES['file']['name']) && is_string($_FILES['file']['name']) ? $_FILES['file']['name'] : '');
+                    \Idno\Core\Idno::site()->session()->addErrorMessage($message !== '' ? $message : \Idno\Core\Idno::site()->language()->_('No file arrived, so nothing was saved.'));
                 }
-                $this->forward($_SERVER['HTTP_REDIRECT']);
+                // Back to the picker, which shows why nothing was added
+                $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'filepicker/?type=image');
             }
         }
 
