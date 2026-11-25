@@ -96,6 +96,17 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * The site's configuration folder holds the configuration, the setup marker and the code that proves access to the
+         * server's files when the installer adopts a database: none of it is ever served, whether or not the file exists.
+         */
+        public function testTheConfigurationFolderIsRefused(): void
+        {
+            foreach (['configuration/config.ini', 'configuration/install-code', 'configuration/setup-pending', 'Configuration/install-code', 'configuration/', 'configuration/.htaccess'] as $path) {
+                $this->assertSame(403, $this->site()->request('GET', $path)->status, $path);
+            }
+        }
+
+        /**
          * The installer's check that URL rewriting works asks for `js/canary.js`; the rules answer it with the look's script.
          */
         public function testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript(): void

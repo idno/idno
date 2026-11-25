@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Install;
 
+use Idno\Install\InstallCode;
 use Idno\Install\InstallPaths;
 use Idno\Install\SetupToken;
 use Idno\Install\WebInstaller;
@@ -297,21 +298,145 @@ final class WebInstallerTest extends TestCase
         self::assertSame([], $this->filesInRoot());
     }
 
-    public function testAnExistingIdnoDatabaseIsUsedOnlyWhenConfirmedAndIsNeverRemoved(): void
+    private function makeAnExistingSite(): string
     {
         $path = $this->root . '/data/idno.sqlite';
         $connection = \Idno\Storage\ConnectionFactory::forConfig(['database' => 'sqlite', 'dbname' => $path]);
         (new \Idno\Storage\SchemaMigrator($connection))->migrate();
         $connection->close();
 
-        $html = (string) $this->save()->getContent();
+        return $path;
+    }
+
+    private function code(): string
+    {
+        $text = file_get_contents($this->root . '/' . InstallCode::relativePath());
+        self::assertIsString($text);
+
+        return trim($text);
+    }
+
+    /**
+     * A database that already holds a site is adopted only by someone who can read a file on the server: the
+     * code the installer writes to configuration/install-code. Without it nothing is written but that file.
+     */
+    public function testAnExistingIdnoDatabaseIsUsedOnlyWithTheCodeFromTheServerAndIsNeverRemoved(): void
+    {
+        $path = $this->makeAnExistingSite();
+        $before = sha1_file($path);
+
+        $response = $this->save();
+        $html = (string) $response->getContent();
         self::assertStringContainsString('already holds an Idno site', $html);
         self::assertStringContainsString('name="use_existing"', $html);
-        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
-        self::assertFileExists($path);
+        self::assertStringContainsString('name="install_code"', $html);
+        self::assertStringContainsString('configuration/install-code', $html);
+        self::assertStringNotContainsString($this->root, $html, 'the file is named from the project');
+        self::assertSame(['configuration/install-code', 'data/idno.sqlite'], $this->filesInRoot(), 'only the code was written');
+        self::assertSame(0600, fileperms($this->root . '/configuration/install-code') & 0777);
+        $code = $this->code();
+        self::assertMatchesRegularExpression('/\A[a-f0-9]{32}\z/', $code);
+        self::assertStringNotContainsString($code, $html . $response->headers, 'the code is never printed or sent');
 
-        self::assertSame(303, $this->save(['use_existing' => '1'])->getStatusCode());
+        // Ticking the box is not enough, and neither is a code that is not the one in the file.
+        foreach ([['use_existing' => '1'], ['use_existing' => '1', 'install_code' => str_repeat('0', 32)], ['use_existing' => '1', 'install_code' => ['x']], ['use_existing' => '1', 'install_code' => substr($code, 0, 31)]] as $fields) {
+            $html = (string) $this->save($fields)->getContent();
+            self::assertStringContainsString('already holds an Idno site', $html);
+            self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        }
+        self::assertStringContainsString('id="field-install_code-error"', (string) $this->save(['use_existing' => '1', 'install_code' => str_repeat('0', 32)])->getContent());
+        self::assertSame($code, $this->code(), 'visiting the page again does not replace the code the person at the server is reading');
+        self::assertSame($before, sha1_file($path), 'the database is untouched');
+        self::assertSame(['configuration/install-code', 'data/idno.sqlite'], $this->filesInRoot());
+
+        // The code without the box changes nothing either.
+        self::assertStringContainsString('already holds an Idno site', (string) $this->save(['install_code' => $code])->getContent());
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+
+        // With both (spaces and capitals as a terminal may give them), the site is adopted, at the address shown.
+        $adopted = $this->save(['use_existing' => '1', 'install_code' => ' ' . strtoupper(substr($code, 0, 16)) . ' ' . substr($code, 16) . "\n", 'domain' => 'notes.example.com']);
+        self::assertSame(303, $adopted->getStatusCode());
         self::assertSame($path, $this->config()['dbname']);
+        self::assertSame('https://notes.example.com/', $this->config()['url']);
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code', 'the code is used once');
+        self::assertFileExists($path);
+    }
+
+    public function testTheAdoptionPageShowsTheAddressThatWillBeWrittenForConfirmation(): void
+    {
+        $this->makeAnExistingSite();
+
+        $html = (string) $this->save(['domain' => 'notes.example.com'])->getContent();
+
+        self::assertMatchesRegularExpression('/<input id="field-domain" name="domain" value="notes\.example\.com"/', $html, 'the address is a field the person sees and confirms with the code');
+        $refused = (string) $this->save(['domain' => 'notes.example.com/evil', 'use_existing' => '1', 'install_code' => $this->code()])->getContent();
+        self::assertStringContainsString('id="field-domain-error"', $refused);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+    }
+
+    public function testAnExpiredCodeIsRefusedAndReplaced(): void
+    {
+        $this->makeAnExistingSite();
+        $this->save();
+        $code = $this->code();
+        touch($this->root . '/' . InstallCode::relativePath(), time() - InstallCode::LIFETIME - 1);
+
+        $html = (string) $this->save(['use_existing' => '1', 'install_code' => $code])->getContent();
+
+        self::assertStringContainsString('already holds an Idno site', $html);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertNotSame($code, $this->code(), 'a new code is written in place of the expired one');
+    }
+
+    public function testAUsedCodeDoesNotAdoptTheDatabaseAgain(): void
+    {
+        $this->makeAnExistingSite();
+        $this->save();
+        $code = $this->code();
+        self::assertSame(303, $this->save(['use_existing' => '1', 'install_code' => $code])->getStatusCode());
+        unlink($this->root . '/configuration/config.ini');
+        unlink($this->root . '/configuration/setup-pending');
+
+        $html = (string) $this->save(['use_existing' => '1', 'install_code' => $code])->getContent();
+
+        self::assertStringContainsString('already holds an Idno site', $html);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertNotSame($code, $this->code());
+    }
+
+    public function testADoubleSubmitWithTheCodeAdoptsOnceAndAStrangerAfterwardsChangesNothing(): void
+    {
+        $this->makeAnExistingSite();
+        $this->save();
+        $code = $this->code();
+
+        self::assertSame(303, $this->save(['use_existing' => '1', 'install_code' => $code])->getStatusCode());
+        $config = file_get_contents($this->root . '/configuration/config.ini');
+        self::assertSame(303, $this->save(['use_existing' => '1', 'install_code' => $code, 'domain' => 'other.example'])->getStatusCode());
+        self::assertSame(303, $this->save(['use_existing' => '1', 'domain' => 'evil.example'])->getStatusCode());
+
+        self::assertSame($config, file_get_contents($this->root . '/configuration/config.ini'));
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code');
+    }
+
+    public function testTheCodeAndTheSetupTokenAreNotOneAnother(): void
+    {
+        $this->makeAnExistingSite();
+        $this->save();
+        $code = $this->code();
+        $paths = new InstallPaths($this->root);
+        $setup = new SetupToken($paths);
+        $token = $setup->issue('Ada');
+
+        self::assertFalse($setup->matches($code));
+        self::assertFalse((new InstallCode($paths))->matches($token));
+        self::assertTrue((new InstallCode($paths))->matches($code));
+    }
+
+    public function testANewSiteOnAnEmptyDatabaseNeedsNoCode(): void
+    {
+        self::assertSame(303, $this->save()->getStatusCode());
+        self::assertFileDoesNotExist($this->root . '/' . InstallCode::relativePath());
     }
 
     public function testAFileThatIsNotADatabaseIsRefusedAndLeftAsItIs(): void

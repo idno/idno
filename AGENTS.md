@@ -609,8 +609,22 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      `connectionProblem()`'s fixed sentences, never the driver's text; SQLite: creates the directory and an empty file last and opens it with
      `SqliteConnectionSetup`); `DatabaseChoice::inspect()` (a `SchemaState` on the candidate settings:
      a database the upgrade would refuse is refused here with the upgrade's own `PublicMessage`; one
-     that already holds an Idno site needs the form's `use_existing=1` and is never overwritten: the
-     upgrade takes over); `ConfigFile::build()` and `writeOnce()` (an exclusive create of
+     that already holds an Idno site is never overwritten (the upgrade takes over) and is ADOPTED only
+     with the form's `use_existing=1` AND the code of `Idno\Install\InstallCode`: without them the
+     step writes nothing but that code, a random 32-hex value in `configuration/install-code`
+     (`InstallCode::relativePath()`, mode 0600, an exclusive create, refused by every shipped server
+     configuration), which the page asks for by its path from the project and the command to read it. The
+     code is proof of access to the server's files: a site whose configuration file was lost is an
+     uninstalled site to anyone, and adopting it writes its `url`, so without the code a stranger could
+     point a site's reset links, ActivityPub ids and IndieAuth endpoints at their own host. It is compared
+     with `hash_equals()` (spaces and letter case ignored), lasts `InstallCode::LIFETIME` (an hour, by the
+     file's modification time), is not replaced while valid (a visitor reaching the page again does not
+     invalidate the code being read at the server; an expired one is replaced), is removed once the
+     configuration is written, and is never printed, logged, put in a cookie or in an address. On the
+     adoption page the domain is a visible field beside the code (it was read from the request's Host in
+     step 2), so the address written is the one the code's holder confirms. `InstallCode` and `SetupToken`
+     are separate (other files, 32 against 64 hex characters, neither accepts the other's value). The
+     command-line installer needs no code (`--use-existing`), and a NEW site on an empty database none); `ConfigFile::build()` and `writeOnce()` (an exclusive create of
      `configuration/config.ini`: false, nothing changed, when any configuration file exists or
      appears, so a double submit or a second tab changes nothing); `SetupToken::issue()` with the value
      of the browser's `idno_install` cookie as the token, and the `idno_setup` cookie carrying the same
@@ -624,8 +638,8 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
   is empty (`InstallForm`), and a form is accepted only with the token of the `idno_install` cookie
   (`WebInstaller::fieldFor()`, a double-submit token; `SameSite=Strict`). Do not add a disk path the
   visitor chooses.
-- **The setup step.** Whoever arrives first may install (decided: no code to paste), but only the
-  browser that did can create the administrator. `SetupToken` writes the marker
+- **The setup step.** Whoever arrives first may install a NEW site (no code to paste; adopting a
+  database that holds a site needs `InstallCode`, above), but only the browser that did can create the administrator. `SetupToken` writes the marker
   `configuration/setup-pending` (JSON: the SHA-256 of a random token, and the site's name; never the
   token) and the browser holds the token in the cookie `idno_setup` (HttpOnly, `SameSite=Lax`, Secure
   on HTTPS, thirty days). Between the configuration and the tables the upgrade page runs as for any
@@ -681,10 +695,12 @@ by that user: `idno:install` and the import command print `DatabaseChoice::sqlit
 Tests: `Tests/Unit/Install/` (`InstallPiecesTest`, `InstallerDatabaseTest`, `WebInstallerTest`: the
 installer driven with `Request` objects on a temporary root: each step, the last step's writes, a
 second submission, a missing token, MongoDB, arrays for strings, hostile values, nothing left behind,
-an existing database never removed), `Tests/Install/WebInstallFlowTest` (over HTTP, a site of its own
+an existing database never removed and adopted only with the install code: wrong, expired, used, a double
+submit, the code and the setup token kept apart; `UploadsDeniedTest`), `Tests/Install/WebInstallFlowTest` (over HTTP, a site of its own
 through `UninstalledSiteTestCase`: every address of an unconfigured site, the whole flow to a
 signed-in administrator, a stranger at each stage (every method, a method override, API and bearer
-headers, the upgrade step), a double click on the last step and on the account form, the ready page's links, the step gone afterwards,
+headers, the upgrade step), a stranger and the owner at a database that holds a site with no configuration (only the
+code's holder adopts it, nothing else is written, the code file is never served), a double click on the last step and on the account form, the ready page's links, the step gone afterwards,
 the lost cookie and the console's link, an unreadable configuration, a hand-written configuration and
 `idno:admin:create`, `idno:install` unattended) and `Tests/Kernel/InstallerSchemaTest` (the MySQL side;
 skips on SQLite). Those sites keep what an installation writes in a temporary directory: in the TEST

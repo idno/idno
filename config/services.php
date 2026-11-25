@@ -88,7 +88,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
         // The installer's value objects, static helpers and the classes it builds with new; the paths, the web
         // installer, the setup token and the two listeners are services (the paths are wired below).
-        'Install' => ['AdministratorDetails.php', 'CheckResult.php', 'ConfigFile.php', 'DatabaseChoice.php', 'DatabaseFinding.php', 'FirstAdministrator.php', 'InstallForm.php', 'InstallPage.php', 'ServerChecks.php', 'SiteAddress.php', 'UploadFolder.php'],
+        'Install' => ['AdministratorDetails.php', 'CheckResult.php', 'ConfigFile.php', 'DatabaseChoice.php', 'DatabaseFinding.php', 'FirstAdministrator.php', 'InstallCode.php', 'InstallForm.php', 'InstallPage.php', 'ServerChecks.php', 'SiteAddress.php', 'UploadFolder.php'],
         'Legacy' => ['BarePage.php', 'ControllerRoute.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {

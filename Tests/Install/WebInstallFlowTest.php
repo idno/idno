@@ -358,6 +358,70 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertFileExists($this->root . '/configuration/config.ini');
     }
 
+    /**
+     * A site whose data is there but whose configuration file is lost is an uninstalled site to anyone who reaches it. Taking
+     * its database over through the web installer (which writes the site's address) needs the code the installer writes to a
+     * file on the server: a stranger cannot, and nothing is written but that file; the person at the server can.
+     */
+    public function testOnlySomeoneWhoCanReadTheServersFilesAdoptsAnExistingDatabase(): void
+    {
+        self::assertSame(0, $this->console(['idno:install', '--no-interaction', '--url=https://owner.example/', '--no-admin'])[0]);
+        unlink($this->root . '/configuration/config.ini');
+        @unlink($this->root . '/Uploads/.htaccess');
+        $database = $this->root . '/data/idno.sqlite';
+        $before = sha1_file($database);
+        $this->startServer();
+        $domain = substr($this->base, strlen('http://'));
+
+        // A stranger's browser runs the installer to the end and ticks "use the site that is there".
+        $stranger = $this->request('/');
+        $strangerCookies = $stranger['cookies'];
+        $strangerToken = self::token($stranger['body']);
+        $form = ['step' => 'database', 'token' => $strangerToken, 'title' => 'Mine now', 'domain' => 'evil.example', 'database' => 'sqlite', 'use_existing' => '1'];
+        $refused = $this->request('/', $form, $strangerCookies);
+        self::assertSame(200, $refused['status'], $refused['body'] . $this->serverLog());
+        self::assertStringContainsString('already holds an Idno site', $refused['body']);
+        self::assertStringContainsString('configuration/install-code', $refused['body']);
+        foreach ([str_repeat('a', 32), 'install-code', ''] as $guess) {
+            self::assertStringContainsString('already holds an Idno site', $this->request('/', $form + ['install_code' => $guess], $strangerCookies)['body']);
+        }
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/Uploads/.htaccess');
+        self::assertSame(['install-code'], array_values(array_diff(scandir($this->root . '/configuration') ?: [], ['.', '..'])), 'nothing but the code is written');
+        self::assertSame($before, sha1_file($database), 'the database is untouched');
+        $code = trim((string) file_get_contents($this->root . '/configuration/install-code'));
+        self::assertStringNotContainsString($code, $refused['body'] . $refused['headers']);
+        $served = $this->request('/configuration/install-code', null, [], ['Accept: */*']);
+        self::assertSame(403, $served['status'], 'the file is never served');
+        self::assertStringNotContainsString($code, $served['body']);
+
+        // An expired code is refused, and replaced.
+        touch($this->root . '/configuration/install-code', time() - 7200);
+        self::assertStringContainsString('already holds an Idno site', $this->request('/', $form + ['install_code' => $code], $strangerCookies)['body']);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        $code = trim((string) file_get_contents($this->root . '/configuration/install-code'));
+
+        // The owner's browser, with the code from the server, adopts the site at the address it confirms. The stranger
+        // visiting again meanwhile did not replace the code.
+        $owner = $this->request('/');
+        $ownerCookies = $owner['cookies'];
+        $ownerToken = self::token($owner['body']);
+        $this->request('/', $form, $strangerCookies);
+        $adopted = $this->request('/', ['token' => $ownerToken, 'domain' => $domain, 'install_code' => $code] + $form, $ownerCookies);
+        self::assertSame(303, $adopted['status'], $adopted['body'] . $this->serverLog());
+        $config = parse_ini_file($this->root . '/configuration/config.ini');
+        self::assertIsArray($config);
+        self::assertSame('http://' . $domain . '/', $config['url']);
+        self::assertSame($database, $config['dbname']);
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code');
+        $written = file_get_contents($this->root . '/configuration/config.ini');
+
+        // The stranger's next submission, with the used code or without, changes nothing: the site is installed, and while it
+        // has no administrator a browser other than the owner's is told it is being set up.
+        self::assertSame(503, $this->request('/', $form + ['install_code' => $code], $strangerCookies)['status']);
+        self::assertSame($written, file_get_contents($this->root . '/configuration/config.ini'));
+    }
+
     public function testASiteConfiguredByItsEnvironmentIsInstalledForTheConsoleAndTheWeb(): void
     {
         $environment = ['IDNO_DATABASE' => 'sqlite', 'IDNO_DBNAME' => $this->root . '/data/env.sqlite', 'IDNO_UPLOADPATH' => $this->root . '/Uploads/'];

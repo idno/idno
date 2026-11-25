@@ -222,14 +222,29 @@ final class WebInstaller
 
                 return ['database' => $finding->message];
             }
-            if ($finding->holdsASite() && $form->text('use_existing') !== '1') {
-                return ['existing' => 'That database already holds an Idno site. To use it, tick the box below; nothing in it will be replaced. To start a new site, choose an empty database.'];
+            $code = new InstallCode($this->paths);
+            if ($finding->holdsASite() && !($form->text('use_existing') === '1' && $code->matches($form->raw('install_code')))) {
+                // Taking over a site's data, and giving it an address, needs proof of access to the
+                // server's files: the code written to a file the web server never serves. Nothing but
+                // that file is written until the code is given.
+                if (!$code->ensure()) {
+                    return ['existing' => 'That database already holds an Idno site, and Idno cannot write the code that shows you can reach this server\'s files: the folder configuration cannot be written to. Restore the site\'s configuration file, or install from the command line: php bin/console idno:install --use-existing'];
+                }
+                $problems = ['existing' => 'That database already holds an Idno site. To use it, show that you can reach this server\'s files: Idno has written a code to the file ' . InstallCode::relativePath() . ' in Idno\'s folder. Read it on the server (for example, from Idno\'s folder: sudo cat ' . InstallCode::relativePath() . '), type it below, check the site\'s address and tick the box. The code lasts an hour. Nothing in the database will be replaced. To start a new site instead, choose an empty database.'];
+                if ($form->text('install_code') !== '' || is_array($request->request->all()['install_code'] ?? null)) {
+                    $problems['install_code'] = 'That is not the code in ' . InstallCode::relativePath() . ', or it has expired (then a new one has been written there). Read the file again.';
+                }
+
+                return $problems;
             }
             $text = $config->build($params + ['uploadpath' => $upload, 'url' => $url]);
             if (!$config->writeOnce($text)) {
                 // Another request wrote the configuration first (a double submit, a second tab): the
                 // site is installed, and this request changes nothing.
                 return $home;
+            }
+            if ($finding->holdsASite()) {
+                $code->clear();
             }
         } catch (ConfigurationException $e) {
             $cleanUp();
