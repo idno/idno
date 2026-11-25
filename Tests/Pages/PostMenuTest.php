@@ -47,6 +47,21 @@ namespace Tests\Pages {
             return $cases;
         }
 
+        /**
+         * A pattern for an attribute that holds an address of this site, whatever host the
+         * site gives itself (the server under test may call itself something other than the
+         * host the tests reach it by).
+         */
+        private function attribute($name, $url, $after = '')
+        {
+            $local = (string) parse_url($url, PHP_URL_PATH);
+            if ($query = parse_url($url, PHP_URL_QUERY)) {
+                $local .= '?' . $query;
+            }
+
+            return '#' . $name . '="(?:https?://[^/"]+)?' . preg_quote(htmlspecialchars($local), '#') . '"' . $after . '#';
+        }
+
         private function look($theme)
         {
             if (Idno::site()->config()->theme !== $theme) {
@@ -70,7 +85,7 @@ namespace Tests\Pages {
                 $this->assertEquals(200, $result['status']);
                 $this->assertSame(1, substr_count($result['body'], 'data-idno-more-menu'), "The post should have one \"More\" menu on $page.");
                 $this->assertMatchesRegularExpression(
-                    '#<a[^>]+data-idno-copy-link[^>]+href="' . preg_quote(htmlspecialchars($url), '#') . '"#',
+                    '#<a[^>]+data-idno-copy-link[^>]+' . trim($this->attribute('href', $url), '#') . '#',
                     $result['body'],
                     "The post's menu on $page should copy its permalink."
                 );
@@ -112,8 +127,8 @@ namespace Tests\Pages {
             $result = $this->get(static::$entry->getDisplayURL(), $as);
             $this->assertTrue((bool) preg_match('#<details class="idno-more".*?</details>#s', $result['body'], $menu), 'The page should have a "More" menu.');
 
-            $hasEdit = strpos($menu[0], 'href="' . htmlspecialchars(static::$entry->getEditURL()) . '"') !== false;
-            $hasDelete = strpos($menu[0], htmlspecialchars(static::$entry->getDeleteURL())) !== false;
+            $hasEdit = (bool) preg_match($this->attribute('href', static::$entry->getEditURL()), $menu[0]);
+            $hasDelete = strpos($menu[0], htmlspecialchars((string) parse_url(static::$entry->getDeleteURL(), PHP_URL_PATH))) !== false;
             $this->assertSame($who === 'author', $hasEdit, 'Edit is in the menu for the author only.');
             $this->assertSame($who === 'author', $hasDelete, 'Delete is in the menu for the author only.');
             $this->assertStringNotContainsString('idno-entry-kebab', $result['body'], 'The old Edit / Delete menu is gone.');

@@ -116,6 +116,21 @@ namespace IdnoPlugins\Portfolios\Tests {
             return $stored ? $stored->getItemUUIDs() : null;
         }
 
+        /**
+         * A pattern for an attribute that holds an address of this site, whatever host the
+         * site gives itself (the server under test may call itself something other than the
+         * host the tests reach it by).
+         */
+        private function attribute($name, $url, $after = '')
+        {
+            $local = (string) parse_url($url, PHP_URL_PATH);
+            if ($query = parse_url($url, PHP_URL_QUERY)) {
+                $local .= '?' . $query;
+            }
+
+            return '#' . $name . '="(?:https?://[^/"]+)?' . preg_quote(htmlspecialchars($local), '#') . '"' . $after . '#';
+        }
+
         private function path($url)
         {
             return (string) parse_url($url, PHP_URL_PATH);
@@ -137,7 +152,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             // The list of an owner with the form's address
             $list = $this->get(Portfolio::listURL(static::$alice), static::$alice);
             $this->assertEquals(200, $list['status']);
-            $this->assertStringContainsString('href="' . Idno::site()->config()->getDisplayURL() . 'portfolio/edit"', $list['body'], 'The owner is offered a new portfolio.');
+            $this->assertMatchesRegularExpression($this->attribute('href', '/portfolio/edit'), $list['body'], 'The owner is offered a new portfolio.');
 
             $form = $this->get('/portfolio/edit', static::$alice);
             $this->assertEquals(200, $form['status']);
@@ -269,7 +284,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertEquals(404, $missing['status']);
 
             foreach (['', '?_t=rss', '?_t=json', '?_t=jsonp', '?_t=jsonfeed', '?_t=activitypub'] as $type) {
-                foreach ([$draft->getURL(), Idno::site()->config()->getDisplayURL() . 'profile/' . static::$alice->getHandle() . '/portfolio/' . $draft->getID()] as $address) {
+                foreach ([$draft->getURL(), Idno::site()->config()->getDisplayURL() . 'profile/' . static::$alice->getHandle() . '/portfolio/' . (string) $draft->getID()] as $address) {
                     $result = $this->get($address . $type, $as);
                     if ($allowed) {
                         $this->assertEquals(200, $result['status'], "The draft is there for its owner and administrators ($type).");
@@ -383,7 +398,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             // The list: its card counts the same
             $list = $this->get(Portfolio::listURL(static::$alice), $as);
             $this->assertEquals(200, $list['status']);
-            $this->assertStringContainsString('href="' . htmlspecialchars($portfolio->getURL()) . '"', $list['body']);
+            $this->assertMatchesRegularExpression($this->attribute('href', $portfolio->getURL()), $list['body']);
             $this->assertMatchesRegularExpression('/data-portfolio="' . preg_quote((string) $portfolio->getID(), '/') . '"[^>]*data-portfolio-count="' . count($expected) . '"/', $list['body']);
             foreach ($hidden as $post) {
                 $this->assertStringNotContainsString((string) $post->getID(), $list['body']);
@@ -391,7 +406,7 @@ namespace IdnoPlugins\Portfolios\Tests {
 
             // Under another member's name it does not exist
             $this->assertEquals(404, $this->get('/profile/' . static::$bob->getHandle() . '/portfolio/' . $portfolio->getAddressKey(), $as)['status']);
-            $this->assertEquals(404, $this->get('/profile/' . static::$bob->getHandle() . '/portfolio/' . $portfolio->getID(), $as)['status']);
+            $this->assertEquals(404, $this->get('/profile/' . static::$bob->getHandle() . '/portfolio/' . (string) $portfolio->getID(), $as)['status']);
             $this->assertEquals(404, $this->get('/profile/nobody' . static::marker() . '/portfolios', $as)['status']);
         }
 
@@ -404,25 +419,25 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->look($theme);
             $as = $who ? static::$$who : null;
             $owner = static::member('pfbutton');
-            $button = 'href="' . htmlspecialchars(Portfolio::listURL($owner)) . '" data-portfolios-button';
+            $button = $this->attribute('href', Portfolio::listURL($owner), ' data-portfolios-button');
 
             $profile = $this->get($owner->getDisplayURL(), $as);
             $this->assertEquals(200, $profile['status']);
-            $this->assertStringNotContainsString($button, $profile['body'], 'No portfolios, no button for others.');
-            $this->assertStringContainsString($button, $this->get($owner->getDisplayURL(), $owner)['body'], 'The owner always has the button.');
+            $this->assertDoesNotMatchRegularExpression($button, $profile['body'], 'No portfolios, no button for others.');
+            $this->assertMatchesRegularExpression($button, $this->get($owner->getDisplayURL(), $owner)['body'], 'The owner always has the button.');
 
             $this->portfolio($owner, 'Only a draft ' . static::marker(), 'draft');
             $profile = $this->get($owner->getDisplayURL(), $as);
             if ($who === 'admin') {
                 // An administrator may read drafts; the button is about what is published
-                $this->assertStringNotContainsString($button, $profile['body']);
+                $this->assertDoesNotMatchRegularExpression($button, $profile['body']);
             } else {
-                $this->assertStringNotContainsString($button, $profile['body'], 'A draft does not show the button.');
+                $this->assertDoesNotMatchRegularExpression($button, $profile['body'], 'A draft does not show the button.');
             }
 
             $this->portfolio($owner, 'Now published ' . static::marker());
             $profile = $this->get($owner->getDisplayURL(), $as);
-            $this->assertStringContainsString($button, $profile['body'], 'A published portfolio shows the button to everyone.');
+            $this->assertMatchesRegularExpression($button, $profile['body'], 'A published portfolio shows the button to everyone.');
 
             // The button's page
             $list = $this->get(Portfolio::listURL($owner), $as);
@@ -464,12 +479,12 @@ namespace IdnoPlugins\Portfolios\Tests {
         {
             $this->look($theme);
             $post = $this->entry(static::$alice);
-            $link = 'href="' . Idno::site()->config()->getDisplayURL() . 'portfolio/pick?object=' . $post->getID() . '"';
+            $link = $this->attribute('href', '/portfolio/pick?object=' . $post->getID());
 
             foreach ([$post->getDisplayURL(), static::$alice->getDisplayURL()] as $page) {
                 $body = $this->get($page, static::$alice)['body'];
                 $this->assertTrue((bool) preg_match('#<details class="idno-more".*?</details>#s', $body, $menu));
-                $this->assertStringContainsString($link, $menu[0], "The author's menu offers portfolios on $page.");
+                $this->assertMatchesRegularExpression($link, $menu[0], "The author's menu offers portfolios on $page.");
                 $this->assertStringContainsString('data-portfolio-pick', $menu[0]);
                 foreach ([null, static::$bob, static::$admin] as $other) {
                     $this->assertStringNotContainsString('portfolio/pick', $this->get($page, $other)['body'], 'Nobody else is offered it.');
@@ -503,7 +518,7 @@ namespace IdnoPlugins\Portfolios\Tests {
 
             // Tick one and two, untick three, and make a new one in the same go
             $newName = 'Made in the picker ' . static::marker();
-            $result = $this->submit('/portfolio/pick', ['object' => $post->getID(), 'portfolios' => [$one->getID(), $two->getID()], 'new_name' => $newName], $owner, $pick);
+            $result = $this->submit('/portfolio/pick', ['object' => (string) $post->getID(), 'portfolios' => [(string) $one->getID(), (string) $two->getID()], 'new_name' => $newName], $owner, $pick);
             $this->assertEquals(302, $result['status']);
             $this->assertSame([$post->getUUID()], $this->itemsOf($one));
             $this->assertSame([$other->getUUID(), $post->getUUID()], $this->itemsOf($two), 'A post is added to the end.');
@@ -518,13 +533,13 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertSame([$post->getUUID()], $made[0]->getItemUUIDs());
 
             // Untick everything
-            $this->submit('/portfolio/pick', ['object' => $post->getID()], $owner, $pick);
+            $this->submit('/portfolio/pick', ['object' => (string) $post->getID()], $owner, $pick);
             $this->assertSame([], $this->itemsOf($one));
             $this->assertSame([$other->getUUID()], $this->itemsOf($two));
 
             // A draft post can be collected too; visitors will not see it
             $draft = $this->entry($owner, 'PUBLIC', 'draft');
-            $this->submit('/portfolio/pick', ['object' => $draft->getID(), 'portfolios' => [$one->getID()]], $owner, '/portfolio/pick?object=' . $draft->getID());
+            $this->submit('/portfolio/pick', ['object' => (string) $draft->getID(), 'portfolios' => [(string) $one->getID()]], $owner, '/portfolio/pick?object=' . $draft->getID());
             $this->assertSame([$draft->getUUID()], $this->itemsOf($one));
             $this->assertStringContainsString('data-portfolio-count="0"', $this->get($one->getURL())['body']);
         }
@@ -545,7 +560,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             $page = $this->path($portfolio->getURL());
 
             $body = $this->get($page, $owner)['body'];
-            $this->assertStringContainsString('action="' . htmlspecialchars($portfolio->getItemsURL()) . '"', $body, 'The owner has the controls.');
+            $this->assertMatchesRegularExpression($this->attribute('action', $portfolio->getItemsURL()), $body, 'The owner has the controls.');
             foreach ([null, static::$bob] as $other) {
                 $this->assertStringNotContainsString('portfolio/items', $this->get($page, $other)['body'], 'Nobody else has them.');
                 $this->assertStringNotContainsString('portfolio/delete', $this->get($page, $other)['body']);
@@ -621,7 +636,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             }
 
             // Bob's own post into Alice's portfolio, by the picker and by naming her portfolio
-            $this->submit('/portfolio/pick', ['object' => $bobs->getID(), 'portfolios' => [$portfolio->getID(), $draft->getID(), $bobsPortfolio->getID()]], static::$bob, $tokenPage);
+            $this->submit('/portfolio/pick', ['object' => (string) $bobs->getID(), 'portfolios' => [(string) $portfolio->getID(), (string) $draft->getID(), (string) $bobsPortfolio->getID()]], static::$bob, $tokenPage);
             $this->assertSame([$post->getUUID()], $this->itemsOf($portfolio));
             $this->assertSame([$post->getUUID()], $this->itemsOf($draft));
             $this->assertSame([$bobs->getUUID()], $this->itemsOf($bobsPortfolio), 'His own portfolio in the same request is his to change.');
@@ -629,10 +644,10 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertSame([$post->getUUID()], $this->itemsOf($portfolio));
 
             // Alice's post into Bob's portfolio
-            $this->assertContains($this->get('/portfolio/pick?object=' . $post->getID(), static::$bob)['status'], [403, 404]);
-            $this->submit('/portfolio/pick', ['object' => $post->getID(), 'portfolios' => [$bobsPortfolio->getID()], 'new_name' => 'With her post'], static::$bob, $tokenPage);
+            $this->assertContains($this->get('/portfolio/pick?object=' . (string) $post->getID(), static::$bob)['status'], [403, 404]);
+            $this->submit('/portfolio/pick', ['object' => (string) $post->getID(), 'portfolios' => [(string) $bobsPortfolio->getID()], 'new_name' => 'With her post'], static::$bob, $tokenPage);
             $this->assertSame([$bobs->getUUID()], $this->itemsOf($bobsPortfolio));
-            $this->submit('/portfolio/pick', ['object' => $post->getUUID(), 'portfolios' => [$bobsPortfolio->getID()]], static::$bob, $tokenPage);
+            $this->submit('/portfolio/pick', ['object' => $post->getUUID(), 'portfolios' => [(string) $bobsPortfolio->getID()]], static::$bob, $tokenPage);
             $this->assertSame([$bobs->getUUID()], $this->itemsOf($bobsPortfolio));
             $old = $this->swapUser(static::$bob);
             foreach (Portfolio::forOwner(static::$bob) as $his) {
@@ -645,7 +660,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertSame([$bobs->getUUID()], $this->itemsOf($bobsPortfolio));
 
             // A visitor
-            foreach (['/portfolio/pick?object=' . $post->getID(), $this->path($portfolio->getEditURL())] as $address) {
+            foreach (['/portfolio/pick?object=' . (string) $post->getID(), $this->path($portfolio->getEditURL())] as $address) {
                 $this->assertEquals(403, $this->get($address)['status']);
             }
         }
@@ -664,7 +679,7 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->request('POST', '/portfolio/edit', ['name' => 'No token ' . static::marker()], static::$alice);
             $this->request('POST', $this->path($portfolio->getEditURL()), ['name' => 'Changed', 'publish_status' => 'draft'], static::$alice);
             $this->request('POST', $this->path($portfolio->getItemsURL()), ['object' => $post->getUUID(), 'action' => 'remove'], static::$alice);
-            $this->request('POST', '/portfolio/pick', ['object' => $second->getID(), 'portfolios' => [$portfolio->getID()], 'new_name' => 'No token'], static::$alice);
+            $this->request('POST', '/portfolio/pick', ['object' => (string) $second->getID(), 'portfolios' => [(string) $portfolio->getID()], 'new_name' => 'No token'], static::$alice);
             $this->request('POST', $this->path($portfolio->getDeleteURL()), [], static::$alice);
 
             $stored = $this->stored($portfolio);
@@ -754,14 +769,14 @@ namespace IdnoPlugins\Portfolios\Tests {
             static::$cleanup[] = $portfolio;
             $bobs = $this->portfolio(static::$bob, 'Bob navigated ' . static::marker());
             static::$cleanup[] = $bobs;
-            $item = '#<a href="' . preg_quote(htmlspecialchars(Portfolio::listURL(static::$alice)), '#') . '" class="idno-nav-item( active)?"( aria-current="page")?>#';
+            $item = '#<a href="(?:https?://[^/"]+)?' . preg_quote(htmlspecialchars($this->path(Portfolio::listURL(static::$alice))), '#') . '" class="idno-nav-item( active)?"( aria-current="page")?>#';
 
             $own = [
                 Portfolio::listURL(static::$alice),
                 $portfolio->getURL(),
                 $portfolio->getEditURL(),
                 Idno::site()->config()->getDisplayURL() . 'portfolio/edit',
-                Idno::site()->config()->getDisplayURL() . 'portfolio/pick?object=' . $post->getID(),
+                Idno::site()->config()->getDisplayURL() . 'portfolio/pick?object=' . (string) $post->getID(),
             ];
             foreach ($own as $address) {
                 $body = $this->get($address, static::$alice)['body'];
@@ -795,9 +810,9 @@ namespace IdnoPlugins\Portfolios\Tests {
         public function testTheDefaultLookLinksToPortfoliosFromTheMembersMenu()
         {
             $this->look('');
-            $link = 'href="' . htmlspecialchars(Portfolio::listURL(static::$alice)) . '"';
+            $link = $this->attribute('href', Portfolio::listURL(static::$alice));
 
-            $this->assertStringContainsString($link, $this->get('/', static::$alice)['body']);
+            $this->assertMatchesRegularExpression($link, $this->get('/', static::$alice)['body']);
             $this->assertStringNotContainsString('/portfolios"', $this->get('/')['body']);
         }
     }
