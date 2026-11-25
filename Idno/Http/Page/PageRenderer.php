@@ -92,17 +92,17 @@ final class PageRenderer
     }
 
     /**
-     * The 500 page of an exception. It reports nothing (a legacy `Page::exception()` logged, counted and alerted the administrator: the
+     * The 500 page of an exception (at another server error status when the exception is an HTTP one that names it). It reports nothing (a legacy `Page::exception()` logged, counted and alerted the administrator: the
      * lifecycle's `reportException()` does, and the caller that answers an exception calls it).
      */
-    public function error(PageContext $context, \Throwable $e): Response
+    public function error(PageContext $context, \Throwable $e, int $status = 500): Response
     {
-        $context->setStatus(500);
+        $context->setStatus($status);
 
         return $this->page($context, [
             'body' => $this->template('pages/500', ['exception' => $e]),
             'title' => 'Exception',
-        ], 500);
+        ], $status);
     }
 
     /**

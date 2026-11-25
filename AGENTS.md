@@ -1012,20 +1012,29 @@ test fixtures is routed to a controller through them yet:
     logger, the `error.exception` statistic, `Logging::oopsAlert()` under the same conditions), then `PageRenderer::error()`: status 500, `pages/500`, which shows the
     exception's message only when `ExceptionMessage::forVisitor()` says so (friendly, or `debug`), and for `json` and `jsonp` the shells' `exception` object. So a 500 is logged
     once, by the site's logger, as a legacy page's was.
-  - any other HTTP exception (a bad request, a method not allowed, a 5xx a page chose to throw) is left to Symfony, which logs and answers it as it does for any controller.
+  - an `HttpExceptionInterface` with a 5xx status (a `ServiceUnavailableHttpException` a page chose to throw) is a failure of the page like any exception: reported once and drawn as
+    the 500 page at its own status (`PageRenderer::error($context, $e, $status)`). Any other HTTP exception below 500 (a bad request, a method not allowed) is left to Symfony,
+    which logs and answers it as it does for any controller.
+  - an `\Error` (a `TypeError`, a call on null): Symfony dispatches nothing for it, so `PageRequestListener::onControllerArguments()` (`kernel.controller_arguments`, priority
+    -10100: after the attribute listeners such as `#[IsGranted]`, which read the controller's own signature) replaces the controller of a site page, for the main request with the
+    legacy application booted, by one that calls it with its resolved arguments and throws `Idno\Http\Page\PageError` for an `\Error`, carrying the original as `previous` and as
+    `$error`. The listener unwraps it, so the logged class, message, file and line are the ORIGINAL error's, and the answer is the same as for an exception: reported once and drawn as the
+    500 page (the message under `ExceptionMessage::forVisitor()`'s rules: an `\Error` is technical, so shown only when `debug` is set). Other controllers and the legacy catch-all keep
+    today's behaviour, an `\Error` ends at `FatalErrorPage`. An `\Error` thrown outside the controller (an argument resolver, another listener) is not covered.
+  - a Security exception anywhere in the chain of `previous` exceptions (`AccessDeniedException`, `AuthenticationException`) is the refusal it is, left to the firewall, as the firewall's own listener reads the chain.
   - when drawing the answer throws (a template, a plugin's extension of the shell), the answer is a plain-text response of the same status (the status's own words, `Cache-Control:
     no-store`; for the 500 nothing of the exception), and the drawing failure is reported once; no second error page is drawn, so nothing loops.
-  `framework.handle_all_throwables` stays FALSE (`config/packages/framework.php`): turning it on would also change what an `\Error` in any `kernel.request` listener of any
-  request becomes, which is not needed here. So an `\Error` (a `TypeError`, a call on null) in a site page is not an exception event: it escapes `Kernel::handle()` and ends at
-  `FatalErrorPage` (status 500, `statics/error-page.php`'s plain page, the error logged once through the site's logger and the oops mail sent), where a legacy page's exception handler drew `pages/500`. That is a
-  deliberate difference, pinned by `SitePageDrawingTest::testAnErrorIsThePlainErrorPage`. Other differences from a legacy page's error, each pinned in `SitePageDrawingTest`: a legacy
+  `framework.handle_all_throwables` stays FALSE (see "Kernel and services"): turning it on would also change what an `\Error` in any `kernel.request` listener of any request becomes,
+  which the controller wrapper above avoids. Differences from a legacy page's error: a 5xx HTTP exception is drawn at its own status (a legacy page's exception handler always sent 500).
+  Other differences from a legacy page's error, each pinned in `SitePageDrawingTest` (the one in the structured data's `url` is normalised in the comparison and nothing else): a legacy
   500 page was drawn after its request had left the request stack, so the `url` of its structured data was empty and a page under `/admin` or `/account` that threw was drawn in
   the account shell; a controller's 500 page says its address and is drawn in the shell of its directory. An exception after output began is answered as before (the output
   stays, the page follows it, the status is what PHP could still change). Pinned by `PageExceptionListenerTest` (unit tier), `SitePageDrawingTest` (`testErrorPages`:
   the 404, 410, 403 and 500 against a real legacy page for the same case, thrown directly and through the current page as legacy code calls it, in five template types, as
   a visitor and a member, in the settings directories; `testARedirectAndA404LogNothing`, `testA500LogsOneCriticalLine`,
-  `testAnExceptionThrownAfterOutputBeganIsAnsweredAsALegacyPageDid`, `testAPageThatCannotBeDrawnEndsAsPlainTextAndIsReportedOnce`,
-  `testAWalledGardenRefusalIsTheDrawn403`) and `SitePageLifecycleTest::testAWalledGardenRefusalIsTheDrawn403AndIsNotLoggedAsAnError`. The `throw-*` cases of the two
+  `testAnExceptionThrownAfterOutputBeganIsAnsweredAsALegacyPageDid`, `testAPageThatCannotBeDrawnEndsAsPlainTextAndIsReportedOnce` (one `Content-Type`),
+  `testAnErrorIsTheSites500PageAsItIsForALegacyPage`, `testNothingTechnicalIsShownWhenDebugIsOff` (a site with `debug` off: a friendly exception, a technical one, a 5xx and an `\Error`, in the web page, JSON, JSONP and Markdown types, the same as a legacy page, nothing technical shown), `testAServerErrorExceptionIsTheSites500PageAtItsStatus`, `testAClientErrorExceptionIsSymfonysAndNotReportedAsAFailure`, `testAnErrorAndAServerErrorAreMailedToTheAdministratorAsAnExceptionIs`,
+  `testAWalledGardenRefusalIsTheDrawn403`: the caching lines of the refusal, line by line) and `SitePageLifecycleTest::testAWalledGardenRefusalIsTheDrawn403AndIsNotLoggedAsAnError`. The `throw-*` cases of the two
   fixtures (`LegacyDrawPage`, `SitePageFixtureController`) stay identical.
 - Drawing a site page into a Response (`Idno\Http\Page\PageRenderer`, a service in a scanned directory, public because `ControllerPage::forward()` takes the
   forward rule from it; it depends on the interfaces `PageDrawer` and `Idno\Templating\TemplateTranslation`, so that a later service's test can double it, and
@@ -1115,10 +1124,12 @@ test fixtures is routed to a controller through them yet:
   asks the schema gate (`Idno\Upgrade\SchemaGate`, a public service, unless a kernel has already
   booted the legacy application in this process: `LegacyBootstrap::bootedInThisProcess()`), and
   boots the legacy application through `Idno\Legacy\LegacyBootstrap` only when the gate is open;
-  `Kernel::legacyBooted()` says whether it did. `framework.handle_all_throwables` is FALSE: an `\Error` is not an exception event, so it ends at
-  `FatalErrorPage`, and only an `\Exception` thrown by a site page reaches `PageExceptionListener` (see "Errors on a site page"). Pass `bootLegacy: false` to the constructor to boot
+  `Kernel::legacyBooted()` says whether it did. Pass `bootLegacy: false` to the constructor to boot
   the kernel alone, as some tests do: such a kernel never asks the gate, and the gate's listener
   does nothing in it.
+- `framework.handle_all_throwables` is FALSE (`config/packages/framework.php`) and stays so: Symfony dispatches `kernel.exception` for an `\Exception` only, and an `\Error` thrown
+  outside a site page's controller (a `kernel.request` listener, any other controller) ends at `FatalErrorPage`, as before. A site page's controller is the one place an `\Error`
+  is made an exception (see "Errors on a site page").
 - The legacy application is a process-wide singleton (`Idno::site()`, `Idno::container()`,
   constants, shutdown functions). `LegacyBootstrap::boot()` is idempotent per process: once
   any kernel has booted it, booting another kernel leaves the first one's container and

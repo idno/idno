@@ -11,6 +11,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -87,6 +88,28 @@ final class PageRequestListener
             throw new AccessDeniedHttpException();
         }
         $lifecycle->enter($context);
+    }
+
+    /**
+     * An \Error the controller of a site page throws is turned into a PageError, which PageExceptionListener answers as it answers an
+     * exception: Symfony dispatches no exception event for an \Error. This runs after Symfony's attribute listeners (#[IsGranted], at
+     * priority -10000, which read the controller's own arguments), so the controller is replaced when nothing else needs its signature; the
+     * arguments are passed on as they were resolved.
+     */
+    #[AsEventListener(event: KernelEvents::CONTROLLER_ARGUMENTS, priority: -10100)]
+    public function onControllerArguments(ControllerArgumentsEvent $event): void
+    {
+        if (!$event->isMainRequest() || !$this->kernel->legacyBooted() || !PageContext::has($event->getRequest())) {
+            return;
+        }
+        $controller = $event->getController();
+        $event->setController(static function (mixed ...$arguments) use ($controller): mixed {
+            try {
+                return $controller(...$arguments);
+            } catch (\Error $error) {
+                throw new PageError($error);
+            }
+        });
     }
 
     // Before Idno\Legacy\LegacyHeaderReconciler (priority 8), which works on the response this leaves

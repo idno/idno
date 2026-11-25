@@ -20,4 +20,11 @@ final class ThrowingController
     {
         throw new \RuntimeException(self::MESSAGE);
     }
+
+    /** An \Error, which Symfony dispatches no exception event for: it ends at the fatal-error page. */
+    #[Route('/_test/throw-error', name: 'idno_test_throw_error')]
+    public function error(): Response
+    {
+        throw new \TypeError('thrown by the test-only controller as an error');
+    }
 }

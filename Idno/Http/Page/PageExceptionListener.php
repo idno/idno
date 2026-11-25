@@ -28,12 +28,13 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
  * It runs at priority 2: above Symfony's ErrorListener (0), which logs every exception it sees, so a page's exception is never
  * logged twice (and an ordinary 404 never as an error), and above the firewall's listener (1), which answers the Security
  * exceptions this one leaves alone (a refusal of the lifecycle, a failed form token: DeniedResponder). It does nothing for a
- * request that is not a site page, in a kernel that did not boot the legacy application, or for any other HTTP exception (a bad
- * request, a method not allowed), which stay Symfony's. A redirect is made into its response by PageRequestListener, which runs
+ * request that is not a site page, in a kernel that did not boot the legacy application, or for an HTTP exception below 500 that is
+ * not one of those (a bad request, a method not allowed), which stay Symfony's; a server error (5xx) HTTP exception is a failure of the
+ * page, reported and drawn as the 500 page at its own status. A redirect is made into its response by PageRequestListener, which runs
  * first; it is answered here too, should this listener ever see one.
  *
- * Only an \Exception reaches it: `framework.handle_all_throwables` is off, so an \Error is not Symfony's to handle and
- * ends at the fatal-error page (FatalErrorPage), which logs and mails it once.
+ * Only an \Exception reaches it: `framework.handle_all_throwables` is off, so Symfony dispatches nothing for an \Error. PageRequestListener
+ * wraps the controller of a site page so that an \Error it throws arrives here as a PageError, and is answered like any exception.
  *
  * Drawing a page can fail (an exception in a template, in a plugin's extension of the shell): the answer is then a plain-text
  * response of the same status, and the failure of the drawing is reported, once. It never draws another error page.
@@ -63,11 +64,23 @@ final class PageExceptionListener
             return;
         }
         $e = $event->getThrowable();
-        if ($e instanceof AccessDeniedException || $e instanceof AuthenticationException) {
-            return;
+        // A Security exception anywhere in the chain is a refusal, whatever wrapped it: the firewall's listener reads the chain the same way.
+        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+            if ($cause instanceof AccessDeniedException || $cause instanceof AuthenticationException) {
+                return;
+            }
         }
+        // The \Error of the page's controller, carried here by PageRequestListener: what is reported and drawn is the error itself.
+        if ($e instanceof PageError) {
+            $e = $e->error;
+        }
+        $failure = 500;
         if ($e instanceof HttpExceptionInterface && !$e instanceof NotFoundHttpException && !$e instanceof GoneHttpException && !$e instanceof AccessDeniedHttpException) {
-            return;
+            // A server error a page chose to throw is a failure of the page, as any exception was; a bad request and the other client errors are Symfony's.
+            if ($e->getStatusCode() < 500) {
+                return;
+            }
+            $failure = $e->getStatusCode();
         }
 
         $context = PageContext::of($request);
@@ -76,9 +89,9 @@ final class PageExceptionListener
             $e instanceof NotFoundHttpException => [404, fn (PageRenderer $renderer): Response => $renderer->notFound($context)],
             $e instanceof GoneHttpException => [410, fn (PageRenderer $renderer): Response => $renderer->gone($context)],
             $e instanceof AccessDeniedHttpException => [403, fn (PageRenderer $renderer): Response => $renderer->denied($context, $e->getMessage())],
-            default => [500, fn (PageRenderer $renderer): Response => $renderer->error($context, $e)],
+            default => [$failure, fn (PageRenderer $renderer): Response => $renderer->error($context, $e, $failure)],
         };
-        if ($status === 500) {
+        if ($status >= 500) {
             // Before the page, as a legacy page logged first: a failure of the page itself is then a second line, never the only one.
             ($this->lifecycle)()->reportException($e);
         }

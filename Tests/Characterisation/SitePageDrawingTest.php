@@ -91,11 +91,11 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         ksort($headers);
 
         $body = $this->named($response->body, $area, $page);
-        if ($response->status === 500) {
+        if ($response->status >= 500) {
             // The one difference of a 500 page, a defect of the legacy one: a legacy page's exception was answered by the exception handler, after
-            // the request had left the request stack, so the page's address in its structured data (`"url"`) was empty. A controller's
-            // page is answered while its request is the current one, and says its address.
-            $body = preg_replace('/"url": "[^"]*"/', '"url": "(the page)"', $body, 1) ?? $body;
+            // the request had left the request stack, so the page's address in its structured data (the `url` of the JSON-LD `WebSite`, and nothing
+            // else) was empty. A controller's page is answered while its request is the current one, and says its address.
+            $body = preg_replace('/("@type": "WebSite",\s*"url": )"[^"]*"/', '$1"(the page)"', $body, 1) ?? $body;
         }
 
         return [
@@ -456,7 +456,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
     }
 
     /** What a case answers with, by its name. */
-    private const STOPS = ['throw-missing' => 404, 'throw-gone' => 410, 'throw-denied' => 403, 'throw-runtime' => 500, 'throw-technical' => 500];
+    private const STOPS = ['throw-missing' => 404, 'throw-gone' => 410, 'throw-denied' => 403, 'throw-runtime' => 500, 'throw-technical' => 500, 'throw-error' => 500];
 
     public function testErrorPages(): void
     {
@@ -523,23 +523,30 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
 
     public function testA500LogsOneCriticalLine(): void
     {
-        $lines = [];
-        foreach (['legacy', 'new'] as $side) {
-            $before = $this->serverLogContents();
+        foreach (['throw-runtime' => 'Broken <b>page</b>', 'throw-error' => 'A PHP <b>type</b> error in the page', 'throw-5xx' => 'Down for <b>maintenance</b>'] as $case => $message) {
+            $lines = [];
+            foreach (['legacy', 'new'] as $side) {
+                $before = $this->serverLogContents();
 
-            $response = $this->get('draw-' . $side, 'plain', 'case=throw-runtime', ['Cookie' => $this->member]);
+                $response = $this->get('draw-' . $side, 'plain', 'case=' . $case, ['Cookie' => $this->member]);
 
-            $this->assertSame(500, $response->status, $side);
-            $added = implode("\n", $this->loggedSince($before));
-            $lines[$side] = array_values(array_filter($this->loggedSince($before), static fn (string $line): bool => str_contains($line, 'Broken <b>page</b>')));
-            $this->assertCount(1, $lines[$side], $side . ': one line, however many handlers saw the exception: ' . $added);
-            $this->assertCount(1, $this->loggedSince($before), $side . ': and nothing else');
-            $this->assertStringNotContainsString('request.CRITICAL', $added, $side);
-            $this->assertStringNotContainsString('request.ERROR', $added, $side);
+                $this->assertSame($side === 'new' && $case === 'throw-5xx' ? 503 : 500, $response->status, $side . ' ' . $case);
+                $added = implode("\n", $this->loggedSince($before));
+                // (the server's own prefix, its process and the time, differs between two requests)
+                $lines[$side] = array_values(array_filter(
+                    array_map(static fn (string $line): string => preg_replace('/^\[\d+\] \[[^\]]+\] /', '', $line) ?? $line, $this->loggedSince($before)),
+                    static fn (string $line): bool => str_contains($line, $message)
+                ));
+                $this->assertCount(1, $lines[$side], $side . ' ' . $case . ': one line, however many handlers saw the exception: ' . $added);
+                $this->assertCount(1, $this->loggedSince($before), $side . ' ' . $case . ': and nothing else');
+                $this->assertStringNotContainsString('request.CRITICAL', $added, $side);
+                $this->assertStringNotContainsString('request.ERROR', $added, $side);
+                $this->assertStringNotContainsString('Fatal', $added, $side);
+            }
+            $this->assertMatchesRegularExpression('/: critical - ' . preg_quote($message, '/') . ' \[.+(LegacyDrawPage|SitePageFixtureController)\.php:\d+\]$/', $lines['new'][0], 'the site logger\'s line');
+            // the same line: the same function made both exceptions, so the file and line are the same
+            $this->assertSame($lines['legacy'][0], $lines['new'][0], $case);
         }
-        $this->assertMatchesRegularExpression('/: critical - Broken <b>page<\/b> \[.+LegacyDrawPage\.php:\d+\]$/', $lines['new'][0], 'the site logger\'s line');
-        // the same line, but for the address of the file and line the exception was made at (the same function made both)
-        $this->assertSame($lines['legacy'][0], $lines['new'][0]);
     }
 
     public function testAnExceptionThrownAfterOutputBeganIsAnsweredAsALegacyPageDid(): void
@@ -550,23 +557,26 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertStringContainsString('Something went wrong', $response->body);
     }
 
-    public function testAnErrorIsThePlainErrorPage(): void
+    public function testAnErrorIsTheSites500PageAsItIsForALegacyPage(): void
     {
-        $before = $this->serverLogContents();
+        foreach (['default', 'json', 'jsonp', 'markdown'] as $type) {
+            foreach ($this->callers() as $headers) {
+                $response = $this->assertTheSamePage('case=throw-error&_t=' . $type, $headers);
 
-        $response = $this->get('draw-new', 'plain', 'case=throw-error', ['Cookie' => $this->member]);
+                $this->assertSame(500, $response->status, $type);
+            }
+        }
+        $page = $this->get('draw-new', 'plain', 'case=throw-error', ['Cookie' => $this->member]);
+        $this->assertStringContainsString('Something went wrong.', $page->body, 'in the site\'s shell, not the fatal-error page');
+        $this->assertStringNotContainsString("Idno experienced a problem with this page", $page->body);
+    }
 
-        // Deliberately not what a legacy page answered (the site's 500 page): an \Error is not an exception to Symfony here
-        // (`handle_all_throwables` is off), so it ends at the fatal-error page, which logs and mails it once.
+    public function testAnErrorThatIsThrownByAControllerOtherThanASitePageStillEndsAtTheFatalErrorPage(): void
+    {
+        $response = $this->site()->request('GET', '_test/throw-error');
+
         $this->assertSame(500, $response->status);
         $this->assertStringContainsString("Idno experienced a problem with this page and couldn't continue.", $response->body);
-        $this->assertStringNotContainsString('Something went wrong.', $response->body, 'not pages/500');
-        $added = implode("\n", $this->loggedSince($before));
-        $this->assertSame(1, substr_count($added, 'Fatal Error: '), 'logged once by the site: ' . $added);
-        $this->assertStringContainsString('A PHP error in the page', $added);
-        $legacy = $this->get('draw-legacy', 'plain', 'case=throw-error', ['Cookie' => $this->member]);
-        $this->assertSame(500, $legacy->status);
-        $this->assertStringContainsString('Something went wrong.', $legacy->body, 'what a legacy page answered');
     }
 
     public function testAPageThatCannotBeDrawnEndsAsPlainTextAndIsReportedOnce(): void
@@ -578,6 +588,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertSame(500, $response->status);
         $this->assertStringStartsWith('text/plain', (string) $response->header('Content-Type'));
         $this->assertSame("Internal Server Error\n", $response->body);
+        $this->assertCount(1, $response->lines('Content-Type'), 'the type of the page that failed to draw is not left beside the plain one');
         $added = implode("\n", $this->loggedSince($before));
         $this->assertSame(1, substr_count($added, 'Broken, and so is its page'), 'the exception, once: ' . $added);
         $this->assertSame(1, substr_count($added, 'The exception cannot be printed'), 'the failure of its page, once: ' . $added);
@@ -596,6 +607,11 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         foreach (['', '&_t=json', '&_t=jsonp', '&_t=markdown', '&_t=rss'] as $type) {
             [$legacy, $new] = $pair('case=draw' . $type, []);
             $this->assertSame(403, $legacy->status, $type);
+            // exactly the caching lines a legacy refusal carries, line by line, and nothing added by a response
+            foreach (['Cache-Control', 'Pragma', 'Expires'] as $name) {
+                $this->assertSame($legacy->lines($name), $new->lines($name), $name . ' of the refusal ' . $type);
+            }
+            $this->assertSame(['no-store, no-cache, must-revalidate'], $new->lines('Cache-Control'), $type);
             $this->assertSame(
                 $this->observedBy($client, $legacy, 'draw-legacy', !str_contains($type, '_t=') || str_contains($type, 'default')),
                 $this->observedBy($client, $new, 'draw-new', !str_contains($type, '_t=') || str_contains($type, 'default')),
@@ -617,6 +633,111 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
             return $this->observed($response, 'plain', $page, $html);
         } finally {
             $this->siteClient = null;
+        }
+    }
+
+    /**
+     * An observation of a legacy 500 answer as it would be at another server error status (the page says its status in a `meta` and in
+     * the `exception` of the JSON shells).
+     *
+     * @param array{status: int, headers: array<string, string>, body: string} $observed
+     *
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    private function atStatus(array $observed, int $status): array
+    {
+        $observed['status'] = $status;
+        $observed['body'] = str_replace('<meta http-equiv="Status" content="500"/>', '<meta http-equiv="Status" content="' . $status . '"/>', $observed['body']);
+
+        return $observed;
+    }
+
+    /**
+     * @return list<array{0: string, 1: string}> a case and a type
+     */
+    private function debugOffCases(): array
+    {
+        $cases = [];
+        foreach (['throw-runtime', 'throw-technical', 'throw-5xx', 'throw-error'] as $case) {
+            foreach (['', '_t=json', '_t=jsonp', '_t=markdown'] as $type) {
+                $cases[] = [$case, $type];
+            }
+        }
+
+        return $cases;
+    }
+
+    public function testNothingTechnicalIsShownWhenDebugIsOff(): void
+    {
+        // the rig's site runs with `debug` on; this one does not
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_DEBUG' => '0']));
+        $secrets = ['idno_entities', 'TechnicalException', 'TypeError', 'ServiceUnavailableHttpException', 'LegacyDrawPage.php', 'SitePageFixtureController.php', 'Stack trace', '#0 ', 'type</b> error', 'type&lt;/b&gt; error', 'maintenance'];
+        foreach ($this->debugOffCases() as [$case, $type]) {
+            $query = 'case=' . $case . ($type === '' ? '' : '&' . $type);
+            $legacy = $client->request('GET', self::AREAS['plain'] . 'draw-legacy?' . $query);
+            $new = $client->request('GET', self::AREAS['plain'] . 'draw-new?' . $query);
+            $html = $type === '';
+            $label = $query;
+
+            // the same answer (a 5xx exception is drawn at its own status: the one difference)
+            $this->assertSame($case === 'throw-5xx' ? 503 : 500, $new->status, $label);
+            $this->assertSame(500, $legacy->status, $label);
+            $expected = $this->observedBy($client, $legacy, 'draw-legacy', $html);
+            $actual = $this->observedBy($client, $new, 'draw-new', $html);
+            $expected = $this->atStatus($expected, $actual['status']);
+            $this->assertSame($expected, $actual, $label);
+
+            if ($case !== 'throw-runtime') {
+                // a technical message, a class, a file, a line and a trace are not for a visitor, in either answer
+                foreach ([$legacy, $new] as $response) {
+                    foreach ($secrets as $secret) {
+                        $this->assertStringNotContainsString($secret, $response->body, $label . ' shows ' . $secret);
+                    }
+                }
+            } else {
+                $this->assertStringContainsString('Broken', $new->body, $label . ': a friendly message is shown');
+                $this->assertStringNotContainsString('LegacyDrawPage.php', $new->body, $label);
+                $this->assertStringNotContainsString('Stack trace', $new->body, $label);
+            }
+        }
+    }
+
+    public function testAServerErrorExceptionIsTheSites500PageAtItsStatus(): void
+    {
+        $legacy = $this->get('draw-legacy', 'plain', 'case=throw-5xx', ['Cookie' => $this->member]);
+        $new = $this->get('draw-new', 'plain', 'case=throw-5xx', ['Cookie' => $this->member]);
+
+        $this->assertSame(500, $legacy->status);
+        $this->assertSame(503, $new->status);
+        $this->assertStringContainsString('Something went wrong.', $new->body);
+        $this->assertSame($this->atStatus($this->observed($legacy, 'plain', 'draw-legacy', true), 503), $this->observed($new, 'plain', 'draw-new', true));
+    }
+
+    public function testAClientErrorExceptionIsSymfonysAndNotReportedAsAFailure(): void
+    {
+        $before = $this->serverLogContents();
+
+        $response = $this->get('draw-new', 'plain', 'case=throw-4xx', ['Cookie' => $this->member]);
+
+        $this->assertSame(400, $response->status);
+        $this->assertStringNotContainsString('Something went wrong.', $response->body, 'not the site\'s 500 page');
+        $this->assertStringNotContainsString('critical', implode("\n", $this->loggedSince($before)), 'no failure of the page is reported');
+    }
+
+    public function testAnErrorAndAServerErrorAreMailedToTheAdministratorAsAnExceptionIs(): void
+    {
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_OOPS_NOTIFY' => 'ops@example.net', 'IDNO_FROM_EMAIL' => 'site@example.net']));
+        $mail = static fn (): array => $client->request('GET', '_test/mail/log')->json();
+        $mail();
+        foreach (['throw-runtime', 'throw-error', 'throw-5xx'] as $case) {
+            $seen = [];
+            foreach (['legacy', 'new'] as $side) {
+                $client->request('GET', self::AREAS['plain'] . 'draw-' . $side . '?case=' . $case);
+                $sent = $mail();
+                $this->assertCount(1, $sent, $side . ' ' . $case . ': one alert');
+                $seen[$side] = [$sent[0]['subject'] ?? null, $sent[0]['to'] ?? null];
+            }
+            $this->assertSame($seen['legacy'], $seen['new'], $case . ': the same subject, which names the exception\'s own class, and recipient');
         }
     }
 }

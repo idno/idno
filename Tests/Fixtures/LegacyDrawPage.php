@@ -78,7 +78,11 @@ class LegacyDrawPage extends Page
                 echo 'Output before the exception. ';
                 throw self::brokenPage();
             case 'throw-error':
-                throw new \Error('A PHP error in the page');
+                throw self::phpError();
+            case 'throw-5xx':
+                throw self::unavailable();
+            case 'throw-4xx':
+                throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException('A bad request');
             case 'redirect201':
                 $this->setResponse(201);
                 $this->forward((string) $this->getInput('to', ''));
@@ -103,5 +107,21 @@ class LegacyDrawPage extends Page
     public static function technicalPage(): \Idno\Exceptions\TechnicalException
     {
         return new \Idno\Exceptions\TechnicalException('Broken <b>query</b> on idno_entities');
+    }
+
+    /**
+     * The \Error of the `throw-error` case: a TypeError, as a typo in a page makes.
+     */
+    public static function phpError(): \TypeError
+    {
+        return new \TypeError('A PHP <b>type</b> error in the page');
+    }
+
+    /**
+     * The exception of the `throw-5xx` case: a server error an HTTP exception names.
+     */
+    public static function unavailable(): \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException
+    {
+        return new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException(null, 'Down for <b>maintenance</b>');
     }
 }

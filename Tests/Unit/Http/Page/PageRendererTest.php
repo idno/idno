@@ -175,6 +175,18 @@ final class PageRendererTest extends TestCase
         $this->assertSame(418, $context->status());
     }
 
+    public function testTheErrorPageCanHaveAnotherServerErrorStatus(): void
+    {
+        $context = $this->context();
+
+        $response = $this->renderer->error($context, new \RuntimeException('Down'), 503);
+
+        $this->assertSame(503, $response->getStatusCode());
+        $this->assertSame(503, $context->status());
+        $this->assertSame('page:Exception:<pages/500>', $response->getContent());
+        $this->assertSame(503, $this->drawer->pages[0][1]);
+    }
+
     public function testErrorPagesHaveTheirStatusAndTitle(): void
     {
         $context = $this->context();

@@ -13,6 +13,8 @@ use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Idno\Http\Page\PageError;
+use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
@@ -37,6 +39,15 @@ final class ListenerPostController
     public function page(): Response
     {
         return new Response('posted');
+    }
+}
+
+#[SitePage('Fixture\ErrorPage')]
+final class ListenerErrorController
+{
+    public function page(Request $request, string $name = 'x'): Response
+    {
+        throw new \TypeError('Failed for ' . $name);
     }
 }
 
@@ -557,5 +568,71 @@ final class PageRequestListenerTest extends TestCase
         $this->listener()->onException($event);
 
         $this->assertTrue($event->isAllowingCustomResponseCode());
+    }
+
+    private function argumentsEvent(Request $request, object $controller, array $arguments, int $type = HttpKernelInterface::MAIN_REQUEST): ControllerArgumentsEvent
+    {
+        $kernel = $this->createMock(HttpKernelInterface::class);
+
+        return new ControllerArgumentsEvent($kernel, new ControllerEvent($kernel, [$controller, 'page'], $request, $type), $arguments, $request, $type);
+    }
+
+    public function testAnErrorOfASitePageControllerIsTurnedIntoAnExceptionThatCarriesIt(): void
+    {
+        $request = Request::create('/');
+        $this->listener()->onController($this->controllerEvent($request, new ListenerErrorController(), 'page'));
+        $event = $this->argumentsEvent($request, new ListenerErrorController(), [$request, 'ada']);
+
+        $this->listener()->onControllerArguments($event);
+
+        try {
+            ($event->getController())(...$event->getArguments());
+            $this->fail('the error is thrown');
+        } catch (PageError $e) {
+            $this->assertInstanceOf(\TypeError::class, $e->getPrevious());
+            $this->assertSame('Failed for ada', $e->getPrevious()->getMessage(), 'the arguments reach the controller');
+            $this->assertSame($e->getPrevious(), $e->error);
+        }
+    }
+
+    public function testAnExceptionOfASitePageControllerIsNotWrapped(): void
+    {
+        $controller = new class {
+            public function page(): Response
+            {
+                throw new \RuntimeException('Plain');
+            }
+        };
+        $request = Request::create('/');
+        $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $event = $this->argumentsEvent($request, $controller, []);
+
+        $this->listener()->onControllerArguments($event);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Plain');
+        ($event->getController())(...$event->getArguments());
+    }
+
+    public function testOtherControllersAreNotWrappedAndNothingIsFetched(): void
+    {
+        $plain = Request::create('/');
+        $event = $this->argumentsEvent($plain, new ListenerErrorController(), [$plain]);
+        $original = $event->getController();
+
+        $this->listener()->onControllerArguments($event);
+        $this->assertSame($original, $event->getController(), 'no page context: left alone');
+
+        // a site page's request, but the legacy application is not booted, or a sub-request
+        $request = Request::create('/');
+        $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        foreach ([[false, HttpKernelInterface::MAIN_REQUEST], [true, HttpKernelInterface::SUB_REQUEST]] as [$booted, $type]) {
+            $event = $this->argumentsEvent($request, new ListenerErrorController(), [$request], $type);
+            $original = $event->getController();
+
+            $this->listener(legacyBooted: $booted)->onControllerArguments($event);
+
+            $this->assertSame($original, $event->getController());
+        }
     }
 }

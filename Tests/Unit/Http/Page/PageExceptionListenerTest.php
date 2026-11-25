@@ -7,6 +7,7 @@ namespace Tests\Unit\Http\Page;
 use Idno\Http\Page\DrawnPage;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageDrawer;
+use Idno\Http\Page\PageError;
 use Idno\Http\Page\PageExceptionListener;
 use Idno\Http\Page\PageLifecycle;
 use Idno\Http\Page\PageRedirect;
@@ -21,6 +22,7 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
@@ -32,6 +34,12 @@ use Symfony\Component\Security\Core\Exception\InvalidCsrfTokenException;
 final class ExceptionTestDrawer implements PageDrawer
 {
     public bool $failing = false;
+
+    /** Fails with an \Error instead of an exception */
+    public bool $failingWithAnError = false;
+
+    /** @var list<int> */
+    public array $statuses = [];
 
     /** @var list<string> */
     public array $templates = [];
@@ -73,6 +81,9 @@ final class ExceptionTestDrawer implements PageDrawer
     {
         $this->calls[] = 'draw ' . $name;
         $this->templates[] = $name;
+        if ($this->failingWithAnError) {
+            throw new \TypeError('the template has a type error');
+        }
         if ($this->failing) {
             throw new \LogicException('the template cannot be drawn');
         }
@@ -83,6 +94,7 @@ final class ExceptionTestDrawer implements PageDrawer
     public function drawPage(array $vars, int $status, string $shell = 'shell'): DrawnPage
     {
         $this->calls[] = 'page ' . $status;
+        $this->statuses[] = $status;
 
         return new DrawnPage('page:' . ($vars['title'] ?? '') . ':' . ($vars['body'] ?? ''), [['Content-Type', 'text/html']]);
     }
@@ -365,5 +377,81 @@ final class PageExceptionListenerTest extends TestCase
             $this->assertStringStartsWith('text/plain', (string) $event->getResponse()->headers->get('Content-Type'));
         }
         $this->assertCount(3, $this->lifecycle->reported, 'the drawing failure of each, once');
+    }
+
+    public function testAnErrorOfThePageIsReportedAndDrawnAsItsOwn(): void
+    {
+        $error = new \TypeError('A type error');
+        $event = $this->event(new PageError($error));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(500, $event->getResponse()?->getStatusCode());
+        $this->assertSame('page:Exception:<pages/500>', $event->getResponse()->getContent());
+        $this->assertSame([$error], $this->lifecycle->reported, 'the original error is what is reported, not the wrapper');
+        $this->assertSame(['report A type error', 'draw pages/500', 'page 500'], $this->calls->getArrayCopy());
+        $this->assertTrue($event->isAllowingCustomResponseCode());
+    }
+
+    public function testAnErrorOfThePageThatCannotBeDrawnIsPlainTextAndTheDrawingFailureIsReported(): void
+    {
+        $this->drawer->failing = true;
+        $error = new \TypeError('A type error');
+        $event = $this->event(new PageError($error));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(500, $event->getResponse()?->getStatusCode());
+        $this->assertSame("Internal Server Error\n", $event->getResponse()->getContent());
+        $this->assertSame(['A type error', 'the template cannot be drawn'], array_map(static fn (\Throwable $e): string => $e->getMessage(), $this->lifecycle->reported));
+    }
+
+    public function testAServerErrorHttpExceptionIsReportedAndDrawnWithItsStatus(): void
+    {
+        $exception = new ServiceUnavailableHttpException(null, 'Down');
+        $event = $this->event($exception);
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(503, $event->getResponse()?->getStatusCode());
+        $this->assertSame('page:Exception:<pages/500>', $event->getResponse()->getContent());
+        $this->assertSame([503], $this->drawer->statuses);
+        $this->assertSame([$exception], $this->lifecycle->reported);
+        $this->assertSame(['report Down', 'draw pages/500', 'page 503'], $this->calls->getArrayCopy());
+    }
+
+    public function testAServerErrorThatCannotBeDrawnKeepsItsStatusAsPlainText(): void
+    {
+        $this->drawer->failing = true;
+        $event = $this->event(new ServiceUnavailableHttpException(null, 'Down'));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(503, $event->getResponse()?->getStatusCode());
+        $this->assertStringContainsString('Service Unavailable', (string) $event->getResponse()->getContent());
+    }
+
+    public function testASecurityExceptionWrappedInAnotherIsStillTheFirewalls(): void
+    {
+        foreach ([new \RuntimeException('Wrapped', 0, new AccessDeniedException()), new \LogicException('Wrapped twice', 0, new \RuntimeException('Inner', 0, new AuthenticationException()))] as $e) {
+            $event = $this->event($e);
+
+            $this->listener()->onException($event);
+
+            $this->assertNull($event->getResponse());
+        }
+        $this->assertSame([], $this->lifecycle->reported);
+        $this->assertSame(0, $this->rendererFetched);
+    }
+
+    public function testAnErrorWhileDrawingTheErrorPageIsPlainTextToo(): void
+    {
+        $this->drawer->failingWithAnError = true;
+        $event = $this->event(new PageError(new \TypeError('The first')));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame("Internal Server Error\n", $event->getResponse()?->getContent());
+        $this->assertSame(['The first', 'the template has a type error'], array_map(static fn (\Throwable $e): string => $e->getMessage(), $this->lifecycle->reported));
     }
 }

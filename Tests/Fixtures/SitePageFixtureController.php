@@ -176,7 +176,11 @@ final class SitePageFixtureController
                 echo 'Output before the exception. ';
                 throw LegacyDrawPage::brokenPage();
             case 'throw-error':
-                throw new \Error('A PHP error in the page');
+                throw LegacyDrawPage::phpError();
+            case 'throw-5xx':
+                throw LegacyDrawPage::unavailable();
+            case 'throw-4xx':
+                throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException('A bad request');
             case 'throw-nested':
                 // An exception whose page cannot be drawn: the 500 page prints the exception (the site is in debug mode)
                 throw new class('Broken, and so is its page') extends \RuntimeException {
