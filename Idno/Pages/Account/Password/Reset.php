@@ -28,7 +28,10 @@ namespace Idno\Pages\Account\Password {
                         $t->body  = $t->__(array('email' => $email, 'code' => $code))->draw('account/password/reset');
                         $t->title = \Idno\Core\Idno::site()->language()->_('Reset password');
 
-                        $t->drawPage();
+                        // The plain shell, with its messages: drawPage() would pick the account settings
+                        // shell for an address under /account/, which is for people who are signed in
+                        $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
+                        echo $t->draw('shell');
                         exit;
 
                     }
@@ -59,8 +62,9 @@ namespace Idno\Pages\Account\Password {
                             $user->setPassword($password);
                             $user->clearPasswordRecoveryCode();
                             $user->save(true);
-                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your password was reset!"));
-                            $this->forward(\Idno\Core\Idno::site()->config()->getURL());
+                            // On to the sign-in page: the home page of a private site would refuse them
+                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your password was changed. Sign in with your new password."));
+                            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/login');
                             return;
 
                         }
@@ -70,7 +74,8 @@ namespace Idno\Pages\Account\Password {
                 $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
             } else {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Sorry, your passwords either don\'t match, or are too weak'));
-                $this->forward($_SERVER['HTTP_REFERER']);
+                // Back to the form: the link's own address, never one taken from the request's headers
+                $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/password/reset/?email=' . urlencode((string) $email) . '&code=' . urlencode((string) $code));
             }
 
         }

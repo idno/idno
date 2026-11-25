@@ -6,7 +6,7 @@
     <meta name="viewport" content="initial-scale=1.0">    <!-- So that mobile webkit will display zoomed in -->
     <meta name="format-detection" content="telephone=no"> <!-- disable auto telephone linking in iOS -->
 
-    <title><?php if (!empty($vars['title'])) echo $vars['title']; ?></title>
+    <title><?php if (!empty($vars['title'])) echo htmlspecialchars((string) $vars['title']); ?></title>
     <style type="text/css">
 
         /* Resets: see reset.css for details */
@@ -64,8 +64,8 @@ if (!empty($vars['preheader'])) {
                         <hr style="border-top: 1px solid #cccccc;">
 
                         <?php
-                            $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-                            $path = str_replace('/', '_', $path);
+                            $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH);
+                            $path = preg_replace('/[^A-Za-z0-9_]/', '', str_replace('/', '_', $path));
                         ?>
 
                         <p style="text-align: center; margin-top: 15px;">
@@ -82,9 +82,9 @@ if (!empty($vars['preheader'])) {
     </tr>
     <tr>
         <td align="center" valign="top" bgcolor="#ebebeb" style="background-color: #ebebeb; padding-bottom: 3em;">
-            <p style="color: #999999; font-size: 12px;">Idno, Inc. 421 Bryant St, San Francisco, CA, 94107</p>
+            <p style="color: #999999; font-size: 12px; font-family: Helvetica, sans-serif;"><?php echo \Idno\Core\Idno::site()->language()->_('Sent by %s', [htmlspecialchars((string) \Idno\Core\Idno::site()->config()->title)]) ?> &middot; <a href="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->getDisplayURL()) ?>" style="color: #999999;"><?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->getDisplayURL()) ?></a></p>
         </td>
-    </tr>    
+    </tr>
 </table>
 <!--/100% wrapper-->
 <br>

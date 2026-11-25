@@ -40,23 +40,8 @@ if (\Idno\Core\Idno::site()->config()->canAddUsers()) {
 <div class="row">
     <div class="col-md-10 col-md-offset-1">
 
-        <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>admin/users" method="post">
-
-            <h3><?php echo \Idno\Core\Idno::site()->language()->_('Invite new users'); ?></h3>
-
-            <p>
-            <?php echo \Idno\Core\Idno::site()->language()->_('To invite new users to the site, enter one or more email addresses below.'); ?>
-            </p>
-
-            <textarea name="invitation_emails" class="form-control" placeholder="friend@email.com"></textarea>
-
-            <p>
-                <input type="submit" class="btn btn-primary" value="<?php echo \Idno\Core\Idno::site()->language()->_('Send invite'); ?>">
-                <input type="hidden" name="action" value="invite_users">
-            <?php echo \Idno\Core\Idno::site()->actions()->signForm('/admin/users') ?>
-            </p>
-
-        </form>
+        <h3><?php echo \Idno\Core\Idno::site()->language()->_('Invite people'); ?></h3>
+        <?php echo $this->__(['mail_configured' => $vars['mail_configured'] ?? false])->draw('admin/users/invite'); ?>
 
     </div>
 </div>
@@ -114,46 +99,7 @@ if (!empty($vars['invitations'])) {
             <div class="row">
                 <div class="col-md-10 col-md-offset-1">
                     <div class="pane">
-                        <?php
-
-                        foreach ($vars['invitations'] as $invitation) {
-
-                            ?>
-                                <div class="row ">
-                                    <div class="col-lg-3 ">
-                                        <p class="user-tbl">
-                                        <?php echo $invitation->email ?>
-                                        </p>
-                                    </div>
-                                    <div class="col-lg-3 ">
-                                        <p class="user-tbl">
-                                            <small><strong><?php echo \Idno\Core\Idno::site()->language()->_('Sent'); ?></strong><br>
-                                            <time datetime="<?php echo date('r', $invitation->created) ?>"
-                                                  class="dt-published"><?php echo date('r', $invitation->created) ?></time></small>
-                                        </p>
-                                    </div>
-                                    <div class="col-lg-5">
-                                        <p class="user-tbl" style="text-align: right">
-                                            <small>
-                                            <?php
-
-                                                echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-sync"></i> Resend', array('invitation_id' => $invitation->getID(), 'action' => 'resend_invitation'), array('class' => '', 'confirm' => true, 'confirm-text' => 'Are you sure? The user will receive a second email.')) . '<br>';
-
-                                            ?>
-                                            <?php
-
-                                                echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-times"></i> Remove', array('invitation_id' => $invitation->getID(), 'action' => 'remove_invitation'), array('class' => '', 'confirm' => true, 'confirm-text' => 'Are you sure? The user won\'t be able to register.')) . '<br>';
-
-                                            ?>
-                                            </small>
-                                        </p>
-                                    </div>
-                                </div>
-                                <?php
-
-                        }
-
-                        ?>
+                        <?php echo $this->__(['invitations' => $vars['invitations']])->draw('admin/users/invitations'); ?>
                     </div>
                 </div>
             </div>

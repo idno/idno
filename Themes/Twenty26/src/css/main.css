@@ -9,6 +9,7 @@
 @import "./components/editor.css";
 @import "./components/profile.css";
 @import "./components/admin.css";
+@import "./components/settings.css";
 @import "./components/annotations.css";
 @import "../../../../css/moremenu.css";
 @import "./components/content-types.css";

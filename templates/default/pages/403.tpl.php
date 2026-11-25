@@ -5,9 +5,18 @@
     $login_url = \Idno\Core\Idno::site()->currentPage()->forwardToLogin($_SERVER['REQUEST_URI'], true);
 
 if (!\Idno\Core\Idno::site()->session()->isLoggedIn()) {
+    if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+        // A private site: say so, for a visitor whose browser does not send them on
+        ?>
+        <noscript>
+            <h1><?php echo \Idno\Core\Idno::site()->language()->esc_('%s is private', [\Idno\Core\Idno::site()->config()->title]); ?></h1>
+            <p><?php echo \Idno\Core\Idno::site()->language()->_('Only members can read this community. If you are a member, sign in. If you have been invited, use the link in your invitation email to create your account.'); ?></p>
+        </noscript>
+        <?php
+    }
     ?>
         <a id="soft-forward"
-           href="<?php echo $login_url; ?>"><?php echo \Idno\Core\Idno::site()->language()->_('Click here to log in.'); ?></a>
+           href="<?php echo htmlspecialchars($login_url); ?>"><?php echo \Idno\Core\Idno::site()->language()->_('Click here to log in.'); ?></a>
         <script>
             $('#soft-forward').hide();  // JS users will be forwarded anyway
         </script>

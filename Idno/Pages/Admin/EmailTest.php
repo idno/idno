@@ -1,7 +1,7 @@
 <?php
 
     /**
-     * Administration page: email settings
+     * Administration page: send a test email with the stored settings
      */
 
 namespace Idno\Pages\Admin {
@@ -13,28 +13,36 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
 
-            $email = $this->getInput('to_email');
+            $lang = \Idno\Core\Idno::site()->language();
+            $session = \Idno\Core\Idno::site()->session();
+            $email = trim((string) $this->getInput('to_email'));
 
-            try {
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $session->addErrorMessage($lang->_('Enter the email address to send the test to.'));
+            } else {
                 $message = new \Idno\Core\Email();
-                $message->addTo($email);
-                $message->setSubject("Test email from " . \Idno\Core\Idno::site()->config()->title . '!');
-                $message->setHTMLBodyFromTemplate('admin/emailtest');
-                $message->setTextBodyFromTemplate('admin/emailtest');
-
-                if ($message->send()) {
-                    \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("Test email sent to %s", [$email]));
-                } else {
-                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("There was a problem sending a test message to %s.", [$email]));
+                $sent = 0;
+                try {
+                    $message->addTo($email);
+                    $message->setSubject($lang->_('Test email from %s', [\Idno\Core\Idno::site()->config()->title]));
+                    $message->setHTMLBodyFromTemplate('admin/emailtest');
+                    $message->setTextBodyFromTemplate('admin/emailtest');
+                    $sent = $message->send();
+                } catch (\Throwable $e) {
+                    list($message->errorKind, $message->error) = \Idno\Core\Email::explain($e);
                 }
-            } catch (\Exception $e) {
-                \Idno\Core\Idno::site()->session()->addErrorMessage($e->getMessage());
+
+                if ($sent) {
+                    $session->addMessage($lang->esc_('The mail server accepted a test email for %s. Check that it arrives, and that it is not in the spam folder.', [$email]));
+                } else {
+                    // The reason is written by Email::explain(): no user name, no password
+                    $session->addErrorMessage($lang->esc_('The test email to %s was not sent. %s', [$email, $message->error]));
+                }
             }
 
-            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/email');
+            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/email#test');
         }
 
     }
 
 }
-

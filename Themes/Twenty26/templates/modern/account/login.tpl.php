@@ -3,6 +3,11 @@
         <h4 class="idno-editor-heading">
             <?= \Idno\Core\Idno::site()->language()->_('Welcome back!') ?>
         </h4>
+        <?php if (!\Idno\Core\Idno::site()->config()->isPublicSite()) { ?>
+            <p class="idno-gate-lead">
+                <?= \Idno\Core\Idno::site()->language()->esc_('%s is a private community. Sign in to read it. If you have been invited, use the link in your invitation email to create your account.', [\Idno\Core\Idno::site()->config()->title]) ?>
+            </p>
+        <?php } ?>
 
         <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>session/login" method="post">
             <div class="idno-form-field">
