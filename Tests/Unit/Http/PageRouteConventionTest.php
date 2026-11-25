@@ -61,4 +61,30 @@ final class PageRouteConventionTest extends TestCase
         }
         $this->assertSame(['no_lead', 'no_slash', 'bad_requirement', 'bad_default', 'missing_method', 'undeclared_method', 'free_but_utf8', 'free_dot'], array_keys($named), implode("\n", $found));
     }
+
+    public function testTheTagRoutesExemptionIsNarrowAndItStillFailsOnEverythingElse(): void
+    {
+        $build = static function (string $path, array $requirements, array $defaults, array $methods = ['GET', 'HEAD', 'OPTIONS'], array $options = ['utf8' => false]): RouteCollection {
+            $routes = new RouteCollection();
+            $routes->add('idno_tag', new Route($path, ['_controller' => RoutesConventionController::class . '::page'] + $defaults, $requirements, $options, '', [], $methods));
+
+            return $routes;
+        };
+        $good = fn (): array => PageRouteConvention::violations($build('/{lead}tag/{tag}', ['lead' => '/?', 'tag' => '[^\s]+'], ['lead' => '']));
+
+        $this->assertSame([], $good(), 'exactly what the route needs: no {slash}, the last parameter takes the rest of the path');
+        // it still fails on {lead}, the methods and the requirements
+        $this->assertNotSame([], PageRouteConvention::violations($build('/tag/{tag}', ['tag' => '[^\s]+'], [])), 'no {lead}');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}', ['lead' => '/?', 'tag' => '[^\s]+'], ['lead' => ''], ['GET'])), 'methods');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}', ['lead' => '.*', 'tag' => '[^\s]+'], ['lead' => ''])), 'lead requirement');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}', ['lead' => '/?', 'tag' => '[^\s]+'], ['lead' => ''], options: [])), 'a free tag without utf8: false');
+        // narrowed: a {slash} after the tag is the ambiguity the exemption exists for, a path that does not end with a parameter has no reason, and the
+        // exemption is one route's, not a name any other takes
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}{slash}', ['lead' => '/?', 'slash' => '/?', 'tag' => '[^\s]+'], ['lead' => '', 'slash' => ''])), 'an exempt route has no {slash}');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}/more', ['lead' => '/?', 'tag' => '[^\s]+'], ['lead' => ''])), 'it ends with its last parameter');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}tag/{tag}', ['lead' => '/?', 'tag' => '[^/]+'], ['lead' => ''])), 'the last parameter takes the rest of the path');
+        $other = new RouteCollection();
+        $other->add('another_route', new Route('/{lead}tag/{tag}', ['_controller' => RoutesConventionController::class . '::page', 'lead' => ''], ['lead' => '/?', 'tag' => '[^\s]+'], ['utf8' => false], '', [], ['GET', 'HEAD', 'OPTIONS']));
+        $this->assertNotSame([], PageRouteConvention::violations($other), 'another route is not exempt');
+    }
 }

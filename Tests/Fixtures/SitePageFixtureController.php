@@ -25,7 +25,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * leading slash and `{slash}` the optional trailing one.
  */
 #[AsController]
-#[SitePage(name: 'Tests\Fixtures\SitePageFixture')]
+#[SitePage(name: 'Tests\Fixtures\SitePageFixture', legacyPatterns: [])]
 final class SitePageFixtureController
 {
     public function __construct(private readonly PageRenderer $renderer)
@@ -39,21 +39,21 @@ final class SitePageFixtureController
     }
 
     #[Route('/{lead}_test/site-page/public{slash}', name: 'idno_test_site_page_public', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', publicOnPrivateSite: true)]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', publicOnPrivateSite: true, legacyPatterns: [])]
     public function public(Request $request): JsonResponse
     {
         return $this->describe($request);
     }
 
     #[Route('/{lead}_test/site-page/account{slash}', name: 'idno_test_site_page_account', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true)]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, legacyPatterns: [])]
     public function account(Request $request): JsonResponse
     {
         return $this->describe($request);
     }
 
     #[Route('/{lead}_test/site-page/typed{slash}', name: 'idno_test_site_page_typed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', defaultType: 'json')]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', defaultType: 'json', legacyPatterns: [])]
     public function typed(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -67,7 +67,7 @@ final class SitePageFixtureController
 
     /** A page that declares POST: its lifecycle checks the form token before `page/post`. */
     #[Route('/{lead}_test/site-page/post{slash}', name: 'idno_test_site_page_post', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'], legacyPatterns: [])]
     public function post(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -75,7 +75,7 @@ final class SitePageFixtureController
 
     /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */
     #[Route('/{lead}_test/site-page/patch{slash}', name: 'idno_test_site_page_patch', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'PATCH'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'], legacyPatterns: [])]
     public function patch(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -107,14 +107,14 @@ final class SitePageFixtureController
     }
 
     #[Route('/{lead}admin/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_admin', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true)]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true, legacyPatterns: [])]
     public function drawAdmin(Request $request): Response
     {
         return $this->drawCase($request);
     }
 
     #[Route('/{lead}account/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_account', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, settingsPage: true)]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, settingsPage: true, legacyPatterns: [])]
     public function drawAccount(Request $request): Response
     {
         return $this->drawCase($request);
@@ -277,14 +277,14 @@ final class SitePageFixtureController
      * `addRoute()` or `hijackRoute()`) is served by the legacy router, the controller's route notwithstanding.
      */
     #[Route('/{lead}_test/claimable{slash}', name: 'idno_test_claimable', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class], markdownPermalink: true)]
+    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class], markdownPermalink: true, legacyPatterns: ['/_test/claimable/?'])]
     public function claimable(): Response
     {
         return new Response('controller');
     }
 
     #[Route('/{lead}_test/unclaimed{slash}', name: 'idno_test_unclaimed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\UnclaimedPage')]
+    #[SitePage(name: 'Tests\Fixtures\UnclaimedPage', legacyPatterns: ['/_test/unclaimed/?'])]
     public function unclaimed(): Response
     {
         return new Response('controller');
@@ -302,7 +302,7 @@ final class SitePageFixtureController
      * Markdown permalink, so the listener takes the suffix off `name` and the page is drawn in the `markdown` type.
      */
     #[Route('/{lead}_test/markdown/{name}{slash}', name: 'idno_test_markdown', requirements: ['lead' => '/?', 'slash' => '/?', 'name' => '[^/]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
-    #[SitePage(name: 'Tests\Fixtures\MarkdownFixture', markdownPermalink: true)]
+    #[SitePage(name: 'Tests\Fixtures\MarkdownFixture', markdownPermalink: true, legacyPatterns: ['/_test/markdown/([^/]+)/?'])]
     public function markdown(Request $request): Response
     {
         $context = PageContext::of($request);

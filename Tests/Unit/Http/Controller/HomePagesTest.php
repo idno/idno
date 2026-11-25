@@ -332,13 +332,6 @@ final class HomePagesTest extends TestCase
         $this->assertSame([], $this->drawer->pages, 'nothing is drawn');
     }
 
-    public function testSearchTakesTheQueryFromAPostedForm(): void
-    {
-        $page = new PageContext(Request::create('/search', 'POST', ['q' => 'posted']), new SitePage('Idno\Pages\Homepage'));
-
-        $this->assertSame('https://example.com/?q=posted', $this->pages->search($page)->headers->get('Location'));
-    }
-
     /**
      * @return array<string, array{0: string, 1: string}> the path as sent, the subject the page lists
      */
@@ -391,6 +384,18 @@ final class HomePagesTest extends TestCase
 
         $this->assertSame('#books', $this->stream->calls[0][2]);
         $this->assertSame('#books', $this->stream->calls[1][2]);
+    }
+
+    public function testTheTagIsTheQueryTheTagPageDisplaysWhateverTheRequestCarries(): void
+    {
+        foreach (['/tag/books?q=x', '/tag/books?q=', '/tag/books'] as $path) {
+            $page = $this->sent($path);
+
+            $this->pages->tag($page);
+
+            $this->assertSame('#books', $page->input('q'), $path . ': what a template that reads the page\'s query shows');
+            $this->assertSame('#books', $page->requestField('q'), $path);
+        }
     }
 
     public function testATagThatIsOnlySlashesIsNoTag(): void

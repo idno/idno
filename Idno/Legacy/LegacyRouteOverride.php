@@ -76,7 +76,7 @@ final class LegacyRouteOverride
         // the controller is no Markdown permalink itself
         $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), $page->replaces);
         $kept = false;
-        foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request) as $claim) {
+        foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request, $page->legacyPatterns ?? []) as $claim) {
             if (!in_array(strtolower($claim['class']), $replaced, true) || ($claim['markdown'] && !$page->markdownPermalink)) {
                 $kept = true;
                 break;

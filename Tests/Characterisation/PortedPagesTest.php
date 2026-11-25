@@ -110,6 +110,9 @@ namespace Tests\Characterisation {
                 ['GET', '/tag/books?q=x', [], 200, 'text/html', null, '<title class="p-name">#books | ', true, $std, true],
                 // `/tag/` has no tag: it is the 404 page.
                 ['GET', '/tag/', [], 404, 'text/html', null, $notFound, false, $std, true],
+                // `/tag//` used to be the tag `/` (the legacy pattern's `[^\s]+` took the second slash and the page listed `#/`): a tag that is only slashes is not a tag,
+                // so it is the 404 page too, as a deliberate change
+                ['GET', '/tag//', [], 404, 'text/html', null, $notFound, false, $std, true],
                 // the small endpoints
                 ['GET', '/robots.txt', [], 200, 'text/plain', null, 'User-agent: *', false, $std, false],
                 ['GET', '/robots.txt/', [], 200, 'text/plain', null, 'User-agent: *', false, $std, false],

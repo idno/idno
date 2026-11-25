@@ -48,6 +48,19 @@ final class PageRouteConvention
             if (!$noSlash && !str_ends_with($path, '{slash}')) {
                 $found[] = $name . ': the path ends with {slash}';
             }
+            if ($noSlash) {
+                // the exemption is for exactly this: no {slash} anywhere, and a last parameter that takes the rest of the path, slashes included
+                $variables = $route->compile()->getPathVariables();
+                $last = $variables === [] ? '' : $variables[array_key_last($variables)];
+                if (str_contains($path, '{slash}')) {
+                    $found[] = $name . ': an exempt route has no {slash}';
+                }
+                if ($last === '' || !str_ends_with($path, '{' . $last . '}')) {
+                    $found[] = $name . ': an exempt route ends with its last parameter';
+                } elseif (preg_match('~^(?:' . (string) $route->getRequirement($last) . ')$~', 'a/b') !== 1) {
+                    $found[] = $name . ': the last parameter of an exempt route takes the rest of the path, slashes included';
+                }
+            }
             foreach (['lead', 'slash'] as $parameter) {
                 if ($noSlash && $parameter === 'slash') {
                     continue;

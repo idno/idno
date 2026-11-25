@@ -106,8 +106,8 @@ final class HomePages
         if ($tag === '') {
             return $this->renderer->notFound($page);
         }
-        // the page's own input, as the tag page had it, so the stream's empty state says what it was searched for
-        $page->setInput('q', '#' . $tag);
+        // the page's own input, whatever `q` the request carries: what a template that reads it (the empty state) says it was searched for
+        $page->replaceInput('q', '#' . $tag);
 
         return $this->serve($page, 'all', '#' . $tag);
     }

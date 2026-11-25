@@ -20,8 +20,17 @@ use Tests\Fixtures\SitePageFixtureController;
 use Tests\Fixtures\SubclassedPage;
 
 /** A controller that replaces a Markdown permalink without saying it is one (not routed) */
-#[\Idno\Http\Page\SitePage(name: 'Fixture\UnmarkedShell', replaces: [ReplacedPage::class])]
+#[\Idno\Http\Page\SitePage(name: 'Fixture\UnmarkedShell', replaces: [ReplacedPage::class], legacyPatterns: ['/_test/claimable/?'])]
 final class SitePageUnmarkedShellController
+{
+    public function page(): void
+    {
+    }
+}
+
+/** A controller whose patterns core registered under the home page's and a subdirectory's (not routed) */
+#[\Idno\Http\Page\SitePage(name: 'Fixture\Home', legacyPatterns: ['/?', '/_test/claimable/?', '/blog/_test/claimable/?'])]
+final class SitePageManyPatternsController
 {
     public function page(): void
     {
@@ -180,13 +189,13 @@ final class LegacyRouteOverrideTest extends TestCase
         $this->routes['/blog/_test/claimable/?'] = ClaimingPage::class;
         $server = ['SCRIPT_NAME' => '/blog/index.php', 'PHP_SELF' => '/blog/index.php'];
 
-        $event = $this->matched('/blog/_test/claimable', 'GET', $server);
+        $event = $this->matched('/blog/_test/claimable', 'GET', $server, SitePageManyPatternsController::class . '::page');
         $this->listener()->onRequest($event);
         $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'));
 
-        $other = $this->matched('/_test/claimable', 'GET', $server);
+        $other = $this->matched('/_test/claimable', 'GET', $server, SitePageManyPatternsController::class . '::page');
         $this->listener()->onRequest($other);
-        $this->assertLeftAlone($other, 'the path outside the subdirectory is not the page\'s');
+        $this->assertSame(SitePageManyPatternsController::class . '::page', $other->getRequest()->attributes->get('_controller'), 'the path outside the subdirectory is not the page\'s');
     }
 
     public function testPathInfoIsReadBeforeTheRequestUri(): void
@@ -291,11 +300,41 @@ final class LegacyRouteOverrideTest extends TestCase
 
         // the home page by the front controller's name (Symfony's path info is `/`), and a claimed path behind it, on a server that gives the legacy router only REQUEST_URI
         foreach (['/index.php', '/index.php/', '/index.php/_test/claimable', '/index.php//_test/claimable', '/ind%65x.php/_test/claimable'] as $uri) {
-            $event = $this->matched($uri, 'GET', ['SCRIPT_FILENAME' => '/srv/index.php']);
+            $event = $this->matched($uri, 'GET', ['SCRIPT_FILENAME' => '/srv/index.php'], SitePageManyPatternsController::class . '::page');
             $request = $event->getRequest();
             $request->attributes->set('_route_params', ['lead' => '', 'slash' => '']);
             $this->listener()->onRequest($event);
             $this->assertSame(LegacyController::class, $request->attributes->get('_controller'), $uri);
+        }
+    }
+
+    public function testABroadPatternRegisteredAfterCoresIsNoClaimOnAMovedPage(): void
+    {
+        // a moved page whose class and registration are gone (`replaces: []`): a plugin's catch-all matches the path now that nothing of core's holds it
+        $this->routes->addRoute('/(.*)', ClaimingPage::class);
+        $this->routes->addRoute('/_test/(unclaimed|other)/?', ClaimingPage::class);
+
+        $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
+        $this->listener()->onRequest($event);
+
+        $this->assertSame(SitePageFixtureController::class . '::unclaimed', $event->getRequest()->attributes->get('_controller'), 'it never took a path core had a page for');
+    }
+
+    public function testAnIdenticalPatternAHijackAndAHijackedOtherPatternAreClaimsOnAMovedPage(): void
+    {
+        foreach ([
+            'identical' => fn (PageHandler $routes) => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
+            'hijack' => fn (PageHandler $routes) => $routes->hijackRoute('/_test/unclaimed/?', ClaimingPage::class),
+            'hijacked other' => fn (PageHandler $routes) => $routes->hijackRoute('/_test/(?:unclaimed|other)', ClaimingPage::class),
+        ] as $name => $register) {
+            $this->routes = new PageHandler();
+            $this->routes->addRoute('/(.*)', ReplacedPage::class);
+            $register($this->routes);
+
+            $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
+            $this->listener()->onRequest($event);
+
+            $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'), $name);
         }
     }
 

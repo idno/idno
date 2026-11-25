@@ -32,6 +32,19 @@ final class PageContextTest extends TestCase
         $this->assertSame('d', $context->input('secret', 'd'));
     }
 
+    public function testAReplacedInputWinsOverTheRequestsOwn(): void
+    {
+        $context = new PageContext(Request::create('/x?a=query', 'POST', ['a' => 'post', 'b' => 'post']), new SitePage('Fixture\Page'));
+        $context->setInput('a', 'set');
+
+        $context->replaceInput('a', 'replaced');
+
+        $this->assertSame('replaced', $context->input('a'));
+        $this->assertSame('replaced', $context->requestField('a'));
+        $this->assertSame('post', $context->input('b'), 'another input is the request\'s');
+        $this->assertSame('replaced', $context->input('a', 'default'));
+    }
+
     public function testSetInputIsUsedWhenTheRequestHasNone(): void
     {
         $context = $this->context(Request::create('/x?a=query'));

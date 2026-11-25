@@ -75,10 +75,9 @@ final class MemoryGuardTest extends TestCase
 
     public function testAFailingRunKeepsItsOwnExitStatusAndAClearOneBecomesOne(): void
     {
-        $this->assertSame(2, MemoryGuard::exitStatus(true, true));
-        $this->assertSame(2, MemoryGuard::exitStatus(true, false));
-        $this->assertSame(1, MemoryGuard::exitStatus(false, true));
-        $this->assertSame(1, MemoryGuard::exitStatus(false, false));
+        $this->assertSame(2, MemoryGuard::exitStatus(true));
+        $this->assertSame(1, MemoryGuard::exitStatus(false));
+        $this->assertSame(1, (new \ReflectionMethod(MemoryGuard::class, 'exitStatus'))->getNumberOfParameters(), 'the one thing that decides it');
     }
 
     public function testARunOverTheLimitExitsWithStatusOneAndSaysWhy(): void

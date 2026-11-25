@@ -724,9 +724,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   (`/foo/` for `/foo`, and the reverse) with a 301 redirect to the route's own path. A route that is a SITE PAGE (a
   `#[SitePage]` controller, see "Legacy pages and routes") is the exception to both: it follows the route convention below, so that
   no spelling of an address is redirected, and the legacy router's own choice for the path still wins where a plugin took it. A page that
-  moves to a controller must check, and declare, what the legacy router does with its paths once it is gone: it keeps its shell's registration (and class) while the
-  controller serves it, or lists in `replaces` every class the stock table would choose for its paths (a broader pattern registered after the shell takes the path
-  back through the override), says `markdownPermalink: true` when it is a permalink, and follows the route convention; `Tests/Kernel/SitePageClaimsTest` and
+  moves to a controller declares what core registered for it, so that it keeps core's place in the legacy router's order: `legacyPatterns` (the patterns exactly as `addRoute()`
+  received them, `[]` when core registered none), `replaces` (the shell class it shadows, empty when the class is deleted), `markdownPermalink: true` when it is a permalink;
+  it keeps its shell's registration and class while the controller serves it, or deletes the class and its registration together; and it follows the route convention. A plugin
+  can still take such a path with `hijackRoute()` of any pattern that matches, or `addRoute()` of core's identical pattern, and for every method; it cannot take it with a pattern
+  registered after core's (a short-link page, a catch-all), which never took a core path, so a controller is not shadowed by one. `Tests/Kernel/SitePageClaimsTest` and
   `PageRoutesTest` fail for a page that does not (see "Legacy pages and routes").
 - It must return a `Symfony\Component\HttpFoundation\Response`, and must take its input
   from the `Request` (inject it as an argument), never from `$_GET`, `$_POST`,
@@ -922,14 +924,14 @@ for classes that extend `PageShell`, and holds each to the rule); today it is `I
 `HomePages` and its `#[SitePage(name: 'Idno\Pages\Homepage')]` gives the home page's body class and page events, so a feed or a tag page fires `page/ready`, `page/head` and `page/get` ONCE,
 with `page_class` `Idno\Pages\Homepage` (the feed page used to fire them for its own class and then again for the home page it built, and the tag page fired a trailing `page/ready`, and
 the feed's `Link` headers were sent twice: all fixed; `PageContractTest`). `replaces` is empty (no shell is shadowed). The routes follow the convention (GET, HEAD, OPTIONS; `{lead}` and
-`{slash}`; `Tests/Unit/Http/PageRouteConvention` knows that `idno_tag` has no `{slash}`, its tag taking the rest of the path):
+`{slash}`; `Tests/Unit/Http/PageRouteConvention` exempts `idno_tag` from the trailing `{slash}` and from nothing else: the exemption requires no `{slash}` in the path, the path to end with its last parameter, and that parameter's requirement to take slashes; `PageRouteConventionTest` pins what it still fails on):
 - `feed()`: `idno_feed_xml` (`/feed.xml`), `idno_feed` (`/feed`), `idno_rss_xml` (`/rss.xml`), `#[SitePage(defaultType: 'rss')]`: the stream drawn in the `rss` type unless the request names
   another (`?_t=json`; an `Accept` header does not choose, as before). It is not the root, so `homepage/replace` is not asked.
 - `search()`: `idno_search` (`/search`): a 302 to `<url>?q=<urlencode(q)>` (`HomeStream::siteAddress()` is the configured `url`); a `q` that is not text (`q[]=x`) is an empty query (it was a
   500 page, `urlencode()` of an array).
 - `tag()`: `idno_tag` (`/tag/<tag>`, requirement `[^\s]+` as the legacy pattern, `utf8: false`: a tag may be any bytes except white space, which a path cannot carry). The tag is read from the
   path AS SENT (`Request::getPathInfo()` is not decoded), one trailing slash is removed and the rest is `urldecode()`d ONCE, so `+` is a space and `%2B` a plus (`/tag/a%2Bb` is `#a+b`; it was
-  `#a b`, decoded twice); the stream's query is `#<tag>` and wins over a `q` in the query string (it was the request's `q`), for every content type (`all`). A path of only slashes is the 404 page.
+  `#a b`, decoded twice); the stream's query is `#<tag>` and wins over a `q` in the query string (it was the request's `q`), for every content type (`all`), and the page's own `q` (`PageContext::replaceInput()`, which wins over the request's field, where `setInput()` yields to it) is the tag, so a template that reads it shows the tag and never a stray `q`. A tag that is only slashes (`/tag//`) is the 404 page, a deliberate change: the legacy pattern `/tag/([^\s]+)\/?` matched it with the tag `/` and the page listed `#/`, and a tag `/` is not a tag.
 `/tag/` and `/search/mentions.json` are not these routes. POST, PUT, PATCH and DELETE of these paths, and a request with a malformed `Host`, are the legacy router's: no page, its 404 page (a POST was
 the invalid-token redirect home). A webmention to one of these addresses is `target_not_found` (it was `source_not_supported` or `target_not_supported`): the endpoint asks the legacy router for the target's
 page and there is none (`WebmentionToADeletedPageTest`). A plugin that `addRoute()`s a page for one of these paths now serves it (`RouteOverrideTest::testAPluginsPageOnAFeedSearchOrTagPathTakes...`, mode
@@ -999,30 +1001,35 @@ class core still registers for the path, if any) and the legacy router share the
 - A POST, PUT, DELETE or PATCH (any method the route does not list) never matches the route: it reaches the catch-all, so a kept shell still
   serves it through `Page::post()` and the other handlers, with its own form token check; a path with no shell answers the legacy 404 as before. A
   controller that serves a state-changing method lists it in `#[SitePage(methods: [...])]` and in its route.
-- The legacy router's choice wins. `Idno\Legacy\LegacyRouteOverride` (`kernel.request`, priority 31, just after `RouterListener` at 32) runs for a
-  main request whose matched route is a site page's, with the legacy application booted. The rule: the path SYMFONY MATCHED is always asked about,
-  in addition to what the legacy router itself would be given. Symfony matches `rawurldecode($request->getPathInfo())`: the `REQUEST_URI` path (an absolute-form
-  target and a fragment are taken off first, `prepareRequestUri()` writing the result back into the server bag) without the BASE URL (the script's name,
-  `/index.php` or `/blog/index.php`, compared case-sensitively and encoded or not), decoded once, never collapsed or dot-segment-free. The legacy router (Toro) routes
-  `PATH_INFO` if the server sets it, else `ORIG_PATH_INFO` unless it is `/index.php`, else the raw `REQUEST_URI` (`toroPath()`), against patterns that `addRoute()`
-  prefixed with the site's subdirectory (`IDNO_SUBDIRECTORY`, from `PHP_SELF`). The built-in server sets `PATH_INFO` decoded, dot segments and doubled slashes
-  removed; Apache's rewrite and Caddy split `/index.php/x` into the script and a `PATH_INFO`; nginx's shipped configuration sets none, so Toro is given the raw
-  `/index.php/x`. So `PageHandler::spellingsOf()` asks, each raw, decoded once (only what is raw: a `PATH_INFO` is not decoded again) and with slash runs made one: the
-  matched path info with the subdirectory in front of it (never the base URL), the request's `REQUEST_URI` path, and `toroPath()` (derivation in its docblock and the
-  override's). Whatever variant reaches the controller is a variant the lookup sees, whichever server and base URL. The lookup is the router's OWN
-  (`handlerFor()` through `chosenFor()` and `claimsOf()`: the exact key, then the patterns in registration order, pinned against Toro by
-  `Tests/Unit/Markdown/RouteLookupTest`; `routeMarkdownSuffix()` shares the path with `toroPath()` through `pathFrom()`), never a second implementation of route
-  matching. When ANY spelling gives a class the controller's `#[SitePage]` does not list in `replaces` (compared without a leading backslash, ignoring case; a handler
-  that is no class name counts as one), the legacy page keeps the path: `_controller` becomes `LegacyController`, the route's parameters are removed and `_route` is
-  `idno_legacy`, so the catch-all's code serves it as if no controller had matched, for every method including HEAD and OPTIONS. Toro then routes the path it is
-  given: where that is a spelling its patterns do not match (an encoded one, with only `REQUEST_URI`) it answers the 404 it always did; the controller's page is never
-  served for an address a plugin took, in any spelling. So a plugin's `hijackRoute()`, its `addRoute()` of an identical pattern (the same key keeps its place
-  and takes the later class), a plugin's subclass of a kept shell, and a plugin's page for a path no shell was ever registered for all still win, as they do
-  today; a different pattern registered after the shell does not (the router would have chosen the shell). The shell itself is shadowed for GET, HEAD and
-  OPTIONS only. What changes: an encoded spelling of a path nobody took (`/x%61`, `/%2Fx`, `/x%2F`) is now served by the controller as the plain spelling is, where
-  a server that gave the legacy router only the raw path answered a 404; a dot segment (`/y/../x`) is no spelling Symfony matches, so it stays the legacy router's
-  (the shell, where there is one and the server removed the segment; the 404 otherwise). `LegacyDispatcher::routes()` writes the subdirectory's alias of the home
-  page into the router's table when asked: it did at dispatch, and now a moment earlier, once.
+- The legacy router's choice wins, where a plugin took the path, and a moved page keeps core's place in the order. The legacy router (Toro) chooses the FIRST registered
+  pattern that matches. Core registers its pages before any plugin registers its own: `LegacyBootstrap::boot()` builds `Idno` (`Component::__construct()` runs `init()`
+  then `registerPages()`), whose `registerPages()` ends with `self::container()->get(Plugins::class)`, and `Plugins::init()` builds each plugin, whose `Component` constructor
+  runs ITS `registerPages()` (`Idno.php` "These must be loaded last", `Plugins.php`); themes follow. (The routes of `Account`, `Admin`, `Webfinger`, `Webmention` and
+  `PubSubHubbub` are registered after the plugins', by `LegacyBootstrap::boot()` building them after `Idno`: a page moved from one of THOSE keeps the plugin's broader
+  pattern ahead of it today and does not under this rule.) `addRoute()` appends a new key at the end and, for a key that exists, replaces the handler IN PLACE (the key keeps
+  its place); `hijackRoute()` removes the key and puts it in FRONT of every other (and the table remembers it: `PageHandler::hijackedPatterns()`); `offsetSet()` of a new key
+  appends. So nothing puts a route ahead of core's but `hijackRoute()`, and a plugin's page took a core path only (a) under core's own pattern (`hijackRoute()` of it, or
+  `addRoute()` of the identical pattern: the same key) or (b) under any pattern it hijacked in front, whatever the pattern matches. A pattern registered after core's, however
+  broad (a short-link page's `/([a-z0-9\-]+)/?`, a catch-all), never took a path core had a page for.
+  The rule follows. Each `#[SitePage]` declares `legacyPatterns`: the patterns core registered for the addresses the route serves, written exactly as `addRoute()` received them
+  (`/feed\.xml`, `/tag/([^\s]+)\/?`: those of a kept shell are still registered, those of a deleted class are not; `[]` for an address core never had a page for).
+  `Idno\Legacy\LegacyRouteOverride` (`kernel.request`, priority 31, just after `RouterListener` at 32) runs for a main request whose matched route is a site page's, with the
+  legacy application booted, and asks `PageHandler::claimsOf()`: a handler held under one of THOSE patterns (found by key, as `addRoute()` keys it with the subdirectory in front
+  and as `hijackRoute()` keys it without; `keysFor()`) or under a hijacked pattern, whose pattern matches one of the request's paths. When a handler is not a class the controller
+  lists in `replaces` (compared without a leading backslash, ignoring case; a handler that is no class name counts as one), the legacy page keeps the path: `_controller` becomes
+  `LegacyController`, the route's parameters are removed and `_route` is `idno_legacy`, so the catch-all's code serves it as if no controller had matched, for every method including
+  HEAD and OPTIONS. A handler under any other pattern is no claim: for a kept shell the shell's own pattern is registered first and matches first, and for a deleted class a
+  plugin's broad pattern now matches because nothing holds core's place, which the declaration restores. A path is asked as it can be given: the path Symfony matched (the path info with the
+  site's subdirectory in front, the way the table has it: never the base URL, the script's name) raw and decoded once, and what the legacy router itself is given (`toroPath()`:
+  `PATH_INFO` where the server sets it, else the raw `REQUEST_URI`), each with slash runs made one (`PageHandler::spellingsOf()`, whose docblock has the derivation from
+  `Request::prepareBaseUrl()`, `preparePathInfo()` and the matcher, and from Toro). Pattern matching is `Toro::serve()`'s (`^/?<pattern>/?$`, its own three tokens replaced once more),
+  and the lookup that decides `.md` is `handlerFor()`, pinned against Toro by `Tests/Unit/Markdown/RouteLookupTest`: no second implementation of route choice. Toro then routes the path
+  it is given: where that is a spelling its patterns do not match (an encoded one, with only `REQUEST_URI`) it answers the 404 it always did; the controller's page is never served for
+  an address a plugin took, in any spelling. So a plugin's `hijackRoute()`, its `addRoute()` of an identical pattern (the same key keeps its place and takes the later class), a
+  subclass of a kept shell registered under the shell's pattern, and a hijacked pattern of any shape that matches, still win, as they do today; a different pattern registered after
+  core's does not. The shell itself is shadowed for GET, HEAD and OPTIONS only. What changes: an encoded spelling of a path nobody took (`/x%61`, `/%2Fx`, `/x%2F`) is now served by the
+  controller as the plain spelling is, where a server that gave the legacy router only the raw path answered a 404; a dot segment (`/y/../x`) is no spelling Symfony matches, so it
+  stays the legacy router's. `LegacyDispatcher::routes()` writes the subdirectory's alias of the home page into the router's table when asked: it did at dispatch, and now a moment earlier, once.
 - The `.md` suffix. A GET or HEAD whose path ends in `.md` is the Markdown form of a permalink where the legacy router would treat it as one
   (`PageHandler::routeMarkdownSuffix()`: the path as given matches a `MarkdownPermalink`'s route, or matches none and without the suffix routes to one);
   `claimsOf()` reports that as a claim with `markdown: true`. The convention: a page that replaces a `MarkdownPermalink` (or is the permalink of a post) says so,
@@ -1033,22 +1040,21 @@ class core still registers for the path, if any) and the legacy router share the
   is a violation (`SitePageClaimsTest`), and at run time the override hands its `.md` request back to the legacy router, so the Markdown form is served by the shell
   while that is registered. A Markdown permalink a plugin took (a `MarkdownPermalink` class not in `replaces`) keeps its Markdown form and its HTML form, whichever
   the controller is. A route that takes no free parameter never matches `<path>.md`, which the legacy router then serves as it did.
-- Moving a page to a controller. The legacy router's lookup is first-match in registration order, so a shell's own pattern shadows every broader pattern after it,
-  and the controller wins because the shell is in `replaces`. Deleting the shell's registration hands the path to the next pattern that matches (a profile's
-  edit page falling to `User\View`'s `/profile/([^\/]+)/([A-Za-z\-\/]+)+`, `/tag/...`, `/content/...`, the permalink route), and deleting the shell CLASS makes
-  `addRoute()` skip it silently and breaks a plugin's subclass of it. So a moved page keeps its shell's registration (and class) while the controller serves
-  it, or lists in `replaces` every class the stock table chooses for its paths (and a malformed `Host` request, which the legacy router serves, then still
-  finds the shell: where there is none, the legacy router answers 404 for it). `Tests/Kernel/SitePageClaimsTest` enforces it over the real route collection and
-  the booted site's real table (core and the plugins the site enables): for each site page route it asks, for its fixed path and a sample for each parameter, what the
-  legacy router would serve, and fails for a class the controller does not list in `replaces`, and for a page that replaces a `MarkdownPermalink` without saying it is
-  one; the sample it asks about is checked against the route (a route no sample matches is a violation, a sample that matches nothing proves nothing); a conflicting table and
-  controller prove it can fail. It sees the plugins the rig enables only (Styles and StandardSiteSync are not among them).
+- Moving a page to a controller. The page declares what core registered for it (`legacyPatterns`), keeps its shell's registration (and class) while the controller serves it
+  (`replaces` lists the shell: the pattern stays registered and holds it), or deletes the class AND its registration (`replaces: []`, the patterns declared and no longer registered).
+  Deleting a shell class makes `addRoute()` skip it silently and breaks a plugin's subclass of it, so a class that plugins may extend is kept as a deprecated shell. A broader
+  pattern of core's own that follows (a profile's general page after its edit page, `/tag/...`, `/content/...`, the permalink route) never takes the moved path: the controller's
+  route matched first and only a claim under a declared pattern hands it back. A malformed `Host` request, which the legacy router serves, finds the shell where there is one and its 404
+  where the page is only a controller. `Tests/Kernel/SitePageClaimsTest` enforces it over the real route collection and the booted site's real table (core and the plugins the site
+  enables): every site page route declares `legacyPatterns`; for a route that replaces classes each pattern is registered with a class the controller lists, and for one that replaces
+  none each is NOT registered; a declared pattern matches a path the route serves (a sample checked against the route); a page that replaces a `MarkdownPermalink` says
+  `markdownPermalink`. Synthetic tables and controllers prove each check can fail. It sees the plugins the rig enables only (Styles and StandardSiteSync are not among them).
 - Cost: the listener does nothing for any request that is not a site page's (a check of the request and one attribute lookup, cached per controller), and
   builds nothing when the legacy application is not booted (the dispatcher is a service closure: `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`;
   `LegacyFallbackListener` takes the legacy controller as a service closure too, so in a kernel with no legacy application the dispatcher is never built, pinned by
-  `PageListenersWithoutLegacyTest`; `KernelExceptionTest` and the upgrade tests stay as they were). For a site page's request it makes one scan of the router's table
-  for each spelling (at most a handful, most of them equal to the first: `array_unique`), about 50 microseconds a scan at the 180 or so routes core and the bundled plugins
-  register (measured on 220 synthetic patterns; the router did the same scan for those requests when it served them), and a hit stops at the matching pattern.
+  `PageListenersWithoutLegacyTest`; `KernelExceptionTest` and the upgrade tests stay as they were). For a site page's request it no longer scans the router's table: it looks up the
+  keys of the controller's few declared patterns (two lookups each) and of the hijacked patterns (none on most sites), and matches each handler's pattern against at most four
+  spellings: a few microseconds, where it was one scan of the 180 or so patterns for each of up to six spellings.
 - A malformed `Host`, and a site in a subdirectory. A request Symfony rejects before routing (a malformed `Host`) is served by the legacy router (`LegacyFallbackListener`),
   which serves what it registered. A site in `/blog` registers its patterns under it (`addRoute()` adds `IDNO_SUBDIRECTORY`, which the legacy bootstrap derives from
   `PHP_SELF`; `hijackRoute()` adds no prefix, so in a subdirectory it never matches), Symfony's base URL is `/blog`, and the router is asked about the path with it
@@ -1058,7 +1064,7 @@ class core still registers for the path, if any) and the legacy router share the
 - Pinned by `Tests/Kernel/PageRoutesTest` (convention, spellings, methods, base URL) and `Tests/Unit/Http/PageRouteConventionTest`, `Tests/Kernel/PageHandlerChoiceTest` (the
   choice and the spellings: hijack, identical and later patterns, the exact key, encoded paths, the `.md` form, the subdirectory in a subprocess, `toroPath()`),
   `Tests/Kernel/LegacyRouteOverrideTest` (in process, with the router's table), `Tests/Kernel/SitePageClaimsTest` and, over HTTP on a site of its own with the
-  fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`, `plugin`, `mdclaim`; the claimed modes also register `/_test/legacyonly/?`, a claimed path with no controller, whose answer in each spelling is what a claimed path answered before a controller served it, registered on `plugins/loaded`, the first
+  fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`, `plugin`, `mdclaim`, `broad`, `corehijack`, `coreidentical`, `feedhijack`, `hijackbroad`; the claimed modes also register `/_test/legacyonly/?`, a claimed path with no controller, whose answer in each spelling is what a claimed path answered before a controller served it, registered on `plugins/loaded`, the first
   event after every plugin's `registerPages()`; `IDNO_TEST_SERVER_NO_PATH_INFO=1` makes the server give the legacy router only the raw path, as Apache and nginx do;
   `IDNO_TEST_SUBDIRECTORY=blog` serves the front controller as `/blog/index.php`), `Tests/Characterisation/RouteOverrideTest`.
 

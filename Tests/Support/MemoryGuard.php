@@ -41,8 +41,6 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterTestError
 
     private static bool $errored = false;
 
-    private static bool $failed = false;
-
     private readonly int $limit;
 
     public function __construct()
@@ -74,9 +72,11 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterTestError
     }
 
     /**
-     * The exit status of a run the memory check fails: PHPUnit's own (2 when a test errored, else 1) and never 0.
+     * The exit status of a run the memory check fails: PHPUnit's own (2 when a test errored, else 1) and never 0. An error that no test reports
+     * (one from `setUpBeforeClass()` or a data provider, which is an error to PHPUnit and sets no `AfterTestError`) is not seen here: the status is
+     * then 1, in place of PHPUnit's 2, which the memory failure and its message make no less a failed run.
      */
-    public static function exitStatus(bool $errored, bool $failed): int
+    public static function exitStatus(bool $errored): int
     {
         return $errored ? 2 : 1;
     }
@@ -115,7 +115,6 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterTestError
 
     public function executeAfterTestFailure(string $test, string $message, float $time): void
     {
-        self::$failed = true;
     }
 
     public function executeAfterLastTest(): void
@@ -128,7 +127,7 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterTestError
         $verdict = self::verdict(self::$classes, memory_get_peak_usage(true), $this->limit);
         if ($verdict !== null) {
             fwrite(STDERR, "\n" . $verdict . "\n");
-            $status = self::exitStatus(self::$errored, self::$failed);
+            $status = self::exitStatus(self::$errored);
             // PHPUnit exits with its own status after this hook: a shutdown function has the last word.
             register_shutdown_function(static function () use ($status): void {
                 exit($status);

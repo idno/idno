@@ -595,6 +595,88 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $this->assertNotContains('Accept', array_map('trim', explode(',', implode(',', $this->raw($base, 'GET', '/_test/unclaimed')['headers']['vary'] ?? []))));
     }
 
+    /**
+     * The paths core had pages for before the home page's feeds, search and tags moved to controllers, with what the controller answers for each
+     * (the search forwards, the others draw): a plugin's page registered AFTER core's, under any pattern that is not core's own, never took them,
+     * because the legacy router chooses the first pattern that matches and core's came first. The controllers keep that order.
+     *
+     * @return list<string>
+     */
+    private static function corePaths(): array
+    {
+        return ['/', '/content/all', '/feed', '/feed.xml', '/rss.xml', '/search', '/tag/books'];
+    }
+
+    public function testABroadPatternARegisteredAfterCoresNeverTakesAPathCoreHasAPageFor(): void
+    {
+        $base = $this->server('broad');
+        [$cookie, $token] = $this->token($base);
+
+        foreach (self::corePaths() as $target) {
+            foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+                $response = $this->raw($base, $method, $target);
+                $label = $method . ' ' . $target . ' (' . $response['status'] . ')';
+                $this->assertNotSame('claimed', $response['body'], $label);
+                $this->assertNotContains(ClaimingPage::class, $response['pages'], $label);
+                $this->assertContains(ControllerPage::class, $response['pages'], $label . ': the controller begun the page');
+            }
+        }
+        // the paths core never had, which the same plugin serves, for every method
+        foreach (['/zzz-short', '/zzz/short/', '//zzz-short'] as $target) {
+            $this->assertSame('claimed', $this->raw($base, 'GET', $target)['body'], $target);
+            $this->assertSame([ClaimingPage::class], $this->raw($base, 'HEAD', $target)['pages'], $target);
+            $post = $this->raw($base, 'POST', $target, ['Cookie' => $cookie, 'Content-Type' => 'application/x-www-form-urlencoded'], http_build_query($token));
+            $this->assertSame('claimed-post', $post['body'], $target);
+        }
+    }
+
+    public function testAClaimOfCoresExactPatternsIsEveryMethodsForEveryPathItServed(): void
+    {
+        foreach (['corehijack', 'coreidentical'] as $mode) {
+            $base = $this->server($mode);
+            [$cookie, $token] = $this->token($base);
+            $query = '?' . http_build_query($token);
+            foreach (self::corePaths() as $target) {
+                $label = $mode . ' ' . $target;
+                $this->assertSame('claimed', $this->raw($base, 'GET', $target)['body'], $label . ' GET');
+                $this->assertSame([ClaimingPage::class], $this->raw($base, 'HEAD', $target)['pages'], $label . ' HEAD');
+                $this->assertSame([ClaimingPage::class], $this->raw($base, 'OPTIONS', $target)['pages'], $label . ' OPTIONS');
+                $post = $this->raw($base, 'POST', $target, ['Cookie' => $cookie, 'Content-Type' => 'application/x-www-form-urlencoded'], http_build_query($token));
+                $this->assertSame('claimed-post', $post['body'], $label . ' POST');
+                $this->assertSame('claimed-put', $this->raw($base, 'PUT', $target . $query, ['Cookie' => $cookie])['body'], $label . ' PUT');
+                $this->assertSame('claimed-delete', $this->raw($base, 'DELETE', $target . $query, ['Cookie' => $cookie])['body'], $label . ' DELETE');
+            }
+            // (and in the spellings of the address, as the claim of any path is)
+            foreach (['/feed.xml/', '//feed.xml', '/fe%65d.xml', '/index.php/feed.xml'] as $target) {
+                $this->assertSame('claimed', $this->raw($base, 'GET', $target)['body'], $mode . ' ' . $target);
+            }
+        }
+    }
+
+    public function testAClaimOfOneOfCoresPatternsIsThatPatternsPathsOnly(): void
+    {
+        $base = $this->server('feedhijack');
+
+        $this->assertSame('claimed', $this->raw($base, 'GET', '/feed.xml')['body']);
+        foreach (['/feed', '/rss.xml', '/search'] as $target) {
+            $response = $this->raw($base, 'GET', $target);
+            $this->assertNotSame('claimed', $response['body'], $target);
+            $this->assertContains(ControllerPage::class, $response['pages'], $target);
+        }
+    }
+
+    public function testAHijackedPatternThatIsNotCoresButMatchesItsPathsStillWinsAsItAlwaysDid(): void
+    {
+        // hijackRoute() puts the pattern in front of every other: it was the first to match, whatever the pattern, so it still is the plugin's
+        $base = $this->server('hijackbroad');
+
+        foreach (['/feed', '/feed.xml', '/search', '/search/'] as $target) {
+            $this->assertSame('claimed', $this->raw($base, 'GET', $target)['body'], $target);
+        }
+        $this->assertNotSame('claimed', $this->raw($base, 'GET', '/rss.xml')['body'], 'a path the pattern does not match');
+        $this->assertNotSame('claimed', $this->raw($base, 'GET', '/tag/books')['body']);
+    }
+
     public function testATripleLeadingSlashIsNoAddressOfThePage(): void
     {
         $base = $this->server('');

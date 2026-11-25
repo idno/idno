@@ -21,9 +21,10 @@ $front = static fn (string $uri): Symfony\Component\HttpFoundation\Request => ne
     'REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET', 'SCRIPT_NAME' => '/blog/index.php', 'PHP_SELF' => '/blog/index.php', 'SCRIPT_FILENAME' => '/srv/blog/index.php', 'HTTP_HOST' => 'localhost',
 ]);
 $routes->addRoute('/?', Tests\Fixtures\ClaimingPage::class);
-$classes = static fn (string $uri): array => array_values(array_unique(array_map(static fn (array $claim): string => $claim['class'], Idno\Core\PageHandler::claimsOf($routes, $front($uri)))));
+$classes = static fn (string $uri): array => array_values(array_unique(array_map(static fn (array $claim): string => $claim['class'], Idno\Core\PageHandler::claimsOf($routes, $front($uri), ['/_test/claimable/?', '/?']))));
 
 echo json_encode([
+    'keys' => Idno\Core\PageHandler::keysFor('/_test/claimable/?'),
     'frontController' => $classes('/blog/index.php/_test/claimable'),
     'frontControllerHome' => $classes('/blog/index.php'),
     'frontControllerHomeSlash' => $classes('/blog/index.php/'),

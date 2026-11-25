@@ -56,6 +56,9 @@ final class PageContext
     /** @var list<string>|null */
     private ?array $arguments = null;
 
+    /** @var array<string, mixed> */
+    private array $replacedInputs = [];
+
     private bool $markdownSuffix = false;
 
     private ?PageRedirect $redirect = null;
@@ -111,10 +114,14 @@ final class PageContext
     }
 
     /**
-     * A form field of the request alone (a POST field over a query field; never a cookie): null when the request has none.
+     * A form field of the request alone (a POST field over a query field; never a cookie), unless the page replaced it (replaceInput()): null when
+     * the request has none.
      */
     public function requestField(string $name): mixed
     {
+        if (isset($this->replacedInputs[$name])) {
+            return $this->replacedInputs[$name];
+        }
         foreach ([$this->request->request->all(), $this->request->query->all()] as $fields) {
             if (isset($fields[$name])) {
                 return $fields[$name];
@@ -144,6 +151,17 @@ final class PageContext
     {
         if ($name !== '') {
             $this->inputs[$name] = $value;
+        }
+    }
+
+    /**
+     * A value the page gives an input in place of the request's own, wherever the page's input is read (a page whose address says what it
+     * shows, as the tag page's does, over a stray `q` of the query string).
+     */
+    public function replaceInput(string $name, mixed $value): void
+    {
+        if ($name !== '') {
+            $this->replacedInputs[$name] = $value;
         }
     }
 

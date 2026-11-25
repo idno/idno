@@ -37,13 +37,22 @@ final class TestEventHooks
         //   homepage-hijack  a plugin's hijackRoute() of the root for a subclass of the home page's shell (ThirdPartyHomepage)
         //   homepage-route   a plugin's addRoute() of a path of its own for the same subclass
         //   feeds     a plugin's addRoute() of the feed, search and tag paths whose core pages are deleted, for ClaimingPage
+        //   broad     a plugin's addRoute() of a pattern that matches every path (a short-link page, a catch-all): registered after core's, so it never took
+        //             a path core had a page for
+        //   corehijack     a plugin's hijackRoute() of each pattern core registered for the home page, its streams, the feeds, the search and the tags
+        //   coreidentical  a plugin's addRoute() of the identical patterns
+        //   feedhijack     a plugin's hijackRoute() of `/feed\.xml` alone
+        //   hijackbroad    a plugin's hijackRoute() of a pattern that matches the feed paths and others, a different pattern from core's
+        // The shell of the claimable path, which a controller replaces: always registered, as core's own pages are (before any plugin's page, which
+        // `plugins/loaded` follows), so that the route table holds what the controller's `legacyPatterns` declare
+        $dispatcher->addListener('plugins/loaded', static function (): void {
+            Idno::site()->routes()->addRoute('/_test/claimable/?', ReplacedPage::class);
+        });
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
             $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
                 $routes = Idno::site()->routes();
-                if (in_array($claim, ['replaced', '1', 'identical', 'subclass'], true)) {
-                    $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
-                }
+                $coreHome = ['/?', '/content/([A-Za-z\-\/]+)+', '/feed\.xml', '/feed/?', '/rss\.xml', '/search/?', '/tag/([^\s]+)\/?'];
                 if (in_array($claim, ['1', 'identical', 'subclass'], true)) {
                     // a plugin's page for a path no controller serves: what a claimed path answers, in each spelling, is what this answers
                     $routes->addRoute('/_test/legacyonly/?', ClaimingPage::class);
@@ -56,6 +65,11 @@ final class TestEventHooks
                     'mdclaim' => $routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class),
                     'homepage-hijack' => $routes->hijackRoute('/', ThirdPartyHomepage::class),
                     'homepage-route' => $routes->addRoute('/third-party-home/?', ThirdPartyHomepage::class),
+                    'broad' => $routes->addRoute('/(.*)', ClaimingPage::class),
+                    'corehijack' => array_map(static fn (string $pattern) => $routes->hijackRoute($pattern, ClaimingPage::class), $coreHome),
+                    'coreidentical' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), $coreHome),
+                    'feedhijack' => $routes->hijackRoute('/feed\.xml', ClaimingPage::class),
+                    'hijackbroad' => $routes->hijackRoute('/(?:feed|search)(.*)', ClaimingPage::class),
                     'feeds' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), ['/feed\.xml', '/search/?', '/tag/([^\s]+)\/?']),
                     default => null,
                 };
