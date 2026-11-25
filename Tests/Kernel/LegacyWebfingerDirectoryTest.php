@@ -20,7 +20,7 @@ final class LegacyWebfingerDirectoryTest extends PrivateSiteTestCase
         $answers = $this->runInSite(
             '$directory = new \Idno\Legacy\LegacyWebfingerDirectory(); $host = \Idno\Core\Idno::site()->config()->host; $base = \Idno\Core\Idno::site()->config()->getDisplayURL();'
             . 'return ["host" => $host, "base" => $base, "found" => $directory->find("acct:ada@" . $host), "nohost" => $directory->find("acct:lovelace"), "withhost" => $directory->find("acct:lovelace@" . $host), "tooshort" => $directory->find("acct:ada"),'
-            . ' "unknown" => $directory->find("acct:nobody@" . $host), "scheme" => $directory->find("mailto:ada@" . $host), "short" => $directory->find("acct:a"), "empty" => $directory->find("")];'
+            . ' "unknown" => $directory->find("acct:nobody@" . $host), "scheme" => $directory->find("mailto:ada@" . $host), "short" => $directory->find("acct:a"), "otherhost" => $directory->find("acct:ada@other.example"), "otherport" => $directory->find("acct:ada@" . $host . ".other.example"), "empty" => $directory->find("")];'
         );
 
         $base = $answers['base'];
@@ -33,9 +33,27 @@ final class LegacyWebfingerDirectoryTest extends PrivateSiteTestCase
         $this->assertSame($base . 'actor/ada', $self['href']);
         $this->assertSame($answers['withhost'], $answers['nohost'], 'the host is optional');
         // (the resource must be longer than eight characters, `acct:` and three: a three-letter handle with no host is refused, as it was)
-        foreach (['tooshort', 'unknown', 'scheme', 'short', 'empty'] as $none) {
+        // (an `acct:` of another host is nobody of this site's, whoever the handle names: the host is stripped only when it is this site's)
+        foreach (['tooshort', 'unknown', 'scheme', 'short', 'otherhost', 'otherport', 'empty'] as $none) {
             $this->assertNull($answers[$none], $none);
         }
+    }
+
+    public function testTheMentionSearchEventFiresWithTheTypedNameAndWhatAListenerDoesToTheMembersIsInTheAnswer(): void
+    {
+        $this->addUser('ada');
+        $this->addUser('bob');
+
+        $answer = $this->runInSite(
+            '$seen = []; \Idno\Core\Idno::site()->events()->addListener("search/mentions", static function (\Idno\Core\Event $event) use (&$seen): void {'
+            . ' $seen[] = $event->data(); foreach ($event->response() as $user) { $user->setTitle("Listed: " . $user->getTitle()); } });'
+            . '$list = (new \Idno\Legacy\LegacyMentionCandidates())->candidates("ad"); return ["seen" => $seen, "list" => $list];'
+        );
+
+        $this->assertSame([['username' => 'ad']], $answer['seen'], 'the event is triggered once, with the name typed as its data');
+        $names = array_column($answer['list'], 'name');
+        sort($names);
+        $this->assertSame(['Listed: Ada', 'Listed: Bob'], $names, 'the members a listener changed are listed as changed');
     }
 
     public function testTheMentionCandidatesAreHandleNameAndAvatarOnly(): void

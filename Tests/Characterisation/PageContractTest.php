@@ -156,7 +156,14 @@ final class PageContractTest extends PrivateSiteTestCase
         foreach (['/', '/feed.xml', '/tag/x', '/robots.txt', '/search/mentions.json'] as $path) {
             $this->assertSame(403, $client->request('GET', $path)->status, $path);
         }
-        foreach (['/.well-known/webfinger?resource=acct:ada@' . $host, '/chrome/manifest.json', '/service-worker.min.js'] as $path) {
+        // (the form token endpoint was no public route: a visitor of a private site is refused, with the XHR header the page asks for as well as without it)
+        foreach ([[], ['X-Requested-With' => 'XMLHttpRequest']] as $headers) {
+            $response = $client->request('GET', '/service/security/csrftoken/', $headers);
+            $this->assertSame(403, $response->status, 'the form token endpoint ' . json_encode($headers));
+            $this->assertStringNotContainsString('"token"', $response->body, 'no token reaches a visitor of a private site');
+        }
+        // (the service worker, either spelling, and the manifest and WebFinger were public routes)
+        foreach (['/.well-known/webfinger?resource=acct:ada@' . $host, '/chrome/manifest.json', '/service-worker.min.js', '/service-worker.js'] as $path) {
             $this->assertSame(200, $client->request('GET', $path)->status, $path);
         }
     }

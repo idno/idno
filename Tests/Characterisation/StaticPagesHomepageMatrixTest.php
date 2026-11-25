@@ -135,11 +135,13 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
 
     /**
      * Asks for `/` of each viewer, for each kind of chosen page, and checks the answer against who may read it. `$visitorRefused`: the site
-     * refuses a visitor before the home page is asked anything (a walled garden whose home route is not public). `$comparePermalink`: also checks
-     * the home page against the page's own address for each viewer (not where a plugin made the home route public and the address is not: a visitor
-     * is shown a public page on the home page there and refused at its address, a decision of its own).
+     * refuses a visitor before the home page is asked anything (a walled garden whose home route is not public). `$permalinkViewers`: the
+     * viewers whose home page is also checked against the page's own address (where a plugin made the home route public and the address is not, a
+     * visitor is shown a public page on the home page and refused at its address, a decision of its own: only the visitor is left out there).
+     *
+     * @param list<string> $permalinkViewers
      */
-    private function assertEveryViewerGetsWhatHeMay(string $base, bool $visitorRefused, bool $comparePermalink = true): void
+    private function assertEveryViewerGetsWhatHeMay(string $base, bool $visitorRefused, array $permalinkViewers = ['visitor', 'bob', 'carol', 'ada']): void
     {
         foreach (self::readers() as $kind => $readers) {
             $id = $this->ids[$kind];
@@ -182,8 +184,8 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
             }
             // The home page shows the static page exactly when the page's own address would (the same viewer, the same page): a viewer the permalink
             // refuses, hides or sends elsewhere is never shown the page on the home page, and one it shows is
-            if ($comparePermalink && isset($this->paths[$kind])) {
-                foreach (['visitor', 'bob', 'carol', 'ada'] as $viewer) {
+            if (isset($this->paths[$kind])) {
+                foreach ($permalinkViewers as $viewer) {
                     $permalink = $this->request($base, $viewer, 'GET', $this->paths[$kind]);
                     $home = $this->request($base, $viewer, 'GET', '/');
                     $this->assertSame(
@@ -237,7 +239,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
     {
         $base = $this->startExtraServer(['IDNO_WALLED_GARDEN' => '1', 'IDNO_TEST_HOMEPAGE_LISTENERS' => 'public']);
 
-        $this->assertEveryViewerGetsWhatHeMay($base, false, false);
+        $this->assertEveryViewerGetsWhatHeMay($base, false, ['bob', 'carol', 'ada']);
         $this->assertNoDeprecation($base);
     }
 
