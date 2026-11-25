@@ -374,17 +374,72 @@ namespace Tests\Core {
             $this->assertSame('1', (string) $client->query('select count(*) from `entities`')->fetchColumn());
         }
 
+        public function testConnectingToADatabaseWithoutASchemaCreatesNothingInIt()
+        {
+            // A site whose configuration names an empty database (one written by hand, say)
+            // used to run every upgrade file against it, which left a versions table and a
+            // few others: enough to look like a site, and not enough to be one.
+            $config = \Idno\Core\Idno::site()->config();
+            new \Idno\Data\MySQL($config->dbuser, $config->dbpass, $this->database, $config->dbhost, $config->dbport);
+
+            $this->assertSame([], $this->tables());
+        }
+
+        public function testLeftoversOfAnEarlierAttemptAreReplacedByTheSchema()
+        {
+            // What a database looked like after Idno had connected to it while it was empty
+            $client = $this->root($this->database);
+            $client->exec('create table `versions` (`label` varchar(32) not null, `value` varchar(10) not null, primary key (`label`)) engine=InnoDB');
+            $client->exec("insert into `versions` values ('schema', '2020120301')");
+            $client->exec('create table `reader` (`uuid` varchar(255) not null, primary key (`uuid`)) engine=InnoDB');
+
+            $this->assertStringStartsWith('REDIRECT: ../begin/register', $this->request('POST', 'settings', $this->settings()));
+
+            foreach (['entities', 'entities_search', 'entities_metadata', 'config', 'config_search', 'reader_search', 'site', 'session', 'versions'] as $table) {
+                $this->assertContains($table, $this->tables(), 'The whole schema should be there.');
+            }
+            $this->assertNotSame('2020120301', $client->query("select `value` from `versions` where `label` = 'schema'")->fetchColumn());
+            $this->assertNotFalse($client->query('select `_id` from `reader` limit 1'), 'The leftover table should have been replaced by the real one.');
+            $this->firstVisitorBecomesTheAdministrator(parse_ini_file($this->configFile(), true));
+        }
+
+        public function testAnIncompleteSiteOrSomebodyElsesTablesAreNotTouched()
+        {
+            // Part of a site: its posts are there, other tables are not
+            $client = $this->root($this->database);
+            $client->exec('create table `versions` (`label` varchar(32) not null, `value` varchar(10) not null, primary key (`label`)) engine=InnoDB');
+            $client->exec("insert into `versions` values ('schema', '2020120301')");
+            $client->exec('create table `entities` (`uuid` varchar(255) not null, `_id` varchar(36) not null, primary key (`uuid`)) engine=InnoDB');
+
+            $page = $this->request('POST', 'settings', $this->settings());
+            $this->assertStringContainsString('holds part of an Idno site', $page);
+            $this->assertSame(['entities', 'versions'], $this->tables());
+            $this->assertFileDoesNotExist($this->configFile());
+
+            // A leftover table with rows in it is somebody's data
+            $client->exec('drop table `entities`');
+            $client->exec('create table `reader` (`uuid` varchar(255) not null, primary key (`uuid`)) engine=InnoDB');
+            $client->exec("insert into `reader` values ('kept')");
+
+            $page = $this->request('POST', 'settings', $this->settings());
+            $this->assertStringContainsString('Use an empty database', $page);
+            $this->assertSame('kept', $client->query('select `uuid` from `reader`')->fetchColumn());
+            $this->assertFileDoesNotExist($this->configFile());
+        }
+
         public function testASchemaThatCannotBeLoadedLeavesNoTablesBehindAndSaysWhy()
         {
-            // A table in the way that the schema's foreign keys can't refer to
+            // Another application's tables, with a foreign key whose name the schema needs: the
+            // name of a constraint is taken once in a database, so a table of the schema fails
             $client = $this->root($this->database);
-            $client->exec('create table `config` (`something` int)');
+            $client->exec('create table `other_parent` (`id` int primary key) engine=InnoDB');
+            $client->exec('create table `other_child` (`id` int, constraint `es_id_id` foreign key (`id`) references `other_parent` (`id`)) engine=InnoDB');
 
             $page = $this->request('POST', 'settings', $this->settings());
 
             $this->assertStringContainsString('The database tables could not be created', $page);
             $this->assertStringContainsString('The database server said: SQLSTATE', $page, 'The server\'s own reason should be shown.');
-            $this->assertSame(['config'], $this->tables(), 'Only the table that was there before should remain.');
+            $this->assertSame(['other_child', 'other_parent'], $this->tables(), 'Only the tables that were there before should remain.');
             $this->assertFileDoesNotExist($this->configFile());
         }
 

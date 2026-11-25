@@ -535,10 +535,18 @@ every check and everything that is written is in `Idno\Core\Installer`, and both
   links it there, so it is complete or absent and an existing one is never replaced.
   `canWriteConfig()` is asked before anything is changed; when the file can't be saved, the
   page shows its contents and where they go, and `?stage=finish` goes on once the file is there.
-- **Schema**: `installSchema()` loads `mysql.sql` only into a database with no `schema` row
-  in `versions`; an existing site's database is left as it is (its upgrades run when Idno
-  connects). If a statement fails, the tables that attempt created are dropped and the
-  server's own message is shown.
+- **Schema**: `installSchema()` decides by the `entities` table. A database that has it,
+  with `config` and a `schema` row in `versions`, holds a site and is left as it is (its
+  upgrades run when Idno connects); one that has it without the rest is refused. Without
+  it there is no site: empty tables with Idno's names (what an earlier attempt left) are
+  dropped and `mysql.sql` is loaded, and a table of that name with rows in it stops the
+  installation. Tables with other names are never touched. If a statement fails, the
+  tables that attempt created are dropped and the server's own message is shown. A
+  `versions` row alone says nothing: don't decide by it.
+- **No upgrades without a site**: `MySQL::checkAndUpgradeSchema()` applies no upgrade file
+  to a database that has no `entities` table (`hasSchema()`). The older upgrade files
+  create `versions` and a few other tables, so a configuration that named an empty
+  database used to leave something that looked installed and answered 500.
 - **Problems** are `Installer::problem()` arrays (`text`, `commands`), by field name, plain
   text; the templates escape them and draw each beside its field
   (`pages/elements/problem`). What was typed is kept, except the password, which is never

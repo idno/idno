@@ -102,6 +102,7 @@ namespace Idno\Data {
                 foreach ($versions as $version) {
                     if ($version->label === 'schema') {
                         $basedate          = $newdate = (int)$version->value;
+                        $has_schema        = null;
                         $upgrade_sql_files = array();
                         $schema_dir        = dirname(dirname(dirname(__FILE__))) . '/warmup/schemas/mysql/';
                         $client            = $this->client;
@@ -125,6 +126,19 @@ namespace Idno\Data {
                             2026111401, // Search text and indexed values to utf8mb4
                         ] as $date) {
                             if ($basedate < $date) {
+                                // Upgrades are for a database that holds a site. Run against one that
+                                // has no tables (a configuration that names an empty database), the
+                                // older files would create a versions table and a few others: what
+                                // looks like a site and is none. The installer loads the schema.
+                                if ($has_schema === null) {
+                                    $has_schema = $this->hasSchema();
+                                    if (!$has_schema) {
+                                        error_log('The database ' . $this->dbname . ' has no Idno tables, so no schema upgrade was applied. Run the installer, or load warmup/schemas/mysql/mysql.sql.');
+                                    }
+                                }
+                                if (!$has_schema) {
+                                    break;
+                                }
                                 try {
                                     $client->beginTransaction();
 
@@ -155,6 +169,22 @@ namespace Idno\Data {
                         }
                     }
                 }
+            }
+        }
+
+        /**
+         * Does this database hold an Idno site: is the table of its posts there?
+         *
+         * @return bool
+         */
+        protected function hasSchema()
+        {
+            try {
+                return (bool) $this->client->query("show tables like 'entities'")->fetchColumn();
+            } catch (\Exception $e) {
+                error_log($e->getMessage());
+
+                return false;
             }
         }
 
