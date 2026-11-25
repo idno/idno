@@ -334,7 +334,8 @@ Idno/
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
-                               commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
+                               commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand, InstallCommand,
+                               AdminCreateCommand, SetupLinkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
   Legacy/                      Shims between the kernel and the legacy application (see below), among them
                                MessengerEventQueue (the site's queue) and LegacyEventTrigger / LegacyUserContext
@@ -400,6 +401,11 @@ Idno/
   Security/                    Passwords (the password service on symfony/password-hasher) and what lets Symfony Security know who is
                                making a request (modern style): SessionUser, CurrentUserSource, CurrentUserAuthenticator,
                                StatelessAuthentication, ApiSignatureVerifier, DeniedResponder, ForbiddenPage and LoginThrottle. See "Security architecture"
+  Install/                     The installation (modern style): the web installer of a site with no configuration
+                               (InstallGateListener, WebInstaller, InstallPage), the step that creates the first
+                               administrator (SetupGateListener, SetupToken, FirstAdministrator), and the pure pieces
+                               the console commands share (ServerChecks, SiteAddress, DatabaseChoice, ConfigFile,
+                               InstallPaths). See "Installation"
   Markdown/                    A post's Markdown form (modern style, NOT a scanned directory: nothing in it is a service):
                                MarkdownRequest (whether a request asks for it), FrontMatter (the YAML block) and
                                HtmlToMarkdown (the conversion). See "Markdown output"
@@ -437,8 +443,7 @@ templates/                     Templates (Twig for web pages and mail, `.tpl.php
                                look (also the fallback of every type); `classic` the entity templates of the look it replaced, which
                                feeds, JSON, Markdown, ActivityPub, KML and mail still draw, with a copy of each `default` file they reach (never selectable); `rss`, `json`, ...
 css/, js/                      The shipped style sheets and scripts: Idno 2026's (`css/idno-2026.min.css`, `js/idno-2026.min.js`, built by Vite from
-                               `frontend/`), the onboarding pages' and installer's (`css/idno-simple*.css`, built by Grunt from `css/scss/idno-simple.scss`,
-                               Bootstrap based) and the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`).
+                               `frontend/`) and the service worker (`js/service-worker.min.js`, built by Grunt from `js/src/ServiceWorker.js`).
                                `Tests/Unit/Templating/StaticAssetsTest` (which also fails for a template that calls a global of a script nothing loads: `Template`, `ImageTools`, `EXIF`, `Modernizr`) fails for a shipped file that
                                nothing names (its `KEPT` list needs a reason for each exception) and for a template that names a file that is not there
 frontend/                      The sources of Idno 2026's style sheet and script (Vite, Tailwind CSS, Tiptap, Alpine) and their npm
@@ -474,8 +479,8 @@ anything else, or unset, is false), both read from `$_SERVER`.
 - **`index.php`** (HTTP): every web request. See the request lifecycle below.
 - **`Idno/start.php`** (boot only): boots the kernel and so the legacy application, and
   returns. Used by `Tests/_bootstrap.php` and by third-party scripts that need
-  `Idno::site()`. It does not handle a request. On a site with no configuration it sends
-  the same redirect to `./warmup/` as `index.php` and exits. While the schema gate is closed
+  `Idno::site()`. It does not handle a request. On a site with no configuration it prints one
+  line on stderr (`InstallGateListener::NOT_INSTALLED`), sets status 503 and exits 1. While the schema gate is closed
   (see "The schema gate and the upgrade") it prints one line on stderr (`Idno's database needs
   an upgrade: load the site in a browser or run php bin/console idno:upgrade`,
   `SchemaGate::CLOSED_MESSAGE`), sets status 503 and exits 1; for a site configured for MongoDB
@@ -493,84 +498,138 @@ anything else, or unset, is false), both read from `$_SERVER`.
   the MongoDB message for a site configured for MongoDB; also before the "not defined" error for a
   legacy command); Symfony's own commands, `idno:upgrade` and `idno:import:mongo` run (pinned by
   `Tests/Kernel/SchemaGateBootTest`). On a
-  site with no configuration it prints one line to stderr and exits 1, before anything connects
+  site with no configuration only `idno:install` (and `list`, `help`) runs: every other command
+  prints `Idno is not installed yet: run php bin/console idno:install` on stderr
+  (`Application::NOT_INSTALLED`) and exits 1, before anything connects
   (pinned by `Tests/Kernel/UpgradeCommandNotInstalledTest`); on any other
   exception while booting it prints `Idno could not start: <exception class>: <message>`
   to stderr and exits 1 (it does not carry on). `idno.php` and
   `known.php` are aliases that repeat the SAPI check and require `bin/console`; use either.
   See "Console commands" below.
 
-These run WITHOUT the kernel or the container, so installer code cannot use container
-services, `Idno::site()` or `Idno::container()`:
+### Installation
 
-- **`warmup/index.php`** (web installer, a separate web entry point that the web server
-  serves directly): loads `vendor/autoload.php` and `warmup/WebInstaller.php` only.
-- **`warmup/CLI/CLIInstaller.php`** (command-line installer): loads `vendor/autoload.php` only.
-  It writes `configuration/config.ini` only; per-domain config files are no longer read, so
-  `install <name>` refuses any other name.
+A site is INSTALLED when it has a configuration: `BootConfig::isDefault()` is false, which
+`LegacyConfigLoader` decides: a `config.ini` or `config.json` was read (in `configuration/` or the
+project root), or the merged configuration names a `database` (a container configured by `IDNO_*`
+variables alone, or `IDNO_DATABASE_URL`, is installed and never offered the installer). On a site that
+is not installed `Idno\Kernel::boot()` stops after the container: the schema gate is not asked, nothing
+connects, the legacy application is not booted, and `Kernel::installed()` is false. The installation
+is `Idno\Install\` (modern style, a scanned directory); it replaced the standalone `warmup/` scripts,
+`Idno\Core\Installer` and the onboarding pages (`/begin/*`, `shell/simple`), which are gone. Only
+`warmup/webserver-configs/` remains (the sample server configurations and `config.ini.template`).
 
-Both installers set up MySQL, MariaDB or SQLite, through ONE method of their shared base,
-`Idno\Core\Installer::databaseParams(string $database, array $input)`: it checks the chosen
-database and returns the values `buildConfig()` fills `warmup/webserver-configs/config.ini.template`
-with, or throws `Idno\Exceptions\ConfigurationException` with the message to show (the web installer
-escapes it). `$database` is read by `Installer::databaseType()`: `sqlite`, `SQLite` and `sqlite3`
-(with spaces around them) are SQLite, `mongo` and `mongodb` (any case, with spaces around them) are
-REFUSED (a `ConfigurationException`: MongoDB is no longer supported, the choices are MySQL or SQLite,
-and `idno:import:mongo` moves a MongoDB site; it is thrown by `databaseType()` itself, so by
-`databaseParams()` and by both installers before anything is written; the web installer shows it on its
-settings page, the CLI installer lets it end the command with the message), anything else is MySQL or
-MariaDB. For MySQL the input is
-`name`, `user`, `pass` and `host`, the check is a connection (`installSchema()`), and the value written
-is `MySQL`. For SQLite the input is `path`: empty is `<project>/data/idno.sqlite`, a relative path is
-under the project directory (as the site reads it). `Installer::sqlitePath()` (also what `makeconfig`
-calls) checks the path WITHOUT touching the disk and refuses with a `ConfigurationException`, saying
-why, a path with a single quote or a control character (it cannot be written in the configuration
-file), a segment `..` (either slash), and a file name that does not match
-`ConnectionParameters::SQLITE_FILE_NAME` (`/^[A-Za-z0-9._-]+\.sqlite\z/`, lower case only: the Apache
-rules match case-sensitively): `.sqlite` is the suffix every shipped web-server configuration refuses
-to serve and PHP never executes; `ConnectionParameters::fromLegacyConfig()` applies the same rule to an SQLite `dbname` (other than
-`:memory:`) and throws a `\LogicException` naming the setting, so no configuration, however written,
-can make the site create its database under an executable name; the import command refuses such a target
-before connecting. `Installer::buildConfig()` (every installer) refuses a value containing a quote, a
-control character or ending in a backslash, with a `ConfigurationException` naming the setting, because
-values are written inside single quotes and such a value could add or change another setting (pinned by
-the property test in `InstallerDatabaseTest`) and fills the template in ONE pass, so every value is written exactly as given. Both installers call `Installer::assertWritableConfigValues()` with the values they will write BEFORE they create or write anything (the SQLite file, `.htaccess`, the configuration), so a refused value leaves nothing behind; the web installer builds the file's text before it writes anything and shows the refusal on the settings page. A database file can neither be fetched nor run through the site
-(directory names may hold anything else, spaces included). `sqliteParams()` then checks what it can
-without creating anything (not a directory, the existing directory and file writable) and creates the
-directory (0755) and an empty file last; the file is opened through DBAL with `SqliteConnectionSetup`
-(which refuses SQLite below 3.38), so an existing file that is not an SQLite database is refused and
-left as it is (an empty file is a valid new database). The value written is exactly `sqlite` (`Sqlite3` in a configuration means MySQL: see
-`ConnectionParameters::driverFamily()`) and `dbname` is the absolute path; `dbuser`, `dbpass` and
-`dbhost` are empty. Neither installer loads SQL: the tables are created by the upgrade, as for MySQL.
-`Installer::requiredModules()` no longer lists `pdo_mysql`: `Installer::databaseModules()` is
-`pdo_mysql` and `pdo_sqlite`, and the requirements page and `check-requirements` need at least one
-(`Installer::databaseModuleAvailable()`). The web installer's settings page has the choice as two
-radio buttons in one `fieldset` (MySQL or MariaDB by default) and NO SQLite path: the installer of a
-site that is not set up is reachable by anyone, so the web installer's SQLite database is always
-`<project>/data/idno.sqlite` (the page says where, escaped, and that another place needs the CLI
-installer or a hand-written `config.ini`; a `sqlite_path` in the request is ignored). What the
-settings page decides is `Installer::checkWebSettings($method, $request)` (no output, no exit; the
-page, `WebInstaller::pageSettings()`, only draws): nothing is checked against the database, and no file
-or directory is created, unless the method is POST and the upload path has passed its own check (a
-failed submission leaves nothing behind); a value that is not a string (`upload_path[]=x`) is empty;
-an empty upload path says "You need to specify an upload path." for either database. Do not add a
-disk path the visitor chooses to the web installer. The CLI asks
-`Please enter the database type (mysql or sqlite): `, and for SQLite the path in place of the
-database's name, user, password and host (manifest keys `database` and `sqlite_path`; `makeconfig`
-writes the SQLite settings without creating the file). The installers change no file's mode: an SQLite
-site set up from the command line has files owned by that user, which the web server cannot write, so
-the CLI installer (and the import command, for an SQLite target) prints
-`Installer::sqliteOwnershipNotes()`: the file, its directory and the files SQLite and the upgrade
-create beside it (`-wal`, `-shm`, `.upgrade.lock`) must be owned by or writable for the web server's
-user (`chown -R www-data data/`), and console commands on the site run as that user. `Tests/Unit/Install/InstallerDatabaseTest`
-pins the SQLite side in the unit tier (a test subclass whose root is a temporary directory),
-`WebSettingsTest` the web installer's decision, `CliInstallerTest` `makeconfig` and the ownership notes,
-`Tests/Kernel/InstallerSchemaTest` the MySQL side (skips on SQLite). `ext-pdo_mysql` is a Composer `suggest`, not a
-`require`, as is `ext-pdo_sqlite`.
-The web installer's check that URL rewriting works (`WebInstaller::rewriteWorking()` and the settings page's own request) asks for `js/canary.js`, a file that does
-not exist: a working rewrite rule answers it with `js/idno-2026.min.js` (the look's script, so a 200), no rule leaves a 404. `.htaccess`, `warmup/webserver-configs/htaccess.dist`,
-`htaccess-2.4.dist`, `nginx.conf`, `docker/caddy/Caddyfile` and both routers carry the rule (it once named `js/known.min.js`, which was never shipped, so the check failed on every
-server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in every configuration and `DeniedPathsTest::testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript` the answer.
+There are three ways in, with one result (a configuration file, the tables, ONE administrator):
+
+- **The web installer.** `Idno\Install\InstallGateListener` (`kernel.request`, priority 310) acts only
+  in a kernel that boots the legacy application and is not installed. It answers `/` (and `/index.php`;
+  GET, HEAD, POST) with `WebInstaller::handle()`, a GET or HEAD for a page anywhere else with a 302 to
+  the base path's `/` (never a relative redirect: the old `./warmup/` looped), and anything else with a
+  503 `text/plain` `Idno is not set up yet.`. The installer has NO address of its own, so it works on a
+  server whose URL rewriting does not, and "inaccessible once installed" is exact: with a configuration
+  the listener does nothing, for every address and method, and `/` is the site's home page. A site
+  whose configuration FILE exists but cannot be read or is empty (`InstallPaths::existingConfigFiles()`)
+  is not offered the installer: every request gets a 503 that says the file cannot be read, with the fix.
+  `WebInstaller` keeps nothing on the server between its steps (what a step accepted travels forward in
+  hidden fields) and writes nothing before the last one:
+  1. "Checking your server" (`ServerChecks::run()`, pure, from facts the caller gives): PHP 8.4, the
+     extensions (`ServerChecks::EXTENSIONS`, and one of `DATABASE_EXTENSIONS`), `configuration/` and
+     `Uploads/` writable (fail), `data/` writable (fail, or a warning that disables the SQLite choice
+     when `pdo_mysql` is there), the kernel's cache in a temporary directory (warn), a base path (fail:
+     Idno is installed at the top of a domain), HTTPS (fail; a warning on `localhost`, `127.0.0.1`,
+     `[::1]`, `*.localhost`, `*.test`: `SiteAddress::isLocal()`). HTTPS is the connection or
+     `X-Forwarded-Proto: https` (`WebInstaller::secure()`, the rule `Page::isSSL()` uses). Every failure
+     is a `CheckResult` with what it means, the fix and, where there is one, the command. URL rewriting
+     is checked by the page's script, which fetches `js/canary.js` (the rewrite rules of `.htaccess`,
+     `warmup/webserver-configs/htaccess.dist`, `htaccess-2.4.dist`, `nginx.conf`,
+     `docker/caddy/Caddyfile` and both routers answer it with `js/idno-2026.min.js`; no rule leaves a
+     404; `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in every configuration
+     and `DeniedPathsTest::testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript` the answer) and
+     posts the result with the form (`rewrite` = `fail` stops the step); without JavaScript it is not
+     checked.
+  2. "Your site": a name and a DOMAIN (`SiteAddress`: read from the Host header, shown, corrected by
+     the person; a host name or IP with an optional port and nothing else). The address written is
+     `https://<domain>/` (`http://` only for a local name). This is how an installer-made site gets its
+     `url` without trusting the Host header: the person confirms it on screen before it is written.
+  3. "Where should Idno keep your site?": SQLite (preselected, "a file on this server") or MySQL or
+     MariaDB (name, user, password, server; the server may be `host:port`, written as `dbhost` and
+     `dbport`). The database is asked LAST so that its password is posted once and never printed.
+     `save()` then, in this order: every check again; `DatabaseChoice::type()` (MongoDB refused with
+     the message that names `idno:import:mongo`); `ConfigFile::assertWritable()` on what would be
+     written, BEFORE anything is created; `DatabaseChoice::params()` (MySQL: connects through
+     `ConnectionFactory::forConfig()`; a failure is one of `connectionProblem()`'s fixed sentences,
+     never the driver's text; SQLite: creates the directory and an empty file last and opens it with
+     `SqliteConnectionSetup`); `DatabaseChoice::inspect()` (a `SchemaState` on the candidate settings:
+     a database the upgrade would refuse is refused here with the upgrade's own `PublicMessage`; one
+     that already holds an Idno site needs the form's `use_existing=1` and is never overwritten: the
+     upgrade takes over); `ConfigFile::build()` and `writeOnce()` (an exclusive create of
+     `configuration/config.ini`: false, nothing changed, when any configuration file exists or
+     appears, so a double submit or a second tab changes nothing); `SetupToken::issue()` and the
+     `idno_setup` cookie; a 303 to `/`. A failure removes the SQLite file this request created.
+  The web installer takes NO path from a request (the SQLite database is always `data/idno.sqlite`,
+  uploads always `Uploads/`: an uninstalled site is reachable by anyone), a field that is not a string
+  is empty (`InstallForm`), and a form is accepted only with the token of the `idno_install` cookie
+  (`WebInstaller::fieldFor()`, a double-submit token; `SameSite=Strict`). Do not add a disk path the
+  visitor chooses.
+- **The setup step.** Whoever arrives first may install (decided: no code to paste), but only the
+  browser that did can create the administrator. `SetupToken` writes the marker
+  `configuration/setup-pending` (JSON: the SHA-256 of a random token, and the site's name; never the
+  token) and the browser holds the token in the cookie `idno_setup` (HttpOnly, `SameSite=Lax`, Secure
+  on HTTPS, thirty days). Between the configuration and the tables the upgrade page runs as for any
+  site. Then `Idno\Install\SetupGateListener` (`kernel.request`, priority 290, after the upgrade gate's
+  300) acts while the legacy application is booted AND the marker exists (one `stat` a request, no
+  statement, once the marker is gone): if the site has an administrator already (an existing database
+  was chosen) it removes the marker and lets the request through; a browser whose cookie matches gets
+  "Create your account" at `/_setup/` (any other page is redirected there), and its POST (name,
+  username, email, a password of at least `AdministratorDetails::PASSWORD_LENGTH` (10) characters typed
+  twice, the form's own token `SetupToken::fieldFor()`) creates the administrator through
+  `Idno\Install\FirstAdministrator` (an interface; `Idno\Legacy\LegacyFirstAdministrator` is the
+  adapter: it refuses when an administrator exists, gives the site its name, `from_email` and closed
+  registration, and triggers `site/firstadmin`), removes the marker, signs the browser in and
+  redirects to `/admin/welcome/` (`Idno\Pages\Admin\Welcome`, a legacy admin page: what to do next;
+  every link on it is followed by a test); everyone else gets a 503 "This site is being set up" for
+  every address and method. `GET /_setup/<token>` with the marker's token gives the browser the cookie
+  (the link `idno:setup:link` prints). "Closed for ever" means: once the site has an administrator the
+  marker is gone and `/_setup/` is an ordinary missing page; nothing else creates an administrator.
+  `Idno\Pages\Account\Register` NEVER makes one: on a site with no user it refuses (a redirect to the
+  home page), and `Idno\Pages\Homepage` on a site with no user answers 503 with the same "being set
+  up" page (a hand-written configuration with no marker), so there is no window in which a stranger
+  becomes the first administrator.
+- **The command line**: `idno:install`, `idno:admin:create` and `idno:setup:link` (see "Console
+  commands"), and a hand-written `config.ini` or `IDNO_*` environment followed by `idno:upgrade` and
+  `idno:admin:create`.
+
+The pages (`InstallPage`, static) are self-contained documents built in PHP as `UpgradePage` is: inline
+style and script with a per-response nonce and a Content-Security-Policy, no image, font or external
+request, light and dark, a label for every field, the error beside its field and in a `role="alert"`
+summary, every value escaped, a password never printed; English only. Every response is `no-store`.
+
+The safety rules, kept from the old installers and pinned by `Tests/Unit/Install/`: the name of an
+SQLite database file must match `ConnectionParameters::SQLITE_FILE_NAME` (`DatabaseChoice::sqlitePath()`
+refuses a quote, a control character, a `..` segment and any other name, touching nothing; the suffix
+`.sqlite` is the one every shipped web-server configuration refuses to serve and PHP never executes,
+and `ConnectionParameters::fromLegacyConfig()` applies the same rule to any configuration);
+`ConfigFile::assertWritable()` refuses a value containing a quote, a control character or ending in a
+backslash, naming the setting and never the value (values are written inside single quotes; the
+property test is in `InstallerDatabaseTest`), and `build()` fills the template in ONE pass; a setting
+with no value (`url`, `dbport`) has its line left out; the value written for SQLite is exactly `sqlite`
+(`Sqlite3` in a configuration means MySQL); no installer loads SQL (the upgrade creates the tables) or
+changes a file's mode or the `.htaccess`. An SQLite site set up from the command line has files owned
+by that user: `idno:install` and the import command print `DatabaseChoice::sqliteOwnershipNotes()`.
+`ext-pdo_mysql` and `ext-pdo_sqlite` are Composer `suggest`s.
+
+Tests: `Tests/Unit/Install/` (`InstallPiecesTest`, `InstallerDatabaseTest`, `WebInstallerTest`: the
+installer driven with `Request` objects on a temporary root: each step, the last step's writes, a
+second submission, a missing token, MongoDB, arrays for strings, hostile values, nothing left behind,
+an existing database never removed), `Tests/Install/WebInstallFlowTest` (over HTTP, a site of its own
+through `UninstalledSiteTestCase`: every address of an unconfigured site, the whole flow to a
+signed-in administrator, a stranger at each stage, the ready page's links, the step gone afterwards,
+the lost cookie and the console's link, an unreadable configuration, a hand-written configuration and
+`idno:admin:create`, `idno:install` unattended) and `Tests/Kernel/InstallerSchemaTest` (the MySQL side;
+skips on SQLite). Those sites keep what an installation writes in a temporary directory: in the TEST
+environment only, `config/services_test.php` builds `BootConfig` and `InstallPaths` through
+`Tests\Fixtures\InstallRoot`, which uses the directory `IDNO_TEST_INSTALL_ROOT` names when it is set
+(never in production: there the root is the project directory).
 
 ### Request lifecycle
 
@@ -581,8 +640,8 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    the body, so `php://input` stays readable for legacy code), and
    `FrontController::handle()` calls `Kernel::handle()`.
 3. The kernel boots: the container is built (or loaded from cache); a site with no
-   configuration throws `NotInstalledException` (before anything connects), which
-   `FrontController` turns into the redirect to `./warmup/`; the schema gate is asked
+   configuration is not booted any further (nothing connects; `Kernel::installed()` is false) and
+   `Idno\Install\InstallGateListener` answers the request with the installer (see "Installation"); otherwise the schema gate is asked
    (`Idno\Upgrade\SchemaGate`, see "The schema gate and the upgrade"); and, when it is open, the
    legacy application is booted by `Idno\Legacy\LegacyBootstrap` (configuration, `Idno::site()`,
    plugins, the legacy session — `session_start()` happens here, before routing). When the gate
@@ -748,6 +807,30 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   the schema gate is closed: then the legacy application (which backs that logger) is not
   booted. Commands that must run then (`idno:upgrade`) take no logger and nothing of the legacy
   application.
+- **`idno:install`** (`Idno\Console\InstallCommand`; the only Idno command that runs on a site with no
+  configuration): the web installer's checks and result from a terminal. Every setting is an option
+  (`--url`, `--site-title`, `--database`, `--sqlite-path`, `--db-name`, `--db-user`, `--db-host`,
+  `--upload-path`, `--admin-name`, `--admin-handle`, `--admin-email`) or a line of `--manifest=<ini>`
+  (`site_title`, `url`, `database`, `sqlite_path`, `mysql_name`, `mysql_user`, `mysql_pass`,
+  `mysql_host`, `upload_path`, `admin_name`, `admin_handle`, `admin_email`); what is missing is asked
+  for unless `--no-interaction`. A password is NEVER an option: the database's comes from the manifest,
+  `--db-password-file` or a hidden prompt, the administrator's from `--admin-password-file`,
+  `--admin-password-stdin` or a hidden prompt typed twice. It refuses (exit 1, nothing changed) when a
+  configuration file exists, a server check fails, `--url` is missing or not `http(s)://host[:port]/`
+  with nothing after it (`SiteAddress::fromUrl()`; an http address on a host that is not local gets a
+  note), the database is MongoDB, a value cannot be written, or the database cannot be used; it writes
+  `configuration/config.ini` with `ConfigFile::writeOnce()`, then runs `idno:upgrade` and (unless
+  `--no-admin`, or the database already held a site) `idno:admin:create --password-stdin` in processes
+  of their own (this one booted with no configuration), and prints who owns the files. Unlike the web
+  installer it takes a path for the SQLite file and for uploads and an http address: whoever runs it
+  has the server already.
+- **`idno:admin:create`** (`Idno\Console\AdminCreateCommand`): the site's first administrator, through
+  `Idno\Install\FirstAdministrator` (`--handle`, `--email`, `--name`, `--site-title`,
+  `--password-file`, `--password-stdin`, or prompts). It needs the tables (it says to run `idno:upgrade`
+  while the gate is closed), refuses once the site has an administrator, and removes the setup marker.
+- **`idno:setup:link`** (`Idno\Console\SetupLinkCommand`): makes a new setup token (the marker is
+  rewritten: an earlier link and the installer's cookie stop working) and prints `<url>/_setup/<token>`,
+  the link to the "Create your account" step; refuses once the site has an administrator.
 - **`idno:upgrade`** (`Idno\Console\UpgradeCommand`): creates or upgrades the database of an
   SQL site (MySQL, MariaDB or SQLite) in one run, `UpgradeRunner::run()` (see "The schema gate and
   the upgrade"): the pending schema migrations, the indexes the core entity classes (`Idno/`)
@@ -848,7 +931,7 @@ other new code may.
   DoctrineBundle (DBAL only, no ORM) and TwigBundle (see "Templates"); `packages/framework.php`: Symfony's session and error
   handling are disabled, the legacy application owns both; `packages/doctrine.php`: the DBAL
   connection, see below; `services.php`; `routes.php`).
-  `Kernel::boot()` refuses a site with no configuration (`LegacyBootstrap::ensureInstalled()`),
+  `Kernel::boot()` stops for a site with no configuration (`LegacyBootstrap::installed()` is false: `Kernel::installed()`, see "Installation"),
   asks the schema gate (`Idno\Upgrade\SchemaGate`, a public service, unless a kernel has already
   booted the legacy application in this process: `LegacyBootstrap::bootedInThisProcess()`), and
   boots the legacy application through `Idno\Legacy\LegacyBootstrap` only when the gate is open;
@@ -866,7 +949,7 @@ other new code may.
   than serve 404s from an empty route table.
 - `config/services.php` scans `Idno/<dir>` for each directory in
   `Idno\Kernel\CodeFingerprint::SERVICE_DIRECTORIES` (`Kernel`, `Config`, `Http`,
-  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`, `Templating`, `Security`) and registers the classes as autowired, autoconfigured
+  `Console`, `Legacy`, `Storage`, `Upgrade`, `Queue`, `Mail`, `Portability`, `Templating`, `Security`, `Install`) and registers the classes as autowired, autoconfigured
   services, except the files it excludes (classes that are not services, or that are wired
   by hand). Value objects and static helpers in a scanned directory are not services and
   must be added to the `$excludes` map in `config/services.php` (today in `Idno/Storage/`:
@@ -891,7 +974,11 @@ other new code may.
   `ImportedPost.php`, `ImportedComment.php` and `ImportResult.php`, the helper `ImportedImages.php`, the five
   interfaces, and `ImportedMedia.php` (wired by hand: it takes a closure that fetches the remote client), and in `Idno/Templating/` the value objects and static helpers
   `LocatedTemplate.php`, `OutputBuffers.php`, `ShellHeaders.php`, `TemplateName.php` and `TypeChain.php` and the classes wired by hand (`CascadeTwigLoader.php`,
-  `SlotRegistry.php`, `TemplateCascade.php`, `TemplateRenderer.php`, `TwigTemplateEngine.php`).
+  `SlotRegistry.php`, `TemplateCascade.php`, `TemplateRenderer.php`, `TwigTemplateEngine.php`), and in `Idno/Install/`
+  everything but the services (`InstallPaths`, wired with the project directory, `WebInstaller`, `SetupToken` and the two
+  listeners): `AdministratorDetails.php`, `CheckResult.php`, `ConfigFile.php`, `DatabaseChoice.php`, `DatabaseFinding.php`,
+  `FirstAdministrator.php` (an interface, aliased to `Idno\Legacy\LegacyFirstAdministrator`), `InstallForm.php`,
+  `InstallPage.php`, `ServerChecks.php` and `SiteAddress.php`.
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
   `Idno\Storage\BootConfigConnectionFactory` decorates the bundle's connection factory and, when
@@ -964,7 +1051,7 @@ other new code may.
   a supported production database for a small site**: one server, a local disk, sessions as PHP files
   (see the `db()` bullet), search without a full-text index, ASCII-only case folding (below), backups
   with `.backup` or a copy of the file while no writer is active. It is NOT supported on a network
-  filesystem (NFS, SMB) or with several web servers on one file. Both installers can set up an
+  filesystem (NFS, SMB) or with several web servers on one file. The web installer and `idno:install` can set up an
   SQLite site (see "Entry points"), and so can a configuration written by hand (`database =
   sqlite`, `dbname = data/idno.sqlite`); the test rig's SQLite mode is an SQLite site too (see
   "Build & Test"). Where the file lives: `dbname` is the
@@ -1440,10 +1527,6 @@ other new code may.
   response body: an error document's `error_description`, `message` or `error` (control characters replaced,
   at most 200 bytes), else `HTTP <status>`; URLs in them are reduced to scheme, host and path. The class logs
   nothing itself.
-- The web installer's check that URL rewriting works (`WebInstaller::rewriteWorking()`) uses
-  `HttpClient::create()` (the installer runs without the container) with a 10-second timeout, no redirects
-  and certificate verification on, as the curl call did by default; `Idno\Core\Installer::urlAnswers()` decides
-  from a client (a 2xx status; a failed request is false; pinned by `Tests/Unit/Install/UrlAnswersTest`).
 - The compiled container lives in `<cache base>/<env>/<build>-<key>` (cache base:
   `IDNO_CACHE_DIR`, else `var/cache`, else a private per-project temp dir; build number from
   `version.idno`). The key (`Kernel::getCacheDir()`) hashes the code fingerprint together with
@@ -1611,8 +1694,8 @@ callback, and often `exit`: Symfony's session listener would close the session a
 - **MongoDB** is no longer a database Idno runs on (the backend, `Idno\Data\Mongo`, and its GridFS file
   system were removed). A site whose `database` is `mongo`, `mongodb` or `Idno\Data\Mongo` is held closed by the schema
   gate (`SchemaStatus::MongoRetired`) with a message that names `php bin/console idno:import:mongo`,
-  which moves it to MySQL, MariaDB or SQLite (see "Importing a MongoDB site"). Both installers refuse
-  `mongo` and `mongodb` (`Installer::databaseType()` throws a `ConfigurationException` saying MongoDB
+  which moves it to MySQL, MariaDB or SQLite (see "Importing a MongoDB site"). The installers refuse
+  `mongo` and `mongodb` (`Idno\Install\DatabaseChoice::type()` throws a `ConfigurationException` saying MongoDB
   is no longer supported and the choices are MySQL or SQLite); any other unknown value still means
   MySQL. A `database` value naming a backend class a plugin supplies (`other`) boots as before.
 - **MySQL 8.0 and MariaDB 10.6** (or later) — store each document as JSON text in the tables of the
@@ -1622,7 +1705,7 @@ callback, and often `exit`: Symfony's session listener would close the session a
   `docs/install/upgrade.md` tells plugin authors what replaces it and what behaves differently.
 - **SQLite** — the same stores with `SqliteDialect`; `database = sqlite` (with `dbname` the file's
   path) gives `db()` the same adapter. A supported production database for a small site on one server
-  with a local disk (the default test rig runs on it; both installers can set up an SQLite site).
+  with a local disk (the default test rig runs on it; the installers can set up an SQLite site).
   See the SQLite bullet under "Kernel and services".
 - The schema is created by the upgrade (see "The schema gate and the upgrade" below): the first
   page load of a new installation, or of a site whose files were replaced, shows the upgrade page,
@@ -1754,7 +1837,7 @@ steps or `idno:upgrade`; the rig and CI run the command before the first request
 
 The legacy application must never boot on a database whose schema is not current (an empty one, a
 pending migration, a 1.x database, a copy not complete). `Idno\Kernel::boot()` asks
-`Idno\Upgrade\SchemaGate` first (after the "not installed" check), in a kernel that would boot the
+`Idno\Upgrade\SchemaGate` first (on an installed site: see "Installation"), in a kernel that would boot the
 legacy application; the gate keeps the status it computed for the life of its container (one per
 request or console run). Everything in `Idno\Upgrade\` runs while the legacy application is not
 booted: no `Idno::site()`, no `Idno\Legacy\`, no `Psr\Log\LoggerInterface` by its plain name (the
@@ -1974,8 +2057,8 @@ name in `config/services.php`).
   200 otherwise; never a document, a rejected row or private detail. Its time budget is
   `UpgradeRunner::STEP_SECONDS` (5); in the test environment only, `config/services_test.php` lets
   `IDNO_TEST_UPGRADE_STEP_SECONDS` shorten it (no request can).
-- After a web install the browser is sent to `begin/register`: that request gets the upgrade page
-  (`Empty`), the steps set the database up, and the reload continues to registration.
+- After a web install the browser is sent to `/`: that request gets the upgrade page
+  (`Empty`), the steps set the database up, and the reload continues to the setup step (`/_setup/`, see "Installation").
 - Test hooks of the test environment (`config/services_test.php`, inert unless their environment
   variable is set): `IDNO_TEST_UPGRADE_STEP_SECONDS` (above) and `Tests\Fixtures\FailFirstConnection`
   (a `doctrine.middleware`: with `IDNO_TEST_FAIL_FIRST_CONNECTION=1` the first connection attempt
@@ -3060,9 +3143,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   json, jsonp, rss, kml, jsonfeed and activitypub shells); `DefaultTemplate::shellHeaders($status)` gives the list for the template's type and
   `DefaultTemplate::sendShellHeaders()` sends it, called
   by `drawPage()` and by the two pages that draw the shell with `draw('shell')` (`Account\Register`, `Account\Password`);
-  `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
-  `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,
-  `Connect`, `Profile`); `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
+  the simple shell (`shell/simple`) and `DefaultTemplate::sendSimpleShellHeaders()` are gone with the onboarding pages; `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
   `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (it scans every `.php` file, `.tpl.php` and plain, by tokens, `\header(` included, and every `.twig` file; a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
   (`Tests/Characterisation/PageHeadersTest`; `Tests/Kernel/ShellHeadersDrawTest` pins `DefaultTemplate::shellHeaders()` per type and status). Two behaviours changed with the table: `drawPageWithoutSideEffects()`
   no longer sends the two HTML headers (`text/html; charset=utf-8`, `nosniff`) for JSONP on an `/admin` or `/account` page (it sends no header at all, as it says; the
@@ -3084,8 +3165,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   and the bundled plugins is a Twig file (`CoreTemplatesAreTwigTest`); the `.tpl.php` files that were beside them are deleted, and the `.tpl.php` engine stays for the `classic`
   and type-shell templates and for third-party plugins and themes.
   No jQuery in the built-in look. The look loads one script, `js/idno-2026.min.js` (Alpine.js, Tiptap, and the modules in `frontend/src/js/modules/`, among them
-  the @-mention autocomplete), and no jQuery or plugin of it: only the onboarding shell (`shell/simple`, and the `onboarding/*` bodies drawn only inside it) loads
-  jQuery. `Tests/Unit/Templating/NoJqueryInTheBuiltInLookTest` fails for a `templates/default/**/*.html.twig` file of core or a bundled plugin that calls `$(`, `$.`, `jQuery`, `mediaelementplayer`,
+  the @-mention autocomplete), and no jQuery or plugin of it (the onboarding shell, the last page that loaded jQuery, is gone; the pages of the installation are not
+  templates and load nothing). `Tests/Unit/Templating/NoJqueryInTheBuiltInLookTest` fails for a `templates/default/**/*.html.twig` file of core or a bundled plugin that calls `$(`, `$.`, `jQuery`, `mediaelementplayer`,
   `tinymce` or `.modal(`/`.tooltip(`/`.popover(` (Alpine's `$el`, `$refs`, `$dispatch`, `${...}` and comments are not calls); a small behaviour is an inline script in plain DOM
   JavaScript or Alpine attributes in the template, not a change to `frontend/src` (a rebuild is not byte-identical). What the inline scripts of the look do:
   `entity/edit/footer` (every edit form: a second submit of a form is ignored while the first is sending, without disabling the buttons, which would drop the
@@ -3098,8 +3179,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   and `fitvids`, jQuery plugins, are deleted, with their Composer packages `npm-asset/mediaelement`, `npm-asset/vanilla-fitvids`, `npm-asset/exif-js`, `npm-asset/tinymce--tinymce-jquery` and `tinymce/tinymce`), and a stored `assets` entry with no template draws nothing. `IdnoPlugins\Photo` no longer registers the `exif-js` asset.
   The page-level checks are in `Tests/Characterisation/BuiltInLookScriptsTest`.
   The Bootstrap-era `css/idno.css`, `css/idno.min.css` (and their SCSS sources) `js/modernizr/`, `js/idno.js` and `js/idno.min.js` (with their sources `js/src/classes/`, `js/src/lib/` and `js/src/Idno.js`) were deleted when nothing drew them. The Grunt build
-  (`Gruntfile.js`, `npm run grunt`) remains for the onboarding style sheet (`build-css`) and the service worker (`build-js`), the language
-  catalogues (`build-lang`) and the linters (`test`); it does not build Idno 2026's files, which the `frontend/` build writes. The guide for plugin and theme authors,
+  (`Gruntfile.js`, `npm run grunt`) remains for the service worker (`build-js`), the language
+  catalogues (`build-lang`) and the JavaScript linter (`test`); it builds no style sheet; it does not build Idno 2026's files, which the `frontend/` build writes. The guide for plugin and theme authors,
   `docs/developers/plugins/upgrading.md` (what still works, what a `.tpl.php` template that a Twig template draws now gets, how to convert one), is pinned
   by `Tests/Kernel/UpgradingGuideTest` (its before and after draw the same markup; the example blocks are read from the guide); `.tpl.php` support ends in 3.0.
 - Tests: `Tests/Unit/Templating/` (`TemplateNameTest`, `TypeChainTest`, `ClassicTemplatesTest`, `TemplateLocatorTest`, `SlotRegistryTest`,
@@ -3504,7 +3585,7 @@ not the legacy application booted. Everything in `Idno/Upgrade/Mongo/` is built 
   prints the counts, the collections not imported, the `config.ini` lines (`database`, `dbname`,
   `dbhost`, `dbport` when given, `dbuser`, `dbpass = "<the password you gave>"`, `filesystem = "local"`,
   `uploadpath`, and `file_path_host` when `--file-host` was given) and `Now run php bin/console
-  idno:upgrade`; exit 0. For an SQLite target it then prints `Installer::sqliteOwnershipNotes()`.
+  idno:upgrade`; exit 0. For an SQLite target it then prints `Idno\Install\DatabaseChoice::sqliteOwnershipNotes()`.
 - Tests: `Tests/Unit/Upgrade/Mongo/` (`MongoDocumentTest`; `MongoImporterTest`, the importer's contract
   `Tests/Import/Contract/MongoImporterContract` on an SQLite file with an `ArrayMongoSource`, plus a 64
   MiB file imported under `memory_limit=32M` in a subprocess, `import_large_file.php`, on the local
@@ -4049,10 +4130,13 @@ Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoade
 7. `KNOWN_*` variables from `$_SERVER`: fallback only, filling keys that no other
    source set
 
+`BootConfig::isDefault()` (the site is not installed: see "Installation") is true when no
+configuration file was read AND the merged configuration names no `database`.
+
 `path` and `host` can never be set; `uploadpath` always ends in a single `/`. The
 former per-host `configuration/{host}.ini` file is no longer read (silently: the upgrade
 notes in `docs/install/upgrade.md` tell sites to move its settings into `config.ini`), and
-the CLI installer no longer writes one.
+no installer writes one.
 
 - Primary config: `configuration/config.ini` (INI format, gitignored)
 - Environment variables come from the web server or the process environment. A `.env` file
@@ -4065,9 +4149,9 @@ the CLI installer no longer writes one.
   `filesystem`, `uploadpath`, `site_secret`
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
 - `url` is a boot setting (`config.ini`, `config.json` or `IDNO_URL`; never stored in the database). The queue
-  worker requires an explicit absolute one and refuses to start without it; the installers do not write one
-  (the web installer would have to trust the request's Host header, and the CLI installer has no address), so
-  an installer-made site adds it by hand
+  worker requires an explicit absolute one and refuses to start without it. Both installers write it: the web
+  installer from the domain the person confirmed on screen (never the Host header unseen), `idno:install` from
+  `--url`. A configuration written by hand, or made by an older installer, adds it by hand
 - Sensitive files: `.env`, `config.ini`, `configuration/` — never commit these
 
 ## Security
@@ -4170,7 +4254,8 @@ the CLI installer no longer writes one.
   whichever page the request reaches. In particular, don't decide what a request is
   for by matching `$_SERVER['REQUEST_URI']`, which includes the query string.
   `IdnoPlugins/ActivityPub/Tests/InboxRequestTest.php` checks this over HTTP.
-- Command-line scripts, `var/`, `config/`, `bin/`, `frontend/`, `Tests/`, `docs/` and `warmup/CLI/` are
+- Command-line scripts, `var/`, `config/`, `bin/`, `frontend/`, `Tests/`, `docs/` and `warmup/CLI/` (which no longer
+  ships; the rule stays for a site upgraded by overwriting files) are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
 - Account pages are closed to API requests: a page registered for a route under
   `/account/` (settings, password, API key, access tokens, the account's own export of its
@@ -4450,9 +4535,9 @@ the CLI installer no longer writes one.
   is on Messenger, the cache is a PSR-6 pool). Messages of this branch's own
   exceptions (`FileStoreException`, the portability services, the queue) are a fixed
   vocabulary with no path, identifier or driver text, so they stay plain exceptions that a
-  visitor may read; keep it so. The installers (`Idno\Core\Installer`, `warmup/`) run
-  before the site exists and show a failed connection's message to whoever is setting
-  the site up: they do not use the rule.
+  visitor may read; keep it so. The installation (`Idno\Install`) runs
+  before the site exists and does not use the rule: its messages are its own fixed sentences
+  (a failed database connection is one of `DatabaseChoice::connectionProblem()`'s, never the driver's text).
   `Tests/Core/ExceptionMessageTest.php` checks the rule.
 - Error responses in JSON: for the `json` and `jsonp` template types, `Page::exception()`
   answers with the page shell (`templates/json/shell.tpl.php`,
@@ -4545,6 +4630,15 @@ the CLI installer no longer writes one.
   - `Page::isSSL()` trusts `X-Forwarded-Proto` from any client (there are no trusted proxies), and the login throttle counts by account
     for that reason.
   - Registration and the password reset request let someone learn whether a handle or an email address has an account.
+- The first administrator: an uninstalled site can be installed by whoever reaches it first (decided: no code to
+  paste), but the site's first administrator can only be created by the browser that wrote the configuration
+  (the `idno_setup` cookie against the hash in `configuration/setup-pending`: `Idno\Install\SetupToken`,
+  `SetupGateListener`), by the one-time link `idno:setup:link` prints, or by `idno:admin:create` on the server.
+  Registration never grants administrator, and a site with no user lets nobody register. Don't add another way
+  to make an administrator on a site that has none, and never one that a request alone can reach. The installer
+  takes no disk path from a request, writes its configuration file only if none exists, prints no password and
+  no driver message, and its forms need the token of the cookie it gave the browser. See "Installation";
+  `Tests/Unit/Install/WebInstallerTest` and `Tests/Install/WebInstallFlowTest` check this.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions

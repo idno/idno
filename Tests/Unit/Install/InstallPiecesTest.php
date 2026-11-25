@@ -269,7 +269,7 @@ final class InstallPiecesTest extends TestCase
 
             return new \RuntimeException('wrapped', 0, $e);
         };
-        foreach ([1045 => 'user name or the password', 1049 => 'no database with that name', 2002 => 'could not reach', 1044 => 'not allowed', 9999 => 'error 9999'] as $code => $expected) {
+        foreach ([1045 => 'user name or the password', 1049 => 'no database with that name', 2002 => 'could not reach', 1044 => 'cannot use a database with that name', 9999 => 'error 9999'] as $code => $expected) {
             $message = DatabaseChoice::connectionProblem($failure($code));
             self::assertStringContainsString($expected, $message);
             self::assertStringNotContainsString('secretuser', $message);

@@ -19,7 +19,6 @@
  */
 
 /*jshint ignore:start*/
-const sass = require('dart-sass');
 /*jshint ignore:end*/
 
 module.exports = function (grunt) {
@@ -122,13 +121,11 @@ module.exports = function (grunt) {
   });
 
   // Load the plugins
-  grunt.loadNpmTasks('grunt-sass');
   grunt.loadNpmTasks('grunt-babel');
   grunt.loadNpmTasks('grunt-terser');
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-watch');
-  grunt.loadNpmTasks('grunt-stylelint');
 
 
   // Tests

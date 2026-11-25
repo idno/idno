@@ -383,13 +383,15 @@ Upgrades normally need no cache clearing, because the compiled cache is keyed by
 !!! warning "Opcache with `opcache.validate_timestamps=0`"
     If your server runs PHP's opcache with `opcache.validate_timestamps=0` (common in production, and set by the bundled Docker image), restart PHP (PHP-FPM, or your web server if it runs PHP) or reset opcache immediately after replacing the files. Until you do, PHP keeps running the old code, and a request in that window can build the new compiled cache from it. If the site reports a container error after a deploy, delete everything under `var/cache/` and restart PHP again.
 
-If you are upgrading from a significantly older version of Idno, or if a config.ini file no longer exists in your
-`configuration` directory (or your installation directory), Idno will send you to the web installer at `/warmup/`. You may need to perform the following additional steps:
+If no `config.ini` exists in your `configuration` directory (or your installation directory) and no environment variable names a database, Idno shows its installer at every address: see [the installation instructions](instructions.md). If you point it at the database your site already uses, it says the database already holds an Idno site and asks you to confirm using it; nothing in the database is replaced, and the upgrade described above then runs.
 
-1. Click "Let's get started" and continue past the requirements check
-2. Enter in your site name, database name, user name, host name and password
-3. Update the path for the "Uploads" folder. (It may automatically default to the proper path name, but double check it.)
-4. Submit the form and you'll be taken to your site.
+### Installation and the first account
+
+* **The installer is part of Idno itself.** The `/warmup/` pages and `warmup/CLI/CLIInstaller.php` are gone: the web installer is what an unconfigured site shows at `/`, and the command line installer is `php bin/console idno:install` (see [Command line installation](cliinstaller.md)). `makeconfig`, `generate-manifest` and `check-requirements` have no successor: `idno:install` takes a manifest, and checks the server itself. Scripts that called the old installer must be changed.
+* **Registering never makes an administrator.** The first administrator is created by the last step of the installation, which only the browser that installed the site can reach, or by `php bin/console idno:admin:create`. A site with no account at all shows "This site is being set up" and lets nobody register.
+* **A site configured by environment variables alone is installed.** If the environment names a database (`IDNO_DATABASE`, `IDNO_DATABASE_URL`), no configuration file is needed and the installer is not offered.
+* **The installers write the site's address.** New installations have `url` in `config.ini`; add it to an older one if you use the queue (see above).
+* **The onboarding pages are gone**: `/begin/`, `/begin/register`, `/begin/profile`, `/begin/connect` and `/begin/publish`, their images (`gfx/onboarding/`) and style sheet (`css/idno-simple*.css`). After the account is created the administrator lands on `/admin/welcome/`.
 
 Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-on-ones-own-server) for this point.
 
@@ -415,6 +417,7 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
     * `Idno/Data/MySQL.php`, `Idno/Data/AbstractSQL.php` and `Idno/Data/Mongo.php`, and `Idno/Files/MongoDBFileSystem.php` and `Idno/Files/MongoDBFile.php` (a database class of your own in `Idno/Data/` still works);
     * `Idno/Core/AsynchronousQueue.php`, `Idno/Core/SynchronousQueue.php`, the directory `Idno/Pages/Service/Queues/` and the directory `ConsolePlugins/EventQueueService/` (a leftover `ConsolePlugins/EventQueueService/` would register a second `service-event-queue` command, which the new one replaces);
     * the directory `warmup/schemas/` (the installers no longer load SQL files: the database is set up by the upgrade page or `idno:upgrade`);
+    * `warmup/index.php`, `warmup/WebInstaller.php` and the directories `warmup/templates/` and `warmup/CLI/` (the old installers; the shipped web server rules still refuse `warmup/CLI/`, for a site that has not deleted it), `Idno/Core/Installer.php`, the directory `Idno/Pages/Onboarding/`, `gfx/onboarding/` and `css/idno-simple.css` and `css/idno-simple.min.css`;
     * any `hosts/` directory (it is no longer read).
 
 ### Settings that changed
@@ -449,6 +452,10 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 * The 1.x database tables (`entities`, `entities_metadata`, `entities_search`, `reader`, `site`, `config` and their `_metadata`/`_search` tables, `versions`, `session`) are no longer read or written. The upgrade copies them into the new tables and renames them `legacy_<name>`.
 
 ## For developers
+
+### The installer and onboarding
+
+`Idno\Core\Installer`, `WebInstaller`, `CLIInstaller` and the `Idno\Pages\Onboarding\*` pages are removed; the installation is `Idno\Install\*` (see `AGENTS.md`). The template `shell/simple` and its partials, the templates under `onboarding/`, and `DefaultTemplate::sendSimpleShellHeaders()` are removed: a plugin that drew a page in the simple shell draws it in the ordinary page shell (`drawPage()`). The `onboarding/connect/networks` extension point no longer exists. `Idno\Pages\Account\Register` no longer takes `onboarding` or `set_name`, and no longer triggers `site/firstadmin` (the installation's last step does); the list of required PHP extensions is `Idno\Install\ServerChecks::EXTENSIONS`. A plugin that created the first user by posting to `begin/register` (a test helper, a provisioning script) uses `php bin/console idno:admin:create`, or the service `Idno\Install\FirstAdministrator`.
 
 ### The new tables
 

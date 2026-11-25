@@ -178,7 +178,7 @@ final class DatabaseChoice
 
         return match (true) {
             $code === 1045, $code === 1698 => 'Idno could not sign in to the database: the user name or the password was not accepted. Check both and try again.',
-            $code === 1044 => 'That database user is not allowed to use that database. In your hosting control panel, add the user to the database with all privileges.',
+            $code === 1044 => 'That database user cannot use a database with that name: either the name is wrong, or the user has not been added to the database. Check the name, and in your hosting control panel add the user to the database with all privileges.',
             $code === 1049 => 'There is no database with that name on the server. Create it first (your hosting control panel has a "MySQL databases" page), or check the name.',
             in_array($code, [2002, 2003, 2005, 2006], true) => 'Idno could not reach the database server. Check the server name: it is almost always localhost, and your hosting control panel says if it is something else.',
             default => 'Idno could not connect to the database' . ($code > 0 ? ' (the server answered with error ' . $code . ')' : '') . '. Check the name, the user, the password and the server name.',
