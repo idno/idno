@@ -28,7 +28,7 @@ final class FormTokenController
     }
 
     #[Route('/{lead}service/security/csrftoken{slash}', name: 'idno_csrf_token', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Service\Security\CSRFToken', legacyPatterns: ['/service/security/csrftoken/?'])]
+    #[SitePage(name: 'Idno\Pages\Service\Security\CSRFToken')]
     public function __invoke(PageContext $page): Response
     {
         if (!$page->isXhr()) {

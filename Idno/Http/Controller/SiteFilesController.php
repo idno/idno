@@ -24,14 +24,14 @@ final class SiteFilesController
     }
 
     #[Route('/{lead}robots.txt{slash}', name: 'idno_robots', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Txt\Robots', legacyPatterns: ['/robots\.txt'])]
+    #[SitePage(name: 'Idno\Pages\Txt\Robots')]
     public function robots(PageContext $page): Response
     {
         return $this->files->robots($page);
     }
 
     #[Route('/{lead}chrome/manifest.json{slash}', name: 'idno_manifest', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Chrome\Manifest', publicOnPrivateSite: true, legacyPatterns: ['/chrome/manifest\.json'])]
+    #[SitePage(name: 'Idno\Pages\Chrome\Manifest', publicOnPrivateSite: true)]
     public function manifest(PageContext $page): Response
     {
         return $this->files->manifest($page);
@@ -42,7 +42,7 @@ final class SiteFilesController
      */
     #[Route('/{lead}service-worker.js{slash}', name: 'idno_service_worker', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
     #[Route('/{lead}service-worker.min.js{slash}', name: 'idno_service_worker_min', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Chrome\ServiceWorker', publicOnPrivateSite: true, legacyPatterns: ['/service-worker(\.min)?\.js'])]
+    #[SitePage(name: 'Idno\Pages\Chrome\ServiceWorker', publicOnPrivateSite: true)]
     public function serviceWorker(PageContext $page): Response
     {
         return $this->files->serviceWorker($page);

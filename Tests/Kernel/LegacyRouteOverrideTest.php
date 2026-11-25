@@ -21,7 +21,7 @@ use Tests\Fixtures\SitePageFixtureController;
 use Tests\Fixtures\SubclassedPage;
 
 /** A controller that replaces a Markdown permalink without saying it is one (not routed) */
-#[\Idno\Http\Page\SitePage(name: 'Fixture\UnmarkedShell', replaces: [ReplacedPage::class], legacyPatterns: ['/_test/claimable/?'])]
+#[\Idno\Http\Page\SitePage(name: ReplacedPage::class, shell: true)]
 final class SitePageUnmarkedShellController
 {
     public function page(): void
@@ -30,7 +30,7 @@ final class SitePageUnmarkedShellController
 }
 
 /** A controller whose patterns core registered under the home page's and a subdirectory's (not routed) */
-#[\Idno\Http\Page\SitePage(name: 'Fixture\Home', legacyPatterns: ['/?', '/_test/claimable/?', '/blog/_test/claimable/?'])]
+#[\Idno\Http\Page\SitePage(name: 'Fixture\Home')]
 final class SitePageManyPatternsController
 {
     public function page(): void

@@ -24,17 +24,18 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 /**
  * Answers what a site page (a controller marked #[SitePage]) throws with the site's own pages, as a legacy page answered
  * the same things: `noContent()` (a NotFoundHttpException) is the 404 page, `goneContent()` (GoneHttpException) the 410
- * page, `deniedContent()` (AccessDeniedHttpException, its message the page's title) the 403 page, each in the request's
- * template type and logged as nothing; and any other exception is what `Page::exception()` did: reported (the critical line,
+ * page, `deniedContent()` (AccessDeniedHttpException, its message the page's title) the 403 page, and so is any refusal of Symfony
+ * Security (`#[IsGranted]`, the lifecycle's refusal of an API request, a failed form token: untitled), each in the request's template
+ * type and logged as nothing, so that every refusal of a site page is drawn one way; and any other exception is what `Page::exception()` did: reported (the critical line,
  * the statistic, the alert to the administrator: PageLifecycle::reportException()) and answered with the 500 page.
  *
  * It runs at priority 2: above Symfony's ErrorListener (0), which logs every exception it sees, so a page's exception is never
- * logged twice (and an ordinary 404 never as an error), and above the firewall's listener (1), which answers the Security
- * exceptions this one leaves alone (a refusal of the lifecycle, a failed form token: DeniedResponder). It does nothing for a
+ * logged twice (and an ordinary 404 never as an error), and above the firewall's listener (1), whose DeniedResponder answers the
+ * Security exceptions of the controllers that are not site pages. It does nothing for a
  * request that is not a site page, in a kernel that did not boot the legacy application, or for an HTTP exception below 500 that is
  * not one of those (a bad request, a method not allowed), which stay Symfony's; a server error (5xx) HTTP exception is a failure of the
- * page, reported and drawn as the 500 page at its own status. A redirect is made into its response by PageRequestListener, which runs
- * first; it is answered here too, should this listener ever see one.
+ * page, reported and drawn as the 500 page at its own status. A redirect (PageRedirect) never reaches it: PageRequestListener, at
+ * priority 10, answers every one of a main request first.
  *
  * Only an \Exception reaches it: `framework.handle_all_throwables` is off, so Symfony dispatches nothing for an \Error. PageRequestListener
  * wraps the controller of a site page so that an \Error it throws arrives here as a PageError, and is answered like any exception.
@@ -70,16 +71,17 @@ final class PageExceptionListener
             return;
         }
         $e = $event->getThrowable();
-        // A Security exception anywhere in the chain is a refusal, whatever wrapped it: the firewall's listener reads the chain the same way.
-        // One that is wrapped is logged once, as a warning naming the wrapping class (never its message): code that wraps a refusal by
-        // mistake, or a real fault whose cause happens to be one, is then not silent.
+        // A Security exception anywhere in the chain is a refusal, whatever wrapped it, as the firewall's listener reads the chain: on a site page
+        // it is drawn as every refusal of the page is (`deniedContent()`'s page, below), never by the firewall's responder. One that is wrapped is
+        // logged once, as a warning naming the wrapping class (never its message): code that wraps a refusal by mistake, or a real fault whose
+        // cause happens to be one, is then not silent.
         for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
             if ($cause instanceof AccessDeniedException || $cause instanceof AuthenticationException) {
                 if ($cause !== $e) {
                     ($this->logger)()->warning('A site page\'s exception wraps a refusal, which is answered as the refusal: ' . $e::class);
                 }
-
-                return;
+                $e = new AccessDeniedHttpException('', $e);
+                break;
             }
         }
         // The \Error of the page's controller, carried here by PageRequestListener: what is reported and drawn is the error itself.
@@ -97,7 +99,6 @@ final class PageExceptionListener
 
         $context = PageContext::of($request);
         [$status, $draw] = match (true) {
-            $e instanceof PageRedirect => [0, fn (PageRenderer $renderer): Response => $renderer->redirectFor($e)],
             $e instanceof NotFoundHttpException => [404, fn (PageRenderer $renderer): Response => $renderer->notFound($context)],
             $e instanceof GoneHttpException => [410, fn (PageRenderer $renderer): Response => $renderer->gone($context)],
             $e instanceof AccessDeniedHttpException => [403, fn (PageRenderer $renderer): Response => $renderer->denied($context, $e->getMessage())],
@@ -134,7 +135,6 @@ final class PageExceptionListener
      */
     private static function plain(Request $request, int $status): Response
     {
-        $status = $status === 0 ? 500 : $status;
         $request->attributes->set(DeniedResponder::ATTRIBUTE, true);
 
         return new Response((Response::$statusTexts[$status] ?? 'Error') . "\n", $status, [

@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 #[SitePage('Fixture\ClassName', accountPage: true)]
 final class SitePageFixtureController
 {
-    #[SitePage('Fixture\MethodName', replaces: ['Fixture\Old'], publicOnPrivateSite: true)]
+    #[SitePage('Fixture\MethodName', shell: true, publicOnPrivateSite: true)]
     public function method(): void
     {
     }
@@ -32,7 +32,7 @@ final class SitePageTest extends TestCase
 
         $this->assertNotNull($page);
         $this->assertSame('Fixture\MethodName', $page->name);
-        $this->assertSame(['Fixture\Old'], $page->replaces);
+        $this->assertTrue($page->shell);
         $this->assertTrue($page->publicOnPrivateSite);
         $this->assertFalse($page->accountPage);
     }

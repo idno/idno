@@ -22,7 +22,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * is still registered under its own class). So there is ONE question, put to the legacy router's own lookup over that table, which applies every rule
  * it has (an exact key first, then the patterns in registration order; `addRoute()` replaces a key in place, `hijackRoute()` puts one in front):
  * which page would you choose for this path? (`PageHandler::claimsOf()`, `handlerFor()`, pinned against Toro by `RouteLookupTest`.) When the
- * answer is a placeholder or a class the controller's `#[SitePage]` lists in `replaces` (its kept shell), core's place is held and the controller
+ * answer is a placeholder or the class the controller's `#[SitePage]` names when it says `shell` (its kept shell), core's place is held and the controller
  * serves; when it is anything else a plugin took the path and the request is handed to the legacy controller, with none of the route's parameters.
  *
  * The paths asked are the ones the two routers can be given (`PageHandler::spellingsOf()` has the derivation from `Request::prepareBaseUrl()`,
@@ -74,7 +74,7 @@ final class LegacyRouteOverride
         // The legacy router's choice, for each spelling of the path: core's place held (a placeholder, or the shell this controller replaces) is the
         // controller's; any other page is a plugin's, and so is one that serves the request as a permalink's Markdown form where the controller is no
         // Markdown permalink itself
-        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), [ControllerRoute::class, ...$page->replaces]);
+        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), [ControllerRoute::class, ...($page->shell ? [$page->name] : [])]);
         $kept = false;
         foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request) as $claim) {
             if (!in_array(strtolower($claim['class']), $replaced, true) || ($claim['markdown'] && !$page->markdownPermalink)) {

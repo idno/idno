@@ -263,17 +263,6 @@ final class PageExceptionListenerTest extends TestCase
         $this->assertSame('page:No entry:<pages/403>', $event->getResponse()->getContent());
     }
 
-    public function testARedirectIsTheRedirectItMakes(): void
-    {
-        $event = $this->event(new PageRedirect('https://example.com/elsewhere', null, 303));
-
-        $this->listener()->onException($event);
-
-        $this->assertSame(303, $event->getResponse()?->getStatusCode());
-        $this->assertSame('https://example.com/elsewhere', $event->getResponse()->headers->get('Location'));
-        $this->assertSame([], $this->lifecycle->reported);
-    }
-
     public function testAnyOtherExceptionIsReportedAndDrawnAs500(): void
     {
         $exception = new \RuntimeException('Broken');
@@ -294,9 +283,9 @@ final class PageExceptionListenerTest extends TestCase
         $this->assertSame(['report Broken', 'draw pages/500', 'page 500'], $this->calls->getArrayCopy());
     }
 
-    public function testHttpExceptionsAndRedirectsAreNotReported(): void
+    public function testHttpExceptionsAreNotReported(): void
     {
-        foreach ([new NotFoundHttpException(), new GoneHttpException(), new AccessDeniedHttpException(), new PageRedirect('https://example.com/')] as $e) {
+        foreach ([new NotFoundHttpException(), new GoneHttpException(), new AccessDeniedHttpException()] as $e) {
             $this->listener()->onException($this->event($e));
         }
 
@@ -315,18 +304,23 @@ final class PageExceptionListenerTest extends TestCase
         $this->assertSame(0, $this->rendererFetched);
     }
 
-    public function testSecurityExceptionsAreLeftToTheFirewall(): void
+    /**
+     * A refusal of Symfony Security on a site page (`#[IsGranted]`, the lifecycle's refusal of an API request, a form token an attribute checked) is
+     * drawn as every refusal of a site page is, the site's 403 page, and is not reported: the firewall's responder answers only other controllers.
+     */
+    public function testSecurityExceptionsAreTheSites403(): void
     {
         foreach ([new AccessDeniedException(), new AuthenticationException(), new InvalidCsrfTokenException()] as $e) {
             $event = $this->event($e);
 
             $this->listener()->onException($event);
 
-            $this->assertNull($event->getResponse(), $e::class);
+            $this->assertSame(403, $event->getResponse()?->getStatusCode(), $e::class);
+            $this->assertSame('page::<pages/403>', $event->getResponse()->getContent(), 'untitled, as deniedContent() with no title');
         }
-        $this->assertSame(0, $this->rendererFetched);
-        $this->assertSame(0, $this->lifecycleFetched);
-        $this->assertSame([], $this->calls->getArrayCopy());
+        $this->assertSame([], $this->lifecycle->reported);
+        $this->assertSame(0, $this->lifecycleFetched, 'nothing is reported');
+        $this->assertSame([], $this->logger->lines);
     }
 
     public function testANonSitePageRequestIsLeftAloneAndNothingIsFetched(): void
@@ -466,17 +460,16 @@ final class PageExceptionListenerTest extends TestCase
         $this->assertStringContainsString('Service Unavailable', (string) $event->getResponse()->getContent());
     }
 
-    public function testASecurityExceptionWrappedInAnotherIsStillTheFirewalls(): void
+    public function testASecurityExceptionWrappedInAnotherIsStillARefusal(): void
     {
         foreach ([new \RuntimeException('Wrapped', 0, new AccessDeniedException()), new \LogicException('Wrapped twice', 0, new \RuntimeException('Inner', 0, new AuthenticationException()))] as $e) {
             $event = $this->event($e);
 
             $this->listener()->onException($event);
 
-            $this->assertNull($event->getResponse());
+            $this->assertSame(403, $event->getResponse()?->getStatusCode());
         }
         $this->assertSame([], $this->lifecycle->reported);
-        $this->assertSame(0, $this->rendererFetched);
         // Each is logged once, as a warning that names the wrapping class and nothing of its message.
         $this->assertSame(['warning: A site page\'s exception wraps a refusal, which is answered as the refusal: RuntimeException', 'warning: A site page\'s exception wraps a refusal, which is answered as the refusal: LogicException'], $this->logger->lines);
     }

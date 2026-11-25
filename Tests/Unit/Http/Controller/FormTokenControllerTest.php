@@ -88,8 +88,7 @@ final class FormTokenControllerTest extends TestCase
         $this->assertSame('/{lead}service/security/csrftoken{slash}', $route->path);
         $this->assertSame(['GET', 'HEAD', 'OPTIONS'], $route->methods);
         $this->assertSame('Idno\Pages\Service\Security\CSRFToken', $page->name);
-        $this->assertSame([], $page->replaces);
+        $this->assertFalse($page->shell);
         $this->assertFalse($page->publicOnPrivateSite, 'a visitor of a private site is refused, as before');
-        $this->assertSame(['/service/security/csrftoken/?'], $page->legacyPatterns);
     }
 }

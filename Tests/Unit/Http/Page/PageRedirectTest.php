@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Page;
 
-use Idno\Http\Page\PageDrawer;
 use Idno\Http\Page\PageRedirect;
-use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\PageRequestListener;
 use Idno\Http\Page\PageLifecycle;
 use Idno\Kernel;
-use Idno\Templating\TemplateTranslation;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -74,8 +71,8 @@ final class PageRedirectTest extends TestCase
         $listener->onException($event);
         $fromTheListener = $event->getResponse();
 
-        $renderer = new PageRenderer($this->createMock(PageDrawer::class), $this->createMock(TemplateTranslation::class));
-        $fromTheRenderer = $renderer->redirectFor($redirect);
+        // What PageRenderer::redirect() answers with for the redirect a forward made
+        $fromTheRenderer = $redirect->toResponse();
 
         $this->assertInstanceOf(Response::class, $fromTheListener);
         $this->assertSame($fromTheRenderer->getStatusCode(), $fromTheListener->getStatusCode());

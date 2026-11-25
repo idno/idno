@@ -118,8 +118,8 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         // The stack trace the 500 page shows in debug mode: where each page threw, and what called it, is the one thing that differs
         $text = preg_replace('/Stack trace:\n.*?#\d+ \{main\}/s', 'Stack trace: {trace}', $text) ?? $text;
 
-        // (and the class of the page, which the body's classes carry)
-        return str_replace([$page, 'tests_fixtures_legacydrawpage', 'tests_fixtures_sitepagefixture'], ['draw-page', 'tests_fixtures_page', 'tests_fixtures_page'], $text);
+        // (and the class of the page, which the body's classes carry; the legacy router drew its refusal of an API request in a page of its own, BarePage)
+        return str_replace([$page, 'tests_fixtures_legacydrawpage', 'tests_fixtures_legacyaccountdrawpage', 'tests_fixtures_sitepagefixture', 'idno_legacy_barepage'], ['draw-page', 'tests_fixtures_page', 'tests_fixtures_page', 'tests_fixtures_page', 'tests_fixtures_page'], $text);
     }
 
     /**
@@ -617,6 +617,47 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
                 $this->assertTheSamePage('case=' . $case . $via, [], 'account');
             }
         }
+    }
+
+    /**
+     * Every refusal of a site page is drawn ONE way, as a legacy page's `deniedContent()` was: Symfony Security's `#[IsGranted]`, the refusal of an
+     * API request on an account page, the private site's refusal of a visitor and the page's own `deniedContent()`. Each is compared, status, headers
+     * and body, with the legacy page's refusal of the same caller and template type: the page's own `deniedContent()` for the first and the last,
+     * the legacy router's for the two the router made (an API request on an account page, a visitor of a private site).
+     */
+    public function testEveryRefusalOfASitePageIsDrawnAsALegacyPagesDeniedContent(): void
+    {
+        $this->addUser('bea', self::PASSWORD);
+        $member = $this->loginCookie('bea', self::PASSWORD);
+        $key = $this->apiKeyOf('bea');
+        foreach (['', '&_t=json', '&_t=markdown'] as $type) {
+            $query = 'case=throw-denied&via=page' . $type;
+            $html = $type === '';
+
+            // #[IsGranted('ROLE_ADMIN')], for a visitor and a member who is no administrator; and the page's own deniedContent()
+            foreach (['visitor' => [], 'member' => ['Cookie' => $member]] as $caller => $headers) {
+                $legacy = $this->observed($this->get('draw-legacy', 'plain', $query, $headers), 'plain', 'draw-legacy', $html);
+                $granted = $this->get('draw-granted', 'plain', $query, $headers);
+                $this->assertSame(403, $granted->status, $caller . $type);
+                $this->assertSame($legacy, $this->observed($granted, 'plain', 'draw-granted', $html), '#[IsGranted], ' . $caller . $type);
+                $this->assertSame($legacy, $this->observed($this->get('draw-new', 'plain', $query, $headers), 'plain', 'draw-new', $html), 'deniedContent(), ' . $caller . $type);
+            }
+
+            // A signed API request on an account page: the legacy router refused it before the page ran
+            $legacyPath = self::AREAS['account'] . 'draw-legacy?' . $query;
+            $newPath = self::AREAS['account'] . 'draw-new?' . $query;
+            $legacy = $this->site()->request('GET', $legacyPath, self::signedHeadersFor('bea', $key, '/' . $legacyPath));
+            $new = $this->site()->request('GET', $newPath, self::signedHeadersFor('bea', $key, '/' . $newPath));
+            $this->assertSame(403, $legacy->status, 'the legacy refusal' . $type);
+            $this->assertSame($this->observed($legacy, 'account', 'draw-legacy', $html), $this->observed($new, 'account', 'draw-new', $html), 'an API request on an account page' . $type);
+        }
+
+        // A visitor of a private site (`testAWalledGardenRefusalIsTheDrawn403` has the other types)
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+        $legacy = $client->request('GET', self::AREAS['plain'] . 'draw-legacy?case=draw');
+        $new = $client->request('GET', self::AREAS['plain'] . 'draw-granted?case=draw');
+        $this->assertSame(403, $new->status);
+        $this->assertSame($this->observedBy($client, $legacy, 'draw-legacy', true), $this->observedBy($client, $new, 'draw-granted', true), 'a visitor of a private site');
     }
 
     public function testAMissingPageOfAnXhrRequestAndAHeadRequestIsTheSame(): void

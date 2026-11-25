@@ -16,6 +16,7 @@ use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * Test-environment only (config/routes/test/fixtures.php): pages served by a controller, for the tests of the page
@@ -25,7 +26,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * leading slash and `{slash}` the optional trailing one.
  */
 #[AsController]
-#[SitePage(name: 'Tests\Fixtures\SitePageFixture', legacyPatterns: [])]
+#[SitePage(name: 'Tests\Fixtures\SitePageFixture')]
 final class SitePageFixtureController
 {
     public function __construct(private readonly PageRenderer $renderer)
@@ -39,21 +40,21 @@ final class SitePageFixtureController
     }
 
     #[Route('/{lead}_test/site-page/public{slash}', name: 'idno_test_site_page_public', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', publicOnPrivateSite: true, legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', publicOnPrivateSite: true)]
     public function public(Request $request): JsonResponse
     {
         return $this->describe($request);
     }
 
     #[Route('/{lead}_test/site-page/account{slash}', name: 'idno_test_site_page_account', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true)]
     public function account(Request $request): JsonResponse
     {
         return $this->describe($request);
     }
 
     #[Route('/{lead}_test/site-page/typed{slash}', name: 'idno_test_site_page_typed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', defaultType: 'json', legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', defaultType: 'json')]
     public function typed(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -67,7 +68,7 @@ final class SitePageFixtureController
 
     /** A page that declares POST: its lifecycle checks the form token before `page/post`. */
     #[Route('/{lead}_test/site-page/post{slash}', name: 'idno_test_site_page_post', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'], legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'])]
     public function post(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -75,7 +76,7 @@ final class SitePageFixtureController
 
     /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */
     #[Route('/{lead}_test/site-page/patch{slash}', name: 'idno_test_site_page_patch', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'PATCH'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'], legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'])]
     public function patch(Request $request): JsonResponse
     {
         return $this->describe($request);
@@ -106,15 +107,27 @@ final class SitePageFixtureController
         return $this->drawCase($request);
     }
 
+    /**
+     * A site page that only an administrator may see, by Symfony Security's attribute: its refusal is drawn as the page's own
+     * `deniedContent()` is (`SitePageDrawingTest::testEveryRefusalOfASitePageIsDrawnAsALegacyPagesDeniedContent`).
+     */
+    #[Route('/{lead}_test/site-page/draw-granted{slash}', name: 'idno_test_site_page_draw_granted', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture')]
+    #[IsGranted('ROLE_ADMIN')]
+    public function drawGranted(Request $request): Response
+    {
+        return $this->drawCase($request);
+    }
+
     #[Route('/{lead}admin/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_admin', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true, legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true)]
     public function drawAdmin(Request $request): Response
     {
         return $this->drawCase($request);
     }
 
     #[Route('/{lead}account/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_account', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, settingsPage: true, legacyPatterns: [])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, settingsPage: true)]
     public function drawAccount(Request $request): Response
     {
         return $this->drawCase($request);
@@ -276,18 +289,18 @@ final class SitePageFixtureController
 
     /**
      * Routing fixtures (IDNO_TEST_CLAIM_ROUTES, TestEventHooks): `claimable` is the path of a shell (ReplacedPage, which the legacy router
-     * still registers: `replaces` names it) and `unclaimed` one with no shell. A page another class has been registered for (a plugin's
+     * still registers: the attribute says `shell`) and `unclaimed` one with no shell. A page another class has been registered for (a plugin's
      * `addRoute()` or `hijackRoute()`) is served by the legacy router, the controller's route notwithstanding.
      */
     #[Route('/{lead}_test/claimable{slash}', name: 'idno_test_claimable', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class], markdownPermalink: true, legacyPatterns: ['/_test/claimable/?'])]
+    #[SitePage(name: ReplacedPage::class, shell: true, markdownPermalink: true)]
     public function claimable(): Response
     {
         return new Response('controller');
     }
 
     #[Route('/{lead}_test/unclaimed{slash}', name: 'idno_test_unclaimed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\UnclaimedPage', legacyPatterns: ['/_test/unclaimed/?'])]
+    #[SitePage(name: 'Tests\Fixtures\UnclaimedPage')]
     public function unclaimed(): Response
     {
         return new Response('controller');
@@ -305,7 +318,7 @@ final class SitePageFixtureController
      * Markdown permalink, so the listener takes the suffix off `name` and the page is drawn in the `markdown` type.
      */
     #[Route('/{lead}_test/markdown/{name}{slash}', name: 'idno_test_markdown', requirements: ['lead' => '/?', 'slash' => '/?', 'name' => '[^/]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
-    #[SitePage(name: 'Tests\Fixtures\MarkdownFixture', markdownPermalink: true, legacyPatterns: ['/_test/markdown/([^/]+)/?'])]
+    #[SitePage(name: 'Tests\Fixtures\MarkdownFixture', markdownPermalink: true)]
     public function markdown(Request $request): Response
     {
         $context = PageContext::of($request);

@@ -306,12 +306,12 @@ final class PageRendererTest extends TestCase
         $this->drawer->type = 'json';
         $this->drawer->api = false;
 
-        $redirect = $this->renderer->redirectFor(new PageRedirect('https://example.com/already?_t=json', null, 307));
+        $redirect = (new PageRedirect('https://example.com/already?_t=json', null, 307))->toResponse();
         $this->assertSame(307, $redirect->getStatusCode());
         $this->assertSame('https://example.com/already?_t=json', $redirect->headers->get('Location'));
         $this->assertSame('', $redirect->getContent());
 
-        $json = $this->renderer->redirectFor(new PageRedirect('https://example.com/x', '{"location":"x","trace":"t"}', 200));
+        $json = (new PageRedirect('https://example.com/x', '{"location":"x","trace":"t"}', 200))->toResponse();
         $this->assertSame(200, $json->getStatusCode());
         $this->assertSame('{"location":"x","trace":"t"}', $json->getContent());
         $this->assertFalse($json->headers->has('Location'));

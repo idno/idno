@@ -48,7 +48,7 @@ final class HomepageControllerTest extends TestCase
         $page = $method->getAttributes(SitePage::class)[0]->newInstance();
         $this->assertSame('Idno\Pages\Homepage', $page->name);
         $this->assertSame('rss', $page->defaultType);
-        $this->assertSame([], $page->replaces, 'the class that served the feed is deleted: no shell is shadowed');
+        $this->assertFalse($page->shell, 'the class that served the feed is deleted: no shell is shadowed');
     }
 
     public function testSearchIsTheHomePagesRedirect(): void
@@ -60,7 +60,7 @@ final class HomepageControllerTest extends TestCase
         $this->assertSame(['GET', 'HEAD', 'OPTIONS'], $route->methods);
         $this->assertSame('Idno\Pages\Homepage', $page->name);
         $this->assertNull($page->defaultType);
-        $this->assertSame([], $page->replaces);
+        $this->assertFalse($page->shell);
     }
 
     public function testTheTagTakesTheRestOfThePathAsAnyBytes(): void
@@ -73,6 +73,6 @@ final class HomepageControllerTest extends TestCase
         $this->assertFalse($route->options['utf8'] ?? null, 'a path that is not UTF-8 is a tag as it was');
         $this->assertSame(['GET', 'HEAD', 'OPTIONS'], $route->methods);
         $this->assertSame('Idno\Pages\Homepage', $page->name);
-        $this->assertSame([], $page->replaces);
+        $this->assertFalse($page->shell);
     }
 }

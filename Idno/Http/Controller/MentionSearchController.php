@@ -22,7 +22,7 @@ final class MentionSearchController
     }
 
     #[Route('/{lead}search/mentions.json{slash}', name: 'idno_mention_search', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Search\Mentions', legacyPatterns: ['/search/mentions\.json'])]
+    #[SitePage(name: 'Idno\Pages\Search\Mentions')]
     public function __invoke(PageContext $page): Response
     {
         return $this->search->answer($page);

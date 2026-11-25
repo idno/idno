@@ -22,7 +22,7 @@ final class WebfingerController
     }
 
     #[Route('/{lead}.well-known/webfinger{slash}', name: 'idno_webfinger', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Webfinger\View', publicOnPrivateSite: true, legacyPatterns: ['/\.well\-known/webfinger/?'])]
+    #[SitePage(name: 'Idno\Pages\Webfinger\View', publicOnPrivateSite: true)]
     public function __invoke(PageContext $page): Response
     {
         return $this->webfinger->answer($page);

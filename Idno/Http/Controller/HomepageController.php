@@ -17,8 +17,8 @@ use Symfony\Component\Routing\Attribute\Route;
  *
  * The feeds, the search and the tags are the same page under other addresses, and were pages of their own that built a home page to draw
  * (classes of their own, deleted): their routes are the home page's, so they fire its page
- * events once and draw its body class. There is no shell for them to shadow (`replaces` is empty), but core still registers their legacy patterns where it
- * always did, with a placeholder (`Idno\Legacy\ControllerRoute`) in place of the deleted class (`legacyPatterns` declares them), so the legacy route table is what
+ * events once and draw its body class. There is no shell for them to shadow (no `shell`), but core still registers their legacy patterns where it
+ * always did, with a placeholder (`Idno\Legacy\ControllerRoute`) in place of the deleted class (`Tests/Kernel/SitePageClaimsTest` holds the table to it), so the legacy route table is what
  * it was and a plugin's registration does what it always did: its page serves the address when the legacy router would choose it.
  */
 #[AsController]
@@ -29,7 +29,7 @@ final class HomepageController
     }
 
     #[Route('/{slash}', name: 'idno_home', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'], legacyPatterns: ['/?'])]
+    #[SitePage(name: 'Idno\Pages\Homepage', shell: true)]
     public function home(PageContext $page): Response
     {
         // the one action that serves the site's root as the home page: the one a plugin may replace
@@ -40,7 +40,7 @@ final class HomepageController
      * @param string $types the content types the path names, as written (`note/article`, `all`)
      */
     #[Route('/{lead}content/{types}{slash}', name: 'idno_content', requirements: ['lead' => '/?', 'slash' => '/?', 'types' => '[A-Za-z\-/]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
-    #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'], legacyPatterns: ['/content/([A-Za-z\-\/]+)+'])]
+    #[SitePage(name: 'Idno\Pages\Homepage', shell: true)]
     public function content(PageContext $page, string $types): Response
     {
         return $this->pages->content($page, $types);
@@ -52,7 +52,7 @@ final class HomepageController
     #[Route('/{lead}feed.xml{slash}', name: 'idno_feed_xml', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
     #[Route('/{lead}feed{slash}', name: 'idno_feed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
     #[Route('/{lead}rss.xml{slash}', name: 'idno_rss_xml', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Homepage', defaultType: 'rss', legacyPatterns: ['/feed\.xml', '/feed/?', '/rss\.xml'])]
+    #[SitePage(name: 'Idno\Pages\Homepage', defaultType: 'rss')]
     public function feed(PageContext $page): Response
     {
         return $this->pages->feed($page);
@@ -62,7 +62,7 @@ final class HomepageController
      * A search, sent to the home page's own (`/?q=`).
      */
     #[Route('/{lead}search{slash}', name: 'idno_search', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Homepage', legacyPatterns: ['/search/?'])]
+    #[SitePage(name: 'Idno\Pages\Homepage')]
     public function search(PageContext $page): Response
     {
         return $this->pages->search($page);
@@ -73,7 +73,7 @@ final class HomepageController
      * byte: the path need not be UTF-8); the tag itself is read from the path as it was sent.
      */
     #[Route('/{lead}tag/{tag}', name: 'idno_tag', requirements: ['lead' => '/?', 'tag' => '[^\s]+'], defaults: ['lead' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
-    #[SitePage(name: 'Idno\Pages\Homepage', legacyPatterns: ['/tag/([^\s]+)\/?'])]
+    #[SitePage(name: 'Idno\Pages\Homepage')]
     public function tag(PageContext $page): Response
     {
         return $this->pages->tag($page);

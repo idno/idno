@@ -16,8 +16,8 @@ use Tests\Fixtures\ClaimingPage;
 use Tests\Fixtures\ReplacedPage;
 use Tests\Fixtures\SitePageFixtureController;
 
-/** A controller that replaces a Markdown permalink and does not say it is one (not routed: the convention's check is proven on it) */
-#[SitePage(name: 'Fixture\UnmarkedShell', replaces: [ReplacedPage::class], legacyPatterns: ['/_test/claimable/?'])]
+/** A controller whose shell is a Markdown permalink and that does not say it is one (not routed: the convention's check is proven on it) */
+#[SitePage(name: ReplacedPage::class, shell: true)]
 final class UnmarkedShellController
 {
     public function page(): void
@@ -25,33 +25,8 @@ final class UnmarkedShellController
     }
 }
 
-#[SitePage(name: 'Fixture\\Undeclared')]
-final class UndeclaredController
-{
-    public function page(): void
-    {
-    }
-}
-
-#[SitePage(name: 'Fixture\\Elsewhere', legacyPatterns: ['/_test/other/?'])]
-final class ElsewhereController
-{
-    public function page(): void
-    {
-    }
-}
-
-
-#[SitePage(name: 'Fixture\Moved', legacyPatterns: ['/feeds/?'])]
+#[SitePage(name: 'Fixture\\Moved')]
 final class MovedController
-{
-    public function page(): void
-    {
-    }
-}
-
-#[SitePage(name: 'Fixture\NothingDeclared', legacyPatterns: [])]
-final class NothingDeclaredController
 {
     public function page(): void
     {
@@ -65,11 +40,10 @@ final class NothingDeclaredController
  * Styles and StandardSiteSync not among them) against `fixtures/core-routes.php`, the WHOLE core table as it was at commit 69af0d425 (every key core and the
  * components it builds register, in order, with a marker where the plugins' routes are registered): each key is still there, in that order, on the same side of
  * the marker (a kept legacy page, a shell and a placeholder all count as the key being there), so a page that moves cannot drop its registration or register it
- * on the wrong side of the plugins, whichever component registered it. And every site page route: declares `legacyPatterns` (the patterns core registered for it,
- * as `addRoute()` received them; `[]` when core registered none, which fails if a snapshot pattern matches one of its paths: it must declare that one); has each
- * pattern in the table with a placeholder (a route that replaces no class) or a class the route lists in `replaces`, on the side of the marker the snapshot
- * says (derived, not listed); has the router's choice for a path it serves be a placeholder or shell registered under one of ITS OWN declared patterns; and
- * a declared pattern matches a path the route serves.
+ * on the wrong side of the plugins, whichever component registered it. And for every site page route, from the registrations alone (a route declares no
+ * patterns): when a pattern of the snapshot, or a placeholder or shell of the table, matches a sample path of the route, the legacy router's choice for that
+ * path is the placeholder or the route's own shell (`#[SitePage(shell: true)]`: its `name`), under a key core registered; so a route whose path core's
+ * pattern matches must have its placeholder or shell registered.
  */
 final class SitePageClaimsTest extends TestCase
 {
@@ -197,16 +171,13 @@ final class SitePageClaimsTest extends TestCase
     }
 
     /**
-     * @param list<string>      $expected  the snapshot's keys (as the table keys them) with the marker
-     * @param string|null       $markerKey the key that marks plugin time in the table; null to leave the side of the marker unchecked
+     * @param list<string> $expected the snapshot's keys (as the table keys them) with the marker
      *
      * @return list<string> what is wrong with the site page routes, given the legacy router's table
      */
-    public static function violations(RouteCollection $routes, PageHandler $table, array $expected, ?string $markerKey = self::PLUGIN_TIME): array
+    public static function violations(RouteCollection $routes, PageHandler $table, array $expected): array
     {
-        $keys = self::keysOf($table);
-        $boundary = $markerKey === null ? false : array_search($markerKey, $keys, true);
-        $snapshotMarker = array_search(self::MARKER, $expected, true);
+        $core = array_values(array_filter($expected, static fn (string $key): bool => $key !== self::MARKER));
         $found = [];
         foreach ($routes as $name => $route) {
             $controller = $route->getDefault('_controller');
@@ -214,64 +185,38 @@ final class SitePageClaimsTest extends TestCase
             if ($page === null) {
                 continue;
             }
-            foreach ($page->replaces as $class) {
-                if (is_a($class, \Idno\Common\MarkdownPermalink::class, true) && !$page->markdownPermalink) {
-                    $found[] = $name . ': replaces ' . $class . ', a Markdown permalink, and does not say it is one (markdownPermalink)';
-                }
-            }
-            if ($page->legacyPatterns === null) {
-                $found[] = $name . ': does not declare legacyPatterns (the patterns core registered for it, or [] when it registered none)';
-                continue;
-            }
-            $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), $page->replaces === [] ? [ControllerRoute::class] : $page->replaces);
-            $declared = array_map(self::keyOf(...), $page->legacyPatterns);
-            foreach ($page->legacyPatterns as $pattern) {
-                $key = self::keyOf($pattern);
-                if (!isset($table[$key])) {
-                    $found[] = $name . ': ' . $pattern . ' is not registered: core registers a moved page\'s pattern, with a placeholder or its shell';
-                    continue;
-                }
-                $handler = ltrim((string) $table[$key], '\\');
-                if (!in_array(strtolower($handler), $replaced, true)) {
-                    $found[] = $name . ': ' . $pattern . ' is registered for ' . $handler . ', which is neither the placeholder nor a class the controller lists in replaces';
-                }
-                // the side of the plugins' routes core registered it on is the snapshot's: derived, not listed
-                $snapshotAt = array_search($key, $expected, true);
-                if ($snapshotAt === false && !str_starts_with($pattern, '/_test/')) {
-                    $found[] = $name . ': ' . $pattern . ' is not one of the registrations core made before any page moved (fixtures/core-routes.php)';
-                } elseif ($boundary !== false && $snapshotMarker !== false) {
-                    $expectedAfter = $snapshotAt !== false && $snapshotAt > $snapshotMarker;
-                    $position = array_search($key, $keys, true);
-                    if ($expectedAfter !== ($position > $boundary)) {
-                        $found[] = $name . ': ' . $pattern . ' is registered ' . ($position > $boundary ? 'after' : 'before') . ' the plugins\' routes, and core registered it ' . ($expectedAfter ? 'after' : 'before');
-                    }
-                }
+            if ($page->shell && is_a($page->name, \Idno\Common\MarkdownPermalink::class, true) && !$page->markdownPermalink) {
+                $found[] = $name . ': its shell ' . $page->name . ' is a Markdown permalink, and it does not say it is one (markdownPermalink)';
             }
             $sample = self::sampleOf($route);
             if ($sample === null) {
-                $found[] = $name . ': no sample path matches the route, so its patterns were not checked against it';
+                $found[] = $name . ': no sample path matches the route, so the legacy router was not asked about it';
                 continue;
             }
-            if ($page->legacyPatterns === []) {
-                // core registered nothing for it, so no pattern of core's may match its paths (it would be taking the place of a page that moved: declare that pattern)
-                foreach ($expected as $key) {
-                    if ($key !== self::MARKER && PageHandler::handlerFor([$key => 'x'], $sample) !== null) {
-                        $found[] = $name . ': declares no legacyPatterns, and core\'s pattern ' . $key . ' matches ' . $sample . ', a path the route serves: declare it';
-                    }
-                }
+            // Its own: the placeholder, and its shell when it has one. Derived from the attribute's name, never from a list of patterns.
+            $own = [strtolower(ControllerRoute::class)];
+            if ($page->shell) {
+                $own[] = strtolower(ltrim($page->name, '\\'));
+            }
+            $coreKeys = array_values(array_filter($core, static fn (string $key): bool => PageHandler::handlerFor([$key => 'x'], $sample) !== null));
+            $held = false;
+            foreach ($table as $key => $handler) {
+                $held = $held || (in_array(strtolower(ltrim((string) $handler, '\\')), $own, true) && PageHandler::handlerFor([(string) $key => 'x'], $sample) !== null);
+            }
+            if ($coreKeys === [] && !$held) {
+                // an address the site never had a page for, and no placeholder or shell claims it: nothing of core's to hold
+                continue;
+            }
+            if (!$held) {
+                $found[] = $name . ': core\'s pattern ' . $coreKeys[0] . ' matches ' . $sample . ', a path the route serves, and no placeholder or shell of the route is registered for it';
                 continue;
             }
             $chosenKey = self::chosenKey($table, $sample);
             $chosen = $chosenKey === null ? null : ltrim((string) $table[$chosenKey], '\\');
-            if ($chosen === null || !in_array(strtolower($chosen), $replaced, true) || !in_array($chosenKey, $declared, true)) {
-                $found[] = $name . ': the legacy router chooses ' . ($chosen ?? 'no page') . ' under ' . ($chosenKey ?? 'no pattern') . ' for ' . $sample . ', not the placeholder or shell registered under one of the route\'s own declared patterns';
-            }
-            $matches = false;
-            foreach ($declared as $key) {
-                $matches = $matches || PageHandler::handlerFor([$key => 'x'], $sample) !== null;
-            }
-            if (!$matches) {
-                $found[] = $name . ': none of its legacyPatterns matches ' . $sample . ', a path the route serves';
+            if ($chosen === null || !in_array(strtolower($chosen), $own, true)) {
+                $found[] = $name . ': the legacy router chooses ' . ($chosen ?? 'no page') . ' under ' . ($chosenKey ?? 'no pattern') . ' for ' . $sample . ', not the route\'s placeholder or shell';
+            } elseif ($coreKeys !== [] && !in_array($chosenKey, $core, true)) {
+                $found[] = $name . ': the legacy router chooses ' . $chosen . ' under ' . $chosenKey . ' for ' . $sample . ', which is not one of the registrations core made before any page moved (fixtures/core-routes.php)';
             }
         }
 
@@ -309,21 +254,22 @@ final class SitePageClaimsTest extends TestCase
         $table = self::fixtureTable();
         $table->addRoute('/_test/claim(.*)', ClaimingPage::class);   // a plugin's later pattern changes nothing
 
-        $this->assertSame([], self::violations(self::fixtureRoutes(), $table, [], null));
+        $this->assertSame([], self::violations(self::fixtureRoutes(), $table, ['/_test/claimable/?', '/_test/markdown/([^/]+)/?', self::MARKER]));
     }
 
     public function testAPatternThatIsNotRegisteredOrHoldsAnotherClassIsFound(): void
     {
-        $found = implode("\n", self::violations(self::fixtureRoutes(), new PageHandler(), [], null));
-        $this->assertStringContainsString('claimable: /_test/claimable/? is not registered', $found);
-        $this->assertStringContainsString('markdown: /_test/markdown/([^/]+)/? is not registered', $found);
+        $snapshot = ['/_test/claimable/?', '/_test/markdown/([^/]+)/?', self::MARKER];
+        $found = implode("\n", self::violations(self::fixtureRoutes(), new PageHandler(), $snapshot));
+        $this->assertStringContainsString('claimable: core\'s pattern /_test/claimable/? matches /_test/claimable, a path the route serves, and no placeholder or shell of the route is registered for it', $found);
+        $this->assertStringContainsString('markdown: core\'s pattern /_test/markdown/([^/]+)/? matches /_test/markdown/abc', $found);
 
-        $table = self::fixtureTable();
+        $table = new PageHandler();
         $table->addRoute('/_test/claimable/?', ClaimingPage::class);
         $table->addRoute('/_test/markdown/([^/]+)/?', ReplacedPage::class);
-        $found = implode("\n", self::violations(self::fixtureRoutes(), $table, [], null));
-        $this->assertStringContainsString('claimable: /_test/claimable/? is registered for ' . ClaimingPage::class . ', which is neither the placeholder nor a class the controller lists in replaces', $found);
-        $this->assertStringContainsString('markdown: /_test/markdown/([^/]+)/? is registered for ' . ReplacedPage::class, $found, 'a controller that replaces no class holds only the placeholder');
+        $found = implode("\n", self::violations(self::fixtureRoutes(), $table, $snapshot));
+        $this->assertStringContainsString('claimable: core\'s pattern /_test/claimable/? matches', $found, 'another class in its place');
+        $this->assertStringContainsString('markdown: core\'s pattern /_test/markdown/([^/]+)/? matches', $found, 'a route with no shell holds only the placeholder: another route\'s shell is not its own');
     }
 
     public function testASnapshotKeyThatIsDroppedIsFound(): void
@@ -354,57 +300,29 @@ final class SitePageClaimsTest extends TestCase
         $this->assertSame([], self::snapshotViolations(['/a-plugin', '/early/?', '/feed\.xml', '/plugin-too', '/m', '/late/?', '/another'], self::smallSnapshot(), '/m'));
     }
 
-    public function testThePositionRelativeToThePluginsIsCheckedAgainstTheSnapshotNotAList(): void
+    public function testAPlaceholderUnderAPatternThatIsNotCoresIsFound(): void
     {
-        $snapshot = ['/_test/claimable/?', self::MARKER, '/_test/markdown/([^/]+)/?'];
-        $table = new PageHandler();
-        $table->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $table->addRoute(self::PLUGIN_TIME, ClaimingPage::class);
-        $table->addRoute('/_test/markdown/([^/]+)/?', ControllerRoute::class);
-        $this->assertSame([], self::violations(self::fixtureRoutes(), $table, $snapshot), 'registered after the plugins, as the snapshot has it');
-
-        $early = new PageHandler();
-        $early->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $early->addRoute('/_test/markdown/([^/]+)/?', ControllerRoute::class);
-        $early->addRoute(self::PLUGIN_TIME, ClaimingPage::class);
-        $this->assertStringContainsString('markdown: /_test/markdown/([^/]+)/? is registered before the plugins\' routes, and core registered it after', implode("\n", self::violations(self::fixtureRoutes(), $early, $snapshot)));
-    }
-
-    public function testADeclaredPatternThatIsNotCoresIsFound(): void
-    {
-        $routes = new RouteCollection();
-        $routes->add('moved', new Route('/{lead}feed{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
-        $table = new PageHandler();
-        $table->addRoute('/feeds/?', ControllerRoute::class);
-
-        $this->assertStringContainsString('moved: /feeds/? is not one of the registrations core made before any page moved', implode("\n", self::violations($routes, $table, ['/feed\.xml', self::MARKER], null)));
-    }
-
-    public function testARouteThatDeclaresNothingButShadowsASnapshotPatternIsFound(): void
-    {
-        $routes = new RouteCollection();
-        $routes->add('shadow', new Route('/{lead}feed.xml{slash}', ['_controller' => NothingDeclaredController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
-        $routes->add('elsewhere', new Route('/{lead}somewhere{slash}', ['_controller' => NothingDeclaredController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
-        $snapshot = ['/feed\.xml', '/feed/?', self::MARKER];
-
-        $found = implode("\n", self::violations($routes, new PageHandler(), $snapshot, null));
-
-        $this->assertStringContainsString('shadow: declares no legacyPatterns, and core\'s pattern /feed\.xml matches /feed.xml, a path the route serves: declare it', $found);
-        $this->assertStringNotContainsString('elsewhere:', $found, 'a path no snapshot pattern matches');
-    }
-
-    public function testTheChoiceMustBeUnderTheRoutesOwnDeclaredPattern(): void
-    {
-        // the placeholder of ANOTHER route's pattern is not this route's place held
+        // the placeholder of another pattern, registered first, is chosen for the path: core's place is not the one held
         $routes = new RouteCollection();
         $routes->add('feedish', new Route('/{lead}feed{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
         $table = new PageHandler();
-        $table->addRoute('/fe(.*)', ControllerRoute::class);     // another page's place, first in the table
+        $table->addRoute('/fe(.*)', ControllerRoute::class);
         $table->addRoute('/feed/?', ControllerRoute::class);
 
-        $found = implode("\n", self::violations($routes, $table, ['/fe(.*)', '/feed/?', self::MARKER], null));
+        $this->assertStringContainsString('feedish: the legacy router chooses Idno\Legacy\ControllerRoute under /fe(.*) for /feed, which is not one of the registrations core made before any page moved', implode("\n", self::violations($routes, $table, ['/feed/?', self::MARKER])));
+    }
 
-        $this->assertStringContainsString('feedish: the legacy router chooses Idno\Legacy\ControllerRoute under /fe(.*) for /feed, not the placeholder or shell registered under one of the route\'s own declared patterns', $found);
+    public function testARouteWhosePathCoresPatternMatchesNeedsItsPlaceholder(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('shadow', new Route('/{lead}feed.xml{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
+        $routes->add('elsewhere', new Route('/{lead}somewhere{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
+        $snapshot = ['/feed\.xml', '/feed/?', self::MARKER];
+
+        $found = implode("\n", self::violations($routes, new PageHandler(), $snapshot));
+
+        $this->assertStringContainsString('shadow: core\'s pattern /feed\.xml matches /feed.xml, a path the route serves, and no placeholder or shell of the route is registered for it', $found);
+        $this->assertStringNotContainsString('elsewhere:', $found, 'a path no snapshot pattern matches');
     }
 
     public function testTheChosenKeyIsTheOneHandlerForChooses(): void
@@ -426,42 +344,28 @@ final class SitePageClaimsTest extends TestCase
         $table = self::fixtureTable();
         $table->hijackRoute('/_test/(.*)', ClaimingPage::class);
 
-        $this->assertStringContainsString('the legacy router chooses ' . ClaimingPage::class . ' under /_test/(.*) for /_test/claimable', implode("\n", self::violations(self::fixtureRoutes(), $table, [], null)));
-    }
-
-    public function testARouteThatDoesNotDeclareItsPatternsOrDeclaresOnesThatDoNotMatchIsFound(): void
-    {
-        $routes = new RouteCollection();
-        $routes->add('undeclared', new Route('/{lead}_test/claimable{slash}', ['_controller' => UndeclaredController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
-        $routes->add('elsewhere', new Route('/{lead}_test/claimable{slash}', ['_controller' => ElsewhereController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
-        $table = new PageHandler();
-        $table->addRoute('/_test/other/?', ControllerRoute::class);
-
-        $found = implode("\n", self::violations($routes, $table, [], null));
-
-        $this->assertStringContainsString('undeclared: does not declare legacyPatterns', $found);
-        $this->assertStringContainsString('elsewhere: none of its legacyPatterns matches /_test/claimable', $found);
+        $this->assertStringContainsString('the legacy router chooses ' . ClaimingPage::class . ' under /_test/(.*) for /_test/claimable', implode("\n", self::violations(self::fixtureRoutes(), $table, [])));
     }
 
     public function testASampleIsGeneratedFromTheRequirementAndFailsWhenNoneMatches(): void
     {
         $routes = new RouteCollection();
-        $hex = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => ElsewhereController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[a-f0-9]{24}']);
-        $never = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => ElsewhereController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[A-Z]{3}']);
+        $hex = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[a-f0-9]{24}']);
+        $never = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => MovedController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[A-Z]{3}']);
         $routes->add('never', $never);
 
         $this->assertSame('/_test/claimable/' . str_repeat('a', 24), (new \ReflectionMethod(self::class, 'sampleOf'))->invoke(null, $hex));
-        $this->assertStringContainsString('never: no sample path matches the route', implode("\n", self::violations($routes, new PageHandler(), [], null)));
+        $this->assertStringContainsString('never: no sample path matches the route', implode("\n", self::violations($routes, new PageHandler(), [])));
     }
 
-    public function testAControllerThatReplacesAMarkdownPermalinkMustSayItIsOne(): void
+    public function testAControllerWhoseShellIsAMarkdownPermalinkMustSayItIsOne(): void
     {
         $routes = new RouteCollection();
         $routes->add('unmarked', new Route('/{lead}_test/claimable{slash}', ['_controller' => UnmarkedShellController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
         $table = new PageHandler();
         $table->addRoute('/_test/claimable/?', ReplacedPage::class);
 
-        $this->assertSame(['unmarked: replaces ' . ReplacedPage::class . ', a Markdown permalink, and does not say it is one (markdownPermalink)'], self::violations($routes, $table, [], null));
+        $this->assertSame(['unmarked: its shell ' . ReplacedPage::class . ' is a Markdown permalink, and it does not say it is one (markdownPermalink)'], self::violations($routes, $table, []));
     }
 
     public function testTheSnapshotIsWellFormed(): void
@@ -476,21 +380,28 @@ final class SitePageClaimsTest extends TestCase
         }
     }
 
-    public function testNoSitePageRouteOfTheSiteBreaksItsDeclaration(): void
+    public function testEverySitePageRouteOfTheSiteHoldsCoresPlace(): void
     {
         $routes = Idno::container()->get('router')->getRouteCollection();
+        $core = array_values(array_filter(self::expectedKeys(), static fn (string $key): bool => $key !== self::MARKER));
         $pages = 0;
-        $declared = 0;
+        $held = 0;
         foreach ($routes as $route) {
             $controller = $route->getDefault('_controller');
             $page = (is_string($controller) || is_array($controller)) ? SitePage::of($controller) : null;
+            $sample = $page === null ? null : self::sampleOf($route);
             if ($page !== null) {
                 ++$pages;
-                $declared += (int) ($page->legacyPatterns !== null && $page->legacyPatterns !== []);
+                foreach ($sample === null ? [] : $core as $key) {
+                    if (PageHandler::handlerFor([$key => 'x'], $sample) !== null) {
+                        ++$held;
+                        break;
+                    }
+                }
             }
         }
         $this->assertGreaterThan(0, $pages, 'the scan saw site page routes');
-        $this->assertGreaterThan(10, $declared, 'and routes with patterns to check against the table (the home page\'s, the small endpoints\', the fixture\'s)');
+        $this->assertGreaterThan(10, $held, 'and routes whose paths core\'s patterns match (the home page\'s, the small endpoints\', the fixture\'s)');
 
         $this->assertSame([], self::violations($routes, Idno::site()->routes(), self::expectedKeys()));
     }

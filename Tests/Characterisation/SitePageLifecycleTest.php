@@ -320,12 +320,14 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $path = '/_test/site-page/account';
         $headers = self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path);
 
-        // A signed request is answered in JSON whatever it asked for, as the legacy refusal was (the JSON shell).
+        // A signed request is answered in JSON whatever it asked for, in the JSON shell with the message the legacy refusal added, as every
+        // refusal of a site page is drawn (SitePageDrawingTest::testEveryRefusalOfASitePageIsDrawnAsALegacyPagesDeniedContent).
         foreach ([$headers, $headers + ['Accept' => 'application/json']] as $sent) {
             $response = $this->site()->request('GET', $path, $sent);
 
             $this->assertSame(403, $response->status);
-            $this->assertSame(['error' => 'forbidden'], $response->json());
+            $this->assertIsArray($response->json());
+            $this->assertContains('Account pages are not available to API requests.', array_column($response->json()['messages'] ?? [], 'message'));
             $this->assertStringContainsString('no-store', (string) $response->header('Cache-Control'));
         }
 

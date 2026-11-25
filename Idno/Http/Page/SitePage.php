@@ -16,7 +16,9 @@ final class SitePage
 
     /**
      * @param string       $name                The legacy page class whose page this draws (the body class and `page/get`'s `page_class`: the controller wiring gives the event this name)
-     * @param list<string> $replaces            The shell class whose legacy routes this controller shadows (empty when the class was deleted)
+     * @param bool         $shell               The class `name` is kept as a deprecated shell (an `Idno\Legacy\PageShell`) and core still registers it for the
+     *                                          addresses this route serves: the legacy router's choice of it is this controller's place held, as the placeholder
+     *                                          (`Idno\Legacy\ControllerRoute`) is for a page whose class was deleted
      * @param bool         $publicOnPrivateSite The page is served to a visitor on a walled garden site
      * @param bool         $accountPage         A page under /account/ (closed to API requests)
      * @param bool         $settingsPage        A page under /account/ or /admin/ (holds stored secrets)
@@ -24,23 +26,17 @@ final class SitePage
      * @param list<string> $methods             The HTTP methods the page serves besides OPTIONS (always) and HEAD (with GET): a method it does not name is refused
      * @param bool         $markdownPermalink   The page is the permalink of a post and answers its Markdown form (a legacy page was a `MarkdownPermalink`): a GET or HEAD request whose
      *                                          route's last parameter ends in `.md` is the request for it, the suffix is taken off the parameter and the `markdown` type selected
-     *                                          (the route may take the suffix with its parameter, as the legacy pattern took it); a page that replaces a `MarkdownPermalink` says so
-     * @param list<string>|null $legacyPatterns The patterns core registered with the legacy router for the addresses this route serves, as `addRoute()` received them (`/feed\.xml`,
-     *                                          `/tag/([^\s]+)\/?`). Core still registers each, where and when it always did, for the class the controller `replaces` (a kept shell) or for a
-     *                                          placeholder (`Idno\Legacy\ControllerRoute`, when the class is deleted), so the legacy route table is what it was before the page moved; this
-     *                                          declaration is what the checks hold the table to (`SitePageClaimsTest`). `[]` says core registered none (an address the site never had a page
-     *                                          for); null (not declared) fails the check. It plays no part at run time
+     *                                          (the route may take the suffix with its parameter, as the legacy pattern took it); a page whose shell is a `MarkdownPermalink` says so
      */
     public function __construct(
         public readonly string $name,
-        public readonly array $replaces = [],
+        public readonly bool $shell = false,
         public readonly bool $publicOnPrivateSite = false,
         public readonly bool $accountPage = false,
         public readonly bool $settingsPage = false,
         public readonly ?string $defaultType = null,
         public readonly array $methods = ['GET'],
         public readonly bool $markdownPermalink = false,
-        public readonly ?array $legacyPatterns = null,
     )
     {
     }

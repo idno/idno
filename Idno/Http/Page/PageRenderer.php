@@ -113,16 +113,8 @@ final class PageRenderer
     {
         $redirect = $this->forward($context, $location, true, $status, debug_backtrace());
 
-        return $redirect === null ? new Response('', $context->status()) : $this->redirectFor($redirect);
-    }
-
-    /**
-     * The Response of a PageRedirect (what `forward()` made, or a page threw): its own location, body and status, nothing derived
-     * again, built by `PageRedirect::toResponse()`, which the listener that answers a thrown redirect uses too.
-     */
-    public function redirectFor(PageRedirect $redirect): Response
-    {
-        return $redirect->toResponse();
+        // Built by PageRedirect::toResponse(), which answers a thrown redirect too, so the two never differ
+        return $redirect === null ? new Response('', $context->status()) : $redirect->toResponse();
     }
 
     /**

@@ -92,6 +92,8 @@ final class LegacyPageLifecycle implements PageLifecycle
         }
         $site->logging()->warning('API request to an account page refused: ' . ltrim($context->page()->name, '\\'));
         $site->template()->autodetectTemplateType();
+        // the message the legacy router's refusal showed with its 403 page
+        $site->session()->addErrorMessage($site->language()->_('Account pages are not available to API requests.'));
 
         return true;
     }

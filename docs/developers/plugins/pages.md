@@ -201,13 +201,13 @@ Core's own home page, feeds, search, tag pages and small public endpoints are no
 The home page is the worked example. `Idno\Http\Controller\HomepageController` declares the routes and the page:
 
     #[Route('/{slash}', name: 'idno_home', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'], legacyPatterns: ['/?'])]
+    #[SitePage(name: 'Idno\Pages\Homepage', shell: true)]
     public function home(PageContext $page): Response
     {
         return $this->pages->home($page, root: true);
     }
 
-`#[SitePage]` (`Idno\Http\Page\SitePage`) says which page this is: its `name` is what the body class and the page events (`page/ready`, `page/head`, `page/get`) know it by, `replaces` the deprecated shell class that stays registered for the path, `legacyPatterns` the patterns core registered for it with the legacy router (`[]` for a page that is new), `publicOnPrivateSite` whether a visitor of a private site may see it, and `methods` the methods it serves: `['GET']` by default, HEAD comes with GET and OPTIONS is always served, and a method not listed is refused with a 405. A page that adds POST, PUT, DELETE or PATCH lists `GET` as well (`['GET', 'POST']`; `['POST']` alone serves no GET), and a state-changing method is answered only with the session's form token. The controller takes a `PageContext`, the request's input, owner and headers. The logic is in a service, `Idno\Http\Controller\Home\HomePages`, which asks the site for what it needs through an interface (`HomeStream`) and draws through `Idno\Http\Page\PageRenderer`:
+`#[SitePage]` (`Idno\Http\Page\SitePage`) says which page this is: its `name` is what the body class and the page events (`page/ready`, `page/head`, `page/get`) know it by, `shell` whether that class is kept as a deprecated shell that stays registered for the path (core keeps registering the patterns a page that moved had, for the shell or for a placeholder), `publicOnPrivateSite` whether a visitor of a private site may see it, and `methods` the methods it serves: `['GET']` by default, HEAD comes with GET and OPTIONS is always served, and a method not listed is refused with a 405. A page that adds POST, PUT, DELETE or PATCH lists `GET` as well (`['GET', 'POST']`; `['POST']` alone serves no GET), and a state-changing method is answered only with the session's form token. The controller takes a `PageContext`, the request's input, owner and headers. The logic is in a service, `Idno\Http\Controller\Home\HomePages`, which asks the site for what it needs through an interface (`HomeStream`) and draws through `Idno\Http\Page\PageRenderer`:
 
     return $this->renderer->page($page, [
         'title'       => $titles['title'],
@@ -215,6 +215,6 @@ The home page is the worked example. `Idno\Http\Controller\HomepageController` d
         'body'        => $this->renderer->template('pages/home', ['items' => $items, 'contentTypes' => $create, 'offset' => $offset, 'count' => $count, 'subject' => $query, 'content' => $friendlyTypes]),
     ]);
 
-The renderer also makes the answers a page gives where a legacy page called `deniedContent()`, `noContent()`, `goneContent()` or `forward()`: `denied()`, `notFound()`, `gone()` and `redirect()`. A controller page never calls `header()`, `echo` or `exit`; ask for caching with `$page->setCaching([...])`, and add other headers with `$page->addHeader()`.
+The renderer also makes the answers a page gives where a legacy page called `deniedContent()`, `noContent()`, `goneContent()` or `forward()`: `denied()`, `notFound()`, `gone()` and `redirect()`. Every refusal of such a page (its own `denied()`, `#[IsGranted]`, a private site's refusal of a visitor, an API request on an account page) is drawn as `deniedContent()` drew it. A controller page never calls `header()`, `echo` or `exit`; ask for caching with `$page->setCaching([...])`, and add other headers with `$page->addHeader()`.
 
 To replace the home page from a plugin, listen to `homepage/replace` instead of taking the route; see [Replacing the home page](upgrading.md#replacing-the-home-page-the-homepagereplace-event).

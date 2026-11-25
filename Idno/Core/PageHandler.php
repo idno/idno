@@ -28,7 +28,7 @@ namespace Idno\Core {
         private static $markdown_suffix = false;
 
         /**
-         * Whether the class a controller's page stands for, or one it replaces, was registered in a table of the router (the
+         * Whether the class a controller's page stands for (its name, which is its shell's when it has one) was registered in a table of the router (the
          * account pages, the settings pages): what was registered with the legacy router for the class keeps applying to the page
          * that replaced it, so a flag left off the attribute never opens a door the registration closed.
          *
@@ -36,13 +36,7 @@ namespace Idno\Core {
          */
         private function anyRegistered(array $registered, \Idno\Http\Page\SitePage $page): bool
         {
-            foreach ([$page->name, ...$page->replaces] as $class) {
-                if (isset($registered[strtolower(ltrim($class, '\\'))])) {
-                    return true;
-                }
-            }
-
-            return false;
+            return isset($registered[strtolower(ltrim($page->name, '\\'))]);
         }
 
         /**
@@ -442,16 +436,7 @@ namespace Idno\Core {
         {
             if ($class instanceof \Idno\Legacy\ControllerPage) {
                 $page = $class->context()->page();
-                if ($page->publicOnPrivateSite || $this->isRoutePublic($page->name)) {
-                    return true;
-                }
-                foreach ($page->replaces as $replaced) {
-                    if ($this->isRoutePublic($replaced)) {
-                        return true;
-                    }
-                }
-
-                return false;
+                return $page->publicOnPrivateSite || $this->isRoutePublic($page->name);
             }
             if (is_object($class)) {
                 $class = get_class($class);

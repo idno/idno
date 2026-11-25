@@ -636,8 +636,8 @@ final class ControllerPageTest extends TestCase
         $routes->addPublicRoute(ControllerPagePublicFixture::class);
 
         $account = $this->page('/', 'GET', [], [], new SitePage(ControllerPageRegisteredFixture::class));
-        $admin = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name', replaces: ['\\' . ControllerPageRegisteredAdminFixture::class]));
-        $public = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name', replaces: [ControllerPagePublicFixture::class]));
+        $admin = $this->page('/', 'GET', [], [], new SitePage('\\' . ControllerPageRegisteredAdminFixture::class, shell: true));
+        $public = $this->page('/', 'GET', [], [], new SitePage(ControllerPagePublicFixture::class, shell: true));
         $publicByName = $this->page('/', 'GET', [], [], new SitePage(ControllerPagePublicFixture::class));
         $none = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name'));
 
