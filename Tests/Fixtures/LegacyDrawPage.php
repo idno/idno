@@ -30,6 +30,12 @@ class LegacyDrawPage extends Page
                 $this->setLastModifiedHeader(1700000000);
                 $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
                 break;
+            case 'conditional':
+                // a page that answers a conditional request: the gatekeeper first, as a permalink does, then the date it sends
+                $this->lastModifiedGatekeeper(1700000000);
+                $this->setLastModifiedHeader(1700000000);
+                $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
+                break;
             case 'no-cache':
                 $this->setNoCache();
                 $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
