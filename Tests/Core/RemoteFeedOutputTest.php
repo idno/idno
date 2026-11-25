@@ -245,7 +245,8 @@ class RemoteFeedOutputTest extends \Tests\IdnoTestCase
 
     public function testErrorMailTextIsPlainText()
     {
-        $text = $this->draw('admin/oops', $this->oopsVars(), 'email-text');
+        // One template draws both bodies of a mail (Email::drawBodies())
+        $text = \Idno\Core\Email::drawBodies('admin/oops', $this->oopsVars())['text'];
 
         // A text part is not HTML: nothing is escaped
         $this->assertStringContainsString('Mozilla/5.0 "><script>alert(1)</script>', $text);

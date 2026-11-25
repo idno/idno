@@ -404,7 +404,7 @@ namespace Idno\Entities {
          */
         function getLink()
         {
-            return \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/register/?email=' . urlencode((string) $this->email) . '&code=' . urlencode((string) $this->code);
+            return Email::siteUrl('account/register/') . '?email=' . urlencode((string) $this->email) . '&code=' . urlencode((string) $this->code);
         }
 
         /**
@@ -427,9 +427,7 @@ namespace Idno\Entities {
             $message = new Email();
             try {
                 $message->addTo((string) $this->email);
-                $message->setSubject($site->language()->_("You've been invited to join %s", [$site->config()->title]));
-                $message->setHTMLBodyFromTemplate('account/invite', $vars);
-                $message->setTextBodyFromTemplate('account/invite', $vars);
+                $message->setBodyFromTemplate('account/invite', $vars);
                 $inviter_email = (string) $this->inviter_email;
                 if ($inviter_email !== '' && filter_var($inviter_email, FILTER_VALIDATE_EMAIL) && empty($site->config()->reply_to_email)) {
                     $message->setReplyTo($inviter_email);

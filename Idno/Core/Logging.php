@@ -336,13 +336,12 @@ namespace Idno\Core {
                     $notify = [$notify];
                 }
 
-                $title = $config->host . ": $title";
-
                 foreach ($notify as $emailaddress) {
                     if (!empty($emailaddress) && filter_var($emailaddress, FILTER_VALIDATE_EMAIL)) {
 
                         $vars = [
-                            'site' => $config->getDisplayURL(),
+                            'site' => $config->getURL(),
+                            'title' => $title,
                             'message' => $message,
                             'user' => 'UNKNOWN',
 
@@ -369,11 +368,8 @@ namespace Idno\Core {
                         }
 
                         $email = new Email();
-                        if (!empty($title)) {
-                            $email->setSubject($title);
-                        }
-                        $email->setHTMLBodyFromTemplate('admin/oops', $vars);
-                        $email->setTextBodyFromTemplate('admin/oops', $vars);
+                        // The template writes the subject: the site's host name and the kind of error
+                        $email->setBodyFromTemplate('admin/oops', $vars);
                         $email->addTo($emailaddress);
                         $email->send();
 

@@ -89,15 +89,24 @@ namespace Idno\Core {
         /**
          * Given the name of a template and a set of variables to include, generates an HTML body and adds it to the message
          *
+         * The template is one of templates/email/, written with the parts of templates/email/parts/
+         * (see part()). What it says about itself with describe() goes to the shell: the
+         * preheader (the line a mail client shows beside the subject) and the reason (the
+         * footer's "You got this email because ...").
+         *
          * @param  $template_name
          * @param  array $vars
+         * @param  array $shellVars Variables for the shell; they win over what the template says
          * @return mixed
          */
         function setHTMLBodyFromTemplate($template_name, $vars = array(), array $shellVars = [])
         {
             $t = clone \Idno\Core\Idno::site()->template();
             $t->setTemplateType('email');
+            static::$described = [];
             $body = $t->__($vars)->draw($template_name);
+            $shellVars += static::$described;
+            static::$described = [];
 
             return $this->setHTMLBody($body, true, $shellVars);
         }
@@ -107,7 +116,9 @@ namespace Idno\Core {
          *
          * @param  $body      The formatted HTML body text of the message
          * @param  bool  $shell     Should the message be placed inside the pageshell? Default: true
-         * @param  array $shellVars Variables to pass to the page shell template
+         * @param  array $shellVars Variables to pass to the page shell template: 'title' (the
+         *                          subject, when it is not set on the message yet), 'preheader'
+         *                          and 'reason', all plain text
          * @return mixed
          */
         function setHTMLBody($body, $shell = true, array $shellVars = [])
@@ -115,6 +126,8 @@ namespace Idno\Core {
             if ($shell) {
                 $t = clone \Idno\Core\Idno::site()->template();
                 $t->setTemplateType('email');
+                // Template variables stay set between draws, so every one the shell reads is given
+                $shellVars += ['title' => (string) $this->message->getSubject(), 'preheader' => '', 'reason' => ''];
                 $message = $t->__(array_merge(array('body' => $body), $shellVars))->draw('shell');
             } else {
                 $message = $body;
@@ -124,30 +137,251 @@ namespace Idno\Core {
         }
 
         /**
-         * Set the text only component of an email.
+         * Set the text only component of an email, from a template of templates/email-text/.
+         * It gets the text footer (templates/email-text/shell) with the reason the template
+         * gave with describe().
          *
          * @param  type $template_name
          * @param  type $vars
          * @return mixed
          */
-        function setTextBodyFromTemplate($template_name, $vars = array())
+        function setTextBodyFromTemplate($template_name, $vars = array(), array $shellVars = [])
         {
             $t = clone \Idno\Core\Idno::site()->template();
             $t->setTemplateType('email-text');
+            static::$described = [];
             $body = $t->__($vars)->draw($template_name);
+            $shellVars += static::$described;
+            static::$described = [];
 
-            return $this->setTextBody($body);
+            return $this->setTextBody($body, true, $shellVars);
         }
 
         /**
          * Sets the plain text body of the message
          *
-         * @param  string $body The body of the message
+         * @param  string $body      The body of the message
+         * @param  bool   $shell     Add the text footer (the reason and the site's name and address)? Default: false
+         * @param  array  $shellVars 'reason', plain text
          * @return mixed
          */
-        function setTextBody($body)
+        function setTextBody($body, $shell = false, array $shellVars = [])
         {
+            if ($shell) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email-text');
+                $body = $t->__(array_merge(['body' => $body, 'reason' => ''], $shellVars))->draw('shell');
+            }
+
             return $this->message->addPart($body, 'text/plain');
+        }
+
+        /**
+         * Write the whole mail from one template of templates/email/: the HTML body, the text
+         * body and, when the template names one with describe(), the subject.
+         *
+         * The template is drawn twice, and the parts it is written with (see part()) come out
+         * as HTML the first time and as plain text the second, so the two bodies of a mail
+         * always say the same. The template must therefore print nothing but parts.
+         *
+         * @param  string $template_name
+         * @param  array  $vars
+         * @return $this
+         */
+        function setBodyFromTemplate($template_name, array $vars = [])
+        {
+            $mail = static::drawBodies($template_name, $vars);
+            if ((string) $mail['subject'] !== '') {
+                $this->setSubject($mail['subject']);
+            }
+            $this->setHTMLBody($mail['html'], true, ['preheader' => $mail['preheader'], 'reason' => $mail['reason']]);
+            $this->setTextBody($mail['text'], true, ['reason' => $mail['reason']]);
+
+            return $this;
+        }
+
+        /**
+         * Draw a template of templates/email/ as both bodies of a mail, without their shells
+         * (see setBodyFromTemplate()): for a mail that is put together now and sent later.
+         *
+         * @param  string $template_name
+         * @param  array  $vars
+         * @return string[] 'html', 'text', and what the template said with describe(): 'subject', 'preheader', 'reason'
+         */
+        static function drawBodies($template_name, array $vars = [])
+        {
+            $t = clone \Idno\Core\Idno::site()->template();
+            $t->setTemplateType('email');
+
+            static::$described = [];
+            static::$partType = 'email';
+            try {
+                $html = $t->__($vars)->draw($template_name);
+                $about = static::$described;
+                static::$partType = 'email-text';
+                $text = $t->draw($template_name);
+            } finally {
+                static::$partType = null;
+                static::$described = [];
+            }
+
+            return ['html' => $html, 'text' => $text] + $about + ['subject' => '', 'preheader' => '', 'reason' => ''];
+        }
+
+        /// The template type parts are drawn with while setBodyFromTemplate() is at work
+        protected static $partType = null;
+
+        /// The typefaces of a mail: the ones the modern look uses, as far as mail clients have them
+        const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+        /// The typefaces of preformatted text in a mail
+        const FONT_MONO = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
+
+        /// The width plain-text mail is wrapped to
+        const TEXT_WIDTH = 72;
+
+        /// What the template being drawn said about its mail (see describe())
+        protected static $described = [];
+
+        /**
+         * Called by a mail's template to say what the shell should know about the mail.
+         *
+         * @param array $about 'subject' (used by setBodyFromTemplate()); 'preheader': a line shown beside the subject in the list of a mail
+         *                     client, and hidden in the mail itself; 'reason': why the reader
+         *                     got the mail, for the footer. Both plain text.
+         */
+        static function describe(array $about)
+        {
+            static::$described = array_intersect_key($about, ['subject' => 1, 'preheader' => 1, 'reason' => 1]) + static::$described;
+        }
+
+        /**
+         * Draw one part of a mail: templates/email/parts/<name> for the HTML body and
+         * templates/email-text/parts/<name> for the text body, which take the same variables,
+         * all of them plain text that the part escapes:
+         *
+         * - heading: 'text'
+         * - paragraph: 'text', or 'format' and 'values' (a sentence with %s for each value; the
+         *   values are set in bold); 'muted' for a smaller, quieter paragraph
+         * - button: 'label', 'url' (the main thing to do; the address is also printed, to copy)
+         * - link: 'label', 'url' (a second, quieter link)
+         * - quote: 'text' (words somebody typed)
+         * - rows: 'rows', a list of label => value
+         * - code: 'text' (preformatted: an error message)
+         *
+         * Each part is drawn with a copy of the template, so a variable given to one part is
+         * never read by the next.
+         *
+         * @param  \Idno\Core\Bonita\Templates $t    The template that is drawing the mail ($t in a template)
+         * @param  string                      $name
+         * @param  array                       $vars
+         * @return string
+         */
+        static function part($t, $name, array $vars = [])
+        {
+            $part = clone $t;
+            if (static::$partType !== null) {
+                $part->setTemplateType(static::$partType);
+            }
+            $defaults = ['text' => '', 'format' => '', 'values' => [], 'muted' => false, 'label' => '', 'url' => '', 'rows' => []];
+
+            return $part->__($vars + $defaults)->draw('parts/' . $name);
+        }
+
+        /**
+         * An address on this site, from the address the site is configured with (never from
+         * the request that happens to be sending the mail, which may be the queue's).
+         *
+         * @param  string $path A path on the site, without the first slash
+         * @return string
+         */
+        static function siteUrl($path = '')
+        {
+            return rtrim((string) \Idno\Core\Idno::site()->config()->getURL(), '/') . '/' . ltrim((string) $path, '/');
+        }
+
+        /**
+         * The name of the site for a mail: its title, or its host name when it has none
+         *
+         * @return string
+         */
+        static function siteName()
+        {
+            $config = \Idno\Core\Idno::site()->config();
+            $name = static::oneLine($config->title);
+
+            return $name !== '' ? $name : (string) $config->host;
+        }
+
+        /**
+         * A value as one line of plain text: no line breaks or control characters, so nothing
+         * a person typed can look like a line of the mail's own.
+         *
+         * @param  string $text
+         * @return string
+         */
+        static function oneLine($text)
+        {
+            return trim(preg_replace('/\s+/u', ' ', static::headerText($text)) ?? '');
+        }
+
+        /**
+         * Put values into a sentence. In HTML the sentence and the values are escaped and the
+         * values are set in bold; in text they are put in as they are.
+         *
+         * @param  string   $format A sentence with %s for each value
+         * @param  string[] $values
+         * @param  bool     $html
+         * @return string
+         */
+        static function emphasise($format, array $values, $html = true)
+        {
+            $values = array_map([static::class, 'oneLine'], $values);
+            if (!$html) {
+                return vsprintf((string) $format, $values);
+            }
+            $values = array_map(
+                function ($value) {
+                    return '<strong>' . htmlspecialchars($value) . '</strong>';
+                }, $values
+            );
+
+            return vsprintf(htmlspecialchars((string) $format, ENT_QUOTES), $values);
+        }
+
+        /**
+         * Wrap plain text for a mail. Lines are counted in characters, not bytes, and a word
+         * longer than a line (an address) is left whole on a line of its own.
+         *
+         * @param  string $text
+         * @param  int    $width
+         * @param  string $prefix Put before every line ("> " for a quotation)
+         * @return string
+         */
+        static function wrapText($text, $width = self::TEXT_WIDTH, $prefix = '')
+        {
+            $width -= mb_strlen($prefix);
+            $lines = [];
+            foreach (preg_split('/\r\n|\r|\n/', (string) $text) as $paragraph) {
+                $line = '';
+                foreach (preg_split('/[ \t]+/', trim($paragraph)) as $word) {
+                    if ($line !== '' && mb_strlen($line) + 1 + mb_strlen($word) > $width) {
+                        $lines[] = $line;
+                        $line = $word;
+                    } else {
+                        $line = $line === '' ? $word : $line . ' ' . $word;
+                    }
+                }
+                $lines[] = $line;
+            }
+
+            return implode(
+                "\n", array_map(
+                    function ($line) use ($prefix) {
+                        return rtrim($prefix . $line);
+                    }, $lines
+                )
+            );
         }
 
         /**

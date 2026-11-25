@@ -1,13 +1,21 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Test Email
-</div><br>
-<hr/>
-<br>
-If you can read this, it means that your email settings are configured correctly!
-<br><br>
-<div align="center">
-    <a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Visit your site</a>
-</div>
-<br>
-<br>
-<br>
+<?php
+
+    /* The test mail an administrator sends from the email settings. No variables. */
+
+    use Idno\Core\Email;
+
+    $lang = \Idno\Core\Idno::site()->language();
+    $site = Email::siteName();
+
+    Email::describe(
+        [
+        'subject' => $lang->_('Test email from %s', [$site]),
+        'preheader' => $lang->_('If you can read this, the email settings work.'),
+        'reason' => $lang->_('You got this email because an administrator of %s sent a test to this address.', [$site]),
+        ]
+    );
+
+    echo Email::part($t, 'heading', ['text' => $lang->_('The email settings work')]);
+    echo Email::part($t, 'paragraph', ['format' => $lang->get('If you can read this, %s can send email.'), 'values' => [$site]]);
+    echo Email::part($t, 'paragraph', ['text' => $lang->_('If it arrived in the spam folder, check the DNS records your mail service asks for (SPF, DKIM and DMARC).')]);
+    echo Email::part($t, 'button', ['label' => $lang->_('Back to the email settings'), 'url' => Email::siteUrl('admin/email/')]);

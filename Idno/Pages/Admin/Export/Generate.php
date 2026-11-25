@@ -100,10 +100,8 @@ namespace Idno\Pages\Admin\Export {
                     \Idno\Core\Idno::site()->config()->save();
 
                     $mail = new Email();
-                    $mail->setHTMLBodyFromTemplate('admin/export');
-                    $mail->setTextBodyFromTemplate('admin/export');
+                    $mail->setBodyFromTemplate('admin/export');
                     $mail->addTo(\Idno\Core\Idno::site()->session()->currentUser()->email);
-                    $mail->setSubject("Your data export is ready");
                     $mail->send();
                 } else {
                     \Idno\Core\Idno::site()->logging()->error("There was a problem creating file {$path}{$filename}");

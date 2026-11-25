@@ -24,9 +24,7 @@ namespace Idno\Pages\Admin {
                 $sent = 0;
                 try {
                     $message->addTo($email);
-                    $message->setSubject($lang->_('Test email from %s', [\Idno\Core\Idno::site()->config()->title]));
-                    $message->setHTMLBodyFromTemplate('admin/emailtest');
-                    $message->setTextBodyFromTemplate('admin/emailtest');
+                    $message->setBodyFromTemplate('admin/emailtest');
                     $sent = $message->send();
                 } catch (\Throwable $e) {
                     list($message->errorKind, $message->error) = \Idno\Core\Email::explain($e);
