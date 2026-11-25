@@ -63,7 +63,8 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $user = $this->user();
         $this->swapUser($user);
         $this->session = $user->standardsitesync_session;
-        $this->settings = ['atmosphere_enabled' => Idno::site()->config()->atmosphere_enabled];
+        $this->settings = ['atmosphere_enabled' => Idno::site()->config()->atmosphere_enabled, 'walled_garden' => Idno::site()->config()->walled_garden ?? null];
+        Idno::site()->config()->walled_garden = false;
         // Off, so that the plugin's hooks (once a test has registered them) do nothing unless a test turns them on
         Idno::site()->config()->atmosphere_enabled = false;
 
@@ -903,6 +904,25 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         $this->assertNull(Main::actionFor($user));
         $this->assertNull(Main::actionFor(null));
+    }
+
+    public function testNothingIsWrittenFromAPrivateSite()
+    {
+        $this->connect();
+        $status = $this->status('On a site that becomes private');
+        Idno::site()->config()->atmosphere_enabled = true;
+        $this->assertSame('sync', Main::actionFor($status), 'Control: the post of a public site is written.');
+
+        Idno::site()->config()->walled_garden = true;
+
+        $this->assertFalse(Main::shouldSync($status), 'A public post on a private site is not public.');
+        $this->assertNull(Main::actionFor($status));
+
+        // A post written while the site was public is taken away when it is next saved
+        Idno::site()->config()->walled_garden = false;
+        $this->assertTrue(Main::syncEntity($status));
+        Idno::site()->config()->walled_garden = true;
+        $this->assertSame('unsync', Main::actionFor(\Idno\Common\Entity::getByID($status->getID())));
     }
 
     public function testAPostThatStopsBeingPublicIsDeletedFromThePds()

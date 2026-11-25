@@ -24,6 +24,11 @@ class ActivityHandler
      */
     public static function handle(string $rawBody, array $headers, string $method, string $path, ?string $targetHandle = null): array
     {
+        // A private site has no inboxes. Refused before anything is asked of the sender
+        if (!Main::federates()) {
+            return ['status' => 404, 'body' => json_encode(['error' => 'Not found'])];
+        }
+
         // Parse the activity
         $activity = json_decode($rawBody, true);
         if (empty($activity) || empty($activity['type'])) {

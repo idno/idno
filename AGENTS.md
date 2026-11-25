@@ -203,6 +203,37 @@ Each content plugin has an `Entry.php` entity class that defines
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
 
+### Private sites
+
+A private site (the `walled_garden` setting; `Config::isPublicSite()` is false) does not
+federate, and tells no other server what its members post. `Main::federates()` is the
+rule, asked on every request and every delivery, so making a site private or public again
+takes effect at once and no post is saved again.
+
+- `Main::registerPages()` gives every federation address (actor, outbox, followers,
+  following, both inboxes, the quote stamp, both NodeInfo addresses) to
+  `Pages\NotFederating`, which answers 404 to any method, for a member who exists and one
+  who does not, to a visitor and to a member. Not 401 or 403, after which other servers ask
+  again with a signature, and not 410, which makes them forget the member for good. A new
+  federation address goes in the list in `registerPages()`, never in an `addRoute()` call
+  of its own.
+- `ActivityHandler::handle()` answers 404 before it reads the activity or asks anything of
+  the sender, so no Follow is accepted; `Delivery::deliverToFollowers()` queues nothing and
+  `Delivery::deliver()` sends nothing, which also stops deliveries that were queued while
+  the site was public.
+- Webfinger (`Idno\Pages\Webfinger\View`, core) finds no member on a private site.
+- Followers are kept. Posts that were delivered before the site was made private stay on
+  the servers that have them; posts made while it was private are in the outbox when it is
+  public again but are not delivered then.
+- The same rule in core and in Atmosphere: `Webmention::pingMentions()` and
+  `sendWebmentionPayload()` send nothing, `PubSubHubbub::publish()` pings no hub, and
+  Atmosphere's `Main::shouldSync()` is false, so nothing is written to a member's PDS (a
+  record written earlier is deleted when its post is next saved). Anything new that sends
+  a post, or word of one, to another server must ask `Config::isPublicSite()` first.
+- `IdnoPlugins/ActivityPub/Tests/PrivateSiteTest.php` (over HTTP),
+  `Tests/Core/PrivateSiteOutboundTest.php` and `IdnoPlugins/Atmosphere/Tests/PostSyncTest.php`
+  check this.
+
 ### Patterns to follow
 
 - Activities are plain PHP arrays, not ORM objects — `ActivityBuilder` returns arrays
@@ -265,8 +296,9 @@ again; their settings page tells them their connection has expired.
   so a post written twice is one record (the PDS refuses any other key for
   `app.bsky.feed.post`). A change is a `putRecord` with `swapRecord` (`RecordWriter`): if the
   record is gone from the PDS, the member deleted it there, and it is not put back.
-- Only a post that is public and published is ever written (`Main::shouldSync()`). One that
-  stops being so is deleted from the PDS, whichever records it has. For Bluesky only: a reply
+- Only a post that is public and published, on a site that is public, is ever written
+  (`Main::shouldSync()`): nothing is written from a private site (the `walled_garden`
+  setting). One that stops being so is deleted from the PDS, whichever records it has. For Bluesky only: a reply
   to something that is not on Bluesky, and a post that already has a Bluesky syndication
   link, are not posted.
 - Audio: neither Bluesky nor anybody else has a shared record for it, so besides

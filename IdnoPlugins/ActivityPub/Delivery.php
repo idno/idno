@@ -22,6 +22,12 @@ class Delivery
      */
     public static function deliver(User $user, array $activity, string $inboxUrl): bool
     {
+        // A private site sends nothing, whenever the delivery was queued
+        if (!Main::federates()) {
+            \Idno\Core\Idno::site()->logging()->debug('ActivityPub: This site is private; nothing is delivered');
+            return false;
+        }
+
         if (empty($inboxUrl) || !filter_var($inboxUrl, FILTER_VALIDATE_URL)) {
             \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Invalid inbox URL for delivery: ' . $inboxUrl);
             return false;
@@ -78,6 +84,11 @@ class Delivery
     {
         // Nothing new goes out in the name of a banned member
         if ($user->isBanned()) {
+            return;
+        }
+
+        // Nothing leaves a private site
+        if (!Main::federates()) {
             return;
         }
 
