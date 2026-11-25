@@ -81,7 +81,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Portability' => ['ExportReport.php', 'ExportState.php', 'FeedShell.php', 'ImportResult.php', 'ImportedComment.php', 'ImportedImages.php', 'ImportedMedia.php', 'ImportedPost.php', 'PostWriter.php', 'ResultNotifier.php', 'SafeXml.php', 'SettingsRedactor.php', 'SiteFacts.php'],
         // Template names, type chains and located files are value objects and static helpers; the cascade, the
         // registry, the renderer, the Twig loader and the Twig engine are wired below.
-        'Templating' => ['CascadeTwigLoader.php', 'EmbedFinder.php', 'LocatedTemplate.php', 'MethodCallExpression.php', 'MethodCallNodeVisitor.php', 'OutputBuffers.php', 'ProfileLink.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
+        'Templating' => ['CascadeTwigLoader.php', 'EmbedFinder.php', 'LocatedTemplate.php', 'MethodCallExpression.php', 'MethodCallNodeVisitor.php', 'OutputBuffers.php', 'ProfileLink.php', 'ShellHeaders.php', 'SlotRegistry.php', 'TemplateCascade.php', 'TemplateName.php', 'TemplateRenderer.php', 'TolerantTwigCache.php', 'TwigCacheWarmer.php', 'TwigTemplateEngine.php', 'TypeChain.php'],
         // Passwords is the service; the legacy hasher is built by it. SessionUser and StatelessAuthentication are value
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.

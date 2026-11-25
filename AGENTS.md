@@ -890,7 +890,7 @@ other new code may.
   `Idno/Portability/`, the static helpers `SafeXml.php` and `SettingsRedactor.php`, the value objects
   `ImportedPost.php`, `ImportedComment.php` and `ImportResult.php`, the helper `ImportedImages.php`, the five
   interfaces, and `ImportedMedia.php` (wired by hand: it takes a closure that fetches the remote client), and in `Idno/Templating/` the value objects and static helpers
-  `LocatedTemplate.php`, `OutputBuffers.php`, `TemplateName.php` and `TypeChain.php` and the classes wired by hand (`CascadeTwigLoader.php`,
+  `LocatedTemplate.php`, `OutputBuffers.php`, `ShellHeaders.php`, `TemplateName.php` and `TypeChain.php` and the classes wired by hand (`CascadeTwigLoader.php`,
   `SlotRegistry.php`, `TemplateCascade.php`, `TemplateRenderer.php`, `TwigTemplateEngine.php`).
 - The database connection: DoctrineBundle's `database_connection` service (`doctrine.dbal.default_connection`,
   autowired as `Doctrine\DBAL\Connection`). `config/packages/doctrine.php` configures no credentials:
@@ -3052,12 +3052,18 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   purifier, lives as long as the container: in the queue worker, for many messages). `Tests/Core/PurifierKeepsNothingTest`.
 - No template sends an HTTP header, and a template draw leaves nothing on the site's template object. Headers: `shell/headers` has no core file
   but the shells (`shell`, `admin-shell`, `account-shell`) still draw it, so the NAME is an extension point (a plugin extension that calls `header()`
-  still runs); `DefaultTemplate::sendShellHeaders()` sends `Content-type: text/html` and `Access-Control-Allow-Origin: *` for the `default` type, called
+  still runs); The headers of every template type are declared in one table, `Idno\Templating\ShellHeaders::for($type, $status, $canonical, $settingsShellAsJsonp)`
+  (static and pure: a list of `[name, value]` in the order they are sent; the type compared in lower case; `default`, `json`, `jsonp`, `rss`,
+  `kml`, `jsonfeed`, `activitypub` and `markdown` have headers, any other type none; the Markdown `Link: <canonical>; rel="canonical"` only at status
+  200 and for an http(s) address with no `<`, `>` or white space; a settings page asked for as JSONP, which is drawn as HTML, is `text/html; charset=utf-8`
+  and `nosniff`; `ShellHeaders::replaces()` is false for `Link` only, which is added), which the type shells no longer send themselves (they were the
+  json, jsonp, rss, kml, jsonfeed and activitypub shells); `DefaultTemplate::shellHeaders($status)` gives the list for the template's type and
+  `DefaultTemplate::sendShellHeaders()` sends it, called
   by `drawPage()` and by the two pages that draw the shell with `draw('shell')` (`Account\Register`, `Account\Password`);
   `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
   `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,
   `Connect`, `Profile`); `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
-  `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`. Header values are unchanged
+  `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
   (`Tests/Characterisation/PageHeadersTest`). `Bonita\Templates::__()` writes template variables only, whatever their names (a variable named
   `templateType`, `vars` or `fallbackToDefault` no longer sets the object's own property of that name: use `setTemplateType()`;
   `TemplateContractTest::testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties`); `Actions::createLink()` and `createForm()` and
@@ -3136,7 +3142,7 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
   404 (no route) and is now what the permalink of a missing post is (410, as Markdown). `PageHandler::handlerFor()` is the
   router's own lookup, written again (Toro's is inline in `serve()`): `Tests/Unit/Markdown/RouteLookupTest` serves a table of
   patterns and paths through `Toro::serve()` and fails if the two ever disagree. `REQUEST_URI` keeps the suffix (`Page::currentUrl()`); slug routes still match no dot.
-- The headers are `DefaultTemplate::sendMarkdownHeaders()`'s (called by `sendShellHeaders()`, so by every `drawPage()` of the
+- The headers are `ShellHeaders`'s `markdown` list (`DefaultTemplate::sendMarkdownHeaders()` sends it alone, for a caller of its own; `sendShellHeaders()` sends it, so every `drawPage()` of the
   type; no template sends one): `Content-Type: text/markdown; charset=utf-8`, `X-Content-Type-Options: nosniff`,
   `Access-Control-Allow-Origin: *` (as every web page has), and, only when the status is 200, `Link: <address>; rel="canonical"`: the entity's `getURL()` on its permalink,
   else the page's own address without `_t` (only an http(s) address with no `<`, `>` or white space). `Vary: Accept` is on

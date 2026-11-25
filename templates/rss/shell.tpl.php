@@ -2,7 +2,6 @@
 
     $template = $this->formatShellVariables($vars);
     $vars = $template->vars;
-    header('Content-type: application/rss+xml');
     unset($vars['body']);
 
 if (empty($vars['title'])) {

@@ -14,7 +14,6 @@
      * ActivityPhp library. This ensures content negotiation always works.
      */
 
-    header('Content-Type: application/activity+json');
 
     unset($vars['body']);
 

@@ -1,6 +1,5 @@
 <?php
 
-    header('Content-type: application/vnd.google-earth.kml+xml');
     unset($vars['body']);
 
 if (empty($vars['title']) && !empty($vars['description'])) {

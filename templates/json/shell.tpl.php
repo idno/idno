@@ -1,9 +1,5 @@
 <?php
 
-    header('Content-type: application/json');
-    header("Access-Control-Allow-Origin: *");
-    header('Access-Control-Allow-Credentials: true');
-    header("Access-Control-Allow-Headers: Authorization, Content-Type");
 
     unset($vars['body']);
     // A page that prints its variables never prints the form token, whatever put it there (see FormToken::scrub()).

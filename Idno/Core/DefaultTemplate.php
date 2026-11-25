@@ -49,6 +49,9 @@ namespace Idno\Core {
         // Override the shell for specific url roots
         public $url_shell_overrides = [];
 
+        // Set by shellForPage(): the page being drawn is a settings page asked for as JSONP, which is drawn as HTML
+        private bool $settingsShellAsJsonp = false;
+
 
         /**
          * On construction, detect the template type
@@ -206,6 +209,7 @@ namespace Idno\Core {
          */
         private function shellForPage($shell)
         {
+            $this->settingsShellAsJsonp = false;
             $type = strtolower((string) $this->getTemplateType());
             if (in_array($type, ['default', 'jsonp'], true)) {
                 $current = null;
@@ -215,11 +219,8 @@ namespace Idno\Core {
                     // The root itself (`/admin`), and everything under it (`/admin/`, `/admin/email`, `/admin?x`); case matters
                     if (strpos($current, $prefix) === 0 && in_array((string) substr($current, strlen($prefix), 1), ['', '/', '?', '#'], true)) {
                         $shell = $page_shell;
-                        if ($type === 'jsonp') {
-                            // The HTML settings shell answers a request for a script: it is HTML, and never to be taken for a script.
-                            header('Content-Type: text/html; charset=utf-8');
-                            header('X-Content-Type-Options: nosniff');
-                        }
+                        // The HTML settings shell answers a request for a script: it is HTML (ShellHeaders says so), never a script.
+                        $this->settingsShellAsJsonp = ($type === 'jsonp');
                     }
                 }
             }
@@ -234,12 +235,33 @@ namespace Idno\Core {
          */
         function sendShellHeaders()
         {
-            if (strtolower((string) $this->getTemplateType()) === 'default') {
-                header('Content-type: text/html');
-                header('Access-Control-Allow-Origin: *');
+            $this->sendHeaders($this->shellHeaders(http_response_code() ?: 200));
+        }
+
+        /**
+         * The headers of a page of this template type, as [name, value] pairs in the order they are sent
+         * (ShellHeaders::for()): for the Markdown type the canonical address too, which is the entity's, on its permalink,
+         * else this page's without `_t`.
+         *
+         * @param  int $status The status the page is answered with
+         * @return array
+         */
+        function shellHeaders(int $status = 200)
+        {
+            $type      = strtolower((string) $this->getTemplateType());
+            $canonical = null;
+            if ($type === 'markdown' && $status === 200) {
+                $entity    = $this->vars['markdown_entity'] ?? null;
+                $canonical = $entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->markdownPageAddress();
             }
-            if (strtolower((string) $this->getTemplateType()) === 'markdown') {
-                $this->sendMarkdownHeaders();
+
+            return \Idno\Templating\ShellHeaders::for($type, $status, is_string($canonical) ? $canonical : null, $this->settingsShellAsJsonp);
+        }
+
+        private function sendHeaders(array $headers)
+        {
+            foreach ($headers as [$name, $value]) {
+                header($name . ': ' . $value, \Idno\Templating\ShellHeaders::replaces($name));
             }
         }
 
@@ -292,18 +314,10 @@ namespace Idno\Core {
          */
         function sendMarkdownHeaders()
         {
-            header('Content-Type: text/markdown; charset=utf-8');
-            // (the document is text, whatever a browser might make of its first bytes)
-            header('X-Content-Type-Options: nosniff');
-            header('Access-Control-Allow-Origin: *');
-            if (http_response_code() !== 200) {
-                return;
-            }
-            $entity = $this->vars['markdown_entity'] ?? null;
-            $canonical = \Idno\Core\UrlValidator::httpUrl($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->markdownPageAddress());
-            if ($canonical !== '' && !preg_match('/[<>\s]/', $canonical)) {
-                header('Link: <' . $canonical . '>; rel="canonical"', false);
-            }
+            $status    = http_response_code() ?: 200;
+            $entity    = $this->vars['markdown_entity'] ?? null;
+            $canonical = $status === 200 ? ($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->markdownPageAddress()) : null;
+            $this->sendHeaders(\Idno\Templating\ShellHeaders::for('markdown', $status, is_string($canonical) ? $canonical : null));
         }
 
         /**
