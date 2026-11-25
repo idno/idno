@@ -349,7 +349,6 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
     public function testAnEmptySiteHasNoHomePageAndTheStreamAnswersForIt(): void
     {
         $result = $this->runInSite(<<<'PHP'
-        $site = \Idno\Core\Idno::site();
         $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
         $log = tempnam(sys_get_temp_dir(), 'idno-log-');
         ini_set('error_log', $log);
@@ -363,7 +362,6 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
             'items' => $page['items'],
             'count' => $page['count'],
             'creatable' => $stream->creatableTypes(),
-            'begin' => $stream->beginUrl() === $site->config()->getURL() . 'begin/',
             'titles' => array_keys($stream->titles()),
             'logged' => file_get_contents($log),
         ];
@@ -379,7 +377,6 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         $this->assertSame([], $result['items']);
         $this->assertSame(0, $result['count']);
         $this->assertFalse($result['creatable']);
-        $this->assertTrue($result['begin'], 'the onboarding is the site\'s address and begin/');
         $this->assertSame(['title', 'description'], $result['titles']);
         $this->assertStringContainsString('Expected exactly 1 admin user for single-user site; got 0', $result['logged']);
     }

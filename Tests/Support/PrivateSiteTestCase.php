@@ -216,23 +216,25 @@ abstract class PrivateSiteTestCase extends TestCase
     // ------------------------------------------------------------------ the site's users and content
 
     /**
-     * Registers a user through the registration form over HTTP (the first user of a site becomes its
-     * administrator; the ActivityPub plugin gives every new user a key pair when it is saved) and
-     * returns the session cookie (`name=value`) of the logged-in user.
+     * Makes the site's first administrator, as the installation's last step does (the site gets its
+     * name, its sender address and closed registration; the ActivityPub plugin gives every new user a
+     * key pair when it is saved), logs in over HTTP and returns the session cookie (`name=value`) of
+     * the logged-in user. On a site that has an administrator it adds a member instead.
      */
     protected function registerUser(string $handle, string $password = 'correct-horse-battery-9'): string
     {
-        $form = $this->site()->request('GET', 'begin/register');
-        $this->assertSame(200, $form->status, $this->serverLog());
-        $response = $this->site()->request('POST', 'begin/register', ['Cookie' => $this->sessionCookie($form)], $this->formToken($form->body, 'begin/register') + [
-            'name' => ucfirst($handle),
-            'handle' => $handle,
-            'email' => $handle . '@example.com',
-            'password' => $password,
-            'password2' => $password,
-        ]);
-        $this->assertSame(302, $response->status, substr($response->body, 0, 1000) . $this->serverLog());
-        $cookie = $this->sessionCookie($response);
+        $created = $this->runInSite(
+            '$first = \Idno\Core\Idno::container()->get(\Idno\Install\FirstAdministrator::class);'
+            . ' if ($first->administratorExists()) { return false; }'
+            . ' return $first->create(new \Idno\Install\AdministratorDetails(' . $this->literal(ucfirst($handle)) . ', ' . $this->literal($handle) . ', ' . $this->literal($handle . '@example.com')
+            . ', ' . $this->literal($password) . ', ' . $this->literal($password) . '), "");'
+        );
+        if ($created === false) {
+            $this->addUser($handle, $password);
+        } else {
+            $this->assertIsString($created, $this->serverLog());
+        }
+        $cookie = $this->loginCookie($handle, $password);
         $check = $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie]);
         $this->assertSame(200, $check->status, 'registered, and so logged in');
 

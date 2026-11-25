@@ -13,7 +13,7 @@ final class BootConfig
 {
     /**
      * @param array<string, mixed> $values
-     * @param bool                 $default True when no config file or JSON file was found
+     * @param bool                 $default True when no config file or JSON file was found and the environment names no database
      */
     public function __construct(
         private readonly array $values,
@@ -41,7 +41,8 @@ final class BootConfig
     }
 
     /**
-     * True when no config file or JSON file was found.
+     * True when the site is not installed: no config file or JSON file was found, and the environment
+     * names no database.
      */
     public function isDefault(): bool
     {

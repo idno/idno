@@ -56,7 +56,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     public function testTheEnvironmentScriptIsEncodedForAScript(): void
     {
         $this->seedSite();
-        $uri = '/begin/?a=</script><script>alert(1)</script>&b="\'';
+        $uri = '/content/all/?a=</script><script>alert(1)</script>&b="\'';
 
         $drawn = (string) $this->runInSite($this->pageCode($uri) . <<<'PHP'
         $template = clone \Idno\Core\Idno::site()->template();
@@ -585,14 +585,14 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * The onboarding shell's toggle script inserts `data-on` and `data-off` as HTML: the name of a syndication account in them is
+     * A toggle script inserts `data-on` and `data-off` as HTML: the name of a syndication account in them is
      * HTML-escaped inside the attribute, so what the script inserts is the name as text.
      */
     public function testAnAccountNameInASyndicationToggleStaysTextWhenTheToggleInsertsItAsHtml(): void
     {
         $this->seedSite();
 
-        $drawn = (string) $this->runInSite($this->pageCode('/begin/connect/') . <<<'PHP'
+        $drawn = (string) $this->runInSite($this->pageCode('/status/edit') . <<<'PHP'
         $template = clone \Idno\Core\Idno::site()->template();
 
         return $template->__(['service' => 'zz', 'username' => 'u', 'name' => 'Carol <b>"C"</b> & co', 'disabled' => '', 'selected' => false])->draw('content/syndication/account');
@@ -844,11 +844,10 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * The values the account and onboarding pages write into a script are written for one: the page's own address in the API key's request,
-     * the site's address in the bookmarklet (and in the continue button, which prints it as before), and the translated words of the profile page's preview. The old
-     * templates printed each as it was (the address of a request, which holds what a visitor typed, could end the script).
+     * The values the account pages write into a script are written for one: the page's own address in the API key's request and
+     * the site's address in the bookmarklet. The old templates printed each as it was (the address of a request, which holds what a visitor typed, could end the script).
      */
-    public function testTheAccountAndOnboardingScriptsWriteTheirValuesForAScript(): void
+    public function testTheAccountScriptsWriteTheirValuesForAScript(): void
     {
         $this->seedSite();
         $uri = '/account/settings/tools/?a=</script><script>alert(1)</script>&b="\'';
@@ -860,7 +859,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             return (string) $template->__($vars)->draw($name);
         };
 
-        return ['tools' => $draw('account/settings/tools'), 'bookmarklet' => $draw('account/settings/following/bookmarklet'), 'connect' => $draw('onboarding/connect'), 'profile' => $draw('onboarding/profile', ['user' => \Idno\Entities\User::getByHandle('ada')])];
+        return ['tools' => $draw('account/settings/tools'), 'bookmarklet' => $draw('account/settings/following/bookmarklet')];
         PHP);
         $this->assertIsArray($out);
 
@@ -868,8 +867,6 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $this->assertStringNotContainsString('alert(1)</script>', $out['tools']);
         $this->assertStringContainsString("fetch('http\\u003A\\/\\/", $out['tools'], 'the address is one JavaScript string');
         $this->assertStringContainsString("location.href='http\\u003A\\/\\/", $out['bookmarklet']);
-        $this->assertMatchesRegularExpression("#window.location = 'http://[^']*begin/publish'; return false;#", $out['connect'], 'the address of the next step is one JavaScript string in the attribute');
-        $this->assertStringContainsString("html('Choose\\u0020different\\u0020photo')", $out['profile']);
     }
 
     /**
@@ -1801,7 +1798,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         return <<<PHP
         \$uri = $uri;
         \$_SERVER['REQUEST_URI'] = \$uri;
-        \\Idno\\Core\\Idno::site()->setCurrentPage(new \\Idno\\Pages\\Onboarding\\Begin());
+        \\Idno\\Core\\Idno::site()->setCurrentPage(new \\Idno\\Pages\\Homepage());
         \\Idno\\Core\\Idno::container()->get('request_stack')->push(new \\Symfony\\Component\\HttpFoundation\\Request([], [], [], [], [], ['REQUEST_URI' => \$uri]));
 
         PHP;

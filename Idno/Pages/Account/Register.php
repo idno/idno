@@ -17,10 +17,9 @@ namespace Idno\Pages\Account {
         function getContent()
         {
             $this->reverseGatekeeper();
+            $this->refuseWithoutAnAdministrator();
             $code       = $this->getInput('code');
             $email      = $this->getInput('email');
-            $onboarding = $this->getInput('onboarding');
-            $set_name   = $this->getInput('set_name');
 
             if (empty(\Idno\Core\Idno::site()->config()->open_registration)) {
                 if (!\Idno\Core\Idno::site()->config()->canAddUsers()) {
@@ -34,22 +33,22 @@ namespace Idno\Pages\Account {
             }
 
             $t = \Idno\Core\Idno::site()->template();
-            if (empty($onboarding)) {
-                $t->body  = $t->__(array('email' => $email, 'code' => $code))->draw('account/register');
-                $t->title = \Idno\Core\Idno::site()->language()->_('Create a new account');
-                $t->sendShellHeaders();
-                echo $t->draw('shell');
-            } else {
-                $t->body  = $t->__(
-                    array(
-                    'email'    => $email,
-                    'code'     => $code,
-                    'set_name' => $set_name,
-                    'messages' => \Idno\Core\Idno::site()->session()->getAndFlushMessages())
-                )->draw('onboarding/register');
-                $t->title = \Idno\Core\Idno::site()->language()->_('Create a new account');
-                $t->sendSimpleShellHeaders();
-                echo $t->draw('shell/simple');
+            $t->body  = $t->__(array('email' => $email, 'code' => $code))->draw('account/register');
+            $t->title = \Idno\Core\Idno::site()->language()->_('Create a new account');
+            $t->sendShellHeaders();
+            echo $t->draw('shell');
+        }
+
+        /**
+         * Registration never makes a site's first administrator: that is the last step of the
+         * installation (Idno\Install\SetupGateListener, or `php bin/console idno:admin:create`),
+         * which only the person who installed the site can reach. On a site with no account at all
+         * nobody can register: the visitor is sent to the home page, which says the site is being set up.
+         */
+        private function refuseWithoutAnAdministrator()
+        {
+            if (!\Idno\Entities\User::get()) {
+                $this->forward(\Idno\Core\Idno::site()->config()->getURL());
             }
         }
 
@@ -61,8 +60,7 @@ namespace Idno\Pages\Account {
             $password2  = trim($this->getInput('password2'));
             $email      = trim($this->getInput('email'));
             $code       = $this->getInput('code');
-            $onboarding = $this->getInput('onboarding');
-            $set_name   = $this->getInput('set_name');
+            $this->refuseWithoutAnAdministrator();
 
             /*if (!\Idno\Common\Page::isSSL() && !\Idno\Core\Idno::site()->config()->disable_cleartext_warning) {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"));
@@ -109,22 +107,7 @@ namespace Idno\Pages\Account {
                         $name = $user->handle;
                     }
                     $user->setTitle($name);
-                    if (!\Idno\Entities\User::get()) {
-                        $user->setAdmin(true);
-                        if (\Idno\Core\Idno::site()->config()->title == 'New Idno site') {
-                            if (!empty($set_name)) {
-                                \Idno\Core\Idno::site()->config()->title = $set_name;
-                            } else {
-                                \Idno\Core\Idno::site()->config()->title = $user->getTitle() . '\'s Idno';
-                            }
-                            \Idno\Core\Idno::site()->config()->open_registration = false;
-                            \Idno\Core\Idno::site()->config()->from_email        = $user->email;
-                            \Idno\Core\Idno::site()->config()->save();
-                        }
-                        \Idno\Core\Idno::site()->events()->triggerEvent('site/firstadmin', array('user' => $user)); // Event hook for first admin
-                    } else {
-                        \Idno\Core\Idno::site()->events()->triggerEvent('site/newuser', array('user' => $user)); // Event hook for new user
-                    }
+                    \Idno\Core\Idno::site()->events()->triggerEvent('site/newuser', array('user' => $user)); // Event hook for new user
                     $user->save(true);
                     // Now we can remove the invitation
                     if (!empty($invitation)) {

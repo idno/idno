@@ -19,33 +19,12 @@
  */
 
 /*jshint ignore:start*/
-const sass = require('dart-sass');
 /*jshint ignore:end*/
 
 module.exports = function (grunt) {
   // Project configuration.
   grunt.initConfig({
     pkg: grunt.file.readJSON('package.json'),
-    sass: {
-	options: {
-	    sourcemap: 'none',
-	    implementation: sass,
-	    noCache: true
-	},
-	dev: {
-	    files: {
-	        'css/idno-simple.css': 'css/scss/idno-simple.scss'
-	    },
-	},
-	dist: {
-	    files: {
-	        'css/idno-simple.min.css': 'css/scss/idno-simple.scss'
-	    },
-	    options: {
-	      outputStyle: 'compressed'
-	    }
-	}
-    },
     concat: {
       options: {
       },
@@ -105,9 +84,6 @@ module.exports = function (grunt) {
 	    }]
 	},
     },
-    stylelint: {
-      all: ['css/scss/*.scss']
-    },
     jshint: {
       // define the files to lint
       files: [
@@ -136,10 +112,6 @@ module.exports = function (grunt) {
             grunt.log.writeln('Waiting for more changes...');
           },
         },
-        sass: {
-            files: 'css/scss/**/*.scss',
-            tasks:  ['build-css', 'stylelint']
-        },
         js: {
             files: ['js/src/**/*.js', 'Gruntfile.js'],
             tasks:  ['build-js', 'jshint']
@@ -149,17 +121,15 @@ module.exports = function (grunt) {
   });
 
   // Load the plugins
-  grunt.loadNpmTasks('grunt-sass');
   grunt.loadNpmTasks('grunt-babel');
   grunt.loadNpmTasks('grunt-terser');
   grunt.loadNpmTasks('grunt-contrib-concat');
   grunt.loadNpmTasks('grunt-contrib-jshint');
   grunt.loadNpmTasks('grunt-contrib-watch');
-  grunt.loadNpmTasks('grunt-stylelint');
 
 
   // Tests
-  grunt.registerTask('test', ['stylelint', 'jshint']);
+  grunt.registerTask('test', ['jshint']);
 
   // Build language pack
   grunt.registerTask('build-lang', '', function () {
@@ -174,6 +144,5 @@ module.exports = function (grunt) {
 
   // Default task(s).
   grunt.registerTask('build-js', ['concat', 'babel', 'terser']);
-  grunt.registerTask('build-css', ['sass']);
-  grunt.registerTask('default', ['build-js', 'build-css', 'build-lang', 'test']);
+  grunt.registerTask('default', ['build-js', 'build-lang', 'test']);
 };

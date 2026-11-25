@@ -170,17 +170,23 @@ final class HomePagesTest extends TestCase
         $this->assertStringStartsWith('page:', (string) $response->getContent());
     }
 
-    public function testAnEmptySiteRedirectsToBegin(): void
+    public function testAnEmptySiteSaysItIsBeingSetUp(): void
     {
         $this->stream->hasUsers = false;
+        $page = $this->context();
 
-        $response = $this->pages->home($this->context());
+        $response = $this->pages->home($page);
 
-        $this->assertSame(302, $response->getStatusCode());
-        $this->assertSame('https://example.com/begin/', $response->headers->get('Location'));
-        $this->assertSame([], $this->drawer->pages, 'nothing is drawn');
+        $this->assertSame(503, $response->getStatusCode());
+        $this->assertSame(503, $page->status(), 'the page knows its status');
+        $this->assertStringContainsString('This site is being set up', (string) $response->getContent());
+        $this->assertSame('text/html; charset=UTF-8', $response->headers->get('Content-Type'));
+        $this->assertSame(['Cache-Control' => 'no-store'], $page->caching(), 'asked as the page\'s caching, which the session\'s lines are reconciled with');
+        $this->assertSame('300', $response->headers->get('Retry-After'));
+        $this->assertMatchesRegularExpression("~script-src 'nonce-[A-Za-z0-9+/=]+'~", (string) $response->headers->get('Content-Security-Policy'));
+        $this->assertFalse($response->headers->has('Location'), 'nobody is sent to a registration page');
+        $this->assertSame([], $this->drawer->pages, 'nothing is drawn in the site\'s shell');
         $this->assertSame([], $this->stream->calls, 'the stream is not asked for a page');
-        $this->assertSame(1, $this->drawer->finished, 'the session ends, as a forward ends it');
     }
 
     public function testTheBodyAndShellVariables(): void
@@ -295,14 +301,14 @@ final class HomePagesTest extends TestCase
         $this->assertSame([['types', null, 'word', 'Requested'], ['page', [], 'word', 40]], array_slice($this->stream->calls, 0, 2));
     }
 
-    public function testTheFeedOfAnEmptySiteRedirectsToBegin(): void
+    public function testTheFeedOfAnEmptySiteSaysItIsBeingSetUp(): void
     {
         $this->stream->hasUsers = false;
 
         $response = $this->pages->feed($this->context('/feed'));
 
-        $this->assertSame(302, $response->getStatusCode());
-        $this->assertSame('https://example.com/begin/', $response->headers->get('Location'));
+        $this->assertSame(503, $response->getStatusCode());
+        $this->assertStringContainsString('This site is being set up', (string) $response->getContent());
     }
 
     /**
@@ -417,7 +423,7 @@ final class HomePagesTest extends TestCase
     {
         $this->stream->hasUsers = false;
 
-        $this->assertSame('https://example.com/begin/', $this->pages->tag($this->sent('/tag/books'))->headers->get('Location'));
+        $this->assertSame(503, $this->pages->tag($this->sent('/tag/books'))->getStatusCode());
     }
 
     public function testARootWebmentionOnASingleUserSiteGoesToTheProfile(): void
@@ -516,11 +522,6 @@ final class HomeStreamDouble implements HomeStream
     public function firstAdministrator(): ?User
     {
         return $this->administrator;
-    }
-
-    public function beginUrl(): string
-    {
-        return 'https://example.com/begin/';
     }
 
     public function siteAddress(): string

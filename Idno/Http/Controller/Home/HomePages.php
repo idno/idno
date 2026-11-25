@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno\Http\Controller\Home;
 
 use Idno\Http\Page\PageContext;
+use Idno\Install\InstallPage;
 use Idno\Http\Page\PageRenderer;
 use Idno\Queue\EventTrigger;
 use Psr\Log\LoggerInterface;
@@ -112,14 +113,33 @@ final class HomePages
         return $this->serve($page, 'all', '#' . $tag);
     }
 
+    /**
+     * What every page of the stream answers on a site with no user: the installer's "being set up" page (503, `Retry-After`, a Content
+     * Security Policy with a nonce of its own, and `Cache-Control: no-store` asked as the page's caching, so the session's other caching
+     * lines stay), whatever the template type, as the legacy home page answered it.
+     */
+    private static function beingSetUp(PageContext $page): Response
+    {
+        $page->setStatus(Response::HTTP_SERVICE_UNAVAILABLE);
+        $page->setCaching(['Cache-Control' => 'no-store']);
+        $nonce = base64_encode(random_bytes(18));
+
+        return new Response(InstallPage::pending($nonce), Response::HTTP_SERVICE_UNAVAILABLE, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Security-Policy' => InstallPage::contentSecurityPolicy($nonce),
+            'Retry-After' => '300',
+        ]);
+    }
+
     private function serve(PageContext $page, ?string $friendly, ?string $search = null): Response
     {
         $query = $search ?? $page->input('q');
         $offset = (int) $page->input('offset');
 
-        // An empty site has no home page
+        // A site with no account yet has no home page: its administrator is made by the installation's last step (or
+        // `php bin/console idno:admin:create`), never by whoever arrives first, and every visitor is told the site is being set up
         if (!$this->stream->siteHasUsers()) {
-            return $this->renderer->redirect($page, $this->stream->beginUrl());
+            return self::beingSetUp($page);
         }
 
         // The home page of a single-user site is its owner's

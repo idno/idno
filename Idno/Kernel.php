@@ -29,6 +29,7 @@ class Kernel extends BaseKernel
     private ?string $cacheDir = null;
     private bool $legacyBooted = false;
     private bool $stepRequest = false;
+    private bool $installed = true;
 
     public function __construct(string $environment, bool $debug, private readonly bool $bootLegacy = true)
     {
@@ -69,6 +70,18 @@ class Kernel extends BaseKernel
         return $this->legacyBooted;
     }
 
+    /**
+     * Whether the site has a configuration (a configuration file, or a database named by the
+     * environment): true before boot() and in a kernel built with bootLegacy: false, which does not
+     * ask. On a site that has none the legacy application is not booted and the schema gate is not
+     * asked: web requests get the installer from Idno\Install\InstallGateListener, and the console
+     * offers `idno:install`.
+     */
+    public function installed(): bool
+    {
+        return $this->installed;
+    }
+
     public function getProjectDir(): string
     {
         return dirname(__DIR__);
@@ -89,9 +102,9 @@ class Kernel extends BaseKernel
     }
 
     /**
-     * Boots the container, then, in a kernel that boots the legacy application: refuses a site with
-     * no configuration (NotInstalledException, before anything connects), asks the schema gate, and
-     * boots the legacy application only when the gate is open. With the gate closed (the database
+     * Boots the container, then, in a kernel that boots the legacy application: stops there for a site
+     * with no configuration (installed() is false; nothing connects and the legacy application is not
+     * booted), otherwise asks the schema gate, and boots the legacy application only when the gate is open. With the gate closed (the database
      * needs creating or upgrading) the legacy application is NOT booted: no Idno::site(), no
      * session; web requests get the upgrade page from Idno\Upgrade\UpgradeGateListener, and the
      * console runs without the legacy commands. Once a kernel has booted the legacy application in
@@ -106,7 +119,12 @@ class Kernel extends BaseKernel
         }
         $container = $this->getContainer();
         $bootstrap = $container->get(LegacyBootstrap::class);
-        $bootstrap->ensureInstalled();
+        if (!$bootstrap->installed()) {
+            $this->installed = false;
+            $this->legacyBooted = false;
+
+            return;
+        }
         if (!$bootstrap->bootedInThisProcess()) {
             $gate = $container->get(SchemaGate::class);
             // Closed: the legacy application must not boot. Unreachable: it boots to show its
@@ -140,6 +158,7 @@ class Kernel extends BaseKernel
     {
         parent::shutdown();
         $this->legacyBooted = false;
+        $this->installed = true;
     }
 
     /**

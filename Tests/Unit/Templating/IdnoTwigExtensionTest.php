@@ -57,7 +57,7 @@ final class IdnoTwigExtensionTest extends TestCase
         $this->assertSame(phpversion(), $this->render('{{ system_info().php }}'));
         $this->assertSame(\Idno\Core\Version::version(), $this->render('{{ system_info().idno }}'));
         $this->assertSame((string) \Idno\Core\Version::build(), $this->render('{{ system_info().build }}'));
-        $this->assertSame(implode(',', \Idno\Core\Installer::requiredModules()), $this->render("{{ system_info().extensions|join(',') }}"));
+        $this->assertSame(implode(',', \Idno\Install\ServerChecks::EXTENSIONS), $this->render("{{ system_info().extensions|join(',') }}"));
         $this->assertSame('1|0', $this->render("{{ can_make_site_private() ? 1 : 0 }}|{{ legacy_tables_in_menu() ? 1 : 0 }}"));
     }
 

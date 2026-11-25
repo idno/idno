@@ -9,7 +9,9 @@ dbname = '%dbname%'
 dbpass = '%dbpass%'
 dbuser = '%dbuser%'
 dbhost = '%dbhost%'
+dbport = '%dbport%'
 
 filesystem = '%filesystem%'
 uploadpath = '%uploadpath%'
 
+url = '%url%'

@@ -18,9 +18,9 @@ docker cp ${TMP_CONTAINER}:/app/vendor ..
 echo Cleaning up
 docker rm ${TMP_CONTAINER}
 
-echo Making configuration, Uploads and var writeable
+echo Making configuration, data, Uploads and var writeable
 # var/ holds the compiled container (var/cache), which the web server must be able to write.
 mkdir -p ../var
-chmod 0777 ../configuration ../Uploads ../var
+chmod 0777 ../configuration ../data ../Uploads ../var
 
 echo done.

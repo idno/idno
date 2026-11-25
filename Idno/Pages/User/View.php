@@ -86,9 +86,6 @@ namespace Idno\Pages\User {
                 $this->forward(); // TODO: 404
             }
             if ($user->saveDataFromInput()) {
-                if ($onboarding = $this->getInput('onboarding')) {
-                    $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'begin/publish');
-                }
                 $this->forward($user->getURL());
             }
             $this->forward($_SERVER['HTTP_REFERER']);

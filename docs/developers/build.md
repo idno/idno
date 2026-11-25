@@ -15,19 +15,18 @@ To get going, install grunt, and the other developer dependencies:
 Grunt is run through the `grunt` script in `package.json`, so you don't need to install it globally: ```npm run grunt -- <task>```. The tasks are:
 
 * `build-js`: concatenates, transpiles (Babel) and minifies the javascript in `js/src`
-* `build-css`: compiles `css/scss/idno-simple.scss` (the style sheet of the onboarding pages and the installer, which keep Bootstrap) into `css/idno-simple.css` and `css/idno-simple.min.css`
 * `build-lang`: regenerates the translation templates (see [Languages](languages/index.md))
-* `test`: runs `stylelint` and `jshint`
-* `watch`: rebuilds when your javascript or SCSS changes
-* the default task runs `build-js`, `build-css`, `build-lang` and `test`
+* `test`: runs `jshint`
+* `watch`: rebuilds when your javascript changes
+* the default task runs `build-js`, `build-lang` and `test`
 
 ### Testing your changes
 
-If you've made JS or CSS changes, you can check your code using ```npm run grunt -- test``` to run the `stylelint` and `jshint` linters.
+If you've made JS changes, you can check your code using ```npm run grunt -- test``` to run the `jshint` linter.
 
 ### Minify your changes
 
-To get your javascript or css changes to be used by Idno, you'll need to build minified versions of them. Do this by running ```npm run grunt -- build-js``` (or the default grunt task, ```npm run grunt```, which builds everything).
+To get your javascript changes to be used by Idno, you'll need to build minified versions of them. Do this by running ```npm run grunt -- build-js``` (or the default grunt task, ```npm run grunt```, which builds everything).
 
 ## Building the Idno 2026 front end
 
@@ -40,14 +39,12 @@ npm --prefix frontend run build
 
 `npm --prefix frontend run dev` rebuilds when a source changes. The build reads the classes the templates use (`templates/default/` and `IdnoPlugins/*/templates/default/`), and writes straight into the project's `css/` and `js/` directories (Vite warns that its output directory is the parent of its root: that is intended, and nothing is emptied). `frontend/` is not served by a web server.
 
-## Building SASS/CSS
+## Style sheets
 
-Idno 2026's own style sheet is built by Vite (above). Grunt builds only the onboarding style sheet from SCSS: build it by running ```npm run grunt -- build-css``` (or the default task).
-
-The `stylelint` grunt task will report errors.  Many of these can be fixed automatically by running `node_modules/.bin/stylelint --fix` on the changed files.
+Idno 2026's style sheet is built by Vite (above); Grunt builds no style sheet. The pages of the installation (`Idno\Install\InstallPage`) and the upgrade page carry their own small inline style, so that they need no file and no request.
 
 !!! note "Watching for changes"
-    If you're doing a lot of editing, you're probably going to forget to refresh your changes. Start your development session by running ```npm run grunt -- watch``` to look for changes in your javascript and SCSS files, and to automatically build your changes!
+    If you're doing a lot of editing, you're probably going to forget to refresh your changes. Start your development session by running ```npm run grunt -- watch``` to look for changes in your javascript files, and to automatically build your changes!
 
 ## Building languages
 

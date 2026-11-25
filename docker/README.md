@@ -8,18 +8,18 @@ Run ./bin/start.sh
 
 Visit https://known.YOUR-TAILSCALE-TAILNET/
 
-You will need to enter the following for the database:
+The installer opens. On "Where should Idno keep your site?" choose "A MySQL or MariaDB database" and enter:
 
 Database name: known (or whatever you set in .env)
-User name: known (or whatever you set in .env)
-Password: whatever you set in .env
-Server: db
+Database user: known (or whatever you set in .env)
+Database password: whatever you set in .env
+Database server: db
 
-The installer does not create the database tables: the first page load after it has written the
-configuration sets them up (or run `php bin/console idno:upgrade` in the idno container, from the
-Idno directory).
+(Or choose "A file on this server" to use SQLite, and no database container.) Saving creates the
+tables; the last step creates your administrator account. From a shell in the idno container,
+`php bin/console idno:install` does the same.
 
-The 'configuration', 'Uploads' and 'var' directories are wide open so the webserver
+The 'configuration', 'data', 'Uploads' and 'var' directories are wide open so the webserver
 can write to them because Docker user/permission management is a headache.
 
 The image runs PHP 8.4, which Idno requires. It sets opcache.validate_timestamps=0, so

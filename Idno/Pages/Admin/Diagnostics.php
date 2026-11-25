@@ -111,16 +111,9 @@ namespace Idno\Pages\Admin {
             }
 
             // Check PHP version
-            $phpversion = \Idno\Core\Installer::checkPHPVersion();
-            if ($phpversion == 'ok') {
+            if (version_compare(PHP_VERSION, \Idno\Install\ServerChecks::PHP_VERSION, '>=')) {
                 $basics['report']['php-version'] = [
                     'status' => 'Ok'
-                ];
-            } else if ($phpversion == 'warn') {
-                $basics['status']             = 'Failure';
-                $basics['report']['php-version'] = [
-                    'status'  => 'Warning',
-                    'message' => 'You are running Idno using a very old version of PHP (' . phpversion() . '), which is no longer actively supported. Although Idno will currently still install, some features may not work, so you should upgrade soon. You may need to ask your server administrator to upgrade PHP for you.'
                 ];
             } else {
                 $basics['report']['php-version'] = [
@@ -132,7 +125,7 @@ namespace Idno\Pages\Admin {
 
             // Check installed extensions
             $basics['report']['php-extensions'] = ['status' => 'Ok', 'message' => 'PHP Extension(s): '];
-            foreach (\Idno\Core\Installer::requiredModules() as $extension) {
+            foreach (\Idno\Install\ServerChecks::EXTENSIONS as $extension) {
                 if (!extension_loaded($extension)) {
                     $basics['report']['php-extensions']['message'] .= "$extension, ";
                     $basics['report']['php-extensions']['status'] = 'Failure';

@@ -375,20 +375,6 @@ namespace Idno\Core {
         }
 
         /**
-         * Sends the headers of the simple shell (`shell/simple`: the onboarding pages and registration), which the shell sent
-         * itself before no template sent a header: the HTML type, the webmention endpoint twice (the two `rel` values) and
-         * the cross-origin header. The page that draws the simple shell calls this first.
-         */
-        function sendSimpleShellHeaders()
-        {
-            $url = \Idno\Core\Idno::site()->config()->getDisplayURL();
-            header('Content-type: text/html');
-            header('Link: <' . $url . 'webmention/>; rel="http://webmention.org/"');
-            header('Link: <' . $url . 'webmention/>; rel="webmention"');
-            header('Access-Control-Allow-Origin: *');
-        }
-
-        /**
          * Draw syndication buttons relating to a particular content type
          *
          * @param  $content_type

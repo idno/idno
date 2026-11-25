@@ -54,11 +54,6 @@ final class LegacyHomeStream implements HomeStream
         return $user instanceof User ? $user : null;
     }
 
-    public function beginUrl(): string
-    {
-        return Idno::site()->config()->getURL() . 'begin/';
-    }
-
     public function siteAddress(): string
     {
         return (string) Idno::site()->config()->url;

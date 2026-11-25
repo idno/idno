@@ -83,9 +83,17 @@ final class LegacyBootstrap
      */
     public function ensureInstalled(): void
     {
-        if ($this->container->get(BootConfig::class)->isDefault()) {
+        if (!$this->installed()) {
             throw new NotInstalledException('Idno is not installed: no config.ini or config.json was found.');
         }
+    }
+
+    /**
+     * Whether the site has a configuration: a configuration file, or a database named by the environment.
+     */
+    public function installed(): bool
+    {
+        return !$this->container->get(BootConfig::class)->isDefault();
     }
 
     /**

@@ -1,0 +1,31 @@
+<h1 class="idno-admin-page-title">{{ t('Your site is ready') }}</h1>
+<p>{{ t('You are signed in as %s, the administrator of this site.', [current_user().getHandle()]) }}</p>
+<h2>{{ t('What to do next') }}</h2>
+<ul class="idno-welcome-next">
+    {% if compose_url|http_url %}
+    <li>
+        <a href="{{ compose_url|http_url }}">{{ t('Write your first post') }}</a><br>
+        {{ t('Opens the new post form. What you publish appears on your home page.') }}
+    </li>
+    {% endif %}
+    <li>
+        <a href="{{ site_url() }}admin/">{{ t('Review your site settings') }}</a><br>
+        {{ t('The description of the site, and who can sign up.') }}
+    </li>
+    <li>
+        <a href="{{ site_url() }}admin/email/">{{ t('Set up email') }}</a><br>
+        {% if mail_is_set_up %}{{ t('A mail server is set. You can send yourself a test message there.') }}{% else %}{{ t('Until a mail server is entered there, the site cannot send mail, including password reset messages.') }}{% endif %}
+    </li>
+    <li>
+        <strong>{{ t('Background tasks') }}</strong><br>
+        {% if queue_is_on %}
+            {{ t('Background tasks are switched on. Keep this command running on the server:') }}
+        {% else %}
+            {{ t('Only needed to connect this site with Mastodon and the rest of the Fediverse. Add this line to the file configuration/config.ini:') }}
+            <pre><code>event_queue = 'AsynchronousQueue'</code></pre>
+            {{ t('and keep this command running on the server, in the folder Idno is in (your host may call it a worker or a daemon):') }}
+        {% endif %}
+        <pre><code>php bin/console service-event-queue</code></pre>
+    </li>
+</ul>
+<p><a href="{{ site_url() }}" class="idno-btn idno-btn-primary">{{ t('Go to your site') }}</a></p>

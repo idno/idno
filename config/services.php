@@ -86,6 +86,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
         'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
+        // The installer's value objects, static helpers and the classes it builds with new; the paths, the web
+        // installer, the setup token and the two listeners are services (the paths are wired below).
+        'Install' => ['AdministratorDetails.php', 'CheckResult.php', 'ConfigFile.php', 'DatabaseChoice.php', 'DatabaseFinding.php', 'FirstAdministrator.php', 'InstallForm.php', 'InstallPage.php', 'ServerChecks.php', 'SiteAddress.php'],
         'Legacy' => ['BarePage.php', 'ControllerRoute.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
@@ -104,6 +107,17 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->factory([LegacyConfigLoader::class, 'fromGlobals'])
         ->args(['%kernel.project_dir%'])
         ->public();
+
+    // The installer (Idno\Install): where an installation keeps its files, under the project
+    // directory; the web installer is told the kernel's cache directory so that it can say when
+    // that is a temporary one. The first administrator is made by the legacy application's code
+    // (public: the console commands fetch it only on an installed site).
+    if ($builder->fileExists($projectDir . '/Idno/Install')) {
+        $services->set(\Idno\Install\InstallPaths::class)->args(['%kernel.project_dir%'])->public();
+        $services->get(\Idno\Install\WebInstaller::class)->arg('$cacheDir', '%kernel.cache_dir%')->arg('$logger', service('monolog.logger.upgrade'));
+        $services->alias(\Idno\Install\FirstAdministrator::class, \Idno\Legacy\LegacyFirstAdministrator::class)->public();
+        $services->get(\Idno\Install\SetupToken::class)->public();
+    }
 
     // The legacy application's services. Each is built at runtime, when first fetched, by
     // the LegacyServiceFactory method named after its Idno::site() accessor; Idno::init()

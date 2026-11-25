@@ -72,6 +72,11 @@ final class LegacyConfigLoader
             }
         }
 
+        // A site configured by the environment alone (a container) is installed: it names its database.
+        if ($default && isset($config['database']) && is_string($config['database']) && trim($config['database']) !== '') {
+            $default = false;
+        }
+
         if (isset($config['uploadpath'])) {
             // End trailing slash insanity once and for all
             $config['uploadpath'] = rtrim((string) $config['uploadpath'], ' /') . '/';

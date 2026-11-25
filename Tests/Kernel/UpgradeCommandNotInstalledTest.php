@@ -63,7 +63,8 @@ final class UpgradeCommandNotInstalledTest extends TestCase
         return [
             'idno:upgrade' => [['idno:upgrade']],
             'idno:upgrade --status' => [['idno:upgrade', '--status']],
-            'another command (the control)' => [['list']],
+            'another command (the control)' => [['debug:router']],
+            'the queue worker' => [['service-event-queue', '--once']],
         ];
     }
 
@@ -88,7 +89,6 @@ final class UpgradeCommandNotInstalledTest extends TestCase
             [
                 'APP_ENV' => 'prod',
                 'IDNO_CACHE_DIR' => $this->root . '/cache',
-                'IDNO_DATABASE' => 'mysql',
                 'IDNO_DBHOST' => '127.0.0.1',
                 'IDNO_DBPORT' => $port,
                 'IDNO_DBNAME' => 'idno',
@@ -118,7 +118,7 @@ final class UpgradeCommandNotInstalledTest extends TestCase
 
         $this->assertSame(1, $exit, "stdout: $stdout\nstderr: $stderr");
         $this->assertSame('', $stdout);
-        $this->assertSame("Idno is not installed yet: run the installer (warmup/ in a browser, or warmup/CLI/CLIInstaller.php) first.\n", $stderr);
+        $this->assertSame("Idno is not installed yet: run php bin/console idno:install\n", $stderr);
         $this->assertFalse($connected, 'nothing connected to the database');
     }
 }

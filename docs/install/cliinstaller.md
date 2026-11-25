@@ -1,59 +1,61 @@
-# Command Line Installer
+# Command line installation
 
-Idno allows you to install Idno via the command line, this can be handy for scripted installs, setting up a MySQL, MariaDB or SQLite site, or when installing over a terminal connection to a remote server.
+`php bin/console idno:install`, run from the Idno folder, does what the web installer does: it checks the server, checks or creates the database, writes `configuration/config.ini`, creates Idno's tables and creates the administrator account. It never replaces a configuration that exists.
 
-# The Basics
+## Answering questions
 
-Go in to ```/warmup/CLI```, and you'll see ```CLIInstaller.php```.
+    php bin/console idno:install
 
-To install a brand new Idno using an interactive install simply run 
+It asks for the site's name and address (`https://example.com/`), the database (`sqlite`, the default, or `mysql` for MySQL or MariaDB) and its settings, the folder for uploaded files, and the administrator's username, email address and password (typed twice, not shown).
 
-```
-./CLIInstaller.php install
-```
+## Unattended
 
-The installer asks for the database type (`mysql` or `sqlite`). For SQLite it then asks for the path of the database file (the default is `data/idno.sqlite`) in place of the database's name, user, password and host. In a manifest, set `database = "sqlite"` and, optionally, `sqlite_path`. The name of the database file must end in `.sqlite` (lower case) and hold only letters, digits, dots, underscores and dashes, and its path cannot contain `..`; anything else is refused before anything is created (the web server is set up never to serve or run a file with that suffix). The web installer takes no path at all: it always uses `data/idno.sqlite`, because the installer of a site that is not set up is reachable by anyone; this installer, run from a terminal, is how to put the database elsewhere.
+Every answer can be an option, so that nothing is asked:
 
-The installer creates the database file and its directory as the user who runs it, and changes no permissions. When it has finished an SQLite install it says so and shows an example: the file, its directory and the files SQLite and the upgrade create beside it (`-wal`, `-shm`, `.upgrade.lock`) must be owned by (or writable for) the web server's user, for example `chown -R www-data data/`, and console commands on the site (`php bin/console idno:upgrade`) should be run as that user.
+    php bin/console idno:install --no-interaction \
+        --url=https://example.com/ --site-title="My site" \
+        --database=sqlite \
+        --admin-handle=ada --admin-email=ada@example.com \
+        --admin-password-file=/run/secrets/idno_admin_password
 
-# The Manifest
+| Option | Meaning |
+|---|---|
+| `--url` | The site's address: `http://` or `https://`, a domain, nothing after it. Required. |
+| `--site-title` | The site's name. |
+| `--database` | `sqlite` (default) or `mysql`. `mongodb` is refused: see [Upgrading](upgrade.md). |
+| `--sqlite-path` | For SQLite: the database file (default `data/idno.sqlite`). Its name must end in `.sqlite`. |
+| `--db-name`, `--db-user`, `--db-host` | For MySQL or MariaDB. The host may be `host:port`; the default is `localhost`. |
+| `--db-password-file` | A file whose first line is the database password. |
+| `--upload-path` | The folder for uploaded files (default `Uploads`). It must exist. |
+| `--admin-name`, `--admin-handle`, `--admin-email` | The administrator. |
+| `--admin-password-file`, `--admin-password-stdin` | The administrator's password: the first line of a file, or of standard input. |
+| `--use-existing` | Use the Idno site the database already holds. Without it, a database that holds a site is refused; with it, nothing is replaced, and a site from an older version is upgraded. |
+| `--no-admin` | Do not create the administrator now. |
+| `--manifest` | An ini file of settings (below). Options win over it. |
 
-A manifest is used to pass configuration options to the CLI installer so that you won't be prompted for them. This is useful for scripting installs.
+**Passwords are never options**, because other users of the server can read a command's arguments. Give them in a file, on standard input, or at the prompt.
 
-First, generate a manifest template:
+A manifest is an ini file with any of the keys `site_title`, `url`, `database`, `sqlite_path`, `mysql_name`, `mysql_user`, `mysql_pass`, `mysql_host`, `upload_path`, `admin_name`, `admin_handle`, `admin_email`:
 
-```
-./CLIInstaller.php generate-manifest /path/to/manifest
-```
+    php bin/console idno:install --no-interaction --manifest=/path/to/manifest.ini --admin-password-stdin < password.txt
 
-Next, edit that file and fill in the appropriate options. The manifest is an INI file with the keys `site_title`, `database`, `mysql_name`, `mysql_user`, `mysql_pass`, `mysql_host` and `upload_path`.
+In a container, set the `IDNO_` environment variables instead (see [the instructions](instructions.md)): the site then needs no configuration file, and only these two commands:
 
-Now, you are able to pass these options to the installer:
+    php bin/console idno:upgrade
+    php bin/console idno:admin:create --no-interaction --handle=ada --email=ada@example.com --password-stdin < password.txt
 
-```
-./CLIInstaller.php install config.ini /path/to/manifest
-```
+## What differs from the web installer
 
-The first argument names the file to write in `configuration/`. It must be `config.ini`: Idno no longer reads per-domain configuration files (`configuration/<domain>.ini`), so the installer refuses any other name.
+Whoever runs the command has the server already, so it accepts what the web installer refuses: a path for the SQLite database and for uploads, and an `http://` address (for a site on a private network; it says so). The name of an SQLite database file must still end in `.sqlite`, and a value that cannot be written safely to the configuration file (one with a quote or a line break) is refused before anything is created.
 
-# Other options
+## Who owns the files
 
-The CLI installer has a few other options that might be useful:
+The command creates files as the user who runs it and changes no permissions, and it says so when it finishes. The web server must be able to read `configuration/config.ini` and to write to the upload folder; for SQLite, the database file, its folder and the files SQLite and the upgrade create beside it (`-wal`, `-shm`, `.upgrade.lock`) must be owned by (or writable for) the web server's user, for example `chown -R www-data data/`. Run later console commands as that user (`sudo -u www-data php bin/console ...`), or run the installation as that user in the first place.
 
-## Checking requirements
+## The other commands
 
-If you just want to check that your server has the necessary requirements to run Idno, you can execute:
+* `php bin/console idno:admin:create` creates the first administrator of a site that has none (after `idno:upgrade`). Options: `--handle`, `--email`, `--name`, `--site-title`, `--password-file`, `--password-stdin`. It refuses once the site has an administrator.
+* `php bin/console idno:setup:link` prints a link, which works once, to the "Create your account" step in a browser, for a site that has no administrator: after a hand-written configuration, or when the browser that ran the web installer is no longer at hand.
+* `php bin/console idno:upgrade` creates or upgrades the tables.
 
-```
-./CLIInstaller.php check-requirements
-```
-
-## Generate config from manifest
-
-If you want to generate a config file, but without going through the full install (useful in a provisioning script), you can use the following command to do so
-
-```
-./CLIInstaller.php makeconfig /path/to/manifest 
-```
-
-This will output the new config to stdOut. Save it as `configuration/config.ini`.
+On a site that is not installed, every other command says `Idno is not installed yet: run php bin/console idno:install`.

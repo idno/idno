@@ -291,7 +291,7 @@ final class IdnoTwigExtension extends AbstractExtension
             'idno' => \Idno\Core\Version::version(),
             'build' => \Idno\Core\Version::build(),
             'php' => phpversion(),
-            'extensions' => array_values(\Idno\Core\Installer::requiredModules()),
+            'extensions' => \Idno\Install\ServerChecks::EXTENSIONS,
         ];
     }
 

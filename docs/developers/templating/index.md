@@ -177,7 +177,7 @@ The guide for plugin and theme authors, with a complete before and after, is [Up
     {% extends '@core/default/shell.html.twig' %}
     {% block nav %}<nav>My navigation</nav>{% endblock %}
 
-Each shell starts with `{% set shell = shell_variables() %}`, which gives it the variables of the page as the shell has always had them (the page's title with its tag, `lang`, the page's owner, ...), and draws every partial with `idno_include('shell/nav', shell)`, so a partial, a plugin's extension of it and a theme's override of it get them too. The shells do not use `slot()` or extend one another. A theme's `.tpl.php` file for a name core draws from Twig (`shell/footer`, say) still wins, and is given the page's variables and the template object, as it always was. The simple shell (`shell/simple`, the onboarding pages) keeps its own markup. `shell/headers` is a name with no core template: a plugin may extend it (an extension that calls `header()` still runs), and its output is not used.
+Each shell starts with `{% set shell = shell_variables() %}`, which gives it the variables of the page as the shell has always had them (the page's title with its tag, `lang`, the page's owner, ...), and draws every partial with `idno_include('shell/nav', shell)`, so a partial, a plugin's extension of it and a theme's override of it get them too. The shells do not use `slot()` or extend one another. A theme's `.tpl.php` file for a name core draws from Twig (`shell/footer`, say) still wins, and is given the page's variables and the template object, as it always was. `shell/headers` is a name with no core template: a plugin may extend it (an extension that calls `header()` still runs), and its output is not used.
 
 ### Extending, prepending and replacing
 

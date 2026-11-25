@@ -14,6 +14,8 @@ final class ExtraServerTest extends PrivateSiteTestCase
 {
     public function testASecondServerServesTheSameSiteInAnotherEnvironment(): void
     {
+        // A site with no account answers 503 (it is being set up): this one has its administrator.
+        $this->registerUser('extra');
         $url = $this->startExtraServer(['APP_ENV' => 'prod', 'APP_DEBUG' => '0'], ['opcache.enable_cli' => '1']);
 
         $this->assertNotSame($this->baseUrl(), $url);

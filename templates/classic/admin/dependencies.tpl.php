@@ -28,7 +28,7 @@
             <small><?php echo \Idno\Core\Idno::site()->language()->_('These extend the way PHP works, and are required for functionality like database storage, webmentions, etc. Click an extension name to learn more about it, including installation instructions.'); ?></small><br />
             <?php
 
-            foreach(\Idno\Core\Installer::requiredModules() as $extension) {
+            foreach(\Idno\Install\ServerChecks::EXTENSIONS as $extension) {
                 echo $this->__(array('extension' => $extension))->draw('admin/dependencies/extension');
             }
 

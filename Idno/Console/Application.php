@@ -47,6 +47,12 @@ final class Application extends FrameworkApplication
      */
     private const NEED_THE_LEGACY_APPLICATION = ['messenger:failed:retry'];
 
+    /** What every other command says, and exits 1, on a site that has no configuration. */
+    public const NOT_INSTALLED = 'Idno is not installed yet: run php bin/console idno:install';
+
+    /** The commands that run on a site that has no configuration. */
+    private const RUN_BEFORE_INSTALLATION = ['idno:install', 'list', 'help', 'completion', '_complete'];
+
     private bool $gateClosedSaid = false;
 
     public function __construct(KernelInterface $kernel)
@@ -93,6 +99,17 @@ final class Application extends FrameworkApplication
      */
     protected function doRunCommand(Command $command, InputInterface $input, OutputInterface $output): int
     {
+        // A site that is not installed has no database to ask about: only the installer (and the
+        // commands that describe the console) run, and nothing connects.
+        $kernel = $this->getKernel();
+        if ($kernel instanceof \Idno\Kernel && !$kernel->installed()) {
+            if (in_array($command->getName(), self::RUN_BEFORE_INSTALLATION, true)) {
+                return parent::doRunCommand($command, $input, $output);
+            }
+            ($output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output)->writeln(self::NOT_INSTALLED, OutputInterface::OUTPUT_PLAIN);
+
+            return 1;
+        }
         if (!$this->runsWithTheGateClosed($command, $input)) {
             $this->sayTheGateIsClosed($output);
             $kernel = $this->getKernel();
@@ -181,7 +198,7 @@ final class Application extends FrameworkApplication
     private function sayTheGateIsClosed(OutputInterface $output): void
     {
         $kernel = $this->getKernel();
-        if ($this->gateClosedSaid || !$kernel instanceof \Idno\Kernel || !$kernel->bootsLegacy() || $kernel->legacyBooted()) {
+        if ($this->gateClosedSaid || !$kernel instanceof \Idno\Kernel || !$kernel->bootsLegacy() || $kernel->legacyBooted() || !$kernel->installed()) {
             return;
         }
         $this->gateClosedSaid = true;

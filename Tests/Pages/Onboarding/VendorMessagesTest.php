@@ -6,7 +6,7 @@ namespace Tests\Pages\Onboarding {
 
     /**
      * A site does not ask a third party for "vendor messages", and nothing a third party says is
-     * put into an administrator's session or page. Onboarding used to POST the version to
+     * put into an administrator's session or page. The onboarding pages (since removed) used to POST the version to
      * idno.co and add the body of the reply to the session messages, which the page shell prints
      * as markup; the admin home page fetched the same text with a script and appended it as
      * markup too.
@@ -41,26 +41,20 @@ namespace Tests\Pages\Onboarding {
             parent::tearDown();
         }
 
-        public function testFinishingOnboardingMakesNoRequestAndAddsNoMessage()
+        public function testThePageANewAdministratorLandsOnMakesNoRequestAndAddsNoMessage()
         {
             $admin = $this->admin();
             $previous = $this->swapUser($admin);
-            $noping = Idno::site()->config()->noping ?? null;
-            Idno::site()->config()->noping = false;
 
             try {
-                $page = new \Idno\Pages\Onboarding\Publish();
-                Idno::site()->setCurrentPage($page);
-                // Don't send a redirect from inside PHPUnit
-                $forward = new \ReflectionProperty(\Idno\Common\Page::class, 'forward');
-                $forward->setAccessible(true);
-                $forward->setValue($page, false);
-                $page->getContent();
+                // The page itself ends the process when it has drawn (Idno\Pages\Admin\Welcome): its body is drawn here.
+                Idno::site()->setCurrentPage(new \Idno\Pages\Admin\Welcome());
+                $html = (string) Idno::site()->template()->__(['compose_url' => Idno::site()->config()->getDisplayURL() . 'status/edit', 'mail_is_set_up' => false, 'queue_is_on' => false])->draw('admin/welcome');
 
-                $this->assertSame([], $this->requests, 'Onboarding must not contact any other site.');
-                $this->assertSame([], Idno::site()->session()->getAndFlushMessages(), 'Onboarding must not add a message taken from another site.');
+                $this->assertStringContainsString('Your site is ready', $html);
+                $this->assertSame([], $this->requests, 'Finishing the installation must not contact any other site.');
+                $this->assertSame([], Idno::site()->session()->getAndFlushMessages(), 'Finishing the installation must not add a message taken from another site.');
             } finally {
-                Idno::site()->config()->noping = $noping;
                 $this->swapUser($previous);
             }
         }

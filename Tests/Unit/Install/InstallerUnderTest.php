@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Install;
 
-use Idno\Core\Installer;
+use Idno\Install\ConfigFile;
+use Idno\Install\DatabaseChoice;
+use Idno\Install\InstallPaths;
 
 /**
- * An Installer whose root is a directory of the test's own, with a say in which PHP modules count as
- * loaded, and its protected methods made callable.
+ * The installer's database choice and configuration file on a root of the test's own, with a say in
+ * whether the SQLite module counts as loaded.
  */
-final class InstallerUnderTest extends Installer
+final class InstallerUnderTest
 {
-    public function __construct(string $root, private readonly bool $sqliteLoaded = true)
-    {
-        parent::__construct();
-        $this->root_path = $root;
-    }
+    private readonly InstallPaths $paths;
+    private readonly DatabaseChoice $choice;
 
-    public function run()
+    public function __construct(string $root, bool $sqliteLoaded = true)
     {
+        $this->paths = new InstallPaths($root);
+        $this->choice = new DatabaseChoice($this->paths, static fn (string $module): bool => $module === 'pdo_sqlite' ? $sqliteLoaded : extension_loaded($module));
     }
 
     /**
@@ -28,48 +29,37 @@ final class InstallerUnderTest extends Installer
      */
     public function params(string $database, array $input): array
     {
-        return $this->databaseParams($database, $input);
+        return $this->choice->params($database, $input);
     }
 
     /**
-     * @param array<string, string> $params
+     * @param array<string, mixed> $params
      */
     public function config(array $params): string
     {
-        return $this->buildConfig($params);
-    }
-
-    public function answers(\Symfony\Contracts\HttpClient\HttpClientInterface $client, string $url): bool
-    {
-        return $this->urlAnswers($client, $url);
+        return (new ConfigFile($this->paths))->build($params);
     }
 
     /**
-     * @param array<string, mixed> $request
-     * @return array<string, mixed>
+     * @param array<string, mixed> $params
      */
-    public function settings(string $method, array $request): array
+    public function assertWritableConfigValues(array $params): void
     {
-        return $this->checkWebSettings($method, $request);
+        (new ConfigFile($this->paths))->assertWritable($params);
     }
 
     public function path(string $path): string
     {
-        return $this->sqlitePath($path);
+        return $this->choice->sqlitePath($path);
     }
 
     public function defaultSqlitePath(): string
     {
-        return parent::defaultSqlitePath();
+        return $this->paths->sqliteFile();
     }
 
     public static function type(string $database): string
     {
-        return self::databaseType($database);
-    }
-
-    protected function moduleLoaded(string $module): bool
-    {
-        return $module === 'pdo_sqlite' ? $this->sqliteLoaded : parent::moduleLoaded($module);
+        return DatabaseChoice::type($database);
     }
 }

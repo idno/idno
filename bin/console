@@ -27,13 +27,10 @@ if (file_exists(dirname(__DIR__) . '/vendor/autoload.php')) {
 // Boot Idno: the Symfony kernel boots the legacy application (see \Idno\Legacy\LegacyBootstrap),
 // unless the schema gate is closed (the database needs creating or upgrading): then the legacy
 // application and its console plugins are not loaded, and Symfony's own commands and idno:upgrade
-// still run (see \Idno\Console\Application).
+// still run (see \Idno\Console\Application). On a site that is not installed only idno:install runs.
 $kernel = \Idno\Kernel::fromGlobals();
 try {
     $kernel->boot();
-} catch (\Idno\Legacy\NotInstalledException $e) {
-    fwrite(STDERR, "Idno is not installed yet: run the installer (warmup/ in a browser, or warmup/CLI/CLIInstaller.php) first.\n");
-    exit(1);
 } catch (\Throwable $e) {
     fwrite(STDERR, 'Idno could not start: ' . (new \ReflectionClass($e))->getShortName() . ': ' . $e->getMessage() . "\n");
     exit(1);

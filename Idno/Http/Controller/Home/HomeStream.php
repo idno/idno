@@ -40,11 +40,6 @@ interface HomeStream
     public function firstAdministrator(): ?User;
 
     /**
-     * Where a visitor to a site with no user is sent: the onboarding's address, the site's own address followed by `begin/`.
-     */
-    public function beginUrl(): string;
-
-    /**
      * The site's address as it is configured (`url`, written as the configuration has it): what the search page sends a visitor's query to.
      */
     public function siteAddress(): string;

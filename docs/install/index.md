@@ -2,7 +2,7 @@
 
 * [Instructions](instructions.md)
 * [System requirements](requirements.md)
-* [Command line installer](cliinstaller.md)
+* [Command line installation](cliinstaller.md)
 * [Moving from an idno.co hosted site to your own hosting](data_migration.md)
 
 # Upgrading Idno

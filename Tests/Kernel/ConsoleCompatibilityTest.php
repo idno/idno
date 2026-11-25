@@ -40,7 +40,7 @@ final class ConsoleCompatibilityTest extends TestCase
 
         $this->assertStringNotContainsString('must return an integer', $stdout . $stderr);
 
-        return [$code, $stdout];
+        return [$code, $stdout, $stderr];
     }
 
     public function testVersionCommandExitsZeroAndPrintsVersion(): void
@@ -70,45 +70,17 @@ final class ConsoleCompatibilityTest extends TestCase
         $this->assertStringContainsString('hello', $out);
     }
 
-    public function testInstallerCheckRequirementsExitsZero(): void
+    public function testTheInstallCommandIsListedAndRefusesAnInstalledSite(): void
     {
-        [$code, $out] = $this->runCli('warmup/CLI/CLIInstaller.php', 'check-requirements');
-
+        [$code, $out] = $this->runCli('bin/console', 'list');
         $this->assertSame(0, $code);
-        $this->assertStringContainsString('Checking requirements', $out);
-    }
-
-    public function testInstallerGenerateManifestExitsZero(): void
-    {
-        $file = sys_get_temp_dir() . '/idno-manifest-' . bin2hex(random_bytes(6)) . '.ini';
-        try {
-            [$code] = $this->runCli('warmup/CLI/CLIInstaller.php', 'generate-manifest', $file);
-
-            $this->assertSame(0, $code);
-            $this->assertStringContainsString('site_title', (string) file_get_contents($file));
-        } finally {
-            @unlink($file);
+        foreach (['idno:install', 'idno:admin:create', 'idno:setup:link'] as $name) {
+            $this->assertMatchesRegularExpression('/^\s+' . preg_quote($name, '/') . '\s/m', $out, "$name not listed");
         }
-    }
 
-    public function testInstallerNoLongerOffersAPerDomainConfigFile(): void
-    {
-        [$code, $out] = $this->runCli('warmup/CLI/CLIInstaller.php', 'help', 'install');
-
-        $this->assertSame(0, $code);
-        $this->assertStringNotContainsString('my.domain.ini', $out);
-        $this->assertStringNotContainsString('domain specific', $out);
-    }
-
-    public function testInstallerRefusesToWriteAPerDomainConfigFile(): void
-    {
-        $root = dirname(__DIR__, 2);
-        // Refused before anything else (the requirements check, the "already installed" check,
-        // prompts, the database), so this never touches the test site.
-        [$code, $out] = $this->runCli('warmup/CLI/CLIInstaller.php', 'install', 'example.com.ini', '/nonexistent-manifest.ini');
-
+        // The test site has a configuration: nothing is checked, asked or written.
+        [$code, , $err] = $this->runCli('bin/console', 'idno:install', '--no-interaction', '--url=https://example.com/');
         $this->assertSame(1, $code);
-        $this->assertStringContainsString('per-domain configuration files are no longer read', $out);
-        $this->assertFileDoesNotExist($root . '/configuration/example.com.ini');
+        $this->assertStringContainsString('already installed', $err);
     }
 }

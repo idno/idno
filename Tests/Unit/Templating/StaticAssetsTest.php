@@ -19,7 +19,6 @@ final class StaticAssetsTest extends TestCase
      * @var array<string, string>
      */
     private const KEPT = [
-        'css/idno-simple.css' => 'The unminified build of css/idno-simple.min.css (the Grunt `dev` target), for reading the onboarding style sheet while changing it.',
     ];
 
     /** Built files that are not tracked, so no shipped file stands behind them. */
