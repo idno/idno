@@ -5,6 +5,9 @@
 <p class="idno-admin-description">
     <?= \Idno\Core\Idno::site()->language()->_('Your content stays on your site &mdash; syncing just makes it discoverable in more places.') ?>
 </p>
+<p class="idno-admin-description">
+    <?= \Idno\Core\Idno::site()->language()->_('Status updates, videos and audio are shared as posts on Bluesky, with a link back here where one is needed. When you edit or delete one here, the post on Bluesky is changed or deleted too. Only posts that are public and published are shared: drafts and private posts never are.') ?>
+</p>
 
 <?php if (empty($vars['sync_enabled'])) { ?>
 
@@ -43,7 +46,7 @@
 
 <div class="idno-admin-card">
     <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Sync older posts') ?></h2>
-    <p><?= \Idno\Core\Idno::site()->language()->_('Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it\'s safe to run this more than once.') ?></p>
+    <p><?= \Idno\Core\Idno::site()->language()->_('Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it\'s safe to run this more than once. Older status updates, videos and audio will appear on Bluesky under their original dates.') ?></p>
 
     <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/standardsitesync/backfill/" method="post" style="margin-top:1rem;">
         <?= \Idno\Core\Idno::site()->actions()->signForm('/account/settings/standardsitesync/backfill/') ?>

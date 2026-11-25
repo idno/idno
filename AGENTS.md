@@ -144,6 +144,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **IndiePub** | IndieAuth + Micropub server |
 | **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
+| **StandardSiteSync** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
 
 ## ActivityPub Plugin
@@ -209,6 +210,50 @@ Each content plugin has an `Entry.php` entity class that defines
   and a corresponding `private static function handleXxx()` method
 - The `ActivityBuilder::CONTEXT_WITH_QUOTES` constant is the canonical `@context`
   for all outgoing activities
+
+## AT Protocol plugin (StandardSiteSync)
+
+`IdnoPlugins/StandardSiteSync/` writes a member's public, published posts to their own PDS
+(the account they connect at `/account/settings/standardsitesync`, with OAuth and DPoP), when a
+post is saved, changed or deleted, through the queue.
+
+| Content | Collection | Embed | On update | On delete |
+|---|---|---|---|---|
+| Status update | `app.bsky.feed.post` | none; a reply to a Bluesky post carries `reply` (root and parent) | `putRecord`, same key | `deleteRecord` |
+| Video (address on another service) | `app.bsky.feed.post` | `app.bsky.embed.external`: a card for the video's address | `putRecord`, same key | `deleteRecord` |
+| Video (in a Bluesky post) | `app.bsky.feed.post` | `app.bsky.embed.record`: that post, quoted | `putRecord`, same key | `deleteRecord` |
+| Media (audio; video files too) | `app.bsky.feed.post` | `app.bsky.embed.external`: a card for the post on this site | `putRecord`, same key | `deleteRecord` |
+| Everything else | `site.standard.document` | | `putRecord`, same key | `deleteRecord` |
+
+- `PostRecord::build()` builds a post record from plain values and asks nothing of anybody;
+  `RichText` makes its text and facets; `PostSource` reads the values from an entity;
+  `PostSync` looks up what must be asked (through `BlueskyLookup`: the DID of a mentioned
+  handle, the post replied to or quoted, a picture for a YouTube card), writes the record and
+  remembers it on the entity (`standardsitesync_post_uri`, `_cid`, `_hash`, `_root`, `_gone`,
+  and a `bluesky` syndication link). `Main` holds the hooks, which only decide
+  (`Main::actionFor()`) and enqueue. A new kind of post goes in `PostSource::KINDS` and gets a
+  case in `PostRecord`.
+- Facets count BYTES of the UTF-8 text, and a post holds 300 graphemes and 3000 bytes. Use
+  `RichText` for both: never `substr()`, `mb_substr()` or `strlen()` on text that goes into a
+  record. Text that is too long is cut between graphemes, outside any facet, and ends with a
+  link to the post on this site.
+- The key of a post record is a TID (the PDS refuses any other for `app.bsky.feed.post`),
+  made from the entity (`Tid::forEntity()`), so a post written twice is one record. A change
+  is a `putRecord` with `swapRecord`: if the record is gone from the PDS, the member deleted it
+  there, and it is not put back.
+- Only a post that is public and published is ever written (`Main::shouldSync()`). One that
+  stops being so is deleted from the PDS. A reply to something that is not on Bluesky, and a
+  post that already has a Bluesky syndication link, are not written.
+- `app.bsky.embed.video` is for a video file uploaded to the member's PDS; nothing uses it
+  until the site keeps video files itself. Bluesky has no record for audio.
+- A refusal by a PDS is an `XrpcException`: its message is the HTTP status and the name of the
+  error, never the server's answer or a token. Keep it that way; the message is logged.
+- The OAuth scope is `atproto transition:generic`, which lets the site write any record and
+  upload blobs. Asking for other scopes means every connected member must connect again.
+- Tests replace `ATProtoClient::$transport` and `BlueskyLookup::$fetch`; no test talks to a
+  PDS. Records are checked against copies of the published Lexicon files
+  (`Tests/fixtures/lexicons`, with their source and commit) by `Tests/LexiconValidator.php`.
+  `IdnoPlugins/StandardSiteSync/Tests/` checks all of this.
 
 ## Twenty26 theme and plugin templates
 
