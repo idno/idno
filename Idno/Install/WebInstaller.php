@@ -39,13 +39,11 @@ final class WebInstaller
 
     /**
      * @param string $cacheDir The kernel's cache directory (to say when it is a temporary one)
-     * @param (\Closure(): DatabaseChoice)|null $choiceFactory The database choice to use (a test's stand-in); the installer's own by default
      */
     public function __construct(
         private readonly InstallPaths $paths,
         private readonly string $cacheDir = '',
         private readonly LoggerInterface $logger = new NullLogger(),
-        private readonly ?\Closure $choiceFactory = null,
     )
     {
     }
@@ -220,7 +218,7 @@ final class WebInstaller
         }
 
         $config = new ConfigFile($this->paths);
-        $choice = $this->choiceFactory !== null ? ($this->choiceFactory)() : new DatabaseChoice($this->paths);
+        $choice = new DatabaseChoice($this->paths);
         $fileWasThere = file_exists($this->paths->sqliteFile());
         $cleanUp = function () use ($type, $fileWasThere): void {
             if ($type === 'sqlite' && !$fileWasThere) {
@@ -255,7 +253,7 @@ final class WebInstaller
                 $code->clear();
             }
         } catch (DatabaseConnectionFailed $e) {
-            $cleanUp();
+            // Only connecting to a MySQL server throws this, and that creates no file: nothing to clean up.
             $this->logger->warning('The installer could not connect to the chosen database: ' . $e->getMessage() . ($e->getPrevious() !== null ? ' (' . $e->getPrevious()::class . ' ' . $e->getPrevious()->getCode() . ')' : ''));
 
             return ['database' => self::CONNECTION_FAILED];

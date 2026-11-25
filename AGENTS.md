@@ -626,8 +626,7 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      the code, and a MySQL server of the visitor's that does not avoid it:
      `WebInstallFlowTest::testASignOfAnEarlierSiteMakesAnyInstallAskForTheCode`). A checkout as shipped asks
      for none. A site whose data is only remote (a MySQL server, an `s3://` upload path) leaves no sign on this server's disk, so the
-     web installer cannot tell it from a new site: its lost configuration must be restored before the site is reachable again. A
-     connection the installer could not make is cleaned up after as every other refusal is. Without the code the step writes nothing but that code, a random 32-hex value in `configuration/install-code`
+     web installer cannot tell it from a new site: its lost configuration must be restored before the site is reachable again. Without the code the step writes nothing but that code, a random 32-hex value in `configuration/install-code`
      (`InstallCode::relativePath()`, mode 0600, an exclusive create, refused by every shipped server
      configuration), which the page asks for by its path from the project and the command to read it. The
      code is proof of access to the server's files: a site whose configuration file was lost is an

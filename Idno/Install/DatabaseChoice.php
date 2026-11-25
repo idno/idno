@@ -26,10 +26,8 @@ use Idno\Upgrade\UpgradeLock;
  * The database of a new installation: which kind was chosen, whether it can be used, the values
  * the configuration file gets for it, and what it already holds. It loads no SQL: the tables are
  * created by the upgrade (the upgrade page, or `php bin/console idno:upgrade`).
- *
- * Not final, so that the web installer's tests can stand in a choice whose connection is refused.
  */
-class DatabaseChoice
+final class DatabaseChoice
 {
     /** How long an installer waits for a database server to answer the connection. */
     public const CONNECT_SECONDS = 5;
