@@ -36,6 +36,11 @@
                             ])->draw('forms/input/image-file') ?>
                         </div>
                     <?php } ?>
+                    <?= $this->__([
+                        'kinds' => \Idno\Core\Upload::typeList(),
+                        'several' => true,
+                        'required' => empty($attachments) ? \Idno\Core\Idno::site()->language()->_('A photo post needs a photo. Choose one before you publish.') : ''
+                    ])->draw('forms/upload/limits') ?>
                 </div>
 
                 <div id="photo-details">
@@ -93,6 +98,9 @@
     document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.idno-photo-files input').forEach(function(input) {
             input.addEventListener('change', function() {
+                if (!this.files || !this.files.length) {
+                    return; // Nothing chosen (or the file was refused): no further slot yet
+                }
                 var imageFile = this.closest('div.idno-image-file');
                 var number = parseInt(imageFile.getAttribute('data-number')) + 1;
                 var next = document.querySelector('.idno-photo-files .idno-image-file[data-number="' + number + '"]');

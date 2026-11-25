@@ -605,6 +605,30 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
   files (e.g. Photo thumbnails) override `getAttachedFileIDs()`. Custom filesystems
   must implement `updateMetadata()` for this to apply.
+- Uploads that PHP did not keep: PHP drops a file larger than `upload_max_filesize` and leaves only
+  an error code in `$_FILES` (an empty `tmp_name`), and drops the whole body of a request larger
+  than `post_max_size`, form token included. Neither is an error to PHP, so a form that takes a
+  file must look, or a post is saved without its file and nobody is told. `\Idno\Core\Upload`
+  holds the rules: `maxFileSize()` and `maxRequestSize()` (from PHP's settings), `formatSize()`
+  ("2 MB"), `errorMessage($code, $name)` (what to tell the member for each `UPLOAD_ERR_` code, in
+  plain words with the limit, never PHP's text about php.ini; empty for `UPLOAD_ERR_NO_FILE`, which
+  only the form can judge), `isShowableImage()` and `imageAccept()` (JPEG, PNG, GIF, WebP, AVIF,
+  SVG). `Page::post()` answers a request that was dropped whole (`Upload::requestWasTooLarge()`)
+  with that message and status 413 instead of "Invalid token"; a page that overrides `post()` and
+  takes files checks it itself. A photo post is never saved without a photo:
+  `Photo::saveDataFromInput()` looks at every file before storing any, refuses the save on any
+  error or when the post would have no photo (new, draft or edit alike; an edit that sends no
+  new file keeps the ones attached), and `Pages\Edit` sends the member back to the form with what
+  they typed. Never filter the entries of `$_FILES` by `tmp_name` before reading their `error`.
+  A form that takes a file draws `forms/upload/limits` inside the `<form>` (both looks; `kinds`,
+  `several`, `required`): it states the accepted kinds and sizes and refuses, in the browser, a
+  file or a total the server would drop, which is the only way the member keeps what they typed
+  when the request would go over `post_max_size`. The script is plain JavaScript; the Twenty26
+  `forms/input/image-file` shows the chosen picture the same way and calls neither jQuery nor the
+  default look's `Template` object. `Tests/Core/UploadTest.php`,
+  `IdnoPlugins/Photo/Tests/PhotoUploadTest.php` (multipart posts over HTTP),
+  `IdnoPlugins/Photo/Tests/PhotoUploadErrorTest.php`, `IdnoPlugins/Media/Tests/MediaUploadErrorTest.php`
+  and `Tests/Entities/UserAvatarUploadTest.php` check this.
 - Site export archive: `Idno\Pages\Admin\Export\Generate` builds an archive of the whole
   site (`Migration::createCompressedArchive()`) and stores it with `Generate::storeArchive()`,
   which marks the file `site_export` in its metadata. `Idno\Pages\File\View` serves a file

@@ -410,7 +410,28 @@ namespace Idno\Common {
             \Idno\Core\Idno::site()->events()->triggerEvent('page/head', array('page' => $this));
             \Idno\Core\Idno::site()->events()->triggerEvent('page/post', array('page_class' => get_called_class(), 'arguments' => $arguments));
 
-            if (\Idno\Core\Idno::site()->session()->isAPIRequest() || \Idno\Core\Idno::site()->actions()->validateToken($this->currentUrl(), false) || \Idno\Core\Idno::site()->actions()->validateToken('', false)) {
+            $return = null;
+            if (\Idno\Core\Upload::requestWasTooLarge()) {
+
+                // PHP threw the whole body away (post_max_size), form token included: say
+                // that, rather than "Invalid token", and act on nothing
+                $too_large = \Idno\Core\Upload::requestTooLargeMessage();
+                \Idno\Core\Idno::site()->logging()->warning('A POST of ' . (int) ($_SERVER['CONTENT_LENGTH'] ?? 0) . ' bytes to ' . $this->currentUrl() . ' was larger than post_max_size and was discarded by PHP.');
+                \Idno\Core\Idno::site()->session()->addErrorMessage($too_large);
+                $this->setResponse(413);
+                http_response_code(413);
+                $return = false;
+                if (!\Idno\Core\Idno::site()->session()->isAPIRequest() && !empty($_SERVER['HTTP_REFERER'])) {
+                    // Back to the form it came from: its path on this site only, whatever
+                    // host the referrer names (the site may be reached under several)
+                    $back = '/' . ltrim((string) parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_PATH), '/');
+                    if ($query = (string) parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_QUERY)) {
+                        $back .= '?' . $query;
+                    }
+                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($back));
+                }
+
+            } else if (\Idno\Core\Idno::site()->session()->isAPIRequest() || \Idno\Core\Idno::site()->actions()->validateToken($this->currentUrl(), false) || \Idno\Core\Idno::site()->actions()->validateToken('', false)) {
                 $this->parseJSONPayload();
                 $return = $this->postContent();
             } else {

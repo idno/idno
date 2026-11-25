@@ -23,10 +23,11 @@
                         <span id="photo-filename"><?php echo \Idno\Core\Idno::site()->language()->_('Select a user picture'); ?></span>
                             <input type="file" name="avatar" id="photo"
                                    class="form-control"
-                                   accept="image/*"
+                                   accept="image/jpeg,image/png,image/gif"
                                    onchange="photoPreview(this)"/>
 
                         </span>
+                        <?php echo $this->__(['kinds' => \Idno\Core\Upload::typeList(['JPEG', 'PNG', 'GIF']), 'several' => false, 'required' => ''])->draw('forms/upload/limits'); ?>
                 </div>
             </div>
 

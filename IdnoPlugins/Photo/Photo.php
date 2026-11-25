@@ -110,6 +110,29 @@ namespace IdnoPlugins\Photo {
         }
 
         /**
+         * The files of one form field, one entry per file, whether the field was sent
+         * as one file (name="photo") or as several (name="photo[]"); nothing when the
+         * request carried no such field. Entries keep PHP's error code: a file that PHP
+         * refused has an empty tmp_name and the reason in 'error'.
+         *
+         * @param  string $field
+         * @return array[]
+         */
+        public static function uploadedFiles($field)
+        {
+            if (empty($_FILES[$field]) || !is_array($_FILES[$field])) {
+                return [];
+            }
+            if (!array_key_exists('name', $_FILES[$field])) {
+                // Already one entry per file (the Micropub endpoint fills $_FILES this way)
+                return array_values(array_filter($_FILES[$field], 'is_array'));
+            }
+            $files = \Idno\Core\Input::getFiles($field);
+
+            return isset($files['name']) ? [$files] : array_values((array) $files);
+        }
+
+        /**
          * Saves changes to this object based on user input
          * @return bool
          */
@@ -140,107 +163,93 @@ namespace IdnoPlugins\Photo {
                 }
             }
 
-            // Get photo
-            $files = \Idno\Core\Input::getFiles('photo');
-
-            if (!isset($files['name'])) {
-                $files = array_filter($files, function($var) {
-                    return !empty($var['tmp_name']); // Filter non-filled in elements
-                });
-            } else {
-                $files = [$files]; // Handle situations where we aren't given an array of photos
-            }
+            // Look at every file before storing any, so that a post is never left with
+            // some of its photos, and never saved without the photo its author chose
+            $files = static::uploadedFiles('photo');
+            $language = \Idno\Core\Idno::site()->language();
+            $session = \Idno\Core\Idno::site()->session();
+            $chosen = [];
 
             foreach ($files as $_file) {
 
-                if (!empty($_file['tmp_name'])) {
+                $errcode = isset($_file['error']) ? intval($_file['error']) : UPLOAD_ERR_OK;
+                $name = isset($_file['name']) ? (string) $_file['name'] : '';
 
-                    if (\Idno\Entities\File::isImage($_file['tmp_name']) || \Idno\Entities\File::isSVG($_file['tmp_name'], $_file['name'])) {
+                if ($errcode === UPLOAD_ERR_NO_FILE || ($errcode === UPLOAD_ERR_OK && empty($_file['tmp_name']) && $name === '')) {
+                    continue; // An empty slot of the form
+                }
 
-                        if (!\Idno\Entities\File::isFileFreeFromScriptTags($_file['tmp_name'], $_file['name'])) {
-                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('This image seems to contain malicious code, so it can\'t be uploaded.'));
-                            return false;
+                // PHP refused the file (too large, cut short, nowhere to put it)
+                if ($errcode !== UPLOAD_ERR_OK || empty($_file['tmp_name'])) {
+                    $session->addErrorMessage(\Idno\Core\Upload::errorMessage($errcode ?: UPLOAD_ERR_CANT_WRITE, $name));
+                    return false;
+                }
+
+                if (!\Idno\Core\Upload::isShowableImage($_file['tmp_name'], $name)) {
+                    $session->addErrorMessage($language->esc_('"%s" is not an image this site can show, so nothing was saved. A photo can be %s.', [$name, \Idno\Core\Upload::typeList()]));
+                    return false;
+                }
+
+                if (!\Idno\Entities\File::isFileFreeFromScriptTags($_file['tmp_name'], $name)) {
+                    $session->addErrorMessage($language->_('This image seems to contain malicious code, so it can\'t be uploaded.'));
+                    return false;
+                }
+
+                $chosen[] = $_file;
+            }
+
+            // A photo post is a photo: without one (newly chosen, or already attached) there is nothing to save
+            if (empty($chosen) && empty($this->getAttachments())) {
+                $session->addErrorMessage($language->_('A photo post needs a photo, and none arrived, so nothing was saved. Choose a photo and try again.'));
+                return false;
+            }
+
+            foreach ($chosen as $_file) {
+
+                // Extract exif data so we can rotate
+                if (is_callable('exif_read_data') && $_file['type'] == 'image/jpeg') {
+                    try {
+                        if ($exif = @exif_read_data($_file['tmp_name'])) {
+                            $this->exif = base64_encode(serialize($exif)); // Yes, this is rough, but exif contains binary data that cannot be saved in mongo
                         }
+                    } catch (\Throwable $e) {
+                        $exif = false;
+                    }
+                } else if (!is_callable('exif_read_data') && $session->isAdmin()) {
+                    \Idno\Core\Idno::site()->logging()->info("Because your server doesn't provide EXIF support, Idno can't preserve any rotation information in this image.");
+                }
 
-                        // Extract exif data so we can rotate
-                        if (is_callable('exif_read_data') && $_file['type'] == 'image/jpeg') {
-                            try {
-                                if (function_exists('exif_read_data')) {
-                                    if ($exif = exif_read_data($_file['tmp_name'])) {
-                                        $this->exif = base64_encode(serialize($exif)); // Yes, this is rough, but exif contains binary data that cannot be saved in mongo
-                                    }
-                                }
-                            } catch (\Exception $e) {
-                                $exif = false;
-                            }
-                        } else {
-                            $exif = false;
+                if ($photo = \Idno\Entities\File::createFromFile($_file['tmp_name'], $_file['name'], $_file['type'], true, true)) {
+                    $this->attachFile($photo, true);
 
-                            if (!is_callable('exif_read_data')) {
-                                // Admins get a no-EXIF error
-                                if (\Idno\Core\Idno::site()->session()->isAdmin()) {
-                                    \Idno\Core\Idno::site()->logging()->info("Because your server doesn't provide EXIF support, Idno can't preserve any rotation information in this image.");
+                    // Now get some smaller thumbnails, with the option to override sizes
+                    $sizes = \Idno\Core\Idno::site()->events()->dispatch('photo/thumbnail/getsizes', new \Idno\Core\Event(array('sizes' => array('large' => 800, 'medium' => 400, 'small' => 200))));
+                    $eventdata = $sizes->data();
+                    foreach ($eventdata['sizes'] as $label => $size) {
+
+                        $filename = $_file['name'];
+
+                        if ($_file['type'] != 'image/gif') {
+                            if ($thumbnail = \Idno\Entities\File::createThumbnailFromFile($_file['tmp_name'], "{$filename}_{$label}", $size, false)) {
+                                // New style thumbnails
+                                $varname        =   "thumbs_{$label}";
+                                if (empty($this->$varname)) {
+                                    $this->$varname = [];
                                 }
+
+                                $this->$varname[$filename] = [
+                                    'id'    => substr($thumbnail, 0, strpos($thumbnail, '/')),
+                                    'url'   => \Idno\Core\Idno::site()->config()->url . 'file/' . $thumbnail,
+                                ];
                             }
                         }
-
-                        if ($photo = \Idno\Entities\File::createFromFile($_file['tmp_name'], $_file['name'], $_file['type'], true, true)) {
-                            $this->attachFile($photo, true);
-
-                            // Now get some smaller thumbnails, with the option to override sizes
-                            $sizes = \Idno\Core\Idno::site()->events()->dispatch('photo/thumbnail/getsizes', new \Idno\Core\Event(array('sizes' => array('large' => 800, 'medium' => 400, 'small' => 200))));
-                            $eventdata = $sizes->data();
-                            foreach ($eventdata['sizes'] as $label => $size) {
-
-                                $filename = $_file['name'];
-
-                                if ($_file['type'] != 'image/gif') {
-                                    if ($thumbnail = \Idno\Entities\File::createThumbnailFromFile($_file['tmp_name'], "{$filename}_{$label}", $size, false)) {
-                                        // New style thumbnails
-                                        $varname        =   "thumbs_{$label}";
-                                        if (empty($this->$varname))
-                                        $this->$varname = [];
-
-                                        $this->$varname[$filename] = [
-                                        'id'    => substr($thumbnail, 0, strpos($thumbnail, '/')),
-                                        'url'   => \Idno\Core\Idno::site()->config()->url . 'file/' . $thumbnail,
-                                        ];
-                                    }
-                                }
-                            }
-
-                        } else {
-                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('No image was attached.'));
-                            return false;
-                        }
-                    } else {
-                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('This doesn\'t seem to be an image.'));
-                        return false;
                     }
 
                 } else {
-
-                    $errcode = null;
-                    if (!empty($_file['error']))
-                        $errcode = $_file['error'];
-
-                    $errmsg = \Idno\Files\FileSystem::getUploadErrorCodeMessage($errcode);
-                    if (!empty($errcode) && !empty($errmsg)) {
-
-                        // No file is ok, if this is not new
-                        if (intval($errcode) == UPLOAD_ERR_NO_FILE && !$new) {
-                            $errmsg = null;
-                        }
-                    } else {
-                        $errmsg = \Idno\Core\Idno::site()->language()->_('We couldn\'t access your image for an unknown reason. Please try again.');
-                    }
-                    if (!empty($errmsg)) {
-                        \Idno\Core\Idno::site()->session()->addErrorMessage($errmsg);
-                        return false;
-                    }
+                    $session->addErrorMessage($language->esc_('This site could not store "%s", so nothing was saved. Please try again.', [$_file['name']]));
+                    return false;
                 }
             }
-            //}
 
             $publish_status = \Idno\Core\Idno::site()->currentPage()->getInput('publish_status', 'published');
 
