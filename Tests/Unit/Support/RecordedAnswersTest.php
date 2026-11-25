@@ -274,12 +274,14 @@ final class RecordedAnswersTest extends TestCase
         $this->assertStringContainsString('+one', $message);
     }
 
-    public function testAChangedCaseIsLeftToItsTestAndMustBeMetWithAReason(): void
+    private function changedRecorder(string $mode): object
     {
         $recorder = new class {
             use RecordedAnswers;
 
             public const CHANGED = ['moved' => 'it moved on purpose', 'unmet' => 'never recorded', 'blank' => ' '];
+
+            public static string $mode = 'compare';
 
             public function record(string $case): void
             {
@@ -298,7 +300,17 @@ final class RecordedAnswersTest extends TestCase
 
             protected static function captureMode(): string
             {
-                return 'compare';
+                return self::$mode;
+            }
+
+            protected static function ciRefusesCapture(): bool
+            {
+                return false;
+            }
+
+            protected static function recordedAnswersDirectory(): string
+            {
+                return sys_get_temp_dir() . '/idno-recorded-never-written';
             }
 
             protected function baseUrl(): string
@@ -306,11 +318,37 @@ final class RecordedAnswersTest extends TestCase
                 return 'http://127.0.0.1:55438/';
             }
         };
+        $recorder::$mode = $mode;
         $recorder::reset();
+
+        return $recorder;
+    }
+
+    public function testAChangedCaseNeedsAReason(): void
+    {
+        $recorder = $this->changedRecorder('compare');
 
         $recorder->record('moved');
         $this->assertStringContainsString('with no reason', $this->failureOf(fn () => $recorder->record('blank')));
-        $this->assertStringContainsString('no test recorded: unmet', $this->failureOf(fn () => $recorder->finish()));
+    }
+
+    public function testACompareRunThatDidNotRunEveryTestIsNotFailedForACaseItNeverMet(): void
+    {
+        $recorder = $this->changedRecorder('compare');
+        $recorder->record('moved');
+
+        $recorder->finish();
+        $this->addToAssertionCount(1);
+    }
+
+    public function testACaptureThatDidNotMeetEveryChangedCaseFailsNamingIt(): void
+    {
+        foreach (['capture', 'verify'] as $mode) {
+            $recorder = $this->changedRecorder($mode);
+            $recorder->record('moved');
+
+            $this->assertStringContainsString('no test recorded: unmet', $this->failureOf(fn () => $recorder->finish()), $mode);
+        }
     }
 
     public function testARecordingNameCannotLeaveItsDirectory(): void
@@ -436,5 +474,51 @@ final class RecordedAnswersTest extends TestCase
         };
 
         return $probe::normalise($response, $baseUrl);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function spellingsOfASessionId(): array
+    {
+        $id = 'k3j4h5g6,f7d8/s9a0+q1w2';
+
+        return [
+            'as set' => [$id],
+            'percent-encoded' => [rawurlencode($id)],
+            'form-encoded' => [urlencode($id)],
+            'inside JSON' => [trim((string) json_encode($id), '"')],
+        ];
+    }
+
+    /** @dataProvider spellingsOfASessionId */
+    public function testACaptureRefusesTheSessionIdInAnySpellingInABodyOrAHeader(string $spelling): void
+    {
+        $id = 'k3j4h5g6,f7d8/s9a0+q1w2';
+        $recorder = $this->recorder('capture');
+        $cookie = 'Set-Cookie: idno=' . rawurlencode($id) . '; path=/';
+
+        $inBody = $this->failureOf(fn () => $recorder->record('group', 'a', self::response([$cookie, 'Content-Type: text/plain'], '{"s":"' . $spelling . '"}')));
+        $inHeader = $this->failureOf(fn () => $recorder->record('group', 'b', self::response([$cookie, 'Location: /login?s=' . $spelling])));
+
+        $this->assertStringContainsString('session id', $inBody);
+        $this->assertStringContainsString('session id', $inHeader);
+    }
+
+    public function testACaptureAllowsTextThatOnlyResemblesTheSessionId(): void
+    {
+        $recorder = $this->recorder('capture');
+        $cookie = 'Set-Cookie: idno=k3j4h5g6f7d8s9a0q1w2; path=/';
+
+        $recorder->record('group', 'a', self::response([$cookie], 'k3j4h5g6f7d8s9a0q1w3 and k3j4h5g6f7d8 and short'));
+        $this->addToAssertionCount(1);
+    }
+
+    public function testATokenGluedToAWordCharacterIsStillAToken(): void
+    {
+        $recorder = $this->recorder('capture');
+        $token = str_repeat('ab12', 16);
+
+        $this->assertStringContainsString('64-digit hex', $this->failureOf(fn () => $recorder->record('group', 'a', self::response([], 'tok_' . $token . '_x'))));
+        $recorder->record('group', 'b', self::response([], 'x' . $token . '0'));
+        $this->addToAssertionCount(1);
     }
 }

@@ -32,7 +32,7 @@ use Tests\Templating\PageNormaliser;
  * the byte length of the answer's own body (the body's length varies with the digits of the site's port). `Date` and `Set-Cookie` are never
  * recorded (they differ by nature: a test never compares two separately generated times). A capture additionally REFUSES to write a recording that
  * holds a 64-digit hex run (a form token or other secret in markup the normaliser does not know) or the value of a cookie the response set (a session
- * id). Header names are folded to lower case and values are trimmed: a difference only in letter case of a name or in surrounding white space is
+ * id), as set, percent-encoded, form-encoded or JSON-escaped, in the body or in a header value. Header names are folded to lower case and values are trimmed: a difference only in letter case of a name or in surrounding white space is
  * not a difference.
  */
 trait RecordedAnswers
@@ -108,14 +108,15 @@ trait RecordedAnswers
     protected static function assertRecordedAnswersComplete(): void
     {
         $mode = static::captureMode();
+        if ($mode === 'compare') {
+            // A compare run may be a filtered one: a case it never met is not a failure (a case it met and that differs already failed)
+            return;
+        }
         $changed = defined(static::class . '::CHANGED') ? constant(static::class . '::CHANGED') : [];
         $unseen = array_diff(array_keys($changed), array_keys(self::$recordedChangedSeen));
         if ($unseen !== []) {
             self::forgetRecordedAnswers();
             \PHPUnit\Framework\Assert::fail('CHANGED lists cases that no test recorded: ' . implode(', ', $unseen));
-        }
-        if ($mode === 'compare') {
-            return;
         }
         $captures = self::$recordedCaptures;
         $differences = self::$recordedDifferences;
@@ -224,14 +225,18 @@ trait RecordedAnswers
 
     private static function refuseSecrets(string $name, string $text, SiteResponse $response): void
     {
-        if (preg_match('/\b[0-9a-f]{64}\b/i', $text) === 1) {
+        if (preg_match('/(?<![0-9a-f])[0-9a-f]{64}(?![0-9a-f])/i', $text) === 1) {
             \PHPUnit\Framework\Assert::fail($name . ' holds a 64-digit hex value: a form token or another secret in markup the normaliser does not know. It is not written.');
         }
         foreach ($response->lines('set-cookie') as $cookie) {
             $pair = explode(';', $cookie, 2)[0];
-            $value = urldecode(substr($pair, (int) strpos($pair, '=') + 1));
-            if (strlen($value) >= 16 && str_contains($text, $value)) {
-                \PHPUnit\Framework\Assert::fail($name . ' holds the value of a cookie the response set (a session id). It is not written.');
+            $raw = substr($pair, (int) strpos($pair, '=') + 1);
+            $decoded = urldecode($raw);
+            $spellings = [$raw, $decoded, rawurlencode($decoded), urlencode($decoded), trim((string) json_encode($decoded), '"'), trim((string) json_encode($raw), '"')];
+            foreach ($spellings as $spelling) {
+                if (strlen($spelling) >= 16 && str_contains($text, $spelling)) {
+                    \PHPUnit\Framework\Assert::fail($name . ' holds the value of a cookie the response set (a session id). It is not written.');
+                }
             }
         }
     }
