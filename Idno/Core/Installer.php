@@ -452,10 +452,11 @@ namespace Idno\Core {
         /**
          * Load the schema into a database that has none.
          *
-         * A database that already holds an Idno schema (a row for it in the versions table) is
-         * left exactly as it is: Idno applies any upgrades it needs when it next connects. If
-         * the schema can't be loaded, the tables this attempt created are removed again, so the
-         * next attempt starts from the same database.
+         * A database that already holds an Idno site (its posts, its settings and a note of its
+         * schema version) is left exactly as it is: Idno applies any upgrades it needs when it
+         * next connects. One that holds part of a site is refused. Empty tables with Idno's
+         * names and no site (what an earlier attempt can leave behind) are replaced. If the
+         * schema can't be loaded, the tables this attempt created are removed again.
          *
          * @param  \PDO   $dbh
          * @param  string $schema
@@ -471,21 +472,52 @@ namespace Idno\Core {
                 return $dbh->query('SHOW TABLES')->fetchAll(\PDO::FETCH_COLUMN);
             };
 
-            try {
-                $before = $tables();
-                if (in_array('versions', $before, true)) {
-                    $statement = $dbh->query("SELECT `value` FROM `versions` WHERE `label` = 'schema'");
-                    if ($statement->fetchColumn() !== false) {
-                        return 'existing';
-                    }
-                }
-            } catch (\PDOException $e) {
-                throw new \Idno\Exceptions\InstallerException(self::problem('The database could not be read. The database server said: ' . $e->getMessage()), 'mysql_name');
-            }
-
             $sql = @file_get_contents("{$this->root_path}/warmup/schemas/$schema/$schema.sql");
             if (empty($sql)) {
                 throw new \Idno\Exceptions\InstallerException(self::problem('The file that describes the database tables (warmup/schemas/' . $schema . '/' . $schema . '.sql) is missing from this copy of Idno.'), 'mysql_name');
+            }
+            // The tables that are Idno's, by the schema's own account
+            preg_match_all('/CREATE TABLE IF NOT EXISTS `([A-Za-z0-9_]+)`/', $sql, $matches);
+            $ours = $matches[1];
+
+            try {
+                $before = $tables();
+
+                if (in_array('entities', $before, true)) {
+                    // A site lives here. It is left exactly as it is, if it is whole.
+                    $version = false;
+                    if (in_array('versions', $before, true)) {
+                        $version = $dbh->query("SELECT `value` FROM `versions` WHERE `label` = 'schema'")->fetchColumn();
+                    }
+                    if ($version !== false && in_array('config', $before, true)) {
+                        return 'existing';
+                    }
+                    throw new \Idno\Exceptions\InstallerException(self::problem(
+                        'This database holds part of an Idno site: it has posts, but other tables are missing. The installer changes nothing in it. Use an empty database, or restore this one from a backup.'
+                    ), 'mysql_name');
+                }
+
+                // No site, but perhaps what an earlier attempt left: empty tables with Idno's names,
+                // and a note of a schema version. They are in the way of the schema, so they go;
+                // a table with anything in it is somebody's data and stops the installation.
+                $leftovers = array_values(array_intersect($before, $ours));
+                foreach ($leftovers as $table) {
+                    if ($table !== 'versions' && $dbh->query('SELECT 1 FROM `' . $table . '` LIMIT 1')->fetchColumn() !== false) {
+                        throw new \Idno\Exceptions\InstallerException(self::problem(
+                            'This database has a table called ' . $table . ' with data in it, which is not an Idno site that can be used. Use an empty database.'
+                        ), 'mysql_name');
+                    }
+                }
+                if ($leftovers) {
+                    $dbh->exec('SET FOREIGN_KEY_CHECKS = 0');
+                    foreach ($leftovers as $table) {
+                        $dbh->exec('DROP TABLE IF EXISTS `' . $table . '`');
+                    }
+                    $dbh->exec('SET FOREIGN_KEY_CHECKS = 1');
+                    $before = array_values(array_diff($before, $leftovers));
+                }
+            } catch (\PDOException $e) {
+                throw new \Idno\Exceptions\InstallerException(self::problem('The database could not be read. The database server said: ' . $e->getMessage()), 'mysql_name');
             }
 
             $statements = explode(";\n", $sql); // Explode statements; only mysql can support multiple statements per line, and then not safely.
