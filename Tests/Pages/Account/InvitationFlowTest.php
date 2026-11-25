@@ -150,6 +150,21 @@ namespace Tests\Pages\Account {
         }
 
         /**
+         * An address from a mail, on the host these tests reach the site by. The web server
+         * writes links with the name it was started on, which need not be the name the tests
+         * use (CI serves on 0.0.0.0 and is reached as localhost), and a browser keeps its
+         * cookies by host name.
+         */
+        protected static function onThisSite($url)
+        {
+            $base = rtrim(Idno::site()->config()->getDisplayURL(), '/');
+            $path = (string) parse_url($url, PHP_URL_PATH);
+            $query = (string) parse_url($url, PHP_URL_QUERY);
+
+            return $base . $path . ($query !== '' ? '?' . $query : '');
+        }
+
+        /**
          * The link in the invitation mail to an address
          */
         protected function linkFor($address)
@@ -158,7 +173,7 @@ namespace Tests\Pages\Account {
             $this->assertNotNull($message, 'There should be an invitation mail to ' . $address);
             $this->assertSame(1, preg_match('#https?://\S+/account/register/\?email=\S+?&code=[0-9a-f]{64}#', $message['text'], $match), 'The mail should hold the link');
 
-            return $match[0];
+            return static::onThisSite($match[0]);
         }
 
         /**
@@ -219,8 +234,11 @@ namespace Tests\Pages\Account {
             $this->assertStringNotContainsString('administrator', $message['text']);
             $this->assertStringContainsString('works until', $message['text']);
 
+            // One link, to the registration page of this site, in both parts of the mail
             $link = $this->linkFor($address);
-            $this->assertStringStartsWith(Idno::site()->config()->getDisplayURL() . 'account/register/', $link);
+            $this->assertSame(1, preg_match('#https?://[^/\s]+/account/register/\?email=\S+?&code=[0-9a-f]{64}#', $message['text'], $inText));
+            $this->assertStringContainsString('href="' . htmlspecialchars($inText[0]) . '"', $message['text'], 'The button of the HTML part goes to the same address');
+            $this->assertSame('/account/register/', parse_url($link, PHP_URL_PATH));
 
             $invitation = Invitation::getByEmail($address);
             $this->assertInstanceOf(Invitation::class, $invitation);
@@ -493,7 +511,7 @@ namespace Tests\Pages\Account {
 
             $invitation = Invitation::getByEmail($address);
             $this->assertInstanceOf(Invitation::class, $invitation);
-            $this->assertStringContainsString('value="' . htmlspecialchars($invitation->getLink()) . '"', $page, 'The link is on the page to copy');
+            $this->assertMatchesRegularExpression('#value="https?://[^/"]+' . preg_quote(htmlspecialchars('/account/register/?email=' . urlencode($address) . '&code=' . $invitation->code), '#') . '"#', $page, 'The link is on the page to copy');
             $this->assertStringContainsString('email not sent', $page);
 
             // And the link works
@@ -581,20 +599,21 @@ namespace Tests\Pages\Account {
             $this->assertSame(200, $form['status']);
             $response = $this->visit($jar, 'POST', '/account/password', $this->formFields($form['body'], '/account/password') + ['email' => $member->email]);
             $this->assertSame(302, $response['status']);
-            $this->assertSame(200, $this->visit($jar, 'GET', $response['location'])['status']);
+            $this->assertSame(200, $this->visit($jar, 'GET', static::onThisSite($response['location']))['status']);
 
             $message = static::$sink->lastTo($member->email);
             $this->assertNotNull($message);
             $this->assertStringContainsString(Idno::site()->config()->title, $message['headers']['subject']);
             $this->assertSame(1, preg_match('#https?://\S+/account/password/reset/\?email=\S+?&code=[0-9a-f]+#', $message['text'], $match));
 
-            $page = $this->visit($jar, 'GET', $match[0]);
+            $reset = static::onThisSite($match[0]);
+            $page = $this->visit($jar, 'GET', $reset);
             $this->assertSame(200, $page['status']);
-            parse_str((string) parse_url($match[0], PHP_URL_QUERY), $query);
+            parse_str((string) parse_url($reset, PHP_URL_QUERY), $query);
             $done = $this->visit($jar, 'POST', '/account/password/reset', $this->formFields($page['body'], '/account/password/reset') + ['email' => $query['email'], 'code' => $query['code'], 'password' => 'a-new-password-2', 'password2' => 'a-new-password-2']);
             $this->assertSame(302, $done['status']);
             $this->assertStringContainsString('/session/login', $done['location'], 'On to the sign-in page, not to the closed front door');
-            $this->assertSame(200, $this->visit($jar, 'GET', $done['location'])['status']);
+            $this->assertSame(200, $this->visit($jar, 'GET', static::onThisSite($done['location']))['status']);
 
             // The new password signs in
             static::$passwords[$member->getHandle()] = 'a-new-password-2';

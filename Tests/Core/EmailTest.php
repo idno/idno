@@ -164,9 +164,10 @@ namespace Tests\Core {
         public function testThePortFollowsTheSecuritySettingWhenNoneIsStored()
         {
             $config = Idno::site()->config();
-            $before = [$config->smtp_port, $config->smtp_secure];
+            $before = [$config->smtp_port, $config->smtp_secure, $config->smtp_timeout];
             try {
                 $config->smtp_port = 0;
+                $config->smtp_timeout = 0;
                 foreach (['tls' => 587, 'ssl' => 465, '' => 25, 'nonsense' => 25] as $secure => $port) {
                     $config->smtp_secure = $secure;
                     $this->assertSame($port, Email::port(), 'Port for security "' . $secure . '"');
@@ -179,7 +180,7 @@ namespace Tests\Core {
                 $this->assertSame('tls', $transport->getEncryption(), 'STARTTLS is SwiftMailer\'s "tls"');
                 $this->assertSame(Email::DEFAULT_TIMEOUT, $transport->getTimeout());
             } finally {
-                list($config->smtp_port, $config->smtp_secure) = $before;
+                list($config->smtp_port, $config->smtp_secure, $config->smtp_timeout) = $before;
             }
         }
 
