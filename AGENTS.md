@@ -72,6 +72,15 @@ Tests/                         Core unit tests
   `Tests/Pages/NonAsciiPermalinkTest.php` checks this over HTTP.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
+- **Current item of the Twenty26 side navigation**: `Themes\Twenty26\Navigation::currentItem()`
+  decides which item of `templates/modern/shell/nav.tpl.php` is the current page, from the page
+  being served (its class, and the `q` input of a `Homepage`), never from the address, and
+  `Navigation::attributes()` gives that item `class="idno-nav-item active"` and
+  `aria-current="page"`. At most one item is current; Home on the home feed and `/content/...`,
+  Search on a search or a tag page, Profile on the viewer's own profile only, Drafts, Log in.
+  Account and admin pages are drawn in the settings shell, which has no side navigation. An error
+  page marks nothing. A new item goes through `attributes()` and gets a case in `currentItem()`.
+  `Tests/Pages/Twenty26NavCurrentPageTest.php` checks this over HTTP.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
   (`ConsolePlugins/EventQueueService`) polling for pending
