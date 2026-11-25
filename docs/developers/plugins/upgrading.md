@@ -87,6 +87,40 @@ Core pages are moving from `Idno\Common\Page` classes run by the legacy router t
 * **`Idno::site()->currentPage()` is an `Idno\Legacy\ControllerPage` while a controller's page is served.** `getInput()`, `getOwner()`, `isPermalink()`, `currentUrl()`, `xhr` and the other members templates and plugins ask a page answer from the request. Where a legacy page exited, it throws what the controller turns into a response: `deniedContent()`, `noContent()`, `goneContent()` and `forward()` throw instead of exiting. A listener of yours that calls `exit` during a controller's request skips `kernel.terminate`, which runs the work a page asked to be done after its response.
 * **The page's events are the same**: `page/ready`, `page/head` and `page/get` (`page/head` and no `page/get` for HEAD) fire in the same order with the same data (`page_class` is `Idno\Pages\Homepage`).
 
+### Replacing the home page: the `homepage/replace` event
+
+To make the site's root something other than the stream (a static page, a landing page), do not extend `Idno\Pages\Homepage` and `hijackRoute()` the root: listen to the event `homepage/replace`. `Idno\Http\Controller\Home\HomePages::home()` triggers it first, with two values in the event's data:
+
+* `page`: the `Idno\Http\Page\PageContext` of the request (its input, owner, headers, the viewer's request);
+* `renderer`: the `Idno\Http\Page\PageRenderer`, which draws a page and makes redirects and refusals.
+
+A listener that sets a `Symfony\Component\HttpFoundation\Response` as the event's response gives the home page; anything else is ignored and the stream is drawn:
+
+    function registerEventHooks()
+    {
+        \Idno\Core\Idno::site()->events()->addListener('homepage/replace', function (\Idno\Core\Event $event) {
+            $data = $event->data();
+            $user = \Idno\Core\Idno::site()->session()->currentUser();
+            if (!$user) {
+                // not for visitors: the stream stays
+                return;
+            }
+            $event->setResponse($data['renderer']->page($data['page'], [
+                'title' => 'Welcome back',
+                'body'  => $data['renderer']->template('myplugin/welcome', ['user' => $user]),
+            ]));
+        });
+    }
+
+The rules:
+
+* **Draw through the renderer.** Use `$renderer->page()`, `redirect()`, `denied()`, `notFound()` or `gone()` and return what they return. Do not `echo`, `exit`, call `header()` or `drawPage()`: nothing a listener draws is sent or ended by it, so the page's headers, caching and `kernel.terminate` still apply. Set what the page is about on the context first (`$page->setOwner()`, `$page->setPermalink()`, `$page->addHeader('Last-Modified', ...)`).
+* **Respect the viewer's access.** The replacement is served to every visitor. Check that the viewer may read what you put there (`canRead()` on an entity) and answer a refusal, a redirect, or nothing (the stream) when they may not.
+* **Only the site's root is replaced.** The event is triggered for `/` (with any query, in any template type), not for `/content/<types>`, which stays the stream, nor for a page that draws the stream under an address of its own (the feed, the tag search).
+* **A listener that throws fails the page**, as a page that throws does: the 500 page, with the exception reported. A listener that answers something that is no `Response` is ignored.
+
+The bundled StaticPages plugin works this way: `IdnoPlugins\StaticPages\Pages\Homepage` (a subclass of the shell that hijacked the root) is gone, and `IdnoPlugins\StaticPages\HomepageReplacement` answers the event. A theme that styled the home page by the body class `idnoplugins_staticpages_pages_homepage` now finds `idno_pages_homepage` there, the class the stream's home page has.
+
 ## What the tests pin
 
-The shell and the controller are checked by `Tests/Unit/Http/Controller/HomePagesTest`, `Tests/Unit/Http/PageShellsTest`, `Tests/Kernel/PageShellTest` and `Tests/Characterisation/HomepageShellTest` (a subclass registered with `hijackRoute()` or `addRoute()`). The rules above are checked by `Tests/Kernel/UpgradingGuideTest` (the example, a PHP template drawn from Twig, a plugin's Twig file extending core's shell), `Tests/Kernel/BuiltInLookTest` (a theme's `.tpl.php` override beats core's Twig file, a theme extends the shell), `Tests/Unit/Templating/TemplateLocatorTest` (the order of the cascade) and `Tests/Unit/Templating/RawUsageTest` (`|raw` and `t_html()` in core).
+The shell and the controller are checked by `Tests/Unit/Http/Controller/HomePagesTest`, `Tests/Unit/Http/PageShellsTest`, `Tests/Kernel/PageShellTest`, `Tests/Kernel/StaticPagesHomepageReplacementTest` (the event, answered by StaticPages), `Tests/Characterisation/StaticPagesHomepageTest` and `Tests/Characterisation/HomepageShellTest` (a subclass registered with `hijackRoute()` or `addRoute()`). The rules above are checked by `Tests/Kernel/UpgradingGuideTest` (the example, a PHP template drawn from Twig, a plugin's Twig file extending core's shell), `Tests/Kernel/BuiltInLookTest` (a theme's `.tpl.php` override beats core's Twig file, a theme extends the shell), `Tests/Unit/Templating/TemplateLocatorTest` (the order of the cascade) and `Tests/Unit/Templating/RawUsageTest` (`|raw` and `t_html()` in core).

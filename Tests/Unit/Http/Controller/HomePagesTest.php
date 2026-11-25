@@ -16,6 +16,7 @@ use Idno\Templating\TemplateTranslation;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The home page's one implementation (`HomePages`), on doubles of the stream and of the drawing: what it asks the stream, what it draws
@@ -31,18 +32,21 @@ final class HomePagesTest extends TestCase
 
     private HomePages $pages;
 
+    private HomeEvents $events;
+
     protected function setUp(): void
     {
         $this->stream = new HomeStreamDouble();
         $this->drawer = new HomeDrawerDouble();
         $this->logger = new HomeLogger();
+        $this->events = new HomeEvents();
         $translation = new class implements TemplateTranslation {
             public function translate(string $text, array $subs = []): string
             {
                 return $text;
             }
         };
-        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), fn () => $this->logger);
+        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), fn () => $this->logger, fn () => $this->events);
     }
 
     private function context(string $uri = '/'): PageContext
@@ -56,6 +60,103 @@ final class HomePagesTest extends TestCase
         $item->updated = $updated;
 
         return $item;
+    }
+
+    public function testTheHomePageAsksForAReplacementFirstWithThePageAndTheRenderer(): void
+    {
+        $page = $this->context();
+
+        $this->pages->home($page);
+
+        $this->assertCount(1, $this->events->calls);
+        [$name, $data] = $this->events->calls[0];
+        $this->assertSame('homepage/replace', $name);
+        $this->assertSame(['page', 'renderer'], array_keys($data));
+        $this->assertSame($page, $data['page']);
+        $this->assertInstanceOf(PageRenderer::class, $data['renderer']);
+        $this->assertNotSame([], $this->drawer->pages, 'the stream is drawn when nobody replaces the home page');
+    }
+
+    public function testAReplacementResponseIsTheHomePage(): void
+    {
+        $this->events->answer = new Response('the replacement', 200, ['X-Replaced' => '1']);
+
+        $response = $this->pages->home($this->context());
+
+        $this->assertSame($this->events->answer, $response);
+        $this->assertSame([], $this->stream->calls, 'the stream is not asked for anything');
+        $this->assertSame([], $this->drawer->pages, 'and nothing of its own is drawn');
+    }
+
+    /**
+     * @return array<string, array{0: mixed}>
+     */
+    public static function nonsense(): array
+    {
+        return ['the default answer' => [true], 'false' => [false], 'null' => [null], 'a string' => ['<html>'], 'an array' => [[new Response('in a list')]], 'an object that is no response' => [new \stdClass()], 'a number' => [200]];
+    }
+
+    /**
+     * @dataProvider nonsense
+     */
+    public function testANonResponseAnswerIsIgnored(mixed $answer): void
+    {
+        $this->events->answer = $answer;
+        $this->stream->items = [self::item(1_700_000_000)];
+
+        $response = $this->pages->home($this->context());
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringStartsWith('page:', (string) $response->getContent(), 'the stream is drawn');
+        $this->assertNotSame([], $this->stream->calls);
+    }
+
+    public function testAListenerThatThrowsFailsThePageAsAFailingPageDoes(): void
+    {
+        $this->events->throw = new \RuntimeException('a plugin broke');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('a plugin broke');
+        $this->pages->home($this->context());
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: bool}>
+     */
+    public static function addresses(): array
+    {
+        return [
+            'the root' => ['/', true],
+            'the root with a query' => ['/?_t=json&q=x', true],
+            'a feed that draws the stream' => ['/feed.xml', false],
+            'a tag search that draws it' => ['/tag/books', false],
+            'a page of a plugin that extends the home page' => ['/third-party-home/', false],
+        ];
+    }
+
+    /**
+     * What is replaced is the site's root: a page that draws the home page's stream under an address of its own (the feed) is not the home page.
+     *
+     * @dataProvider addresses
+     */
+    public function testOnlyTheRootIsReplaced(string $address, bool $replaced): void
+    {
+        $this->events->answer = new Response('the replacement');
+
+        $response = $this->pages->home($this->context($address));
+
+        $this->assertSame($replaced, $response === $this->events->answer, $address);
+        $this->assertCount($replaced ? 1 : 0, $this->events->calls, $address);
+    }
+
+    public function testContentNeverAsksForAReplacement(): void
+    {
+        $this->events->answer = new Response('the replacement');
+
+        $response = $this->pages->content($this->context('/content/note'), 'note');
+
+        $this->assertSame([], $this->events->calls);
+        $this->assertStringStartsWith('page:', (string) $response->getContent());
     }
 
     public function testAnEmptySiteRedirectsToBegin(): void
@@ -365,5 +466,25 @@ final class HomeLogger extends AbstractLogger
     public function log($level, string|\Stringable $message, array $context = []): void
     {
         $this->lines[] = [(string) $level, (string) $message];
+    }
+}
+
+final class HomeEvents implements \Idno\Queue\EventTrigger
+{
+    /** @var list<array{0: string, 1: array<mixed>}> */
+    public array $calls = [];
+
+    public mixed $answer = true;
+
+    public ?\Throwable $throw = null;
+
+    public function trigger(string $event, array $data): mixed
+    {
+        $this->calls[] = [$event, $data];
+        if ($this->throw !== null) {
+            throw $this->throw;
+        }
+
+        return $this->answer;
     }
 }

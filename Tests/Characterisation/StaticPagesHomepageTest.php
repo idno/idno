@@ -7,7 +7,7 @@ namespace Tests\Characterisation;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
- * A static page set as the home page (StaticPages hijacks the routes `` and `/` for its own page class), over HTTP, on a
+ * A static page set as the home page (StaticPages answers the home page's replacement event, `homepage/replace`), over HTTP, on a
  * site of the test's own: `/` shows the page, `/content/default/` is still the stream, and clearing the setting
  * brings the stream back. Each assertion is what the site does today.
  */
@@ -88,14 +88,16 @@ final class StaticPagesHomepageTest extends PrivateSiteTestCase
         $this->setAsHomepage();
 
         // A webmention whose source is a public address cannot be accepted over HTTP in a test (the source is fetched, and a loopback source is refused),
-        // so what is pinned is the route: the page the router finds for the site's root is the static home page's class, and the method that
-        // handles a mention of it is the stream's home page's own (which hands a root mention on a single-user site to the administrator's profile page).
+        // so what is pinned is the route: the page the router finds for the site's root is the home page's own, whose webmention handler
+        // (which hands a root mention on a single-user site to the administrator's profile page) is the one a site with no static home page has.
+        // (The plugin once served the root with a page class of its own that inherited the handler; the root is the home page's now.)
         $result = $this->runInSite(
-            '$page = \Idno\Core\Idno::site()->routes()->getRoute(\Idno\Core\Idno::site()->config()->getURL());'
+            // (a script's routes are under its own directory, which is the site's subdirectory there)
+            '$page = \Idno\Core\Idno::site()->routes()->getRoute(rtrim(dirname($_SERVER["SCRIPT_NAME"]), "/") . "/");'
             . 'return [get_class($page), (new \ReflectionMethod($page, \'webmentionContent\'))->getDeclaringClass()->getName()];'
         );
 
-        $this->assertSame(['IdnoPlugins\StaticPages\Pages\Homepage', 'Idno\Pages\Homepage'], $result);
+        $this->assertSame(['Idno\Pages\Homepage', 'Idno\Pages\Homepage'], $result);
     }
 
     public function testARootWebmentionWithASourceThatIsNotPublicIsRefusedWithTheSelfMentionMessage(): void
@@ -106,5 +108,66 @@ final class StaticPagesHomepageTest extends PrivateSiteTestCase
 
         $this->assertSame(400, $response->status);
         $this->assertSame('{"error":"target_not_supported","error_text":"A page can\'t webmention itself."}', $response->body);
+    }
+
+    public function testASiteWithAStaticHomePageLogsNoDeprecation(): void
+    {
+        $this->setAsHomepage();
+
+        $this->assertSame(200, $this->site()->request('GET', '/')->status);
+        $this->assertSame(200, $this->site()->request('GET', '/content/default/')->status);
+
+        $this->assertStringNotContainsString('Deprecated', $this->serverLog());
+    }
+
+    public function testTheMarkdownFormOfTheHomePageIsTheStaticPagesOwn(): void
+    {
+        $this->setAsHomepage();
+
+        $page = $this->site()->request('GET', '/?_t=md');
+
+        $this->assertSame(200, $page->status);
+        $this->assertStringStartsWith('text/markdown', (string) $page->header('Content-Type'));
+        $this->assertStringContainsString('title: "About this fixture"', $page->body);
+        $this->assertStringContainsString('Static fixture body', $page->body);
+        $this->assertStringNotContainsString('a note in the stream', $page->body);
+    }
+
+    public function testAHomePageThatForwardsSendsAVisitorOnAndLetsAnAdministratorIn(): void
+    {
+        $forwarding = (string) $this->runInSite(
+            '$admin = \Idno\Entities\User::getByHandle(\'ada\');'
+            . '$page = new \IdnoPlugins\StaticPages\StaticPage(); $page->setOwner($admin); $page->setTitle(\'Forwarding fixture\'); $page->body = \'<p>Forwarding body</p>\'; $page->forward_url = \'http://example.test/away\'; $page->setAccess(\'PUBLIC\'); $page->save(true);'
+            . 'return $page->getID();'
+        );
+        $this->pageId = $forwarding;
+        $this->setAsHomepage();
+
+        $visitor = $this->site()->request('GET', '/');
+        $this->assertSame(302, $visitor->status);
+        $this->assertSame('http://example.test/away', $visitor->header('Location'));
+
+        $admin = $this->site()->request('GET', '/', ['Cookie' => $this->loginCookie('ada', 'correct-horse-battery-9')]);
+        $this->assertSame(200, $admin->status);
+        $this->assertStringContainsString('Forwarding body', $admin->body);
+    }
+
+    public function testAHomePageThatIsGoneIsUnsetWhenAnAdministratorAsksAndTheStreamReturns(): void
+    {
+        $this->setAsHomepage();
+        $this->runInSite('\IdnoPlugins\StaticPages\StaticPage::getByID(' . $this->literal($this->pageId) . ')->delete(); return 1;');
+
+        // a visitor is sent to the root again and the setting stays (it is the administrator's to change)
+        $visitor = $this->site()->request('GET', '/');
+        $this->assertSame(302, $visitor->status);
+        $this->assertSame('/', $visitor->header('Location'));
+
+        $admin = $this->site()->request('GET', '/', ['Cookie' => $this->loginCookie('ada', 'correct-horse-battery-9')]);
+        $this->assertSame(302, $admin->status);
+        $this->assertSame('/', $admin->header('Location'));
+
+        $after = $this->site()->request('GET', '/');
+        $this->assertSame(200, $after->status);
+        $this->assertStringContainsString('a note in the stream', $after->body);
     }
 }

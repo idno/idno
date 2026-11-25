@@ -6,6 +6,7 @@ namespace Idno\Http\Controller\Home;
 
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRenderer;
+use Idno\Queue\EventTrigger;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,21 +22,38 @@ final class HomePages
     /**
      * @param \Closure(): LoggerInterface $logger the site's logger, fetched when something is logged: it needs the legacy application, which a
      *                                          kernel that did not boot it does not have
+     * @param \Closure(): EventTrigger $events the site's events, fetched when the home page asks for a replacement (the same reason)
      */
     public function __construct(
         private readonly HomeStream $stream,
         private readonly PageRenderer $renderer,
         #[AutowireServiceClosure(LoggerInterface::class)]
         private readonly \Closure $logger,
+        #[AutowireServiceClosure(EventTrigger::class)]
+        private readonly \Closure $events,
     )
     {
     }
 
     /**
      * The home page of a request that names no content type in its path.
+     *
+     * A plugin may replace the site's root (not the pages that draw the stream under an address of their own, such as the feed): the event `homepage/replace` is triggered first, with `page` (the `PageContext`) and `renderer` (the
+     * `PageRenderer`), and a listener that sets a `Symfony\Component\HttpFoundation\Response` as the event's response (`$event->setResponse()`)
+     * gives the home page. Anything else a listener answers (the event's default `true`, `false`, a string, an array, any object that is no
+     * `Response`) is ignored and the stream is drawn. A listener that throws fails the page as a page that throws does (the 500 page, the
+     * exception reported); this does not catch it. The streams under `/content/` are never replaced: they are how the stream stays
+     * reachable when the home page is something else.
      */
     public function home(PageContext $page): Response
     {
+        if (trim($page->request()->getPathInfo(), '/') === '') {
+            $replacement = ($this->events)()->trigger('homepage/replace', ['page' => $page, 'renderer' => $this->renderer]);
+            if ($replacement instanceof Response) {
+                return $replacement;
+            }
+        }
+
         return $this->serve($page, null);
     }
 

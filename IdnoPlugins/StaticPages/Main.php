@@ -38,15 +38,25 @@ namespace IdnoPlugins\StaticPages {
 
             \Idno\Core\Idno::site()->routes()->addRoute('/pages/([^/.]+)/?', 'IdnoPlugins\StaticPages\Pages\View');
 
-            // This makes sure that the homepage is accessible even when it is overridden.
-            \Idno\Core\Idno::site()->routes()->addRoute('/content/default/?', 'Idno\Pages\Homepage');
-
-            if (!empty($this->getCurrentHomepageId())) {
-                \Idno\Core\Idno::site()->routes()->hijackRoute('', 'IdnoPlugins\StaticPages\Pages\Homepage');
-                \Idno\Core\Idno::site()->routes()->hijackRoute('/', 'IdnoPlugins\StaticPages\Pages\Homepage');
-            }
-
             \Idno\Core\Idno::site()->template()->extendTemplate('admin/menu/items', 'staticpages/admin/menu');
+        }
+
+        /**
+         * A static page set as the home page replaces the stream at the site's root, through the home page's replacement event
+         * (`homepage/replace`: see HomepageReplacement). The streams under `/content/` stay the stream.
+         */
+        function registerEventHooks()
+        {
+            \Idno\Core\Idno::site()->events()->addListener('homepage/replace', function (\Idno\Core\Event $event) {
+                $data = $event->data();
+                if (empty($data['page']) || empty($data['renderer'])) {
+                    return;
+                }
+                $response = (new HomepageReplacement($this))->respond($data['page'], $data['renderer']);
+                if ($response !== null) {
+                    $event->setResponse($response);
+                }
+            });
         }
 
         /**
