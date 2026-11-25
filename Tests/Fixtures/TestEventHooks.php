@@ -26,6 +26,29 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/' . $directory . 'draw-legacy/?', $page);
             }
         });
+        // With IDNO_TEST_CLAIM_ROUTES the pages of the routing tests (RouteOverrideTest), registered on `plugins/loaded`, the first event the boot
+        // fires after every plugin's registerPages() (a plugin registers its pages when it is built), as a plugin's page is:
+        //   replaced  the shell ReplacedPage on the path a controller serves, which the controller shadows
+        //   1         the shell, then a plugin's hijackRoute() of the same pattern for ClaimingPage
+        //   identical the shell, then a plugin's addRoute() of the identical pattern for ClaimingPage
+        //   subclass  the shell, then a plugin's hijackRoute() of the same pattern for a subclass of the shell
+        //   plugin    a plugin's addRoute() for a path no shell was ever registered for
+        $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
+        if (is_string($claim) && $claim !== '') {
+            $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
+                $routes = Idno::site()->routes();
+                if (in_array($claim, ['replaced', '1', 'identical', 'subclass'], true)) {
+                    $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
+                }
+                match ($claim) {
+                    '1' => $routes->hijackRoute('/_test/claimable/?', ClaimingPage::class),
+                    'identical' => $routes->addRoute('/_test/claimable/?', ClaimingPage::class),
+                    'subclass' => $routes->hijackRoute('/_test/claimable/?', SubclassedPage::class),
+                    'plugin' => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
+                    default => null,
+                };
+            });
+        }
         // With IDNO_TEST_DRAW_HEADERS=1 a directory of templates that send headers while a page is drawn: an extension of `shell/headers`
         // and a third-party `json` shell (SitePageDrawingHeadersTest). Inert otherwise.
         if (getenv('IDNO_TEST_DRAW_HEADERS') === '1') {

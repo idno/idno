@@ -243,6 +243,32 @@ final class SitePageFixtureController
         throw $exception;
     }
 
+    /**
+     * Routing fixtures (IDNO_TEST_CLAIM_ROUTES, TestEventHooks): `claimable` is the path of a shell (ReplacedPage, which the legacy router
+     * still registers: `replaces` names it) and `unclaimed` one with no shell. A page another class has been registered for (a plugin's
+     * `addRoute()` or `hijackRoute()`) is served by the legacy router, the controller's route notwithstanding.
+     */
+    #[Route('/{lead}_test/claimable{slash}', name: 'idno_test_claimable', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class])]
+    public function claimable(): Response
+    {
+        return new Response('controller');
+    }
+
+    #[Route('/{lead}_test/unclaimed{slash}', name: 'idno_test_unclaimed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\UnclaimedPage')]
+    public function unclaimed(): Response
+    {
+        return new Response('controller');
+    }
+
+    /** A route whose last parameter may hold any byte: it is not UTF-8 only (`utf8: false`), as the legacy router took any path. */
+    #[Route('/{lead}_test/site-page/bytes/{rest}{slash}', name: 'idno_test_site_page_bytes', requirements: ['lead' => '/?', 'slash' => '/?', 'rest' => '[^/]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
+    public function bytes(Request $request): JsonResponse
+    {
+        return new JsonResponse(['rest' => bin2hex((string) $request->attributes->get('rest'))]);
+    }
+
     private function describe(Request $request): JsonResponse
     {
         $data = ['site_page' => false];

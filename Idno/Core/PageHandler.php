@@ -151,6 +151,57 @@ namespace Idno\Core {
         }
 
         /**
+         * The path Toro::serve() routes, from the three server values it reads, in its order: PATH_INFO, else ORIG_PATH_INFO unless it is
+         * `/index.php`, else REQUEST_URI up to the first `?` after its first byte; `/` when none has a value.
+         *
+         * @param mixed $pathInfo
+         * @param mixed $origPathInfo
+         * @param mixed $requestUri
+         * @return mixed the path (a string for any server value a SAPI gives)
+         */
+        private static function pathFrom($pathInfo, $origPathInfo, $requestUri)
+        {
+            $path = '/';
+            if (!empty($pathInfo)) {
+                $path = $pathInfo;
+            } else if (!empty($origPathInfo) && $origPathInfo !== '/index.php') {
+                $path = $origPathInfo;
+            } else if (!empty($requestUri)) {
+                $path = (strpos($requestUri, '?') > 0) ? strstr($requestUri, '?', true) : $requestUri;
+            }
+
+            return $path;
+        }
+
+        /**
+         * The path the legacy router routes for a request, read from the request's server bag as Toro::serve() reads the
+         * superglobals: the path as the server gave it (percent-encoded, with the site's subdirectory and any doubled slash),
+         * which is what the registered patterns are matched against.
+         */
+        public static function toroPath(\Symfony\Component\HttpFoundation\Request $request): string
+        {
+            return (string) static::pathFrom(
+                $request->server->get('PATH_INFO'),
+                $request->server->get('ORIG_PATH_INFO'),
+                $request->server->get('REQUEST_URI')
+            );
+        }
+
+        /**
+         * The page class the legacy router serves a path with: the handler `handlerFor()` finds, as a class name without a leading
+         * backslash, or null when no route matches (or the handler is not a class name).
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return string|null
+         */
+        public static function chosenFor($routes, string $path): ?string
+        {
+            $handler = static::handlerFor($routes, $path);
+
+            return is_string($handler) && $handler !== '' ? ltrim($handler, '\\') : null;
+        }
+
+        /**
          * A GET or HEAD request for `<permalink>.md` is routed as a request for `<permalink>`, and remembered as one that
          * asked for Markdown, when the path as given matches no route and the path without the suffix is served by a page
          * that has a Markdown form (a \Idno\Common\MarkdownPermalink). A path ending in `.md` that a permalink page's route
@@ -165,14 +216,7 @@ namespace Idno\Core {
             }
 
             // The path Toro::serve() will route
-            $path = '/';
-            if (!empty($_SERVER['PATH_INFO'])) {
-                $path = $_SERVER['PATH_INFO'];
-            } else if (!empty($_SERVER['ORIG_PATH_INFO']) && $_SERVER['ORIG_PATH_INFO'] !== '/index.php') {
-                $path = $_SERVER['ORIG_PATH_INFO'];
-            } else if (!empty($_SERVER['REQUEST_URI'])) {
-                $path = (strpos($_SERVER['REQUEST_URI'], '?') > 0) ? strstr($_SERVER['REQUEST_URI'], '?', true) : $_SERVER['REQUEST_URI'];
-            }
+            $path = static::pathFrom($_SERVER['PATH_INFO'] ?? null, $_SERVER['ORIG_PATH_INFO'] ?? null, $_SERVER['REQUEST_URI'] ?? null);
             if (!is_string($path)) {
                 return;
             }

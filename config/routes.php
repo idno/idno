@@ -6,8 +6,9 @@ use Symfony\Component\Config\Resource\FileExistenceResource;
 use Symfony\Component\Routing\RouteCollection;
 
 /**
- * Attribute routes from Idno/Upgrade (the upgrade step, Idno\Upgrade\UpgradeController) and
- * Idno/Legacy (the legacy catch-all, Idno\Legacy\LegacyController).
+ * Attribute routes from Idno/Upgrade (the upgrade step, Idno\Upgrade\UpgradeController),
+ * Idno/Legacy (the legacy catch-all, Idno\Legacy\LegacyController) and Idno/Http/Controller (the
+ * controllers of site pages: a directory that does not exist yet is skipped, and noticed when it is created).
  *
  * $loader is the Symfony PhpFileLoader that includes this file. The collection is built by
  * hand so it can record a FileExistenceResource per directory: if a directory is created or
@@ -16,7 +17,7 @@ use Symfony\Component\Routing\RouteCollection;
  * @var \Symfony\Component\Routing\Loader\PhpFileLoader $loader
  */
 $collection = new RouteCollection();
-foreach ([dirname(__DIR__) . '/Idno/Upgrade', dirname(__DIR__) . '/Idno/Legacy'] as $dir) {
+foreach ([dirname(__DIR__) . '/Idno/Upgrade', dirname(__DIR__) . '/Idno/Legacy', dirname(__DIR__) . '/Idno/Http/Controller'] as $dir) {
     $collection->addResource(new FileExistenceResource($dir));
     if (is_dir($dir)) {
         $collection->addCollection($loader->import($dir, 'attribute'));

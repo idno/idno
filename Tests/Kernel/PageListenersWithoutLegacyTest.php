@@ -71,6 +71,32 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
+    /**
+     * (That the override does not even fetch the legacy router's table in such a kernel is `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`,
+     * on a counting closure: the container builds the dispatcher anyway, as a listener of another event refers to it, so this test cannot see it.)
+     */
+    public function testTheRouteOverrideLeavesEveryRouteAloneWithoutTheLegacyApplication(): void
+    {
+        $kernel = $this->kernel();
+        $handler = self::errorHandler();
+
+        // a path a legacy page could have been registered for, a path that is not a site page's, the upgrade step, and a path the catch-all serves
+        $claimable = $kernel->handle(Request::create('/_test/claimable'));
+        $unclaimed = $kernel->handle(Request::create('/_test/unclaimed/'));
+        $doubled = $kernel->handle(new Request([], [], [], [], [], ['REQUEST_URI' => '//_test/unclaimed', 'REQUEST_METHOD' => 'GET', 'HTTP_HOST' => 'localhost']));
+        $ping = $kernel->handle(Request::create('/_test/ping'));
+        $step = $kernel->handle(Request::create('/_upgrade/step', 'POST'));
+
+        $this->assertFalse($kernel->legacyBooted());
+        $this->assertSame('controller', $claimable->getContent(), 'the controller\'s route stands: there is no legacy router to prefer');
+        $this->assertSame('controller', $unclaimed->getContent());
+        $this->assertSame('controller', $doubled->getContent());
+        $this->assertSame(200, $ping->getStatusCode());
+        $this->assertSame(200, $step->getStatusCode());
+        $this->assertSame($handler, self::errorHandler(), 'no PHP error handler was installed');
+        $kernel->shutdown();
+    }
+
     public function testTheUpgradeStepIsUntouched(): void
     {
         $kernel = $this->kernel();
