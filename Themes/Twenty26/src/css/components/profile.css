@@ -28,6 +28,15 @@
     color: var(--color-text-strong);
   }
 
+  /* The profile's buttons, centred on each other: a button with an icon and one
+     without do not share a text baseline */
+  .idno-profile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   .idno-profile-handle {
     font-size: var(--font-size-sm);
     color: var(--color-text-muted);

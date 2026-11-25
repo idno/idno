@@ -16,9 +16,8 @@ $user = $vars['user'];
                     <?= htmlentities(strip_tags($user->getTitle()), ENT_QUOTES, 'UTF-8') ?>
                 </a>
             </h1>
-            <?php /* One row for the profile's buttons, centred on each other: a button with an icon
-                     and one without do not share a baseline */ ?>
-            <div class="idno-profile-actions" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.5rem">
+            <?php /* One row for the profile's buttons ("Edit profile" and what plugins add) */ ?>
+            <div class="idno-profile-actions">
                 <?php if ($user->canEdit() && $user->getUUID() == \Idno\Core\Idno::site()->session()->currentUserUUID()) { ?>
                     <a href="<?= $user->getEditURL() ?>" class="idno-btn idno-btn-ghost idno-btn-sm">
                         <?= \Idno\Core\Idno::site()->language()->_('Edit profile') ?>

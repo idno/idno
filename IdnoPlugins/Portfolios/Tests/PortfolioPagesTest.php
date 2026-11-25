@@ -458,7 +458,12 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertTrue((bool) preg_match('#<div class="idno-profile-actions"[^>]*>(.*?)</div>#s', $body, $row), 'The profile has a row of buttons.');
             $this->assertMatchesRegularExpression($this->attribute('href', static::$alice->getEditURL()), $row[1], '"Edit profile" is in the row.');
             $this->assertStringContainsString('data-portfolios-button', $row[1], '"Portfolios" is in the same row.');
-            $this->assertStringContainsString('align-items:center', $row[0]);
+            $this->assertStringNotContainsString('style=', $row[0], 'The row is styled by the theme, not inline.');
+            $this->assertMatchesRegularExpression(
+                '/\.idno-profile-actions\{[^}]*align-items:center/',
+                (string) file_get_contents(Idno::site()->config()->path . '/Themes/Twenty26/dist/modern.min.css'),
+                'The built theme centres the buttons of the row on each other.'
+            );
         }
 
         /**
