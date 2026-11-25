@@ -113,6 +113,17 @@ namespace IdnoPlugins\Video\Tests {
             $this->assertStringContainsString('YouTube', $result['body'], 'The form should name the services that can be used.');
         }
 
+        public function testVideoSettingsAreForAdministratorsOnly()
+        {
+            $anonymous = Webservice::get(Idno::site()->config()->getURL() . 'admin/video/');
+            $this->assertNotEquals(200, $anonymous['response']);
+
+            $this->logIn();
+            $member = $this->request('GET', 'admin/video/');
+            $this->assertNotEquals(200, $member['status'], 'A member is not an administrator.');
+            $this->assertStringNotContainsString('video_blocked_hosts', $member['body']);
+        }
+
         public function testPostingAVideoAndEditingIt()
         {
             $this->logIn();

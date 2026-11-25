@@ -16,10 +16,67 @@ namespace IdnoPlugins\Video {
      * - video_provider, video_id, video_start, video_key, video_portrait: what VideoUrl
      *   made of that address. The player is built from these, after VideoUrl has checked
      *   them again (see getVideo()).
+     * - video_host: for a video on an open service (PeerTube, Loops), the host it is on.
+     *   The host was asked when the post was saved (OpenVideo); it is not asked again.
      * - title, body (the description, HTML) and tags.
      */
     class Video extends \Idno\Common\Entity
     {
+
+        /// The title the video's own host gave when the address was set, if any
+        private $titleFromHost = '';
+
+        /// Why the last address given to setVideoAddress() was refused, in words for the member
+        private $refusal = '';
+
+        /**
+         * Whether videos on open services (PeerTube, Loops), which run on any host, may be
+         * posted and played. A site's admin can turn this off; it is on unless they have.
+         *
+         * @return bool
+         */
+        static function openServicesAllowed(): bool
+        {
+            $setting = \Idno\Core\Idno::site()->config()->video_open_services;
+
+            return !($setting === false || $setting === 0 || $setting === '0' || $setting === 'false');
+        }
+
+        /**
+         * Whether the site's admin has blocked a host (or the domain it is under).
+         *
+         * @param  string $host
+         * @return bool
+         */
+        static function isBlockedHost(string $host): bool
+        {
+            $blocked = \Idno\Core\Idno::site()->config()->video_blocked_hosts;
+            if (empty($blocked) || !is_array($blocked)) {
+                return false;
+            }
+            $host = strtolower($host);
+            foreach ($blocked as $entry) {
+                if (!is_string($entry) || $entry === '') {
+                    continue;
+                }
+                $entry = strtolower($entry);
+                if ($host === $entry || substr($host, -strlen($entry) - 1) === '.' . $entry) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * The names of the services a member can post a video from, as the site is set up.
+         *
+         * @return string[]
+         */
+        static function serviceNames(): array
+        {
+            return VideoUrl::supportedServices(self::openServicesAllowed());
+        }
 
         /**
          * The title the member gave or, without one, the kind of video this is.
@@ -64,7 +121,14 @@ namespace IdnoPlugins\Video {
                 return null;
             }
 
-            return VideoUrl::fromStored($this->video_provider, $this->video_id, $this->video_start, $this->video_key, $this->video_portrait);
+            $video = VideoUrl::fromStored($this->video_provider, $this->video_id, $this->video_start, $this->video_key, $this->video_portrait, $this->video_host);
+
+            // A host that anybody can run is framed only while the site's admin allows it
+            if ($video && $video->isOpen() && (!self::openServicesAllowed() || self::isBlockedHost($video->getHost()))) {
+                return null;
+            }
+
+            return $video;
         }
 
         /**
@@ -79,14 +143,37 @@ namespace IdnoPlugins\Video {
 
         /**
          * Set the video from its address on a supported service. Nothing is changed when
-         * the address is not recognised.
+         * the address is not recognised. For an address that has the form of one on an
+         * open service (PeerTube, Loops), the host is asked whether it has the video; that
+         * is the only case in which a request is made.
          *
          * @param  mixed $address
          * @return bool Whether the address was recognised
          */
         function setVideoAddress($address): bool
         {
+            $this->refusal = '';
+            $this->titleFromHost = '';
+
+            // The address this post already has: nothing to work out, and nothing to ask
+            if (is_string($address) && trim($address) !== '' && trim($address) === $this->video_url && $this->getVideo()) {
+                return true;
+            }
+
             $video = VideoUrl::parse($address);
+
+            if (!$video && self::openServicesAllowed() && ($candidate = VideoUrl::candidate($address))) {
+                // The address has the form of one on PeerTube or Loops: ask the host
+                if (!self::isBlockedHost($candidate['host']) && ($found = OpenVideo::resolve($candidate))) {
+                    $video = $found['video'];
+                    $this->titleFromHost = $found['title'];
+                } else {
+                    $this->refusal = \Idno\Core\Idno::site()->language()->_(
+                        'We couldn\'t find that video on %s. Check the address, or try again in a moment.',
+                        [$candidate['host']]
+                    );
+                }
+            }
             if (!$video) {
                 return false;
             }
@@ -98,6 +185,7 @@ namespace IdnoPlugins\Video {
             $this->video_start    = $video->getStart();
             $this->video_key      = $video->getKey();
             $this->video_portrait = $video->isPortrait();
+            $this->video_host     = $video->getHost();
 
             return true;
         }
@@ -163,9 +251,9 @@ namespace IdnoPlugins\Video {
 
             if (!$this->setVideoAddress($page->getInput('video'))) {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(
-                    \Idno\Core\Idno::site()->language()->_(
+                    $this->refusal ?: \Idno\Core\Idno::site()->language()->_(
                         'That doesn\'t look like the address of a video we can show. Paste the address of a video on one of: %s.',
-                        [implode(', ', VideoUrl::supportedServices())]
+                        [implode(', ', self::serviceNames())]
                     )
                 );
 
@@ -173,6 +261,10 @@ namespace IdnoPlugins\Video {
             }
 
             $this->title = trim(strip_tags((string) $page->getInput('title')));
+            if ($this->title === '' && empty($this->_id)) {
+                // A new post with no title takes the one its host has for the video
+                $this->title = trim(strip_tags($this->titleFromHost));
+            }
             $this->body  = $t->sanitize_html((string) $page->getInput('body'));
             $this->tags  = $page->getInput('tags');
             $this->setAccess($page->getInput('access'));

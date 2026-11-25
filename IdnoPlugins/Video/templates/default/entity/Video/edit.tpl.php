@@ -37,7 +37,7 @@ if ($address === '' && !empty($vars['url']) && is_string($vars['url'])) {
                     'required' => true
                 ])->draw('forms/input/url'); ?>
                 <p class="help-block">
-                    <?php echo htmlspecialchars($lang->_('Paste the address of a video on one of: %s.', [implode(', ', \IdnoPlugins\Video\VideoUrl::supportedServices())])); ?>
+                    <?php echo htmlspecialchars($lang->_('Paste the address of a video on one of: %s.', [implode(', ', \IdnoPlugins\Video\Video::serviceNames())])); ?>
                 </p>
 
                 <label for="title"><?php echo $lang->_('Title'); ?></label>

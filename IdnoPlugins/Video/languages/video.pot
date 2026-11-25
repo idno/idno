@@ -73,3 +73,39 @@ msgstr ""
 #: ./templates/default/entity/Video/edit.tpl.php
 msgid "Description"
 msgstr ""
+
+#: ./Video.php
+msgid "We couldn't find that video on %s. Check the address, or try again in a moment."
+msgstr ""
+
+#: ./Pages/Admin.php
+msgid "Your video settings were saved."
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "Members can post videos from %s."
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "PeerTube and Loops are different: anybody can run one, on any address. When a member posts a video from one, this site asks that address whether it has the video, and shows its player in a restricted frame that cannot take visitors away from your site."
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "Allow videos from PeerTube and Loops sites"
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "Sites to block"
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "One address to a line. Videos from these sites, and from sites under them, can't be posted, and ones already posted are shown as a link only."
+msgstr ""
+
+#: ./templates/modern/video/admin.tpl.php
+msgid "The open social web"
+msgstr ""
+
+#: ./templates/default/video/admin.tpl.php
+msgid "Save"
+msgstr ""

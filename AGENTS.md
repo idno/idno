@@ -118,7 +118,7 @@ Tests/                         Core unit tests
 | **Text** | Long-form articles | `Article` | `/entry/edit` |
 | **Photo** | Photos with captions | `Note` + attachment | `/photo/edit` |
 | **Media** | Audio/video uploads | `Note` + attachment | `/media/edit` |
-| **Video** | A video on a video sharing service, by its address | `Note` + link | `/video/edit` |
+| **Video** | A video on a video sharing service or a PeerTube or Loops site, by its address | `Note` + link | `/video/edit`, `/admin/video` |
 | **Event** | Calendar events & RSVPs | `Event` | `/event/edit`, `/rsvp/edit` |
 | **Checkin** | Location check-ins | `Note` + location | `/checkin/edit` |
 | **Like** | Bookmarks / likes | `Note` | `/like/edit` |
@@ -482,8 +482,8 @@ Each content plugin has an `Entry.php` entity class that defines
   again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
   which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
   `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
-- Video posts (`IdnoPlugins/Video`): a member gives the address of a video on YouTube, Vimeo,
-  Dailymotion or TikTok. `VideoUrl::parse()` reads the provider and the id of the video out
+- Video posts (`IdnoPlugins/Video`): a member gives the address of a video. For YouTube, Vimeo,
+  Dailymotion and TikTok, `VideoUrl::parse()` reads the provider and the id of the video out
   of the address and makes no request to anything (so there is nothing to protect from
   SSRF); an address it does not recognise is refused when the post is saved. It accepts
   https only, a host from `VideoUrl::HOSTS` exactly (no userinfo, no port), and an id that
@@ -494,12 +494,30 @@ Each content plugin has an `Entry.php` entity class that defines
   (`Video::getVideo()` calls `VideoUrl::fromStored()`), and a record that fails gets no
   player, only the link. The link to the video is printed only if
   `UrlValidator::httpUrl()` accepts the stored address. Feeds, JSON and ActivityPub get the
-  link and the description, never the frame. Don't add a service whose player can be on
-  any host (PeerTube) without a list of hosts the site's admin has chosen, and don't fetch
-  anything (oEmbed, a thumbnail, a title) from an address a member gave except through
-  `Webservice::safeSend()`. `video_source` is `link` for these posts; a later version that
+  link and the description, never the frame. `video_source` is `link` for these posts; a later version that
   keeps video files on the site is to store another value and attach the file, so that
   stored posts need no change. `IdnoPlugins/Video/Tests/` checks all of this.
+- Videos on open services (PeerTube, Loops; `VideoUrl::OPEN_PROVIDERS`): these run on any
+  host, so `VideoUrl::parse()` never accepts one from its address alone.
+  `VideoUrl::candidate()` reads what the address would mean (the host must match
+  `VideoUrl::HOST_PATTERN`: a domain name, never an address literal, a port or userinfo),
+  and `OpenVideo::resolve()` asks the host, with `Webservice::safeSend()` and https only:
+  PeerTube for `/api/v1/videos/<id>` (the answer must be about that video), Loops for its
+  NodeInfo (which must be on the same host and name the software `loops`). This happens
+  when a post is saved, never when one is drawn, and not again when a post is edited
+  without changing its address. The answer proves only that the host answered as the
+  software does, which any server can do, so it is not what makes the player safe: the
+  frame has `sandbox="allow-scripts allow-same-origin allow-presentation"`
+  (`VideoUrl::OPEN_SANDBOX`: no navigating the page, no windows, no forms) and
+  `referrerpolicy="no-referrer"`, and its caption names the host. Don't add a token to
+  that sandbox, and don't draw a player for an open service without it. The site's admin
+  can turn open services off (`video_open_services`) or block hosts
+  (`video_blocked_hosts`) at `/admin/video`; `Video::getVideo()` applies both whenever a
+  post is drawn, so they take effect on posts already made. Text taken from the host (the
+  title) is stored as plain text and escaped where it is printed. A new open service goes
+  in `OPEN_PROVIDERS` with a check in `OpenVideo`; don't fetch anything else (oEmbed, a
+  thumbnail) from an address a member gave except through `Webservice::safeSend()`.
+  `IdnoPlugins/Video/Tests/OpenVideo*Test.php` check this.
 - A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
   for example; `/content/<category>/` for the whole site). The profile itself lists
   everything the member has published, as `/profile/<handle>/all` does.
