@@ -109,8 +109,9 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
     }
 
     /**
-     * The pages of the whole stream for a visitor, the administrator and a member, without a search and for a hashtag, at three offsets: the pinned
-     * results of the same matrix (`n1` to `n6` the six public notes, oldest first; the article, the bookmark and the two private notes by name). A draft is
+     * The pages of the whole stream for a visitor, the administrator and a member, without a search and with one that matches nothing, at three
+     * offsets: the pinned results of the same matrix (what a search matches is the database's: MySQL's full-text index and SQLite's substring search
+     * differ, and the storage contract pins each) (`n1` to `n6` the six public notes, oldest first; the article, the bookmark and the two private notes by name). A draft is
      * listed to nobody; the counts are of the published posts each may read.
      */
     public function testThePagesOfTheStreamForEachViewerAreThePinnedOnes(): void
@@ -132,7 +133,7 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         $out = [];
         foreach ([null, 'ada', 'bob'] as $viewer) {
             $viewAs($viewer);
-            foreach ([null, '#garden', 'nothing-matches-this'] as $query) {
+            foreach ([null, 'nothing-matches-this'] as $query) {
                 foreach ([0, 3, 100] as $offset) {
                     $page = $stream->page($all, $query, $offset);
                     $out[($viewer ?? 'visitor') . ' ' . json_encode($query) . ' ' . $offset] = [$page['count'], array_map($key, $page['items'])];
@@ -144,13 +145,11 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         PHP);
 
         $public = ['bookmark', 'article', 'n6', 'n5', 'n4', 'n3', 'n2', 'n1'];
-        $tagged = ['n6', 'n5', 'n4', 'n3', 'n2', 'n1'];
         $streams = ['visitor' => $public, 'ada' => ['bob-private', 'ada-private', ...$public], 'bob' => ['bob-private', ...$public]];
         $expected = [];
         foreach ($streams as $viewer => $items) {
             foreach ([0, 3, 100] as $offset) {
                 $expected[$viewer . ' null ' . $offset] = [count($items), array_slice($items, $offset)];
-                $expected[$viewer . ' "#garden" ' . $offset] = [6, array_slice($tagged, $offset)];
                 $expected[$viewer . ' "nothing-matches-this" ' . $offset] = [0, []];
             }
         }

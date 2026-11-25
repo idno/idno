@@ -2026,7 +2026,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `PageContext::input()`. A new code path takes `HomeStream` by constructor injection; it is a legacy-backed service (it needs the legacy application) until the
   listing moves to `EntityRepository`. `Tests/Unit/Http/Controller/HomePagesTest` pins the flow on doubles; `Tests/Kernel/LegacyHomeStreamTest` pins what the stream gives on a
   seeded site with private posts and a draft (each friendly path with and without a search; the pages of each viewer, visitor, member and administrator, at three offsets,
-  with and without a hashtag; requested types with and without a search; drafts and private posts; titles; creatable types), and runs it on an empty site, a single-user
+  without a search and with one that matches nothing (what a search matches is the database's); requested types with and without a search; drafts and private posts; titles; creatable types), and runs it on an empty site, a single-user
   site and a single-user site with no administrator.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
