@@ -152,6 +152,15 @@ final class PageContextTest extends TestCase
         $this->assertTrue($context->replacesHeader('X-Unknown'));
     }
 
+    public function testDefaultHeadersAreKeptByName(): void
+    {
+        $context = $this->context(Request::create('/x'));
+        $context->addDefaultHeader('Content-Type', 'application/json');
+        $context->addDefaultHeader('Content-Type', 'text/plain');
+
+        $this->assertSame(['Content-Type' => 'text/plain'], $context->defaultHeaders());
+    }
+
     public function testSetCachingOwnsCaching(): void
     {
         $context = $this->context(Request::create('/x'));

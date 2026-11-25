@@ -21,6 +21,7 @@ final class SitePage
      * @param bool         $accountPage         A page under /account/ (closed to API requests)
      * @param bool         $settingsPage        A page under /account/ or /admin/ (holds stored secrets)
      * @param string|null  $defaultType         The template type the page is drawn in when the request names none
+     * @param list<string> $methods             The HTTP methods the page serves besides OPTIONS (always) and HEAD (with GET): a method it does not name is refused
      */
     public function __construct(
         public readonly string $name,
@@ -29,8 +30,30 @@ final class SitePage
         public readonly bool $accountPage = false,
         public readonly bool $settingsPage = false,
         public readonly ?string $defaultType = null,
+        public readonly array $methods = ['GET'],
     )
     {
+    }
+
+    /**
+     * The methods the page serves, upper case: the declared ones, HEAD where GET is, and OPTIONS.
+     *
+     * @return list<string>
+     */
+    public function allowedMethods(): array
+    {
+        $methods = array_map('strtoupper', $this->methods);
+        if (in_array('GET', $methods, true)) {
+            $methods[] = 'HEAD';
+        }
+        $methods[] = 'OPTIONS';
+
+        return array_values(array_unique($methods));
+    }
+
+    public function allows(string $method): bool
+    {
+        return in_array(strtoupper($method), $this->allowedMethods(), true);
     }
 
     /**

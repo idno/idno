@@ -927,31 +927,51 @@ test fixtures is routed to a controller through them yet:
   the home page did, and carries the home page's body class (`pageClassName()` is `Idno\Pages\Homepage`: the golden `not-found.html`).
   A test that listens for an event removes its listener (`Idno\Core\EventDispatcher::removeListener()`). Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
 - The page lifecycle of a controller (`Idno\Http\Page\PageLifecycle`, an interface; `Idno\Legacy\LegacyPageLifecycle` the adapter, aliased
-  and public in `config/services.php`): what a legacy page did around its handler, in the same order. `PageRequestListener`
-  (`#[AsEventListener]` on `kernel.controller` at priority 0, so before `IsGrantedAttributeListener` at 20; constructor: the kernel and
-  the lifecycle as a SERVICE CLOSURE) does nothing unless the request is the main one, `Kernel::legacyBooted()` and
+  and public in `config/services.php` so that a test can ask whether it was built): what a legacy page did around its handler, in the same
+  order. `PageRequestListener` (`#[AsEventListener]` on `kernel.controller` at priority 0, so before `IsGrantedAttributeListener` at 20;
+  constructor: the kernel and the lifecycle as a SERVICE CLOSURE) does nothing unless the request is the main one, `Kernel::legacyBooted()` and
   `SitePage::of($event->getController())` is not null: a plain controller, a sub-request, the legacy catch-all, `/_upgrade/step`, a `bootLegacy:
   false` kernel and a kernel with the schema gate closed never build the lifecycle and install no PHP error handler
-  (`Tests/Kernel/PageListenersWithoutLegacyTest`, `Tests/Unit/Http/Page/PageRequestListenerTest`). Then it builds the `PageContext`, attaches it
-  to the request and runs, in this order, the legacy one's: `begin()` (`Page::init()`: the `defaultType` of the attribute set as input `_t`
-  when the request names none, the template type from `_t` (`TypeChain::requested()`, requestable and existing types only), the current page
-  made a `ControllerPage`, `$_SERVER['HTTP_REFERER']` made non-empty, `Idno::embedded()`, `page/ready`; PHP's own `X-Powered-By` is removed
-  while headers are not sent, because the response adds the page's beside it); for OPTIONS the controller is replaced by one answering 204 with
-  `Access-Control-Allow-Methods: GET, POST, HEAD, OPTIONS, PUT, DELETE` and `Access-Control-Max-Age: 86400`, as `Page::options()` did,
-  and nothing more; otherwise `refusesApiRequest()` (an `accountPage` and `Session::isAPIRequest()`: the warning `API request to an account
-  page refused: <name>`, the template type from `Accept`, the session message `Account pages are not available to API requests.`), then
-  `mayView()` (`publicGatekeeper()`'s rule: a public site, or a logged-on visitor, or `publicOnPrivateSite`), either refusal an
-  `AccessDeniedHttpException` (no `page/head`, no `page/get`; the type of the refusal is the one `_t` chose, not `Accept`, as a legacy 403
-  was), then `enter()` (`autodetectTemplateType()`, `page/head` with `['page' => <the current page>]`, `page/get` with `['page_class' =>
-  <the attribute's name>, 'arguments' => <the context's>]`). HEAD runs as GET (Symfony matches it on the GET route and strips the body): it
-  fires `page/get` too, which a legacy HEAD did not. The page is an XHR page from `page/ready` on (a legacy one set its flag after it). On the
-  response (`kernel.response`, priority 0) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
-  `X-Clacks-Overhead`, `X-Idno-Build-Fingerprint`: none when `IDNO_UNIT_TEST` is defined, as `init()` sent none), then the context's headers (a
-  name replaces the controller's unless the page began it with `addHeader(..., $replace: false)`: `PageContext::replacesHeader()`; `Link` is
-  added), then, when `ownsCaching()`, the context's caching headers. `LegacyPageLifecycle::reportException()` is what a legacy `Page::exception()`
-  reported (one critical line `<message> [<file>:<line>]`, the `error.exception` statistic, `Logging::oopsAlert()`) and never throws; it draws
-  nothing. Pinned by `Tests/Characterisation/SitePageLifecycleTest` (over HTTP, on `Tests\Fixtures\SitePageFixtureController`: the routes
-  `/{lead}_test/site-page/{state,public,account}{slash}`, in the convention of a page's routes) and `Tests/Kernel/LegacyPageLifecycleTest`.
+  (`Tests/Kernel/PageListenersWithoutLegacyTest`, `Tests/Unit/Http/Page/PageRequestListenerTest`). In this order:
+  1. A method the page did not declare is refused (`MethodNotAllowedHttpException`, 405) before anything is begun or fired. A page serves GET (and
+     HEAD with it) and OPTIONS unless `#[SitePage(methods: [...])]` names more (`SitePage::allows()`); the route's `methods` must include
+     `OPTIONS` (Symfony would answer 405 where a legacy page answered 204) and the declared methods.
+  2. The `PageContext` is built and attached to the request, and `begin()` runs (`Page::init()`: the `defaultType` of the attribute set as
+     input `_t` when the request names none, the template type from `_t` (`TypeChain::requested()`, requestable and existing types only), the
+     current page made a `ControllerPage` whose XHR flag is still off, `$_SERVER['HTTP_REFERER']` made non-empty, `Idno::embedded()`, `page/ready`; PHP's own
+     `X-Powered-By` is removed while headers are not sent, because the response adds the page's beside it). Then, for an XHR request (any method but
+     OPTIONS, as the router's `<method>_xhr` handlers were), what the legacy router sent: `Content-Type: application/json` as a default only (the
+     page's own type wins, as the shell's replaced it), `Expires: Mon, 26 Jul 1997 05:00:00 GMT`, `Last-Modified` now, `Cache-Control: no-store,
+     no-cache, must-revalidate, post-check=0, pre-check=0` and `Pragma: no-cache` (the page owns its caching from here), replacing the
+     `Expires`, `Cache-Control` and `Pragma` PHP's session already holds. Symfony sorts the directives of `Cache-Control` and adds `private`.
+  3. `refusesApiRequest()` (an `accountPage`, or a page the router registered as one, and `Session::isAPIRequest()`: the warning `API request
+     to an account page refused: <name>` and the template type from `Accept`), for OPTIONS too, as the router's check ran for every method.
+  4. OPTIONS: the controller is replaced by one answering 204 with `Access-Control-Allow-Methods: GET, POST, HEAD, OPTIONS, PUT, DELETE` and
+     `Access-Control-Max-Age: 86400`, as `Page::options()` did. Nothing more.
+  5. `mayView()` (`publicGatekeeper()`'s rule: a public site, or a logged-on visitor, or `publicOnPrivateSite`).
+  6. `enter()`: the XHR flag is set (so `page/ready` saw it off, `page/head` sees it on, as for a legacy page), `autodetectTemplateType()`, then
+     for GET `page/head` with `['page' => <the current page>]` and `page/get` with `['page_class' => <the attribute's name>, 'arguments' =>
+     <the context's>]`; for HEAD `page/head` with the `page_class` and `arguments` and NO `page/get`, as a legacy HEAD (the controller still runs,
+     for its headers; Symfony strips the body). For a declared POST, PUT, DELETE or PATCH: `page/head` with the page, then the session's form
+     token is checked (a signed API request needs none) and only then `page/<method>` fires: a POST without it logs `Invalid token.`, adds the
+     session message and forwards (a `PageRedirect`; an XHR page is refused instead), the others throw `SecurityException` ("The page you were on
+     timed out."); a legacy page fired `page/post` before it checked, which a listener may no longer see for a request that fails.
+  A refusal (step 3 and 5) is Symfony Security's `AccessDeniedException`, so the firewall's `DeniedResponder` answers it: status 403 with the site's
+  403 page for a caller of the web page type, `{"error":"forbidden"}` for one answered in JSON (`_t=json`, `Accept`, and a signed API request, as the
+  legacy JSON shell was), `Cache-Control: no-store`, and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
+  refusal: the type of the answer follows `Accept` too for a visitor of a walled garden (a legacy 403 followed `_t` only), a JSON refusal has no
+  `messages`, and the 403 is drawn in the page itself (a legacy API refusal built a second page, which said `page/ready` again).
+  On the response (`kernel.response`, priority 0) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
+  `X-Clacks-Overhead`, `X-Idno-Build-Fingerprint`: none when `IDNO_UNIT_TEST` is defined, as `init()` sent none), the context's default headers
+  (only where the response has none of the name), the context's headers (a name replaces the controller's unless the page began it with
+  `addHeader(..., $replace: false)`: `PageContext::replacesHeader()`; `Link` is added), then, when `ownsCaching()`, the context's caching headers.
+  `LegacyPageLifecycle::reportException()` is what a legacy `Page::exception()` reported (one critical line `<message> [<file>:<line>]`, the
+  `error.exception` statistic, `Logging::oopsAlert()`) and never throws; `PageRequestListener::onTerminate()` calls it for work after the response
+  that fails. Pinned by `Tests/Characterisation/SitePageLifecycleTest` (over HTTP, on `Tests\Fixtures\SitePageFixtureController`: the routes
+  `/{lead}_test/site-page/{state,public,account,typed,args/{word},post,undeclared}{slash}`, in the convention of a page's routes),
+  `SitePageLifecycleEquivalenceTest` (the same request through a real legacy page and the fixture: the events with their order and data, the
+  refusals, the headers) and `Tests/Kernel/LegacyPageLifecycleTest`. `Tests/Kernel/SitePageRoutesTest` scans the real route collection for a
+  site page under `/account` or `/admin` without its flag.
 
 ### Kernel and services
 

@@ -86,7 +86,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         // As a legacy page's: only page/get carries the class in its data; a GET's page/head carries the page itself.
         $this->assertSame([null, null, self::PAGE_CLASS], array_column($events, 'page_class'));
         $this->assertSame(
-            ['site_page' => true, 'current' => 'Idno\Legacy\ControllerPage', 'page_class' => self::PAGE_CLASS, 'type' => 'default', 'xhr' => false, 'permalink' => false, 'owner' => null, 'input_q' => null],
+            ['site_page' => true, 'current' => 'Idno\Legacy\ControllerPage', 'page_class' => self::PAGE_CLASS, 'type' => 'default', 'xhr' => false, 'permalink' => false, 'owner' => null, 'input_q' => null, 'arguments' => [], 'method' => 'GET'],
             $response->json()
         );
     }
@@ -94,7 +94,6 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
     public function testTheCurrentPageReadsTheRequestsInput(): void
     {
         $this->assertSame('hello', $this->site()->request('GET', self::STATE . '?q=hello')->json()['input_q']);
-        $this->assertSame('/', $this->site()->request('GET', '/_test/site-page/state/')->header('Location') ?? '/', 'the optional trailing slash is a route of its own');
         $this->assertSame(200, $this->site()->request('GET', '/_test/site-page/state/')->status);
         $this->assertSame(200, $this->site()->request('GET', '//_test/site-page/state')->status);
     }
@@ -138,8 +137,59 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
         $this->assertSame(200, $response->status);
         $this->assertTrue($response->json()['xhr']);
-        // The request is an XHR one from the start: a legacy page set its flag after page/ready (false, true, true).
-        $this->assertSame([true, true, true], array_column($events, 'xhr'));
+        // As a legacy page's: the flag is set after page/ready.
+        $this->assertSame([false, true, true], array_column($events, 'xhr'));
+    }
+
+    public function testAnXhrRequestGetsTheHeadersTheLegacyRouterSentForIt(): void
+    {
+        $legacy = $this->site()->request('GET', '/robots.txt', ['X-Requested-With' => 'XMLHttpRequest']);
+        $response = $this->site()->request('GET', self::STATE, ['X-Requested-With' => 'XMLHttpRequest']);
+        $plain = $this->site()->request('GET', self::STATE);
+
+        $this->assertSame('Mon, 26 Jul 1997 05:00:00 GMT', $response->header('Expires'));
+        $this->assertSame($legacy->header('Expires'), $response->header('Expires'));
+        $this->assertSame('no-cache', $response->header('Pragma'));
+        $this->assertNotNull($response->header('Last-Modified'));
+        $directives = array_map('trim', explode(',', (string) $response->header('Cache-Control')));
+        foreach (['no-store', 'no-cache', 'must-revalidate', 'post-check=0', 'pre-check=0'] as $directive) {
+            $this->assertContains($directive, $directives, 'Cache-Control: ' . $response->header('Cache-Control'));
+        }
+        $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'), 'the page\'s own type');
+        // Not for another request, and not for OPTIONS (a legacy page has no options_xhr).
+        $this->assertNotSame('Mon, 26 Jul 1997 05:00:00 GMT', $plain->header('Expires'));
+        $options = $this->site()->request('OPTIONS', self::STATE, ['X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertNotSame('Mon, 26 Jul 1997 05:00:00 GMT', $options->header('Expires'));
+    }
+
+    public function testAHeadRequestFiresHeadWithItsClassAndNoGet(): void
+    {
+        [$response, $events] = $this->recorded('HEAD', self::STATE);
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame('', $response->body);
+        $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'));
+        // A legacy HEAD's page/head carries the class and arguments, not the page.
+        $this->assertSame([null, self::PAGE_CLASS], array_column($events, 'page_class'));
+        $this->assertSame([null, []], array_column($events, 'arguments'));
+        $this->assertStringContainsString('1', (string) $response->header('X-Idno-Test-Page-Head'));
+    }
+
+    public function testTheAttributesDefaultTypeAppliesWhenTheRequestNamesNone(): void
+    {
+        $this->assertSame('json', $this->site()->request('GET', '/_test/site-page/typed')->json()['type']);
+        $this->assertSame('default', $this->site()->request('GET', '/_test/site-page/typed?_t=default')->json()['type'], 'a type the request names wins');
+        [, $events] = $this->recorded('GET', '/_test/site-page/typed');
+        $this->assertSame(['json', 'json', 'json'], array_column($events, 'type'), 'known from page/ready');
+    }
+
+    public function testPageGetCarriesTheRoutesArguments(): void
+    {
+        [$response, $events] = $this->recorded('GET', '/_test/site-page/args/hello/');
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame([null, null, ['hello']], array_column($events, 'arguments'));
+        $this->assertSame(['hello'], $response->json()['arguments']);
     }
 
     public function testTheStandardHeaders(): void
@@ -219,5 +269,115 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
         $other = '/_test/site-page/state';
         $this->assertSame(200, $this->site()->request('GET', $other, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $other))->status, 'a page that is not an account page answers an API request');
+    }
+
+    public function testAWalledGardenRefusalIsTheSites403PageOrJsonAndIsNotLoggedAsAnError(): void
+    {
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+
+        $html = $client->request('GET', self::STATE);
+        $this->assertSame(403, $html->status);
+        $this->assertStringContainsString('text/html', (string) $html->header('Content-Type'));
+        $this->assertStringContainsString('id="soft-forward"', $html->body, 'the site\'s 403 page of a visitor');
+        $this->assertStringContainsString('no-store', (string) $html->header('Cache-Control'));
+        $this->assertNull($html->header('Location'), 'no login redirect: a legacy refusal drew the 403 page too');
+
+        $json = $client->request('GET', self::STATE, ['Accept' => 'application/json']);
+        $this->assertSame(403, $json->status);
+        $this->assertSame(['error' => 'forbidden'], $json->json());
+        $this->assertStringContainsString('no-store', (string) $json->header('Cache-Control'));
+
+        $log = $this->serverLogContents();
+        $this->assertStringNotContainsString('request.ERROR', $log);
+        $this->assertStringNotContainsString('request.CRITICAL', $log);
+    }
+
+    public function testAnApiRefusalOnAnAccountPageIsAJson403AndIsNotLoggedAsAnError(): void
+    {
+        $path = '/_test/site-page/account';
+        $headers = self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path);
+
+        // A signed request is answered in JSON whatever it asked for, as the legacy refusal was (the JSON shell).
+        foreach ([$headers, $headers + ['Accept' => 'application/json']] as $sent) {
+            $response = $this->site()->request('GET', $path, $sent);
+
+            $this->assertSame(403, $response->status);
+            $this->assertSame(['error' => 'forbidden'], $response->json());
+            $this->assertStringContainsString('no-store', (string) $response->header('Cache-Control'));
+        }
+
+        $this->assertStringNotContainsString('request.ERROR', $this->serverLogContents());
+    }
+
+    public function testASignedOptionsRequestOnAnAccountPageIsRefusedAsALegacyOneWas(): void
+    {
+        $path = '/_test/site-page/account';
+
+        [$response, $events] = $this->recorded('OPTIONS', $path, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path));
+
+        $this->assertSame(403, $response->status);
+        $this->assertSame(['page/ready'], array_column($events, 'event'));
+    }
+
+    public function testAPostThePageDidNotDeclareIsRefusedBeforeAnyEvent(): void
+    {
+        foreach (['POST', 'PUT', 'DELETE'] as $method) {
+            [$response, $events] = $this->recorded($method, '/_test/site-page/undeclared');
+
+            $this->assertSame(405, $response->status, $method);
+            $this->assertSame([], $events, $method . ': nothing fired');
+            $this->assertStringContainsString('GET', (string) $response->header('Allow'), $method);
+        }
+    }
+
+    /**
+     * A session and the signed form token of its login form.
+     *
+     * @return array{0: string, 1: array<string, string>}
+     */
+    private function sessionAndToken(): array
+    {
+        $form = $this->site()->request('GET', 'session/login');
+
+        return [self::sessionCookie($form), self::formToken($form->body, 'session/login')];
+    }
+
+    public function testAPostNeedsTheFormTokenBeforePagePostFires(): void
+    {
+        $path = '/_test/site-page/post';
+        [$cookie, $token] = $this->sessionAndToken();
+
+        [$refused, $events] = $this->recorded('POST', $path, ['Cookie' => $cookie]);
+        $this->assertSame(302, $refused->status, 'a POST without its token is sent away, as Page::post() did');
+        $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'), 'no page/post');
+        $this->assertStringContainsString('Invalid token', $this->serverLogContents());
+
+        file_put_contents($this->recordFile, '');
+        $accepted = $this->site()->request('POST', $path, ['Cookie' => $cookie], $token);
+        $this->assertSame(200, $accepted->status);
+        $this->assertSame('POST', $accepted->json()['method']);
+        $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($this->events(), 'event'));
+        $this->assertSame([null, null, self::PAGE_CLASS], array_column($this->events(), 'page_class'));
+    }
+
+    public function testAPutNeedsTheFormTokenToo(): void
+    {
+        $path = '/_test/site-page/post';
+        [$cookie] = $this->sessionAndToken();
+
+        [$response, $events] = $this->recorded('PUT', $path, ['Cookie' => $cookie]);
+
+        $this->assertSame(500, $response->status, 'a legacy PUT without a token threw');
+        $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'));
+    }
+
+    public function testASignedApiRequestNeedsNoFormToken(): void
+    {
+        $path = '/_test/site-page/post';
+
+        [$response, $events] = $this->recorded('POST', $path, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path));
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($events, 'event'));
     }
 }

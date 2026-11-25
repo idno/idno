@@ -16,8 +16,9 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 /**
  * Runs the page lifecycle for a controller marked as a site page (#[SitePage]): before the controller, what a legacy page did
@@ -57,11 +58,20 @@ final class PageRequestListener
             return;
         }
         $request = $event->getRequest();
+        // A method the page did not declare never reaches it with another method's semantics: nothing is begun, no event fires.
+        if (!$page->allows($request->getMethod())) {
+            throw new MethodNotAllowedHttpException($page->allowedMethods());
+        }
         $lifecycle = ($this->lifecycle)();
         $context = new PageContext($request, $page);
         $context->attachTo($request);
         $lifecycle->begin($context);
 
+        // The legacy router refused an API request on an account page for every method, OPTIONS included. A refusal is Symfony
+        // Security's, so the firewall answers it (the site's 403 page, or JSON for a caller that wants it, never cached).
+        if ($lifecycle->refusesApiRequest($context)) {
+            throw new AccessDeniedException();
+        }
         if ($request->getMethod() === 'OPTIONS') {
             // What Page::options() answers: the page was begun (its events fired), nothing more.
             $event->setController(static fn (): Response => new Response('', 204, [
@@ -71,8 +81,8 @@ final class PageRequestListener
 
             return;
         }
-        if ($lifecycle->refusesApiRequest($context) || !$lifecycle->mayView($context)) {
-            throw new AccessDeniedHttpException();
+        if (!$lifecycle->mayView($context)) {
+            throw new AccessDeniedException();
         }
         $lifecycle->enter($context);
     }
@@ -88,6 +98,11 @@ final class PageRequestListener
         $response = $event->getResponse();
         foreach (($this->lifecycle)()->standardHeaders() as $name => $value) {
             $response->headers->set($name, $value);
+        }
+        foreach ($context->defaultHeaders() as $name => $value) {
+            if (!$response->headers->has($name)) {
+                $response->headers->set($name, $value);
+            }
         }
         foreach ($context->headers() as $name => $values) {
             $response->headers->set($name, $values, $context->replacesHeader($name));

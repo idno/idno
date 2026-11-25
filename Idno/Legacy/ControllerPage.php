@@ -40,10 +40,14 @@ final class ControllerPage extends Page
     /**
      * @param PageContext|null $context null is the home page of a request for `/`
      */
-    public function __construct(?PageContext $context = null)
+    /**
+     * @param bool $xhrFromStart false leaves the XHR flag off until startXhr(): a legacy page's flag was set by the router's
+     *                           `<method>_xhr` call, after the page was built and had said `page/ready`
+     */
+    public function __construct(?PageContext $context = null, bool $xhrFromStart = true)
     {
         $this->context = $context ?? new PageContext(Request::create('/'), new SitePage('Idno\Pages\Homepage'));
-        $this->xhr = $this->context->isXhr();
+        $this->xhr = $xhrFromStart && $this->context->isXhr();
         $this->arguments = $this->context->arguments();
     }
 
@@ -117,7 +121,15 @@ final class ControllerPage extends Page
 
     public function xhr(): bool
     {
-        return $this->context->isXhr();
+        return $this->xhr;
+    }
+
+    /**
+     * Sets the XHR flag the request asks for (what `get_xhr()` did).
+     */
+    public function startXhr(): void
+    {
+        $this->xhr = $this->context->isXhr();
     }
 
     public function setResponse(int $code)

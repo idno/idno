@@ -43,6 +43,34 @@ final class SitePageFixtureController
         return $this->describe($request);
     }
 
+    #[Route('/{lead}_test/site-page/typed{slash}', name: 'idno_test_site_page_typed', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', defaultType: 'json')]
+    public function typed(Request $request): JsonResponse
+    {
+        return $this->describe($request);
+    }
+
+    #[Route('/{lead}_test/site-page/args/{word}{slash}', name: 'idno_test_site_page_args', requirements: ['lead' => '/?', 'slash' => '/?', 'word' => '[a-z]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    public function args(Request $request): JsonResponse
+    {
+        return $this->describe($request);
+    }
+
+    /** A page that declares POST: its lifecycle checks the form token before `page/post`. */
+    #[Route('/{lead}_test/site-page/post{slash}', name: 'idno_test_site_page_post', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'])]
+    public function post(Request $request): JsonResponse
+    {
+        return $this->describe($request);
+    }
+
+    /** A route that lets a method through that the page never declared. */
+    #[Route('/{lead}_test/site-page/undeclared{slash}', name: 'idno_test_site_page_undeclared', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE'])]
+    public function undeclared(Request $request): JsonResponse
+    {
+        return $this->describe($request);
+    }
+
     private function describe(Request $request): JsonResponse
     {
         $data = ['site_page' => false];
@@ -58,6 +86,8 @@ final class SitePageFixtureController
                 'permalink' => $page->isPermalink(),
                 'owner' => is_object($owner) ? $owner->getHandle() : null,
                 'input_q' => $page->getInput('q'),
+                'arguments' => $page->arguments,
+                'method' => $request->getMethod(),
             ];
         }
         $response = new JsonResponse($data);

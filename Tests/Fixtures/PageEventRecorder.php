@@ -11,7 +11,7 @@ use Idno\Core\Idno;
 /**
  * Test-environment only (installed by TestEventHooks, which config/services_test.php makes the configurator of the
  * legacy event dispatcher): when the environment variable IDNO_TEST_RECORD_PAGES names a file, the page events
- * `page/ready`, `page/head` and `page/get` append one JSON line each to it: the event's name, the `page_class` of its
+ * `page/ready`, `page/head`, `page/get`, `page/post` and `page/put` append one JSON line each to it: the event's name, the `page_class` and the `arguments` of its
  * data (null when it has none), the class of the current page, the first word of the template's body classes, the
  * template type, whether the page is an XHR one, whether it is a permalink and the handle of the page's owner (null
  * when it has none). On `page/head` it also sends the header `X-Idno-Test-Page-Head: 1`, as a plugin's `page/head`
@@ -20,7 +20,7 @@ use Idno\Core\Idno;
  */
 final class PageEventRecorder
 {
-    public const EVENTS = ['page/ready', 'page/head', 'page/get'];
+    public const EVENTS = ['page/ready', 'page/head', 'page/get', 'page/post', 'page/put'];
 
     public static function install(EventDispatcher $dispatcher): void
     {
@@ -41,6 +41,7 @@ final class PageEventRecorder
                 $line = json_encode([
                     'event' => $name,
                     'page_class' => is_array($data) ? ($data['page_class'] ?? null) : null,
+                    'arguments' => is_array($data) ? ($data['arguments'] ?? null) : null,
                     'current' => is_object($page) ? get_class($page) : null,
                     'body_class' => $bodyClass,
                     'type' => Idno::site()->template()->getTemplateType(),

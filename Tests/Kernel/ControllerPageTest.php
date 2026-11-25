@@ -137,6 +137,19 @@ final class ControllerPageTest extends TestCase
         $this->assertSame([], $plain->arguments);
     }
 
+    public function testTheXhrFlagCanWaitForTheLifecycleToStartIt(): void
+    {
+        $request = Request::create('/x', 'GET', [], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $page = new ControllerPage(new PageContext($request, new SitePage('Idno\Pages\Homepage')), false);
+
+        $this->assertFalse($page->xhr());
+        $this->assertFalse($page->xhr);
+
+        $page->startXhr();
+        $this->assertTrue($page->xhr());
+        $this->assertTrue($page->xhr);
+    }
+
     public function testResponseIsTheContextsStatus(): void
     {
         $page = $this->page();

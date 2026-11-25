@@ -40,6 +40,9 @@ final class PageContext
     /** @var list<array{0: string, 1: string}> headers added only to a response whose status is 200 (a Markdown document's canonical link) */
     private array $headersOnSuccess = [];
 
+    /** @var array<string, string> headers added only to a response that has none of the name (the type a router gives a request the page then answers in its own) */
+    private array $defaultHeaders = [];
+
     /** @var array<string, bool> by lower-case name: whether the first value of the header replaces a header of that name another part set */
     private array $replacing = [];
 
@@ -217,6 +220,23 @@ final class PageContext
             $this->replacing[strtolower($name)] = $replace;
         }
         $this->headers[$key] = $replace ? [$value] : [...($this->headers[$key] ?? []), $value];
+    }
+
+    /**
+     * A header the page gives an answer that has none of its own (the router's `Content-Type` for an XHR request, which the page's
+     * shell replaces).
+     */
+    public function addDefaultHeader(string $name, string $value): void
+    {
+        $this->defaultHeaders[$name] = $value;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function defaultHeaders(): array
+    {
+        return $this->defaultHeaders;
     }
 
     /**

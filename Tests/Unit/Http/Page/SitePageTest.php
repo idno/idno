@@ -37,6 +37,16 @@ final class SitePageTest extends TestCase
         $this->assertFalse($page->accountPage);
     }
 
+    public function testAPageServesGetHeadAndOptionsUnlessItDeclaresMore(): void
+    {
+        $this->assertEqualsCanonicalizing(['GET', 'HEAD', 'OPTIONS'], (new SitePage('X'))->allowedMethods());
+        $this->assertEqualsCanonicalizing(['GET', 'HEAD', 'OPTIONS', 'POST'], (new SitePage('X', methods: ['get', 'POST']))->allowedMethods());
+        $this->assertEqualsCanonicalizing(['HEAD', 'OPTIONS', 'POST'], (new SitePage('X', methods: ['POST', 'head']))->allowedMethods(), 'HEAD is allowed only with GET or by name');
+        $this->assertTrue((new SitePage('X', methods: ['GET', 'POST']))->allows('post'));
+        $this->assertTrue((new SitePage('X'))->allows('options'), 'OPTIONS is every page\'s');
+        $this->assertFalse((new SitePage('X'))->allows('POST'));
+    }
+
     public function testTheClassAttributeIsUsedWhenTheMethodHasNone(): void
     {
         $page = SitePage::of([new SitePageFixtureController(), 'plain']);

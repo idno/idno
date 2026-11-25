@@ -18,7 +18,8 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 #[SitePage('Fixture\ListenerPage')]
@@ -27,6 +28,15 @@ final class ListenerPageController
     public function page(): Response
     {
         return new Response('page');
+    }
+}
+
+#[SitePage('Fixture\ListenerPostPage', methods: ['GET', 'POST'])]
+final class ListenerPostController
+{
+    public function page(): Response
+    {
+        return new Response('posted');
     }
 }
 
@@ -177,12 +187,59 @@ final class PageRequestListenerTest extends TestCase
 
         $this->listener()->onController($event);
 
-        $this->assertSame(['begin'], $this->lifecycle->calls, 'no check, no page/head, no page/get');
+        $this->assertSame(['begin', 'refusesApiRequest'], $this->lifecycle->calls, 'no walled garden check, no page/head, no page/get');
         $response = ($event->getController())();
         $this->assertSame(204, $response->getStatusCode());
         $this->assertSame('', $response->getContent());
         $this->assertSame('GET, POST, HEAD, OPTIONS, PUT, DELETE', $response->headers->get('Access-Control-Allow-Methods'));
         $this->assertSame('86400', $response->headers->get('Access-Control-Max-Age'));
+    }
+
+    public function testAnApiRequestIsRefusedForOptionsToo(): void
+    {
+        $this->lifecycle->refusesApi = true;
+        $event = $this->controllerEvent(Request::create('/', 'OPTIONS'), new ListenerPageController(), 'page');
+
+        $this->expectException(AccessDeniedException::class);
+        try {
+            $this->listener()->onController($event);
+        } finally {
+            $this->assertSame(['begin', 'refusesApiRequest'], $this->lifecycle->calls);
+        }
+    }
+
+    public function testAMethodThePageDidNotDeclareIsRefusedBeforeAnyEvent(): void
+    {
+        foreach (['POST', 'PUT', 'DELETE', 'PATCH'] as $method) {
+            $request = Request::create('/', $method);
+            $event = $this->controllerEvent($request, new ListenerPageController(), 'page');
+
+            try {
+                $this->listener()->onController($event);
+                $this->fail($method . ' is refused');
+            } catch (MethodNotAllowedHttpException $refusal) {
+                $this->assertSame([], $this->lifecycle->calls, $method . ': not even begun');
+                $this->assertFalse(PageContext::has($request), $method);
+                $this->assertStringContainsString('GET', (string) $refusal->getHeaders()['Allow']);
+            }
+        }
+    }
+
+    public function testADeclaredMethodIsLetThroughAndHeadFollowsGet(): void
+    {
+        $post = $this->controllerEvent(Request::create('/', 'POST'), new ListenerPostController(), 'page');
+        $this->listener()->onController($post);
+        $this->assertSame(['begin', 'refusesApiRequest', 'mayView', 'enter'], $this->lifecycle->calls);
+
+        $this->lifecycle->calls = [];
+        $head = $this->controllerEvent(Request::create('/', 'HEAD'), new ListenerPageController(), 'page');
+        $this->listener()->onController($head);
+        $this->assertSame(['begin', 'refusesApiRequest', 'mayView', 'enter'], $this->lifecycle->calls);
+
+        $this->lifecycle->calls = [];
+        $put = $this->controllerEvent(Request::create('/', 'PUT'), new ListenerPostController(), 'page');
+        $this->expectException(MethodNotAllowedHttpException::class);
+        $this->listener()->onController($put);
     }
 
     public function testARefusalThrowsBeforeEnter(): void
@@ -193,7 +250,7 @@ final class PageRequestListenerTest extends TestCase
         try {
             $this->listener()->onController($event);
             $this->fail('the page is refused');
-        } catch (AccessDeniedHttpException) {
+        } catch (AccessDeniedException) {
             $this->assertSame(['begin', 'refusesApiRequest', 'mayView'], $this->lifecycle->calls);
         }
     }
@@ -206,7 +263,7 @@ final class PageRequestListenerTest extends TestCase
         try {
             $this->listener()->onController($event);
             $this->fail('the request is refused');
-        } catch (AccessDeniedHttpException) {
+        } catch (AccessDeniedException) {
             $this->assertSame(['begin', 'refusesApiRequest'], $this->lifecycle->calls, 'the walled garden is not asked: the API refusal comes first');
         }
     }
@@ -244,6 +301,23 @@ final class PageRequestListenerTest extends TestCase
         $this->assertSame(['page'], $response->headers->all('x-replaced'));
         $this->assertSame(['controller', 'page'], $response->headers->all('x-added'));
         $this->assertSame(['<https://example.com/c>; rel="c"', '<https://example.com/a>; rel="a"', '<https://example.com/b>; rel="b"'], $response->headers->all('link'));
+    }
+
+    public function testADefaultHeaderIsGivenOnlyToAResponseThatHasNone(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        PageContext::of($request)->addDefaultHeader('X-Default', 'router');
+        $bare = new Response('x');
+        $own = new Response('x', 200, ['X-Default' => 'page']);
+
+        foreach ([$bare, $own] as $response) {
+            $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+        }
+
+        $this->assertSame('router', $bare->headers->get('X-Default'));
+        $this->assertSame('page', $own->headers->get('X-Default'));
     }
 
     public function testCachingFromTheContextReachesTheResponse(): void
