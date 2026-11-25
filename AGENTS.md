@@ -223,6 +223,7 @@ post is saved, changed or deleted, through the queue.
 | Video (address on another service) | `app.bsky.feed.post` | `app.bsky.embed.external`: a card for the video's address | `putRecord`, same key | `deleteRecord` |
 | Video (in a Bluesky post) | `app.bsky.feed.post` | `app.bsky.embed.record`: that post, quoted | `putRecord`, same key | `deleteRecord` |
 | Media (audio; video files too) | `app.bsky.feed.post` | `app.bsky.embed.external`: a card for the post on this site | `putRecord`, same key | `deleteRecord` |
+| Media (audio), as well | `live.voxport.podcast.episode`, in the member's `live.voxport.podcast.series` | the file's address, type and size; `blueskyPostRef` names the post above | `putRecord`, same key | `deleteRecord` (the series stays) |
 | Everything else | `site.standard.document` | | `putRecord`, same key | `deleteRecord` |
 
 - `PostRecord::build()` builds a post record from plain values and asks nothing of anybody;
@@ -246,6 +247,12 @@ post is saved, changed or deleted, through the queue.
   post that already has a Bluesky syndication link, are not written.
 - `app.bsky.embed.video` is for a video file uploaded to the member's PDS; nothing uses it
   until the site keeps video files itself. Bluesky has no record for audio.
+- Audio: Bluesky has no record for it, so an audio post is written twice: as a Bluesky post
+  (for followers there) and as an episode in VoxPort's podcast lexicons (`EpisodeRecord`,
+  `EpisodeSync`), the only published podcast lexicons there are. Each member has one series
+  record, remembered on the member (`standardsitesync_series_uri`, `_cid`, `_hash`); the
+  episode is remembered on the entity (`standardsitesync_episode_*`). The audio file stays on
+  this site (`audioUrl`); it is not uploaded as a blob. Lengths in these lexicons are bytes.
 - A refusal by a PDS is an `XrpcException`: its message is the HTTP status and the name of the
   error, never the server's answer or a token. Keep it that way; the message is logged.
 - The OAuth scope is `atproto transition:generic`, which lets the site write any record and

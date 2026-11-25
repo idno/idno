@@ -132,7 +132,7 @@ class PostSync
         $created = $rkey === null;
         $rkey = $rkey ?? Tid::forEntity((int) $entity->created, (string) $entity->getID());
 
-        $cid = $this->write($rkey, $record, $created ? null : $known);
+        $cid = RecordWriter::put($this->client, PostRecord::COLLECTION, $rkey, $record, $created ? null : $known);
         if ($cid === null) {
             // The member deleted the record on their PDS: it is not put back
             $this->forget($entity);
@@ -186,43 +186,6 @@ class PostSync
         $rkey = substr($uri, strlen($prefix));
 
         return Tid::isValid($rkey) ? $rkey : null;
-    }
-
-    /**
-     * Put the record under its key.
-     *
-     * @param  string      $rkey
-     * @param  array       $record
-     * @param  string|null $known The CID of the version this site wrote last, when it wrote one
-     * @return string|null The CID of the record; null when the record this site wrote is no longer on
-     *                     the PDS (the member deleted it there), in which case nothing is written
-     */
-    private function write(string $rkey, array $record, ?string $known): ?string
-    {
-        if ($known === null) {
-            $result = $this->client->putRecord(PostRecord::COLLECTION, $rkey, $record);
-        } else {
-            try {
-                // Only replace the version this site wrote
-                $result = $this->client->putRecord(PostRecord::COLLECTION, $rkey, $record, $known);
-            } catch (XrpcException $e) {
-                if ($e->getStatus() !== 400 && $e->getStatus() !== 409) {
-                    throw $e;
-                }
-                if ($this->client->getRecord(PostRecord::COLLECTION, $rkey) === null) {
-                    return null;
-                }
-                // It was changed somewhere else; this site has the post, so its version is written
-                $result = $this->client->putRecord(PostRecord::COLLECTION, $rkey, $record);
-            }
-        }
-
-        $cid = $result['cid'] ?? null;
-        if (!is_string($cid) || !preg_match(PostRecord::CID_PATTERN, $cid)) {
-            throw new \Idno\Exceptions\TechnicalException('The PDS did not answer a write with the CID of the record');
-        }
-
-        return $cid;
     }
 
     /**

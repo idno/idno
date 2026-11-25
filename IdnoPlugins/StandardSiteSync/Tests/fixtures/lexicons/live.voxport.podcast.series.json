@@ -1,0 +1,137 @@
+{
+  "id": "live.voxport.podcast.series",
+  "defs": {
+    "main": {
+      "key": "tid",
+      "type": "record",
+      "record": {
+        "type": "object",
+        "required": [
+          "handle",
+          "title",
+          "createdAt"
+        ],
+        "properties": {
+          "cover": {
+            "type": "blob",
+            "accept": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "maxSize": 2097152,
+            "description": "Cover art image"
+          },
+          "email": {
+            "type": "string",
+            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+            "maxLength": 254,
+            "description": "Contact email for podcast"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Display name of the podcast"
+          },
+          "author": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Author/creator name (if different from DID owner)"
+          },
+          "handle": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_-]+$",
+            "maxLength": 64,
+            "description": "Unique handle for this series"
+          },
+          "persons": {
+            "type": "array",
+            "items": {
+              "ref": "live.voxport.podcast.episode#person",
+              "type": "ref"
+            },
+            "maxLength": 50,
+            "description": "People associated with this series \u2014 show hosts (Podcasting 2.0 podcast:person at channel level)"
+          },
+          "explicit": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether content is explicit"
+          },
+          "language": {
+            "type": "string",
+            "format": "language",
+            "maxLength": 5,
+            "description": "Primary language (ISO 639-1)"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "maxLength": 5,
+            "description": "Podcast categories (Apple Podcasts format)"
+          },
+          "rssFeedUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Original RSS feed URL (for imported series)"
+          },
+          "websiteUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "External website URL"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Podcast description/summary"
+          },
+          "podcastGuid": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "maxLength": 64,
+            "description": "Podcasting 2.0 channel-level permanent identity (podcast:guid). A UUIDv5 derived from the feed URL that survives host moves."
+          },
+          "rssImported": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this series was imported from an external RSS feed"
+          }
+        }
+      },
+      "description": "A podcast series/channel owned by a creator on VoxPort"
+    },
+    "seriesRef": {
+      "type": "object",
+      "required": [
+        "uri"
+      ],
+      "properties": {
+        "cid": {
+          "type": "string",
+          "format": "cid",
+          "description": "CID of the referenced series record, for a versioned (strong) reference. Optional."
+        },
+        "uri": {
+          "type": "string",
+          "format": "at-uri",
+          "description": "AT-URI of the referenced series record"
+        }
+      },
+      "description": "A reference to a live.voxport.podcast.series record. Use this (not a ref to the record def itself) when linking to a series from another record. cid is optional so a reference can be stored before the series CID is known."
+    }
+  },
+  "$type": "com.atproto.lexicon.schema",
+  "lexicon": 1,
+  "description": "A podcast series/channel owned by a creator on VoxPort"
+}

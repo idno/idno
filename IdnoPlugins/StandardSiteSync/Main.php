@@ -236,7 +236,7 @@ class Main extends Plugin
     public static function hasRemoteRecord($object): bool
     {
         return $object instanceof \Idno\Common\Entity
-            && (PostSync::hasRecord($object) || !empty($object->standardsitesync_uri));
+            && (PostSync::hasRecord($object) || EpisodeSync::hasRecord($object) || !empty($object->standardsitesync_uri));
     }
 
     /**
@@ -275,7 +275,7 @@ class Main extends Plugin
 
         // The request that saved the post may save its own copy again: keep that copy in step
         if ($changed && $entity !== $object) {
-            foreach (array_merge(PostSync::FIELDS, ['standardsitesync_uri', 'posse']) as $field) {
+            foreach (array_merge(PostSync::FIELDS, EpisodeSync::FIELDS, ['standardsitesync_uri', 'posse']) as $field) {
                 $object->$field = $entity->$field;
             }
         }
@@ -283,7 +283,8 @@ class Main extends Plugin
 
     /**
      * Write a single entity to its owner's PDS: a status update, a video or an audio
-     * post as a Bluesky post (see PostRecord), anything else as a standard.site document.
+     * post as a Bluesky post (see PostRecord), an audio post as a podcast episode too (see
+     * EpisodeRecord), anything else as a standard.site document.
      * Nothing that goes wrong is passed on: it is logged, without what the server
      * answered and without any token.
      *
@@ -303,11 +304,18 @@ class Main extends Plugin
             $client = new ATProtoClient(self::getATProtoSessionForUser($user));
 
             if (PostSync::handles($entity)) {
-                if ($skipExisting && PostSync::hasRecord($entity)) {
+                $audio = EpisodeSync::handles($entity);
+                if ($skipExisting && PostSync::hasRecord($entity) && (!$audio || EpisodeSync::hasRecord($entity))) {
                     return false;
                 }
+                $changes = [PostSync::CREATED, PostSync::UPDATED, PostSync::GONE];
                 $outcome = (new PostSync($client))->sync($entity);
-                $changed = in_array($outcome, [PostSync::CREATED, PostSync::UPDATED, PostSync::GONE], true);
+                $changed = in_array($outcome, $changes, true);
+
+                // An audio post is also an episode of the member's series, which names its Bluesky post
+                if ($audio && in_array((new EpisodeSync($client))->sync($entity, $user), $changes, true)) {
+                    $changed = true;
+                }
 
                 // Earlier versions wrote these posts as standard.site documents: that record is replaced
                 if ($outcome !== PostSync::SKIPPED && !empty($entity->standardsitesync_uri)) {
@@ -369,6 +377,9 @@ class Main extends Plugin
             $client = new ATProtoClient(self::getATProtoSessionForUser($user));
 
             $changed = PostSync::handles($entity) && (new PostSync($client))->remove($entity);
+            if ((new EpisodeSync($client))->remove($entity)) {
+                $changed = true;
+            }
             if (!PostSync::handles($entity) || !empty($entity->standardsitesync_uri)) {
                 $client->deleteDocument($entity);
                 if (!empty($entity->standardsitesync_uri)) {

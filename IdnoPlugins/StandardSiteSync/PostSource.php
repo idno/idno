@@ -5,7 +5,7 @@ namespace IdnoPlugins\StandardSiteSync;
 use Idno\Common\Entity;
 
 /**
- * Reads from an entity what PostRecord::build() needs. Nothing is asked of any server
+ * Reads from an entity what PostRecord::build() (and, for audio, EpisodeRecord::episode()) needs. Nothing is asked of any server
  * here; what has to be looked up is named ("reply_to", "quote_of", "thumb_url") for
  * PostSync to resolve.
  */
@@ -63,6 +63,10 @@ class PostSource
         $source['fallback_title'] = (string) $entity->getTitle();
         $source['html'] = is_string($entity->body) ? $entity->body : '';
 
+        if ($kind === 'media' && ($audio = self::audio($entity))) {
+            $source['audio'] = $audio;
+        }
+
         if ($kind === 'video') {
             $source['video_url'] = (string) $entity->getVideoAddress();
             if ($video = $entity->getVideo()) {
@@ -77,6 +81,30 @@ class PostSource
         }
 
         return $source;
+    }
+
+    /**
+     * The audio file of a Media post: its address on this site, its type and its size.
+     *
+     * @return array|null 'url', 'type' and 'length'; null when the post is not audio or has no file
+     */
+    private static function audio(Entity $entity): ?array
+    {
+        if (!is_string($entity->media_type) || strpos($entity->media_type, 'audio/') !== 0) {
+            return null;
+        }
+        $attachment = $entity->getAttachments()[0] ?? null;
+        if (!is_array($attachment) || !is_string($attachment['url'] ?? null)) {
+            return null;
+        }
+        $config = \Idno\Core\Idno::site()->config();
+        $url = (string) preg_replace('/^(https?:\/\/\/)/', $config->getDisplayURL(), $attachment['url']);
+        $url = \Idno\Core\UrlValidator::httpUrl($config->sanitizeAttachmentURL($url));
+        if ($url === '') {
+            return null;
+        }
+
+        return ['url' => $url, 'type' => $entity->media_type, 'length' => (int) ($attachment['length'] ?? 0)];
     }
 
     /**

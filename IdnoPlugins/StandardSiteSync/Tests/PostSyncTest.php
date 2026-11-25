@@ -96,6 +96,9 @@ class PostSyncTest extends \Tests\IdnoTestCase
         }
         $user = $this->user();
         $user->standardsitesync_session = $this->session;
+        foreach (['uri', 'cid', 'hash'] as $field) {
+            $user->{'standardsitesync_series_' . $field} = null;
+        }
         $user->save(true);
         foreach ($this->toDelete as $entity) {
             $entity->delete();
@@ -543,6 +546,163 @@ class PostSyncTest extends \Tests\IdnoTestCase
             'external' => ['uri' => $media->getURL(), 'title' => 'Episode 4', 'description' => 'We talk to the librarian.'],
         ], $record['embed']);
         $this->assertSame(['podcast'], $record['tags']);
+    }
+
+    // Audio as a podcast episode
+
+    private function audio(string $title): \IdnoPlugins\Media\Media
+    {
+        $media = new \IdnoPlugins\Media\Media();
+        $media->title = $title;
+        $media->body = '<p>Show notes.</p>';
+        $media->media_type = 'audio/mpeg';
+        $media->attachments = [[
+            '_id' => 'abc123', 'url' => Idno::site()->config()->getDisplayURL() . 'file/abc123/episode.mp3',
+            'mime-type' => 'audio/mpeg', 'length' => 123456, 'filename' => 'episode.mp3',
+        ]];
+        $media->setAccess('PUBLIC');
+        $media->setPublishStatus('published');
+        $this->assertNotFalse($media->save());
+        $this->toDelete[] = $media;
+
+        return $media;
+    }
+
+    public function testAnAudioPostIsAlsoAnEpisodeOfTheMembersSeries()
+    {
+        $this->connect();
+        $media = $this->audio('Episode 1');
+
+        $this->assertTrue(Main::syncEntity($media));
+
+        $puts = $this->requestsTo('com.atproto.repo.putRecord');
+        $this->assertSame(
+            ['app.bsky.feed.post', 'live.voxport.podcast.series', 'live.voxport.podcast.episode'],
+            array_map(function ($put) {
+                return $put['json']['collection'];
+            }, $puts)
+        );
+        foreach ($puts as $put) {
+            $this->assertSame([], self::$validator->validateInput('com.atproto.repo.putRecord', $put['json']));
+            $this->assertSame([], self::$validator->validateRecord($put['json']['record']), $put['json']['collection']);
+            $this->assertTrue(Tid::isValid($put['json']['rkey']));
+        }
+
+        [$post, $series, $episode] = $puts;
+        $user = \Idno\Entities\User::getByID($this->user()->getID());
+        $seriesUri = 'at://' . self::DID . '/live.voxport.podcast.series/' . $series['json']['rkey'];
+        $this->assertSame($seriesUri, $user->standardsitesync_series_uri);
+        $this->assertSame($user->getHandle(), $series['json']['record']['handle']);
+
+        $record = $episode['json']['record'];
+        $this->assertSame(['uri' => $seriesUri], $record['series']);
+        $this->assertSame('Episode 1', $record['title']);
+        $this->assertSame('Show notes.', $record['summary']);
+        $this->assertSame(Idno::site()->config()->getDisplayURL() . 'file/abc123/episode.mp3', $record['audioUrl']);
+        $this->assertSame('audio/mpeg', $record['audioType']);
+        $this->assertSame(123456, $record['audioLength']);
+        $this->assertSame([
+            'uri' => 'at://' . self::DID . '/app.bsky.feed.post/' . $post['json']['rkey'],
+            'cid' => $this->cidOf($post['json']['record']),
+        ], $record['blueskyPostRef']);
+
+        $stored = \Idno\Common\Entity::getByID($media->getID());
+        $this->assertSame('at://' . self::DID . '/live.voxport.podcast.episode/' . $episode['json']['rkey'], $stored->standardsitesync_episode_uri);
+        $this->assertSame($this->cidOf($record), $stored->standardsitesync_episode_cid);
+
+        // Again: nothing is written
+        $this->assertFalse(Main::syncEntity($stored));
+        $this->assertFalse(Main::syncEntity($stored, true));
+        $this->assertCount(3, $this->requests);
+
+        // A second episode: the series is not written again
+        $second = $this->audio('Episode 2');
+        Main::syncEntity($second);
+        $puts = $this->requestsTo('com.atproto.repo.putRecord');
+        $this->assertCount(5, $puts);
+        $this->assertSame('app.bsky.feed.post', $puts[3]['json']['collection']);
+        $this->assertSame('live.voxport.podcast.episode', $puts[4]['json']['collection']);
+        $this->assertSame(['uri' => $seriesUri], $puts[4]['json']['record']['series']);
+        $this->assertNotSame($episode['json']['rkey'], $puts[4]['json']['rkey']);
+    }
+
+    public function testAnEditedAudioPostReplacesItsEpisodeAndADeletedOneDeletesIt()
+    {
+        $this->connect();
+        $media = $this->audio('Episode 1');
+        Main::syncEntity($media);
+        [$post, , $episode] = $this->requestsTo('com.atproto.repo.putRecord');
+        $firstCid = $media->standardsitesync_episode_cid;
+        $this->requests = [];
+
+        $media->title = 'Episode 1, corrected';
+        $this->assertTrue(Main::syncEntity($media));
+
+        $puts = $this->requestsTo('com.atproto.repo.putRecord');
+        $this->assertCount(2, $puts);
+        $this->assertSame(['app.bsky.feed.post', $post['json']['rkey']], [$puts[0]['json']['collection'], $puts[0]['json']['rkey']]);
+        $this->assertSame(['live.voxport.podcast.episode', $episode['json']['rkey']], [$puts[1]['json']['collection'], $puts[1]['json']['rkey']]);
+        $this->assertSame($firstCid, $puts[1]['json']['swapRecord']);
+        $this->assertSame('Episode 1, corrected', $puts[1]['json']['record']['title']);
+        // The episode names the new version of its post
+        $this->assertSame($this->cidOf($puts[0]['json']['record']), $puts[1]['json']['record']['blueskyPostRef']['cid']);
+
+        Idno::site()->config()->standardsitesync_enabled = true;
+        $media->setAccess('SITE');
+        $this->assertSame('unsync', Main::actionFor($media));
+        $this->assertTrue(Main::removeEntity($media, true));
+
+        $deleted = [];
+        foreach ($this->requestsTo('com.atproto.repo.deleteRecord') as $delete) {
+            $deleted[$delete['json']['collection']] = $delete['json']['rkey'];
+        }
+        $this->assertSame([
+            'app.bsky.feed.post'           => $post['json']['rkey'],
+            'live.voxport.podcast.episode' => $episode['json']['rkey'],
+        ], $deleted);
+        $stored = \Idno\Common\Entity::getByID($media->getID());
+        $this->assertFalse(Main::hasRemoteRecord($stored));
+    }
+
+    public function testAnEpisodeTheMemberDeletedOnTheirPdsIsNotPutBack()
+    {
+        $this->connect();
+        $media = $this->audio('Episode 1');
+        Main::syncEntity($media);
+
+        $this->answers['com.atproto.repo.putRecord'] = function ($request) {
+            $gone = $request['json']['collection'] === 'live.voxport.podcast.episode' && isset($request['json']['swapRecord']);
+
+            return $gone ? [400, ['error' => 'InvalidSwap']] : $this->defaultAnswer($request);
+        };
+        $this->answers['com.atproto.repo.getRecord'] = function () {
+            return [400, ['error' => 'RecordNotFound']];
+        };
+        $media->title = 'Episode 1, again';
+        $this->assertTrue(Main::syncEntity($media));
+        $this->assertFalse(\IdnoPlugins\StandardSiteSync\EpisodeSync::hasRecord($media));
+        $this->assertTrue(PostSync::hasRecord($media));
+
+        $this->requests = [];
+        $media->title = 'Episode 1, once more';
+        Main::syncEntity($media);
+        $this->assertSame(['app.bsky.feed.post'], array_map(function ($put) {
+            return $put['json']['collection'];
+        }, $this->requestsTo('com.atproto.repo.putRecord')));
+    }
+
+    public function testAVideoFileInAMediaPostIsNotAnEpisode()
+    {
+        $this->connect();
+        $media = $this->audio('A film');
+        $media->media_type = 'video/mp4';
+        $media->save();
+
+        Main::syncEntity($media);
+
+        $this->assertSame(['app.bsky.feed.post'], array_map(function ($put) {
+            return $put['json']['collection'];
+        }, $this->requestsTo('com.atproto.repo.putRecord')));
     }
 
     // Failures

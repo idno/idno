@@ -220,6 +220,9 @@ class LexiconValidator
         if (isset($schema['maxGraphemes']) && self::graphemes($value) > $schema['maxGraphemes']) {
             $errors[] = "$path is longer than " . $schema['maxGraphemes'] . ' graphemes';
         }
+        if (isset($schema['pattern']) && !preg_match('~' . str_replace('~', '\\~', $schema['pattern']) . '~', $value)) {
+            $errors[] = "$path does not match " . $schema['pattern'];
+        }
         if (isset($schema['format'])) {
             if ($schema['format'] === 'at-identifier') {
                 $ok = preg_match(self::FORMATS['did'], $value) || preg_match(self::FORMATS['handle'], $value);
