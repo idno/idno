@@ -83,15 +83,29 @@ final class SetupGateListener
         $wantsPage = ($method === 'GET' || $method === 'HEAD') && (str_contains(strtolower((string) $request->headers->get('Accept', '')), 'text/html') || !$request->headers->has('Accept'));
         $secure = WebInstaller::secure($request);
 
-        // The link `idno:setup:link` prints: it gives this browser the token.
+        // The link `idno:setup:link` prints works once: using it makes a new token, which only this
+        // browser gets (the link's own, which a server's log may keep, stops working).
         if ($method === 'GET' && preg_match('#\A/_setup/([a-f0-9]{64})/?\z#', $path, $match) === 1 && $this->setup->matches($match[1])) {
             $response = new RedirectResponse($base . self::PATH, Response::HTTP_SEE_OTHER);
-            $response->headers->setCookie(Cookie::create(SetupToken::COOKIE, $match[1], time() + SetupToken::LIFETIME, '/', null, $secure, true, false, Cookie::SAMESITE_LAX));
+            $response->headers->setCookie(Cookie::create(SetupToken::COOKIE, $this->setup->issue($this->setup->title()), time() + SetupToken::LIFETIME, '/', null, $secure, true, false, Cookie::SAMESITE_LAX));
 
             return $response;
         }
 
+        // The setup cookie, or the installer's own cookie (the same value: the browser has only that
+        // one when the installer's last response never reached it).
         $token = $request->cookies->get(SetupToken::COOKIE);
+        $renew = false;
+        if (!$this->setup->matches($token) && $this->setup->matches($request->cookies->get(WebInstaller::COOKIE))) {
+            $token = $request->cookies->get(WebInstaller::COOKIE);
+            $renew = true;
+        }
+        if ($renew) {
+            $response = $this->forTheInstaller($request, $administrator, (string) $token, $wantsPage);
+            $response->headers->setCookie(Cookie::create(SetupToken::COOKIE, (string) $token, time() + SetupToken::LIFETIME, '/', null, $secure, true, false, Cookie::SAMESITE_LAX));
+
+            return $response;
+        }
         if (!$this->setup->matches($token)) {
             if (!$wantsPage) {
                 return new Response("This site is being set up.\n", Response::HTTP_SERVICE_UNAVAILABLE, ['Content-Type' => 'text/plain; charset=UTF-8', 'Retry-After' => '300']);
@@ -105,6 +119,18 @@ final class SetupGateListener
             ]);
         }
 
+        return $this->forTheInstaller($request, $administrator, (string) $token, $wantsPage);
+    }
+
+    /**
+     * The answer for the browser that holds the setup token.
+     */
+    private function forTheInstaller(Request $request, FirstAdministrator $administrator, string $token, bool $wantsPage): Response
+    {
+        $method = $request->getRealMethod();
+        $path = $request->getPathInfo();
+        $base = $request->getBasePath();
+        $secure = WebInstaller::secure($request);
         $atForm = in_array($path, ['/_setup', self::PATH], true);
         if (!$atForm || !in_array($method, ['GET', 'HEAD', 'POST'], true) || $method !== $request->getMethod()) {
             return $wantsPage
@@ -112,7 +138,7 @@ final class SetupGateListener
                 : new Response("This site is being set up.\n", Response::HTTP_SERVICE_UNAVAILABLE, ['Content-Type' => 'text/plain; charset=UTF-8']);
         }
 
-        $field = SetupToken::fieldFor((string) $token);
+        $field = SetupToken::fieldFor($token);
         $form = new InstallForm($request->request->all());
         $details = new AdministratorDetails($form->raw('name'), $form->raw('handle'), $form->raw('email'), $form->raw('password'), $form->raw('password2'));
         $errors = [];
@@ -120,19 +146,35 @@ final class SetupGateListener
             if (!hash_equals($field, $form->text('token'))) {
                 $errors['form'] = 'That form was opened too long ago. Please fill it in again.';
             } else {
-                $errors = $administrator->problems($details);
-                if ($errors === []) {
-                    try {
-                        $uuid = $administrator->create($details, $this->setup->title());
-                    } catch (\RuntimeException) {
-                        $errors['form'] = 'The account could not be created. Please try again.';
+                // One submission at a time: a second one (a double click) waits here, then finds the
+                // marker gone and the account made, and is sent to sign in.
+                $uuid = null;
+                $ran = $this->setup->exclusively(function () use ($administrator, $details, &$errors, &$uuid): bool {
+                    if ($administrator->administratorExists()) {
+                        $this->setup->clear();
+
+                        return true;
                     }
+                    $errors = $administrator->problems($details);
+                    if ($errors === []) {
+                        try {
+                            $uuid = $administrator->create($details, $this->setup->title());
+                            $this->setup->clear();
+                        } catch (\RuntimeException) {
+                            $errors['form'] = 'The account could not be created. Please try again.';
+                        }
+                    }
+
+                    return true;
+                });
+                if ($ran === null || ($errors === [] && $uuid === null)) {
+                    return new RedirectResponse($base . '/session/login', Response::HTTP_SEE_OTHER);
                 }
-                if ($errors === [] && isset($uuid)) {
-                    $this->setup->clear();
+                if ($uuid !== null) {
                     $administrator->signIn($uuid);
                     $response = new RedirectResponse($base . self::WELCOME, Response::HTTP_SEE_OTHER);
                     $response->headers->clearCookie(SetupToken::COOKIE, '/', null, $secure, true, Cookie::SAMESITE_LAX);
+                    $response->headers->clearCookie(WebInstaller::COOKIE, '/', null, $secure, true, Cookie::SAMESITE_STRICT);
 
                     return $response;
                 }

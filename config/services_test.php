@@ -141,7 +141,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()->get(BootConfig::class)
         ->factory([\Tests\Fixtures\InstallRoot::class, 'bootConfig'])
         ->args(['%kernel.project_dir%']);
-    $container->services()->get(\Idno\Install\InstallPaths::class)
-        ->factory([\Tests\Fixtures\InstallRoot::class, 'paths'])
-        ->args(['%kernel.project_dir%']);
+    if ($builder->hasDefinition(\Idno\Install\InstallPaths::class)) {
+        $container->services()->get(\Idno\Install\InstallPaths::class)
+            ->factory([\Tests\Fixtures\InstallRoot::class, 'paths'])
+            ->args(['%kernel.project_dir%']);
+    }
 };

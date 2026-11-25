@@ -296,9 +296,26 @@ JS;
             . '<style nonce="' . self::e($nonce) . '">' . self::STYLE . '</style>'
             . '<script nonce="' . self::e($nonce) . '">document.documentElement.className="js";</script>'
             . '</head><body><main>' . $body . '</main>'
-            . ($script === '' ? '' : '<script nonce="' . self::e($nonce) . '">' . $script . '</script>')
+            . '<script nonce="' . self::e($nonce) . '">' . self::ONCE . $script . '</script>'
             . '</body></html>' . "\n";
     }
+
+    /** A form is sent once: a second click while the first submission is on its way does nothing. */
+    private const ONCE = <<<'JS'
+(function () {
+  'use strict';
+  var forms = document.querySelectorAll('form');
+  for (var i = 0; i < forms.length; i++) {
+    forms[i].addEventListener('submit', function (event) {
+      if (this.getAttribute('data-sent')) { event.preventDefault(); return; }
+      this.setAttribute('data-sent', '1');
+    });
+  }
+  window.addEventListener('pageshow', function () {
+    for (var j = 0; j < forms.length; j++) { forms[j].removeAttribute('data-sent'); }
+  });
+})();
+JS;
 
     private const STYLE = <<<'CSS'
 :root{color-scheme:light dark;--bg:#ffffff;--fg:#1b1b1b;--muted:#4a4a4a;--line:#c8c8c8;--field:#ffffff;--warn-bg:#fff4d6;--warn-fg:#3d2c00;--err-bg:#fde8e8;--err-fg:#6b0f0f;--ok:#17633a;--button:#1f4fa3;--button-fg:#ffffff}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Idno\Install;
 
 use Doctrine\DBAL\Configuration;
+use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Idno\Config\BootConfig;
 use Idno\Exceptions\ConfigurationException;
@@ -28,6 +29,9 @@ use Idno\Upgrade\UpgradeLock;
  */
 final class DatabaseChoice
 {
+    /** How long an installer waits for a database server to answer the connection. */
+    public const CONNECT_SECONDS = 5;
+
     /** @var \Closure(string): bool */
     private readonly \Closure $moduleLoaded;
 
@@ -142,12 +146,22 @@ final class DatabaseChoice
         if ($params['dbname'] === '' || $params['dbhost'] === '') {
             throw new ConfigurationException('Idno needs the name of the database and the name of the server it is on.');
         }
-        // A server typed as host:port (some hosts give it that way) is a host and a port.
-        if (preg_match('/\A([^:]+):([0-9]{1,5})\z/', $params['dbhost'], $match) === 1) {
+        // A server typed as host:port or [ipv6]:port (some hosts give it that way) is a host and a port.
+        if (preg_match('/\A([^:\[\]]+|\[[^\[\]]+\]):([0-9]{1,5})\z/', $params['dbhost'], $match) === 1) {
             $params['dbhost'] = $match[1];
             $params['dbport'] = $match[2];
         }
-        $connection = ConnectionFactory::forConfig($params, [], $this->paths->root());
+        // The server and the database's name become parts of the driver's connection string: only what
+        // a host name, an address or a database name can hold is accepted, so that neither can add an
+        // option to it (a socket, a file).
+        if (preg_match('/\A(?:[A-Za-z0-9._-]{1,253}|\[[0-9A-Fa-f:.]{2,45}\])\z/', $params['dbhost']) !== 1) {
+            throw new ConfigurationException('The database server must be a host name or an IP address, optionally followed by a colon and a port (for example localhost, or db.example.com:3307).');
+        }
+        if (preg_match('/\A[^;=\s\x00-\x1f\x7f]{1,64}\z/', $params['dbname']) !== 1) {
+            throw new ConfigurationException('The name of the database cannot contain a space, a semicolon or an equals sign.');
+        }
+        $params['dbhost'] = trim($params['dbhost'], '[]');
+        $connection = self::connection($params, $this->paths->root());
         try {
             $connection->getServerVersion();
         } catch (\Throwable $e) {
@@ -157,6 +171,28 @@ final class DatabaseChoice
         }
 
         return $params;
+    }
+
+    /**
+     * The connection an installer checks a candidate database with. It is the site's connection for
+     * those settings, except that for MySQL and MariaDB the server may NOT ask for a local file (the
+     * site's own connection allows LOAD DATA LOCAL; here the server is whatever a visitor of an
+     * uninstalled site typed, and a hostile one could ask the driver for any file the web server can
+     * read) and that connecting gives up after CONNECT_SECONDS.
+     *
+     * @param array<string, mixed> $params database, dbname, dbuser, dbpass, dbhost, dbport
+     */
+    public static function connection(array $params, ?string $projectDir = null): Connection
+    {
+        $dbal = ConnectionFactory::parameters($params, [], $projectDir);
+        if (($dbal['driver'] ?? null) === 'pdo_mysql') {
+            $dbal['driverOptions'] = [
+                \Pdo\Mysql::ATTR_LOCAL_INFILE => 0,
+                \PDO::ATTR_TIMEOUT => self::CONNECT_SECONDS,
+            ] + ($dbal['driverOptions'] ?? []);
+        }
+
+        return DriverManager::getConnection($dbal, ConnectionFactory::configuration($dbal));
     }
 
     /**
@@ -195,7 +231,7 @@ final class DatabaseChoice
     public function inspect(array $params): DatabaseFinding
     {
         $config = new BootConfig($params, false);
-        $connection = ConnectionFactory::forConfig($params, [], $this->paths->root());
+        $connection = self::connection($params, $this->paths->root());
         try {
             $catalog = new SchemaCatalog($connection);
             $state = new SchemaState(

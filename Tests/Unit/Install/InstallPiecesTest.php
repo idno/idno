@@ -277,6 +277,89 @@ final class InstallPiecesTest extends TestCase
         }
     }
 
+    public function testTheInstallersMysqlConnectionNeverSendsALocalFileAndGivesUpSoon(): void
+    {
+        if (!extension_loaded('pdo_mysql')) {
+            self::markTestSkipped('pdo_mysql is needed.');
+        }
+        // The site's own connection allows LOAD DATA LOCAL; the installer's server is whatever a visitor typed.
+        $options = DatabaseChoice::connection(['database' => 'MySQL', 'dbname' => 'idno', 'dbuser' => 'u', 'dbpass' => 'p', 'dbhost' => 'db.example.com', 'dbport' => '3307'])->getParams()['driverOptions'] ?? [];
+
+        self::assertSame(0, $options[\Pdo\Mysql::ATTR_LOCAL_INFILE]);
+        self::assertSame(DatabaseChoice::CONNECT_SECONDS, $options[\PDO::ATTR_TIMEOUT]);
+        self::assertLessThanOrEqual(10, DatabaseChoice::CONNECT_SECONDS);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function notDatabaseServers(): array
+    {
+        return [
+            'an option of the connection string' => ['localhost;unix_socket=/tmp/x', 'idno'],
+            'a local file option' => ['localhost;local_infile=1', 'idno'],
+            'a space' => ['local host', 'idno'],
+            'a slash' => ['/var/run/mysqld/mysqld.sock', 'idno'],
+            'a user' => ['root@localhost', 'idno'],
+            'an unclosed bracket' => ['[::1', 'idno'],
+            'a database name with an option' => ['localhost', 'idno;host=evil.example'],
+            'a database name with a space' => ['localhost', 'my db'],
+        ];
+    }
+
+    /**
+     * @dataProvider notDatabaseServers
+     */
+    public function testAServerOrDatabaseNameThatCouldAddAnOptionToTheConnectionIsRefusedBeforeConnecting(string $host, string $name): void
+    {
+        $choice = new DatabaseChoice(new InstallPaths($this->root), static fn (string $module): bool => true);
+        try {
+            $choice->params('mysql', ['name' => $name, 'user' => 'u', 'pass' => 'p', 'host' => $host]);
+            self::fail('Accepted.');
+        } catch (ConfigurationException $e) {
+            self::assertMatchesRegularExpression('/database server must be|name of the database cannot/', $e->getMessage());
+            self::assertNull($e->getPrevious(), 'nothing was connected to');
+        }
+    }
+
+    public function testAServerMayBeAnAddressWithAPort(): void
+    {
+        if (!extension_loaded('pdo_mysql')) {
+            self::markTestSkipped('pdo_mysql is needed.');
+        }
+        $choice = new DatabaseChoice(new InstallPaths($this->root));
+        // Port 9 of this computer refuses at once: the host and the port were read, and connecting was tried.
+        foreach (['127.0.0.1:9', '[::1]:9'] as $host) {
+            try {
+                $choice->params('mysql', ['name' => 'idno', 'user' => 'u', 'pass' => 'p', 'host' => $host]);
+                self::fail('Connected to a closed port.');
+            } catch (ConfigurationException $e) {
+                self::assertStringContainsString('could not reach the database server', $e->getMessage(), $host);
+            }
+        }
+    }
+
+    public function testASetupTokenCanBeTheValueTheBrowserAlreadyHoldsAndTheWorkIsDoneOnceAtATime(): void
+    {
+        $setup = new SetupToken(new InstallPaths($this->root));
+        $held = str_repeat('ab', 32);
+
+        self::assertSame($held, $setup->issue('Site', $held));
+        self::assertTrue($setup->matches($held));
+        self::assertNotSame('not a token', $setup->issue('Site', 'not a token'));
+        self::assertSame('done', $setup->exclusively(static fn (): string => 'done'));
+        $setup->clear();
+        self::assertNull($setup->exclusively(static fn (): string => 'never'), 'no marker: the work is not run');
+    }
+
+    public function testNoCheckNamesTheServersOwnPath(): void
+    {
+        $results = ServerChecks::run(new InstallPaths($this->root), ['php' => '8.0', 'extension' => static fn (string $n): bool => false, 'writable' => static fn (string $p): bool => false, 'secure' => false, 'host' => 'example.com', 'basePath' => '/x', 'cacheInTemp' => true]);
+        foreach ($results as $result) {
+            self::assertStringNotContainsString($this->root, $result->meaning . $result->fix . $result->command . $result->title, $result->id);
+        }
+    }
+
     public function testTheOwnershipNotesNameTheFilesTheDirectoryAndTheWebServersUser(): void
     {
         $text = implode("\n", DatabaseChoice::sqliteOwnershipNotes('/srv/idno/data/idno.sqlite'));

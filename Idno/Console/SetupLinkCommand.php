@@ -69,7 +69,7 @@ final class SetupLinkCommand extends Command
             $output->writeln('Open your site\'s address followed by this in your browser to create the administrator account:');
             $output->writeln('    /_setup/' . $token);
         }
-        $output->writeln('The link works until the account exists. Until then, visitors see a page saying the site is being set up.');
+        $output->writeln('The link works once: the browser that opens it can then create the account. Run this command again for another link. Until the account exists, visitors see a page saying the site is being set up.');
         $output->writeln('The web server must be able to read the file configuration/setup-pending this command wrote: if the link shows "being set up", run this command as the web server\'s user.');
 
         return Command::SUCCESS;

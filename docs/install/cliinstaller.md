@@ -29,6 +29,7 @@ Every answer can be an option, so that nothing is asked:
 | `--upload-path` | The folder for uploaded files (default `Uploads`). It must exist. |
 | `--admin-name`, `--admin-handle`, `--admin-email` | The administrator. |
 | `--admin-password-file`, `--admin-password-stdin` | The administrator's password: the first line of a file, or of standard input. |
+| `--use-existing` | Use the Idno site the database already holds. Without it, a database that holds a site is refused; with it, nothing is replaced, and a site from an older version is upgraded. |
 | `--no-admin` | Do not create the administrator now. |
 | `--manifest` | An ini file of settings (below). Options win over it. |
 
@@ -54,7 +55,7 @@ The command creates files as the user who runs it and changes no permissions, an
 ## The other commands
 
 * `php bin/console idno:admin:create` creates the first administrator of a site that has none (after `idno:upgrade`). Options: `--handle`, `--email`, `--name`, `--site-title`, `--password-file`, `--password-stdin`. It refuses once the site has an administrator.
-* `php bin/console idno:setup:link` prints a one-time link to the "Create your account" step in a browser, for a site that has no administrator: after a hand-written configuration, or when the browser that ran the web installer is no longer at hand.
+* `php bin/console idno:setup:link` prints a link, which works once, to the "Create your account" step in a browser, for a site that has no administrator: after a hand-written configuration, or when the browser that ran the web installer is no longer at hand.
 * `php bin/console idno:upgrade` creates or upgrades the tables.
 
 On a site that is not installed, every other command says `Idno is not installed yet: run php bin/console idno:install`.

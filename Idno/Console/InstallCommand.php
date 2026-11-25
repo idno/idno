@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Idno\Console;
 
+use Idno\Config\BootConfig;
 use Idno\Exceptions\ConfigurationException;
 use Idno\Install\AdministratorDetails;
 use Idno\Install\CheckResult;
@@ -55,6 +56,7 @@ final class InstallCommand extends Command
 
     public function __construct(
         private readonly InstallPaths $paths,
+        private readonly BootConfig $config,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     )
@@ -80,6 +82,7 @@ final class InstallCommand extends Command
             ->addOption('admin-email', null, InputOption::VALUE_REQUIRED, 'The administrator\'s email address')
             ->addOption('admin-password-file', null, InputOption::VALUE_REQUIRED, 'A file whose first line is the administrator\'s password')
             ->addOption('admin-password-stdin', null, InputOption::VALUE_NONE, 'Read the administrator\'s password from standard input')
+            ->addOption('use-existing', null, InputOption::VALUE_NONE, 'Use the Idno site the database already holds (it is upgraded if it is from an older version; nothing in it is replaced)')
             ->addOption('no-admin', null, InputOption::VALUE_NONE, 'Do not create the administrator now (use idno:admin:create or idno:setup:link later)');
     }
 
@@ -88,6 +91,11 @@ final class InstallCommand extends Command
         $errors = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
         if ($this->paths->existingConfigFiles() !== []) {
             $errors->writeln('Idno is already installed: a configuration file exists (' . $this->paths->existingConfigFiles()[0] . '). Nothing was changed.');
+
+            return Command::FAILURE;
+        }
+        if (!$this->config->isDefault()) {
+            $errors->writeln('Idno is already installed: its environment names a database (IDNO_DATABASE or IDNO_DATABASE_URL), so it needs no configuration file. Create the tables with php bin/console idno:upgrade and the administrator with php bin/console idno:admin:create. Nothing was changed.');
 
             return Command::FAILURE;
         }
@@ -183,6 +191,9 @@ final class InstallCommand extends Command
             if ($finding->kind === DatabaseFinding::REFUSED) {
                 throw new ConfigurationException($finding->message);
             }
+            if ($finding->holdsASite() && !$input->getOption('use-existing')) {
+                throw new ConfigurationException('That database already holds an Idno site' . ($finding->kind === DatabaseFinding::IDNO_ONE_X ? ' from Idno 1.x, which would be upgraded (its tables are renamed, so the old version of Idno could no longer use it)' : '') . '. To use it, run this command again with --use-existing; nothing in it is replaced. To start a new site, choose an empty database.');
+            }
             if (!$config->writeOnce($config->build($params + ['uploadpath' => $upload, 'url' => $url]))) {
                 throw new ConfigurationException('A configuration file appeared while this command ran. Nothing was changed.');
             }
@@ -199,7 +210,7 @@ final class InstallCommand extends Command
             $output->writeln('Note: the address is http, not https. Passwords typed on the site can be read on the network; use this only on a private network.');
         }
         if ($finding->holdsASite()) {
-            $output->writeln('The database already holds an Idno site: it is kept, and upgraded if it is from an older version. Nothing in it is replaced.');
+            $output->writeln('Using the Idno site the database already holds: it is upgraded if it is from an older version. Nothing in it is replaced.');
         }
 
         $output->writeln('Setting up the database...');
@@ -299,7 +310,13 @@ final class InstallCommand extends Command
     private function console(array $arguments, ?string $stdin, OutputInterface $output): int
     {
         $command = array_merge([PHP_BINARY, '-d', 'error_reporting=' . error_reporting(), $this->projectDir . '/bin/console'], $arguments);
-        $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->projectDir);
+        // Standard error goes to a temporary file, not a pipe: two pipes read one after the other can
+        // leave both processes waiting when the one read second fills up.
+        $errorFile = tmpfile();
+        if ($errorFile === false) {
+            return 1;
+        }
+        $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => $errorFile], $pipes, $this->projectDir);
         if (!is_resource($process)) {
             return 1;
         }
@@ -308,10 +325,11 @@ final class InstallCommand extends Command
         }
         fclose($pipes[0]);
         $out = (string) stream_get_contents($pipes[1]);
-        $err = (string) stream_get_contents($pipes[2]);
         fclose($pipes[1]);
-        fclose($pipes[2]);
         $status = proc_close($process);
+        rewind($errorFile);
+        $err = (string) stream_get_contents($errorFile);
+        fclose($errorFile);
         // What the command wrote on standard error is its log unless it failed.
         foreach (array_filter(explode("\n", $out . ($status === 0 ? '' : $err)), static fn (string $line): bool => trim($line) !== '') as $line) {
             $output->writeln('  ' . $line, OutputInterface::OUTPUT_RAW);

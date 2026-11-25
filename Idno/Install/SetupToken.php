@@ -23,14 +23,17 @@ final class SetupToken
     }
 
     /**
-     * Makes a new token and writes the marker (replacing one that is there: the earlier token stops
-     * working). Returns the token, 64 hex characters.
+     * Makes a new token (or takes the one given, 64 hex characters: the web installer gives the
+     * random value its browser already holds) and writes the marker, replacing one that is there: the
+     * earlier token stops working. Returns the token.
      *
      * @throws \RuntimeException when the marker cannot be written
      */
-    public function issue(string $siteTitle = ''): string
+    public function issue(string $siteTitle = '', ?string $token = null): string
     {
-        $token = bin2hex(random_bytes(32));
+        if ($token === null || preg_match('/\A[a-f0-9]{64}\z/', $token) !== 1) {
+            $token = bin2hex(random_bytes(32));
+        }
         $json = json_encode(['hash' => hash('sha256', $token), 'title' => $siteTitle], JSON_THROW_ON_ERROR);
         if (@file_put_contents($this->paths->marker(), $json, LOCK_EX) === false) {
             throw new \RuntimeException('The folder configuration cannot be written to.');
@@ -65,6 +68,32 @@ final class SetupToken
         $title = $this->read()['title'] ?? '';
 
         return is_string($title) ? $title : '';
+    }
+
+    /**
+     * Runs $work while no other request runs work of its own here (an exclusive lock on the marker
+     * file), so that two submissions of the account form cannot both create an administrator. Returns
+     * what $work returns, or null, without running it, when the marker is gone.
+     *
+     * @template T
+     * @param \Closure(): T $work
+     * @return T|null
+     */
+    public function exclusively(\Closure $work): mixed
+    {
+        $handle = @fopen($this->paths->marker(), 'r');
+        if ($handle === false) {
+            return null;
+        }
+        try {
+            flock($handle, LOCK_EX);
+            clearstatcache(true, $this->paths->marker());
+
+            return $this->pending() ? $work() : null;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     public function clear(): void

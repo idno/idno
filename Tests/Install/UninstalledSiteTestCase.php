@@ -174,10 +174,11 @@ abstract class UninstalledSiteTestCase extends TestCase
     /**
      * Runs bin/console in the site's environment.
      *
-     * @param list<string> $arguments
+     * @param list<string>          $arguments
+     * @param array<string, string> $environment variables over the site's own
      * @return array{int, string, string} exit code, standard output, standard error
      */
-    protected function console(array $arguments, string $stdin = ''): array
+    protected function console(array $arguments, string $stdin = '', array $environment = []): array
     {
         $checkout = dirname(__DIR__, 2);
         $process = proc_open(
@@ -185,7 +186,7 @@ abstract class UninstalledSiteTestCase extends TestCase
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $checkout,
-            $this->environment(),
+            $environment + $this->environment(),
         );
         self::assertIsResource($process);
         fwrite($pipes[0], $stdin);

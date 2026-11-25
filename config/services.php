@@ -112,10 +112,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // directory; the web installer is told the kernel's cache directory so that it can say when
     // that is a temporary one. The first administrator is made by the legacy application's code
     // (public: the console commands fetch it only on an installed site).
-    $services->set(\Idno\Install\InstallPaths::class)->args(['%kernel.project_dir%'])->public();
-    $services->get(\Idno\Install\WebInstaller::class)->arg('$cacheDir', '%kernel.cache_dir%');
-    $services->alias(\Idno\Install\FirstAdministrator::class, \Idno\Legacy\LegacyFirstAdministrator::class)->public();
-    $services->get(\Idno\Install\SetupToken::class)->public();
+    if ($builder->fileExists($projectDir . '/Idno/Install')) {
+        $services->set(\Idno\Install\InstallPaths::class)->args(['%kernel.project_dir%'])->public();
+        $services->get(\Idno\Install\WebInstaller::class)->arg('$cacheDir', '%kernel.cache_dir%')->arg('$logger', service('monolog.logger.upgrade'));
+        $services->alias(\Idno\Install\FirstAdministrator::class, \Idno\Legacy\LegacyFirstAdministrator::class)->public();
+        $services->get(\Idno\Install\SetupToken::class)->public();
+    }
 
     // The legacy application's services. Each is built at runtime, when first fetched, by
     // the LegacyServiceFactory method named after its Idno::site() accessor; Idno::init()

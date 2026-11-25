@@ -156,7 +156,7 @@ final class ServerChecks
             $state,
             'The folder ' . $name . ' can be written to',
             $why . ', and the web server is not allowed to write to it' . (is_dir($path) ? '' : ' (it does not exist)') . '.',
-            'In your hosting file manager, ' . (is_dir($path) ? 'open the permissions of the folder ' . $name : 'create the folder ' . $name . ', open its permissions') . ' and allow the owner and the group to write (often shown as 775). Or, from a terminal in ' . $paths->root() . ', with the user your web server runs as in place of www-data:',
+            'In your hosting file manager, ' . (is_dir($path) ? 'open the permissions of the folder ' . $name : 'create the folder ' . $name . ', open its permissions') . ' and allow the owner and the group to write (often shown as 775). Or, from a terminal in the folder Idno is in, with the user your web server runs as in place of www-data:',
             'mkdir -p ' . $name . ' && chown -R www-data ' . $name
         );
     }

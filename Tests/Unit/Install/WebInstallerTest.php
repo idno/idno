@@ -158,6 +158,10 @@ final class WebInstallerTest extends TestCase
             $cookies[$cookie->getName()] = $cookie;
         }
         self::assertTrue($setup->matches($cookies[SetupToken::COOKIE]->getValue()));
+        // The token is the value the browser already holds: if this response is lost (a double click),
+        // the browser's installer cookie still opens the account step.
+        self::assertSame(self::COOKIE, $cookies[SetupToken::COOKIE]->getValue());
+        self::assertTrue($setup->matches(self::COOKIE));
         self::assertTrue($cookies[SetupToken::COOKIE]->isHttpOnly());
         self::assertTrue($cookies[SetupToken::COOKIE]->isSecure());
         self::assertSame('lax', $cookies[SetupToken::COOKIE]->getSameSite());
@@ -291,6 +295,8 @@ final class WebInstallerTest extends TestCase
         self::assertStringContainsString('could not be opened as an SQLite database', $html);
         self::assertSame('not a database', file_get_contents($this->root . '/data/idno.sqlite'));
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertStringNotContainsString($this->root, $html, 'a file is named from the project, never by the server\'s path');
+        self::assertStringContainsString('data/idno.sqlite could not be opened', $html);
     }
 
     public function testEveryValueIsEscaped(): void

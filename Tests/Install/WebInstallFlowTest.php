@@ -162,6 +162,57 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertSame($written, file_get_contents($this->root . '/configuration/config.ini'));
     }
 
+    public function testADoubleClickOnTheLastStepDoesNotLockTheInstallerOut(): void
+    {
+        $this->startServer();
+        $first = $this->request('/');
+        $install = [WebInstaller::COOKIE => $first['cookies'][WebInstaller::COOKIE]];
+        $fields = ['step' => 'database', 'token' => self::token($first['body']), 'title' => 'Twice', 'domain' => substr($this->base, strlen('http://')), 'database' => 'sqlite'];
+
+        // Two submissions; the browser only ever sees the answer to the second, which sets no setup cookie.
+        self::assertSame(303, $this->request('/', $fields, $install)['status']);
+        $second = $this->request('/', $fields, $install);
+        self::assertArrayNotHasKey(SetupToken::COOKIE, $second['cookies']);
+        $this->createTheTables();
+
+        // The cookie the installer gave the browser at the start opens the account step, and the setup cookie follows.
+        $home = $this->request('/', null, $install);
+        self::assertSame(302, $home['status'], $home['body']);
+        self::assertSame('/_setup/', $home['location']);
+        self::assertSame($install[WebInstaller::COOKIE], $home['cookies'][SetupToken::COOKIE]);
+        $form = $this->request('/_setup/', null, $install);
+        self::assertStringContainsString('<h1>Create your account</h1>', $form['body']);
+
+        // Two submissions of the account form make one administrator: the second is sent to sign in.
+        $created = $this->request('/_setup/', self::ACCOUNT + ['token' => self::token($form['body'])], $install);
+        self::assertSame('/admin/welcome/', $created['location']);
+        $again = $this->request('/_setup/', self::ACCOUNT + ['token' => self::token($form['body'])], $install);
+        self::assertSame(404, $again['status'], 'the step is gone');
+    }
+
+    public function testNoMethodHeaderOrAddressGetsAStrangerPastTheSetupStep(): void
+    {
+        $this->startServer();
+        $this->installTheSite();
+        $this->createTheTables();
+
+        foreach (['PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'] as $method) {
+            self::assertSame(503, $this->request('/_setup/', null, [], ['Accept: text/html'], $method)['status'], $method);
+        }
+        foreach ([['X-HTTP-Method-Override: GET'], ['X-HTTP-Method-Override: nonsense'], ['X-IDNO-USERNAME: ada', 'X-IDNO-SIGNATURE: x'], ['Authorization: Bearer x']] as $headers) {
+            self::assertSame(503, $this->request('/_setup/', self::ACCOUNT + ['token' => 'x'], [], array_merge(['Accept: text/html'], $headers))['status'], implode(' ', $headers));
+            self::assertSame(503, $this->request('/micropub/endpoint', ['h' => 'entry', 'content' => 'x'], [], $headers)['status'], implode(' ', $headers));
+        }
+        foreach (['/index.php/_setup/', '/_setup//', '/_SETUP/', '/_setup/?x=1', '/account/register', '/session/login', '/begin/register'] as $path) {
+            self::assertSame(503, $this->request($path)['status'], $path);
+            self::assertSame(503, $this->request($path, self::ACCOUNT)['status'], 'POST ' . $path);
+        }
+        $step = $this->request('/_upgrade/step', [], [], ['Accept: application/json'], 'POST');
+        self::assertSame(503, $step['status'], 'the upgrade step is not a way around it');
+        self::assertFileExists($this->root . '/configuration/setup-pending');
+        self::assertStringContainsString('This site is being set up', $this->request('/')['body'], 'and nobody was created');
+    }
+
     public function testALostCookieIsRecoveredWithTheLinkTheConsolePrints(): void
     {
         $this->startServer();
@@ -180,6 +231,10 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertSame(303, $opened['status']);
         self::assertSame('/_setup/', $opened['location']);
         $other = [SetupToken::COOKIE => $opened['cookies'][SetupToken::COOKIE]];
+        // The link worked once: the token it carried (which a server's log may keep) is no longer the site's.
+        self::assertNotSame(substr($match[1], strlen('/_setup/')), $other[SetupToken::COOKIE]);
+        self::assertSame(503, $this->request($match[1])['status']);
+        self::assertSame(503, $this->request('/_setup/', null, [SetupToken::COOKIE => substr($match[1], strlen('/_setup/'))])['status']);
         $form = $this->request('/_setup/', null, $other);
         self::assertStringContainsString('<h1>Create your account</h1>', $form['body']);
         self::assertSame(303, $this->request('/_setup/', self::ACCOUNT + ['token' => self::token($form['body'])], $other)['status']);
@@ -282,5 +337,40 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertSame(200, $home['status'], $this->serverLog());
         self::assertStringContainsString('Ada&#039;s notes', $home['body']);
         self::assertSame(404, $this->request('/_setup/')['status']);
+    }
+
+    public function testTheConsoleNeverTakesOverADatabaseThatHoldsASiteUnlessTold(): void
+    {
+        self::assertSame(0, $this->console(['idno:install', '--no-interaction', '--url=https://example.com/', '--no-admin'])[0]);
+        unlink($this->root . '/configuration/config.ini');
+
+        [$exit, , $err] = $this->console(['idno:install', '--no-interaction', '--url=https://example.com/', '--no-admin']);
+        self::assertSame(1, $exit);
+        self::assertStringContainsString('already holds an Idno site', $err);
+        self::assertStringContainsString('--use-existing', $err);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+
+        [$exit, $out, $err] = $this->console(['idno:install', '--no-interaction', '--url=https://example.com/', '--use-existing']);
+        self::assertSame(0, $exit, $out . $err);
+        self::assertStringContainsString('Using the Idno site the database already holds', $out);
+        self::assertFileExists($this->root . '/configuration/config.ini');
+    }
+
+    public function testASiteConfiguredByItsEnvironmentIsInstalledForTheConsoleAndTheWeb(): void
+    {
+        $environment = ['IDNO_DATABASE' => 'sqlite', 'IDNO_DBNAME' => $this->root . '/data/env.sqlite', 'IDNO_UPLOADPATH' => $this->root . '/Uploads/'];
+
+        [$exit, , $err] = $this->console(['idno:install', '--no-interaction', '--url=https://example.com/'], '', $environment);
+        self::assertSame(1, $exit);
+        self::assertStringContainsString('environment names a database', $err);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/data/idno.sqlite');
+
+        touch($this->root . '/data/env.sqlite');
+        [$exit, $out, $err] = $this->console(['idno:upgrade'], '', $environment);
+        self::assertSame(0, $exit, $out . $err);
+        [$exit, $out, $err] = $this->console(['idno:admin:create', '--no-interaction', '--handle=ada', '--email=ada@example.com', '--password-stdin'], "correct horse battery\n", $environment);
+        self::assertSame(0, $exit, $out . $err);
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini', 'no configuration file was needed');
     }
 }

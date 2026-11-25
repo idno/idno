@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Idno\Install;
 
 use Idno\Exceptions\ConfigurationException;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -34,6 +36,7 @@ final class WebInstaller
     public function __construct(
         private readonly InstallPaths $paths,
         private readonly string $cacheDir = '',
+        private readonly LoggerInterface $logger = new NullLogger(),
     )
     {
     }
@@ -73,10 +76,12 @@ final class WebInstaller
                     ? InstallPage::database($databaseValues, [], $this->available($checks), false, $token, $nonce)
                     : InstallPage::site($form->siteValues(), $errors, $token, $nonce);
             } else {
-                $result = $this->save($form, $checks, $request);
+                $result = $this->save($form, $checks, $request, $cookie);
                 if ($result instanceof Response) {
                     $response = $result;
                 } else {
+                    // A message names a file under the project by its path from there, never the server's own path.
+                    $result = array_map(fn (string $message): string => str_replace($this->paths->root() . '/', '', $message), $result);
                     $html = isset($result['title']) || isset($result['domain'])
                         ? InstallPage::site($form->siteValues(), $result, $token, $nonce)
                         : InstallPage::database($databaseValues, array_diff_key($result, ['existing' => '']) + (isset($result['existing']) ? ['use_existing' => $result['existing']] : []), $this->available($checks), isset($result['existing']), $token, $nonce);
@@ -157,7 +162,7 @@ final class WebInstaller
      *                                        (`existing`: the database holds a site and the form
      *                                        must confirm using it)
      */
-    private function save(InstallForm $form, array $checks, Request $request): Response|array
+    private function save(InstallForm $form, array $checks, Request $request, string $cookie): Response|array
     {
         $errors = $form->siteProblems();
         if ($errors !== []) {
@@ -229,19 +234,23 @@ final class WebInstaller
             $cleanUp();
 
             return [self::fieldOf($e->getMessage(), $type) => $e->getMessage()];
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             $cleanUp();
+            $this->logger->warning('The installer could not read the chosen database: ' . $e::class . ': ' . substr((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $e->getMessage()), 0, 500));
 
             return ['database' => 'Idno could not read that database. Check its settings and try again.'];
         }
 
+        // The setup token is the random value this browser already holds (its installer cookie): if
+        // this response never reaches the browser (a double click on the button), the browser can
+        // still create the administrator, because the setup step accepts that cookie too.
         try {
-            $token = (new SetupToken($this->paths))->issue($form->title());
-            $home->headers->setCookie(Cookie::create(SetupToken::COOKIE, $token, time() + SetupToken::LIFETIME, '/', null, self::secure($request), true, false, Cookie::SAMESITE_LAX));
-        } catch (\Throwable) {
+            (new SetupToken($this->paths))->issue($form->title(), $cookie);
+            $home->headers->setCookie(Cookie::create(SetupToken::COOKIE, $cookie, time() + SetupToken::LIFETIME, '/', null, self::secure($request), true, false, Cookie::SAMESITE_LAX));
+        } catch (\Throwable $e) {
             // The site is installed; `php bin/console idno:setup:link` opens the administrator step.
+            $this->logger->warning('The installer wrote the configuration but not the setup marker: ' . $e::class . '. Run php bin/console idno:setup:link');
         }
-        $home->headers->clearCookie(self::COOKIE, '/', null, self::secure($request), true, Cookie::SAMESITE_STRICT);
 
         return $home;
     }

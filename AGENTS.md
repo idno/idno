@@ -556,16 +556,26 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      `dbport`). The database is asked LAST so that its password is posted once and never printed.
      `save()` then, in this order: every check again; `DatabaseChoice::type()` (MongoDB refused with
      the message that names `idno:import:mongo`); `ConfigFile::assertWritable()` on what would be
-     written, BEFORE anything is created; `DatabaseChoice::params()` (MySQL: connects through
-     `ConnectionFactory::forConfig()`; a failure is one of `connectionProblem()`'s fixed sentences,
-     never the driver's text; SQLite: creates the directory and an empty file last and opens it with
+     written, BEFORE anything is created; `DatabaseChoice::params()` (MySQL: the server must be a host name or an address and the
+     database's name hold no `;`, `=` or space, since both become parts of the driver's connection
+     string; it connects through `DatabaseChoice::connection()`, the site's connection for those
+     settings EXCEPT that `LOCAL_INFILE` is off and connecting gives up after `CONNECT_SECONDS` (5): the
+     server is whatever a visitor of an uninstalled site typed, and a hostile one could otherwise ask
+     the driver for any file the web server can read. Never give an installer
+     `ConnectionFactory::forConfig()` for a candidate database. A failure is one of
+     `connectionProblem()`'s fixed sentences, never the driver's text; SQLite: creates the directory and an empty file last and opens it with
      `SqliteConnectionSetup`); `DatabaseChoice::inspect()` (a `SchemaState` on the candidate settings:
      a database the upgrade would refuse is refused here with the upgrade's own `PublicMessage`; one
      that already holds an Idno site needs the form's `use_existing=1` and is never overwritten: the
      upgrade takes over); `ConfigFile::build()` and `writeOnce()` (an exclusive create of
      `configuration/config.ini`: false, nothing changed, when any configuration file exists or
-     appears, so a double submit or a second tab changes nothing); `SetupToken::issue()` and the
-     `idno_setup` cookie; a 303 to `/`. A failure removes the SQLite file this request created.
+     appears, so a double submit or a second tab changes nothing); `SetupToken::issue()` with the value
+     of the browser's `idno_install` cookie as the token, and the `idno_setup` cookie carrying the same
+     value; a 303 to `/`. A failure removes the SQLite file this request created, and a message never
+     holds the server's own path (a file is named from the project). What cannot be shown (an exception
+     while the database is read, a marker that cannot be written) is logged on the Monolog channel
+     `upgrade`, wired by name as for `Idno\Upgrade` and for the same reason: the site's logger does not
+     exist yet.
   The web installer takes NO path from a request (the SQLite database is always `data/idno.sqlite`,
   uploads always `Uploads/`: an uninstalled site is reachable by anyone), a field that is not a string
   is empty (`InstallForm`), and a form is accepted only with the token of the `idno_install` cookie
@@ -578,7 +588,9 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
   on HTTPS, thirty days). Between the configuration and the tables the upgrade page runs as for any
   site. Then `Idno\Install\SetupGateListener` (`kernel.request`, priority 290, after the upgrade gate's
   300) acts while the legacy application is booted AND the marker exists (one `stat` a request, no
-  statement, once the marker is gone): if the site has an administrator already (an existing database
+  statement, once the marker is gone). It accepts the `idno_setup` cookie or, with the same value, the
+  installer's `idno_install` cookie (the browser has only that one when the installer's last response
+  never reached it: a double click on the button), and then gives it the setup cookie. If the site has an administrator already (an existing database
   was chosen) it removes the marker and lets the request through; a browser whose cookie matches gets
   "Create your account" at `/_setup/` (any other page is redirected there), and its POST (name,
   username, email, a password of at least `AdministratorDetails::PASSWORD_LENGTH` (10) characters typed
@@ -588,8 +600,10 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
   registration, and triggers `site/firstadmin`), removes the marker, signs the browser in and
   redirects to `/admin/welcome/` (`Idno\Pages\Admin\Welcome`, a legacy admin page: what to do next;
   every link on it is followed by a test); everyone else gets a 503 "This site is being set up" for
-  every address and method. `GET /_setup/<token>` with the marker's token gives the browser the cookie
-  (the link `idno:setup:link` prints). "Closed for ever" means: once the site has an administrator the
+  every address and method. `GET /_setup/<token>` with the marker's token (the link `idno:setup:link`
+  prints) works ONCE: it makes a new token, which only that browser gets, so the one in the link (and
+  in any server log) is dead. The account form's work runs under an exclusive lock on the marker
+  (`SetupToken::exclusively()`): two submissions make one administrator, and the second is sent to sign in. "Closed for ever" means: once the site has an administrator the
   marker is gone and `/_setup/` is an ordinary missing page; nothing else creates an administrator.
   `Idno\Pages\Account\Register` NEVER makes one: on a site with no user it refuses (a redirect to the
   home page), and `Idno\Pages\Homepage` on a site with no user answers 503 with the same "being set
@@ -623,7 +637,8 @@ installer driven with `Request` objects on a temporary root: each step, the last
 second submission, a missing token, MongoDB, arrays for strings, hostile values, nothing left behind,
 an existing database never removed), `Tests/Install/WebInstallFlowTest` (over HTTP, a site of its own
 through `UninstalledSiteTestCase`: every address of an unconfigured site, the whole flow to a
-signed-in administrator, a stranger at each stage, the ready page's links, the step gone afterwards,
+signed-in administrator, a stranger at each stage (every method, a method override, API and bearer
+headers, the upgrade step), a double click on the last step and on the account form, the ready page's links, the step gone afterwards,
 the lost cookie and the console's link, an unreadable configuration, a hand-written configuration and
 `idno:admin:create`, `idno:install` unattended) and `Tests/Kernel/InstallerSchemaTest` (the MySQL side;
 skips on SQLite). Those sites keep what an installation writes in a temporary directory: in the TEST
@@ -816,9 +831,10 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   for unless `--no-interaction`. A password is NEVER an option: the database's comes from the manifest,
   `--db-password-file` or a hidden prompt, the administrator's from `--admin-password-file`,
   `--admin-password-stdin` or a hidden prompt typed twice. It refuses (exit 1, nothing changed) when a
-  configuration file exists, a server check fails, `--url` is missing or not `http(s)://host[:port]/`
+  configuration file exists or the environment names a database (the site is installed), a server check fails, `--url` is missing or not `http(s)://host[:port]/`
   with nothing after it (`SiteAddress::fromUrl()`; an http address on a host that is not local gets a
-  note), the database is MongoDB, a value cannot be written, or the database cannot be used; it writes
+  note), the database is MongoDB, a value cannot be written, the database cannot be used, or it already holds an Idno
+  site and `--use-existing` was not given (a 1.x site would be upgraded, and its old version could no longer use it); it writes
   `configuration/config.ini` with `ConfigFile::writeOnce()`, then runs `idno:upgrade` and (unless
   `--no-admin`, or the database already held a site) `idno:admin:create --password-stdin` in processes
   of their own (this one booted with no configuration), and prints who owns the files. Unlike the web
@@ -830,7 +846,7 @@ effect here. A legacy `ConsolePlugin` must not define options named `--env`/`-e`
   while the gate is closed), refuses once the site has an administrator, and removes the setup marker.
 - **`idno:setup:link`** (`Idno\Console\SetupLinkCommand`): makes a new setup token (the marker is
   rewritten: an earlier link and the installer's cookie stop working) and prints `<url>/_setup/<token>`,
-  the link to the "Create your account" step; refuses once the site has an administrator.
+  the link to the "Create your account" step, which works once; refuses once the site has an administrator.
 - **`idno:upgrade`** (`Idno\Console\UpgradeCommand`): creates or upgrades the database of an
   SQL site (MySQL, MariaDB or SQLite) in one run, `UpgradeRunner::run()` (see "The schema gate and
   the upgrade"): the pending schema migrations, the indexes the core entity classes (`Idno/`)
@@ -4075,7 +4091,7 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
   the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
   format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
   directly, and never call `error_log()`: both bypass the log level.
-- The one exception: code in `Idno\Upgrade\` runs while the legacy application is NOT booted, so
+- The one exception: code in `Idno\Upgrade\` (and the web installer, `Idno\Install\WebInstaller`, wired the same way) runs while the legacy application is NOT booted, so
   the site's logger does not exist there. It must not take `Psr\Log\LoggerInterface` by autowiring
   (that is the legacy logger); it logs its failures, and nothing else, on the Monolog channel
   `upgrade` (declared in `config/packages/monolog.php`, written by the `symfony` handler at warning
