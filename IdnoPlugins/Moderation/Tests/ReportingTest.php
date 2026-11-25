@@ -231,6 +231,28 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertCount(1, $this->mails('received'), 'The reporter is thanked once.');
         }
 
+        public function testReportingAgainCannotFloodOrSteerACase()
+        {
+            $entry = $this->post(static::$author);
+            $pest = static::member('reppest');
+            $first = $this->report($pest, 'post', $entry, 'spam');
+            $revision = static::freshCase($first['case'])->revision;
+
+            $again = $this->report($pest, 'post', $entry, 'child-safety');
+
+            $case = static::freshCase($first['case']);
+            $this->assertTrue($again['ok']);
+            $this->assertEquals($revision, $case->revision, 'A repeat by the same member must not get in the way of an administrator who is about to act.');
+            $this->assertEquals(['child-safety' => 1], $case->reasons, 'One member counts once, with the reason they gave last.');
+
+            for ($i = 0; $i < 10; $i++) {
+                $last = $this->report($pest, 'post', $entry, 'spam', 'again ' . $i);
+            }
+            $this->assertFalse($last['ok'], 'Repeats are limited too.');
+            $this->assertLessThanOrEqual(5, count(static::freshCase($first['case'])->getReports()[0]->entries));
+            $this->assertEquals($revision, static::freshCase($first['case'])->revision);
+        }
+
         public function testSeveralMembersReportingMakeOneCase()
         {
             $entry = $this->post(static::$author);

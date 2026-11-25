@@ -34,6 +34,18 @@ namespace Tests\Common {
             static::$author = static::$reader = static::$admin = null;
         }
 
+        /**
+         * The post as stored now, whoever is signed in
+         */
+        private function stored($entry)
+        {
+            Idno::site()->db()->setIgnoreAccess(true);
+            $stored = Entity::getByUUID($entry->getUUID(), false);
+            Idno::site()->db()->setIgnoreAccess(false);
+
+            return $stored;
+        }
+
         private function takenDown($status = Entity::MODERATION_REMOVED)
         {
             $marker = static::marker();
@@ -157,6 +169,53 @@ namespace Tests\Common {
             $stored = Entity::getByUUID($entry->getUUID(), false);
             Idno::site()->db()->setIgnoreAccess(false);
             $this->assertNotEmpty($stored, 'The author must not be able to delete a post that was taken down: it is evidence.');
+        }
+
+        public function testAuthorCannotDeleteARemovedPostByAnyOtherRoute()
+        {
+            // Control: an HTTP DELETE to the permalink, signed with the author's API key, deletes an ordinary post
+            $ordinary = $this->post(static::$author);
+            $ordinaryPath = (string) parse_url($ordinary->getDisplayURL(), PHP_URL_PATH);
+            $this->request('DELETE', $ordinaryPath, null, null, $this->signature(static::$author, $ordinaryPath));
+            $this->assertEmpty($this->stored($ordinary), 'Control: the same request deletes a post that is not taken down.');
+
+            // The same request for a post that was taken down
+            [$entry] = $this->takenDown();
+            $path = (string) parse_url($entry->getDisplayURL(), PHP_URL_PATH);
+            $this->request('DELETE', $path, null, null, $this->signature(static::$author, $path));
+            $this->assertNotEmpty($this->stored($entry), 'A DELETE request must not delete a post that was taken down.');
+
+            // Micropub, with an access token of the author's
+            if (Idno::site()->plugins()->get('IndiePub')) {
+                $token = \IdnoPlugins\IndiePub\Pages\IndieAuth\Token::issueToken(static::fresh(static::$author), ['me' => static::$author->getURL(), 'client_id' => 'https://client.example/', 'scope' => 'delete']);
+                $this->request('POST', '/micropub/endpoint', ['action' => 'delete', 'url' => $entry->getUUID()], null, ['Authorization: Bearer ' . $token]);
+                $this->request('POST', '/micropub/endpoint', ['action' => 'delete', 'url' => $entry->getDisplayURL()], null, ['Authorization: Bearer ' . $token]);
+                $this->assertNotEmpty($this->stored($entry), 'Micropub must not delete a post that was taken down.');
+            }
+
+            // And in this process, whoever calls delete()
+            $old = $this->swapUser(static::$author);
+            $stored = Entity::getByUUID($entry->getUUID(), false);
+            $this->assertFalse($stored->delete(), 'delete() refuses a moderated entity unless an administrator asks.');
+            $this->swapUser(static::$admin);
+            $this->assertNotEmpty(Entity::getByUUID($entry->getUUID(), false));
+            $this->assertNotFalse(Entity::getByUUID($entry->getUUID(), false)->delete(), 'An administrator can delete it.');
+            $this->swapUser($old);
+        }
+
+        public function testAnAdministratorCannotEditTheirOwnRemovedPost()
+        {
+            $marker = static::marker();
+            $entry = $this->post(static::$admin, 'Zebra ' . $marker);
+            $other = static::member('tdadmintwo', true);
+            $old = $this->swapUser($other);
+            $entry->moderate(Entity::MODERATION_REMOVED);
+            $entry->save(true);
+
+            $this->assertTrue($entry->canEdit(), 'Another administrator can edit it.');
+            $this->swapUser(static::$admin);
+            $this->assertFalse($entry->canEdit(), 'Its author cannot, administrator or not.');
+            $this->swapUser($old);
         }
 
         public function testCanEdit()

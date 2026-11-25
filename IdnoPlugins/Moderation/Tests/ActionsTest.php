@@ -324,6 +324,34 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertEquals(200, $this->get($target->getDisplayURL())['status']);
         }
 
+        public function testBanWithRemoveStillRemovesWhenTheMemberIsAlreadyBanned()
+        {
+            $target = static::member('acttarget');
+            [, $first] = $this->reportedPost(null, $target);
+            [$second, $secondCase] = $this->reportedPost(null, $target);
+            $this->assertTrue($this->act($first, static::$admin, 'ban')['ok']);
+
+            $this->assertTrue($this->act($secondCase, static::$admin, 'ban', ['remove_content' => true])['ok']);
+
+            $this->assertEquals('removed', $this->stored($second)->getPublishStatus(), 'The post must be removed even though its author was banned already.');
+            $this->assertTrue(static::freshCase($secondCase)->content_removed);
+        }
+
+        public function testRestoringAPostOfAMemberWhoseContentIsHiddenKeepsItHidden()
+        {
+            $target = static::member('acttarget');
+            [$entry, $case] = $this->reportedPost(null, $target);
+            $this->assertTrue($this->act($case, static::$admin, 'ban', ['remove_content' => true, 'hide_all' => true])['ok']);
+
+            $this->assertTrue($this->act($case, static::$admin, 'restore')['ok']);
+
+            $this->assertEquals('hidden', $this->stored($entry)->getPublishStatus(), 'The post goes back to being hidden with the rest, not public.');
+            $this->assertNotEquals(200, $this->get($entry->getDisplayURL())['status']);
+
+            $this->assertTrue($this->act($case, static::$admin, 'unban')['ok']);
+            $this->assertEquals('published', $this->stored($entry)->getPublishStatus(), 'Lifting the ban brings it back.');
+        }
+
         public function testThereIsNobodyToBanForACommentFromAnotherSite()
         {
             $entry = $this->post(static::$author);

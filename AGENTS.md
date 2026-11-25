@@ -239,8 +239,11 @@ takedown lock and the "More" menu are in core; everything else is the bundled pl
   (`moderation_status`), copied into the publish status by `Entity::save()`, so the
   existing rule for unpublished entities hides the post from everyone but its author and
   administrators, and no form can publish it again. `canEdit()` is false for anyone but
-  an administrator while an entity is moderated: its author can see it (with the notice
-  drawn by `entity/moderated`) but cannot edit or delete it. Don't key anything on the
+  an administrator who is not its author while an entity is moderated: its author can see
+  it (with the notice drawn by `entity/moderated`) but cannot edit or delete it.
+  `Entity::delete()` itself refuses a moderated entity unless such an administrator asks
+  (or the database is set to ignore access), because not every route that deletes checks
+  `canEdit()` first. Don't key anything on the
   publish status alone: content forms set it before `canEdit()` runs.
   `Entity::restoreAnnotation()` puts a removed comment back under its address, with no
   events and no notifications. `Tests/Common/TakedownTest.php` checks this.
@@ -280,7 +283,8 @@ Rules to keep:
 - **What a reporter types** is made plain text (`Moderation::cleanDescription()`: no
   tags, no control characters, 1000 characters), escaped wherever it is printed, and
   never logged. A member can file ten reports an hour, one per open case (reporting again
-  adds to it), never about themself or their own things.
+  adds to it, five times at most, counts once with the reason given last, and does not
+  change the case's revision), never about themself or their own things.
 - **One case per reported thing while it is open**; a report on something whose case is
   resolved opens a new case. A case keeps a copy of what was reported.
 - **Two administrators at once**: an action names the `revision` of the case it saw, and

@@ -258,6 +258,10 @@
 
     document.addEventListener('click', function (event) {
         var link = event.target.closest ? event.target.closest('a[data-mod-report]') : null;
+        // Only ever fetch the report form from this site
+        if (link && link.origin !== window.location.origin) {
+            return;
+        }
         if (link && !event.metaKey && !event.ctrlKey && !event.shiftKey && event.button === 0) {
             event.preventDefault();
             openReport(link);

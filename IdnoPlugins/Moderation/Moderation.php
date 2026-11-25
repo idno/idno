@@ -31,6 +31,9 @@ namespace IdnoPlugins\Moderation {
         const RATE_LIMIT = 10;
         const RATE_WINDOW = 3600;
 
+        /// How many times one member can report the same thing while its case is open
+        const REPEAT_LIMIT = 5;
+
         /// How much of a post's text a case keeps, in characters
         const SNAPSHOT_LENGTH = 5000;
 
@@ -325,6 +328,8 @@ namespace IdnoPlugins\Moderation {
                 if ($recent >= self::RATE_LIMIT) {
                     return $refuse($language->_("You've sent a lot of reports in the last hour. Please try again later."), 429);
                 }
+            } else if (is_array($report->entries) && count($report->entries) >= self::REPEAT_LIMIT) {
+                return $refuse($language->_("You've already reported this. A moderator will review it."), 429);
             }
 
             if (!$case) {
@@ -356,18 +361,31 @@ namespace IdnoPlugins\Moderation {
                 $report->entries = [];
                 $case->report_count = (int) $case->report_count + 1;
             }
+            $previous = (string) $report->reason;
             $report->reason = $reason;
             $report->description = $description;
             $entries = is_array($report->entries) ? $report->entries : [];
             $entries[] = ['time' => $now, 'reason' => $reason, 'description' => $description];
             $report->entries = $entries;
 
+            // One member counts once, with the reason they gave last
             $reasons = is_array($case->reasons) ? $case->reasons : [];
+            if (!$new && isset($reasons[$previous])) {
+                if (--$reasons[$previous] <= 0) {
+                    unset($reasons[$previous]);
+                }
+            }
             $reasons[$reason] = ($reasons[$reason] ?? 0) + 1;
             $case->reasons = $reasons;
-            $case->urgent = !empty($case->urgent) || Reasons::isUrgent($reason);
+            $case->urgent = count(array_filter(array_keys($reasons), [Reasons::class, 'isUrgent'])) > 0;
             $case->last_reported = $now;
-            static::saveCase($case);
+            if ($new) {
+                static::saveCase($case);
+            } else {
+                // The same member reporting again is no reason to turn away an
+                // administrator who is about to act: the revision stays
+                $case->save();
+            }
 
             $report->case_id = $case->getID();
             $report->save();
@@ -613,6 +631,14 @@ namespace IdnoPlugins\Moderation {
                 return true;
             }
             $entity->unmoderate();
+            // The post of a member who is banned with everything hidden goes back to being
+            // hidden with the rest; lifting the ban brings it back
+            $owner = $entity->getOwner();
+            if ($owner instanceof User && $owner->isHiddenByBan() && $entity->getPublishStatus() === 'published') {
+                $entity->moderate(Entity::MODERATION_HIDDEN);
+
+                return (bool) $entity->save(true);
+            }
             if (!$entity->save(true)) {
                 return false;
             }
@@ -856,7 +882,7 @@ namespace IdnoPlugins\Moderation {
                     // The post goes first: once the member is banned nothing is sent to other
                     // servers in their name, and the removal has to reach them
                     $removedHere = false;
-                    if (!empty($options['remove_content']) && $case->target_type !== 'profile' && !$subject->isBanned() && $subject->canBeBannedBy($admin->getUUID())) {
+                    if (!empty($options['remove_content']) && $case->target_type !== 'profile' && ($subject->isBanned() || $subject->canBeBannedBy($admin->getUUID()))) {
                         $removedHere = static::removeContent($case, $entity);
                     }
                     $result = static::banMember(
@@ -918,8 +944,8 @@ namespace IdnoPlugins\Moderation {
                     if ($case->isOpen() || empty($case->content_removed) || !empty($case->content_deleted)) {
                         return $refuse($language->_('There is nothing to delete here.'));
                     }
-                    if ($case->target_type === 'post' && $entity) {
-                        $entity->delete();
+                    if ($case->target_type === 'post' && $entity && $entity->delete() === false) {
+                        return $refuse($language->_("The post couldn't be deleted."));
                     }
                     $case->kept_comment = null;
                     $case->content_deleted = true;

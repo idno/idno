@@ -1225,6 +1225,17 @@ namespace Idno\Common {
          */
         function delete()
         {
+            // What the moderators have taken down is evidence: only an administrator (or
+            // code that has set the database to ignore access) deletes it, whichever page
+            // or protocol the request came through.
+            if ($this->isModerated()) {
+                $session = \Idno\Core\Idno::site()->session();
+                $administrator = $session && $session->isAdmin() && $this->getOwnerID() != $session->currentUserUUID();
+                if (!$administrator && !\Idno\Core\Idno::site()->db()->getIgnoreAccess()) {
+                    return false;
+                }
+            }
+
             $event = new \Idno\Core\Event(array('object' => $this));
             $event->setResponse(true);
             if (\Idno\Core\Idno::site()->events()->triggerEvent('delete', array('object' => $this))) {
@@ -1824,12 +1835,13 @@ namespace Idno\Common {
                 $user = User::getByUUID($user_id);
             }
 
+            // What the moderators have taken down can only be changed by administrators,
+            // and not by its author even if they are one
+            if ($this->isModerated() && (!$user->isAdmin() || $this->getOwnerID() == $user_id)) return false;
+
             if ($user->isAdmin()) {
                 return true;
             }
-
-            // What the moderators have taken down can only be changed by administrators
-            if ($this->isModerated()) return false;
 
             if ($this->getOwnerID() == $user_id) return true;
 
