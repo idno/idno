@@ -31,51 +31,7 @@ class Actor extends \Idno\Common\Page
             return;
         }
 
-        $actorId = $user->getActivityPubActorID();
-        $followersCount = ActivityPubFollower::getFollowerCount($user->getUUID());
-        $statusesCount = self::getContentCount($user);
-
-        $person = [
-            '@context' => [
-                'https://www.w3.org/ns/activitystreams',
-                'https://w3id.org/security/v1',
-                [
-                    'toot'                 => 'http://joinmastodon.org/ns#',
-                    'discoverable'         => 'toot:discoverable',
-                    'gts'                  => 'https://gotosocial.org/ns#',
-                    'interactionPolicy'    => ['@id' => 'gts:interactionPolicy', '@type' => '@id'],
-                    'canQuote'             => ['@id' => 'gts:canQuote', '@type' => '@id'],
-                    'automaticApproval'    => ['@id' => 'gts:automaticApproval', '@type' => '@id'],
-                ],
-            ],
-            'id'                        => $actorId,
-            'type'                      => 'Person',
-            'url'                       => $user->getURL(),
-            'preferredUsername'          => $user->getHandle(),
-            'name'                      => $user->getName(),
-            'summary'                   => $user->getDescription(),
-            'manuallyApprovesFollowers' => false,
-            'discoverable'              => true,
-            'inbox'                     => $actorId . '/inbox',
-            'outbox'                    => $actorId . '/outbox',
-            'followers'                 => $actorId . '/followers',
-            'following'                 => $actorId . '/following',
-            'publicKey'                 => $user->getPublicKey(),
-            'endpoints'                 => $user->getActivityPubEndpoints(),
-            'followersCount'            => $followersCount,
-            'followingCount'            => 0,
-            'statusesCount'             => $statusesCount,
-        ];
-
-        $icon = $user->getIcon();
-        if ($icon) {
-            $mime = \Idno\Common\Entity::getMediaMimeType($icon);
-            $person['icon'] = [
-                'type'      => 'Image',
-                'url'       => $icon,
-                'mediaType' => $mime ?: 'image/png',
-            ];
-        }
+        $person = ActivityBuilder::buildActor($user);
 
         header('Content-Type: application/activity+json');
         header('Access-Control-Allow-Origin: *');
@@ -92,20 +48,5 @@ class Actor extends \Idno\Common\Page
         header('Allow: GET');
         echo json_encode(['error' => 'Method not allowed']);
         exit;
-    }
-
-    /**
-     * Count public published content entities for a user, excluding non-content entities.
-     *
-     * @param User $user
-     * @return int
-     */
-    private static function getContentCount(User $user): int
-    {
-        return (int) Entity::countFromX(ActivityBuilder::NON_CONTENT_SUBTYPES, [
-            'owner'          => $user->getUUID(),
-            'publish_status' => 'published',
-            'access'         => 'PUBLIC',
-        ]);
     }
 }

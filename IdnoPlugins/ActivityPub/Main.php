@@ -38,7 +38,9 @@ class Main extends Plugin
             '/actor/([^\/]+)/?'            => 'Actor',
             // Shared inbox
             '/inbox/?'                     => 'SharedInbox',
-            // Quote authorization stamp endpoint (FEP-044f)
+            // Quote authorization stamp endpoint (FEP-044f): the quoted post and the quoting post
+            // as base64url, and an HMAC. The second route is the address stamps had before.
+            '/activitypub/quote-stamp/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)/([0-9a-f]+)' => 'QuoteStamp',
             '/activitypub/quote-stamp/?'   => 'QuoteStamp',
             // NodeInfo (public discovery endpoints)
             '/.well-known/nodeinfo/?'      => 'NodeInfoIndex',

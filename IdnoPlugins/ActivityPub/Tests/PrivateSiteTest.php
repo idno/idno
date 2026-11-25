@@ -3,6 +3,7 @@
 namespace IdnoPlugins\ActivityPub\Tests;
 
 use Idno\Core\Idno;
+use IdnoPlugins\ActivityPub\ActivityBuilder;
 use IdnoPlugins\ActivityPub\ActivityHandler;
 use IdnoPlugins\ActivityPub\Delivery;
 use IdnoPlugins\ActivityPub\Entities\ActivityPubFollower;
@@ -176,6 +177,58 @@ class PrivateSiteTest extends \Tests\BrowserTestCase
             $this->assertEquals(200, $this->get($path, null, $accept)['status'], "$path is served again when the site is public again.");
         }
         $this->assertStringContainsString($marker, $this->get('/actor/' . $handle . '/outbox?page=1', null, $accept)['body']);
+    }
+
+    /**
+     * A post has an ActivityPub form at its own addresses (its id and its permalink), and a
+     * quote of it has a stamp. A private site gives out neither, to a visitor or to a member.
+     */
+    public function testPrivateSiteGivesNoPostOrQuoteStampToOtherServers()
+    {
+        $marker = static::marker();
+        $post = $this->post(static::$author, 'Not for other servers ' . $marker);
+        $quoting = 'https://remote.invalid/users/someone/statuses/1';
+        $accept = ['Accept: application/activity+json, application/ld+json'];
+        $path = function ($url) {
+            $parts = parse_url($url);
+
+            return $parts['path'] . (isset($parts['query']) ? '?' . $parts['query'] : '');
+        };
+        $paths = [
+            $path($post->getUUID()),
+            $path($post->getURL()),
+            $path(ActivityBuilder::buildQuoteStampUrl($post->getUUID(), $quoting)),
+            $path(ActivityBuilder::buildLegacyQuoteStampUrl($post->getUUID(), $quoting)),
+        ];
+        $request = [
+            'id' => $quoting . '/quote',
+            'type' => 'QuoteRequest',
+            'actor' => 'https://remote.invalid/users/someone',
+            'object' => $post->getUUID(),
+            'instrument' => $quoting,
+        ];
+
+        foreach ($paths as $address) {
+            $this->assertEquals(200, $this->get($address, null, $accept)['status'], "Control: $address is served by a public site.");
+        }
+        $this->assertStringContainsString($marker, $this->get($paths[0], null, $accept)['body'], 'Control: a public site gives the post.');
+        $this->assertNotNull(ActivityHandler::acceptQuoteRequest($request), 'Control: a public site accepts a quote.');
+
+        $this->setPrivate(true);
+
+        $this->assertFalse(ActivityBuilder::isFederated($post));
+        $this->assertNull(ActivityHandler::acceptQuoteRequest($request), 'A private site accepts no quote.');
+        foreach ([null, static::$author] as $viewer) {
+            foreach ($paths as $address) {
+                $result = $this->get($address, $viewer, $accept);
+                $who = $viewer ? 'a member' : 'a visitor';
+                $this->assertNotEquals(200, $result['status'], "$address of a private site should give $who no ActivityPub document.");
+                // The words of the post, not its marker: the address of a post holds the marker
+                foreach (['Not for other servers', 'QuoteAuthorization', '"content"', 'attributedTo'] as $leak) {
+                    $this->assertStringNotContainsString($leak, $result['body'], "$address of a private site should say nothing ($leak).");
+                }
+            }
+        }
     }
 
     public function testAdminPageSaysThatFederationIsOff()

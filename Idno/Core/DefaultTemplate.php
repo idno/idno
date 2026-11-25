@@ -292,6 +292,12 @@ namespace Idno\Core {
          */
         function autodetectTemplateType()
         {
+            // What is drawn depends on the Accept header (a page, JSON, an ActivityPub object),
+            // so a cache must keep the answers apart
+            if (!headers_sent()) {
+                header('Vary: Accept', false);
+            }
+
             if ($page = site()->currentPage()) {
                 $template = $page->getInput('_t');
                 if (!empty($template)) {

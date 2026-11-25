@@ -66,7 +66,67 @@ class ActivityBuilder
     ];
 
     /**
+     * Is this entity a post that other servers may have: public, published, of a real
+     * content type, and by a member who is not banned? Only such a post is served as an
+     * ActivityPub object, has quote requests accepted and has stamps answered for it.
+     *
+     * No post is, on a private site (Main::federates()).
+     *
+     * A post with no publish status counts as published (posts from before there were
+     * drafts have none).
+     *
+     * @param mixed $entity
+     * @return bool
+     */
+    public static function isFederated($entity): bool
+    {
+        if (!($entity instanceof Entity) || $entity instanceof User) {
+            return false;
+        }
+        // A private site tells no other server what its members post
+        if (!Main::federates()) {
+            return false;
+        }
+        if ($entity instanceof \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower
+            || $entity instanceof \Idno\Entities\AsynchronousQueuedEvent
+        ) {
+            return false;
+        }
+        if (!$entity->isPublic()) {
+            return false;
+        }
+        $status = $entity->getPublishStatus();
+        if (!empty($status) && $status !== 'published') {
+            return false;
+        }
+        $type = $entity->getActivityStreamsObjectType();
+        if (empty($type) || $type === 'entity') {
+            return false;
+        }
+        $owner = $entity->getOwner();
+
+        return $owner instanceof User && !$owner->isBanned();
+    }
+
+    /**
+     * A post as a document of its own: what a server gets when it fetches the post by its
+     * id or its address. It is buildObject() and the context that deliveries carry, and
+     * nothing else, so that a server that fetches a post reads exactly what a server that
+     * was sent it read.
+     *
+     * @param Entity $entity
+     * @return array
+     */
+    public static function buildDocument(Entity $entity): array
+    {
+        return ['@context' => self::CONTEXT_WITH_QUOTES] + self::buildObject($entity);
+    }
+
+    /**
      * Convert an Idno entity to an ActivityPub object (Note, Article, etc.).
+     *
+     * This is the only place a post is turned into an ActivityPub object. Deliveries, the
+     * outbox and the post's own address all use it.
      *
      * @param Entity $entity The Idno entity
      * @return array ActivityPub object
@@ -135,8 +195,11 @@ class ActivityBuilder
             ],
         ];
 
-        // Location data (for checkins)
-        if ($idnoType === 'place' || !empty($entity->lat)) {
+        // Location data (for checkins). A check-in whose place is to be kept vague is drawn
+        // with an inexact position for visitors who are not signed in, which other servers
+        // never are, so it gets no position at all.
+        $vague = method_exists($entity, 'isAnonymous') && $entity->isAnonymous();
+        if (!$vague && ($idnoType === 'place' || !empty($entity->lat))) {
             if (!empty($entity->lat) && !empty($entity->long)) {
                 $location = [
                     'type' => 'Place',
@@ -154,6 +217,68 @@ class ActivityBuilder
         }
 
         return $object;
+    }
+
+    /**
+     * A member as an ActivityPub actor. This is the only place a member is turned into one:
+     * the actor's own address and the member's profile, asked for as ActivityPub, both use it.
+     *
+     * @param User $user
+     * @return array
+     */
+    public static function buildActor(User $user): array
+    {
+        $actorId = $user->getActivityPubActorID();
+
+        $person = [
+            '@context' => [
+                'https://www.w3.org/ns/activitystreams',
+                'https://w3id.org/security/v1',
+                [
+                    'toot'                 => 'http://joinmastodon.org/ns#',
+                    'discoverable'         => 'toot:discoverable',
+                    'gts'                  => 'https://gotosocial.org/ns#',
+                    'interactionPolicy'    => ['@id' => 'gts:interactionPolicy', '@type' => '@id'],
+                    'canQuote'             => ['@id' => 'gts:canQuote', '@type' => '@id'],
+                    'automaticApproval'    => ['@id' => 'gts:automaticApproval', '@type' => '@id'],
+                ],
+            ],
+            'id'                        => $actorId,
+            'type'                      => 'Person',
+            'url'                       => $user->getURL(),
+            'preferredUsername'         => $user->getHandle(),
+            'name'                      => $user->getName(),
+            'summary'                   => $user->getDescription(),
+            'manuallyApprovesFollowers' => false,
+            'discoverable'              => true,
+            'inbox'                     => $actorId . '/inbox',
+            'outbox'                    => $actorId . '/outbox',
+            'followers'                 => $actorId . '/followers',
+            'following'                 => $actorId . '/following',
+            'publicKey'                 => $user->getPublicKey(),
+            'endpoints'                 => $user->getActivityPubEndpoints(),
+            'followersCount'            => \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower::getFollowerCount($user->getUUID()),
+            'followingCount'            => 0,
+            'statusesCount'             => (int) Entity::countFromX(
+                self::NON_CONTENT_SUBTYPES, [
+                'owner'          => $user->getUUID(),
+                'publish_status' => 'published',
+                'access'         => 'PUBLIC',
+                ]
+            ),
+        ];
+
+        $icon = $user->getIcon();
+        if ($icon) {
+            $mime = Entity::getMediaMimeType($icon);
+            $person['icon'] = [
+                'type'      => 'Image',
+                'url'       => $icon,
+                'mediaType' => $mime ?: 'image/png',
+            ];
+        }
+
+        return $person;
     }
 
     /**
@@ -278,22 +403,61 @@ class ActivityBuilder
     public static function buildQuoteAccept(array $quoteRequest, User $user, string $stampUrl): array
     {
         $actorId = $user->getActivityPubActorID();
+        $requestActor = self::idOf($quoteRequest['actor'] ?? '');
+
+        // Only the request's own standard properties are sent back, each as an id. The
+        // request may hold the whole quoting post, with terms from contexts this Accept
+        // does not carry, and the Accept is matched to the request by its id.
+        $request = [
+            'id'         => $quoteRequest['id'] ?? '',
+            'type'       => 'QuoteRequest',
+            'actor'      => $requestActor,
+            'object'     => self::idOf($quoteRequest['object'] ?? ''),
+            'instrument' => self::idOf($quoteRequest['instrument'] ?? ''),
+        ];
 
         return [
             '@context'  => self::CONTEXT_WITH_QUOTES,
             'id'        => $actorId . '#quote-accept-' . md5($quoteRequest['id'] ?? time()),
             'type'      => 'Accept',
             'actor'     => $actorId,
-            'to'        => $quoteRequest['actor'] ?? '',
-            'object'    => $quoteRequest,
+            'to'        => $requestActor,
+            'object'    => $request,
             'result'    => $stampUrl,
             'published' => date(\DateTime::RFC3339),
         ];
     }
 
     /**
-     * Generate a QuoteAuthorization stamp URL for a quote approval (FEP-044f).
-     * Uses HMAC to produce deterministic, unforgeable stamp URLs without database storage.
+     * The id of something that is given as an id or as an object with one
+     *
+     * @param mixed $value
+     * @return string
+     */
+    public static function idOf($value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+        if (is_array($value) && isset($value['id']) && is_string($value['id'])) {
+            return $value['id'];
+        }
+
+        return '';
+    }
+
+    /**
+     * The address of the QuoteAuthorization stamp for a quote approval (FEP-044f).
+     *
+     * A stamp is not stored: its address holds the quoted post and the quoting post, and an
+     * HMAC of both made with the site's secret, so it cannot be made up by anyone else.
+     *
+     * The two addresses are in the path as unpadded base64url, so the stamp's address has
+     * no character that a URL library would write another way. A server that verifies a
+     * quote compares the address it requested, after normalising it, to the address it
+     * was given and to the stamp's id, as strings. Mastodon does, and it turns
+     * "?target=https%3A%2F%2F..." into "?target=https://...": it never accepted a stamp
+     * whose address held a percent-encoded address in its query string.
      *
      * @param string $interactionTarget The URI of the quoted post
      * @param string $interactingObject The URI of the quoting post
@@ -301,14 +465,92 @@ class ActivityBuilder
      */
     public static function buildQuoteStampUrl(string $interactionTarget, string $interactingObject): string
     {
-        $siteUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
-        $secret = \Idno\Core\Idno::site()->config()->site_secret ?? \Idno\Core\Idno::site()->config()->getDisplayURL();
-        $sig = hash_hmac('sha256', $interactionTarget . "\n" . $interactingObject, $secret);
+        return \Idno\Core\Idno::site()->config()->getDisplayURL() . 'activitypub/quote-stamp/'
+            . self::base64UrlEncode($interactionTarget) . '/'
+            . self::base64UrlEncode($interactingObject) . '/'
+            . self::quoteStampSignature($interactionTarget, $interactingObject);
+    }
 
-        return $siteUrl . 'activitypub/quote-stamp'
+    /**
+     * The address of a stamp as it was made before stamps had the address above. Stamps
+     * with such an address were given out and are still asked for; their id stays as it was.
+     *
+     * @param string $interactionTarget
+     * @param string $interactingObject
+     * @return string
+     */
+    public static function buildLegacyQuoteStampUrl(string $interactionTarget, string $interactingObject): string
+    {
+        return \Idno\Core\Idno::site()->config()->getDisplayURL() . 'activitypub/quote-stamp'
             . '?target=' . urlencode($interactionTarget)
             . '&object=' . urlencode($interactingObject)
-            . '&sig=' . $sig;
+            . '&sig=' . self::quoteStampSignature($interactionTarget, $interactingObject);
+    }
+
+    /**
+     * The HMAC that makes a stamp's address one that only this site can have made
+     *
+     * @param string $interactionTarget
+     * @param string $interactingObject
+     * @return string 64 hex characters
+     */
+    public static function quoteStampSignature(string $interactionTarget, string $interactingObject): string
+    {
+        $secret = (string) \Idno\Core\Idno::site()->config()->site_secret;
+        if ($secret === '') {
+            throw new \Idno\Exceptions\TechnicalException('The site has no site_secret, so no quote stamp can be made or checked.');
+        }
+
+        return hash_hmac('sha256', $interactionTarget . "\n" . $interactingObject, $secret);
+    }
+
+    /**
+     * The QuoteAuthorization stamp itself (FEP-044f): the document a third server reads
+     * to check that the author of the quoted post approved the quote.
+     *
+     * @param Entity $quoted            The quoted post, which is this site's
+     * @param string $interactingObject The URI of the quoting post
+     * @param string $id                The stamp's address, as it was given out
+     * @return array
+     */
+    public static function buildQuoteAuthorization(Entity $quoted, string $interactingObject, string $id): array
+    {
+        return [
+            '@context'          => self::CONTEXT_WITH_QUOTES,
+            'id'                => $id,
+            'type'              => 'QuoteAuthorization',
+            'attributedTo'      => $quoted->getActivityPubActorID(),
+            'interactingObject' => $interactingObject,
+            'interactionTarget' => $quoted->getUUID(),
+        ];
+    }
+
+    /**
+     * Unpadded base64url (RFC 4648, section 5): letters, digits, "-" and "_" only
+     *
+     * @param string $value
+     * @return string
+     */
+    public static function base64UrlEncode(string $value): string
+    {
+        return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+    }
+
+    /**
+     * @param string $value
+     * @return string|null The decoded value, or null if this is not unpadded base64url
+     */
+    public static function base64UrlDecode(string $value): ?string
+    {
+        if ($value === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $value)) {
+            return null;
+        }
+        $decoded = base64_decode(strtr($value, '-_', '+/'), true);
+        if ($decoded === false || self::base64UrlEncode($decoded) !== $value) {
+            return null;
+        }
+
+        return $decoded;
     }
 
     /**
