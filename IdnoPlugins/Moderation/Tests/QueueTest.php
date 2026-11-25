@@ -122,7 +122,8 @@ namespace IdnoPlugins\Moderation\Tests {
 
         public function testUsersPageLinksToTheMemberRecord()
         {
-            $page = $this->get('/search/users/?query=' . static::$author->getHandle(), static::$admin);
+            // By email address: that search is exact in every database (a search for words is not, in MongoDB)
+            $page = $this->get('/search/users/?query=' . rawurlencode(static::$author->email), static::$admin);
 
             $this->assertStringContainsString('admin/moderation/member/' . ((string) static::$author->getID()), str_replace('\\/', '/', $page['body']));
         }
