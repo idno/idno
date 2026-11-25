@@ -3,6 +3,15 @@
     <?= \Idno\Core\Idno::site()->language()->_('ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms. When users publish content, it is automatically delivered to their followers on the fediverse.') ?>
 </p>
 
+<?php if (!\IdnoPlugins\ActivityPub\Main::federates()) { ?>
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('This site is private, so federation is off') ?></h2>
+    <p>
+        <?= \Idno\Core\Idno::site()->language()->_('Nothing posted here is sent to other servers, members cannot be found or followed from them, and no new follower is accepted. Followers from before the site was made private are kept, and are sent new posts again if the site is made public.') ?>
+    </p>
+</div>
+<?php } ?>
+
 <?php if (empty($vars['queue_ok'])) { ?>
 <div class="idno-admin-card" style="border-left:4px solid var(--color-warning,#eab308);background:var(--color-warning-bg,#fefce8)">
     <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Asynchronous queue required') ?></h2>

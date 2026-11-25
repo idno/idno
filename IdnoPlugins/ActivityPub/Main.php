@@ -26,23 +26,29 @@ class Main extends Plugin
 
     function registerPages()
     {
-        // Per-user endpoints (marked public so they work even on non-public sites)
-        // Sub-path routes must be registered before the actor profile route
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/inbox/?', '\IdnoPlugins\ActivityPub\Pages\Inbox', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/outbox/?', '\IdnoPlugins\ActivityPub\Pages\Outbox', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/followers/?', '\IdnoPlugins\ActivityPub\Pages\Followers', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/following/?', '\IdnoPlugins\ActivityPub\Pages\Following', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/?', '\IdnoPlugins\ActivityPub\Pages\Actor', true);
-
-        // Shared inbox
-        \Idno\Core\Idno::site()->routes()->addRoute('/inbox/?', '\IdnoPlugins\ActivityPub\Pages\SharedInbox', true);
-
-        // Quote authorization stamp endpoint (FEP-044f)
-        \Idno\Core\Idno::site()->routes()->addRoute('/activitypub/quote-stamp/?', '\IdnoPlugins\ActivityPub\Pages\QuoteStamp', true);
-
-        // NodeInfo (public discovery endpoints)
-        \Idno\Core\Idno::site()->routes()->addRoute('/.well-known/nodeinfo/?', '\IdnoPlugins\ActivityPub\Pages\NodeInfoIndex', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/nodeinfo/2\\.0/?', '\IdnoPlugins\ActivityPub\Pages\NodeInfo', true);
+        // A private site does not federate: every one of these addresses answers 404 there
+        // (see Pages\NotFederating). Which it is is decided on each request.
+        $federates = self::federates();
+        $routes = [
+            // Per-user endpoints. Sub-path routes must be registered before the actor profile route
+            '/actor/([^\/]+)/inbox/?'      => 'Inbox',
+            '/actor/([^\/]+)/outbox/?'     => 'Outbox',
+            '/actor/([^\/]+)/followers/?'  => 'Followers',
+            '/actor/([^\/]+)/following/?'  => 'Following',
+            '/actor/([^\/]+)/?'            => 'Actor',
+            // Shared inbox
+            '/inbox/?'                     => 'SharedInbox',
+            // Quote authorization stamp endpoint (FEP-044f)
+            '/activitypub/quote-stamp/?'   => 'QuoteStamp',
+            // NodeInfo (public discovery endpoints)
+            '/.well-known/nodeinfo/?'      => 'NodeInfoIndex',
+            '/nodeinfo/2\\.0/?'             => 'NodeInfo',
+        ];
+        foreach ($routes as $pattern => $page) {
+            // Marked public: other servers do not log in, and the gatekeeper of a private
+            // site would answer them 403
+            \Idno\Core\Idno::site()->routes()->addRoute($pattern, '\IdnoPlugins\ActivityPub\Pages\\' . ($federates ? $page : 'NotFederating'), true);
+        }
 
         // Admin
         \Idno\Core\Idno::site()->routes()->addRoute('/admin/activitypub/?', '\IdnoPlugins\ActivityPub\Pages\Admin');
@@ -221,6 +227,20 @@ class Main extends Plugin
 
             Delivery::deliver($user, $data['activity'], $data['inbox']);
         });
+    }
+
+    /**
+     * Does this site federate? Not when it is private (the "walled_garden" setting): nothing
+     * its members post may leave it. Then there are no actors, outboxes, collections, inboxes
+     * or NodeInfo, no Follow is accepted and nothing is delivered. This is asked on every
+     * request and every delivery, so making the site private or public again takes effect at
+     * once, with nothing saved again.
+     *
+     * @return bool
+     */
+    public static function federates(): bool
+    {
+        return (bool) \Idno\Core\Idno::site()->config()->isPublicSite();
     }
 
     /**

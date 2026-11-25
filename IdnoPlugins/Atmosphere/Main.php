@@ -215,8 +215,9 @@ class Main extends Plugin
     }
 
     /**
-     * Whether a post may be on the PDS: only one that is public and published. A draft,
-     * a private post or a post for members only is never written there.
+     * Whether a post may be on the PDS: only one that is public and published, on a site
+     * that is public. A draft, a private post, a post for members only or any post of a
+     * private site (the "walled_garden" setting) is never written there.
      *
      * @param  mixed $object
      * @return bool
@@ -227,6 +228,10 @@ class Main extends Plugin
             return false;
         }
         if (!$object->isPublic()) {
+            return false;
+        }
+        // Nothing posted on a private site is public, whatever the post's own access says
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
             return false;
         }
 
