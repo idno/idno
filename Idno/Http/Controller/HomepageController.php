@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * class, its page events and a legacy page registered for the same path (a plugin's `hijackRoute()` of the root) are as they were.
  *
  * The feeds, the search and the tags are the same page under other addresses, and were pages of their own that built a home page to draw
- * (`Idno\Pages\Feed`, `Idno\Pages\Search\Forward`, `Idno\Pages\Search\Tags`, deleted): their routes are the home page's, so they fire its page
+ * (classes of their own, deleted): their routes are the home page's, so they fire its page
  * events once and draw its body class. There is no shell for them to shadow (`replaces` is empty), but core still registers their legacy patterns where it
  * always did, with a placeholder (`Idno\Legacy\ControllerRoute`) in place of the deleted class (`legacyPatterns` declares them), so the legacy route table is what
  * it was and a plugin's registration does what it always did: its page serves the address when the legacy router would choose it.

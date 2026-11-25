@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * `/.well-known/webfinger`: the page `Idno\Pages\Webfinger\View` was (deleted). Public on a private site.
+ * `/.well-known/webfinger`: a page that was a legacy class (the `#[SitePage]` names it). Public on a private site.
  */
 #[AsController]
 final class WebfingerController

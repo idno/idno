@@ -193,3 +193,27 @@ A number of functions exist for particular access control use cases:
 * `$this->goneContent()` displays a "this content was removed" error page and sets HTTP code 410.
 
 In each case, execution is halted.
+
+## Pages served by controllers
+
+Core's own home page, feeds, search, tag pages and small public endpoints are not `Page` classes: each is a Symfony controller that calls a service, and the page classes your plugin extends or registers keep working beside them. A page of your own is still a `\Idno\Common\Page` class, as above. Read this section to see how core does it, or to replace the home page.
+
+The home page is the worked example. `Idno\Http\Controller\HomepageController` declares the routes and the page:
+
+    #[Route('/{slash}', name: 'idno_home', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'], legacyPatterns: ['/?'])]
+    public function home(PageContext $page): Response
+    {
+        return $this->pages->home($page, root: true);
+    }
+
+`#[SitePage]` (`Idno\Http\Page\SitePage`) says which page this is: its `name` is what the body class and the page events (`page/ready`, `page/head`, `page/get`) know it by, `replaces` the deprecated shell class that stays registered for the path, `publicOnPrivateSite` whether a visitor of a private site may see it, and `methods` what it serves besides GET, HEAD and OPTIONS (a state-changing method is answered only with the session's form token). The controller takes a `PageContext`, the request's input, owner and headers. The logic is in a service, `Idno\Http\Controller\Home\HomePages`, which asks the site for what it needs through an interface (`HomeStream`) and draws through `Idno\Http\Page\PageRenderer`:
+
+    return $this->renderer->page($page, [
+        'title' => $title,
+        'body'  => $this->renderer->template('content/stream', ['items' => $items]),
+    ]);
+
+The renderer also makes the answers a page gives where a legacy page called `deniedContent()`, `noContent()`, `goneContent()` or `forward()`: `denied()`, `notFound()`, `gone()` and `redirect()`. A controller page never calls `header()`, `echo` or `exit`; ask for caching with `$page->setCaching([...])`, and add other headers with `$page->addHeader()`.
+
+To replace the home page from a plugin, listen to `homepage/replace` instead of taking the route; see [Replacing the home page](upgrading.md#replacing-the-home-page-the-homepagereplace-event).

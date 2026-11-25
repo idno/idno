@@ -100,6 +100,14 @@ What a site draws is pinned before an engine changes it, in three layers.
 
 A golden is captured from the code it pins and does not change by itself. When a change is meant to alter one, run `IDNO_TEST_CAPTURE_GOLDENS=1 composer test -- Tests/Templating/`: it writes the files instead of comparing, then FAILS naming the files it wrote (a capture run is never green), fails when two looks render a shared golden differently, and is refused when `CI` is set. Review `git diff` of the files, run the tests again without the variable, and say in the commit which pages changed and why. The goldens are the same on SQLite, MySQL and MariaDB: capture on one and run the others.
 
+## Testing pages that controllers serve
+
+A site page (a controller marked `#[SitePage]`) is tested against a real legacy page. `Tests\Fixtures\SitePageFixtureController` is a controller page and `Tests\Fixtures\LegacyDrawPage`, `LegacyPlainPage`, `LegacyAccountDrawPage` and `LegacyAdminDrawPage` are legacy pages that do the same (the fixtures are routed only in the test environment); `SitePageLifecycleEquivalenceTest` and `SitePageDrawingTest` ask both the same question and compare the answers whole. `Tests\Fixtures\TestEventHooks` registers the rest, switched by the environment of the site a test starts: `IDNO_TEST_CLAIM_ROUTES` (a plugin's page on a moved path: `identical`, `hijackbroad`, `moved-exact` and the others the tests name), `IDNO_TEST_HOMEPAGE_LISTENERS`, `IDNO_TEST_RECORD_PAGES` (records the page events) and `IDNO_TEST_DRAW_HEADERS`.
+
+A test that needs a site of its own extends `Tests\Support\PrivateSiteTestCase`. Beyond `siteEnvironment()` it overrides `siteIni()` for the site's PHP settings (a test that counts session files points `session.save_path` at its own `sessionDirectory()`, because the system's directory is shared by every process; on MySQL and MariaDB the sessions are rows of `idno_sessions` in the site's database, which `siteConnection()` opens). `startExtraServer()` starts a second server on the same database: `IDNO_TEST_SERVER_NO_PATH_INFO=1` makes it give the legacy router only the raw request path, as Apache and nginx do, and `IDNO_TEST_SUBDIRECTORY=blog` serves the front controller as `/blog/index.php`.
+
+The whole suite runs in one PHP process. `Tests\Support\MemoryGuard` fails the run when its peak passes 380 MiB and names the five test classes that left the most memory behind: release a kernel, a server or a large value in `tearDown()`. To measure, run `IDNO_TEST_MEMORY_REPORT=/tmp/memory.json composer test`: the file holds the peak and, for each class, the memory at its start and what it kept. `IDNO_TEST_MEMORY_LIMIT_MB=<n>` changes the limit (0 turns the failure off).
+
 ## Testing mail
 
 Mail is tested on the wire. `Tests\Fixtures\Smtp\ScriptedSmtpServer` is a real SMTP server in a subprocess on

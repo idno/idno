@@ -13,7 +13,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * `/service/security/csrftoken/`: the session's form token, for a script (the page `Idno\Pages\Service\Security\CSRFToken` was, deleted). Only an
+ * `/service/security/csrftoken/`: the session's form token, for a script (a page that was a legacy class: the `#[SitePage]` names it). Only an
  * XHR request is answered (anything else is the site's 403 page, as before), and the answer is never cached. The token is the session's one
  * stored token, so the endpoint needs no address to make one for.
  */

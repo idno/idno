@@ -12,8 +12,8 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * `robots.txt`, the web app manifest and the service worker script: the pages `Idno\Pages\Txt\Robots`, `Idno\Pages\Chrome\Manifest` and
- * `Idno\Pages\Chrome\ServiceWorker` were (deleted). The manifest and the service worker are public on a private site (a browser fetches them
+ * `robots.txt`, the web app manifest and the service worker script: three pages that were
+ * legacy classes (each `#[SitePage]` names the class whose page it is). The manifest and the service worker are public on a private site (a browser fetches them
  * without the visitor's cookie); `robots.txt` is not, as it was.
  */
 #[AsController]

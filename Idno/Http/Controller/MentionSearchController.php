@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * `/search/mentions.json`: the page `Idno\Pages\Search\Mentions` was (deleted). Not public on a private site.
+ * `/search/mentions.json`: a page that was a legacy class (the `#[SitePage]` names it). Not public on a private site.
  */
 #[AsController]
 final class MentionSearchController
