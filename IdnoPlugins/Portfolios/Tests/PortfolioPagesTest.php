@@ -447,6 +447,21 @@ namespace IdnoPlugins\Portfolios\Tests {
         }
 
         /**
+         * In Twenty26 the profile's buttons are one row ("Edit profile" and what plugins
+         * add), so that they line up with each other.
+         */
+        public function testTwenty26DrawsTheProfilesButtonsInOneRow()
+        {
+            $this->look('Twenty26');
+            $body = $this->get(static::$alice->getDisplayURL(), static::$alice)['body'];
+
+            $this->assertTrue((bool) preg_match('#<div class="idno-profile-actions"[^>]*>(.*?)</div>#s', $body, $row), 'The profile has a row of buttons.');
+            $this->assertMatchesRegularExpression($this->attribute('href', static::$alice->getEditURL()), $row[1], '"Edit profile" is in the row.');
+            $this->assertStringContainsString('data-portfolios-button', $row[1], '"Portfolios" is in the same row.');
+            $this->assertStringContainsString('align-items:center', $row[0]);
+        }
+
+        /**
          * @dataProvider looks
          */
         #[\PHPUnit\Framework\Attributes\DataProvider('looks')]

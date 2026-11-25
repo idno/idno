@@ -63,7 +63,8 @@
 
 .idno-portfolio-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+    /* One portfolio to a row, as wide as the posts of a feed */
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--spacing-gap, 12px);
 }
 
