@@ -26,7 +26,7 @@ namespace Tests {
             foreach (
                      //    'curl','date','dom','gd','json','libxml','mbstring','mysql','reflection','session','simplexml', 'openssl'
                      //'curl','date','dom','gd','json','libxml','mbstring','pdo','pdo_mysql','reflection','session','simplexml', 'openssl'
-                     \Idno\Core\Installer::requiredModules()
+                     \Idno\Install\ServerChecks::EXTENSIONS
                       as $extension) {
                 echo "$extension " . (extension_loaded($extension) ? 'true' : 'false') . "\n";
                 $this->assertTrue(extension_loaded($extension));

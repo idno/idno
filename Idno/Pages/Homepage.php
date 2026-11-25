@@ -27,7 +27,16 @@ namespace Idno\Pages {
 
             // Check for an empty site
             if (!\Idno\Entities\User::get()) {
-                $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'begin/');
+                // The site has no account yet: its administrator is made by the last step of the installation
+                // (or `php bin/console idno:admin:create`), never by whoever arrives here first.
+                $nonce = base64_encode(random_bytes(18));
+                $this->setResponse(503);
+                header('Content-Type: text/html; charset=UTF-8');
+                header('Content-Security-Policy: ' . \Idno\Install\InstallPage::contentSecurityPolicy($nonce));
+                header('Cache-Control: no-store');
+                header('Retry-After: 300');
+                echo \Idno\Install\InstallPage::pending($nonce);
+                exit;
             }
 
             // Set the homepage owner for single-user sites

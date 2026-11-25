@@ -169,10 +169,19 @@ final class LegacyConfigLoaderTest extends TestCase
         $this->assertSame('json', $this->load($dir)->get('dbname'));
     }
 
-    public function testDatabaseUrlDoesNotMakeConfigNonDefault(): void
+    public function testADatabaseNamedByTheEnvironmentAloneIsAnInstalledSite(): void
     {
-        $config = $this->load($this->project(), [], ['IDNO_DATABASE_URL' => 'mysql://u:p@h/db']);
-        $this->assertTrue($config->isDefault());
+        // A container is configured by its environment, with no configuration file.
+        $this->assertFalse($this->load($this->project(), [], ['IDNO_DATABASE_URL' => 'mysql://u:p@h/db'])->isDefault());
+        $this->assertFalse($this->load($this->project(), ['IDNO_DATABASE' => 'sqlite', 'IDNO_DBNAME' => 'data/idno.sqlite'])->isDefault());
+        $this->assertFalse($this->load($this->project(), ['KNOWN_DATABASE' => 'mysql'])->isDefault());
+    }
+
+    public function testAnEnvironmentThatNamesNoDatabaseIsNotAnInstalledSite(): void
+    {
+        $this->assertTrue($this->load($this->project())->isDefault());
+        $this->assertTrue($this->load($this->project(), ['IDNO_DOMAIN' => 'example.com', 'IDNO_PORT' => '80', 'IDNO_DBNAME' => 'idno', 'IDNO_DATABASE' => ' '])->isDefault());
+        $this->assertTrue($this->load($this->project(), ['IDNO_DATABASE' => ['x']])->isDefault());
     }
 
     public function testIniBeatsKnownEnv(): void

@@ -10,7 +10,6 @@ use Idno\Http\FrontController;
 use Idno\Kernel;
 use Idno\Legacy\LegacyFallbackListener;
 use Idno\Legacy\LegacyResponse;
-use Idno\Legacy\NotInstalledException;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
@@ -24,32 +23,6 @@ final class FrontControllerTest extends TestCase
     {
         $this->kernel?->shutdown();
         $this->kernel = null;
-    }
-
-    public function testNotInstalledRedirectsToWarmup(): void
-    {
-        $kernel = new class ('test', true) extends Kernel {
-            public function boot(): void
-            {
-                throw new NotInstalledException('not installed');
-            }
-        };
-
-        $response = FrontController::handle($kernel, Request::create('/'));
-
-        $this->assertSame(302, $response->getStatusCode());
-        $this->assertSame('./warmup/', $response->headers->get('Location'));
-    }
-
-    public function testNotInstalledRedirectIsSentLikeTheLegacyFrontController(): void
-    {
-        // Before the kernel handled requests, the redirect was header('Location: ./warmup/')
-        // and nothing else: no body, and no Symfony headers (Cache-Control, Date).
-        $response = FrontController::notInstalledResponse();
-
-        $this->assertInstanceOf(LegacyResponse::class, $response);
-        $this->assertSame('./warmup/', $response->headers->get('Location'));
-        $this->assertSame(302, $response->getStatusCode());
     }
 
     public function testUnmatchedPathsReachTheLegacyController(): void

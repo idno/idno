@@ -133,4 +133,15 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $container->services()->alias('idno.test.queue_handler', \Idno\Queue\QueuedEventHandler::class)->public();
     $container->services()->alias('idno.test.messenger_retry_idno', 'messenger.retry.multiplier_retry_strategy.idno')->public();
     $container->services()->alias('idno.test.messenger_retry_failed', 'messenger.retry.multiplier_retry_strategy.failed')->public();
+
+    // The installer's tests give a site a root of its own for what an installation writes (the
+    // configuration, the setup marker, the SQLite database, uploads): when the environment variable
+    // IDNO_TEST_INSTALL_ROOT names a directory, the boot configuration is read from it and the
+    // installer writes into it. Unset (always, outside those tests), both use the project directory.
+    $container->services()->get(BootConfig::class)
+        ->factory([\Tests\Fixtures\InstallRoot::class, 'bootConfig'])
+        ->args(['%kernel.project_dir%']);
+    $container->services()->get(\Idno\Install\InstallPaths::class)
+        ->factory([\Tests\Fixtures\InstallRoot::class, 'paths'])
+        ->args(['%kernel.project_dir%']);
 };

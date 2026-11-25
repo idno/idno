@@ -31,14 +31,14 @@ if (file_exists(dirname(dirname(__FILE__)) . '/vendor/autoload.php')) {
 // Boot the Symfony kernel, which boots the legacy application
 // (see \Idno\Legacy\LegacyBootstrap). This only boots: HTTP requests are handled by
 // index.php (\Idno\Http\FrontController); code that includes this file gets a booted
-// legacy application. While the schema gate is closed (the database needs creating or
+// legacy application. A site that is not installed says so on stderr and exits 1. While the schema gate is closed (the database needs creating or
 // upgrading) the legacy application cannot boot: this says so on stderr and exits 1.
-try {
-    $kernel = \Idno\Kernel::fromGlobals();
-    $kernel->boot();
-} catch (\Idno\Legacy\NotInstalledException $e) {
-    \Idno\Http\FrontController::notInstalledResponse()->send();
-    exit; // Load the installer
+$kernel = \Idno\Kernel::fromGlobals();
+$kernel->boot();
+if (!$kernel->installed()) {
+    file_put_contents('php://stderr', \Idno\Install\InstallGateListener::NOT_INSTALLED . "\n");
+    http_response_code(503);
+    exit(1);
 }
 if (!$kernel->legacyBooted()) {
     file_put_contents('php://stderr', $kernel->getContainer()->get(\Idno\Upgrade\SchemaGate::class)->closedMessage() . "\n");

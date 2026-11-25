@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Install;
 
-use Idno\Core\Installer;
+use Idno\Install\ServerChecks;
 use Idno\Exceptions\ConfigurationException;
 use Idno\Storage\ConnectionParameters;
 use PHPUnit\Framework\TestCase;
 
 /**
- * What both installers do with the choice of database: Installer::databaseParams() checks it and gives
+ * What both installers do with the choice of database: Idno\Install\DatabaseChoice::params() checks it and gives
  * the values the configuration file is built from. It needs nothing but PHP: the installer's root is a
  * temporary directory holding a copy of the configuration template, and SQLite files live in it.
  */
@@ -430,13 +430,9 @@ final class InstallerDatabaseTest extends TestCase
 
     public function testAtLeastOneDatabaseModuleIsRequired(): void
     {
-        self::assertNotContains('pdo_mysql', Installer::requiredModules());
-        self::assertNotContains('pdo_sqlite', Installer::requiredModules());
-        self::assertContains('pdo', Installer::requiredModules());
-        self::assertSame(['pdo_mysql', 'pdo_sqlite'], Installer::databaseModules());
-
-        self::assertFalse(Installer::databaseModuleAvailable(static fn (string $module): bool => false));
-        self::assertTrue(Installer::databaseModuleAvailable(static fn (string $module): bool => $module === 'pdo_sqlite'));
-        self::assertTrue(Installer::databaseModuleAvailable(static fn (string $module): bool => $module === 'pdo_mysql'));
+        self::assertNotContains('pdo_mysql', ServerChecks::EXTENSIONS);
+        self::assertNotContains('pdo_sqlite', ServerChecks::EXTENSIONS);
+        self::assertContains('pdo', ServerChecks::EXTENSIONS);
+        self::assertSame(['pdo_sqlite', 'pdo_mysql'], ServerChecks::DATABASE_EXTENSIONS);
     }
 }

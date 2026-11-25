@@ -52,6 +52,7 @@ namespace Idno\Core {
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/diagnostics/?', '\Idno\Pages\Admin\Diagnostics');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/statistics/?', '\Idno\Pages\Admin\Statistics');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/legacytables/?', '\Idno\Pages\Admin\LegacyTables');
+            \Idno\Core\Idno::site()->routes()->addRoute('/admin/welcome/?', '\Idno\Pages\Admin\Welcome');
 
             if (!empty(\Idno\Core\Idno::site()->config()->capture_logs) && \Idno\Core\Idno::site()->config()->capture_logs) {
                 \Idno\Core\Idno::site()->routes()->addRoute('/admin/logs/?', '\Idno\Pages\Admin\Logs');

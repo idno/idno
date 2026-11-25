@@ -216,16 +216,6 @@ namespace Idno\Core {
             $this->routes()->addRoute('/drafts/?', '\Idno\Pages\Drafts');
 
             /**
-             * Installation / first use
-            */
-            $this->routes()->addRoute('/begin/?', '\Idno\Pages\Onboarding\Begin', true);
-            $this->routes()->addRoute('/begin/register/?', '\Idno\Pages\Onboarding\Register', true);
-            $this->routes()->addRoute('/begin/profile/?', '\Idno\Pages\Onboarding\Profile');
-            $this->routes()->addRoute('/begin/connect/?', '\Idno\Pages\Onboarding\Connect');
-            $this->routes()->addRoute('/begin/connect\-forwarder/?', '\Idno\Pages\Onboarding\ConnectForwarder');
-            $this->routes()->addRoute('/begin/publish/?', '\Idno\Pages\Onboarding\Publish');
-
-            /**
              * Add some services
             */
             $this->routes()->addRoute('/service/db/optimise/?', '\Idno\Pages\Service\Db\Optimise');

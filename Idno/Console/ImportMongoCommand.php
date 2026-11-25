@@ -6,7 +6,7 @@ namespace Idno\Console;
 
 use Doctrine\DBAL\Exception\ConnectionException;
 use Idno\Config\BootConfig;
-use Idno\Core\Installer;
+use Idno\Install\DatabaseChoice;
 use Idno\Storage\ConnectionFactory;
 use Idno\Storage\ConnectionParameters;
 use Idno\Storage\Files\FilesystemFactory;
@@ -293,7 +293,7 @@ final class ImportMongoCommand extends Command
         if ($target['database'] === 'sqlite') {
             $path = str_starts_with($target['dbname'], '/') ? $target['dbname'] : $this->projectDir . '/' . $target['dbname'];
             $output->writeln('');
-            foreach (Installer::sqliteOwnershipNotes($path) as $line) {
+            foreach (DatabaseChoice::sqliteOwnershipNotes($path) as $line) {
                 $output->writeln($line, OutputInterface::OUTPUT_PLAIN);
             }
         }

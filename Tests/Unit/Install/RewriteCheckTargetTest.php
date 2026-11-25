@@ -81,8 +81,6 @@ final class RewriteCheckTargetTest extends TestCase
 
     public function testTheInstallerAsksForTheFileTheRulesAnswer(): void
     {
-        $installer = (string) file_get_contents($this->root . '/warmup/WebInstaller.php');
-        $this->assertStringContainsString("'/js/canary.js'", $installer, 'the server-side check');
-        $this->assertStringContainsString("'../js/canary.js'", (string) file_get_contents($this->root . '/warmup/templates/default/pages/settings.tpl.php'), 'the settings page\'s own request');
+        $this->assertStringContainsString("fetch('./js/canary.js'", (string) file_get_contents($this->root . '/Idno/Install/InstallPage.php'), 'the request the first page of the installer makes');
     }
 }

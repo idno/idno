@@ -8,26 +8,11 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * The built-in look (Idno 2026) does not load jQuery or any plugin of it: a template of the look that calls them throws a
- * ReferenceError when its script runs, and the feature behind it is dead. Only the onboarding shell loads jQuery.
+ * ReferenceError when its script runs, and the feature behind it is dead. No page loads jQuery (the installation's pages, which
+ * are not templates, load nothing at all).
  */
 final class NoJqueryInTheBuiltInLookTest extends TestCase
 {
-    /**
-     * Files that are drawn only inside the onboarding shell (`shell/simple`, which loads jQuery itself: `Idno\Pages\Onboarding\*` and
-     * `Idno\Pages\Account\Register` draw them as the body of that shell and nowhere else). Each needs its reason; a file that is
-     * not there fails the test, so the list cannot go stale.
-     *
-     * @var array<string, string>
-     */
-    private const DRAWN_ONLY_IN_THE_SIMPLE_SHELL = [
-        'templates/default/shell/simple.html.twig' => 'The onboarding shell: it loads jQuery in its head.',
-        'templates/default/shell/simple/messages.html.twig' => 'Part of the onboarding shell.',
-        'templates/default/onboarding/begin.html.twig' => 'The body of the onboarding page, drawn by Idno\Pages\Onboarding\Begin inside shell/simple.',
-        'templates/default/onboarding/connect.html.twig' => 'The body of the onboarding page, drawn by Idno\Pages\Onboarding\Connect inside shell/simple.',
-        'templates/default/onboarding/profile.html.twig' => 'The body of the onboarding page, drawn by Idno\Pages\Onboarding\Profile inside shell/simple.',
-        'templates/default/onboarding/register.html.twig' => 'The body of the onboarding page, drawn by Idno\Pages\Account\Register inside shell/simple.',
-    ];
-
     /** A jQuery call, or a call of a jQuery plugin (comments are removed first). */
     private const PATTERN = '~(?<![\w$])\$\s*\(|(?<![\w$])\$\.[A-Za-z_]|\bwindow\.\$(?![\w$])|\bjQuery\b|\bmediaelementplayer\b|\btinymce\b|\btinyMCE\b|\.(?:modal|tooltip|popover)\s*\(~i';
 
@@ -36,9 +21,6 @@ final class NoJqueryInTheBuiltInLookTest extends TestCase
         $root = dirname(__DIR__, 3);
         $offenders = [];
         foreach ($this->templates($root) as $relative => $path) {
-            if (isset(self::DRAWN_ONLY_IN_THE_SIMPLE_SHELL[$relative])) {
-                continue;
-            }
             $hits = self::calls((string) file_get_contents($path));
             if ($hits !== []) {
                 $offenders[] = $relative . ': ' . implode(', ', array_slice($hits, 0, 3));
@@ -48,24 +30,13 @@ final class NoJqueryInTheBuiltInLookTest extends TestCase
         $this->assertSame([], $offenders, 'the built-in look loads no jQuery: write the script in plain DOM JavaScript or Alpine');
     }
 
-    public function testEveryFileDrawnOnlyInTheSimpleShellIsThereAndHasItsReason(): void
+    public function testNoShellOfTheLookLoadsJquery(): void
     {
         $root = dirname(__DIR__, 3);
-        foreach (self::DRAWN_ONLY_IN_THE_SIMPLE_SHELL as $file => $reason) {
-            $this->assertFileExists($root . '/' . $file);
-            $this->assertNotSame('', trim($reason));
+        foreach ($this->templates($root) as $relative => $path) {
+            $this->assertDoesNotMatchRegularExpression('~jquery~i', (string) preg_replace('~\{#.*?#\}~s', '', (string) file_get_contents($path)), $relative . ' names jQuery');
         }
-    }
-
-    public function testTheSimpleShellLoadsJqueryAndTheListedBodiesAreDrawnOnlyThere(): void
-    {
-        $root = dirname(__DIR__, 3);
-        $this->assertStringContainsString('jquery', (string) file_get_contents($root . '/templates/default/shell/simple.html.twig'));
-        foreach (['Begin', 'Connect', 'Profile'] as $page) {
-            $source = (string) file_get_contents($root . '/Idno/Pages/Onboarding/' . $page . '.php');
-            $this->assertStringContainsString("draw('shell/simple')", $source, $page . ' draws its body inside the simple shell');
-        }
-        $this->assertStringContainsString("draw('shell/simple')", (string) file_get_contents($root . '/Idno/Pages/Account/Register.php'));
+        $this->assertFileDoesNotExist($root . '/templates/default/shell/simple.html.twig', 'the onboarding shell, the last page that loaded jQuery, is gone');
     }
 
     /** @return list<string> */
