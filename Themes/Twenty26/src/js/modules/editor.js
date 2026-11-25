@@ -22,8 +22,11 @@ Alpine.data('tiptapEditor', (uniqueId) => {
             const container = document.getElementById(`${uniqueId}-editor`);
             const textarea = document.getElementById(uniqueId);
 
+            const placeholder = container.getAttribute('data-placeholder');
+
             editor = createEditor(container, {
                 content: textarea.value,
+                ...(placeholder ? { placeholder } : {}),
                 onChange: (html) => {
                     textarea.value = html;
                 },
@@ -32,6 +35,19 @@ Alpine.data('tiptapEditor', (uniqueId) => {
                 },
             });
             this.tick++;
+
+            // Name the editing area for screen readers, from the field's label if it has one
+            const editable = container.querySelector('[contenteditable]');
+            if (editable) {
+                editable.setAttribute('role', 'textbox');
+                editable.setAttribute('aria-multiline', 'true');
+                const label = document.getElementById(`${uniqueId}-label`);
+                if (label) {
+                    editable.setAttribute('aria-labelledby', label.id);
+                } else if (placeholder) {
+                    editable.setAttribute('aria-label', placeholder);
+                }
+            }
         },
 
         toggleLink() {

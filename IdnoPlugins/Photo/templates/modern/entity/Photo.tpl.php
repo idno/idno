@@ -30,6 +30,9 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
 
     <?php
     if (!empty($attachments)) {
+        ?>
+        <div class="idno-photo-grid <?php if ($multiple) echo "multiple-images"; ?>">
+        <?php
         foreach ($attachments as $attachment) {
 
             if (!empty($currentPage) && !\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
@@ -81,6 +84,9 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
             <?php
             $photoCount++;
         }
+        ?>
+        </div>
+        <?php
     } ?>
     <?= $this->autop($this->parseHashtags($this->parseURLs($vars['object']->body, $rel))) . $tags ?>
 

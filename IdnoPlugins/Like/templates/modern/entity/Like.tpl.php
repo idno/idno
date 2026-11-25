@@ -1,18 +1,21 @@
 <?php
 
     $class = '';
-    $icon = '';
+    $kind = '';
 
 if (!empty($vars['object']->likeof)) {
     $class = "u-like-of";
-    $icon = '<i class="fa fa-thumbs-up"></i> ';
+    $kind = 'like';
 } elseif (!empty($vars['object']->repostof)) {
     $class = "u-repost-of";
-    $icon = '<i class="fa fa-retweet"></i> ';
+    $kind = 'repost';
 } else {
     $class = "u-bookmark-of";
-    $icon = '<i class="fa fa-bookmark"></i> ';
+    $kind = 'bookmark';
 }
+
+    $address = \Idno\Core\UrlValidator::httpUrl($vars['object']->body);
+    $host = $address !== '' ? (string) parse_url($address, PHP_URL_HOST) : '';
 
 if (!empty($vars['object']->pageTitle)) {
     $body = $vars['object']->pageTitle;
@@ -27,8 +30,13 @@ if (!empty($vars['object']->pageTitle)) {
     if (empty($vars['feed_view'])) {
 
         ?>
-            <h2 class="idno-entry-title"><?= $icon ?><a href="<?= htmlspecialchars(\Idno\Core\UrlValidator::httpUrl($vars['object']->body)) ?>" class="<?= $class ?> p-name"
-                target="_blank"><?= $this->parseURLs(htmlentities(strip_tags($body))) ?></a>
+            <?php if ($host !== '') { ?>
+            <p class="idno-entry-kicker idno-entry-kicker-<?= $kind ?>">
+                <span><?= htmlspecialchars($host) ?></span>
+            </p>
+            <?php } ?>
+            <h2 class="idno-entry-title"><a href="<?= htmlspecialchars($address) ?>" class="<?= $class ?> p-name"
+                target="_blank" rel="noopener"><?= $this->parseURLs(htmlentities(strip_tags($body))) ?></a>
             </h2>
         <?php
 
