@@ -137,6 +137,21 @@ final class PageContextTest extends TestCase
         $this->assertSame(['<c>'], $context->headers()['Link']);
     }
 
+    public function testAHeaderFirstAddedWithoutReplacingDoesNotReplaceAnotherPartsHeader(): void
+    {
+        $context = $this->context(Request::create('/x'));
+        $context->addHeader('Link', '<a>', false);
+        $context->addHeader('Link', '<b>', false);
+        $context->addHeader('X-One', '1');
+        $context->addHeader('x-two', '2', false);
+        $context->addHeader('X-Two', '3');
+
+        $this->assertFalse($context->replacesHeader('link'));
+        $this->assertTrue($context->replacesHeader('X-One'));
+        $this->assertTrue($context->replacesHeader('x-two'), 'a replacing add starts the list again');
+        $this->assertTrue($context->replacesHeader('X-Unknown'));
+    }
+
     public function testSetCachingOwnsCaching(): void
     {
         $context = $this->context(Request::create('/x'));

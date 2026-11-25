@@ -333,8 +333,8 @@ Idno/
                                MessengerTrimPass, TwigTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
-                               PageContextResolver, PageRedirect: what a controller that draws a site page carries, see
-                               "Legacy pages and routes")
+                               PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener: what a controller that
+                               draws a site page carries, and the lifecycle run around it, see "Legacy pages and routes")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -603,7 +603,10 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
 4. Symfony's router matches the request. Attribute-routed controllers under `Idno\`
    (and, in the `test` environment only, `Tests\Fixtures\`) are tried first. Anything
    they do not match goes to the lowest-priority catch-all route `idno_legacy`
-   (`/{path}`, any path, any HTTP method): `Idno\Legacy\LegacyController`.
+   (`/{path}`, any path, any HTTP method): `Idno\Legacy\LegacyController`. A controller marked
+   `#[SitePage]` is a page of the site: before it runs, `Idno\Http\Page\PageRequestListener` (`kernel.controller`, main
+   requests only, and only when the kernel booted the legacy application) begins the page as `Page::init()` did, refuses
+   an API request on an account page and a visitor of a private site, and enters it (see "Legacy pages and routes").
 5. `LegacyController` returns an `Idno\Legacy\LegacyResponse`: a streamed response that
    sends no status line and no headers of its own. Symfony's response listeners still
    modify the object (they set a charset, and `X-Robots-Tag: noindex` in debug mode), but
@@ -694,6 +697,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   (so there can be two `Cache-Control` headers).
 - Mark it `#[AsController]` (or register it as a service) when it needs constructor
   injection; services are autowired from the container.
+- A controller that draws a page of the site marks the class or the method with `#[Idno\Http\Page\SitePage(name: <the legacy page class>, ...)]`:
+  `PageRequestListener` then runs the page's lifecycle around it (the events plugins listen to, the template type, the walled garden, the
+  refusal of an API request on an account page, the standard headers; see "Legacy pages and routes") and gives the controller a
+  `PageContext` argument. The fixture is `Tests/Fixtures/SitePageFixtureController` (`/_test/site-page/{state,public,account}`); a test records the
+  page events with `IDNO_TEST_RECORD_PAGES` (`Tests\Fixtures\PageEventRecorder`).
 - A test-only route goes in `Tests/Fixtures/` (loaded by `config/routes/test/fixtures.php`
   in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
   example, pinned by `Tests/Characterisation/KernelRoutingTest`; `ThrowingController`
@@ -847,7 +855,7 @@ other new code may.
 A page a controller draws has a current page too (`Idno::site()->currentPage()`), because templates, helpers and plugins ask it for
 the request's input, address, entity, owner, assets and status (`Idno\Core\Idno`, `DefaultTemplate`, `LegacyTemplateHelpers`,
 `Syndication`, `Webmention`, the bundled plugins' entities all do), and a controller serves no `Page`. Two shims in `Idno\Legacy\`
-(both `final`, excluded from the container scan) provide it; nothing is routed to a controller through them yet:
+(both `final`, excluded from the container scan) provide it; nothing but test fixtures is routed to a controller through them yet:
 
 - `Idno\Http\Page\SitePage` (an attribute on a controller class or method; the method's wins; `SitePage::of()` takes an object, a
   `Class::method` string, an `[object|class, method]` array or an invokable, cached per class and method) says which legacy page the
@@ -880,6 +888,32 @@ the request's input, address, entity, owner, assets and status (`Idno\Core\Idno`
   `PageHandler` for an API request on an account page and of `LegacyForbiddenPage`, and the stand-in current page of tests): it runs `Page::init()` as
   the home page did, and carries the home page's body class (`pageClassName()` is `Idno\Pages\Homepage`: the golden `not-found.html`).
   Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
+- The page lifecycle of a controller (`Idno\Http\Page\PageLifecycle`, an interface; `Idno\Legacy\LegacyPageLifecycle` the adapter, aliased
+  and public in `config/services.php`): what a legacy page did around its handler, in the same order. `PageRequestListener`
+  (`#[AsEventListener]` on `kernel.controller` at priority 0, so before `IsGrantedAttributeListener` at 20; constructor: the kernel and
+  the lifecycle as a SERVICE CLOSURE) does nothing unless the request is the main one, `Kernel::legacyBooted()` and
+  `SitePage::of($event->getController())` is not null: a plain controller, a sub-request, the legacy catch-all, `/_upgrade/step`, a `bootLegacy:
+  false` kernel and a kernel with the schema gate closed never build the lifecycle and install no PHP error handler
+  (`Tests/Kernel/PageListenersWithoutLegacyTest`, `Tests/Unit/Http/Page/PageRequestListenerTest`). Then it builds the `PageContext`, attaches it
+  to the request and runs, in this order, the legacy one's: `begin()` (`Page::init()`: the `defaultType` of the attribute set as input `_t`
+  when the request names none, the template type from `_t` (`TypeChain::requested()`, requestable and existing types only), the current page
+  made a `ControllerPage`, `$_SERVER['HTTP_REFERER']` made non-empty, `Idno::embedded()`, `page/ready`; PHP's own `X-Powered-By` is removed
+  while headers are not sent, because the response adds the page's beside it); for OPTIONS the controller is replaced by one answering 204 with
+  `Access-Control-Allow-Methods: GET, POST, HEAD, OPTIONS, PUT, DELETE` and `Access-Control-Max-Age: 86400`, as `Page::options()` did,
+  and nothing more; otherwise `refusesApiRequest()` (an `accountPage` and `Session::isAPIRequest()`: the warning `API request to an account
+  page refused: <name>`, the template type from `Accept`, the session message `Account pages are not available to API requests.`), then
+  `mayView()` (`publicGatekeeper()`'s rule: a public site, or a logged-on visitor, or `publicOnPrivateSite`), either refusal an
+  `AccessDeniedHttpException` (no `page/head`, no `page/get`; the type of the refusal is the one `_t` chose, not `Accept`, as a legacy 403
+  was), then `enter()` (`autodetectTemplateType()`, `page/head` with `['page' => <the current page>]`, `page/get` with `['page_class' =>
+  <the attribute's name>, 'arguments' => <the context's>]`). HEAD runs as GET (Symfony matches it on the GET route and strips the body): it
+  fires `page/get` too, which a legacy HEAD did not. The page is an XHR page from `page/ready` on (a legacy one set its flag after it). On the
+  response (`kernel.response`, priority 0) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
+  `X-Clacks-Overhead`, `X-Idno-Build-Fingerprint`: none when `IDNO_UNIT_TEST` is defined, as `init()` sent none), then the context's headers (a
+  name replaces the controller's unless the page began it with `addHeader(..., $replace: false)`: `PageContext::replacesHeader()`; `Link` is
+  added), then, when `ownsCaching()`, the context's caching headers. `LegacyPageLifecycle::reportException()` is what a legacy `Page::exception()`
+  reported (one critical line `<message> [<file>:<line>]`, the `error.exception` statistic, `Logging::oopsAlert()`) and never throws; it draws
+  nothing. Pinned by `Tests/Characterisation/SitePageLifecycleTest` (over HTTP, on `Tests\Fixtures\SitePageFixtureController`: the routes
+  `/{lead}_test/site-page/{state,public,account}{slash}`, in the convention of a page's routes) and `Tests/Kernel/LegacyPageLifecycleTest`.
 
 ### Kernel and services
 

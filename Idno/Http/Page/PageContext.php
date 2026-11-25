@@ -37,6 +37,9 @@ final class PageContext
     /** @var array<string, list<string>> */
     private array $headers = [];
 
+    /** @var array<string, bool> by lower-case name: whether the first value of the header replaces a header of that name another part set */
+    private array $replacing = [];
+
     /** @var array<string, string>|null */
     private ?array $caching = null;
 
@@ -185,7 +188,19 @@ final class PageContext
                 break;
             }
         }
+        if ($replace || !isset($this->headers[$key])) {
+            $this->replacing[strtolower($name)] = $replace;
+        }
         $this->headers[$key] = $replace ? [$value] : [...($this->headers[$key] ?? []), $value];
+    }
+
+    /**
+     * Whether a header of this name replaces one another part (a controller's response) already has, as opposed to being added
+     * beside it: true unless the page began the header with `$replace` false.
+     */
+    public function replacesHeader(string $name): bool
+    {
+        return $this->replacing[strtolower($name)] ?? true;
     }
 
     /**

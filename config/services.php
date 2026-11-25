@@ -362,6 +362,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // answers every refusal. Nothing is looked up and nothing from the configuration is compiled in.
     $services->set(\Idno\Legacy\LegacyCurrentUserSource::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\CurrentUserSource::class, \Idno\Legacy\LegacyCurrentUserSource::class);
+    // The lifecycle of a page a controller serves (Idno\Http\Page\PageRequestListener), over the legacy application: public so that a
+    // test can tell it was never built for a request that is not a site page.
+    $services->set(\Idno\Legacy\LegacyPageLifecycle::class)->public();
+    $services->alias(\Idno\Http\Page\PageLifecycle::class, \Idno\Legacy\LegacyPageLifecycle::class)->public();
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);
