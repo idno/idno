@@ -456,10 +456,29 @@ namespace IdnoPlugins\ActivityPub\Tests {
                 },
                 ]
             );
-            $body = (string) curl_exec($curl);
+            $body = $this->underThisProcessName((string) curl_exec($curl));
             $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
 
             return ['status' => $status, 'headers' => $headers + ['content-type' => ''], 'body' => $body, 'json' => json_decode($body, true)];
+        }
+
+        /**
+         * The web server may know the site by another host name than this process does: in CI
+         * it listens on 0.0.0.0 and is reached as localhost, and no address is configured. It
+         * then writes the addresses it makes up itself (not the stored ids) with its own name.
+         * A site in use has one name. Write the server's name for the site as this process's.
+         */
+        private function underThisProcessName($body)
+        {
+            $parts = parse_url(Idno::site()->config()->getDisplayURL());
+            $port = empty($parts['port']) ? '' : ':' . $parts['port'];
+            foreach (['0.0.0.0', '127.0.0.1', '[::1]', 'localhost'] as $host) {
+                if ($host !== $parts['host']) {
+                    $body = preg_replace('#(https?:)//' . preg_quote($host . $port, '#') . '(?=[/"\'<\s]|$)#', '$1//' . $parts['host'] . $port, $body);
+                }
+            }
+
+            return $body;
         }
     }
 
