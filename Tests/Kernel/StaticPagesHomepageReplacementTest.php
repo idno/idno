@@ -13,21 +13,32 @@ use Tests\Support\PrivateSiteTestCase;
  */
 final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
 {
-    /** @var array<string, string> */
-    private array $ids = [];
+    protected const SHARED_SITE = true;
 
-    protected function setUp(): void
+    /** @var array<string, string> the id of the page of each kind, by name (seeded once for the class's site) */
+    private static array $ids = [];
+
+    protected function seedSharedSite(): void
     {
-        parent::setUp();
         $this->addUser('ada', 'correct-horse-battery-9', null, true);
         $this->addUser('bob', 'correct-horse-battery-9');
         $this->addUser('carol', 'correct-horse-battery-9');
-        $this->ids = $this->runInSite(
+        self::$ids = $this->runInSite(
             '$admin = \Idno\Entities\User::getByHandle("ada"); $carol = \Idno\Entities\User::getByHandle("carol");'
             . '$mk = function ($title, $access, $extra = [], $owner = null) use ($admin, $carol) { $p = new \IdnoPlugins\StaticPages\StaticPage(); $p->setOwner($owner ?? $admin); $p->setTitle($title); $p->body = "<p>Body of $title</p>"; $p->setAccess($access); foreach ($extra as $k => $v) { $p->$k = $v; } $p->save(true); return $p->getID(); };'
             . '$note = new \IdnoPlugins\Status\Status(); $note->body = "a note"; $note->setOwner($admin); $note->setAccess("PUBLIC"); $note->save(true);'
             . 'return ["public" => $mk("Public page", "PUBLIC", ["slug" => "public-page"]), "forward" => $mk("Forwarding page", "PUBLIC", ["forward_url" => "http://example.test/away"]), "private" => $mk("Private page", $carol->getUUID(), [], $carol), "site" => $mk("Members page", "SITE"), "draft" => $mk("Draft page", "PUBLIC", ["publish_status" => "draft"], $carol), "note" => $note->getID()];'
         );
+        // the choice of home page is the one setting the tests change: it is saved once as it is when no page is chosen, and put back after each test
+        $this->runInSite('\Idno\Core\Idno::site()->config()->staticPages = []; \Idno\Core\Idno::site()->config()->save(); return 1;');
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->connection !== null) {
+            $this->runInSite('\Idno\Core\Idno::site()->config()->staticPages = []; \Idno\Core\Idno::site()->config()->save(); return 1;');
+        }
+        parent::tearDown();
     }
 
     /**
@@ -61,7 +72,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
 
     public function testTheChosenPageIsAnsweredInItsShellAsAPermalinkOfItsOwner(): void
     {
-        foreach ([$this->ids['public'], 'public-page'] as $chosen) {
+        foreach ([self::$ids['public'], 'public-page'] as $chosen) {
             $answer = $this->ask($chosen, null);
 
             $this->assertSame(200, $answer['response']['status'], $chosen);
@@ -76,7 +87,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
 
     public function testAVisitorIsForwardedToTheAddressAPageForwardsTo(): void
     {
-        $answer = $this->ask($this->ids['forward'], null);
+        $answer = $this->ask(self::$ids['forward'], null);
 
         $this->assertSame(302, $answer['response']['status']);
         $this->assertSame('http://example.test/away', $answer['response']['location']);
@@ -85,7 +96,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
 
     public function testAnAdministratorSeesAPageThatForwardsAVisitor(): void
     {
-        $answer = $this->ask($this->ids['forward'], 'ada');
+        $answer = $this->ask(self::$ids['forward'], 'ada');
 
         $this->assertSame(200, $answer['response']['status']);
         $this->assertStringContainsString('Body of Forwarding page', $answer['response']['body']);
@@ -94,7 +105,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
 
     public function testAMemberIsForwardedToo(): void
     {
-        $answer = $this->ask($this->ids['forward'], 'bob');
+        $answer = $this->ask(self::$ids['forward'], 'bob');
 
         $this->assertSame('http://example.test/away', $answer['response']['location']);
     }
@@ -115,7 +126,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
      */
     public function testAHomePageThatCannotBeUsedIsUnsetByAnAdministratorAndTheStreamIsServed(string $case): void
     {
-        $chosen = $this->ids[$case] ?? $case;
+        $chosen = self::$ids[$case] ?? $case;
 
         $answer = $this->ask($chosen, 'ada');
 
@@ -128,7 +139,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
      */
     public function testAVisitorOrAMemberFindingAnUnusablePageLeavesTheSettingAndTheStreamIsServed(string $case): void
     {
-        $chosen = $this->ids[$case] ?? $case;
+        $chosen = self::$ids[$case] ?? $case;
 
         foreach ([null, 'bob'] as $who) {
             $answer = $this->ask($chosen, $who);
@@ -162,13 +173,13 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
     public function testWhatTheViewerCannotReadIsNoHomePage(string $case, array $cannot, array $can): void
     {
         foreach ($cannot as $who) {
-            $answer = $this->ask($this->ids[$case], $who);
+            $answer = $this->ask(self::$ids[$case], $who);
 
             $this->assertNull($answer['response'], $case . ' for ' . ($who ?? 'a visitor'));
-            $this->assertSame($this->ids[$case], $answer['homepage'], 'nothing is unset for a viewer who is only refused');
+            $this->assertSame(self::$ids[$case], $answer['homepage'], 'nothing is unset for a viewer who is only refused');
         }
         foreach ($can as $who) {
-            $answer = $this->ask($this->ids[$case], $who);
+            $answer = $this->ask(self::$ids[$case], $who);
 
             $this->assertSame(200, $answer['response']['status'] ?? null, $case . ' for ' . $who);
         }
@@ -177,7 +188,7 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
     public function testThePluginListensToTheEvent(): void
     {
         $answer = $this->runInSite(
-            '\Idno\Core\Idno::site()->config()->staticPages = ["homepage" => ' . $this->literal($this->ids['public']) . '];'
+            '\Idno\Core\Idno::site()->config()->staticPages = ["homepage" => ' . $this->literal(self::$ids['public']) . '];'
             . '$_SERVER["REQUEST_URI"] = "/"; $_SERVER["REQUEST_METHOD"] = "GET";'
             . '$context = new \Idno\Http\Page\PageContext(\Symfony\Component\HttpFoundation\Request::create("/"), new \Idno\Http\Page\SitePage("Idno\Pages\Homepage"));'
             . '\Idno\Core\Idno::site()->setCurrentPage(new \Idno\Legacy\ControllerPage($context, false));'

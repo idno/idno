@@ -195,6 +195,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `IDNO_TEST_SUBDIRECTORY=<name>` in the environment make the server behave as Apache or nginx do for the legacy router's path, and serve a site under `/<name>/`). `startExtraServer(array $environment, array $ini = []): string`
   starts a second `php -S` (a free port, stopped in `tearDown()`) on the same database and upload directory, with other
   environment variables or PHP settings (the production environment, opcache), and returns its base URL.
+  A class whose tests only READ the site shares one site (`protected const SHARED_SITE = true`): the first test starts it, `seedSharedSite()` writes what
+  every test reads (once, after the site has answered a request), and the site, its extra servers (kept by environment and ini) and its database stay until
+  `tearDownAfterClass()`. After every test the fingerprint (`siteFingerprint()`: the rows of `idno_entities`, `idno_reader`, `idno_site`, the settings and
+  the names and sizes of the uploaded files; never sessions or the queue) is compared with the one taken after seeding: a test that changed the site fails
+  ("changed the shared site") and the next test gets a rebuilt site; the site's cache pool is emptied; every test must ask for the same environment
+  (`Tests/Characterisation/SharedSiteTest`). A test that changes the site (a user, a post, a setting, a plugin) stays in a class of its own that is not shared,
+  or puts the change back exactly; `RenderedSiteTestCase::seedSite()` returns what it seeded the first time on a shared site.
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
   `Tests\Queue\AsyncSiteTestCase`, a `PrivateSiteTestCase` that sets `IDNO_EVENT_QUEUE=AsynchronousQueue` (through
   `additionalEnvironment()`; `siteEnvironment()` stays the test class's) and adds `runWorkerOnce()`

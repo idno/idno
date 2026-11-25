@@ -28,10 +28,37 @@ use Tests\Storage\PrivateDatabase;
  * IDNO_TEST_HTTP_ALLOW naming its own origin, plus what siteEnvironment() says (a theme, a mail server). The
  * helper scripts that boot the site (runInSite(), console()) get the same environment. The server is stopped (a
  * bounded wait, then SIGKILL) and the database dropped in tearDown(), whatever the outcome.
+ *
+ * A class whose tests only READ the site may share one (`protected const SHARED_SITE = true`): the first test starts it,
+ * seedSharedSite() writes what every test reads, and the site, its extra servers and its database stay until
+ * tearDownAfterClass(). After every test the site's tables, settings and upload directory are compared with what they were
+ * after seeding: a test that changed them fails with a message saying so and the site is rebuilt for the next test; the site's
+ * cache pool is emptied; and every test of the class must ask for the same environment (siteEnvironment(), additionalEnvironment(),
+ * siteIni()). A class that is not shared is as it always was.
  */
 abstract class PrivateSiteTestCase extends TestCase
 {
     use LogsIn;
+
+    /** Whether the tests of the class share one site (they only read it): see the class's comment. */
+    protected const SHARED_SITE = false;
+
+    /**
+     * The shared sites, by test class: directory, uploadPath, url, dbname, serverLog, server, connection, environment (the key the
+     * class asked for), fingerprint and extra (key => [server, url, log]).
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private static array $shared = [];
+
+    /** @var string the key of the environment this test asked for, when the site is shared */
+    private string $environmentKey = '';
+
+    /** Whether this test's site is shared: it is stopped by tearDownAfterClass(), not by tearDown(). */
+    private bool $usesSharedSite = false;
+
+    /** Whether setUp() finished with a shared site in hand (one that failed part-way is cleaned up as a site of its own). */
+    private bool $sharedReady = false;
 
     /** Seconds to wait for the web server to listen. */
     private const START_SECONDS = 20;
@@ -66,16 +93,109 @@ abstract class PrivateSiteTestCase extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->rigUploadsBefore = self::filesUnder((string) Idno::site()->config()->uploadpath);
+        $this->usesSharedSite = static::SHARED_SITE;
+        if ($this->usesSharedSite) {
+            $this->environmentKey = $this->environmentKey();
+            if (isset(self::$shared[static::class])) {
+                $this->adopt(self::$shared[static::class]);
+                $this->sharedReady = true;
+
+                return;
+            }
+        }
+        $this->start();
+        if ($this->usesSharedSite) {
+            // A request makes the site's own record when it is the first one a site with a user answers: it is made before the fingerprint
+            // (before the seed, and again after it, for a seed that adds the first user), which must not change when a test asks.
+            $this->site()->request('GET', '');
+            $this->seedSharedSite();
+            $this->site()->request('GET', '');
+            self::$shared[static::class] = [
+                'directory' => $this->directory, 'uploadPath' => $this->uploadPath, 'url' => $this->url, 'dbname' => $this->dbname,
+                'serverLog' => $this->serverLog, 'server' => $this->server, 'connection' => $this->connection,
+                'environment' => $this->environmentKey, 'fingerprint' => $this->siteFingerprint(), 'extra' => [],
+            ];
+            $this->server = null;
+            $this->sharedReady = true;
+        }
+    }
+
+    /**
+     * Writes what every test of a class that shares its site reads (SHARED_SITE): called once, on the first test's instance, after the site
+     * has started and answered one request. A test class overrides it; the default writes nothing.
+     */
+    protected function seedSharedSite(): void
+    {
+    }
+
+    /**
+     * A hash of what a test can change of the site: every row of the three collections, the settings and the names and sizes of the files in
+     * the upload directory (never the sessions, the queue, the migrations or the upgrade's bookkeeping, which a request writes by itself).
+     */
+    protected function siteFingerprint(): string
+    {
+        $hash = hash_init('sha256');
+        foreach (['idno_entities', 'idno_reader', 'idno_site'] as $table) {
+            hash_update($hash, $table . "\n" . json_encode($this->siteConnection()->fetchAllNumeric('select id, data from ' . $table . ' order by id')) . "\n");
+        }
+        hash_update($hash, json_encode($this->siteConnection()->fetchAllNumeric('select name, value, position from idno_settings order by position')) . "\n");
+        $files = [];
+        $root = $this->uploadPath;
+        if (is_dir($root)) {
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if ($file->isFile()) {
+                    $files[] = substr($file->getPathname(), strlen($root)) . ':' . $file->getSize();
+                }
+            }
+        }
+        sort($files);
+        hash_update($hash, implode("\n", $files));
+
+        return hash_final($hash);
+    }
+
+    /**
+     * The directory of the site's cache pool (IDNO_CACHEPATH): emptied after every test of a shared site.
+     */
+    protected function cachePoolDirectory(): string
+    {
+        return $this->directory . '/cache';
+    }
+
+    private function environmentKey(): string
+    {
+        return hash('sha256', json_encode([$this->siteEnvironment(), $this->additionalEnvironment(), $this->siteIni(), $this->configuredScheme()], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param array<string, mixed> $site an entry of self::$shared
+     */
+    private function adopt(array $site): void
+    {
+        if ($site['environment'] !== $this->environmentKey) {
+            $this->fail('A shared site has one environment: this test asks for another than the first test of ' . static::class . ' did.');
+        }
+        $this->directory = $site['directory'];
+        $this->uploadPath = $site['uploadPath'];
+        $this->url = $site['url'];
+        $this->dbname = $site['dbname'];
+        $this->serverLog = $site['serverLog'];
+        $this->connection = $site['connection'];
+        $this->client = new HttpSiteClient($this->url);
+    }
+
+    private function start(): void
+    {
         $this->directory = sys_get_temp_dir() . '/idno-site-' . bin2hex(random_bytes(6));
         mkdir($this->directory, 0700);
         $this->uploadPath = $this->directory . '/uploads';
         mkdir($this->uploadPath, 0700);
-        $this->rigUploadsBefore = self::filesUnder((string) Idno::site()->config()->uploadpath);
 
         $family = ConnectionParameters::driverFamily(Idno::container()->get(BootConfig::class)->all());
         $dbname = '';
         if ($family === 'mysql') {
-            $this->connection = PrivateDatabase::mysql('site', migrate: false);
+            $this->connection = PrivateDatabase::mysql((string) (getenv('IDNO_TEST_SITE_PURPOSE') ?: 'site'), migrate: false);
             $dbname = (string) $this->connection->getDatabase();
         } elseif ($family === 'sqlite') {
             $dbname = $this->directory . '/site.sqlite';
@@ -97,23 +217,72 @@ abstract class PrivateSiteTestCase extends TestCase
 
     protected function tearDown(): void
     {
-        $this->stopServer();
-        if ($this->connection !== null) {
-            if (($this->connection->getParams()['driver'] ?? '') === 'pdo_sqlite') {
-                $this->connection->close();
+        $changed = false;
+        if ($this->usesSharedSite && $this->sharedReady) {
+            $changed = $this->sharedSiteChanged();
+            if ($changed) {
+                self::release(static::class);
             } else {
-                PrivateDatabase::drop($this->connection);
+                self::removeTree($this->cachePoolDirectory());
             }
-            $this->connection = null;
+        } else {
+            $this->stopServer();
+            if ($this->connection !== null) {
+                if (($this->connection->getParams()['driver'] ?? '') === 'pdo_sqlite') {
+                    $this->connection->close();
+                } else {
+                    PrivateDatabase::drop($this->connection);
+                }
+            }
+            if ($this->directory !== '' && is_dir($this->directory)) {
+                self::removeTree($this->directory);
+            }
         }
-        if ($this->directory !== '' && is_dir($this->directory)) {
-            self::removeTree($this->directory);
-        }
+        $this->connection = null;
         $this->directory = '';
         $this->uploadPath = '';
         $leaked = array_values(array_diff(self::filesUnder((string) Idno::site()->config()->uploadpath), $this->rigUploadsBefore));
         parent::tearDown();
         $this->assertSame([], $leaked, 'the site of the test wrote into the rig\'s shared upload directory');
+        $this->assertFalse($changed, 'The test changed the shared site; a test that changes the site cannot share it.');
+    }
+
+    /**
+     * A shared site is removed after the last test of its class: its servers stopped, its database dropped, its directory removed.
+     */
+    public static function tearDownAfterClass(): void
+    {
+        self::release(static::class);
+        parent::tearDownAfterClass();
+    }
+
+    private function sharedSiteChanged(): bool
+    {
+        $site = self::$shared[static::class] ?? null;
+
+        return $site === null || $this->siteFingerprint() !== $site['fingerprint'];
+    }
+
+    private static function release(string $class): void
+    {
+        $site = self::$shared[$class] ?? null;
+        unset(self::$shared[$class]);
+        if ($site === null) {
+            return;
+        }
+        $servers = [$site['server'], ...array_map(static fn (array $extra) => $extra['server'], array_values($site['extra']))];
+        self::stop(array_values(array_filter($servers)));
+        $connection = $site['connection'];
+        if ($connection instanceof Connection) {
+            if (($connection->getParams()['driver'] ?? '') === 'pdo_sqlite') {
+                $connection->close();
+            } else {
+                PrivateDatabase::drop($connection);
+            }
+        }
+        if (is_dir($site['directory'])) {
+            self::removeTree($site['directory']);
+        }
     }
 
     /**
@@ -142,8 +311,20 @@ abstract class PrivateSiteTestCase extends TestCase
         $url = 'http://127.0.0.1:' . $port . '/';
         // a site in a subdirectory (IDNO_TEST_SUBDIRECTORY=blog: the rig's router serves the front controller as /blog/index.php) is configured at it
         $subdirectory = isset($environment['IDNO_TEST_SUBDIRECTORY']) ? $environment['IDNO_TEST_SUBDIRECTORY'] . '/' : '';
+        if ($this->usesSharedSite) {
+            // a shared site keeps the server for the class, by what it was asked for
+            $key = hash('sha256', json_encode([$environment, $ini], JSON_THROW_ON_ERROR));
+            if (isset(self::$shared[static::class]['extra'][$key])) {
+                return self::$shared[static::class]['extra'][$key]['url'];
+            }
+        }
         $environment += ['IDNO_URL' => $this->configuredScheme() . substr($url, strlen('http')) . $subdirectory, 'IDNO_TEST_HTTP_ALLOW' => '127.0.0.1:' . $port];
-        $this->extraServers[] = $this->launch($port, $environment, $ini, $this->directory . '/extra-' . $port . '.log');
+        $server = $this->launch($port, $environment, $ini, $this->directory . '/extra-' . $port . '.log');
+        if ($this->usesSharedSite) {
+            self::$shared[static::class]['extra'][$key] = ['server' => $server, 'url' => $url];
+        } else {
+            $this->extraServers[] = $server;
+        }
 
         return $url;
     }
@@ -524,6 +705,14 @@ abstract class PrivateSiteTestCase extends TestCase
             $servers[] = $this->server;
             $this->server = null;
         }
+        self::stop($servers);
+    }
+
+    /**
+     * @param list<resource> $servers
+     */
+    private static function stop(array $servers): void
+    {
         foreach ($servers as $server) {
             $pid = (int) proc_get_status($server)['pid'];
             // The workers PHP_CLI_SERVER_WORKERS forks are the server's children.
@@ -577,6 +766,9 @@ abstract class PrivateSiteTestCase extends TestCase
 
     private static function removeTree(string $path): void
     {
+        if (!file_exists($path) && !is_link($path)) {
+            return;
+        }
         if (is_link($path) || is_file($path)) {
             @unlink($path);
 

@@ -22,26 +22,36 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
     private const PAGE_CLASS = 'Tests\Fixtures\SitePageFixture';
 
-    private string $recordFile = '';
+    protected const SHARED_SITE = true;
+
+    /** The file the site records the page events in: one for the class, so that its environment is the same for every test. */
+    private static string $recordFile = '';
 
     protected function setUp(): void
     {
-        $this->recordFile = sys_get_temp_dir() . '/idno-site-pages-' . bin2hex(random_bytes(6));
+        self::$recordFile = self::$recordFile !== '' ? self::$recordFile : sys_get_temp_dir() . '/idno-site-pages-' . bin2hex(random_bytes(6));
         parent::setUp();
-        $this->addUser('ada', 'correct-horse-battery-9', null, true);
     }
 
-    protected function tearDown(): void
+    protected function seedSharedSite(): void
     {
-        if ($this->recordFile !== '' && is_file($this->recordFile)) {
-            unlink($this->recordFile);
+        $this->addUser('ada', 'correct-horse-battery-9', null, true);
+        // the API key is made when it is first asked for: made here, so that no test makes it
+        $this->apiKeyOf('ada');
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (self::$recordFile !== '' && is_file(self::$recordFile)) {
+            unlink(self::$recordFile);
         }
-        parent::tearDown();
+        self::$recordFile = '';
+        parent::tearDownAfterClass();
     }
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_RECORD_PAGES' => $this->recordFile];
+        return ['IDNO_TEST_RECORD_PAGES' => self::$recordFile];
     }
 
     /**
@@ -51,7 +61,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
     {
         return array_map(
             static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
-            array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile))))
+            array_values(array_filter(explode("\n", (string) file_get_contents(self::$recordFile))))
         );
     }
 
@@ -64,7 +74,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
      */
     private function recorded(string $method, string $path, array $headers = [], ?SiteClient $client = null): array
     {
-        file_put_contents($this->recordFile, '');
+        file_put_contents(self::$recordFile, '');
         $response = ($client ?? $this->site())->request($method, $path, $headers);
 
         return [$response, $this->events()];
@@ -377,7 +387,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'), 'no page/post');
         $this->assertStringContainsString('Invalid token', $this->serverLogContents());
 
-        file_put_contents($this->recordFile, '');
+        file_put_contents(self::$recordFile, '');
         $accepted = $this->site()->request('POST', $path, ['Cookie' => $cookie], $token);
         $this->assertSame(200, $accepted->status);
         $this->assertSame('POST', $accepted->json()['method']);

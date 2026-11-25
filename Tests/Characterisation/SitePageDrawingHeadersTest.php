@@ -19,6 +19,8 @@ use Tests\Support\PrivateSiteTestCase;
  */
 final class SitePageDrawingHeadersTest extends PrivateSiteTestCase
 {
+    protected const SHARED_SITE = true;
+
     private const TRANSPORT = ['date', 'server', 'connection', 'transfer-encoding', 'keep-alive', 'content-length'];
 
     protected function siteEnvironment(): array

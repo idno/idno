@@ -42,10 +42,24 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
     /** The client whose address `observed()` makes the same (the test's own site when null). */
     private ?SiteClient $siteClient = null;
 
+    protected const SHARED_SITE = true;
+
+    protected function seedSharedSite(): void
+    {
+        $this->addUser('ada', self::PASSWORD, null, true);
+        // a member whose address the site blocks (for the signed request of a blocked member), and one who is neither blocked nor the administrator
+        $this->addUser('bob');
+        $this->addUser('bea', self::PASSWORD);
+        $this->runInSite('$c = \Idno\Core\Idno::site()->config(); $c->blocked_emails = [\'bob@example.com\']; $c->save(); return true;');
+        // the API key is made when it is first asked for: made here, so that no test makes it
+        foreach (['ada', 'bob', 'bea'] as $handle) {
+            $this->apiKeyOf($handle);
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
-        $this->addUser('ada', self::PASSWORD, null, true);
         $this->member = $this->loginCookie('ada', self::PASSWORD);
     }
 
@@ -495,9 +509,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
     public function testAForwardForASignedRequestOfABlockedMemberIsTheSameJson(): void
     {
         // The signed request is an API request that no member is let in by: the page is answered as an API request all the same
-        $this->addUser('bob');
         $key = $this->apiKeyOf('bob');
-        $this->runInSite('$c = \Idno\Core\Idno::site()->config(); $c->blocked_emails = [\'bob@example.com\']; $c->save(); return true;');
         $path = static fn (string $page): string => '/' . self::AREAS['plain'] . $page . '?case=redirect&to=' . rawurlencode('https://example.com/elsewhere');
         $legacy = $this->site()->request('GET', ltrim($path('draw-legacy'), '/'), self::signedHeadersFor('bob', $key, $path('draw-legacy')));
         $new = $this->site()->request('GET', ltrim($path('draw-new'), '/'), self::signedHeadersFor('bob', $key, $path('draw-new')));
@@ -627,7 +639,6 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
      */
     public function testEveryRefusalOfASitePageIsDrawnAsALegacyPagesDeniedContent(): void
     {
-        $this->addUser('bea', self::PASSWORD);
         $member = $this->loginCookie('bea', self::PASSWORD);
         $key = $this->apiKeyOf('bea');
         foreach (['', '&_t=json', '&_t=markdown'] as $type) {

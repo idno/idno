@@ -15,26 +15,34 @@ use Tests\Support\PrivateSiteTestCase;
  */
 final class PageContractTest extends PrivateSiteTestCase
 {
-    private string $recordFile = '';
+    protected const SHARED_SITE = true;
+
+    /** The file the site records the page events in: one for the class, so that its environment is the same for every test. */
+    private static string $recordFile = '';
 
     protected function setUp(): void
     {
-        $this->recordFile = sys_get_temp_dir() . '/idno-pages-' . bin2hex(random_bytes(6));
+        self::$recordFile = self::$recordFile !== '' ? self::$recordFile : sys_get_temp_dir() . '/idno-pages-' . bin2hex(random_bytes(6));
         parent::setUp();
+    }
+
+    protected function seedSharedSite(): void
+    {
         $this->addUser('ada', 'correct-horse-battery-9', null, true);
     }
 
-    protected function tearDown(): void
+    public static function tearDownAfterClass(): void
     {
-        if ($this->recordFile !== '' && is_file($this->recordFile)) {
-            unlink($this->recordFile);
+        if (self::$recordFile !== '' && is_file(self::$recordFile)) {
+            unlink(self::$recordFile);
         }
-        parent::tearDown();
+        self::$recordFile = '';
+        parent::tearDownAfterClass();
     }
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_RECORD_PAGES' => $this->recordFile];
+        return ['IDNO_TEST_RECORD_PAGES' => self::$recordFile];
     }
 
     /**
@@ -46,9 +54,9 @@ final class PageContractTest extends PrivateSiteTestCase
      */
     private function recorded(string $method, string $path, array $headers = []): array
     {
-        file_put_contents($this->recordFile, '');
+        file_put_contents(self::$recordFile, '');
         $response = $this->site()->request($method, $path, $headers);
-        $lines = array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile))));
+        $lines = array_values(array_filter(explode("\n", (string) file_get_contents(self::$recordFile))));
 
         return [$response, array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), $lines)];
     }
@@ -173,65 +181,14 @@ final class PageContractTest extends PrivateSiteTestCase
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
 
         foreach (['/', '/feed.xml', '/tag/x'] as $path) {
-            file_put_contents($this->recordFile, '');
+            file_put_contents(self::$recordFile, '');
             $response = $client->request('GET', $path);
 
             $this->assertSame(403, $response->status, $path);
             $this->assertNull($response->header('X-Idno-Test-Page-Head'), $path);
-            $events = array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile)))));
+            $events = array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), array_values(array_filter(explode("\n", (string) file_get_contents(self::$recordFile)))));
             $this->assertSame(['page/ready'], array_column($events, 'event'), $path);
             $this->assertSame('Idno\Legacy\ControllerPage', $events[0]['current'], $path);
-        }
-    }
-
-    /**
-     * The `Link` headers of a page as they were sent, each as `<rel> <address>` with the site's own address as `@/`.
-     *
-     * @return list<string>
-     */
-    private function links(string $path): array
-    {
-        $lines = [];
-        $ch = curl_init($this->baseUrl() . ltrim($path, '/'));
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$lines): int {
-                $lines[] = trim($line);
-
-                return strlen($line);
-            },
-        ]);
-        curl_exec($ch);
-        curl_close($ch);
-        $links = [];
-        foreach ($lines as $line) {
-            if (stripos($line, 'link:') === 0) {
-                $links[] = (string) preg_replace('/^Link: <([^>]*)>; rel="([^"]*)"$/', '$2 $1', str_replace($this->baseUrl(), '@/', $line));
-            }
-        }
-
-        return $links;
-    }
-
-    public function testEachPageSendsTheLinksOfItsEndpointsAndTheHubsListenersWhenTheHubIsSet(): void
-    {
-        $endpoints = ['authorization_endpoint @/indieauth/auth', 'token_endpoint @/indieauth/token', 'micropub @/micropub/endpoint'];
-        $listeners = static fn (string $self): array => ['http://webmention.org/ @/webmention/', 'webmention @/webmention/', 'hub https://withknown.superfeedr.com/', 'self @/' . $self];
-
-        // The default hub: the webmention, hub and self links follow the endpoints, once on every page (the feed used to send them twice: its own
-        // page and the home page it built each fired `page/head`).
-        foreach (['', 'robots.txt', 'tag/x', 'content/all', 'feed.xml', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
-            $this->assertSame([...$endpoints, ...$listeners($path)], $this->links($path), '/' . $path);
-        }
-    }
-
-    public function testEachPageSendsOnlyTheLinksOfItsEndpointsWhenTheHubIsEmpty(): void
-    {
-        $this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->hub = ""; $config->save(); return true;');
-        $endpoints = ['authorization_endpoint @/indieauth/auth', 'token_endpoint @/indieauth/token', 'micropub @/micropub/endpoint'];
-
-        foreach (['', 'feed.xml', 'robots.txt', 'tag/x', 'content/all', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
-            $this->assertSame($endpoints, $this->links($path), '/' . $path);
         }
     }
 }

@@ -31,26 +31,36 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
 
     private const PASSWORD = 'correct-horse-battery-9';
 
-    private string $recordFile = '';
+    protected const SHARED_SITE = true;
+
+    /** The file the site records the page events in: one for the class, so that its environment is the same for every test. */
+    private static string $recordFile = '';
 
     protected function setUp(): void
     {
-        $this->recordFile = sys_get_temp_dir() . '/idno-site-pages-eq-' . bin2hex(random_bytes(6));
+        self::$recordFile = self::$recordFile !== '' ? self::$recordFile : sys_get_temp_dir() . '/idno-site-pages-eq-' . bin2hex(random_bytes(6));
         parent::setUp();
-        $this->addUser('ada', self::PASSWORD, null, true);
     }
 
-    protected function tearDown(): void
+    protected function seedSharedSite(): void
     {
-        if ($this->recordFile !== '' && is_file($this->recordFile)) {
-            unlink($this->recordFile);
+        $this->addUser('ada', self::PASSWORD, null, true);
+        // the API key is made when it is first asked for: made here, so that no test makes it
+        $this->apiKeyOf('ada');
+    }
+
+    public static function tearDownAfterClass(): void
+    {
+        if (self::$recordFile !== '' && is_file(self::$recordFile)) {
+            unlink(self::$recordFile);
         }
-        parent::tearDown();
+        self::$recordFile = '';
+        parent::tearDownAfterClass();
     }
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_RECORD_PAGES' => $this->recordFile];
+        return ['IDNO_TEST_RECORD_PAGES' => self::$recordFile];
     }
 
     /**
@@ -64,10 +74,10 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
      */
     private function observe(SiteClient $client, string $method, string $path, string $pageClass, array $headers = [], string|array|null $body = null): array
     {
-        file_put_contents($this->recordFile, '');
+        file_put_contents(self::$recordFile, '');
         $response = $client->request($method, $path, $headers, $body);
         $events = [];
-        foreach (array_filter(explode("\n", (string) file_get_contents($this->recordFile))) as $line) {
+        foreach (array_filter(explode("\n", (string) file_get_contents(self::$recordFile))) as $line) {
             $event = json_decode($line, true, 512, JSON_THROW_ON_ERROR);
             $events[] = [
                 'event' => $event['event'],

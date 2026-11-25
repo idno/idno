@@ -25,26 +25,25 @@ final class RouteOverrideTest extends PrivateSiteTestCase
 {
     use LogsIn;
 
-    private string $recordFile = '';
+    protected const SHARED_SITE = true;
+
+    /** The file the servers record the page events in: one for the class, so that every test asks for the same servers. */
+    private static string $recordFile = '';
 
     /** @var array<string, string> */
     private array $servers = [];
 
     protected function setUp(): void
     {
+        self::$recordFile = self::$recordFile !== '' ? self::$recordFile : sys_get_temp_dir() . '/idno-route-override-' . bin2hex(random_bytes(6)) . '.jsonl';
         parent::setUp();
-        $this->recordFile = $this->directory() . '/idno-route-override-' . bin2hex(random_bytes(6)) . '.jsonl';
     }
 
-    private function directory(): string
+    public static function tearDownAfterClass(): void
     {
-        return sys_get_temp_dir();
-    }
-
-    protected function tearDown(): void
-    {
-        @unlink($this->recordFile);
-        parent::tearDown();
+        @unlink(self::$recordFile);
+        self::$recordFile = '';
+        parent::tearDownAfterClass();
     }
 
     /**
@@ -52,7 +51,7 @@ final class RouteOverrideTest extends PrivateSiteTestCase
      */
     private function server(string $mode, bool $noPathInfo = false, string $subdirectory = ''): string
     {
-        $environment = ['IDNO_TEST_RECORD_PAGES' => $this->recordFile];
+        $environment = ['IDNO_TEST_RECORD_PAGES' => self::$recordFile];
         if ($mode !== '') {
             $environment['IDNO_TEST_CLAIM_ROUTES'] = $mode;
         }
@@ -75,7 +74,7 @@ final class RouteOverrideTest extends PrivateSiteTestCase
      */
     private function raw(string $base, string $method, string $target, array $headers = [], string $body = ''): array
     {
-        @unlink($this->recordFile);
+        @unlink(self::$recordFile);
         $parts = parse_url($base);
         $socket = stream_socket_client('tcp://' . $parts['host'] . ':' . $parts['port'], $errno, $error, 10);
         $this->assertNotFalse($socket, 'connect: ' . $error);
@@ -135,7 +134,7 @@ final class RouteOverrideTest extends PrivateSiteTestCase
     private function pages(): array
     {
         $pages = [];
-        foreach (is_file($this->recordFile) ? (file($this->recordFile, FILE_IGNORE_NEW_LINES) ?: []) : [] as $line) {
+        foreach (is_file(self::$recordFile) ? (file(self::$recordFile, FILE_IGNORE_NEW_LINES) ?: []) : [] as $line) {
             $event = json_decode($line, true);
             if (($event['event'] ?? '') === 'page/ready') {
                 $pages[] = (string) $event['current'];

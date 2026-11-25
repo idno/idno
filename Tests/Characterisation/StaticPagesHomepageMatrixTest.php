@@ -33,22 +33,23 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
         'markdown' => ['?_t=md', 'text/markdown; charset=utf-8'],
     ];
 
-    /** @var array<string, string> the id of the page of each kind, by name */
-    private array $ids = [];
+    protected const SHARED_SITE = true;
+
+    /** @var array<string, string> the id of the page of each kind, by name (seeded once for the class's site) */
+    private static array $ids = [];
 
     /** @var array<string, string> the address of the page of each kind that exists, by name */
-    private array $paths = [];
+    private static array $paths = [];
 
     /** @var array<string, string> the session cookie of each viewer */
     private array $cookies = ['visitor' => ''];
 
-    protected function setUp(): void
+    protected function seedSharedSite(): void
     {
-        parent::setUp();
         $this->addUser('ada', 'correct-horse-battery-9', null, true);
         $this->addUser('bob', 'correct-horse-battery-9');
         $this->addUser('carol', 'correct-horse-battery-9');
-        $this->ids = $this->runInSite(
+        self::$ids = $this->runInSite(
             '$ada = \Idno\Entities\User::getByHandle("ada"); $bob = \Idno\Entities\User::getByHandle("bob"); $carol = \Idno\Entities\User::getByHandle("carol");'
             . '\Idno\Core\Idno::site()->session()->logUserOn($ada);'
             . '$group = new \Idno\Entities\AccessGroup(); $group->title = "Friends"; $group->owner = $ada->getUUID(); $group->addMember($bob->getUUID()); $group->save(true);'
@@ -59,7 +60,14 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
             . ' "group" => $mk("Marker group page", $group->getUUID()), "draft" => $mk("Marker draft page", "PUBLIC", ["publish_status" => "draft"]),'
             . ' "forward" => $mk("Marker forwarding page", "PUBLIC", ["forward_url" => ' . $this->literal(self::FORWARD) . ']), "deleted" => $gone, "missing" => "no-such-page"];'
         );
-        $this->paths = $this->runInSite('\Idno\Core\Idno::site()->session()->logUserOn(\Idno\Entities\User::getByHandle("ada")); $paths = []; foreach (json_decode(' . $this->literal((string) json_encode(array_diff_key($this->ids, ['deleted' => 1, 'missing' => 1]))) . ', true) as $kind => $id) { $paths[$kind] = parse_url(\IdnoPlugins\StaticPages\StaticPage::getByID($id)->getURL(), PHP_URL_PATH); } return $paths;');
+        self::$paths = $this->runInSite('\Idno\Core\Idno::site()->session()->logUserOn(\Idno\Entities\User::getByHandle("ada")); $paths = []; foreach (json_decode(' . $this->literal((string) json_encode(array_diff_key(self::$ids, ['deleted' => 1, 'missing' => 1]))) . ', true) as $kind => $id) { $paths[$kind] = parse_url(\IdnoPlugins\StaticPages\StaticPage::getByID($id)->getURL(), PHP_URL_PATH); } return $paths;');
+        // the choice of home page is the one setting the tests change: it is saved once as it is when no page is chosen, and put back after each test
+        $this->choose('');
+    }
+
+    protected function setUp(): void
+    {
+        parent::setUp();
         foreach (['bob', 'carol', 'ada'] as $handle) {
             $this->cookies[$handle] = $this->loginCookie($handle, 'correct-horse-battery-9');
         }
@@ -103,6 +111,16 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
         return ['status' => (int) ($status[1] ?? 0), 'headers' => $parsed, 'body' => $content];
     }
 
+    protected function tearDown(): void
+    {
+        if ($this->connection !== null) {
+            $this->choose('');
+            // a server that unsets a page that is gone saves the settings it was started with (its environment's too): put back the site's own
+            $this->runInSite('$c = \Idno\Core\Idno::site()->config(); $saved = false; foreach (["walled_garden", "test_homepage_listeners"] as $name) { if (isset($c->config[$name])) { unset($c->config[$name]); $saved = true; } } if ($saved) { $c->save(); } return 1;');
+        }
+        parent::tearDown();
+    }
+
     private function choose(string $value): void
     {
         $this->runInSite('\Idno\Core\Idno::site()->config()->staticPages = ' . ($value === '' ? '[]' : '["homepage" => ' . $this->literal($value) . ']') . '; \Idno\Core\Idno::site()->config()->save(); return 1;');
@@ -144,7 +162,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
     private function assertEveryViewerGetsWhatHeMay(string $base, bool $visitorRefused, array $permalinkViewers = ['visitor', 'bob', 'carol', 'ada']): void
     {
         foreach (self::readers() as $kind => $readers) {
-            $id = $this->ids[$kind];
+            $id = self::$ids[$kind];
             $title = ['site' => 'Marker members page', 'forward' => 'Marker forwarding page'][$kind] ?? 'Marker ' . $kind . ' page';
             $this->choose($id);
             // (the administrator last: asking for a page that is gone unsets the setting)
@@ -184,14 +202,14 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
             }
             // The home page shows the static page exactly when the page's own address would (the same viewer, the same page): a viewer the permalink
             // refuses, hides or sends elsewhere is never shown the page on the home page, and one it shows is
-            if (isset($this->paths[$kind])) {
+            if (isset(self::$paths[$kind])) {
                 foreach ($permalinkViewers as $viewer) {
-                    $permalink = $this->request($base, $viewer, 'GET', $this->paths[$kind]);
+                    $permalink = $this->request($base, $viewer, 'GET', self::$paths[$kind]);
                     $home = $this->request($base, $viewer, 'GET', '/');
                     $this->assertSame(
                         $permalink['status'] === 200 && str_contains($permalink['body'], $title),
                         $home['status'] === 200 && str_contains($home['body'], $title),
-                        'the home page and ' . $this->paths[$kind] . ' agree about ' . $viewer
+                        'the home page and ' . self::$paths[$kind] . ' agree about ' . $viewer
                     );
                     if ($permalink['status'] === 302) {
                         $this->assertSame($permalink['headers']['location'] ?? [], $home['headers']['location'] ?? [], 'forwarding for ' . $viewer);
@@ -257,9 +275,9 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
     public function testAHomePageThatIsGoneIsUnsetOnlyWhenAnAdministratorAsks(): void
     {
         foreach (['deleted', 'missing'] as $kind) {
-            $this->choose($this->ids[$kind]);
+            $this->choose(self::$ids[$kind]);
             $this->request($this->baseUrl(), 'bob', 'GET');
-            $this->assertSame($this->ids[$kind], $this->setting(), $kind . ': a member leaves the setting');
+            $this->assertSame(self::$ids[$kind], $this->setting(), $kind . ': a member leaves the setting');
 
             $admin = $this->request($this->baseUrl(), 'ada', 'GET');
             $this->assertSame(200, $admin['status'], $kind);
@@ -277,7 +295,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
 
     public function testAListenerThatThrowsGivesTheSitesErrorPageAndIsReportedOnce(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_HOMEPAGE_LISTENERS' => 'throw']);
 
         $r = $this->request($base, 'visitor', 'GET');
@@ -303,13 +321,13 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
         $this->assertStringContainsString(self::STREAM, $r['body']);
         $this->assertStringNotContainsString('NOT-A-RESPONSE', $r['body']);
         // and what it set does not stop a page from being the home page
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $this->assertStringContainsString('<title class="p-name">Marker public page</title>', $this->request($base, 'visitor', 'GET')['body']);
     }
 
     public function testTheFirstListenerToSetAResponseWins(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_HOMEPAGE_LISTENERS' => 'first,late,erase']);
 
         $r = $this->request($base, 'visitor', 'GET');
@@ -320,7 +338,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
 
     public function testALaterListenerCannotReplaceOrEraseThePluginsPage(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_HOMEPAGE_LISTENERS' => 'late,erase']);
 
         $r = $this->request($base, 'visitor', 'GET');
@@ -350,7 +368,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
      */
     public function testTheRootIsReplacedUnderASubdirectoryAndAtTheFrontController(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_SUBDIRECTORY' => 'blog']);
 
         foreach (['/blog/', '/blog/index.php'] as $path) {
@@ -364,7 +382,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
 
     public function testTheFrontControllerOfASiteAtTheRootIsTheRoot(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
 
         $r = $this->raw($this->baseUrl(), 'GET', '/index.php');
 
@@ -378,7 +396,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
      */
     public function testAThirdPartyPageThatTookTheRootIsNotReplaced(): void
     {
-        $this->choose($this->ids['public']);
+        $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_CLAIM_ROUTES' => 'homepage-hijack']);
 
         $r = $this->raw($base, 'GET', '/');

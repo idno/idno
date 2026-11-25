@@ -64,8 +64,21 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
     /** @var list<string> the files this test wrote instead of comparing (IDNO_TEST_CAPTURE_GOLDENS=1) */
     private array $written = [];
 
+    /** @var array<string, array<string, mixed>> what seedSite() returned for each shared site (class and address) */
+    private static array $seeded = [];
+
     /** @var array<string, string> the golden files this process has written, with what: a golden two looks share must be written the same */
     private static array $captured = [];
+
+    public static function tearDownAfterClass(): void
+    {
+        foreach (array_keys(self::$seeded) as $key) {
+            if (str_starts_with($key, static::class . '|')) {
+                unset(self::$seeded[$key]);
+            }
+        }
+        parent::tearDownAfterClass();
+    }
 
     protected function setUp(): void
     {
@@ -85,6 +98,11 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      */
     protected function seedSite(): array
     {
+        // a class that shares its site (SHARED_SITE) has it seeded once, by seedSharedSite(): the paths are what that returned
+        $shared = static::class . '|' . $this->baseUrl();
+        if (static::SHARED_SITE && isset(self::$seeded[$shared])) {
+            return self::$seeded[$shared];
+        }
         $key = $this->literal(self::PUBLIC_KEY);
         $password = $this->literal(self::PASSWORD);
         $code = <<<'PHP'
@@ -204,6 +222,9 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
 
         $paths = $this->runInSite($code);
         $this->assertIsArray($paths);
+        if (static::SHARED_SITE) {
+            self::$seeded[$shared] = $paths;
+        }
 
         return $paths;
     }
