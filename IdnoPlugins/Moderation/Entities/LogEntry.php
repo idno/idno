@@ -9,6 +9,7 @@ namespace IdnoPlugins\Moderation\Entities {
      * actor_uuid, actor_name   The administrator (or the reporter, for 'report')
      * action                   'report', 'dismiss', 'remove', 'ban', 'reopen', 'restore', 'delete', 'unban', 'note'
      * case_id, subject_uuid, subject_name, detail
+     * at                       When, with fractions of a second, to keep the order within one second
      */
     class LogEntry extends Record
     {

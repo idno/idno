@@ -70,8 +70,9 @@ if ($user instanceof \Idno\Entities\User) {
                         );
                     }
                 }
-                // Actions that plugins add for this member
-                echo $this->__(['user' => $user])->draw('forms/components/usersearch/user/actions');
+                // Actions that plugins add for this member. The row is drawn by a template object
+                // of its own, which knows nothing of what plugins extend: ask the site's.
+                echo \Idno\Core\Idno::site()->template()->__(['user' => $user])->draw('forms/components/usersearch/user/actions');
                 // Block/unblock
                 if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                     echo \Idno\Core\Idno::site()->actions()->createLink(

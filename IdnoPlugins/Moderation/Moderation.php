@@ -557,6 +557,7 @@ namespace IdnoPlugins\Moderation {
             $entry->subject_uuid = $subject ? $subject->getUUID() : ($case ? (string) $case->subject_uuid : '');
             $entry->subject_name = $subject ? static::cleanText($subject->getTitle(), 200) : ($case ? (string) $case->subject_name : '');
             $entry->detail = static::cleanText($detail, 500);
+            $entry->at = microtime(true); // 'created' is in whole seconds: this keeps the order of what happens within one
             $entry->save();
 
             return $entry;
@@ -570,7 +571,7 @@ namespace IdnoPlugins\Moderation {
             $entries = LogEntry::find($search, $limit);
             usort(
                 $entries, function ($a, $b) {
-                    return [(int) $b->created, (string) $b->getID()] <=> [(int) $a->created, (string) $a->getID()];
+                    return [(int) $b->created, (float) $b->at] <=> [(int) $a->created, (float) $a->at];
                 }
             );
 

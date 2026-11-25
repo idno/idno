@@ -82,8 +82,9 @@ if ($user instanceof \Idno\Entities\User) {
             <small>
             <?php
             if ($user->getUUID() != \Idno\Core\Idno::site()->session()->currentUserUUID()) {
-                // Actions that plugins add for this member
-                echo $this->__(['user' => $user])->draw('forms/components/usersearch/user/actions');
+                // Actions that plugins add for this member. The row is drawn by a template object
+                // of its own, which knows nothing of what plugins extend: ask the site's.
+                echo \Idno\Core\Idno::site()->template()->__(['user' => $user])->draw('forms/components/usersearch/user/actions');
                 if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                     echo \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/users', '<i class="fa fa-check-circle-o"></i> ' . \Idno\Core\Idno::site()->language()->_('Clear'), array('blocked_emails' => $user->email, 'action' => 'unblock_emails'), array('class' => '', 'confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Are you sure? The user will be able to log in and post again.'))) . '<br>';
                 } else {
