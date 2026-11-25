@@ -10,7 +10,7 @@
     $lang = \Idno\Core\Idno::site()->language();
 
     $currentPage = \Idno\Core\Idno::site()->currentPage();
-if (!empty($currentPage) && $currentPage->isPermalink()) {
+if (!empty($currentPage) && $currentPage->isPermalinkFor($object)) {
     $rel = 'rel="in-reply-to"';
 } else {
     $rel = '';

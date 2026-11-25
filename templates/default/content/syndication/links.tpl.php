@@ -28,7 +28,7 @@ if ($posse = $vars['object']->getPosseLinks()) {
             if (empty($element['identifier'])) $element['identifier'] = '';
 
             $rel_syndication = '';
-            if (\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+            if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
                 $rel_syndication = ' rel="syndication"';
             }
 

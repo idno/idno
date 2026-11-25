@@ -6,7 +6,7 @@
 if (empty($vars['title'])) { $vars['title'] = '';
 }
 
-if (!empty($vars['object'])) {
+if (!empty($vars['object']) && $currentPage->isPermalinkFor($vars['object'])) {
     $objectIcon = $vars['object']->getIcon();
 } else {
     $objectIcon = false;
@@ -26,7 +26,7 @@ if (!empty($vars['object'])) {
 
         $opengraph['og:url'] = $currentPage->currentUrl();
 
-        if (!empty($vars['object'])) {
+        if (!empty($vars['object']) && $currentPage->isPermalinkFor($vars['object'])) {
             $owner  = $vars['object']->getOwner();
             $object = $vars['object'];
 

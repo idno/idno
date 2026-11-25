@@ -1,6 +1,6 @@
 <?php
 $currentPage = \Idno\Core\Idno::site()->currentPage();
-if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
     $rel = 'rel="in-reply-to" class="u-in-reply-to"';
 } else {
     $rel = '';

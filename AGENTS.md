@@ -72,6 +72,15 @@ Tests/                         Core unit tests
   `Tests/Pages/NonAsciiPermalinkTest.php` checks this over HTTP.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
+- **Current item of the Twenty26 side navigation**: `Themes\Twenty26\Navigation::currentItem()`
+  decides which item of `templates/modern/shell/nav.tpl.php` is the current page, from the page
+  being served (its class, and the `q` input of a `Homepage`), never from the address, and
+  `Navigation::attributes()` gives that item `class="idno-nav-item active"` and
+  `aria-current="page"`. At most one item is current; Home on the home feed and `/content/...`,
+  Search on a search or a tag page, Profile on the viewer's own profile only, Drafts, Log in.
+  Account and admin pages are drawn in the settings shell, which has no side navigation. An error
+  page marks nothing. A new item goes through `attributes()` and gets a case in `currentItem()`.
+  `Tests/Pages/Twenty26NavCurrentPageTest.php` checks this over HTTP.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
   (`ConsolePlugins/EventQueueService`) polling for pending
@@ -118,6 +127,7 @@ Tests/                         Core unit tests
 | **Text** | Long-form articles | `Article` | `/entry/edit` |
 | **Photo** | Photos with captions | `Note` + attachment | `/photo/edit` |
 | **Media** | Audio/video uploads | `Note` + attachment | `/media/edit` |
+| **Video** | A video on a video sharing service or a PeerTube or Loops site, by its address | `Note` + link | `/video/edit`, `/admin/video` |
 | **Event** | Calendar events & RSVPs | `Event` | `/event/edit`, `/rsvp/edit` |
 | **Checkin** | Location check-ins | `Note` + location | `/checkin/edit` |
 | **Like** | Bookmarks / likes | `Note` | `/like/edit` |
@@ -453,6 +463,15 @@ must have and checks that what they draw is Twenty26 markup.
   site). The annotation templates of both looks (`templates/default/entity/annotations/`,
   `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
   `Tests/Common/AnnotationOutputTest.php` checks this.
+- "Is this a permalink": `Page::isPermalink()` says only that the page is the permalink of
+  something. The profile is the permalink of a member (`User\View` sets the member as the page's
+  entity) and draws that member's posts as a list, so a template that draws one entity asks
+  `currentPage()->isPermalinkFor($vars['object'])`, which is true only when the page's entity is
+  that entity (or the page has none). The comment block and form, `syndication` links, the
+  `in-reply-to` marker on links in a post's text, the photo limit of a list and the page's Open
+  Graph, Dublin Core and JSON-LD description of a post all use it, in both looks and in the
+  bundled themes. Don't test `isPermalink()` in an entity template. `Tests/Pages/ProfileFeedViewTest.php`
+  checks this over HTTP.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to
@@ -506,6 +525,49 @@ must have and checks that what they draw is Twenty26 markup.
   again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
   which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
   `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
+- Video posts (`IdnoPlugins/Video`): a member gives the address of a video. For YouTube, Vimeo,
+  Dailymotion and TikTok, `VideoUrl::parse()` reads the provider and the id of the video out
+  of the address and makes no request to anything (so there is nothing to protect from
+  SSRF); an address it does not recognise is refused when the post is saved. It accepts
+  https only, a host from `VideoUrl::HOSTS` exactly (no userinfo, no port), and an id that
+  matches the provider's pattern (`VideoUrl::ID_PATTERNS`). The player is an `<iframe>`
+  whose address `VideoUrl::getEmbedUrl()` builds from fixed text and those checked values,
+  on a host in `VideoUrl::EMBED_HOSTS`; the address the member typed is never put in `src`.
+  The stored provider and id are checked again each time a post is drawn
+  (`Video::getVideo()` calls `VideoUrl::fromStored()`), and a record that fails gets no
+  player, only the link. The link to the video is printed only if
+  `UrlValidator::httpUrl()` accepts the stored address. Feeds, JSON and ActivityPub get the
+  link and the description, never the frame. `video_source` is `link` for these posts; a later version that
+  keeps video files on the site is to store another value and attach the file, so that
+  stored posts need no change. `IdnoPlugins/Video/Tests/` checks all of this.
+- Videos on open services (PeerTube, Loops; `VideoUrl::OPEN_PROVIDERS`): these run on any
+  host, so `VideoUrl::parse()` never accepts one from its address alone.
+  `VideoUrl::candidate()` reads what the address would mean (the host must match
+  `VideoUrl::HOST_PATTERN`: a domain name, never an address literal, a port or userinfo),
+  and `OpenVideo::resolve()` asks the host, with `Webservice::safeSend()` and https only:
+  PeerTube for `/api/v1/videos/<id>` (the answer must be about that video), Loops for its
+  NodeInfo (which must be on the same host and name the software `loops`). This happens
+  when a post is saved, never when one is drawn, and not again when a post is edited
+  without changing its address. The answer proves only that the host answered as the
+  software does, which any server can do, so it is not what makes the player safe: the
+  frame has `sandbox="allow-scripts allow-same-origin allow-presentation"`
+  (`VideoUrl::OPEN_SANDBOX`: no navigating the page, no windows, no forms) and
+  `referrerpolicy="no-referrer"`, and its caption names the host. Don't add a token to
+  that sandbox, and don't draw a player for an open service without it. The site's admin
+  can turn open services off (`video_open_services`) or block hosts
+  (`video_blocked_hosts`) at `/admin/video`; `Video::getVideo()` applies both whenever a
+  post is drawn, so they take effect on posts already made. Text taken from the host (the
+  title) is stored as plain text and escaped where it is printed. A new open service goes
+  in `OPEN_PROVIDERS` with a check in `OpenVideo`; don't fetch anything else (oEmbed, a
+  thumbnail) from an address a member gave except through `Webservice::safeSend()`.
+  `IdnoPlugins/Video/Tests/OpenVideo*Test.php` check this.
+- A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
+  for example; `/content/<category>/` for the whole site). The profile itself lists
+  everything the member has published, as `/profile/<handle>/all` does.
+  `\Idno\Pages\User\View::contentTypeLinks()` gives the links a profile shows (the kinds
+  the member has published, which costs one count per content type), and
+  `entity/User/profile/types` draws them in both looks.
+  `Tests/Pages/User/ProfileContentTypesTest.php` checks this.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never

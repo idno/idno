@@ -10,7 +10,7 @@
 
 if ($currentPage->isPermalink()) {
     /* @var \Idno\Common\Entity $object */
-    if (!empty($vars['object']) && $vars['object'] instanceof \Idno\Common\Entity) {
+    if (!empty($vars['object']) && $vars['object'] instanceof \Idno\Common\Entity && $currentPage->isPermalinkFor($vars['object'])) {
         $object = $vars['object'];
         if ($creator = $object->getOwner()) {
             ?>
