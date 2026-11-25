@@ -321,24 +321,21 @@ final class PageRequestListenerTest extends TestCase
         $this->assertSame('page', $own->headers->get('X-Default'));
     }
 
-    public function testCachingFromTheContextReachesTheResponse(): void
+    public function testCachingIsLeftToTheHeaderReconciler(): void
     {
         $listener = $this->listener();
         $request = Request::create('/');
         $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
-        $untouched = new Response('x', 200, ['Cache-Control' => 'public, max-age=60']);
-        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $untouched));
-        $this->assertTrue($untouched->headers->hasCacheControlDirective('public'), 'a page that asked for nothing leaves the controller\'s caching');
-
         PageContext::of($request)->setCaching(['Cache-Control' => 'no-store, no-cache, must-revalidate', 'Pragma' => 'no-cache', 'Expires' => 'Thu, 19 Nov 1981 08:52:00 GMT']);
         $response = new Response('x', 200, ['Cache-Control' => 'public, max-age=60']);
+
         $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
 
-        $this->assertTrue($response->headers->hasCacheControlDirective('no-store'));
-        $this->assertTrue($response->headers->hasCacheControlDirective('must-revalidate'));
-        $this->assertFalse($response->headers->hasCacheControlDirective('public'));
-        $this->assertSame('no-cache', $response->headers->get('Pragma'));
-        $this->assertSame('Thu, 19 Nov 1981 08:52:00 GMT', $response->headers->get('Expires'));
+        // the page's caching is sent line by line by Idno\Legacy\LegacyHeaderReconciler, never through the response's own computed Cache-Control
+        $this->assertTrue($response->headers->hasCacheControlDirective('public'));
+        $this->assertFalse($response->headers->hasCacheControlDirective('no-store'));
+        $this->assertFalse($response->headers->has('Pragma'));
+        $this->assertFalse($response->headers->has('Expires'));
     }
 
     public function testSubRequestsAreLeftAlone(): void

@@ -126,6 +126,12 @@ final class SitePageFixtureController
             case 'drawmessage':
                 Idno::site()->session()->addMessage('A message to be shown once');
                 break;
+            case 'cached':
+                $context->addHeader('Last-Modified', \Idno\Core\Time::timestampToRFC2616(1700000000));
+                break;
+            case 'no-cache':
+                Idno::site()->currentPage()->setNoCache();
+                break;
             case 'permalink':
                 $context->setPermalink();
                 $user = Idno::site()->session()->currentUser();

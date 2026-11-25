@@ -250,7 +250,8 @@ final class ControllerPage extends Page
 
     public function setNoCache()
     {
-        $this->context->setCaching(['Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0', 'Pragma' => 'no-cache']);
+        // what `Page::setNoCache()` sent: two `Cache-Control` lines and a `Pragma`; the session's `Expires` is left as it is
+        $this->context->setCaching(['Cache-Control' => ['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], 'Pragma' => 'no-cache']);
     }
 
     public function setLastModifiedHeader(int $timestamp)

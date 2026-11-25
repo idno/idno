@@ -17,6 +17,19 @@ final class AddedHeadersTest extends TestCase
         $this->assertSame(['added' => [], 'remove' => [], 'keep' => []], AddedHeaders::between([], []));
     }
 
+    public function testTheCachingHeadersAreNeverTaken(): void
+    {
+        // a draw that replaced the session's own, or added a line beside it, left them in PHP's list: they are PHP's to send, as a legacy page's were
+        $before = ['Expires: Thu, 19 Nov 1981 08:52:00 GMT', 'Cache-Control: no-store, no-cache, must-revalidate', 'Pragma: no-cache'];
+        $after = ['Expires: Mon, 26 Jul 1997 05:00:00 GMT', 'Cache-Control: public, max-age=60', 'Cache-Control: s-maxage=60', 'Pragma: public', 'X-Fixture: one'];
+
+        $result = AddedHeaders::between($before, $after);
+
+        $this->assertSame([['X-Fixture', 'one', true]], $result['added']);
+        $this->assertSame(['X-Fixture'], $result['remove']);
+        $this->assertSame([], $result['keep']);
+    }
+
     public function testANewHeaderIsAddedAndRemoved(): void
     {
         $result = AddedHeaders::between(['Expires: x'], ['Expires: x', 'X-Fixture: one']);

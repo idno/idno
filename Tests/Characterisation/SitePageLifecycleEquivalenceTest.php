@@ -142,12 +142,13 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
 
         $legacy = $this->site()->request('GET', self::LEGACY, $headers);
         $fixture = $this->site()->request('GET', self::FIXTURE, $headers);
-        $this->assertSame($legacy->header('Expires'), $fixture->header('Expires'));
-        $this->assertSame($legacy->header('Pragma'), $fixture->header('Pragma'));
-        $this->assertNotNull($legacy->header('Last-Modified'));
-        $this->assertNotNull($fixture->header('Last-Modified'));
-        $directives = static fn (SiteResponse $r): array => array_values(array_diff(array_map('trim', explode(',', (string) $r->header('Cache-Control'))), ['private']));
-        $this->assertEqualsCanonicalizing($directives($legacy), $directives($fixture));
+        $this->assertSame($legacy->lines('Expires'), $fixture->lines('Expires'));
+        $this->assertSame($legacy->lines('Pragma'), $fixture->lines('Pragma'));
+        $this->assertCount(1, $legacy->lines('Last-Modified'));
+        $this->assertCount(1, $fixture->lines('Last-Modified'));
+        // line by line, as sent: the router's two lines, and no third a response computes
+        $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $legacy->lines('Cache-Control'));
+        $this->assertSame($legacy->lines('Cache-Control'), $fixture->lines('Cache-Control'));
     }
 
     public function testAMethodsRefusalAndEventsAreTheSameOnAWalledGarden(): void

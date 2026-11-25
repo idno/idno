@@ -161,17 +161,35 @@ final class PageContextTest extends TestCase
         $this->assertSame(['Content-Type' => 'text/plain'], $context->defaultHeaders());
     }
 
-    public function testSetCachingOwnsCaching(): void
+    public function testSetCachingOwnsTheNamesItSets(): void
     {
         $context = $this->context(Request::create('/x'));
         $this->assertFalse($context->ownsCaching());
         $this->assertSame([], $context->caching());
+        $this->assertSame([], $context->cachingLines());
 
-        $context->setCaching(['Cache-Control' => 'no-store']);
+        $context->setCaching(['Cache-Control' => 'no-store', 'Expires' => 'Mon, 26 Jul 1997 05:00:00 GMT']);
         $context->setCaching(['Pragma' => 'no-cache']);
 
         $this->assertTrue($context->ownsCaching());
-        $this->assertSame(['Pragma' => 'no-cache'], $context->caching());
+        // a later call adds the names it sets and replaces the lines of one asked for before; the names it does not set stay asked for
+        $this->assertSame(['Cache-Control' => 'no-store', 'Expires' => 'Mon, 26 Jul 1997 05:00:00 GMT', 'Pragma' => 'no-cache'], $context->caching());
+
+        $context->setCaching(['cache-control' => ['no-store, max-age=0', 'post-check=0, pre-check=0']]);
+
+        $this->assertSame(
+            ['Cache-Control' => ['no-store, max-age=0', 'post-check=0, pre-check=0'], 'Expires' => ['Mon, 26 Jul 1997 05:00:00 GMT'], 'Pragma' => ['no-cache']],
+            $context->cachingLines(),
+            'every name by its canonical spelling, each with the list of its lines'
+        );
+    }
+
+    public function testOnlyTheCachingHeadersCanBeAskedFor(): void
+    {
+        $context = $this->context(Request::create('/x'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $context->setCaching(['Set-Cookie' => 'a=b']);
     }
 
     public function testArgumentsAreTheRouteParametersWithoutLeadAndSlash(): void

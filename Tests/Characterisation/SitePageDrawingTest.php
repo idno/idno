@@ -18,11 +18,11 @@ use Tests\Templating\PageNormaliser;
  * name of the page in its own address, is made the same.
  *
  * Headers that belong to the transport and not to the page are left out of the comparison (`Date`, `Server`, `Connection`,
- * `Transfer-Encoding`, and `X-Robots-Tag`, which Symfony adds to every response in debug mode). `Content-Length` is compared as
+ * `Transfer-Encoding`). `Content-Length` is compared as
  * what it is: the length of that answer's own body (the two bodies differ in the name of their page), and for a HEAD that it is
- * there and the length of the GET's. A cookie is compared whole but for the session id and its date, and the spelling of a header's
- * value is compared as the same where HTTP says it is (the space after the `;` of a media type, the set of `Cache-Control`
- * directives: the response adds `private`, as `SitePageLifecycleEquivalenceTest` allows).
+ * there and the length of the GET's. A cookie is compared whole but for the session id and its date, and the space after the `;` of a media type is
+ * not compared. Every other header is compared line by line, in the order sent: `Cache-Control` is the session's line (and the
+ * page's own), never a second one a response computes.
  */
 final class SitePageDrawingTest extends PrivateSiteTestCase
 {
@@ -35,7 +35,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
 
     private const TYPES = ['default', 'json', 'jsonp', 'rss', 'jsonfeed', 'kml', 'markdown', 'activitypub'];
 
-    private const TRANSPORT = ['date', 'server', 'connection', 'transfer-encoding', 'keep-alive', 'x-robots-tag'];
+    private const TRANSPORT = ['date', 'server', 'connection', 'transfer-encoding', 'keep-alive'];
 
     private string $member = '';
 
@@ -66,8 +66,12 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
      */
     private function observed(SiteResponse $response, string $area, string $page, bool $html, bool $head = false): array
     {
-        $headers = [];
-        foreach ($response->headers as $name => $value) {
+        // each LINE of each header, in the order sent: a repeated header is compared line by line, with nothing normalised but what is not a
+        // line of the page's (the session's id and date, the spelling of a media type)
+        $lines = [];
+        foreach ($response->lines as $line) {
+            [$name, $value] = array_map('trim', explode(':', $line, 2)) + ['', ''];
+            $name = strtolower($name);
             if (in_array($name, self::TRANSPORT, true)) {
                 continue;
             }
@@ -75,20 +79,15 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
             if ($name === 'set-cookie') {
                 // the session's id and its date are the only things that differ between two requests
                 $value = preg_replace(['/^([^=;]+)=[^;]*/', '/expires=[^;]+/i'], ['$1=(id)', 'expires=(date)'], $value) ?? $value;
-                $value = preg_replace('/, ([^=;, ]+)=[^;]*/', ', $1=(id)', $value) ?? $value;
             } elseif ($name === 'content-length') {
                 $value = $head || $value !== (string) strlen($response->body) ? ($head ? '(present)' : $value) : '(its body)';
             } elseif ($name === 'content-type') {
                 // PHP appends its charset as `;charset=UTF-8`, a response as `; charset=UTF-8`: the same media type
                 $value = preg_replace('/\s*;\s*/', ';', $value) ?? $value;
-            } elseif ($name === 'cache-control') {
-                // the session's directives, and the ones a response adds of its own (`private`, a second `no-cache`): the set of them
-                $directives = array_values(array_unique(array_filter(array_map('trim', explode(',', $value)), static fn (string $d): bool => $d !== 'private')));
-                sort($directives);
-                $value = implode(', ', $directives);
             }
-            $headers[$name] = $value;
+            $lines[$name][] = $value;
         }
+        $headers = array_map(static fn (array $values): string => implode("\n", $values), $lines);
         ksort($headers);
 
         $body = $this->named($response->body, $area, $page);
@@ -178,6 +177,112 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertTheSamePage('case=draw', ['Accept' => 'application/activity+json']);
         $this->assertTheSamePage('case=draw', ['X-Requested-With' => 'XMLHttpRequest']);
         $this->assertTheSamePage('case=draw', [], method: 'HEAD');
+    }
+
+    /**
+     * @return list<array<string, string>> a visitor, then a member
+     */
+    private function callers(): array
+    {
+        return [[], ['Cookie' => $this->member]];
+    }
+
+    public function testTheSessionsCacheControlIsKeptByteForByte(): void
+    {
+        foreach (['draw', 'cached'] as $case) {
+            foreach ($this->callers() as $headers) {
+                $label = $case . ' ' . json_encode(array_keys($headers));
+                $legacy = $this->get('draw-legacy', 'plain', 'case=' . $case, $headers);
+                $new = $this->get('draw-new', 'plain', 'case=' . $case, $headers);
+
+                // the lines PHP's session cache limiter queued, once each, and nothing a response computes (`no-cache, private`)
+                $this->assertSame(['no-store, no-cache, must-revalidate'], $new->lines('Cache-Control'), $label);
+                $this->assertSame(['no-cache'], $new->lines('Pragma'), $label);
+                $this->assertCount(1, $new->lines('Expires'), $label);
+                $this->assertSame($legacy->lines('Expires'), $new->lines('Expires'), $label);
+                $this->assertSame([], $new->lines('ETag'), $label);
+                $this->assertSame($case === 'cached' ? ['Tue, 14 Nov 2023 22:13:20 GMT'] : [], $new->lines('Last-Modified'), $label);
+                $this->assertSame($legacy->lines('Last-Modified'), $new->lines('Last-Modified'), $label);
+                $this->assertTheSamePage('case=' . $case, $headers);
+            }
+        }
+    }
+
+    public function testEveryCachingHeaderIsTheLegacyPagesInEveryTypeAndMethod(): void
+    {
+        foreach (['default', 'json', 'rss', 'markdown', 'activitypub'] as $type) {
+            foreach (['cached', 'no-cache'] as $case) {
+                $this->assertTheSamePage('case=' . $case . '&_t=' . $type, ['Cookie' => $this->member]);
+            }
+        }
+        $this->assertTheSamePage('case=cached', [], method: 'HEAD');
+        $this->assertTheSamePage('case=no-cache', ['Cookie' => $this->member], method: 'HEAD');
+        // an XHR request gets the router's lines, and a page that asks for no caching changes only what it asks for
+        $this->assertTheSamePage('case=cached', ['X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertTheSamePage('case=no-cache', ['X-Requested-With' => 'XMLHttpRequest']);
+    }
+
+    public function testSetNoCacheReachesTheResponse(): void
+    {
+        foreach ($this->callers() as $headers) {
+            $legacy = $this->get('draw-legacy', 'plain', 'case=no-cache', $headers);
+            $new = $this->get('draw-new', 'plain', 'case=no-cache', $headers);
+
+            // two `Cache-Control` lines, as `header()` sent them, and the session's `Expires` that `setNoCache()` leaves
+            $this->assertSame(['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], $new->lines('Cache-Control'));
+            $this->assertSame(['no-cache'], $new->lines('Pragma'));
+            $this->assertSame($legacy->lines('Expires'), $new->lines('Expires'));
+            $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $new->lines('Expires'));
+            $this->assertTheSamePage('case=no-cache', $headers);
+        }
+        // an XHR request: the router's `Expires`, the page's `Cache-Control` over its own
+        $xhr = $this->get('draw-new', 'plain', 'case=no-cache', ['X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertSame(['Mon, 26 Jul 1997 05:00:00 GMT'], $xhr->lines('Expires'));
+        $this->assertSame(['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], $xhr->lines('Cache-Control'));
+    }
+
+    public function testThePageHeadHeaderSurvives(): void
+    {
+        // The plugins' `page/head` and `page/ready` listeners send `Link` headers with `header()` (IndieAuth, Micropub, webmention): a
+        // controller's response sends them too, once each, before the response's own
+        foreach ($this->callers() as $headers) {
+            $legacy = $this->get('draw-legacy', 'plain', 'case=draw', $headers);
+            $new = $this->get('draw-new', 'plain', 'case=draw', $headers);
+
+            $this->assertNotSame([], $legacy->lines('Link'), 'the legacy page has them');
+            $this->assertSame(
+                array_map(fn (string $line): string => $this->named($line, 'plain', 'draw-legacy'), $legacy->lines('Link')),
+                array_map(fn (string $line): string => $this->named($line, 'plain', 'draw-new'), $new->lines('Link'))
+            );
+            $this->assertCount(count(array_unique($new->lines('Link'))), $new->lines('Link'), 'none twice');
+        }
+    }
+
+    public function testLinkHeadersAreMerged(): void
+    {
+        // A Markdown page adds its canonical link beside the plugins' (one header name, several lines, none lost, in the order sent)
+        $legacy = $this->get('draw-legacy', 'plain', 'case=draw&_t=markdown', ['Cookie' => $this->member]);
+        $new = $this->get('draw-new', 'plain', 'case=draw&_t=markdown', ['Cookie' => $this->member]);
+
+        $this->assertSame(
+            array_map(fn (string $line): string => $this->named($line, 'plain', 'draw-legacy'), $legacy->lines('Link')),
+            array_map(fn (string $line): string => $this->named($line, 'plain', 'draw-new'), $new->lines('Link'))
+        );
+        $this->assertContains('rel="canonical"', array_map(static fn (string $l): string => substr($l, (int) strrpos($l, ';') + 2), $new->lines('Link')));
+        $this->assertGreaterThan(1, count($new->lines('Link')));
+    }
+
+    public function testNoXRobotsTagInDebugMode(): void
+    {
+        // Symfony adds `X-Robots-Tag: noindex` to every response in debug mode (the test site's); a page of the site never had it
+        foreach (['draw', 'notfound', 'error', 'redirect'] as $case) {
+            foreach ($this->callers() as $headers) {
+                $this->assertSame([], $this->get('draw-legacy', 'plain', 'case=' . $case, $headers)->lines('X-Robots-Tag'), 'legacy ' . $case);
+                $this->assertSame([], $this->get('draw-new', 'plain', 'case=' . $case, $headers)->lines('X-Robots-Tag'), 'new ' . $case);
+            }
+        }
+        // and the responses of the other controllers keep what they have
+        $this->assertSame(['noindex'], $this->site()->request('GET', '_test/ping')->lines('X-Robots-Tag'));
     }
 
     public function testTheSettingsShellsAreDrawnForTheDirectoriesThatHaveOne(): void

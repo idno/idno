@@ -57,7 +57,30 @@ namespace Tests\Characterisation {
             $status = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
             curl_close($ch);
 
-            return new SiteResponse($status, self::parseHeaderLines($headerLines), (string)$content);
+            return new SiteResponse($status, self::parseHeaderLines($headerLines), (string)$content, self::finalLines($headerLines));
+        }
+
+        /**
+         * The header lines of the final response, trimmed, in order (a new status line, as after '100 Continue', discards those before it).
+         *
+         * @param string[] $lines
+         * @return list<string>
+         */
+        public static function finalLines(array $lines): array
+        {
+            $final = [];
+            foreach ($lines as $line) {
+                if (str_starts_with($line, 'HTTP/')) {
+                    $final = [];
+                    continue;
+                }
+                $line = trim($line);
+                if (str_contains($line, ':')) {
+                    $final[] = $line;
+                }
+            }
+
+            return $final;
         }
 
         /**

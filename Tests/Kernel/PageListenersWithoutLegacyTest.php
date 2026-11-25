@@ -52,6 +52,25 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
+    public function testTheHeadersOfEveryOtherResponseAreExactlyWhatTheyWere(): void
+    {
+        $kernel = $this->kernel();
+
+        $step = $kernel->handle(Request::create('/_upgrade/step', 'POST'));
+        $ping = $kernel->handle(Request::create('/_test/ping'));
+        $page = $kernel->handle(Request::create('/_test/site-page/state'));
+
+        // neither the caching rule of a site page nor the removal of the tag Symfony adds in debug mode reaches them
+        $this->assertSame('no-store, private', $step->headers->get('Cache-Control'));
+        $this->assertSame('noindex', $step->headers->get('X-Robots-Tag'));
+        $this->assertSame('no-cache, private', $ping->headers->get('Cache-Control'));
+        $this->assertSame('noindex', $ping->headers->get('X-Robots-Tag'));
+        $this->assertSame('no-store, private', $page->headers->get('Cache-Control'), 'a fixture route that is a site page, in a kernel with no legacy application: no page context');
+        $this->assertSame('noindex', $page->headers->get('X-Robots-Tag'));
+        $this->assertFalse($kernel->getContainer()->initialized(LegacyPageLifecycle::class));
+        $kernel->shutdown();
+    }
+
     public function testTheUpgradeStepIsUntouched(): void
     {
         $kernel = $this->kernel();

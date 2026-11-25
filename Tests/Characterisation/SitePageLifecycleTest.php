@@ -151,10 +151,8 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame($legacy->header('Expires'), $response->header('Expires'));
         $this->assertSame('no-cache', $response->header('Pragma'));
         $this->assertNotNull($response->header('Last-Modified'));
-        $directives = array_map('trim', explode(',', (string) $response->header('Cache-Control')));
-        foreach (['no-store', 'no-cache', 'must-revalidate', 'post-check=0', 'pre-check=0'] as $directive) {
-            $this->assertContains($directive, $directives, 'Cache-Control: ' . $response->header('Cache-Control'));
-        }
+        $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $response->lines('Cache-Control'));
+        $this->assertSame($legacy->lines('Cache-Control'), $response->lines('Cache-Control'));
         $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'), 'the page\'s own type');
         // Not for another request, and not for OPTIONS (a legacy page has no options_xhr).
         $this->assertNotSame('Mon, 26 Jul 1997 05:00:00 GMT', $plain->header('Expires'));

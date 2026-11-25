@@ -19,7 +19,7 @@ use Tests\Support\PrivateSiteTestCase;
  */
 final class SitePageDrawingHeadersTest extends PrivateSiteTestCase
 {
-    private const TRANSPORT = ['date', 'server', 'connection', 'transfer-encoding', 'keep-alive', 'x-robots-tag', 'content-length'];
+    private const TRANSPORT = ['date', 'server', 'connection', 'transfer-encoding', 'keep-alive', 'content-length'];
 
     protected function siteEnvironment(): array
     {
@@ -36,13 +36,6 @@ final class SitePageDrawingHeadersTest extends PrivateSiteTestCase
         $headers = [];
         foreach ($response->headers as $name => $value) {
             if (in_array($name, self::TRANSPORT, true) || $name === 'host') {
-                continue;
-            }
-            if ($name === 'cache-control') {
-                // the session's directives and the ones a response adds of its own (`private`, a second `no-cache`): the set of them
-                $directives = array_values(array_unique(array_filter(array_map('trim', explode(',', $value)), static fn (string $d): bool => $d !== 'private')));
-                sort($directives);
-                $headers[$name] = implode(', ', $directives);
                 continue;
             }
             $headers[$name] = $name === 'set-cookie'

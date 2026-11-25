@@ -10,11 +10,12 @@ use Idno\Templating\ShellHeaders;
  * What a draw added to the headers PHP holds (`headers_list()` before and after): the headers a template or a plugin's
  * extension sent with `header()` while a page was drawn, and what to do with PHP's list so that each is sent once, by the
  * response. Pure; the one place that reads and changes PHP's list is Idno\Legacy\LegacyPageDrawer. A cookie is never taken (PHP
- * adds the session's).
+ * adds the session's), nor are the caching headers: what a draw did to the session's lines (replaced them, or added one) is PHP's
+ * to send, as a legacy page's was.
  */
 final class AddedHeaders
 {
-    private const NEVER = ['set-cookie'];
+    private const NEVER = ['set-cookie', 'cache-control', 'pragma', 'expires'];
 
     /**
      * @param list<string> $before the lines of `headers_list()` before the draw

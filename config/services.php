@@ -370,6 +370,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // when the renderer is, and touches the legacy application only when a page is drawn.
     $services->set(\Idno\Legacy\LegacyPageDrawer::class);
     $services->alias(\Idno\Http\Page\PageDrawer::class, \Idno\Legacy\LegacyPageDrawer::class);
+    // The headers PHP holds for a response, and the rule that makes a site page's the ones a legacy page sends (kernel.response)
+    $services->alias(\Idno\Legacy\HeaderQueue::class, \Idno\Legacy\PhpHeaders::class);
     // public: the page a controller serves (Idno\Legacy\ControllerPage) takes the rule of a forward from it
     $services->set(\Idno\Http\Page\PageRenderer::class)->autowire()->public();
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);

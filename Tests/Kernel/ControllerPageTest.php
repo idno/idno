@@ -255,8 +255,9 @@ final class ControllerPageTest extends TestCase
 
         $this->assertTrue($page->context()->ownsCaching());
         $this->assertSame(
-            ['Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0', 'Pragma' => 'no-cache'],
-            $page->context()->caching()
+            ['Cache-Control' => ['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], 'Pragma' => 'no-cache'],
+            $page->context()->caching(),
+            'the two Cache-Control lines and the Pragma that `Page::setNoCache()` sent'
         );
     }
 

@@ -26,6 +26,14 @@ class LegacyDrawPage extends Page
             case 'draw':
                 $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
                 break;
+            case 'cached':
+                $this->setLastModifiedHeader(1700000000);
+                $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
+                break;
+            case 'no-cache':
+                $this->setNoCache();
+                $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
+                break;
             case 'permalink':
                 $this->setPermalink();
                 $user = Idno::site()->session()->currentUser();

@@ -340,7 +340,8 @@ Idno/
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
   Legacy/                      Shims between the kernel and the legacy application (see below), among them
-                               MessengerEventQueue (the site's queue) and LegacyEventTrigger / LegacyUserContext
+                               MessengerEventQueue (the site's queue), LegacyEventTrigger / LegacyUserContext and
+                               LegacyHeaderReconciler (with HeaderQueue and PhpHeaders: the headers of a site page)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
@@ -704,7 +705,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
 - Do not assume a clean header slate: the legacy application boots before routing, and
   the headers it has already set (`Set-Cookie`, `Expires`, `Link`, a
   `Cache-Control`, `Pragma: no-cache`) are sent with your response, alongside the response's own headers
-  (so there can be two `Cache-Control` headers).
+  (so there can be two `Cache-Control` headers). That is still true of every controller that is not a site page. For a
+  site page (`#[SitePage]`) `Idno\Legacy\LegacyHeaderReconciler` makes the headers the ones a legacy page sends, line for line: the
+  `Cache-Control`, `Pragma` and `Expires` of the session are PHP's and the response's own are taken off it, so one `Cache-Control` line
+  goes out; a page that wants other caching calls `PageContext::setCaching()` (see "Kernel and services"); `Last-Modified` is the
+  response's. Such a page never carries `X-Robots-Tag` in debug mode.
 - Mark it `#[AsController]` (or register it as a service) when it needs constructor
   injection; services are autowired from the container.
 - A controller that draws a page of the site marks the class or the method with `#[Idno\Http\Page\SitePage(name: <the legacy page class>, ...)]`:
@@ -880,8 +885,9 @@ test fixtures is routed to a controller through them yet:
   `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (`requestField()`, a POST field over a
   query field, never a cookie; then `dataField()`: what `setInput()` set, then the fields of a `json` input and of the body of a request
   whose REAL method is not GET (an override header does not hide a body), the earlier winning, as `Page::parseJSONPayload()` merged them), `isXhr()` (`X-Requested-With`), the permalink flag, entity, owner, assets per class,
-  status (200), the `.md` suffix flag, a recorded redirect and the work to do after the response, headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()`
-  replaces; `ownsCaching()` says the page asked), `requestUri()` (the raw `REQUEST_URI`, which `Page::currentUrl()` uses) and `arguments()`
+  status (200), the `.md` suffix flag, a recorded redirect and the work to do after the response, headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()` takes the
+  lines of `Cache-Control`, `Pragma` and `Expires`, a string or a list for each, and replaces the lines of the names it sets and no others, so the
+  router's XHR lines and then `setNoCache()` add up as they did; `ownsCaching()` says the page asked; `cachingLines()`), `requestUri()` (the raw `REQUEST_URI`, which `Page::currentUrl()` uses) and `arguments()`
   (the route's parameters but `lead`, `slash` and the framework's `_*`, in order, or what `setArguments()` set). `PageContextResolver` gives a
   controller argument typed `PageContext` that of the request. `PageRedirect` (a `\RuntimeException` with the `location`, an optional `body` that an API request gets in place of a redirect, and the `status`, 302
   unless a 307 keeps the method) is what a page throws where a legacy page forwards and exits.
@@ -951,9 +957,9 @@ test fixtures is routed to a controller through them yet:
      current page made a `ControllerPage` whose XHR flag is still off, `$_SERVER['HTTP_REFERER']` made non-empty, `Idno::embedded()`, `page/ready`; PHP's own
      `X-Powered-By` is removed while headers are not sent, because the response adds the page's beside it). Then, for an XHR request (any method but
      OPTIONS, as the router's `<method>_xhr` handlers were), what the legacy router sent: `Content-Type: application/json` as a default only (the
-     page's own type wins, as the shell's replaced it), `Expires: Mon, 26 Jul 1997 05:00:00 GMT`, `Last-Modified` now, `Cache-Control: no-store,
-     no-cache, must-revalidate, post-check=0, pre-check=0` and `Pragma: no-cache` (the page owns its caching from here), replacing the
-     `Expires`, `Cache-Control` and `Pragma` PHP's session already holds. Symfony sorts the directives of `Cache-Control` and adds `private`.
+     page's own type wins, as the shell's replaced it), `Last-Modified` now, and, as the page's caching (`setCaching()`, so the page owns those three
+     names from here), `Expires: Mon, 26 Jul 1997 05:00:00 GMT`, TWO `Cache-Control` lines (`no-store, no-cache, must-revalidate` and `post-check=0,
+     pre-check=0`) and `Pragma: no-cache`, in place of the session's lines (`LegacyHeaderReconciler` sends them).
   3. `refusesApiRequest()` (an `accountPage`, or a page the router registered as one, and `Session::isAPIRequest()`: the warning `API request
      to an account page refused: <name>` and the template type from `Accept`), for OPTIONS too, as the router's check ran for every method.
   4. OPTIONS: the controller is replaced by one answering 204 with `Access-Control-Allow-Methods: GET, POST, HEAD, OPTIONS, PUT, DELETE` and
@@ -978,10 +984,10 @@ test fixtures is routed to a controller through them yet:
   again). The walled garden's refusal (step 5) is the PAGE's: an `AccessDeniedHttpException`, which `PageExceptionListener` draws as `deniedContent()` did
   (the 403 page in the shell and the template type of the request, from `_t` only: `publicGatekeeper()` ran before `Accept` was read), through the renderer, with
   the headers of the type and the page's own, and nothing is logged as an error. Neither runs `page/head` or `page/get`.
-  On the response (`kernel.response`, priority 0) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
+  On the response (`kernel.response`, priority 16, before the reconciler) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
   `X-Clacks-Overhead`, `X-Idno-Build-Fingerprint`: none when `IDNO_UNIT_TEST` is defined, as `init()` sent none), the context's default headers
   (only where the response has none of the name), the context's headers (a name replaces the controller's unless the page began it with
-  `addHeader(..., $replace: false)`: `PageContext::replacesHeader()`; `Link` is added), then, when `ownsCaching()`, the context's caching headers.
+  `addHeader(..., $replace: false)`: `PageContext::replacesHeader()`; `Link` is added). The caching the page asked for is NOT put on the response: see the header rule.
   `LegacyPageLifecycle::reportException()` is what a legacy `Page::exception()` reported (one critical line `<message> [<file>:<line>]`, the
   `error.exception` statistic, `Logging::oopsAlert()`) and never throws; `PageRequestListener::onTerminate()` calls it for work after the response
   that fails. Pinned by `Tests/Characterisation/SitePageLifecycleTest` (over HTTP, on `Tests\Fixtures\SitePageFixtureController`: the routes
@@ -1068,10 +1074,36 @@ test fixtures is routed to a controller through them yet:
   order, and the body, in every template type (`default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `markdown`, `activitypub`), as a visitor and a member, in the two
   directories that have a shell of their own, by `Accept` and as an XHR request, for a HEAD, and for a signed API request (also of a blocked member). What the
   comparison treats as the same: the name of the page in its own address (also in the base64 of a `fwd` link, and the class in the body's classes), a stack trace, the
-  transport's headers and `X-Robots-Tag` (Symfony's, in debug mode), a cookie but for the session id and its date, `Content-Length` as the length of its own body (and
-  present for a HEAD, where it is the GET's), the space after the `;` of a media type, and the set of `Cache-Control` directives (the response adds `private` and a
-  second `no-cache` beside the session's: taking PHP's session-cache headers into the response would end that, and is the lifecycle's). Keep a case of the two fixtures
+  transport's headers (`Date`, `Server`, `Connection`, `Transfer-Encoding`), a cookie but for the session id and its date, `Content-Length` as the length of its own body (and
+  present for a HEAD, where it is the GET's), the space after the `;` of a media type. Every other header is compared line by line, in the order sent (`Cache-Control` included: one line, the
+  session's, never the second a response computes, and no `X-Robots-Tag`). The cases `cached` (`Last-Modified` set through the context, a fixed time) and `no-cache`
+  (`setNoCache()` through the current page) carry the caching rule. Keep a case of the two fixtures
   identical.
+
+- The headers of a site page (`Idno\Legacy\LegacyHeaderReconciler`, `kernel.response` priority 8, after `PageRequestListener::onResponse()` (16) and before Symfony's
+  `ResponseListener` (0); it does nothing unless the request is the main one, the legacy application booted, the request has a `PageContext` and the response is not a
+  `LegacyResponse`; `reconcile(Response, PageContext, bool $knownType)` is the same rule for a caller that has a response in hand). A legacy page's caching headers
+  are PHP's: the session's cache limiter queues `Expires: Thu, 19 Nov 1981 08:52:00 GMT`, `Cache-Control: no-store, no-cache, must-revalidate` and `Pragma: no-cache`
+  at `session_start()` for every request, a visitor's too, a page adds `Last-Modified` with `header()` (the newest listed post's `updated` on a stream) and sends no
+  `ETag`; the legacy router sends its own lines for an XHR request and `setNoCache()` two `Cache-Control` lines and `Pragma`. A Symfony `Response` always has a
+  computed `Cache-Control` (sorted, `no-cache, private`, or `private, must-revalidate` once `Last-Modified` or `Expires` is set; `ResponseHeaderBag` recomputes it
+  whenever one of those is set) and a `Date`, and `Response::sendHeaders()` sends every header but `Content-Type` with `header($line, false)`, after what PHP holds:
+  without a rule a page sends two `Cache-Control` lines. The rule: (1) `Cache-Control`, `Pragma` and `Expires` are never the response's (taken off it, however it came by
+  them), and PHP's lines are sent as PHP queued them; (2) for a name the page asked for with `PageContext::setCaching()` (`ControllerPage::setNoCache()` does), PHP's
+  lines of that name are removed and exactly the lines the page asked for are queued with `header()`, the first replacing, the others added: so `Cache-Control` may
+  be two lines, and `Expires` stays the session's after `setNoCache()`, as it did; where PHP keeps no header list (the command line, or after output began: every
+  in-process test) the response carries what the page asked for, one line a name; (3) `Last-Modified` is the response's when it has one (PHP's queued line is
+  removed), else PHP's stands; (4) a response with no `Content-Type` and a type that declares none (a third party's) takes the `Content-Type` PHP queued, because a response
+  with none is given `text/html` when it is prepared and sends it replacing PHP's; (5) everything else (`Link` from `page/head` and the plugins, `Vary`, `X-*`), `Date`
+  and `Set-Cookie` is left alone, the response's lines beside PHP's, so `Link` values add up; (6) a second listener (priority -300, after Symfony's
+  `DisallowRobotsIndexingListener`, -255) takes `X-Robots-Tag: noindex` off a site page's response unless the page set it, because in debug mode Symfony adds it to
+  every response and a legacy page never sent it; the responses of every other controller (`/_upgrade/step`, `/_test/*`) keep it and keep every header they have. A
+  header a draw sends itself with `header()` for one of the three caching names stays in PHP's list (`AddedHeaders` never takes them): it is PHP's to send. The seam over
+  PHP's functions is `Idno\Legacy\HeaderQueue` (`listed()`, `queued()`, `remove()`, `send()`; `PhpHeaders`), so the rule is tested against a recording double
+  (`Tests/Kernel/LegacyHeaderReconcilerTest`) and over HTTP in `Tests/Characterisation/CachingHeadersTest` (the real pages, line by line, for a visitor and a member, written
+  from what the site sent before any page was ported), `SitePageDrawingTest` (`cached`, `no-cache`, the `Link` lines, no `X-Robots-Tag`), `SitePageLifecycleTest` (XHR) and
+  `Tests/Kernel/PageListenersWithoutLegacyTest` (no legacy application: nothing changes). Two differences from a legacy page remain, neither of them a caching header: the order of lines of DIFFERENT names (PHP's lines first, then the response's), and
+  `Date`, which the response always carries and which therefore comes after PHP's lines, where the server wrote its own first.
 
 ### Kernel and services
 

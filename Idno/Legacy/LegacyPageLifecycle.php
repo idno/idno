@@ -59,23 +59,22 @@ final class LegacyPageLifecycle implements PageLifecycle
     /**
      * What the legacy router sent for an XHR request to a page that has an `<method>_xhr` handler (every method but OPTIONS), after
      * the page was built and before anything else: the JSON content type (a default: the page's shell replaces it), the 1997
-     * `Expires`, `Last-Modified` now, a no-store `Cache-Control` with the two legacy directives, and `Pragma`. They replace the
-     * headers PHP's session already holds, as `header()` replaced them.
+     * `Expires`, `Last-Modified` now, a no-store `Cache-Control` of two lines, and `Pragma`. The caching lines replace the
+     * session's (`LegacyHeaderReconciler` sends them in place of PHP's), as `header()` replaced them.
      */
     private function sendRouterXhrHeaders(PageContext $context): void
     {
         if (!$context->isXhr() || $context->request()->getMethod() === 'OPTIONS') {
             return;
         }
-        if (!headers_sent()) {
-            foreach (['Expires', 'Cache-Control', 'Pragma'] as $name) {
-                header_remove($name);
-            }
-        }
         $context->addDefaultHeader('Content-Type', 'application/json');
-        $context->addHeader('Expires', 'Mon, 26 Jul 1997 05:00:00 GMT');
         $context->addHeader('Last-Modified', gmdate('D, d M Y H:i:s') . ' GMT');
-        $context->setCaching(['Cache-Control' => 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0', 'Pragma' => 'no-cache']);
+        // the lines the router sent, one for each `header()` call (`Toro::serve()`), in place of the session's
+        $context->setCaching([
+            'Expires' => 'Mon, 26 Jul 1997 05:00:00 GMT',
+            'Cache-Control' => ['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'],
+            'Pragma' => 'no-cache',
+        ]);
     }
 
     public function refusesApiRequest(PageContext $context): bool

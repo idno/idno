@@ -17,6 +17,9 @@ final class PageContext
 {
     public const ATTRIBUTE = '_idno_page';
 
+    /** The headers a page may ask caching of, by lower-case name */
+    private const CACHING = ['cache-control' => 'Cache-Control', 'pragma' => 'Pragma', 'expires' => 'Expires'];
+
     /** @var array<string, mixed> */
     private array $inputs = [];
 
@@ -46,7 +49,7 @@ final class PageContext
     /** @var array<string, bool> by lower-case name: whether the first value of the header replaces a header of that name another part set */
     private array $replacing = [];
 
-    /** @var array<string, string>|null */
+    /** @var array<string, string|list<string>>|null by canonical name */
     private ?array $caching = null;
 
     /** @var list<string>|null */
@@ -274,14 +277,23 @@ final class PageContext
     }
 
     /**
-     * The caching headers (`Cache-Control`, `Pragma`, `Expires`) the page asks for, replacing any it asked for before. A page
-     * that has asked owns its caching: nothing adds a default.
+     * The caching headers (`Cache-Control`, `Pragma`, `Expires`) the page asks for: each name's lines (a string is one line, a list
+     * several, as `setNoCache()` sent two `Cache-Control` lines), replacing what the page asked for under that name before and adding to
+     * the names it asked for. A page that has asked owns the names it asked for: they are sent exactly as given, and PHP's own lines of
+     * those names (the session's) are not sent.
      *
-     * @param array<string, string> $headers
+     * @param array<string, string|list<string>> $headers
+     *
+     * @throws \InvalidArgumentException for any other header
      */
     public function setCaching(array $headers): void
     {
-        $this->caching = $headers;
+        $caching = $this->caching ?? [];
+        foreach ($headers as $name => $lines) {
+            $canonical = self::CACHING[strtolower((string) $name)] ?? throw new \InvalidArgumentException('Only Cache-Control, Pragma and Expires are caching headers: ' . $name);
+            $caching[$canonical] = $lines;
+        }
+        $this->caching = $caching;
     }
 
     public function ownsCaching(): bool
@@ -290,11 +302,19 @@ final class PageContext
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string|list<string>> as the page gave them, by canonical name
      */
     public function caching(): array
     {
         return $this->caching ?? [];
+    }
+
+    /**
+     * @return array<string, list<string>> the lines of each caching header the page asked for, in the order it asked
+     */
+    public function cachingLines(): array
+    {
+        return array_map(static fn (string|array $lines): array => array_values((array) $lines), $this->caching ?? []);
     }
 
     /**
