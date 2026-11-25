@@ -92,7 +92,7 @@ final class WebInstaller
                     $result = array_map(fn (string $message): string => str_replace($this->paths->root() . '/', '', $message), $result);
                     $html = isset($result['title']) || isset($result['domain'])
                         ? InstallPage::site($form->siteValues(), $result, $token, $nonce)
-                        : InstallPage::database($databaseValues, array_diff_key($result, ['existing' => '']) + (isset($result['existing']) ? ['use_existing' => $result['existing']] : []), $this->available($checks), isset($result['existing']), $token, $nonce);
+                        : InstallPage::database($databaseValues, array_diff_key($result, ['existing' => '']) + (isset($result['existing']) ? ['use_existing' => $result['existing']] : []), $this->available($checks), isset($result['existing']), $token, $nonce, isset($result['existing']) || isset($result['earlier']));
                 }
             }
         }
@@ -207,6 +207,16 @@ final class WebInstaller
             }
         }
 
+        // What an earlier site left on this server is read from the folders before anything is created, never from the request:
+        // where there is any sign of one, setting up a site here (a new one on a database of the visitor's choosing too) needs the
+        // code from the server, and nothing but that code is written until it is given.
+        $signs = EarlierSite::signs($this->paths);
+        $code = new InstallCode($this->paths);
+        $proven = $code->matches($form->raw('install_code'));
+        if ($signs !== [] && !$proven) {
+            return $this->askForCode($code, $form, $request, 'Idno found what an earlier Idno site left on this server (' . EarlierSite::describe($signs) . '), and no configuration file. Until a site is set up, this installer answers whoever reaches this address first; so setting one up here needs proof that you can reach this server\'s files.', in_array(EarlierSite::DATABASE, $signs, true));
+        }
+
         $config = new ConfigFile($this->paths);
         $choice = new DatabaseChoice($this->paths);
         $fileWasThere = file_exists($this->paths->sqliteFile());
@@ -229,20 +239,9 @@ final class WebInstaller
 
                 return ['database' => $finding->message];
             }
-            $code = new InstallCode($this->paths);
-            if ($finding->holdsASite() && !($form->text('use_existing') === '1' && $code->matches($form->raw('install_code')))) {
-                // Taking over a site's data, and giving it an address, needs proof of access to the
-                // server's files: the code written to a file the web server never serves. Nothing but
-                // that file is written until the code is given.
-                if (!$code->ensure()) {
-                    return ['existing' => 'That database already holds an Idno site, and Idno cannot write the code that shows you can reach this server\'s files: the folder configuration cannot be written to. Restore the site\'s configuration file, or install from the command line: php bin/console idno:install --use-existing'];
-                }
-                $problems = ['existing' => 'That database already holds an Idno site. To use it, show that you can reach this server\'s files: Idno has written a code to the file ' . InstallCode::relativePath() . ' in Idno\'s folder. Read it on the server (for example, from Idno\'s folder: sudo cat ' . InstallCode::relativePath() . '), type it below, check the site\'s address and tick the box. The code lasts an hour. Nothing in the database will be replaced. To start a new site instead, choose an empty database.'];
-                if ($form->text('install_code') !== '' || is_array($request->request->all()['install_code'] ?? null)) {
-                    $problems['install_code'] = 'That is not the code in ' . InstallCode::relativePath() . ', or it has expired (then a new one has been written there). Read the file again.';
-                }
-
-                return $problems;
+            if ($finding->holdsASite() && !($form->text('use_existing') === '1' && $proven)) {
+                // Taking over a site's data, and giving it an address, needs the same proof.
+                return $this->askForCode($code, $form, $request, 'That database already holds an Idno site. To use it, show that you can reach this server\'s files.', true);
             }
             $text = $config->build($params + ['uploadpath' => $upload, 'url' => $url]);
             if (!$config->writeOnce($text)) {
@@ -250,7 +249,7 @@ final class WebInstaller
                 // site is installed, and this request changes nothing.
                 return $home;
             }
-            if ($finding->holdsASite()) {
+            if ($signs !== [] || $finding->holdsASite()) {
                 $code->clear();
             }
         } catch (DatabaseConnectionFailed $e) {
@@ -285,6 +284,27 @@ final class WebInstaller
         }
 
         return $home;
+    }
+
+    /**
+     * What the database step says when the code from the server is needed: why, where the code is and how to read it. The code is
+     * written (or kept, while it is valid); nothing else is. `existing` asks for the box that adopts the database's site as well,
+     * `earlier` for the code alone.
+     *
+     * @return array<string, string>
+     */
+    private function askForCode(InstallCode $code, InstallForm $form, Request $request, string $why, bool $adopts): array
+    {
+        $key = $adopts ? 'existing' : 'earlier';
+        if (!$code->ensure()) {
+            return [$key => $why . ' Idno cannot write that code: the folder configuration cannot be written to. Restore the site\'s configuration file, or install from the command line: php bin/console idno:install'];
+        }
+        $problems = [$key => $why . ' Idno has written a code to the file ' . InstallCode::relativePath() . ' in Idno\'s folder. Read it on the server (for example, from Idno\'s folder: sudo cat ' . InstallCode::relativePath() . '), type it below and check the site\'s address' . ($adopts ? '; to keep the site that is in the database, also tick the box' : '') . '. The code lasts an hour. Nothing in a database is replaced. If the earlier site is yours, putting back its configuration/config.ini is simpler.'];
+        if ($form->text('install_code') !== '' || is_array($request->request->all()['install_code'] ?? null)) {
+            $problems['install_code'] = 'That is not the code in ' . InstallCode::relativePath() . ', or it has expired (then a new one has been written there). Read the file again.';
+        }
+
+        return $problems;
     }
 
     /**

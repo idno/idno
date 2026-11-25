@@ -41,7 +41,10 @@ final class InstallCode
     }
 
     /**
-     * Writes a new code when there is none, or the one there has expired.
+     * Writes a new code when there is none, or the one there has expired. The file is replaced under an exclusive lock and read
+     * again under it, so requests that find the code expired at the same moment replace it once: the second keeps the code the
+     * first wrote (which the person at the server may be reading). A configuration folder that is not there (it was lost with the
+     * configuration) is created, with the .htaccess that refuses everything in it.
      *
      * @return bool Whether a valid code is there afterwards (false when the folder cannot be written to)
      */
@@ -50,30 +53,47 @@ final class InstallCode
         if ($this->valid() !== null) {
             return true;
         }
+        $directory = $this->paths->configDir();
+        if (!is_dir($directory)) {
+            if (!@mkdir($directory, 0755, true) && !is_dir($directory)) {
+                return false;
+            }
+            @chmod($directory, 0755);
+            if (!file_exists($directory . '/.htaccess')) {
+                @file_put_contents($directory . '/.htaccess', "Require all denied\n");
+            }
+        }
         $file = $this->file();
-        @unlink($file);
-        $code = bin2hex(random_bytes(16));
         $old = umask(0077);
         try {
-            // An exclusive create: when two requests get here at once, the one that loses keeps the
-            // winner's code instead of replacing it.
-            $handle = @fopen($file, 'x');
-            if ($handle === false) {
-                return $this->valid() !== null;
-            }
-            $written = fwrite($handle, $code . "\n");
-            fclose($handle);
+            $handle = @fopen($file, 'c+');
         } finally {
             umask($old);
         }
-        @chmod($file, 0600);
-        if ($written !== strlen($code) + 1) {
-            @unlink($file);
-
+        if ($handle === false) {
             return false;
         }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                return false;
+            }
+            if ($this->valid() !== null) {
+                return true;
+            }
+            $code = bin2hex(random_bytes(16));
+            ftruncate($handle, 0);
+            rewind($handle);
+            $written = fwrite($handle, $code . "\n");
+            fflush($handle);
+            @chmod($file, 0600);
+            touch($file);
+            clearstatcache(true, $file);
 
-        return true;
+            return $written === strlen($code) + 1;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
     }
 
     /**

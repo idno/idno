@@ -110,12 +110,13 @@ JS;
      * @param array<string, string>                                                                                              $errors
      * @param array{sqlite: bool, mysql: bool}                                                                                   $available Which choices this server can offer
      * @param bool                                                                                                               $existing  Whether the chosen database already holds an Idno site (asks for the confirmation)
+     * @param bool                                                                                                               $codeAsked Whether the code from the server is asked for (an earlier site's signs, or adopting one)
      */
-    public static function database(array $values, array $errors, array $available, bool $existing, string $token, string $nonce): string
+    public static function database(array $values, array $errors, array $available, bool $existing, string $token, string $nonce, bool $codeAsked = false): string
     {
         $sqlite = $values['database'] === 'sqlite';
         $body = self::steps(3) . '<h1>Where should Idno keep your site?</h1>' . self::summary($errors)
-            . '<form method="post" action="./">' . self::hidden(['step' => 'database', 'token' => $token, 'title' => $values['title']] + ($existing ? [] : ['domain' => $values['domain']]))
+            . '<form method="post" action="./">' . self::hidden(['step' => 'database', 'token' => $token, 'title' => $values['title']] + ($codeAsked ? [] : ['domain' => $values['domain']]))
             . '<fieldset><legend>Everything you post is kept in a database. Uploaded pictures and files are kept in the folder Uploads.</legend>';
         $body .= '<label class="choice"><input type="radio" name="database" value="sqlite"' . ($sqlite ? ' checked' : '') . ($available['sqlite'] ? '' : ' disabled') . '>'
             . '<span><strong>A file on this server (SQLite)</strong><span>The simple choice: nothing else to set up. Right for a personal site or a small group.'
@@ -130,11 +131,11 @@ JS;
             . self::field('mysql_pass', 'Database password', '', '', $errors, ['type' => 'password', 'autocomplete' => 'off'])
             . self::field('mysql_host', 'Database server', 'Almost always localhost. Your hosting control panel says if it is something else.', $values['mysql_host'] === '' ? 'localhost' : $values['mysql_host'], $errors, ['autocomplete' => 'off', 'autocapitalize' => 'none', 'spellcheck' => 'false'])
             . '</div>';
-        if ($existing) {
-            // Adopting a site writes its address: it is shown here, beside the code from the server, for the person to confirm.
+        if ($codeAsked) {
+            // Setting up a site where an earlier one was writes its address: it is shown here, beside the code from the server, for the person to confirm.
             $body .= self::field('install_code', 'Code from the server', 'The code in the file ' . InstallCode::relativePath() . ' in Idno\'s folder. It is not shown anywhere else.', '', $errors, ['autocomplete' => 'off', 'autocapitalize' => 'none', 'spellcheck' => 'false', 'required' => ''])
                 . self::field('domain', 'The site\'s address', 'The domain people use to reach the site, without https:// in front. It is written to the configuration: check that it is right.', $values['domain'], $errors, ['autocomplete' => 'off', 'autocapitalize' => 'none', 'spellcheck' => 'false', 'required' => ''])
-                . '<label class="check"><input type="checkbox" name="use_existing" value="1"> Use the Idno site that is already in this database. Nothing in it is replaced; if it is from an older version of Idno it is upgraded, and its own accounts sign in as before.</label>';
+                . ($existing ? '<label class="check"><input type="checkbox" name="use_existing" value="1"> Use the Idno site that is already in this database. Nothing in it is replaced; if it is from an older version of Idno it is upgraded, and its own accounts sign in as before.</label>' : '');
         }
         $body .= '<div class="actions"><button type="submit">Save and set up the site</button> <button type="submit" name="back" value="1" class="link" formnovalidate>Back</button></div></form>';
         $script = <<<'JS'

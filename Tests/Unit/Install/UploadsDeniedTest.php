@@ -139,6 +139,59 @@ final class UploadsDeniedTest extends TestCase
         }
     }
 
+    /**
+     * nginx chooses ONE location for a request, by its own order: an exact (`=`) location, else the longest prefix; when that prefix
+     * is `^~` it wins and no regex is tried; otherwise the FIRST regex location that matches, in the file's order, wins over the prefix.
+     * So reordering the file can hand an uploaded file to the static-asset or `.php` location: the uploads are refused by `^~` prefix
+     * locations (which no regex can override) for the usual spellings, and by the case-insensitive deny regex placed before the
+     * static and `.php` locations for the others. This resolves each path as nginx does and requires the chosen location to deny.
+     */
+    public function testNginxChoosesADenyingLocationForEveryUploadPath(): void
+    {
+        $text = (string) file_get_contents($this->root . '/warmup/webserver-configs/nginx.conf');
+        preg_match_all('#location\s+(=|\^~|~\*|~)?\s*(\S+)\s*\{([^{}]*)\}#', $text, $m, PREG_SET_ORDER);
+        $locations = array_map(static fn (array $l): array => ['modifier' => $l[1], 'pattern' => $l[2], 'deny' => str_contains($l[3], 'deny all')], $m);
+        $this->assertGreaterThan(10, count($locations), 'the locations were read');
+        foreach (['/Uploads/', '/uploads/'] as $prefix) {
+            $this->assertContains(['modifier' => '^~', 'pattern' => $prefix, 'deny' => true], $locations, 'a ^~ prefix location, which no regex location can override, denies ' . $prefix);
+        }
+
+        foreach ([...self::DENIED, '/UPLOADS/x.png', '/Uploads/x.php', '/uploads/a/b.jpg', '/Uploads/a.css', '/UpLoads/x.js'] as $path) {
+            $chosen = self::nginxLocation($locations, $path);
+            $this->assertNotNull($chosen, $path);
+            $this->assertTrue($chosen['deny'], 'nginx serves ' . $path . ' from location ' . $chosen['modifier'] . ' ' . $chosen['pattern']);
+        }
+        $this->assertFalse(self::nginxLocation($locations, '/js/idno-2026.min.js')['deny'], 'and an ordinary asset is served');
+    }
+
+    /**
+     * @param list<array{modifier: string, pattern: string, deny: bool}> $locations in the file's order
+     * @return array{modifier: string, pattern: string, deny: bool}|null
+     */
+    private static function nginxLocation(array $locations, string $path): ?array
+    {
+        $prefix = null;
+        foreach ($locations as $location) {
+            if ($location['modifier'] === '=' && $location['pattern'] === $path) {
+                return $location;
+            }
+            if (($location['modifier'] === '' || $location['modifier'] === '^~') && str_starts_with($path, $location['pattern'])
+                && ($prefix === null || strlen($location['pattern']) > strlen($prefix['pattern']))) {
+                $prefix = $location;
+            }
+        }
+        if ($prefix !== null && $prefix['modifier'] === '^~') {
+            return $prefix;
+        }
+        foreach ($locations as $location) {
+            if (($location['modifier'] === '~' || $location['modifier'] === '~*') && preg_match('#' . str_replace('#', '\\#', $location['pattern']) . '#' . ($location['modifier'] === '~*' ? 'i' : ''), $path) === 1) {
+                return $location;
+            }
+        }
+
+        return $prefix;
+    }
+
     public function testTheUploadsDirectoryRefusesEverythingItself(): void
     {
         $this->assertSame("Require all denied\n", (string) file_get_contents($this->root . '/Uploads/.htaccess'));

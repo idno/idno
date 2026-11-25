@@ -78,6 +78,14 @@ namespace Tests\Characterisation {
                     'Uploads/.htaccess',
                     'Uploads/',
                 ];
+                // Spellings a web server makes into the same path before it matches its rules (repeated slashes, `.` segments): the
+                // test routers normalise the path the same way. Sent as written (curl would otherwise remove the `.` segments).
+                foreach (['//Uploads/' . $relative . '.file', '/./Uploads/' . $relative . '.data', '/Uploads//' . $relative . '.file', '/.//uploads/./' . $relative . '.file', '//configuration/.htaccess'] as $raw) {
+                    [$status, $body] = $this->rawGet($raw);
+                    $this->assertSame(403, $status, $raw);
+                    $this->assertStringNotContainsString('private picture', $body, $raw);
+                    $this->assertStringNotContainsString('attached_entity', $body, $raw);
+                }
                 foreach ($paths as $path) {
                     $r = $this->site()->request('GET', $path);
 
@@ -93,6 +101,21 @@ namespace Tests\Characterisation {
                     @rmdir($dir);
                 }
             }
+        }
+
+        /**
+         * A GET of a path exactly as written, `.` segments and repeated slashes included.
+         *
+         * @return array{0: int, 1: string} the status and the body
+         */
+        private function rawGet(string $path): array
+        {
+            $parts = parse_url($this->site()->baseUrl());
+            $curl = curl_init($parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') . $path);
+            curl_setopt_array($curl, [CURLOPT_RETURNTRANSFER => true, CURLOPT_PATH_AS_IS => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_TIMEOUT => 30]);
+            $body = (string) curl_exec($curl);
+
+            return [(int) curl_getinfo($curl, CURLINFO_RESPONSE_CODE), $body];
         }
 
         /**

@@ -357,7 +357,7 @@ final class WebInstallerTest extends TestCase
 
         $response = $this->save();
         $html = (string) $response->getContent();
-        self::assertStringContainsString('already holds an Idno site', $html);
+        self::assertStringContainsString('earlier Idno site', $html, 'the database file is a sign of an earlier site');
         self::assertStringContainsString('name="use_existing"', $html);
         self::assertStringContainsString('name="install_code"', $html);
         self::assertStringContainsString('configuration/install-code', $html);
@@ -371,7 +371,7 @@ final class WebInstallerTest extends TestCase
         // Ticking the box is not enough, and neither is a code that is not the one in the file.
         foreach ([['use_existing' => '1'], ['use_existing' => '1', 'install_code' => str_repeat('0', 32)], ['use_existing' => '1', 'install_code' => ['x']], ['use_existing' => '1', 'install_code' => substr($code, 0, 31)]] as $fields) {
             $html = (string) $this->save($fields)->getContent();
-            self::assertStringContainsString('already holds an Idno site', $html);
+            self::assertMatchesRegularExpression('/earlier Idno site|already holds an Idno site/', $html);
             self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
         }
         self::assertStringContainsString('id="field-install_code-error"', (string) $this->save(['use_existing' => '1', 'install_code' => str_repeat('0', 32)])->getContent());
@@ -379,7 +379,7 @@ final class WebInstallerTest extends TestCase
         self::assertSame($before, sha1_file($path), 'the database is untouched');
         self::assertSame(['configuration/install-code', 'data/idno.sqlite'], $this->filesInRoot());
 
-        // The code without the box changes nothing either.
+        // The code without the box changes nothing either: the database's site is then the one that asks.
         self::assertStringContainsString('already holds an Idno site', (string) $this->save(['install_code' => $code])->getContent());
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
 
@@ -413,7 +413,7 @@ final class WebInstallerTest extends TestCase
 
         $html = (string) $this->save(['use_existing' => '1', 'install_code' => $code])->getContent();
 
-        self::assertStringContainsString('already holds an Idno site', $html);
+        self::assertStringContainsString('earlier Idno site', $html);
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
         self::assertNotSame($code, $this->code(), 'a new code is written in place of the expired one');
     }
@@ -429,7 +429,7 @@ final class WebInstallerTest extends TestCase
 
         $html = (string) $this->save(['use_existing' => '1', 'install_code' => $code])->getContent();
 
-        self::assertStringContainsString('already holds an Idno site', $html);
+        self::assertStringContainsString('earlier Idno site', $html);
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
         self::assertNotSame($code, $this->code());
     }
@@ -463,6 +463,115 @@ final class WebInstallerTest extends TestCase
         self::assertTrue((new InstallCode($paths))->matches($code));
     }
 
+    /**
+     * @return array<string, array{0: string, 1: string}> a sign of an earlier site => the file that is it, and its content
+     */
+    public static function earlierSites(): array
+    {
+        return [
+            'a database file' => ['data/idno.sqlite', 'not empty'],
+            'a stored upload' => ['Uploads/example.com/a/b/c/d/0123456789abcdef0123456789abcdef.file', 'bytes'],
+            'a stray configuration file' => ['configuration/config.ini.bak', "dbname = 'x'\n"],
+        ];
+    }
+
+    /**
+     * Where an earlier site left something on this server, ANY install through the browser needs the code from the server, a new
+     * site on an empty database of the visitor's choosing included: nothing but the code is written without it.
+     *
+     * @dataProvider earlierSites
+     */
+    public function testASignOfAnEarlierSiteAsksForTheCodeForAnyInstall(string $file, string $content): void
+    {
+        if (!is_dir(dirname($this->root . '/' . $file))) {
+            mkdir(dirname($this->root . '/' . $file), 0755, true);
+        }
+        file_put_contents($this->root . '/' . $file, $content);
+        $before = $this->filesInRoot();
+
+        $html = (string) $this->save()->getContent();
+        self::assertStringContainsString('earlier Idno site', $html);
+        self::assertStringContainsString('name="install_code"', $html);
+        self::assertStringContainsString('configuration/install-code', $html);
+        $expected = [...$before, 'configuration/install-code'];
+        sort($expected);
+        self::assertSame($expected, $this->filesInRoot(), 'only the code is written');
+        self::assertStringContainsString('earlier Idno site', (string) $this->save(['install_code' => str_repeat('0', 32)])->getContent());
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+
+        // another database (a MySQL server the visitor names) does not avoid it: the code is asked before anything is connected to
+        if (extension_loaded('pdo_mysql')) {
+            $mysql = (string) $this->save(['database' => 'mysql', 'mysql_name' => 'mine', 'mysql_user' => 'u', 'mysql_pass' => 'p', 'mysql_host' => '127.0.0.1:9'])->getContent();
+            self::assertStringContainsString('earlier Idno site', $mysql);
+            self::assertStringNotContainsString(\Idno\Install\InstallPage::e(WebInstaller::CONNECTION_FAILED), $mysql);
+        }
+
+        if ($file === 'data/idno.sqlite') {
+            // the file at the default path is no SQLite database: with the code, it is refused as before, and left as it is
+            self::assertStringContainsString('could not be opened as an SQLite database', (string) $this->save(['install_code' => $this->code()])->getContent());
+            self::assertSame($content, file_get_contents($this->root . '/' . $file));
+
+            return;
+        }
+        self::assertSame(303, $this->save(['install_code' => $this->code()])->getStatusCode());
+        self::assertFileExists($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code', 'used once');
+    }
+
+    public function testAnotherApplicationsSqliteDatabaseAtTheDefaultPathAsksForTheCodeAndIsThenUsed(): void
+    {
+        $path = $this->root . '/data/idno.sqlite';
+        $connection = \Idno\Storage\ConnectionFactory::forConfig(['database' => 'sqlite', 'dbname' => $path]);
+        $connection->executeStatement('create table other_app (id integer)');
+        $connection->close();
+
+        self::assertStringContainsString('earlier Idno site', (string) $this->save()->getContent());
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertSame(303, $this->save(['install_code' => $this->code()])->getStatusCode());
+    }
+
+    public function testTheCodeIsWrittenWhenTheConfigurationFolderIsMissingWithItsRefusal(): void
+    {
+        rmdir($this->root . '/configuration');
+        $code = new InstallCode(new InstallPaths($this->root));
+
+        self::assertTrue($code->ensure());
+        self::assertFileExists($this->root . '/configuration/install-code');
+        self::assertSame("Require all denied\n", file_get_contents($this->root . '/configuration/.htaccess'));
+        self::assertSame(0755, fileperms($this->root . '/configuration') & 0777);
+        self::assertSame(0600, fileperms($this->root . '/configuration/install-code') & 0777);
+    }
+
+    /**
+     * Requests that find the code expired at the same moment replace it ONCE: each process that runs ensure() at once ends with the
+     * same code in the file, so a code the owner read after the first replacement is not replaced again by the second.
+     */
+    public function testRequestsAtTheMomentTheCodeExpiresReplaceItOnce(): void
+    {
+        $code = new InstallCode(new InstallPaths($this->root));
+        $code->ensure();
+        $file = $this->root . '/' . InstallCode::relativePath();
+        $script = $this->root . '/ensure.php';
+        file_put_contents($script, '<?php require ' . json_encode(dirname(__DIR__, 3) . '/vendor/autoload.php', JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . '; while (microtime(true) < (float) $argv[2]) { usleep(100); } (new \\Idno\\Install\\InstallCode(new \\Idno\\Install\\InstallPaths($argv[1])))->ensure(); echo trim((string) file_get_contents($argv[1] . "/configuration/install-code"));');
+        for ($round = 0; $round < 5; $round++) {
+            touch($file, time() - InstallCode::LIFETIME - 10);
+            $start = microtime(true) + 0.5;
+            $processes = [];
+            for ($i = 0; $i < 6; $i++) {
+                $processes[] = proc_open([PHP_BINARY, '-d', 'display_errors=stderr', $script, $this->root, (string) $start], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
+            }
+            $seen = [];
+            foreach ($processes as $i => $process) {
+                $seen[] = stream_get_contents($pipes[$i][1]);
+                stream_get_contents($pipes[$i][2]);
+                proc_close($process);
+            }
+            self::assertCount(1, array_unique($seen), 'one replacement: ' . json_encode($seen));
+            self::assertSame($seen[0], trim((string) file_get_contents($file)));
+        }
+        unlink($script);
+    }
+
     public function testANewSiteOnAnEmptyDatabaseNeedsNoCode(): void
     {
         self::assertSame(303, $this->save()->getStatusCode());
@@ -472,8 +581,9 @@ final class WebInstallerTest extends TestCase
     public function testAFileThatIsNotADatabaseIsRefusedAndLeftAsItIs(): void
     {
         file_put_contents($this->root . '/data/idno.sqlite', 'not a database');
+        self::assertStringContainsString('earlier Idno site', (string) $this->save()->getContent(), 'a file that is there is a sign of an earlier site');
 
-        $html = (string) $this->save()->getContent();
+        $html = (string) $this->save(['install_code' => $this->code()])->getContent();
 
         self::assertStringContainsString('could not be opened as an SQLite database', $html);
         self::assertSame('not a database', file_get_contents($this->root . '/data/idno.sqlite'));

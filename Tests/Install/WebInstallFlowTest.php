@@ -380,10 +380,10 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         $form = ['step' => 'database', 'token' => $strangerToken, 'title' => 'Mine now', 'domain' => 'evil.example', 'database' => 'sqlite', 'use_existing' => '1'];
         $refused = $this->request('/', $form, $strangerCookies);
         self::assertSame(200, $refused['status'], $refused['body'] . $this->serverLog());
-        self::assertStringContainsString('already holds an Idno site', $refused['body']);
+        self::assertStringContainsString('earlier Idno site', $refused['body']);
         self::assertStringContainsString('configuration/install-code', $refused['body']);
         foreach ([str_repeat('a', 32), 'install-code', ''] as $guess) {
-            self::assertStringContainsString('already holds an Idno site', $this->request('/', $form + ['install_code' => $guess], $strangerCookies)['body']);
+            self::assertStringContainsString('earlier Idno site', $this->request('/', $form + ['install_code' => $guess], $strangerCookies)['body']);
         }
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
         self::assertFileDoesNotExist($this->root . '/Uploads/.htaccess');
@@ -397,7 +397,7 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
 
         // An expired code is refused, and replaced.
         touch($this->root . '/configuration/install-code', time() - 7200);
-        self::assertStringContainsString('already holds an Idno site', $this->request('/', $form + ['install_code' => $code], $strangerCookies)['body']);
+        self::assertStringContainsString('earlier Idno site', $this->request('/', $form + ['install_code' => $code], $strangerCookies)['body']);
         self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
         $code = trim((string) file_get_contents($this->root . '/configuration/install-code'));
 
@@ -420,6 +420,68 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         // has no administrator a browser other than the owner's is told it is being set up.
         self::assertSame(503, $this->request('/', $form + ['install_code' => $code], $strangerCookies)['status']);
         self::assertSame($written, file_get_contents($this->root . '/configuration/config.ini'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}> a sign of an earlier site => its file (under the install root) and content
+     */
+    public static function earlierSites(): array
+    {
+        return [
+            'a database file' => ['data/old.sqlite', 'what is left of a database'],
+            'a stored upload' => ['Uploads/owner.example/a/b/c/d/0123456789abcdef0123456789abcdef.file', 'a private picture'],
+            'a stray configuration file' => ['configuration/config.ini.bak', "url = 'https://owner.example/'\n"],
+        ];
+    }
+
+    /**
+     * A server that shows what an earlier site left (its configuration lost) installs nothing for a stranger: a NEW site on an
+     * empty database of the visitor's own needs the code from the server, as adopting the old one does. Without it nothing is
+     * written but the code; another database (a MySQL server the visitor names) does not avoid it; with it the install goes on.
+     *
+     * @dataProvider earlierSites
+     */
+    public function testASignOfAnEarlierSiteMakesAnyInstallAskForTheCode(string $file, string $content): void
+    {
+        if (!is_dir(dirname($this->root . '/' . $file))) {
+            mkdir(dirname($this->root . '/' . $file), 0755, true);
+        }
+        file_put_contents($this->root . '/' . $file, $content);
+        $this->startServer();
+        $domain = substr($this->base, strlen('http://'));
+        $first = $this->request('/');
+        $cookies = $first['cookies'];
+        $form = ['step' => 'database', 'token' => self::token($first['body']), 'title' => 'Mine now', 'domain' => $domain, 'database' => 'sqlite'];
+
+        $asked = $this->request('/', $form, $cookies);
+        self::assertSame(200, $asked['status'], $asked['body'] . $this->serverLog());
+        self::assertStringContainsString('earlier Idno site', $asked['body']);
+        self::assertStringContainsString('configuration/install-code', $asked['body']);
+        self::assertStringContainsString('name="install_code"', $asked['body']);
+        self::assertStringContainsString('earlier Idno site', $this->request('/', $form + ['install_code' => str_repeat('a', 32)], $cookies)['body']);
+        $mysql = $this->request('/', ['database' => 'mysql', 'mysql_name' => 'mine', 'mysql_user' => 'u', 'mysql_pass' => 'p', 'mysql_host' => '127.0.0.1:9'] + $form, $cookies);
+        self::assertStringContainsString('earlier Idno site', $mysql['body'], 'a database of the visitor\'s own does not avoid the code');
+        self::assertFileDoesNotExist($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/data/idno.sqlite');
+        self::assertFileDoesNotExist($this->root . '/Uploads/.htaccess');
+        self::assertSame($content, file_get_contents($this->root . '/' . $file));
+        self::assertFileExists($this->root . '/configuration/install-code', 'only the code is written');
+
+        $code = trim((string) file_get_contents($this->root . '/configuration/install-code'));
+        $installed = $this->request('/', $form + ['install_code' => $code], $cookies);
+        self::assertSame(303, $installed['status'], $installed['body'] . $this->serverLog());
+        self::assertFileExists($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code');
+        self::assertArrayHasKey(SetupToken::COOKIE, $installed['cookies'], 'the code holder\'s browser creates the administrator');
+    }
+
+    public function testAFreshServerInstallsWithoutACode(): void
+    {
+        $this->startServer();
+        $this->installTheSite();
+
+        self::assertFileExists($this->root . '/configuration/config.ini');
+        self::assertFileDoesNotExist($this->root . '/configuration/install-code', 'no code was asked for or written');
     }
 
     public function testASiteConfiguredByItsEnvironmentIsInstalledForTheConsoleAndTheWeb(): void

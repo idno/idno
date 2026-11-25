@@ -18,7 +18,15 @@ if (PHP_SAPI !== 'cli-server') {
  */
 
 $root = dirname(__DIR__, 2);
-$path = rawurldecode((string) parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH));
+// The path as a web server matches its rules: decoded once, repeated slashes made one and `.` segments removed (`//Uploads/x`
+// and `/./Uploads/x` are `/Uploads/x`). Read from the request URI itself: parse_url() takes `//Uploads/...` for a host.
+$uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
+$path = rawurldecode(explode('?', $uri, 2)[0]);
+do {
+    $before = $path;
+    $path = (string) preg_replace(['#/+#', '#/\.(?=/|$)#'], ['/', ''], $path);
+} while ($path !== $before);
+$path = '/' . ltrim($path, '/');
 
 // Never expose things the .htaccess file denies (directories case-insensitively, as on a
 // case-insensitive filesystem)

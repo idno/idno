@@ -615,8 +615,15 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      `SqliteConnectionSetup`); `DatabaseChoice::inspect()` (a `SchemaState` on the candidate settings:
      a database the upgrade would refuse is refused here with the upgrade's own `PublicMessage`; one
      that already holds an Idno site is never overwritten (the upgrade takes over) and is ADOPTED only
-     with the form's `use_existing=1` AND the code of `Idno\Install\InstallCode`: without them the
-     step writes nothing but that code, a random 32-hex value in `configuration/install-code`
+     with the form's `use_existing=1` AND the code of `Idno\Install\InstallCode`. The same code is asked for
+     ANY web install, a new site on a database of the visitor's choosing included, when the server shows an
+     earlier site: `Idno\Install\EarlierSite::signs()`, the one rule, read from the folders before anything
+     is created and never from the request: an SQLite file that is not empty anywhere under `data/`, any file
+     under the upload folder but its shipped `readme.txt` and `.htaccess`, any file in `configuration/` but the
+     shipped `.htaccess` and the code itself (`EarlierSiteTest`, and over HTTP for each sign with and without
+     the code, and a MySQL server of the visitor's that does not avoid it:
+     `WebInstallFlowTest::testASignOfAnEarlierSiteMakesAnyInstallAskForTheCode`). A checkout as shipped asks
+     for none. Without the code the step writes nothing but that code, a random 32-hex value in `configuration/install-code`
      (`InstallCode::relativePath()`, mode 0600, an exclusive create, refused by every shipped server
      configuration), which the page asks for by its path from the project and the command to read it. The
      code is proof of access to the server's files: a site whose configuration file was lost is an
@@ -624,7 +631,9 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      point a site's reset links, ActivityPub ids and IndieAuth endpoints at their own host. It is compared
      with `hash_equals()` (spaces and letter case ignored), lasts `InstallCode::LIFETIME` (an hour, by the
      file's modification time), is not replaced while valid (a visitor reaching the page again does not
-     invalidate the code being read at the server; an expired one is replaced), is removed once the
+     invalidate the code being read at the server; an expired one is replaced ONCE: under an exclusive lock on
+     the file, read again under it, so requests at the moment it expires keep the first replacement; a
+     `configuration/` that is not there is created, 0755, with a `Require all denied` `.htaccess`), is removed once the
      configuration is written, and is never printed, logged, put in a cookie or in an address. On the
      adoption page the domain is a visible field beside the code (it was read from the request's Host in
      step 2), so the address written is the one the code's holder confirms. `InstallCode` and `SetupToken`
@@ -643,8 +652,8 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
   is empty (`InstallForm`), and a form is accepted only with the token of the `idno_install` cookie
   (`WebInstaller::fieldFor()`, a double-submit token; `SameSite=Strict`). Do not add a disk path the
   visitor chooses.
-- **The setup step.** Whoever arrives first may install a NEW site (no code to paste; adopting a
-  database that holds a site needs `InstallCode`, above), but only the browser that did can create the administrator. `SetupToken` writes the marker
+- **The setup step.** Whoever arrives first may install a NEW site on a server as shipped (no code to paste; where
+  the server shows an earlier site, or to adopt a database that holds one, `InstallCode`, above), but only the browser that did can create the administrator. `SetupToken` writes the marker
   `configuration/setup-pending` (JSON: the SHA-256 of a random token, and the site's name; never the
   token) and the browser holds the token in the cookie `idno_setup` (HttpOnly, `SameSite=Lax`, Secure
   on HTTPS, thirty days). Between the configuration and the tables the upgrade page runs as for any
@@ -4990,8 +4999,14 @@ no installer writes one.
   (the root `.htaccess`, both `.dist` files, `nginx.conf`, the Caddyfile, both routers), in any letter case, and
   `Uploads/.htaccess` refuses everything itself. A stored file reached by its path would skip `Pages\File\View` and so
   the post's `canRead()`, the `restricted` mark and the export archive. `Tests/Unit/Install/UploadsDeniedTest` reads
-  every shipped configuration and runs its deny rules against upload paths in mixed case;
-  `DeniedPathsTest::testStoredFilesUnderTheUploadsDirectoryAreRefused` asks the rig for a stored `.file` and `.data`.
+  every shipped configuration and runs its deny rules against upload paths in mixed case, and resolves each path through
+  nginx's own choice of location (an exact location, else the longest prefix, which wins outright when it is `^~`, else the
+  first matching regex in the file's order): the uploads are refused by `^~ /Uploads/` and `^~ /uploads/`, which no regex can
+  override, and by the case-insensitive deny regex placed before the static-asset and `.php` locations, so a reordering that
+  hands `/UPLOADS/x.png` to the static location fails it. Both test routers match their rules on the path as a web server does
+  (read from the request URI, decoded once, repeated slashes made one, `.` segments removed: `//Uploads/x`, `/./Uploads/x`).
+  `DeniedPathsTest::testStoredFilesUnderTheUploadsDirectoryAreRefused` asks the rig for a stored `.file` and `.data`, in those
+  spellings too (sent as written).
   An upload path elsewhere in the document root needs a rule of its own (`docs/install/instructions.md`).
 - Private sites (`walled_garden`) and pages that controllers serve: `PageRequestListener` applies `LegacyPageLifecycle::mayView()` (a public site, a logged-on visitor, or `#[SitePage(publicOnPrivateSite: true)]`, which
   the legacy `addRoute(..., true)` and `addPublicRoute()` of the page's class also set) after OPTIONS and before the page is entered; a refusal is the site's 403 page in the request's template type, fires no
@@ -5382,8 +5397,9 @@ no installer writes one.
     page asks for is added to the response after the controller returns. Its answer is always the whole page.
   - Every state-changing method of a site page needs the session's form token (or a signed API request): a site page cannot take a POST from another
     server (a webmention, a WebSub callback, an inbox), so such an endpoint stays a legacy page or a plain controller.
-- The first administrator: an uninstalled site can be installed as a NEW site by whoever reaches it first (no code to
-  paste; adopting a database that already holds a site needs the code `Idno\Install\InstallCode` writes on the server), but the site's first administrator can only be created by the browser that wrote the configuration
+- The first administrator: an uninstalled site as shipped can be installed by whoever reaches it first (no code to
+  paste); where the server shows an earlier site (`EarlierSite::signs()`), any web install, and adopting a database that
+  already holds a site, needs the code `Idno\Install\InstallCode` writes on the server, but the site's first administrator can only be created by the browser that wrote the configuration
   (the `idno_setup` cookie against the hash in `configuration/setup-pending`: `Idno\Install\SetupToken`,
   `SetupGateListener`), by the one-time link `idno:setup:link` prints, or by `idno:admin:create` on the server.
   Registration never grants administrator, and a site with no user lets nobody register. Don't add another way
