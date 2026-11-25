@@ -483,7 +483,13 @@ namespace IdnoPlugins\Portfolios\Tests {
 
             foreach ([$post->getDisplayURL(), static::$alice->getDisplayURL()] as $page) {
                 $body = $this->get($page, static::$alice)['body'];
-                $this->assertTrue((bool) preg_match('#<details class="idno-more".*?</details>#s', $body, $menu));
+                // The post's menu is the one that copies the post's address (a profile has its own)
+                preg_match_all('#<details class="idno-more".*?</details>#s', $body, $menus);
+                $copies = $this->attribute('href', $post->getDisplayURL());
+                $menu = array_values(array_filter($menus[0], function ($markup) use ($copies) {
+                    return (bool) preg_match($copies, $markup);
+                }));
+                $this->assertCount(1, $menu, "The post has its menu on $page.");
                 $this->assertMatchesRegularExpression($link, $menu[0], "The author's menu offers portfolios on $page.");
                 $this->assertStringContainsString('data-portfolio-pick', $menu[0]);
                 foreach ([null, static::$bob, static::$admin] as $other) {

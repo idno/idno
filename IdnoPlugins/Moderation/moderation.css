@@ -1,0 +1,207 @@
+/*
+ * Styles of the Moderation plugin, for every look: the report form and its dialog, and the
+ * moderation queue. The custom properties are the Twenty26 tokens, with fallbacks.
+ */
+
+.mod-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.mod-muted { color: var(--color-text-secondary, #6b7280); font-weight: 400; }
+
+/* Buttons */
+.mod-btn,
+a.mod-btn:link,
+a.mod-btn:visited {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    min-height: 2.5rem; padding: 0.5rem 1rem;
+    border: 1px solid var(--color-border, #e5e7eb); border-radius: 9999px;
+    background: var(--color-surface, #fff); color: var(--color-text-strong, #111);
+    font: inherit; font-size: 0.875rem; font-weight: 500; line-height: 1.2; text-decoration: none;
+    cursor: pointer;
+}
+.mod-btn:hover { background: var(--color-bg, #f3f4f6); }
+.mod-btn:focus-visible, .mod-tab:focus-visible, .mod-item:focus-visible, .mod-reason:focus-within { outline: 2px solid var(--color-link, #2563eb); outline-offset: 2px; }
+.mod-btn-sm { min-height: 2rem; padding: 0.25rem 0.75rem; font-size: 0.8125rem; }
+.mod-btn-primary, a.mod-btn-primary:link { background: #111; border-color: #111; color: #fff; }
+.mod-btn-primary:hover { background: #333; }
+.mod-btn-danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+.mod-btn-danger:hover { background: #991b1b; }
+.mod-btn-danger-quiet { color: #b91c1c; }
+.mod-btn-ghost, a.mod-btn-ghost:link, a.mod-btn-ghost:visited { border-color: transparent; background: none; color: var(--color-text-secondary, #6b7280); }
+.mod-btn[disabled] { opacity: 0.5; cursor: default; }
+
+.mod-textarea, .mod-input {
+    display: block; width: 100%; padding: 0.625rem 0.75rem;
+    border: 1px solid var(--color-border, #e5e7eb); border-radius: 0.75rem;
+    background: var(--color-surface, #fff); color: var(--color-text, #374151);
+    font: inherit; font-size: 0.9375rem;
+}
+.mod-textarea { resize: vertical; min-height: 4.5rem; }
+.mod-label { display: block; margin: 1rem 0 0.375rem; font-size: 0.875rem; font-weight: 600; color: var(--color-text-strong, #111); }
+.mod-check { display: flex; gap: 0.625rem; align-items: flex-start; margin: 0.875rem 0; font-size: 0.875rem; font-weight: 400; }
+.mod-check input { margin-top: 0.2rem; flex: none; }
+.mod-check small { display: block; color: var(--color-text-secondary, #6b7280); }
+.mod-alert { margin: 0 0 1rem; padding: 0.625rem 0.875rem; border: 1px solid #fecaca; border-radius: 0.75rem; background: #fef2f2; color: #991b1b; font-size: 0.875rem; }
+
+/* Pills */
+.mod-pill { display: inline-flex; align-items: center; padding: 0.125rem 0.5625rem; border-radius: 9999px; background: #eef0f3; color: #374151; font-size: 0.75rem; font-weight: 600; line-height: 1.5; white-space: nowrap; }
+.mod-pill-urgent { background: #fef2f2; color: #b91c1c; }
+.mod-pill-quiet { background: none; border: 1px solid var(--color-border, #e5e7eb); color: var(--color-text-secondary, #6b7280); font-weight: 500; }
+.mod-pill-outcome { background: #ecfdf5; color: #047857; }
+.mod-badge { display: inline-block; min-width: 1.25rem; margin-left: auto; padding: 0 0.4375rem; border-radius: 9999px; background: #dc2626; color: #fff; font-size: 0.6875rem; font-weight: 700; line-height: 1.25rem; text-align: center; }
+li > a > .mod-badge { margin-left: 0.375rem; }
+
+/* ------------------------------------------------------------------ The report form */
+.mod-report-page { max-width: 34rem; margin: 0 auto; padding: 1.5rem; background: var(--color-surface, #fff); border: 1px solid var(--color-border, #e5e7eb); border-radius: 1rem; }
+.mod-report-title { margin: 0 0 1rem; font-size: 1.25rem; font-weight: 700; color: var(--color-text-strong, #111); }
+.mod-reasons { margin: 0; padding: 0; border: 0; min-width: 0; }
+.mod-reasons legend, .mod-step-heading { display: block; width: 100%; margin: 0 0 0.5rem; padding: 0; border: 0; font-size: 1rem; font-weight: 600; color: var(--color-text-strong, #111); }
+.mod-step-label { display: block; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary, #6b7280); }
+.mod-reason { display: flex; align-items: center; gap: 0.75rem; margin: 0; padding: 0.5625rem 0.625rem; border-radius: 0.625rem; cursor: pointer; font-weight: 400; }
+.mod-reason:hover, .mod-reason:has(input:checked) { background: var(--color-bg, #f3f4f6); }
+.mod-reason input { flex: none; margin: 0; accent-color: #111; }
+.mod-reason-text strong { display: block; font-size: 0.9375rem; font-weight: 500; color: var(--color-text-strong, #111); }
+.mod-reason-text small { display: block; font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); }
+.mod-report-step + .mod-report-step { margin-top: 1.5rem; }
+.mod-quote { margin: 0; padding: 0.5rem 0.75rem; border: 0; border-left: 3px solid var(--color-border, #e5e7eb); border-radius: 0 0.5rem 0.5rem 0; background: #fafafa; font-size: 0.875rem; color: var(--color-text, #374151); overflow-wrap: anywhere; }
+.mod-quote strong { display: block; color: var(--color-text-strong, #111); }
+.mod-counter { margin: 0.25rem 0 0; text-align: right; font-size: 0.75rem; color: var(--color-text-secondary, #6b7280); }
+.mod-privacy { margin: 0.75rem 0 0; font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); }
+.mod-privacy strong { color: var(--color-text-strong, #111); }
+.mod-report-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-top: 1.25rem; }
+
+/* The dialog (moderation.js): the same form, one step at a time */
+.mod-dialog { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 0; border-radius: 1rem; background: var(--color-surface, #fff); color: var(--color-text, #374151); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); overflow: hidden; }
+.mod-dialog::backdrop { background: rgba(17, 17, 17, 0.45); }
+.mod-dialog[open] { display: flex; flex-direction: column; }
+.mod-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.875rem 1rem 0.875rem 1.25rem; border-bottom: 1px solid var(--color-border-subtle, #f0f0f0); }
+.mod-dialog-head h2 { margin: 0; font-size: 1rem; font-weight: 700; color: var(--color-text-strong, #111); }
+.mod-dialog-close { width: 2rem; height: 2rem; border: 0; border-radius: 0.5rem; background: none; color: var(--color-text-secondary, #6b7280); font-size: 1.25rem; line-height: 1; cursor: pointer; }
+.mod-dialog-close:hover { background: var(--color-bg, #f3f4f6); }
+.mod-dialog-body { padding: 1rem 1.25rem 1.25rem; overflow-y: auto; }
+.mod-dialog .mod-report-page { max-width: none; margin: 0; padding: 0; border: 0; }
+.mod-dialog .mod-report-title { display: none; }
+.mod-dialog .mod-report-step + .mod-report-step { margin-top: 0; }
+.mod-dialog [data-mod-step][hidden], .mod-dialog .mod-report-actions[hidden] { display: none; }
+.mod-dialog .mod-reason { justify-content: space-between; }
+.mod-dialog .mod-reason input { position: absolute; opacity: 0; pointer-events: none; }
+.mod-dialog .mod-reason::after { content: "›"; color: var(--color-text-muted, #9ca3af); font-size: 1.25rem; line-height: 1; }
+.mod-done { padding: 1rem 0 0.25rem; text-align: center; }
+.mod-done-mark { display: inline-flex; align-items: center; justify-content: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: #ecfdf5; color: #047857; font-size: 1.5rem; }
+.mod-done h3 { margin: 0.75rem 0 0.375rem; font-size: 1.0625rem; font-weight: 700; color: var(--color-text-strong, #111); }
+.mod-done p { margin: 0 0 0.75rem; font-size: 0.9375rem; }
+.mod-done .mod-muted { font-size: 0.8125rem; }
+.mod-confirm p { margin: 0 0 1rem; font-size: 0.9375rem; }
+.mod-confirm-buttons { display: flex; justify-content: flex-end; gap: 0.5rem; }
+@media (max-width: 640px) {
+    .mod-dialog { width: 100vw; max-width: 100vw; margin: auto 0 0; border-radius: 1.125rem 1.125rem 0 0; max-height: 88vh; }
+    .mod-dialog-head::before { content: ""; position: absolute; top: 0.375rem; left: 50%; width: 2.25rem; height: 0.25rem; margin-left: -1.125rem; border-radius: 0.125rem; background: #d1d5db; }
+    .mod-dialog-head { position: relative; padding-top: 1.125rem; }
+}
+
+/* ------------------------------------------------------------------ The queue */
+.idno-admin-content:has(.mod-header) { max-width: 76rem; min-width: 0; }
+.idno-admin-main:has(.mod-header) { min-width: 0; }
+.mod-list, .mod-detail, .mod-wide, .mod-items li { min-width: 0; }
+.mod-item > * { min-width: 0; max-width: 100%; }
+.mod-header { margin-bottom: 1rem; }
+.mod-title { margin-bottom: 0.5rem; }
+.mod-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--color-border, #e5e7eb); overflow-x: auto; }
+.mod-tab, a.mod-tab:link, a.mod-tab:visited { flex: none; padding: 0.5rem 0.75rem; margin-bottom: -1px; border-bottom: 2px solid transparent; color: var(--color-text-secondary, #6b7280); font-size: 0.875rem; text-decoration: none; white-space: nowrap; }
+.mod-tab:hover { color: var(--color-text-strong, #111); }
+a.mod-tab-active:link, a.mod-tab-active:visited, .mod-tab-active { border-color: #111; color: var(--color-text-strong, #111); font-weight: 600; }
+.mod-count { display: inline-block; padding: 0 0.4375rem; border-radius: 9999px; background: var(--color-border, #e5e7eb); color: var(--color-text, #374151); font-size: 0.75rem; font-weight: 600; }
+
+.mod-card { padding: 1rem; border: 1px solid var(--color-border, #e5e7eb); border-radius: 0.75rem; background: var(--color-surface, #fff); }
+.mod-card + .mod-card, .mod-wide > * + * { margin-top: 1rem; }
+.mod-card-title { margin: 0 0 0.5rem; font-size: 0.9375rem; font-weight: 700; color: var(--color-text-strong, #111); }
+.mod-section { margin: 1.25rem 0 0.5rem; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-secondary, #6b7280); }
+.mod-section .mod-muted { text-transform: none; letter-spacing: 0; }
+.mod-empty { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; padding: 3rem 1.5rem; border: 1px dashed var(--color-border, #e5e7eb); border-radius: 0.75rem; text-align: center; color: var(--color-text-secondary, #6b7280); font-size: 0.875rem; }
+.mod-empty strong { color: var(--color-text-strong, #111); font-size: 1rem; }
+
+.mod-queue { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
+.mod-wide { grid-column: 1 / -1; max-width: 60rem; }
+.mod-items { margin: 0; padding: 0; list-style: none; border: 1px solid var(--color-border, #e5e7eb); border-radius: 0.75rem; background: var(--color-surface, #fff); overflow: hidden; }
+.mod-items li + li { border-top: 1px solid var(--color-border-subtle, #f0f0f0); }
+.mod-item, a.mod-item:link, a.mod-item:visited { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem 0.875rem; color: var(--color-text, #374151); text-decoration: none; }
+.mod-item:hover { background: #fafafa; }
+.mod-item-current, a.mod-item-current:link { background: var(--color-bg, #f3f4f6); box-shadow: inset 3px 0 0 #111; }
+.mod-item-top { display: flex; justify-content: space-between; gap: 0.5rem; }
+.mod-item-title { font-size: 0.875rem; font-weight: 600; color: var(--color-text-strong, #111); overflow-wrap: anywhere; }
+.mod-item-age { flex: none; font-size: 0.75rem; color: var(--color-text-secondary, #6b7280); }
+.mod-item-excerpt { font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-item-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.mod-back, a.mod-back:link, a.mod-back:visited { display: none; margin-bottom: 0.75rem; font-size: 0.875rem; color: var(--color-text-secondary, #6b7280); text-decoration: none; }
+.mod-pager { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 0.75rem; font-size: 0.8125rem; }
+
+@media (min-width: 1100px) {
+    .mod-queue { grid-template-columns: 21rem minmax(0, 1fr); }
+    .mod-list { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+}
+@media (max-width: 1099px) {
+    /* One thing at a time: the list, or the case with a way back */
+    .mod-queue-has-case .mod-list { display: none; }
+    .mod-queue-has-case a.mod-back:link, .mod-queue-has-case a.mod-back:visited { display: inline-block; }
+    .mod-empty-detail { display: none; }
+}
+
+.mod-case-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.mod-case-title { margin: 0 0 0.375rem; font-size: 1.25rem; font-weight: 700; color: var(--color-text-strong, #111); overflow-wrap: anywhere; }
+.mod-case-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; margin: 0; font-size: 0.8125rem; }
+.mod-status { flex: none; padding: 0.1875rem 0.625rem; border-radius: 9999px; background: #ecfdf5; color: #047857; font-size: 0.75rem; font-weight: 600; }
+.mod-status-open { background: #fffbeb; color: #b45309; }
+.mod-resolution { margin: 0.75rem 0 0; font-size: 0.875rem; }
+.mod-snapshot-author { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; margin: 0 0 0.375rem; font-size: 0.875rem; }
+.mod-snapshot-title { margin: 0 0 0.25rem; font-weight: 600; color: var(--color-text-strong, #111); }
+.mod-snapshot-text { font-size: 0.9375rem; overflow-wrap: anywhere; max-height: 18rem; overflow-y: auto; }
+.mod-snapshot-foot { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.75rem 0 0; padding-top: 0.625rem; border-top: 1px solid var(--color-border-subtle, #f0f0f0); font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); }
+.mod-columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 1rem; }
+@media (min-width: 760px) { .mod-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.mod-reports { margin: 0; padding: 0; list-style: none; }
+.mod-report-entry + .mod-report-entry { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--color-border-subtle, #f0f0f0); }
+.mod-report-who { margin: 0 0 0.25rem; font-size: 0.875rem; }
+.mod-report-who .mod-muted { display: block; font-size: 0.75rem; }
+.mod-report-said { font-size: 0.8125rem; }
+.mod-report-said blockquote { margin: 0.375rem 0 0; padding: 0.375rem 0.625rem; border: 0; border-left: 3px solid var(--color-border, #e5e7eb); background: #fafafa; font-size: 0.875rem; color: var(--color-text, #374151); overflow-wrap: anywhere; }
+.mod-report-said p { margin: 0.25rem 0 0; }
+.mod-about p { margin: 0 0 0.375rem; font-size: 0.875rem; }
+.mod-note { margin-bottom: 0.75rem; font-size: 0.875rem; }
+.mod-note p { margin: 0; overflow-wrap: anywhere; }
+.mod-note .mod-muted { font-size: 0.75rem; }
+.mod-note-form .mod-btn { margin-top: 0.5rem; }
+
+.mod-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border, #e5e7eb); }
+.mod-actions form { margin: 0; }
+.mod-actions-hint { flex-basis: 100%; margin: 0.25rem 0 0; font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); }
+.mod-ban > summary { list-style: none; }
+.mod-ban > summary::-webkit-details-marker { display: none; }
+.mod-ban[open] { flex-basis: 100%; order: 5; }
+.mod-ban-form { max-width: 34rem; margin-top: 0.75rem; border-color: #fecaca; }
+.mod-ban-form h3 { margin: 0 0 0.5rem; font-size: 1rem; font-weight: 700; color: var(--color-text-strong, #111); }
+.mod-ban-form p { margin: 0 0 0.5rem; font-size: 0.875rem; }
+.mod-ban-buttons { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
+@media (max-width: 640px) {
+    /* Full-width buttons, easy to hit with a thumb. (Not pinned to the bottom: the admin
+       navigation of Twenty26 sits there on a phone.) */
+    .mod-actions > form, .mod-actions > form > .mod-btn, .mod-ban, .mod-ban > summary { width: 100%; }
+}
+
+.mod-log { margin: 0; padding: 0; list-style: none; font-size: 0.8125rem; color: var(--color-text, #374151); }
+.mod-log li { display: flex; gap: 0.75rem; padding: 0.25rem 0; }
+.mod-log time { flex: none; width: 8.5rem; color: var(--color-text-secondary, #6b7280); }
+
+.mod-table-card { padding: 0; overflow-x: auto; }
+.mod-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.mod-table th, .mod-table td { padding: 0.625rem 0.875rem; border-bottom: 1px solid var(--color-border-subtle, #f0f0f0); text-align: left; vertical-align: top; }
+.mod-table tr:last-child td { border-bottom: 0; }
+.mod-table th { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary, #6b7280); }
+.mod-table small { display: block; color: var(--color-text-secondary, #6b7280); }
+.mod-table-actions { text-align: right; white-space: nowrap; }
+.mod-member, a.mod-member:link, a.mod-member:visited { display: flex; align-items: center; gap: 0.625rem; color: var(--color-text-strong, #111); text-decoration: none; }
+.mod-avatar { width: 2rem; height: 2rem; border-radius: 50%; object-fit: cover; background: var(--color-border, #e5e7eb); flex: none; }
+.mod-avatar-lg { width: 4rem; height: 4rem; }
+.mod-member-head { display: flex; gap: 1rem; align-items: center; }
+.mod-member-head p { margin: 0.125rem 0; font-size: 0.875rem; }
+.mod-settings .mod-btn { margin-top: 0.5rem; }
+.mod-settings .mod-label:first-child { margin-top: 0; }
+.mod-settings .mod-muted { margin: 0 0 0.5rem; font-size: 0.8125rem; }
+.mod-legal p { margin: 0; font-size: 0.875rem; }

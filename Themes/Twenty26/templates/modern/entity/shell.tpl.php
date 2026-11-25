@@ -16,6 +16,8 @@ if ($object) {
             </div>
             <?php } ?>
 
+            <?= $this->draw('entity/moderated') ?>
+
             <div class="idno-entry-header p-author h-card">
                 <a href="<?= $owner->getDisplayURL() ?>" class="u-url">
                     <img class="idno-entry-avatar u-photo" src="<?= $owner->getIcon() ?>"

@@ -24,6 +24,9 @@ $user = $vars['user'];
             <?php /* Buttons that plugins add to a profile, drawn with the member in $vars['user'] */ ?>
             <?= $this->__(['user' => $user])->draw('entity/User/profile/actions') ?>
         </div>
+        <div class="idno-profile-menu">
+            <?= $this->__(['user' => $user])->draw('entity/User/menu') ?>
+        </div>
     </div>
     <?php
     $description = $user->getDescription();

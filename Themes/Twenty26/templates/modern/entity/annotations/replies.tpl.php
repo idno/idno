@@ -11,7 +11,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         $owner_url = \Idno\Core\UrlValidator::httpUrl($annotation['owner_url']);
         $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         // Anchor ID for this annotation, derived from the local link hash
-        $anchorId = 'annotation-' . basename(parse_url($locallink, PHP_URL_PATH));
+        $anchorId = \Idno\Common\Entity::annotationAnchor($locallink);
         // For direct comments (permalink is a local annotation URL), link to the anchor;
         // for webmentions, link to the source post
         $isLocalAnnotation = preg_match('#/annotations/[a-f0-9]+$#', $permalink);
@@ -53,9 +53,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         </div>
         <?php
             $this->annotation_permalink = $locallink;
-            if ($vars['object']->canEditAnnotation($annotation)) {
-                echo $this->draw('content/annotation/edit');
-            }
+            echo '<span class="idno-annotation-menu">' . $this->__(['annotation' => $annotation, 'annotation_permalink' => $locallink])->draw('entity/annotations/menu') . '</span>';
         ?>
     </div>
 <?php

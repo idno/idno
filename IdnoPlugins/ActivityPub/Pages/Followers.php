@@ -23,6 +23,12 @@ class Followers extends \Idno\Common\Page
             return;
         }
 
+        // A banned member has no actor: other servers are told it is gone
+        if ($user->isBanned()) {
+            $this->goneContent();
+            return;
+        }
+
         $actorId = $user->getActivityPubActorID();
         $followersUrl = $actorId . '/followers';
 

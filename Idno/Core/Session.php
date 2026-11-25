@@ -572,7 +572,7 @@ namespace Idno\Core {
 
         function logUserOn(\Idno\Entities\User $user)
         {
-            if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+            if ($user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                 $this->logUserOff();
 
                 return false;
@@ -607,7 +607,7 @@ namespace Idno\Core {
         {
             if ($user = User::getByUUID($user->getUUID(), false)) {
 
-                if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+                if ($user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                     $this->logUserOff();
 
                     return false;
@@ -629,7 +629,7 @@ namespace Idno\Core {
         {
             if (!$this->currentUser() && !empty($_SESSION['user_uuid'])) {
                 if ($this->user = User::getByUUID($_SESSION['user_uuid'])) {
-                    if (\Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
+                    if ($this->user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
                         $this->logUserOff();
                     }
                 }

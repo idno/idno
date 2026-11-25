@@ -83,11 +83,11 @@ namespace Tests\Pages {
             foreach ([$url, static::$author->getDisplayURL()] as $page) {
                 $result = $this->get($page, $as);
                 $this->assertEquals(200, $result['status']);
-                $this->assertSame(1, substr_count($result['body'], 'data-idno-more-menu'), "The post should have one \"More\" menu on $page.");
-                $this->assertMatchesRegularExpression(
-                    '#<a[^>]+data-idno-copy-link[^>]+' . trim($this->attribute('href', $url), '#') . '#',
-                    $result['body'],
-                    "The post's menu on $page should copy its permalink."
+                // A profile has a menu of its own; the post's is the one that copies the post's address
+                $this->assertSame(
+                    1,
+                    preg_match_all('#<a[^>]+data-idno-copy-link[^>]+' . trim($this->attribute('href', $url), '#') . '#', $result['body']),
+                    "The post should have one \"More\" menu on $page, which copies its permalink."
                 );
             }
         }
