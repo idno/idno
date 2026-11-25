@@ -127,7 +127,7 @@ Tests/                         Core unit tests
 | **Text** | Long-form articles | `Article` | `/entry/edit` |
 | **Photo** | Photos with captions | `Note` + attachment | `/photo/edit` |
 | **Media** | Audio/video uploads | `Note` + attachment | `/media/edit` |
-| **Video** | A video on a video sharing service or a PeerTube or Loops site, by its address | `Note` + link | `/video/edit`, `/admin/video` |
+| **Video** | A video on a video sharing service, in a Bluesky post, or on a PeerTube or Loops site, by its address | `Note` + link | `/video/edit`, `/admin/video` |
 | **Event** | Calendar events & RSVPs | `Event` | `/event/edit`, `/rsvp/edit` |
 | **Checkin** | Location check-ins | `Note` + location | `/checkin/edit` |
 | **Like** | Bookmarks / likes | `Note` | `/like/edit` |
@@ -527,6 +527,18 @@ Each content plugin has an `Entry.php` entity class that defines
   in `OPEN_PROVIDERS` with a check in `OpenVideo`; don't fetch anything else (oEmbed, a
   thumbnail) from an address a member gave except through `Webservice::safeSend()`.
   `IdnoPlugins/Video/Tests/OpenVideo*Test.php` check this.
+- Videos in Bluesky posts (AT Protocol): the address (`bsky.app/profile/<handle or DID>/post/<key>`)
+  is read by `VideoUrl::candidate()`, and `OpenVideo::resolve()` asks Bluesky's public API
+  (`OpenVideo::BLUESKY_API`, a fixed host, still through `Webservice::safeSend()`) for the
+  identity behind a handle and for the post, which must have a video. What is stored is the
+  identity (`video_did`), the video's content id (`video_cid`) and its shape, each held to a
+  strict pattern (`VideoUrl::DID_PATTERN`, `CID_PATTERN`) when stored and again when drawn.
+  There is no frame: the post is drawn with a `<video>` whose `src` and `poster`
+  `VideoUrl::getStreamUrl()` and `getPosterUrl()` build on `VideoUrl::STREAM_HOST` from
+  those values, with `preload="none"`. The addresses Bluesky returns are never used. The
+  small script beside the player holds no value from the post: it reads the element's own
+  attributes. A Skylight video is a Bluesky post and is posted by its bsky.app address.
+  `IdnoPlugins/Video/Tests/BlueskyVideoTest.php` checks this.
 - A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
   for example; `/content/<category>/` for the whole site). The profile itself lists
   everything the member has published, as `/profile/<handle>/all` does.

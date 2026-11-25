@@ -4,7 +4,8 @@ namespace IdnoPlugins\Video {
 
     /**
      * Asks a host whether it runs an open video service (PeerTube, Loops) and has the video
-     * that an address names. VideoUrl::candidate() reads the address; this confirms it.
+     * that an address names. VideoUrl::candidate() reads the address; this confirms it. It
+     * also asks Bluesky's public API for the video in a Bluesky post.
      *
      * The requests go to the host in the address the member gave, so they are made with
      * Webservice::safeSend(), which refuses addresses on this machine and on private
@@ -18,6 +19,9 @@ namespace IdnoPlugins\Video {
      */
     class OpenVideo
     {
+
+        /// Bluesky's public API, which describes public posts to anybody
+        const BLUESKY_API = 'https://public.api.bsky.app/xrpc/';
 
         /// The most that is read of an answer
         const MAX_ANSWER = 524288;
@@ -50,6 +54,9 @@ namespace IdnoPlugins\Video {
             $id = $candidate['id'] ?? null;
             $start = $candidate['start'] ?? 0;
 
+            if ($provider === 'bluesky') {
+                return self::resolveBluesky($candidate['actor'] ?? null, $id);
+            }
             if (!is_string($provider) || !in_array($provider, VideoUrl::OPEN_PROVIDERS, true)) {
                 return null;
             }
@@ -104,6 +111,58 @@ namespace IdnoPlugins\Video {
             }
 
             return ['video' => $video, 'title' => self::plainTitle($described['name'] ?? '')];
+        }
+
+        /**
+         * A Bluesky post is described by Bluesky's public API (BLUESKY_API, a fixed host):
+         * a handle is resolved to its identity, and the post must have a video.
+         *
+         * @param mixed $actor A handle or a DID
+         * @param mixed $rkey  The record key of the post
+         */
+        private static function resolveBluesky($actor, $rkey): ?array
+        {
+            if (!is_string($actor) || !is_string($rkey) || !preg_match(VideoUrl::ID_PATTERNS['bluesky'], $rkey)) {
+                return null;
+            }
+
+            $did = $actor;
+            if (!preg_match(VideoUrl::DID_PATTERN, $actor)) {
+                if (!preg_match(VideoUrl::HOST_PATTERN, $actor)) {
+                    return null;
+                }
+                $resolved = self::json(self::BLUESKY_API . 'com.atproto.identity.resolveHandle?handle=' . rawurlencode($actor));
+                $did = $resolved['did'] ?? null;
+                if (!is_string($did) || !preg_match(VideoUrl::DID_PATTERN, $did)) {
+                    return null;
+                }
+            }
+
+            $uri = 'at://' . $did . '/app.bsky.feed.post/' . $rkey;
+            $answer = self::json(self::BLUESKY_API . 'app.bsky.feed.getPosts?uris=' . rawurlencode($uri));
+            $posts = $answer['posts'] ?? null;
+            if (!is_array($posts) || !isset($posts[0]) || !is_array($posts[0]) || ($posts[0]['uri'] ?? null) !== $uri) {
+                return null;
+            }
+
+            // The video is the post's embed, or the media beside a quoted post
+            $embed = $posts[0]['embed'] ?? null;
+            if (is_array($embed) && ($embed['$type'] ?? null) === 'app.bsky.embed.recordWithMedia#view') {
+                $embed = $embed['media'] ?? null;
+            }
+            if (!is_array($embed) || ($embed['$type'] ?? null) !== 'app.bsky.embed.video#view') {
+                return null;
+            }
+
+            $ratio = null;
+            $shape = $embed['aspectRatio'] ?? null;
+            if (is_array($shape) && is_int($shape['width'] ?? null) && is_int($shape['height'] ?? null) && $shape['width'] > 0 && $shape['height'] > 0) {
+                $ratio = $shape['width'] / $shape['height'];
+            }
+
+            $video = VideoUrl::fromStored('bluesky', $rkey, 0, '', false, '', ['did' => $did, 'cid' => $embed['cid'] ?? null, 'ratio' => $ratio]);
+
+            return $video ? ['video' => $video, 'title' => ''] : null;
         }
 
         /**

@@ -109,3 +109,7 @@ msgstr ""
 #: ./templates/default/video/admin.tpl.php
 msgid "Save"
 msgstr ""
+
+#: ./Video.php
+msgid "We couldn't find a video in that Bluesky post. Check the address, or try again in a moment."
+msgstr ""
