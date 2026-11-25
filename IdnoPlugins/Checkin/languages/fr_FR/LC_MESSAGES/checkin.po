@@ -3,7 +3,7 @@ msgid "You don't have permission to perform this task."
 msgstr "Vous n’avez pas la permission d’effectuer cette tâche."
 
 #: ./Pages/Delete.php:23
-msgid "Your checkin was deleted."
+msgid "Your check-in was deleted."
 msgstr "Votre checkin a été supprimé."
 
 #: ./Pages/Delete.php:25
@@ -15,19 +15,19 @@ msgid "Where are you?"
 msgstr "Où es-tu?"
 
 #: ./Pages/Edit.php:34
-msgid "Edit checkin"
+msgid "Edit check-in"
 msgstr "Modifier le checkin"
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:10
-msgid "New Location"
+msgid "New location"
 msgstr "Nouvel emplacement"
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:12
-msgid "Edit Location"
+msgid "Edit location"
 msgstr "Modifier l’emplacement"
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:18
-msgid "Hang tight ... searching for your location."
+msgid "Hang tight… searching for your location."
 msgstr "Un moment s’il vous plaît ... recherche de votre emplacement."
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:34

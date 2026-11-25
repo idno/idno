@@ -502,6 +502,43 @@ namespace Idno\Common {
         }
 
         /**
+         * Move the browser on after a post was deleted. Back to the page the request came from,
+         * unless that page was the post itself (its permalink, its edit page or its delete page),
+         * which no longer exists. Then: the list of the member's drafts, if the post was a draft
+         * and the site has such a page (a theme says so by answering the "drafts/url" event), and
+         * otherwise the home page.
+         *
+         * @param \Idno\Common\Entity $object The post that was deleted
+         */
+        function forwardAfterDelete(\Idno\Common\Entity $object)
+        {
+            $referrer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+
+            if ($referrer !== '') {
+                $path = rtrim((string) parse_url($referrer, PHP_URL_PATH), '/');
+                $gone = false;
+                foreach ([$object->getURL(), $object->getEditURL(), $object->getDeleteURL()] as $address) {
+                    $own = rtrim((string) parse_url((string) $address, PHP_URL_PATH), '/');
+                    if ($own !== '' && ($path === $own || strpos($path, $own . '/') === 0)) {
+                        $gone = true;
+                    }
+                }
+                if (!$gone) {
+                    $this->forward($referrer);
+                }
+            }
+
+            if ($object->getPublishStatus() === 'draft') {
+                $drafts = \Idno\Core\Idno::site()->events()->triggerEvent('drafts/url', ['object' => $object], '');
+                if (is_string($drafts) && $drafts !== '') {
+                    $this->forward($drafts);
+                }
+            }
+
+            $this->forward();
+        }
+
+        /**
          * If this page is allowed to forward, send a header to move
          * the browser on. Otherwise, do nothing
          *
@@ -1000,6 +1037,37 @@ namespace Idno\Common {
         function isPermalink()
         {
             return $this->isPermalinkPage;
+        }
+
+        /**
+         * Is this page the permalink of this very entity?
+         *
+         * A page can be a permalink of something that is not the entity being drawn: the profile
+         * is the permalink of a member, and draws that member's posts as a list. A template that
+         * draws one entity (its comment block, the markup only its own page has) must ask this,
+         * not isPermalink(). A permalink page with no entity associated (an annotation's page,
+         * for example) counts as the permalink of whatever is drawn on it.
+         *
+         * @param  Entity|null $entity The entity being drawn
+         * @return bool
+         */
+        function isPermalinkFor($entity)
+        {
+            if (!$this->isPermalinkPage) {
+                return false;
+            }
+            if (empty($this->entity)) {
+                return true;
+            }
+            if (!($entity instanceof Entity)) {
+                return false;
+            }
+            if ($this->entity === $entity) {
+                return true;
+            }
+            $uuid = $entity->getUUID();
+
+            return !empty($uuid) && $uuid === $this->entity->getUUID();
         }
 
         /**

@@ -8,9 +8,9 @@
                 <?php
 
                 if (empty($vars['object']->_id)) {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Bookmark'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New bookmark'); ?><?php
                 } else {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Bookmark'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit bookmark'); ?><?php
                 }
 
                 ?>
@@ -18,7 +18,7 @@
 
             <div class="content-form">
                 <label for="body">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Link Address'); ?></label>
+                    <?php echo \Idno\Core\Idno::site()->language()->_('Link address'); ?></label>
                 <?php
                 $value = "";
                 if (empty($vars['url'])) {

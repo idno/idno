@@ -60,7 +60,7 @@
                     <?php echo $this->__([
                         'name' => 'body',
                         'id' => 'body',
-                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Say something here...'),
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Add a comment (optional)'),
                         'height' => 126,
                         'value' => $vars['object']->body,
                     'class' => 'form-control event'])->draw('forms/input/longtext'); ?>

@@ -27,13 +27,13 @@ if ($title == 'Untitled') {
                 if (empty($vars['object']->_id)) {
 
                     ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('New Page'); ?></h4>
+                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('New page'); ?></h4>
                     <?php
 
                 } else {
 
                     ?>
-                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('Edit Page'); ?></h4>
+                        <h4><?php echo \Idno\Core\Idno::site()->language()->_('Edit page'); ?></h4>
                     <?php
 
                 }
@@ -54,7 +54,7 @@ if ($title == 'Untitled') {
                     'wordcount' => false,
                     'class' => 'wysiwyg',
                     'height' => 500,
-                    'placeholder' => \Idno\Core\Idno::site()->language()->_('Share something brilliant...'),
+                    'placeholder' => \Idno\Core\Idno::site()->language()->_('Write your page content'),
                     'label' => \Idno\Core\Idno::site()->language()->_('Body')
                 ])->draw('forms/input/richtext')?>
 
@@ -67,7 +67,7 @@ if ($title == 'Untitled') {
                         <option <?php
                         if ($vars['category'] == 'No Category') {
                             echo 'selected';
-                        } ?>><?php echo \Idno\Core\Idno::site()->language()->_('No Category'); ?>
+                        } ?>><?php echo \Idno\Core\Idno::site()->language()->_('No category'); ?>
                         </option>
                         <?php
 
@@ -112,11 +112,11 @@ if ($title == 'Untitled') {
                     <div>
                         <p>
                             <label for="forward_url">
-                                <?php echo \Idno\Core\Idno::site()->language()->_('Forward URL'); ?></label>
+                                <?php echo \Idno\Core\Idno::site()->language()->_('Redirect address'); ?></label>
                             <input type="text" name="forward_url" id="forward_url"
-                                   placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Website to forward users to'); ?>"
+                                   placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Address to send visitors to'); ?>"
                                    value="<?php echo htmlspecialchars($forward_url) ?>" class="form-control"/>
-                            <small><?php echo \Idno\Core\Idno::site()->language()->_('Most of the time, you should leave this blank. Include a URL here if you want users to be forwarded to an external page instead of displaying page content.'); ?></small>
+                            <small><?php echo \Idno\Core\Idno::site()->language()->_('Usually you should leave this blank. Add an address here to send visitors to another page instead of showing this page\'s content.'); ?></small>
                         </p>
                     </div>
                     <p style="margin-bottom: 20px">

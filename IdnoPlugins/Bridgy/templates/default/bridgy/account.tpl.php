@@ -3,7 +3,7 @@
     <div class="col-md-10 col-md-offset-1">
 
         <?php echo $this->draw('account/menu') ?>
-        <h1><?php echo \Idno\Core\Idno::site()->language()->_('Social Interactions'); ?></h1>
+        <h1><?php echo \Idno\Core\Idno::site()->language()->_('Social interactions'); ?></h1>
         <h2><?php echo \Idno\Core\Idno::site()->language()->_('Connect with Bridgy'); ?></h2>
 
     </div>

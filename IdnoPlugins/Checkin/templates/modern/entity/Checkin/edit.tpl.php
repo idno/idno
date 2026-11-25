@@ -5,9 +5,9 @@
         <h4 class="idno-editor-heading">
             <?php
             if (empty($vars['object']->_id)) {
-                echo \Idno\Core\Idno::site()->language()->_('New Location');
+                echo \Idno\Core\Idno::site()->language()->_('New location');
             } else {
-                echo \Idno\Core\Idno::site()->language()->_('Edit Location');
+                echo \Idno\Core\Idno::site()->language()->_('Edit location');
                 if ($vars['object']->getPublishStatus() === 'draft') {
                     echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
                 }
@@ -17,7 +17,7 @@
 
         <div id="geoplaceholder">
             <p style="text-align: center; color: var(--color-text-muted);">
-                <?= \Idno\Core\Idno::site()->language()->_('Hang tight ... searching for your location.') ?>
+                <?= \Idno\Core\Idno::site()->language()->_('Hang tight… searching for your location.') ?>
             </p>
             <div class="geospinner">
                 <div class="rect1"></div>
@@ -89,7 +89,7 @@
             <label class="idno-label" for="anonymity" style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
                 <input name="anonymity" type="checkbox"
                        value="Yes" <?php if (!empty($vars['object']->anonymity) && $vars['object']->anonymity == 'Yes') echo 'checked'; ?>
-                       title="<?= \Idno\Core\Idno::site()->language()->_('When selected, your precise location will only be shown to logged out users after 24 hours have passed') ?>">
+                       title="<?= \Idno\Core\Idno::site()->language()->_('When this is on, visitors who aren\'t signed in will see your exact location only after 24 hours.') ?>">
                 <?= \Idno\Core\Idno::site()->language()->_('Protect my location for 24 hours') ?>
             </label>
         </div>
@@ -109,7 +109,7 @@
                 <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
             </button>
             <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
             </button>
             <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                 <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

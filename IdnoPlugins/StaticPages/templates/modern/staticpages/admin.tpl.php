@@ -20,7 +20,7 @@
     ?>
 
 <div class="idno-admin-card">
-    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('All Pages') ?></h2>
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('All pages') ?></h2>
     <table style="width:100%;border-collapse:collapse;">
         <thead>
             <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
@@ -110,7 +110,7 @@
         <thead>
             <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
                 <th style="width:30px;padding:0.5rem;"></th>
-                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Category Name') ?></th>
+                <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Category name') ?></th>
                 <th style="text-align:left;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Pages') ?></th>
                 <th style="text-align:right;padding:0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Actions') ?></th>
             </tr>

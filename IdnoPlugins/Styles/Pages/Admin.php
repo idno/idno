@@ -26,7 +26,7 @@ namespace IdnoPlugins\Styles\Pages {
             $t = \Idno\Core\Idno::site()->template();
             $t->__(array(
                         'body'  => $t->__(array('css' => $css))->draw('styles/admin'),
-                        'title' => \Idno\Core\Idno::site()->language()->_('Site Styles')
+                        'title' => \Idno\Core\Idno::site()->language()->_('Site styles')
             ))->drawPage();
         }
 

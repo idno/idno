@@ -20,11 +20,11 @@ namespace IdnoPlugins\Checkin\Pages {
             }
 
             if ($object->delete()) {
-                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your checkin was deleted.'));
+                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your check-in was deleted.'));
             } else {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("We couldn't delete %s.", [$object->getTitle()]));
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardAfterDelete($object);
         }
 
     }

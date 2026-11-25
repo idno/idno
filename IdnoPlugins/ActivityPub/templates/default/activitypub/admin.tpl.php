@@ -2,7 +2,7 @@
     <div class="col-md-10 col-md-offset-1">
         <?php echo $this->draw('admin/menu')?>
 
-        <h1><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub Federation'); ?></h1>
+        <h1><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub federation'); ?></h1>
 
         <?php if (empty($vars['queue_ok'])) { ?>
         <div class="alert alert-danger">
@@ -34,7 +34,7 @@
                 <tr>
                     <th><?php echo \Idno\Core\Idno::site()->language()->_('User'); ?></th>
                     <th><?php echo \Idno\Core\Idno::site()->language()->_('Handle'); ?></th>
-                    <th><?php echo \Idno\Core\Idno::site()->language()->_('AP Followers'); ?></th>
+                    <th><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub followers'); ?></th>
                     <th><?php echo \Idno\Core\Idno::site()->language()->_('Keys'); ?></th>
                 </tr>
             </thead>
@@ -60,7 +60,7 @@
             <code><?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>.well-known/webfinger</code>
         </p>
         <p>
-            <strong><?php echo \Idno\Core\Idno::site()->language()->_('Shared Inbox'); ?>:</strong>
+            <strong><?php echo \Idno\Core\Idno::site()->language()->_('Shared inbox'); ?>:</strong>
             <code><?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>inbox</code>
         </p>
         <p>

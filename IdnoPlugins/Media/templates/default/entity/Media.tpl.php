@@ -3,7 +3,7 @@
     $player_id = rand(0, 9999);
 
 $currentPage = \Idno\Core\Idno::site()->currentPage();
-if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
     $rel = 'rel="in-reply-to"';
 } else {
     $rel = '';
@@ -39,7 +39,7 @@ if (empty($vars['feed_view'])) {
                     }
                     ?>
                             
-                        <?php echo \Idno\Core\Idno::site()->language()->_('Sorry, your browser does not support the video tag.'); ?>
+                        <?php echo \Idno\Core\Idno::site()->language()->_('Your browser doesn\'t support embedded video.'); ?>
                     </video>
                 </p>
                 <?php

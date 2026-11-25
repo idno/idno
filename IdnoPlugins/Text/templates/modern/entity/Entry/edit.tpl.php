@@ -43,9 +43,9 @@ if (!empty($vars['url'])) {
 
                 <h4 class="idno-editor-heading">
                     <?php if (empty($vars['object']->_id)) { ?>
-                        <?= \Idno\Core\Idno::site()->language()->_('New Post') ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('New post') ?>
                     <?php } else { ?>
-                        <?= \Idno\Core\Idno::site()->language()->_('Edit Post') ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('Edit post') ?>
                         <?php if ($vars['object']->getPublishStatus() === 'draft') { ?>
                             <span class="idno-badge-draft"><?= \Idno\Core\Idno::site()->language()->_('Draft') ?></span>
                         <?php } ?>
@@ -59,7 +59,7 @@ if (!empty($vars['url'])) {
 
                 <div class="idno-form-field">
                     <label class="idno-label" for="subtitle"><?= \Idno\Core\Idno::site()->language()->_('Subtitle') ?></label>
-                    <?= $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Optional sub title for this post'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'idno-input idno-editor-subtitle'])->draw('forms/input/input') ?>
+                    <?= $this->__(['name' => 'subtitle', 'placeholder' => \Idno\Core\Idno::site()->language()->_('Add a short tagline (optional)'), 'id' => 'subtitle', 'value' => $subtitle, 'class' => 'idno-input idno-editor-subtitle'])->draw('forms/input/input') ?>
                 </div>
 
                 <?= $this->__([
@@ -100,7 +100,7 @@ if (!empty($vars['url'])) {
                     </button>
                     <div class="idno-reply-input" x-show="open" x-cloak>
                         <input type="url" name="inreplyto[]"
-                               placeholder="<?= \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to') ?>"
+                               placeholder="<?= \Idno\Core\Idno::site()->language()->_('Paste the link you\'re replying to') ?>"
                                class="idno-input"
                                value="<?= !empty($vars['object']->inreplyto) ? htmlspecialchars(is_array($vars['object']->inreplyto) ? $vars['object']->inreplyto[0] : $vars['object']->inreplyto) : '' ?>"/>
                     </div>
@@ -121,7 +121,7 @@ if (!empty($vars['url'])) {
                         <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
                     </button>
                     <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                        <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                        <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
                     </button>
                     <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                         <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

@@ -7,9 +7,9 @@
                                 <?php
 
                                 if (empty($vars['object']->_id)) {
-                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Event'); ?><?php
+                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New event'); ?><?php
                                 } else {
-                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Event'); ?><?php
+                                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit event'); ?><?php
                                 }
                                 ?>
             </h4></div>
@@ -46,7 +46,7 @@
                 <?php echo $this->__([
                             'name' => 'starttime',
                             'id' => 'starttime',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the start day and time?'),
+                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Enter the start day and time'),
                             'value' => $vars['object']->starttime,
                 'class' => 'form-control'])->draw('forms/input/datetime-local'); ?>
             </div>
@@ -56,7 +56,7 @@
                 <?php echo $this->__([
                             'name' => 'endtime',
                             'id' => 'endtime',
-                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the end day and time'),
+                            'placeholder' => \Idno\Core\Idno::site()->language()->_('Enter the end day and time'),
                             'value' => $vars['object']->endtime,
                 'class' => 'form-control'])->draw('forms/input/datetime-local'); ?>
                     

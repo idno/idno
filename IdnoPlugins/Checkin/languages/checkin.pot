@@ -3,7 +3,7 @@ msgid "You don't have permission to perform this task."
 msgstr ""
 
 #: ./Pages/Delete.php:23
-msgid "Your checkin was deleted."
+msgid "Your check-in was deleted."
 msgstr ""
 
 #: ./Pages/Delete.php:25
@@ -15,19 +15,19 @@ msgid "Where are you?"
 msgstr ""
 
 #: ./Pages/Edit.php:34
-msgid "Edit checkin"
+msgid "Edit check-in"
 msgstr ""
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:10
-msgid "New Location"
+msgid "New location"
 msgstr ""
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:12
-msgid "Edit Location"
+msgid "Edit location"
 msgstr ""
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:18
-msgid "Hang tight ... searching for your location."
+msgid "Hang tight… searching for your location."
 msgstr ""
 
 #: ./templates/default/entity/Checkin/edit.tpl.php:34

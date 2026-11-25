@@ -31,7 +31,7 @@ namespace IdnoPlugins\Checkin\Pages {
             if (empty($object)) {
                 $title = \Idno\Core\Idno::site()->language()->_('Where are you?');
             } else {
-                $title = \Idno\Core\Idno::site()->language()->_('Edit checkin');
+                $title = \Idno\Core\Idno::site()->language()->_('Edit check-in');
             }
 
             if (!empty($this->xhr)) {

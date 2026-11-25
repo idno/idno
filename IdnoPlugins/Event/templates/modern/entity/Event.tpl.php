@@ -48,7 +48,7 @@ $timeformat = 'l, jS F Y h:i A';
     ?>
     <?php if (!empty($vars['object']->timezone)) { ?>
     <p>
-        <?= \Idno\Core\Idno::site()->language()->_('Time Zone') ?>:
+        <?= \Idno\Core\Idno::site()->language()->_('Time zone') ?>:
         <?= $this->__(['value' => $vars['object']->timezone])->draw('forms/output/timezones') ?>
     </p>
     <?php } ?>

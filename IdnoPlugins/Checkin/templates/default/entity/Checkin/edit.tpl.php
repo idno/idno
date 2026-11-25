@@ -7,15 +7,15 @@
                 <?php
 
                 if (empty($vars['object']->_id)) {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New Location'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('New location'); ?><?php
                 } else {
-                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Location'); ?><?php
+                    ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit location'); ?><?php
                 }
                 ?>
             </h4>
             <div id="geoplaceholder">
                 <p style="text-align: center; color: #4c93cb;">
-                    <?php echo \Idno\Core\Idno::site()->language()->_('Hang tight ... searching for your location.'); ?>
+                    <?php echo \Idno\Core\Idno::site()->language()->_('Hang tight… searching for your location.'); ?>
                 </p>
 
                 <div class="geospinner">
@@ -82,7 +82,7 @@
                     <label for="anonymity">
                         <?php echo \Idno\Core\Idno::site()->language()->_('Protect my location for 24 hours'); ?> <br>
                     </label>
-                    <input name="anonymity" type="checkbox" data-toggle="toggle" data-onstyle="info" data-on="Yes" data-off="No"  data-toggle="tooltip" data-placement="top" title="<?= \Idno\Core\Idno::site()->language()->_('When selected, your precise location will only be shown to logged out users after 24 hours have passed'); ?>"
+                    <input name="anonymity" type="checkbox" data-toggle="toggle" data-onstyle="info" data-on="Yes" data-off="No"  data-toggle="tooltip" data-placement="top" title="<?= \Idno\Core\Idno::site()->language()->_('When this is on, visitors who aren\'t signed in will see your exact location only after 24 hours.'); ?>"
                        value="Yes" name="single_user" <?php if ($vars['object']->anonymity == 'Yes') echo 'checked'; ?>>
 
             </div>

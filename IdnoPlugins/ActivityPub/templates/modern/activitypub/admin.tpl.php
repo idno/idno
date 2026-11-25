@@ -1,4 +1,4 @@
-<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('ActivityPub Federation') ?></h1>
+<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('ActivityPub federation') ?></h1>
 <p class="idno-admin-description">
     <?= \Idno\Core\Idno::site()->language()->_('ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms. When users publish content, it is automatically delivered to their followers on the fediverse.') ?>
 </p>
@@ -18,11 +18,11 @@
     <div style="display:flex;gap:2rem;margin-top:0.5rem;">
         <div class="idno-admin-stat">
             <div class="idno-admin-stat-value"><?= $vars['total_users'] ?></div>
-            <div class="idno-admin-stat-label"><?= \Idno\Core\Idno::site()->language()->_('Total Users') ?></div>
+            <div class="idno-admin-stat-label"><?= \Idno\Core\Idno::site()->language()->_('Total users') ?></div>
         </div>
         <div class="idno-admin-stat">
             <div class="idno-admin-stat-value"><?= $vars['total_followers'] ?></div>
-            <div class="idno-admin-stat-label"><?= \Idno\Core\Idno::site()->language()->_('AP Followers') ?></div>
+            <div class="idno-admin-stat-label"><?= \Idno\Core\Idno::site()->language()->_('ActivityPub followers') ?></div>
         </div>
     </div>
 </div>
@@ -35,7 +35,7 @@
             <tr style="border-bottom:2px solid var(--color-border,#e5e7eb);">
                 <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('User') ?></th>
                 <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Handle') ?></th>
-                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('AP Followers') ?></th>
+                <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('ActivityPub followers') ?></th>
                 <th style="text-align:left;padding:0.5rem 0.5rem;font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Keys') ?></th>
             </tr>
         </thead>
@@ -68,7 +68,7 @@
             <dd><code><?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>.well-known/webfinger</code></dd>
         </div>
         <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">
-            <dt style="font-weight:600;min-width:8rem;"><?= \Idno\Core\Idno::site()->language()->_('Shared Inbox') ?>:</dt>
+            <dt style="font-weight:600;min-width:8rem;"><?= \Idno\Core\Idno::site()->language()->_('Shared inbox') ?>:</dt>
             <dd><code><?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>inbox</code></dd>
         </div>
         <div style="display:flex;gap:0.5rem;margin-bottom:0.4rem;">

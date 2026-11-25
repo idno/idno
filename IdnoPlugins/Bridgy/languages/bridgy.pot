@@ -3,7 +3,7 @@ msgid "Interactions"
 msgstr ""
 
 #: ./templates/default/bridgy/account.tpl.php:6
-msgid "Social Interactions"
+msgid "Social interactions"
 msgstr ""
 
 #: ./templates/default/bridgy/account.tpl.php:7

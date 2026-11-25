@@ -1,4 +1,4 @@
-<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('Social Interactions') ?></h1>
+<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('Social interactions') ?></h1>
 <p class="idno-admin-description">
     <a href="https://www.brid.gy"><?= \Idno\Core\Idno::site()->language()->_('Bridgy') ?></a>
     <?= \Idno\Core\Idno::site()->language()->_('is a service that pulls social interactions - such as likes and retweets - back to your website.') ?>

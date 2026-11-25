@@ -128,10 +128,10 @@ namespace IdnoPlugins\Media {
                             $this->attachFile($media);
                             $ok = true;
                         } else {
-                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Media wasn\'t attached.'));
+                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('No file was attached.'));
                         }
                     } else {
-                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_('This doesn\'t seem to be a media file .. %s', [$_FILES['media']['type']]));
+                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_('This doesn\'t seem to be a media file: %s', [$_FILES['media']['type']]));
                     }
                 } else {
                     \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('We couldn\'t access your media. Please try again.'));

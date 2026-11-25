@@ -5,9 +5,9 @@
         <h4 class="idno-editor-heading">
             <?php
             if (empty($vars['object']->_id)) {
-                echo \Idno\Core\Idno::site()->language()->_('New Bookmark');
+                echo \Idno\Core\Idno::site()->language()->_('New bookmark');
             } else {
-                echo \Idno\Core\Idno::site()->language()->_('Edit Bookmark');
+                echo \Idno\Core\Idno::site()->language()->_('Edit bookmark');
                 if ($vars['object']->getPublishStatus() === 'draft') {
                     echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
                 }
@@ -17,7 +17,7 @@
 
         <div class="idno-form-field">
             <label class="idno-label" for="body">
-                <?= \Idno\Core\Idno::site()->language()->_('Link Address') ?></label>
+                <?= \Idno\Core\Idno::site()->language()->_('Link address') ?></label>
             <?php
             $value = "";
             if (empty($vars['url'])) {
@@ -91,7 +91,7 @@
                 <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
             </button>
             <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
             </button>
             <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                 <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

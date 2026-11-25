@@ -20,9 +20,9 @@ if (!empty($vars['url'])) {
             <h4 class="idno-editor-heading">
                 <?php
                 if (empty($vars['object']->_id)) {
-                    echo \Idno\Core\Idno::site()->language()->_('New Status Update');
+                    echo \Idno\Core\Idno::site()->language()->_('New status update');
                 } else {
-                    echo \Idno\Core\Idno::site()->language()->_('Edit Status Update');
+                    echo \Idno\Core\Idno::site()->language()->_('Edit status update');
                 }
                 if (!empty($vars['object']->_id) && $vars['object']->getPublishStatus() === 'draft') {
                     echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
@@ -80,7 +80,7 @@ if (!empty($vars['url'])) {
                 </button>
                 <div class="idno-reply-input" x-show="open" x-cloak>
                     <input type="url" name="inreplyto[]"
-                           placeholder="<?= \Idno\Core\Idno::site()->language()->_('Add the URL that you\'re replying to') ?>"
+                           placeholder="<?= \Idno\Core\Idno::site()->language()->_('Paste the link you\'re replying to') ?>"
                            class="idno-input"
                            value="<?= !empty($vars['object']->inreplyto) ? htmlspecialchars(is_array($vars['object']->inreplyto) ? $vars['object']->inreplyto[0] : $vars['object']->inreplyto) : '' ?>"/>
                 </div>
@@ -100,7 +100,7 @@ if (!empty($vars['url'])) {
                     <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
                 </button>
                 <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                    <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                    <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
                 </button>
                 <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                     <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

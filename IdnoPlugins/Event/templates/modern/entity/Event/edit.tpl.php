@@ -6,9 +6,9 @@
         <h4 class="idno-editor-heading">
             <?php
             if (empty($vars['object']->_id)) {
-                echo \Idno\Core\Idno::site()->language()->_('New Event');
+                echo \Idno\Core\Idno::site()->language()->_('New event');
             } else {
-                echo \Idno\Core\Idno::site()->language()->_('Edit Event');
+                echo \Idno\Core\Idno::site()->language()->_('Edit event');
                 if ($vars['object']->getPublishStatus() === 'draft') {
                     echo ' <span class="idno-badge-draft">' . \Idno\Core\Idno::site()->language()->_('Draft') . '</span>';
                 }
@@ -48,7 +48,7 @@
                     <?= $this->__([
                         'name' => 'starttime',
                         'id' => 'starttime',
-                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the start day and time?'),
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Enter the start day and time'),
                         'value' => $vars['object']->starttime,
                         'class' => 'idno-input'
                     ])->draw('forms/input/datetime-local') ?>
@@ -60,7 +60,7 @@
                     <?= $this->__([
                         'name' => 'endtime',
                         'id' => 'endtime',
-                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Type in the end day and time'),
+                        'placeholder' => \Idno\Core\Idno::site()->language()->_('Enter the end day and time'),
                         'value' => $vars['object']->endtime,
                         'class' => 'idno-input'
                     ])->draw('forms/input/datetime-local') ?>
@@ -120,7 +120,7 @@
                 <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
             </button>
             <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                <?= \Idno\Core\Idno::site()->language()->_('Save as Draft') ?>
+                <?= \Idno\Core\Idno::site()->language()->_('Save as draft') ?>
             </button>
             <a href="<?= !empty($vars['object']->_id) ? $vars['object']->getDisplayURL() : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                 <?= \Idno\Core\Idno::site()->language()->_('Cancel') ?>

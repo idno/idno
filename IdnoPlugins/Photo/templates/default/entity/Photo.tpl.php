@@ -8,7 +8,7 @@ if ($num_pics > 1)
 $photoCount = 0;
 
 $currentPage = \Idno\Core\Idno::site()->currentPage();
-if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+if (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
     $rel = 'rel="in-reply-to"';
 } else {
     $rel = '';
@@ -34,7 +34,7 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
     if (!empty($attachments)) {
         foreach ($attachments as $attachment) {
 
-            if (!empty($currentPage) && !\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+            if (!empty($currentPage) && !\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
                 if ($photoCount == 5 && $num_pics > $photoCount) {
                     ?>
                     <div class="photo-view photo-view-more">
@@ -73,7 +73,7 @@ if (empty($vars['feed_view']) && $vars['object']->getTitle() && $vars['object']-
 
             ?>
             <div class="photo-view">
-                <a href="<?php echo (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalink()) ? $this->makeDisplayURL($mainsrc) : $vars['object']->getDisplayURL(); ?>"
+                <a href="<?php echo (!empty($currentPage) && \Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) ? $this->makeDisplayURL($mainsrc) : $vars['object']->getDisplayURL(); ?>"
                    data-gallery="<?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?>"
                    data-original-img="<?php echo $this->makeDisplayURL($mainsrc) ?>"
                    data-title="<?php echo htmlentities(strip_tags($vars['object']->getTitle()), ENT_QUOTES, 'UTF-8'); ?>"

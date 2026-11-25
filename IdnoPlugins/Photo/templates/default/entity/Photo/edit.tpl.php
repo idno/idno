@@ -19,9 +19,9 @@
                     <?php
 
                     if (empty($vars['object']->_id)) {
-                        ?><?php echo \Idno\Core\Idno::site()->language()->_('New Photo'); ?><?php
+                        ?><?php echo \Idno\Core\Idno::site()->language()->_('New photo'); ?><?php
                     } else {
-                        ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit Photo'); ?><?php
+                        ?><?php echo \Idno\Core\Idno::site()->language()->_('Edit photo'); ?><?php
                     }
 
                     ?>

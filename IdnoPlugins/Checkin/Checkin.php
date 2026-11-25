@@ -13,7 +13,7 @@ namespace IdnoPlugins\Checkin {
         function getTitle()
         {
             return \Idno\Core\Idno::site()->language()->_('Checked into %s', [
-                $this->canSeePreciseLocation() && $this->placename ? $this->placename : \Idno\Core\Idno::site()->language()->_('somewhere near...')
+                $this->canSeePreciseLocation() && $this->placename ? $this->placename : \Idno\Core\Idno::site()->language()->_('somewhere nearby')
             ]);
         }
 
@@ -181,7 +181,7 @@ namespace IdnoPlugins\Checkin {
                     }
                 }
             } else {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('You can\'t save an empty checkin.'));
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Choose a location before saving your check-in.'));
             }
 
             return false;

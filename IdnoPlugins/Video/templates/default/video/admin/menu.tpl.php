@@ -1,0 +1,1 @@
+<li <?php if (\Idno\Core\Idno::site()->currentPage()->doesPathMatch('/admin/video/')) echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>admin/video/"><?php echo \Idno\Core\Idno::site()->language()->_('Video'); ?></a></li>
