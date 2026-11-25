@@ -103,6 +103,13 @@ final class PageExceptionListener
             $response = self::plain($status);
         }
 
+        // What a server error HTTP exception asks to be sent with it (`Retry-After` of a 503) goes with the page, as Symfony's own answer would send it
+        if ($status >= 500 && $e instanceof HttpExceptionInterface) {
+            foreach ($e->getHeaders() as $name => $value) {
+                $response->headers->set($name, is_array($value) ? array_map('strval', $value) : (string) $value);
+            }
+        }
+
         // The status is the page's: without this the kernel makes a 500 of any other answer to an exception that is not an HTTP one
         $event->allowCustomResponseCode();
         $event->setResponse($response);

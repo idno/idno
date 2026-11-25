@@ -420,6 +420,26 @@ final class PageExceptionListenerTest extends TestCase
         $this->assertSame(['report Down', 'draw pages/500', 'page 503'], $this->calls->getArrayCopy());
     }
 
+    public function testAServerErrorsOwnHeadersAreCarriedOntoThePage(): void
+    {
+        $event = $this->event(new ServiceUnavailableHttpException(120, 'Down'));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(503, $event->getResponse()?->getStatusCode());
+        $this->assertSame('120', $event->getResponse()->headers->get('Retry-After'));
+    }
+
+    public function testAServerErrorThatCannotBeDrawnKeepsItsHeadersToo(): void
+    {
+        $this->drawer->failing = true;
+        $event = $this->event(new ServiceUnavailableHttpException(120, 'Down'));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame('120', $event->getResponse()?->headers->get('Retry-After'));
+    }
+
     public function testAServerErrorThatCannotBeDrawnKeepsItsStatusAsPlainText(): void
     {
         $this->drawer->failing = true;

@@ -73,15 +73,27 @@ final class RecordingLifecycle implements PageLifecycle
 
     public ?PageContext $context = null;
 
+    /** @var array<string, \Throwable> a failure to throw from a method, by its name */
+    public array $failures = [];
+
     public function begin(PageContext $context): void
     {
         $this->context = $context;
         $this->calls[] = 'begin';
+        $this->failAt('begin');
+    }
+
+    private function failAt(string $method): void
+    {
+        if (isset($this->failures[$method])) {
+            throw $this->failures[$method];
+        }
     }
 
     public function refusesApiRequest(PageContext $context): bool
     {
         $this->calls[] = 'refusesApiRequest';
+        $this->failAt('refusesApiRequest');
 
         return $this->refusesApi;
     }
@@ -89,6 +101,7 @@ final class RecordingLifecycle implements PageLifecycle
     public function mayView(PageContext $context): bool
     {
         $this->calls[] = 'mayView';
+        $this->failAt('mayView');
 
         return $this->mayView;
     }
@@ -96,6 +109,7 @@ final class RecordingLifecycle implements PageLifecycle
     public function enter(PageContext $context): void
     {
         $this->calls[] = 'enter';
+        $this->failAt('enter');
     }
 
     public function standardHeaders(): array
@@ -634,5 +648,57 @@ final class PageRequestListenerTest extends TestCase
 
             $this->assertSame($original, $event->getController());
         }
+    }
+
+    public function testTheControllersAttributesSurviveTheWrapper(): void
+    {
+        $request = Request::create('/');
+        $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $event = $this->argumentsEvent($request, new ListenerErrorController(), [$request]);
+        $before = $event->getAttributes('*');
+        $this->assertNotSame([], $before, 'the controller has attributes to begin with (its #[SitePage])');
+
+        $this->listener()->onControllerArguments($event);
+
+        $this->assertEquals($before, $event->getAttributes('*'), 'the wrapper keeps the controller\'s attributes for the phases after it');
+        $this->assertNotNull($request->attributes->get('_controller_attributes'), 'and the request still carries them, which the response phase reads');
+    }
+
+    public function testCacheIsTheOneAttributeASitePageDoesNotKeep(): void
+    {
+        $request = Request::create('/');
+        $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $event = $this->argumentsEvent($request, new ListenerErrorController(), [$request]);
+        $keep = new SitePage('Fixture\Kept');
+        $request->attributes->set('_controller_attributes', [$keep, new \Symfony\Component\HttpKernel\Attribute\Cache(maxage: 60)]);
+
+        $this->listener()->onControllerArguments($event);
+
+        $this->assertSame([$keep], $request->attributes->get('_controller_attributes'));
+    }
+
+    public function testAnErrorOfAListenerWhileThePageIsBegunOrEnteredIsTurnedIntoAnExceptionThatCarriesIt(): void
+    {
+        foreach (['begin', 'enter'] as $method) {
+            $this->lifecycle->failures = [$method => new \TypeError('A plugin\'s listener failed')];
+            $request = Request::create('/');
+
+            try {
+                $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+                $this->fail($method . ': the error is thrown');
+            } catch (PageError $e) {
+                $this->assertSame($this->lifecycle->failures[$method], $e->error, $method);
+                $this->assertTrue(PageContext::has($request), $method . ': the page has its context, which the exception listener needs');
+            }
+        }
+    }
+
+    public function testAnExceptionOfAListenerWhileThePageIsBegunIsNotWrapped(): void
+    {
+        $this->lifecycle->failures['begin'] = new \RuntimeException('Plain');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Plain');
+
+        $this->listener()->onController($this->controllerEvent(Request::create('/'), new ListenerPageController(), 'page'));
     }
 }

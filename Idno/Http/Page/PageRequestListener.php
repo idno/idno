@@ -11,6 +11,7 @@ use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpKernel\Attribute\Cache;
 use Symfony\Component\HttpKernel\Event\ControllerArgumentsEvent;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -61,7 +62,7 @@ final class PageRequestListener
         // Caching is the page's own (`PageContext::setCaching()`, `ControllerPage::setNoCache()`), sent line by line in place of the session's.
         // Symfony's `#[Cache]` is not applied to a site page (its headers come after the page's, and the controller of a page is wrapped),
         // so it is refused where a developer sees it: with debug on.
-        if ($this->kernel->isDebug() && $event->getAttributes(\Symfony\Component\HttpKernel\Attribute\Cache::class) !== []) {
+        if ($this->kernel->isDebug() && $event->getAttributes(Cache::class) !== []) {
             throw new \LogicException('#[Cache] is not applied to a site page: ask for caching with PageContext::setCaching() (or setNoCache()).');
         }
         $request = $event->getRequest();
@@ -72,35 +73,41 @@ final class PageRequestListener
         $lifecycle = ($this->lifecycle)();
         $context = new PageContext($request, $page);
         $context->attachTo($request);
-        $lifecycle->begin($context);
+        // An \Error from a listener of a plugin (the page's own events fire in begin() and enter()) is answered as one from the controller is:
+        // Symfony dispatches no exception event for an \Error, so it is carried as a PageError.
+        try {
+            $lifecycle->begin($context);
 
-        // The legacy router refused an API request on an account page for every method, OPTIONS included. A refusal is Symfony
-        // Security's, so the firewall answers it (the site's 403 page, or JSON for a caller that wants it, never cached).
-        if ($lifecycle->refusesApiRequest($context)) {
-            throw new AccessDeniedException();
-        }
-        if ($request->getMethod() === 'OPTIONS') {
-            // What Page::options() answers: the page was begun (its events fired), nothing more.
-            $event->setController(static fn (): Response => new Response('', 204, [
-                'Access-Control-Allow-Methods' => 'GET, POST, HEAD, OPTIONS, PUT, DELETE',
-                'Access-Control-Max-Age' => '86400',
-            ]));
+            // The legacy router refused an API request on an account page for every method, OPTIONS included. A refusal is Symfony
+            // Security's, so the firewall answers it (the site's 403 page, or JSON for a caller that wants it, never cached).
+            if ($lifecycle->refusesApiRequest($context)) {
+                throw new AccessDeniedException();
+            }
+            if ($request->getMethod() === 'OPTIONS') {
+                // What Page::options() answers: the page was begun (its events fired), nothing more.
+                $event->setController(static fn (): Response => new Response('', 204, [
+                    'Access-Control-Allow-Methods' => 'GET, POST, HEAD, OPTIONS, PUT, DELETE',
+                    'Access-Control-Max-Age' => '86400',
+                ]));
 
-            return;
+                return;
+            }
+            // The walled garden: what `publicGatekeeper()` did was `deniedContent()`, the site's own 403 page in the request's template type
+            // (PageExceptionListener draws it), so it is the page's refusal and not Security's.
+            if (!$lifecycle->mayView($context)) {
+                throw new AccessDeniedHttpException();
+            }
+            $lifecycle->enter($context);
+        } catch (\Error $error) {
+            throw new PageError($error);
         }
-        // The walled garden: what `publicGatekeeper()` did was `deniedContent()`, the site's own 403 page in the request's template type
-        // (PageExceptionListener draws it), so it is the page's refusal and not Security's.
-        if (!$lifecycle->mayView($context)) {
-            throw new AccessDeniedHttpException();
-        }
-        $lifecycle->enter($context);
     }
 
     /**
      * An \Error the controller of a site page throws is turned into a PageError, which PageExceptionListener answers as it answers an
      * exception: Symfony dispatches no exception event for an \Error. This runs after Symfony's attribute listeners (#[IsGranted], at
-     * priority -10000, which read the controller's own arguments), so the controller is replaced when nothing else needs its signature; the
-     * arguments are passed on as they were resolved.
+     * priority -10000, which read the controller's own arguments), so the controller is replaced, with the attributes it had (the phases after this one, the response's, read
+     * them) except #[Cache], which a site page does not take (see onController), and the arguments are passed on as they were resolved.
      */
     #[AsEventListener(event: KernelEvents::CONTROLLER_ARGUMENTS, priority: -10100)]
     public function onControllerArguments(ControllerArgumentsEvent $event): void
@@ -115,7 +122,7 @@ final class PageRequestListener
             } catch (\Error $error) {
                 throw new PageError($error);
             }
-        });
+        }, array_values(array_filter($event->getAttributes('*'), static fn (object $attribute): bool => !$attribute instanceof Cache)));
     }
 
     // Before Idno\Legacy\LegacyHeaderReconciler (priority 8), which works on the response this leaves

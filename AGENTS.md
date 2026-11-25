@@ -1013,15 +1013,20 @@ test fixtures is routed to a controller through them yet:
     exception's message only when `ExceptionMessage::forVisitor()` says so (friendly, or `debug`), and for `json` and `jsonp` the shells' `exception` object. So a 500 is logged
     once, by the site's logger, as a legacy page's was.
   - an `HttpExceptionInterface` with a 5xx status (a `ServiceUnavailableHttpException` a page chose to throw) is a failure of the page like any exception: reported once and drawn as
-    the 500 page at its own status (`PageRenderer::error($context, $e, $status)`). Any other HTTP exception below 500 (a bad request, a method not allowed) is left to Symfony,
+    the 500 page at its own status (`PageRenderer::error($context, $e, $status)`), carrying the headers the exception asks for (`getHeaders()`: `Retry-After` of a
+    503), on the plain-text answer too. Any other HTTP exception below 500 (a bad request, a method not allowed) is left to Symfony,
     which logs and answers it as it does for any controller.
   - an `\Error` (a `TypeError`, a call on null): Symfony dispatches nothing for it, so `PageRequestListener::onControllerArguments()` (`kernel.controller_arguments`, priority
     -10100: after the attribute listeners such as `#[IsGranted]`, which read the controller's own signature) replaces the controller of a site page, for the main request with the
     legacy application booted, by one that calls it with its resolved arguments and throws `Idno\Http\Page\PageError` for an `\Error`, carrying the original as `previous` and as
     `$error`. The listener unwraps it, so the logged class, message, file and line are the ORIGINAL error's, and the answer is the same as for an exception: reported once and drawn as the
     500 page (the message under `ExceptionMessage::forVisitor()`'s rules: an `\Error` is technical, so shown only when `debug` is set). Other controllers and the legacy catch-all keep
-    today's behaviour, an `\Error` ends at `FatalErrorPage`. An `\Error` thrown outside the controller (an argument resolver, another listener) is not covered.
-  - a Security exception anywhere in the chain of `previous` exceptions (`AccessDeniedException`, `AuthenticationException`) is the refusal it is, left to the firewall, as the firewall's own listener reads the chain.
+    today's behaviour, an `\Error` ends at `FatalErrorPage`. The wrapper is given the attributes the controller had, less `#[Cache]` (refused above), so the
+    attribute listeners of the phases after it still see them. An `\Error` thrown by a listener of the page's own events while the page is begun or entered
+    (`PageRequestListener::onController()`: a plugin's `page/head` listener) is carried as a `PageError` too. Not covered: an `\Error` thrown by an argument resolver or by
+    another Symfony listener (it ends at `FatalErrorPage`).
+  - a Security exception anywhere in the chain of `previous` exceptions (`AccessDeniedException`, `AuthenticationException`) is the refusal it is, left to the firewall, as the firewall's own listener reads the chain. So an exception that merely WRAPS a Security exception (a Twig `RuntimeError` around an
+    `AccessDeniedException`) is answered as the refusal, a 403, and is neither logged nor mailed nor drawn as the 500 page, exactly as for any Symfony controller.
   - when drawing the answer throws (a template, a plugin's extension of the shell), the answer is a plain-text response of the same status (the status's own words, `Cache-Control:
     no-store`; for the 500 nothing of the exception), and the drawing failure is reported once; no second error page is drawn, so nothing loops.
   `framework.handle_all_throwables` stays FALSE (see "Kernel and services"): turning it on would also change what an `\Error` in any `kernel.request` listener of any request becomes,

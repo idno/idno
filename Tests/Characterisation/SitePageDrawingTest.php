@@ -746,6 +746,10 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
     {
         // the rig's site runs with `debug` on; this one does not
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_DEBUG' => '0']));
+        // the premise: the site's `debug` really is off here, and on in the rig's (the same page shows its exception there)
+        $rigs = $this->get('draw-new', 'plain', 'case=throw-technical', ['Cookie' => $this->member]);
+        $this->assertStringContainsString('Stack trace', $rigs->body, 'the rig\'s site runs with debug on, and shows the exception');
+        $this->assertStringNotContainsString('Stack trace', $client->request('GET', self::AREAS['plain'] . 'draw-new?case=throw-technical')->body, 'this one runs with debug off');
         $secrets = ['idno_entities', 'TechnicalException', 'TypeError', 'ServiceUnavailableHttpException', 'LegacyDrawPage.php', 'SitePageFixtureController.php', 'Stack trace', '#0 ', 'type</b> error', 'type&lt;/b&gt; error', 'maintenance'];
         foreach ($this->debugOffCases() as [$case, $type]) {
             $query = 'case=' . $case . ($type === '' ? '' : '&' . $type);
@@ -768,11 +772,13 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
                     foreach ($secrets as $secret) {
                         $this->assertStringNotContainsString($secret, $response->body, $label . ' shows ' . $secret);
                     }
+                    $this->assertDoesNotMatchRegularExpression('~\.php\b|\bline \d+|:\d+\)|\.php:\d+~i', $response->body, $label . ' shows a file or a line');
                 }
             } else {
                 $this->assertStringContainsString('Broken', $new->body, $label . ': a friendly message is shown');
                 $this->assertStringNotContainsString('LegacyDrawPage.php', $new->body, $label);
                 $this->assertStringNotContainsString('Stack trace', $new->body, $label);
+                $this->assertDoesNotMatchRegularExpression('~\.php\b|\bline \d+|:\d+\)~i', $new->body, $label . ' shows a file or a line');
             }
         }
     }
@@ -786,6 +792,15 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertSame(503, $new->status);
         $this->assertStringContainsString('Something went wrong.', $new->body);
         $this->assertSame($this->atStatus($this->observed($legacy, 'plain', 'draw-legacy', true), 503), $this->observed($new, 'plain', 'draw-new', true));
+    }
+
+    public function testAServerErrorExceptionsOwnHeadersGoWithTheSites500Page(): void
+    {
+        $new = $this->get('draw-new', 'plain', 'case=throw-5xx-retry', ['Cookie' => $this->member]);
+
+        $this->assertSame(503, $new->status);
+        $this->assertStringContainsString('Something went wrong.', $new->body);
+        $this->assertSame(['120'], $new->lines('Retry-After'));
     }
 
     public function testAClientErrorExceptionIsSymfonysAndNotReportedAsAFailure(): void

@@ -208,6 +208,8 @@ final class SitePageFixtureController
                 throw LegacyDrawPage::phpError();
             case 'throw-5xx':
                 throw LegacyDrawPage::unavailable();
+            case 'throw-5xx-retry':
+                throw new \Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException(120, 'Down for <b>maintenance</b>');
             case 'throw-4xx':
                 throw new \Symfony\Component\HttpKernel\Exception\BadRequestHttpException('A bad request');
             case 'throw-nested':
