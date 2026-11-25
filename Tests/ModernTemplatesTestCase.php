@@ -21,6 +21,7 @@ namespace Tests {
 
         private $previousTemplateType;
         private $previousPage;
+        private $previousUser;
 
         /// Marks of the default look that Twenty26 cannot draw
         const DEFAULT_LOOK_MARKS = ['col-md-', 'class="row', 'fa fa-', 'btn btn-', 'form-control', 'hideContentCreateForm', '$('];
@@ -38,7 +39,7 @@ namespace Tests {
             \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/IdnoPlugins/' . $this->plugin());
             $this->previousTemplateType = Idno::site()->template()->getTemplateType();
             $this->previousPage = Idno::site()->currentPage();
-            $this->swapUser($this->admin());
+            $this->previousUser = $this->swapUser($this->admin());
             Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
         }
 
@@ -50,6 +51,8 @@ namespace Tests {
                 $entity->delete();
             }
             $this->toDelete = [];
+            // Leave the session as it was found: later tests depend on who is logged in
+            $this->swapUser($this->previousUser);
         }
 
         /**

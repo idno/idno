@@ -146,7 +146,7 @@
     color: rgba(255, 255, 255, 0.75);
   }
 
-  /* Tags */
+  /* Tags: a row of links that look like tags, in the colour of a link */
   .idno-tags {
     display: flex;
     flex-wrap: wrap;
@@ -163,23 +163,62 @@
   .idno-tags a {
     display: inline-flex;
     align-items: center;
-    padding: 0.125rem 0.625rem;
+    padding: 0.1875rem 0.75rem;
     border-radius: var(--radius-full);
-    background: var(--color-bg);
-    color: var(--color-text);
+    border: 1px solid color-mix(in srgb, var(--color-link) 20%, transparent);
+    background: color-mix(in srgb, var(--color-link) 8%, transparent);
+    color: var(--color-link);
     font-size: var(--font-size-sm);
+    font-weight: 500;
+    line-height: 1.5;
     text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
   }
 
   .idno-tags a::before {
     content: "#";
-    color: var(--color-text-secondary);
+    opacity: 0.6;
   }
 
   .idno-entry-body .idno-tags a:hover,
   .idno-tags a:hover {
-    color: var(--color-text-strong);
-    background: var(--color-border);
+    background: color-mix(in srgb, var(--color-link) 16%, transparent);
+    border-color: color-mix(in srgb, var(--color-link) 40%, transparent);
+  }
+
+  .idno-tags a:focus-visible {
+    outline: 2px solid var(--color-link);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Embedded players in the text of a post (the default look sizes these with FitVids,
+   * a jQuery plugin): as wide as the post, 16:9.
+   */
+  .idno-entry iframe {
+    max-width: 100%;
+  }
+
+  .idno-entry-body iframe[src*="youtube"],
+  .idno-entry-body iframe[src*="youtu.be"],
+  .idno-entry-body iframe[src*="vimeo.com"],
+  .idno-entry-body iframe[src*="bitchute.com"],
+  .idno-entry-body iframe[src*="archive.org"] {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin-top: var(--spacing-gap);
+    border: 0;
+    border-radius: var(--radius-sm);
+  }
+
+  /* The Video plugin's player fills its own frame */
+  .idno-entry-body .idno-video-player iframe {
+    height: 100%;
+    margin-top: 0;
+    aspect-ratio: auto;
+    border-radius: 0;
   }
 
   /* Photos: one picture fills the post, several share a grid */
@@ -484,7 +523,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .idno-audio-play,
-    .idno-file-input {
+    .idno-file-input,
+    .idno-tags a {
       transition: none;
     }
 
