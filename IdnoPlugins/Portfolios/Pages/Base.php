@@ -32,12 +32,18 @@ namespace IdnoPlugins\Portfolios\Pages {
         }
 
         /**
-         * The member named by a handle in the address, or the site's "not found" page.
+         * The member named by a handle in the address, or the site's "not found" page: also for
+         * a member whose profile is hidden by a ban, unless an administrator is looking.
          */
         protected function memberOrNotFound($handle): User
         {
             $member = is_string($handle) && $handle !== '' ? User::getByHandle(rawurldecode($handle)) : null;
             if (!($member instanceof User)) {
+                $this->noContent();
+            }
+            // As the profile does: a member banned together with everything they posted has
+            // no profile to show, and no portfolios
+            if ($member->isHiddenByBan() && !Idno::site()->session()->isAdmin()) {
                 $this->noContent();
             }
 

@@ -608,6 +608,41 @@ namespace IdnoPlugins\Portfolios\Tests {
             $this->assertStringContainsString('data-portfolio-count="1"', $this->get($portfolio->getURL())['body']);
         }
 
+        /**
+         * A member banned together with everything they posted has no profile; their
+         * portfolios go with it, for everyone but administrators.
+         *
+         * @dataProvider looks
+         */
+        #[\PHPUnit\Framework\Attributes\DataProvider('looks')]
+        public function testABannedMembersPortfoliosAreGoneWithTheirProfile($theme)
+        {
+            $this->look($theme);
+            $owner = static::member('pfbanned');
+            $post = $this->entry($owner);
+            $name = 'Of the banned ' . static::marker();
+            $portfolio = $this->portfolio($owner, $name, 'published', [$post]);
+            $this->assertEquals(200, $this->get($portfolio->getURL())['status']);
+
+            $old = $this->swapUser(static::$admin);
+            $stored = static::fresh($owner);
+            $this->assertTrue($stored->ban('Testing', static::$admin->getUUID(), true));
+            $this->assertNotEmpty($stored->save(true));
+            $this->swapUser($old);
+
+            foreach ([null, static::$bob] as $as) {
+                foreach (['', '?_t=rss', '?_t=json'] as $type) {
+                    foreach ([$portfolio->getURL(), Portfolio::listURL($owner)] as $address) {
+                        $result = $this->get($address . $type, $as);
+                        $this->assertEquals(404, $result['status'], "$address$type is gone.");
+                        $this->assertStringNotContainsString($name, $result['body']);
+                    }
+                }
+            }
+            $this->assertEquals(200, $this->get(Portfolio::listURL($owner), static::$admin)['status'], 'An administrator still sees them.');
+            $this->assertEquals(200, $this->get($portfolio->getURL(), static::$admin)['status']);
+        }
+
         // ---------------------------------------------------------------------------------
         // Requests that must be refused
         // ---------------------------------------------------------------------------------

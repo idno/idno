@@ -386,6 +386,9 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   goes in only when `Portfolio::accepts()` says it is a post of the portfolio's owner. The
   picker works on the signed-in member's own post and own portfolios; ids of anyone
   else's in the request change nothing.
+- A member whose profile is hidden by a ban (`User::isHiddenByBan()`) has no portfolio
+  pages either, except for administrators (`Pages\Base::memberOrNotFound()`); a post the
+  moderators took down fails `canRead()` and so drops out of every portfolio's view.
 - A `deleted` listener in `Main` calls `Portfolio::removeEverywhere()`. Deleting a
   portfolio deletes no posts.
 - **Text**: the name (100 characters) and description (2,000) are stored as typed and
