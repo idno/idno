@@ -104,6 +104,15 @@ final class NonHtmlReachTest extends TestCase
         return $list;
     }
 
+    public function testATemplateDrawnThroughThePageRendererIsNamed(): void
+    {
+        $drawn = new \ReflectionMethod(self::class, 'drawnNames');
+        $php = "return \$this->renderer->page(\$context, ['title' => 'A', 'body' => \$this->renderer->template('pages/example', ['a' => 1])]);"
+            . " \$site->template()->draw('pages/other'); \$x = \$t->template(); \$y = \$r->template(\$name, []);";
+
+        $this->assertSame(['pages/other', 'pages/example'], $drawn->invoke(null, $php));
+    }
+
     public function testEveryTemplateANonHtmlTypeReachesIsAPhpFileOutsideDefault(): void
     {
         $inDefault = [];
@@ -312,6 +321,15 @@ final class NonHtmlReachTest extends TestCase
     {
         $names = [];
         if (preg_match_all('/\b(?:draw|idno_include)\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]/', $php, $matches) > 0) {
+            foreach ($matches[1] as $name) {
+                if (!str_ends_with($name, '/')) {
+                    $names[] = $name;
+                }
+            }
+        }
+        // A template a page service draws through the page renderer: `$renderer->template('pages/x', [...])`, which is what its `body` is made of
+        // (`$renderer->page($context, ['title' => ..., 'body' => $renderer->template('pages/x', [])])`)
+        if (preg_match_all('/->template\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]\s*,/', $php, $matches) > 0) {
             foreach ($matches[1] as $name) {
                 if (!str_ends_with($name, '/')) {
                     $names[] = $name;

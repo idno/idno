@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageRedirect.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/DrawnPage.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageRedirect.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -366,6 +366,12 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // test can tell it was never built for a request that is not a site page.
     $services->set(\Idno\Legacy\LegacyPageLifecycle::class)->public();
     $services->alias(\Idno\Http\Page\PageLifecycle::class, \Idno\Legacy\LegacyPageLifecycle::class)->public();
+    // What a controller draws a site page with (Idno\Http\Page\PageRenderer), over the site's template object: the drawer is built
+    // when the renderer is, and touches the legacy application only when a page is drawn.
+    $services->set(\Idno\Legacy\LegacyPageDrawer::class);
+    $services->alias(\Idno\Http\Page\PageDrawer::class, \Idno\Legacy\LegacyPageDrawer::class);
+    // public: the page a controller serves (Idno\Legacy\ControllerPage) takes the rule of a forward from it
+    $services->set(\Idno\Http\Page\PageRenderer::class)->autowire()->public();
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);

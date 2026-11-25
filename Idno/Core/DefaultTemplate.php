@@ -190,6 +190,39 @@ namespace Idno\Core {
         }
 
         /**
+         * What drawPage() draws and the headers it sends, returned: the page's shell as a string and the headers of this
+         * template type for an answer of the status (ShellHeaders::for(), as [name, value] pairs), for a controller that makes
+         * its own Response. As drawPage() does: the shell is chosen, the session's messages are taken and flushed, the session
+         * is closed, and the headers are worked out before the shell is drawn; unlike it, nothing is echoed, sent or ended.
+         *
+         * @param  int           $status      The status the page is answered with
+         * @param  string        $shell       Optional override of the page shell template to be used
+         * @param  callable|null $sendHeaders Given the headers at the moment `drawPage()` sent them (after the session is closed, before the shell is
+         *                                    drawn), for a caller that sends them to see what the draw does to them (`header_remove()`)
+         * @return array{body: string, headers: list<array{0: string, 1: string}>}
+         */
+        function renderPage(int $status, $shell = 'shell', ?callable $sendHeaders = null)
+        {
+            $shell = $this->shellForPage($shell);
+
+            $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
+
+            session_write_close();
+
+            $headers = $this->shellHeaders($status);
+            if ($sendHeaders !== null) {
+                $sendHeaders($headers);
+            }
+
+            try {
+                return ['body' => (string) parent::drawPage(false, $shell), 'headers' => $headers];
+            } finally {
+                // (the flag describes this draw, which has its headers: a later header query on this object is not a settings page's)
+                $this->settingsShellAsJsonp = false;
+            }
+        }
+
+        /**
          * Draws the page in its shell as drawPage() does, but with none of its side effects: the session's messages are
          * neither shown nor used up, the session is left open and no header is sent. For a caller that makes a Response
          * of its own (a controller's 403 page).

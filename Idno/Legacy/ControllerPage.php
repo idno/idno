@@ -11,6 +11,7 @@ use Idno\Core\Time;
 use Idno\Entities\User;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRedirect;
+use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
 use Idno\Markdown\MarkdownRequest;
 use Idno\Templating\ShellHeaders;
@@ -298,48 +299,10 @@ final class ControllerPage extends Page
      */
     public function forward(string $location = '', bool $exit = true)
     {
-        $request = $this->context->request();
-        if ($this->context->isXhr() && in_array($request->getRealMethod(), ['POST', 'PUT', 'DELETE'], true)) {
+        // The rule of a forward is the page renderer's, the one place it is written (the container's: a page does not own one)
+        $redirect = Idno::container()->get(PageRenderer::class)->forward($this->context, $location, $exit, 302, debug_backtrace());
+        if ($redirect === null) {
             return;
-        }
-        $site = Idno::site();
-        if (empty($location)) {
-            $location = $site->config()->getDisplayURL();
-        }
-        $template = $site->template();
-        if ($template->getTemplateType() != 'default') {
-            $location = $template->getURLWithVar('_t', $template->getTemplateType(), $location);
-        }
-        if ($exit) {
-            $site->session()->finishEarly();
-        }
-
-        $trace = null;
-        if (!empty($site->config()->forward_trace)) {
-            $frames = debug_backtrace();
-            if (!empty($frames[1])) {
-                $trace = '';
-                if (!empty($frames[0])) {
-                    $trace .= "Forward at {$frames[0]['file']}:{$frames[0]['line']}";
-                }
-                $file = !empty($frames[1]['file']) ? $frames[1]['file'] : 'UNKNOWN';
-                $line = !empty($frames[1]['line']) ? $frames[1]['line'] : 'xxx';
-                $trace .= ", called by {$frames[1]['function']} in {$file}:{$line}";
-                $site->logging()->debug($trace);
-            }
-        }
-
-        if ($site->session()->isAPIRequest()) {
-            $answer = ['location' => $location];
-            if ($trace !== null) {
-                $answer['trace'] = $trace;
-            }
-            $redirect = new PageRedirect((string) $location, (string) json_encode($answer), $this->response());
-        } else {
-            if ($trace !== null) {
-                $this->context->addHeader('X-Idno-Forward-Trace', $trace);
-            }
-            $redirect = new PageRedirect((string) $location);
         }
         if ($exit) {
             $this->context->setRedirect(null);

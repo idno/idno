@@ -6,9 +6,11 @@ namespace Tests\Fixtures;
 
 use Idno\Core\Idno;
 use Idno\Http\Page\PageContext;
+use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -23,6 +25,10 @@ use Symfony\Component\Routing\Attribute\Route;
 #[SitePage(name: 'Tests\Fixtures\SitePageFixture')]
 final class SitePageFixtureController
 {
+    public function __construct(private readonly PageRenderer $renderer)
+    {
+    }
+
     #[Route('/{lead}_test/site-page/state{slash}', name: 'idno_test_site_page_state', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
     public function state(Request $request): JsonResponse
     {
@@ -69,6 +75,72 @@ final class SitePageFixtureController
     public function undeclared(Request $request): JsonResponse
     {
         return $this->describe($request);
+    }
+
+    /**
+     * Draws the page for the `case` of the request through the page renderer, as `LegacyDrawPage` does through the template object
+     * (the legacy page at `draw-legacy` in each of the same directories). `SitePageDrawingTest` compares the two.
+     */
+    #[Route('/{lead}_test/site-page/draw-new{slash}', name: 'idno_test_site_page_draw', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    public function draw(Request $request): Response
+    {
+        return $this->drawCase($request);
+    }
+
+    #[Route('/{lead}admin/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_admin', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true)]
+    public function drawAdmin(Request $request): Response
+    {
+        return $this->drawCase($request);
+    }
+
+    #[Route('/{lead}account/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_account', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', accountPage: true, settingsPage: true)]
+    public function drawAccount(Request $request): Response
+    {
+        return $this->drawCase($request);
+    }
+
+    private function drawCase(Request $request): Response
+    {
+        $context = PageContext::of($request);
+        $renderer = $this->renderer;
+        $case = (string) $context->input('case', 'draw');
+        switch ($case) {
+            case 'messages':
+                // a message for the page this redirects to
+                Idno::site()->session()->addMessage('A message to be shown once');
+
+                return $renderer->redirect($context, $request->getSchemeAndHttpHost() . '/_test/site-page/draw-new?case=draw');
+            case 'drawmessage':
+                Idno::site()->session()->addMessage('A message to be shown once');
+                break;
+            case 'permalink':
+                $context->setPermalink();
+                $user = Idno::site()->session()->currentUser();
+                if ($user instanceof \Idno\Entities\User) {
+                    $context->setOwner($user);
+                }
+                break;
+            case 'notfound':
+                return $renderer->notFound($context);
+            case 'gone':
+                return $renderer->gone($context);
+            case 'denied':
+                return $renderer->denied($context, (string) $context->input('title', ''));
+            case 'error':
+                return $renderer->error($context, LegacyDrawPage::brokenPage());
+            case 'technical':
+                return $renderer->error($context, LegacyDrawPage::technicalPage());
+            case 'redirect201':
+                $context->setStatus(201);
+
+                return $renderer->redirect($context, (string) $context->input('to', ''));
+            case 'redirect':
+                return $renderer->redirect($context, (string) $context->input('to', ''));
+        }
+
+        return $renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $renderer->template('pages/home/blurb', ['offset' => 0])]);
     }
 
     private function describe(Request $request): JsonResponse

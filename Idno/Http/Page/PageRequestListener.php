@@ -8,7 +8,6 @@ use Idno\Kernel;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -117,12 +116,6 @@ final class PageRequestListener
                 $response->headers->set($name, $value, false);
             }
         }
-        // Work after the response: the client is told the answer is complete (a legacy page sent `Connection: close` and the length
-        // before it worked), so a server that only flushes (`php -S`, mod_php) lets go of it; FPM lets go in `Response::send()`.
-        if ($context->afterResponseWork() !== [] && !$response instanceof StreamedResponse && !$response instanceof BinaryFileResponse) {
-            $response->headers->set('Connection', 'close');
-            $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
-        }
         // A forward the page made and went on from (`forward($location, false)`): the header is sent with whatever the page answers
         $redirect = $context->redirect();
         if ($redirect !== null) {
@@ -134,6 +127,16 @@ final class PageRequestListener
                     $response->setStatusCode($redirect->status);
                 }
             }
+        }
+        // The length is of the whole body, so it is worked out last, after a forward's body is put before the page's: for a page the
+        // renderer drew (it set the length of its own body, which is then too short) and for work after the response, where a legacy
+        // page sent `Connection: close` and the length before it worked, so that a server that only flushes (`php -S`, mod_php) lets go
+        // of the client; FPM lets go in `Response::send()`.
+        if (($context->afterResponseWork() !== [] || $response->headers->has('Content-Length')) && !$response instanceof StreamedResponse && !$response instanceof BinaryFileResponse) {
+            if ($context->afterResponseWork() !== []) {
+                $response->headers->set('Connection', 'close');
+            }
+            $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
         }
     }
 
@@ -148,11 +151,7 @@ final class PageRequestListener
         if (!$redirect instanceof PageRedirect || !$event->isMainRequest()) {
             return;
         }
-        if ($redirect->body !== null) {
-            $response = new Response($redirect->body, $redirect->status, $redirect->body === '' ? [] : ['Content-Type' => 'application/json']);
-        } else {
-            $response = new RedirectResponse($redirect->location, $redirect->status);
-        }
+        $response = $redirect->toResponse();
         // A 200 (the JSON an API request gets, the empty answer of work after the response) is not a redirect: without this the
         // kernel makes a 500 of any 2xx a listener sets for an exception that is not an HTTP one.
         $event->allowCustomResponseCode();

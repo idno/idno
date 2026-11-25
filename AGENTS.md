@@ -333,8 +333,9 @@ Idno/
                                MessengerTrimPass, TwigTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
-                               PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener: what a controller that
-                               draws a site page carries, and the lifecycle run around it, see "Legacy pages and routes")
+                               PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener, PageRenderer, PageDrawer,
+                               DrawnPage: what a controller that draws a site page carries, the lifecycle run around it and
+                               how it draws, see "Legacy pages and routes")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -606,7 +607,9 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    (`/{path}`, any path, any HTTP method): `Idno\Legacy\LegacyController`. A controller marked
    `#[SitePage]` is a page of the site: before it runs, `Idno\Http\Page\PageRequestListener` (`kernel.controller`, main
    requests only, and only when the kernel booted the legacy application) begins the page as `Page::init()` did, refuses
-   an API request on an account page and a visitor of a private site, and enters it (see "Legacy pages and routes").
+   an API request on an account page and a visitor of a private site, and enters it (see "Legacy pages and routes"). The controller
+   answers with a Response it draws through `Idno\Http\Page\PageRenderer` (the page in its shell, with the headers of its template
+   type and the ones its draw sent, the 404, 410, 403 and 500 pages, a forward), never `drawPage()`, which echoes and exits.
 5. `LegacyController` returns an `Idno\Legacy\LegacyResponse`: a streamed response that
    sends no status line and no headers of its own. Symfony's response listeners still
    modify the object (they set a charset, and `X-Robots-Tag: noindex` in debug mode), but
@@ -706,6 +709,10 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   refusal of an API request on an account page, the standard headers; see "Legacy pages and routes") and gives the controller a
   `PageContext` argument. The fixture is `Tests/Fixtures/SitePageFixtureController` (`/_test/site-page/{state,public,account}`); a test records the
   page events with `IDNO_TEST_RECORD_PAGES` (`Tests\Fixtures\PageEventRecorder`).
+- A controller or a page service draws a site page through `Idno\Http\Page\PageRenderer` (injected; never `drawPage()`, which echoes and exits):
+  `page($context, ['title' => ..., 'body' => $renderer->template('pages/x', [...])])` returns the Response, `notFound()`, `gone()`, `denied()`,
+  `error()` and `redirect()` the pages and the forward a legacy page answered with (see "Legacy pages and routes"). A template drawn only through
+  `->template('name', ...)` counts as drawn for `NonHtmlReachTest`.
 - A test-only route goes in `Tests/Fixtures/` (loaded by `config/routes/test/fixtures.php`
   in the `test` environment only). `Tests/Fixtures/PingController` (`/_test/ping`) is the
   example, pinned by `Tests/Characterisation/KernelRoutingTest`; `ThrowingController`
@@ -972,6 +979,57 @@ test fixtures is routed to a controller through them yet:
   `SitePageLifecycleEquivalenceTest` (the same request through a real legacy page and the fixture: the events with their order and data, the
   refusals, the headers) and `Tests/Kernel/LegacyPageLifecycleTest`. `Tests/Kernel/SitePageRoutesTest` scans the real route collection for a
   site page under `/account` or `/admin` without its flag.
+- Drawing a site page into a Response (`Idno\Http\Page\PageRenderer`, a service in a scanned directory, public because `ControllerPage::forward()` takes the
+  forward rule from it; it depends on the interfaces `PageDrawer` and `Idno\Templating\TemplateTranslation`, so that a later service's test can double it, and
+  `Idno\Legacy\LegacyPageDrawer` implements `PageDrawer` over `Idno::site()`, built when the renderer is and reading the application only when something is
+  drawn). `page($context, $vars, $status = 200, $shell = 'shell')`: the status is the context's when the caller passes 200 and the page set another
+  (`setResponse()`), and the context is given the status it ends with, because templates read the page's status (`http_status()`); the body and the headers
+  come from `PageDrawer::drawPage()`, which sets the variables on the SITE's template object (so `leaked_user()`, a JSON page's printed variables and a
+  template that reads what an earlier draw left behave as on a legacy page), puts `http_response_code($status)` in place for the draw (the Markdown shell reads
+  it) and back afterwards (200 where the process had none: the CLI's is false), and calls `DefaultTemplate::renderPage($status, $shell)`: `drawPage()`'s work (the
+  shell chosen, with the `/admin` and `/account` overrides; the session's messages taken and flushed, so they are shown once; the session closed; the headers of the
+  template type worked out BEFORE the draw, as `sendShellHeaders()` did; the private settings-shell flag reset afterwards) with the headers returned as `[name, value]`
+  pairs instead of sent and the shell returned instead of echoed. The headers the DRAW sent itself with `header()` (a plugin's extension of `shell/headers`, a
+  third-party shell: the extension point `shell/headers` still is) are taken too, and so is what the draw does to the type's own: under a web SAPI `LegacyPageDrawer` sends
+  the type's headers into PHP's list at the moment `drawPage()` sent them (`DefaultTemplate::renderPage()`'s `$sendHeaders` callback: after the session is closed, before the
+  shell is drawn), reads `headers_list()` before and after, and `Idno\Http\Page\AddedHeaders::between()` (pure) works out the lines that are new and whether each replaced a
+  header of its name (it did when PHP's line is gone), was added beside it, or, with none held, replaces unless `ShellHeaders::replaces()` says the name is added (`Link`); the
+  new lines are removed from PHP's list (what PHP held of those names put back) and carried on the `DrawnPage`, each with its replace flag as a third element: so a
+  third-party shell's own `Content-Type` wins over the type's declared one, a plugin's `Access-Control-Allow-Origin` replaces core's, one added beside it is sent after it, a
+  `header_remove()` of one of the type's headers takes it off, and nothing is sent twice. A status the draw set with `http_response_code()` is the response's
+  (`DrawnPage::$status`) and a `Location` it sent is answered as PHP answers one (302 unless the status is a 201 or a 3xx: `PageRedirect::statusWithLocation()`). Under the CLI
+  (no list) the type's declared headers are the response's, unchanged (`SitePageDrawingHeadersTest`, a site with `IDNO_TEST_DRAW_HEADERS=1` and the templates of
+  `Tests/Fixtures/DrawHeaders`). A cookie is never taken (PHP adds the session's), and where PHP keeps no list (the CLI) there is nothing to take: that is observed over HTTP, a
+  `php -S` of the test's own. The response takes each pair with its flag (without one, `ShellHeaders::replaces()`: every name replaces but `Link`), so a repeated
+  header keeps its order, and `Content-Length` is the length in bytes of the body, as a legacy page sent it (a HEAD answer keeps it: it is the GET's);
+  `PageRequestListener::onResponse()` works the length out again, last, when the response has one or work is registered after the response, so that a forward's body put
+  before the page's is counted (the one place it is computed after any redirect body). Not set by the renderer: the standard and caching headers (the listener's).
+  `template($name, $vars)` draws one template with the variables set the same way. `notFound()` (`pages/404`, title `t("This page can't be found.")`), `gone()`
+  (`pages/410`, `t("This content isn't here.")`), `denied($context, $title = '')` (`pages/403`) and `error($context, $e)` (`pages/500` with `exception`, title
+  `Exception`) set the context's status (404, 410, 403, 500) and draw the body before the shell, as `noContent()`, `goneContent()`, `deniedContent()` and `exception()`
+  did; they log and alert nothing (`reportException()` is the listener's: a caller that uses `error()` alone gets no report). The forward has ONE rule,
+  `PageRenderer::forward($context, $location, $end, $status, $frames)` (what `Page::forward()` did): null for an XHR POST, PUT or DELETE (the page cannot forward and goes
+  on); an empty location is the site's address (`PageDrawer::displayUrl()`); a template type other than `default` is carried in `_t` (`PageDrawer::urlWithVar()`, the template's
+  own `getURLWithVar()`); the session is closed first when the page ends (`PageDrawer::finishSession()`, `finishEarly()`); the trace when the site sets `forward_trace`
+  (`PageDrawer::forwardTrace()`: `X-Idno-Forward-Trace` on the context, `trace` in the JSON); and an API request, decided by the SESSION's flag (`PageDrawer::isApiRequest()`,
+  `Session::isAPIRequest()`, which stays true when a stateless credential left the request anonymous, a blocked member's signed request) is not redirected but given
+  the JSON `{"location": ...}` at the page's status. It returns a `PageRedirect`, which `redirectFor(PageRedirect)` makes into the Response without deriving anything again
+  (`PageRedirect::toResponse()`, a pure method, the ONE place it is built: `PageRequestListener::onException()` answers a thrown redirect with it too, so the two never differ:
+  a `Location` and an empty body at PHP's status for a `Location`, or the JSON body with `Content-Type: application/json`: the legacy page echoed the JSON with no type of its own,
+  so `text/html`, the one difference); `redirect($context, $location = '', $status = 302)` is `redirectFor(forward(...))` (an empty answer at the page's status where the forward does nothing),
+  and `ControllerPage::forward()` is the same `forward()`, so a thrown `PageRedirect` and a returned redirect never differ. A forward keeps the status the page set when PHP would keep it (a 201 or a 3xx: pinned by `SitePageDrawingTest::testAForwardOfAPageThatSetA201KeepsIt`), else it is the `$status` asked for (302). `PageDrawer` has methods beyond drawing for this
+  (`isApiRequest()`, `finishSession()`, `forwardTrace()`, `displayUrl()`, `urlWithVar()`). Pinned by `Tests/Unit/Http/Page/PageRendererTest` and `AddedHeadersTest`
+  (doubles), `Tests/Kernel/LegacyPageDrawerTest` (the CLI's status) and, over HTTP on a private site, `Tests/Characterisation/SitePageDrawingTest`: a REAL legacy page
+  (`Tests\Fixtures\LegacyDrawPage`, registered in the test environment by `TestEventHooks` on `plugins/loaded` at `.../draw-legacy`, with a class of its own under `/admin/`
+  and `/account/`) and the fixture controller (`.../draw-new`, `Tests\Fixtures\SitePageFixtureController`) do the same for each `case` (`draw`, `drawmessage`, `permalink`,
+  `notfound`, `gone`, `denied`, `error`, `technical`, `redirect`) and the two answers are compared whole: the status, every header by name with a repeated header's values in
+  order, and the body, in every template type (`default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `markdown`, `activitypub`), as a visitor and a member, in the two
+  directories that have a shell of their own, by `Accept` and as an XHR request, for a HEAD, and for a signed API request (also of a blocked member). What the
+  comparison treats as the same: the name of the page in its own address (also in the base64 of a `fwd` link, and the class in the body's classes), a stack trace, the
+  transport's headers and `X-Robots-Tag` (Symfony's, in debug mode), a cookie but for the session id and its date, `Content-Length` as the length of its own body (and
+  present for a HEAD, where it is the GET's), the space after the `;` of a media type, and the set of `Cache-Control` directives (the response adds `private` and a
+  second `no-cache` beside the session's: taking PHP's session-cache headers into the response would end that, and is the lifecycle's). Keep a case of the two fixtures
+  identical.
 
 ### Kernel and services
 
@@ -3189,7 +3247,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   200 and for an http(s) address with no `<`, `>` or white space; a settings page asked for as JSONP, which is drawn as HTML, is `text/html; charset=utf-8`
   and `nosniff`; `ShellHeaders::replaces()` is false for `Link` only, which is added), which the type shells no longer send themselves (they were the
   json, jsonp, rss, kml, jsonfeed and activitypub shells); `DefaultTemplate::shellHeaders($status)` gives the list for the template's type and
-  `DefaultTemplate::sendShellHeaders()` sends it, called
+  `DefaultTemplate::sendShellHeaders()` sends it (`DefaultTemplate::renderPage($status, $shell)` is `drawPage(false)` with the list returned and nothing sent, for
+  `PageRenderer`), called
   by `drawPage()` and by the two pages that draw the shell with `draw('shell')` (`Account\Register`, `Account\Password`);
   `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
   `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,

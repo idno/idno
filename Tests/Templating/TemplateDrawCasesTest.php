@@ -93,6 +93,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
     private const SAME_OUTPUT = [
         'zone Europe/London for a member | a zone for a member with none' => 'London\'s offset is zero, and the template prints a difference from the member\'s own zone only for a zone whose offset is not zero.',
         'rich text output, a rel of zero | rich text output, a rel of the string zero | rich text output, a rel of an empty string | rich text output, a rel of null | rich text output, a rel of false' => 'Each is a value PHP and Twig read as false, which is no rel.',
+        'richtext, zero | richtext, the string zero | richtext, an empty string | richtext, null | richtext, false' => 'Each is a value PHP and Twig read as false, which is no value: the editor takes a made-up id (`editor-` and a random number, which the case makes the same) and the template prints nothing else of them.',
         'form list, zero | form list, the string zero | form list, an empty string | form list, null | form list, false' => 'Each is a value PHP and Twig read as false, which is no value.',
         'idno version 0.1 | idno version 1.0-DEV | idno version ' => 'A required version below the installed one only says what is installed; these three are all below it.',
         'build version 1 | build version 7' => 'A required build below the installed one only says what is installed.',
@@ -1260,7 +1261,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             $out['select, options, ' . $label] = $draw('forms/input/select', ['name' => 's', 'options' => $value, 'value' => '']);
             $out['longtext, ' . $label] = $draw('forms/input/longtext', ['name' => 'b', 'required' => $value, 'class' => $value, 'placeholder' => $value, 'height' => $value, 'unique_id' => $value]);
             $out['longtext, value, ' . $label] = $draw('forms/input/longtext', ['name' => 'b', 'value' => $value]);
-            $out['richtext, ' . $label] = $draw('forms/input/richtext', ['required' => $value, 'unique_id' => $value, 'name' => $value, 'placeholder' => $value]);
+            // A falsy unique_id draws `editor-` and a random number (`random(9999)`): the number is made the one fixed id here, so that the five
+            // states are the same text every run, instead of different by chance and the same on a collision (SAME_OUTPUT says why they are the same)
+            $out['richtext, ' . $label] = preg_replace('/\\beditor-\\d{1,4}\\b/', 'editor-1', $draw('forms/input/richtext', ['required' => $value, 'unique_id' => $value, 'name' => $value, 'placeholder' => $value]));
             foreach (['text', 'email', 'url', 'password', 'file', 'datetime-local', 'button', 'submit', 'timezones'] as $control) {
                 $out[$control . ', a class of ' . $label] = $draw('forms/input/' . $control, ['name' => 'c', 'value' => 'Europe/London', 'class' => $value]);
             }

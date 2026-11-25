@@ -71,6 +71,15 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autowire()
         ->autoconfigure();
 
+    // The pages a controller serves as site pages, for the tests of the page lifecycle and of drawing a page (takes the page renderer).
+    // (only where the renderer is scanned: a kernel on a project directory that has no Idno/Http has none)
+    if ($builder->hasDefinition(\Idno\Http\Page\PageRenderer::class)) {
+        $container->services()
+            ->set(\Tests\Fixtures\SitePageFixtureController::class)
+            ->autowire()
+            ->autoconfigure();
+    }
+
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
     // test environment; no request can set it.

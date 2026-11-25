@@ -13,7 +13,6 @@ use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
@@ -364,7 +363,7 @@ final class PageRequestListenerTest extends TestCase
         $this->listener()->onException($event);
 
         $response = $event->getResponse();
-        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertSame('', $response->getContent());
         $this->assertSame('https://example.com/next', $response->headers->get('Location'));
         $this->assertSame(302, $response->getStatusCode());
 
@@ -485,6 +484,36 @@ final class PageRequestListenerTest extends TestCase
 
         $this->assertSame('close', $response->headers->get('Connection'));
         $this->assertSame('6', $response->headers->get('Content-Length'), 'bytes, not characters');
+    }
+
+    public function testTheLengthIncludesTheBodyOfAForwardTheApiRequestGetsAndWentOnFrom(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $context = PageContext::of($request);
+        $context->afterResponse(static fn () => null);
+        $context->setRedirect(new PageRedirect('https://example.com/next', '{"location":"x"}', 200));
+        $response = new Response('abc');
+
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+
+        $this->assertSame('{"location":"x"}abc', $response->getContent());
+        $this->assertSame((string) strlen('{"location":"x"}abc'), $response->headers->get('Content-Length'));
+    }
+
+    public function testALengthTheRendererSetIsWorkedOutAgainAfterAForwardsBody(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/next', '{"location":"x"}', 200));
+        $response = new Response('abc', 200, ['Content-Length' => '3']);
+
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+
+        $this->assertSame((string) strlen('{"location":"x"}abc'), $response->headers->get('Content-Length'));
+        $this->assertFalse($response->headers->has('Connection'), 'no work follows the response');
     }
 
     public function testTheForwardThatEndsThePageReplacesOneItWentOnFrom(): void
