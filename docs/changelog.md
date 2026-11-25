@@ -11,6 +11,9 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.3 or later is now required
+* New Portfolios plugin: members collect their own posts into named, ordered lists (draft or published) at `/profile/<handle>/portfolios`, add and remove posts from the "More" menu of a post, and show published portfolios from their profile
+* Every post has a "More" menu with "Copy link"; plugins add items to it through `content/menu/items`
+* Fixed the page description being printed unescaped in the Open Graph tags, and the JSON Feed of a page that has no description failing
 * New Twenty26 theme, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor
 * New StandardSiteSync plugin, which syncs posts to standard.site records on an AT Protocol PDS
 * Link previews are now fetched by the server instead of the browser

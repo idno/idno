@@ -1,0 +1,252 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Idno Portfolios\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+#: ./Pages/Delete.php
+msgid "Your portfolio was deleted. The posts that were in it are still on your profile."
+msgstr ""
+
+#: ./Pages/Delete.php
+msgid "We couldn't delete your portfolio."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Edit portfolio"
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "New portfolio"
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Give your portfolio a name."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "We couldn't save your portfolio."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Your portfolio was created. Add posts to it from the menu on each of your posts."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Your portfolio is published."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Your portfolio is a draft again. Only you can see it."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Your portfolio was saved."
+msgstr ""
+
+#: ./Pages/Index.php
+msgid "Your portfolios"
+msgstr ""
+
+#: ./Pages/Index.php
+msgid "%s's portfolios"
+msgstr ""
+
+#: ./Pages/Index.php
+msgid "Portfolios by %s"
+msgstr ""
+
+#: ./Pages/Items.php
+msgid "The post was taken out of this portfolio."
+msgstr ""
+
+#: ./Pages/Items.php
+msgid "That post can't go into this portfolio."
+msgstr ""
+
+#: ./Pages/Pick.php
+msgid "Add to portfolio"
+msgstr ""
+
+#: ./Pages/Pick.php
+msgid "Your new portfolio is a draft. Publish it when it is ready."
+msgstr ""
+
+#: ./Pages/Pick.php
+msgid "A portfolio holds %d posts at most."
+msgstr ""
+
+#: ./Pages/Pick.php
+msgid "Your portfolios were updated."
+msgstr ""
+
+#: ./Pages/View.php
+msgid "A portfolio by %s"
+msgstr ""
+
+#: ./Portfolio.php
+msgid "Portfolio"
+msgstr ""
+
+#: ./templates/default/portfolios/card.tpl.php
+msgid "Draft"
+msgstr ""
+
+#: ./templates/default/portfolios/card.tpl.php
+msgid "1 post"
+msgstr ""
+
+#: ./templates/default/portfolios/card.tpl.php
+msgid "%d posts"
+msgstr ""
+
+#: ./templates/default/portfolios/card.tpl.php
+msgid "only you can see it"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Name"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "My best reporting"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Description"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "What this collection is and why you chose these pieces (optional)"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Who can see it"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Only you can see it"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Published"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Anyone can see it, and it is listed on your profile"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Create portfolio"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Save"
+msgstr ""
+
+#: ./templates/default/portfolios/edit.tpl.php
+msgid "Cancel"
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "You don't have any portfolios yet"
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "A portfolio is a collection of your posts that you choose and put in order: your best videos, a series of articles, the work from one project. Make one, then add posts to it from the menu on each of your posts."
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "Make your first portfolio"
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "No portfolios yet"
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "%s hasn't published a portfolio."
+msgstr ""
+
+#: ./templates/default/portfolios/list.tpl.php
+msgid "See their profile"
+msgstr ""
+
+#: ./templates/default/portfolios/nav.tpl.php
+msgid "Portfolios"
+msgstr ""
+
+#: ./templates/default/portfolios/pick.tpl.php
+msgid "Your portfolios were updated"
+msgstr ""
+
+#: ./templates/default/portfolios/pick.tpl.php
+msgid "You don't have a portfolio yet. Name one here and this post will be the first thing in it."
+msgstr ""
+
+#: ./templates/default/portfolios/pick.tpl.php
+msgid "Name a new portfolio to add this post to"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Only you can see this portfolio. Publish it to show it on your profile."
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Only its owner and administrators can see this portfolio."
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Link"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Publish"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Unpublish"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Edit"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Delete this portfolio? The posts in it stay on your profile. This can't be undone."
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Delete"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Nothing in this portfolio yet"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Open the menu (the three dots) on any of your posts and choose \"Add to portfolio\"."
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Go to your posts"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Nothing here yet"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "There are no posts in this portfolio that you can see."
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Move up"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Move down"
+msgstr ""
+
+#: ./templates/default/portfolios/view.tpl.php
+msgid "Remove from portfolio"
+msgstr ""

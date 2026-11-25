@@ -128,6 +128,13 @@ namespace Idno\Core {
             if (static::isAccountPattern($pattern) && class_exists($handler)) {
                 $this->account_pages[strtolower(ltrim($handler, '\\'))] = true;
             }
+            // As addRoute() does: a site in a subdirectory is routed with it in the pattern
+            if (defined('IDNO_SUBDIRECTORY')) {
+                if (substr($pattern, 0, 1) != '/') {
+                    $pattern = '/' . $pattern;
+                }
+                $pattern = '/' . IDNO_SUBDIRECTORY . $pattern;
+            }
             $pattern = strtr($pattern, $this->routeTokens());
             if (class_exists($handler)) {
                 unset($this->routes[$pattern]);

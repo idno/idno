@@ -21,6 +21,8 @@ $user = $vars['user'];
                     <?= \Idno\Core\Idno::site()->language()->_('Edit profile') ?>
                 </a>
             <?php } ?>
+            <?php /* Buttons that plugins add to a profile, drawn with the member in $vars['user'] */ ?>
+            <?= $this->__(['user' => $user])->draw('entity/User/profile/actions') ?>
         </div>
     </div>
     <?php

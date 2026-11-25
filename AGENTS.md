@@ -145,6 +145,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
 | **Styles** | Custom CSS admin interface |
+| **Portfolios** | Members collect their own posts into named lists shown from their profile (see below) |
 
 ## ActivityPub Plugin
 
@@ -243,6 +244,59 @@ must have and checks that what they draw is Twenty26 markup.
 - An audio file is an `<audio controls>` element inside `x-data="audioPlayer"`
   (`src/js/modules/audio.js`), which swaps the native controls for the theme's; without
   JavaScript the native ones remain.
+
+## Portfolios Plugin
+
+`IdnoPlugins/Portfolios/`: a portfolio is a named, ordered list of its owner's own posts, a
+draft or published. On for new sites (`Config`); not federated; not a content type.
+
+- **Storage**: one `Portfolio` entity (`Portfolio.php`) with `title`, `description` (plain
+  text), `portfolio_slug` and `items`, an array of post UUIDs in the owner's order. Both
+  back ends index each element of an array field, so `Portfolio::containing($uuid)` finds
+  the portfolios a post is in without scanning. The entity's own `slug` is a random
+  `portfolio-...` value so that a post address can never resolve to a portfolio.
+- **Addresses**: `/profile/<handle>/portfolios` (`Pages\Index`) and
+  `/profile/<handle>/portfolio/<slug or id>` (`Pages\View`), registered with
+  `hijackRoute()` so they come before the core route that reads the rest of a profile
+  address as kinds of post. The slug is made from the name once and never changes.
+  `/portfolio/edit[/<id>]`, `/portfolio/delete/<id>`, `/portfolio/items/<id>` (remove, up,
+  down, add) and `/portfolio/pick` (the picker a post's menu opens) change things; each
+  acts only on a POST that `Page::post()` has checked.
+- **Who sees what**: a draft is hidden by the core rule for unpublished entities, so
+  `Portfolio::findFor()` returns nothing and the page is the site's 404, the same page as
+  for a portfolio that does not exist. Inside a published portfolio a viewer gets
+  `getVisibleItems()`: only posts they may `canRead()`. Never print `getItemUUIDs()` or
+  count it for a viewer; `jsonSerialize()` is overridden for the same reason. Template
+  variables of these pages end up in the JSON form of the page, so pass only what the
+  viewer may see.
+- **Who changes what**: `canEdit()` on the portfolio (owner or administrator), and a post
+  goes in only when `Portfolio::accepts()` says it is a post of the portfolio's owner. The
+  picker works on the signed-in member's own post and own portfolios; ids of anyone
+  else's in the request change nothing.
+- A `deleted` listener in `Main` calls `Portfolio::removeEverywhere()`. Deleting a
+  portfolio deletes no posts.
+- **Text**: the name (100 characters) and description (2,000) are stored as typed and
+  escaped with `htmlspecialchars()` wherever they are printed.
+- **Templates** are in `templates/default/portfolios/` and serve every look (Twenty26
+  falls back to them); `css/portfolios.css` and `js/portfolios.js` are the plugin's own and
+  are not part of the theme's built bundle. The script opens the picker in a dialog;
+  without it the picker is a plain page.
+- `IdnoPlugins/Portfolios/Tests/` checks all of this, over HTTP in both looks.
+
+### Extension points this plugin uses
+
+- **The "More" menu of a post**: `content/menu` (both looks) draws `shell/moremenu`, a
+  `<details>` with "Copy link"; plugins add items by extending `content/menu/items`
+  (drawn with the post in `$vars['object']`), each a link or button with class
+  `idno-more-item` and `role="menuitem"`. In Twenty26 the menu also holds Edit and Delete.
+  The menu's markup is passed to `shell/moremenu` as `menu_items`, never `items`: `items`
+  is the list of posts of a feed page, which the RSS and JSON shells read after the body
+  has been drawn. `Tests/Pages/PostMenuTest.php` checks this.
+- **Twenty26 side navigation**: `shell/nav/items` is drawn after "Profile" with the current
+  item's key in `$vars['nav_current']`; a page says which item it belongs to with a
+  `navigationItem($viewer)` method, which `Themes\Twenty26\Navigation::currentItem()` asks.
+- **Profile**: `entity/User/profile/actions` (both looks), drawn with the member in
+  `$vars['user']`.
 
 ## IndieWeb Standards
 
@@ -584,6 +638,9 @@ must have and checks that what they draw is Twenty26 markup.
   the member has published, which costs one count per content type), and
   `entity/User/profile/types` draws them in both looks.
   `Tests/Pages/User/ProfileContentTypesTest.php` checks this.
+- Open Graph description: `templates/default/shell/opengraph.tpl.php` prints its values as they
+  are, so each is escaped where it is put into the list, the page's `description` included
+  (it was once printed raw). Pass a page's `description` as plain text.
 - Content Security Policy headers via template system
 - IndieAuth codes and tokens (`IdnoPlugins/IndiePub`): both come from
   `Pages\IndieAuth\Auth::generateSecret()` (`random_bytes()`, 64 hex characters); never

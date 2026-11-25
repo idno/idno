@@ -16,6 +16,7 @@ namespace Themes\Twenty26 {
      * none.
      *
      * Items are named by a key: home, profile, search, drafts, settings, admin, login.
+     * A plugin's item has a key of its own, which its pages give in navigationItem().
      */
     class Navigation
     {
@@ -40,6 +41,13 @@ namespace Themes\Twenty26 {
             }
             $viewer = $viewer ?? Idno::site()->session()->currentUser();
             $class = ltrim(get_class($page), '\\');
+
+            // A page may say itself which item it belongs to (a plugin's pages, whose item the
+            // plugin adds through shell/nav/items): navigationItem() returns the key, or an
+            // empty string when the page belongs to no item for this viewer.
+            if (method_exists($page, 'navigationItem')) {
+                return (string) $page->navigationItem($viewer);
+            }
 
             // The home feed and its content-type views (/content/...). A search, and a tag page,
             // which the site answers with a search, are drawn by the same page with a query.

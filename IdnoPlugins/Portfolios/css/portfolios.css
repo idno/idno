@@ -1,0 +1,468 @@
+/*
+ * Portfolios (IdnoPlugins/Portfolios). One stylesheet for every look: it uses the Twenty26
+ * theme's custom properties where they exist and falls back to plain values elsewhere.
+ * Lengths are in px, not rem: the default look sets the root font size to 10px.
+ */
+
+.idno-portfolios,
+.idno-portfolio,
+.idno-portfolio-form-page {
+    max-width: 736px;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: var(--font-size-base, 15px);
+    line-height: 1.5;
+}
+
+.idno-portfolios-header {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.idno-portfolios-title,
+.idno-portfolio-name {
+    margin: 0;
+    font-size: var(--font-size-title, 28px);
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--color-text-strong, #111);
+    overflow-wrap: anywhere;
+}
+
+.idno-portfolio-owner {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-text-secondary, #6b7280);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-owner:hover {
+    color: var(--color-text-strong, #111);
+}
+
+.idno-portfolio-owner-photo {
+    width: 24px;
+    height: 24px;
+    border-radius: 9999px;
+    object-fit: cover;
+}
+
+.idno-portfolios-heading .idno-portfolio-owner {
+    margin-bottom: 6px;
+}
+
+/* The list of a member's portfolios */
+
+.idno-portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(256px, 1fr));
+    gap: var(--spacing-gap, 12px);
+}
+
+.idno-portfolio-card {
+    margin: 0;
+}
+
+.idno-portfolio-card-link {
+    display: flex;
+    gap: 14px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: var(--spacing-card, 24px);
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--color-border-subtle, #e5e7eb);
+    border-radius: var(--radius-md, 12px);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+    color: inherit;
+    text-decoration: none;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.idno-portfolio-card-link:hover,
+.idno-portfolio-card-link:focus-visible {
+    border-color: var(--color-border, #d1d5db);
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+
+.idno-portfolio-card-icon {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-sm, 8px);
+    background: var(--color-bg, #f3f4f6);
+    color: var(--color-text-strong, #111);
+}
+
+.idno-portfolio-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.idno-portfolio-card-name {
+    font-weight: 700;
+    font-size: var(--font-size-lg, 18px);
+    line-height: 1.3;
+    color: var(--color-text-strong, #111);
+    overflow-wrap: anywhere;
+}
+
+.idno-portfolio-card-description {
+    color: var(--color-text, #374151);
+    font-size: var(--font-size-base, 15px);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.idno-portfolio-card-meta {
+    margin-top: auto;
+    padding-top: 6px;
+    color: var(--color-text-secondary, #6b7280);
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-badge {
+    display: inline-block;
+    vertical-align: middle;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.5;
+}
+
+/* One portfolio */
+
+.idno-portfolio-header {
+    padding: var(--spacing-card, 24px);
+    margin-bottom: var(--spacing-gap, 12px);
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--color-border-subtle, #e5e7eb);
+    border-radius: var(--radius-md, 12px);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+}
+
+.idno-portfolio-crumb {
+    margin: 0 0 12px;
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-crumb a {
+    color: var(--color-text-secondary, #6b7280);
+    text-decoration: none;
+}
+
+.idno-portfolio-crumb a:hover {
+    color: var(--color-text-strong, #111);
+}
+
+.idno-portfolio-draft-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm, 8px);
+    background: #fffbeb;
+    color: #92400e;
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-description {
+    margin: 8px 0 0;
+    color: var(--color-text, #374151);
+    font-size: var(--font-size-lg, 18px);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.idno-portfolio-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    color: var(--color-text-secondary, #6b7280);
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-count::before {
+    content: "\00b7";
+    margin-right: 12px;
+}
+
+.idno-portfolio-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.idno-portfolio-owner-actions {
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border-subtle, #e5e7eb);
+}
+
+.idno-portfolio-actions form {
+    margin: 0;
+    display: inline-flex;
+}
+
+.idno-portfolio-danger,
+.idno-portfolio-danger:hover {
+    color: #b91c1c;
+}
+
+.idno-portfolio-item {
+    margin-bottom: var(--spacing-gap, 12px);
+}
+
+.idno-portfolio-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 4px;
+    padding: 0 4px;
+}
+
+.idno-portfolio-item-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    min-width: 32px;
+    justify-content: center;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: var(--radius-sm, 8px);
+    background: transparent;
+    color: var(--color-text-secondary, #6b7280);
+    font: inherit;
+    font-size: var(--font-size-sm, 13px);
+    cursor: pointer;
+}
+
+.idno-portfolio-item-button:hover:not(:disabled),
+.idno-portfolio-item-button:focus-visible {
+    background: var(--color-border-subtle, #f0f0f0);
+    color: var(--color-text-strong, #111);
+}
+
+.idno-portfolio-item-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.idno-portfolio-item-remove {
+    margin-left: auto;
+}
+
+/* Empty states */
+
+.idno-portfolio-empty {
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--color-surface, #fff);
+    border: 1px dashed var(--color-border, #d1d5db);
+    border-radius: var(--radius-md, 12px);
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.idno-portfolio-empty p {
+    max-width: 544px;
+    margin: 0 auto 12px;
+    line-height: 1.5;
+}
+
+.idno-portfolio-empty p:last-child {
+    margin-bottom: 0;
+}
+
+.idno-portfolio-empty-title {
+    color: var(--color-text-strong, #111);
+    font-size: var(--font-size-lg, 18px);
+    font-weight: 700;
+}
+
+/* Forms: a portfolio's own, and the picker */
+
+.idno-portfolio-form {
+    padding: var(--spacing-card, 24px);
+    margin-top: 16px;
+    background: var(--color-surface, #fff);
+    border: 1px solid var(--color-border-subtle, #e5e7eb);
+    border-radius: var(--radius-md, 12px);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+}
+
+.idno-portfolio-form .idno-portfolios-title {
+    font-size: var(--font-size-lg, 18px);
+}
+
+.idno-portfolio-field {
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.idno-portfolio-field legend,
+.idno-portfolio-picker-list legend {
+    float: none;
+    width: auto;
+    padding: 0;
+    margin: 0 0 6px;
+    border: 0;
+    font-size: inherit;
+}
+
+.idno-portfolio-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 10px;
+    margin: 0;
+    border-radius: var(--radius-sm, 8px);
+    font-weight: 400;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+
+.idno-portfolio-choice:hover {
+    background: var(--color-bg, #f3f4f6);
+}
+
+.idno-portfolio-choice input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 2px 0 0;
+    accent-color: var(--color-primary, #111);
+}
+
+.idno-portfolio-choice-help {
+    display: block;
+    color: var(--color-text-secondary, #6b7280);
+    font-size: var(--font-size-sm, 13px);
+}
+
+.idno-portfolio-picker-list {
+    margin: 0 0 16px;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+    max-height: 256px;
+    overflow-y: auto;
+}
+
+.idno-portfolio-picker-about,
+.idno-portfolio-picker-none {
+    margin: 4px 0 16px;
+    color: var(--color-text-secondary, #6b7280);
+    overflow-wrap: anywhere;
+}
+
+/* The picker as a dialog (js/portfolios.js) */
+
+.idno-portfolio-dialog {
+    /* Centred whatever a look's reset does to the margins of a dialog */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    height: fit-content;
+    width: min(448px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-lg, 16px);
+    background: var(--color-surface, #fff);
+    color: var(--color-text, #374151);
+    box-shadow: var(--shadow-modal, 0 20px 60px rgba(0, 0, 0, 0.15));
+    overflow: auto;
+}
+
+.idno-portfolio-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.idno-portfolio-dialog .idno-portfolio-form {
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.idno-portfolio-dialog-loading {
+    margin: 0;
+    padding: 32px;
+    text-align: center;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.idno-portfolio-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 88px;
+    transform: translateX(-50%);
+    z-index: 1000;
+    max-width: calc(100vw - 32px);
+    padding: 10px 16px;
+    border-radius: 9999px;
+    background: var(--color-primary, #111);
+    color: var(--color-primary-text, #fff);
+    font-size: var(--font-size-sm, 13px);
+    font-weight: 600;
+    box-shadow: var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.08));
+}
+
+.idno-portfolios-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+@media (max-width: 640px) {
+    .idno-portfolio-header,
+    .idno-portfolio-form,
+    .idno-portfolio-card-link {
+        padding: 16px;
+    }
+
+    .idno-portfolios-title,
+    .idno-portfolio-name {
+        font-size: 24px;
+    }
+
+    .idno-portfolio-description {
+        font-size: var(--font-size-base, 15px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .idno-portfolio-card-link {
+        transition: none;
+    }
+
+    .idno-portfolio-card-link:hover {
+        transform: none;
+    }
+}

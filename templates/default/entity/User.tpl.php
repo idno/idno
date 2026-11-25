@@ -67,6 +67,8 @@ if (empty($vars['user']) && !empty($vars['object'])) {
                         ?></div>
 
                         <?php echo $this->draw('entity/User/profile/fields') ?>
+                        <?php /* Buttons that plugins add to a profile, drawn with the member in $vars['user'] */ ?>
+                        <?php echo $this->__(['user' => $vars['user']])->draw('entity/User/profile/actions') ?>
                     </div>
                 </div>
             </div>

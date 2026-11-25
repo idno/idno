@@ -15,7 +15,7 @@ if (empty($vars['title'])) {
         $json['title'] = 'Idno site';
     }
 } else {
-    $json['title'] = $vars['description'];
+    $json['title'] = $vars['title'];
 }
 
 if (empty($vars['base_url'])) {
