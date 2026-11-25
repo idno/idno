@@ -70,6 +70,14 @@ Tests/                         Core unit tests
   `rawurlencode(rawurldecode($slug))`. Don't write a slug route as a list of ASCII
   characters, and only ever pass the slug to the database as a query value.
   `Tests/Pages/NonAsciiPermalinkTest.php` checks this over HTTP.
+- **Entity events are registered once per class**: `Entity::registerEventHooks()` runs for every entity
+  that is constructed or hydrated, so it adds the `object/getbyurl` listener once for each
+  event dispatcher and entity class (tracked in a `WeakMap` keyed by the dispatcher), as a static
+  closure that holds the class name and no entity. A listener bound to the entity keeps every
+  entity of the process alive and runs the lookup once for each of them (one process with 5,000
+  entities took 97 seconds for 20 lookups of an unknown address). Don't `addListener()` a closure
+  that uses `$this` from an entity's `registerEventHooks()`, `init()` or constructor.
+  `Tests/Common/EntityGetByUrlListenerTest.php` checks this.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
 - **Current item of the Twenty26 side navigation**: `Themes\Twenty26\Navigation::currentItem()`
