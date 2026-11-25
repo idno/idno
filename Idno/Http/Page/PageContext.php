@@ -37,6 +37,9 @@ final class PageContext
     /** @var array<string, list<string>> */
     private array $headers = [];
 
+    /** @var list<array{0: string, 1: string}> headers added only to a response whose status is 200 (a Markdown document's canonical link) */
+    private array $headersOnSuccess = [];
+
     /** @var array<string, bool> by lower-case name: whether the first value of the header replaces a header of that name another part set */
     private array $replacing = [];
 
@@ -217,6 +220,23 @@ final class PageContext
     }
 
     /**
+     * A header that belongs only to an answer of status 200, whatever the page's own status said when it was drawn: the response
+     * that is finally returned decides (a controller may answer 404 without telling the page). Added beside any other of its name.
+     */
+    public function addHeaderOnSuccess(string $name, string $value): void
+    {
+        $this->headersOnSuccess[] = [$name, $value];
+    }
+
+    /**
+     * @return list<array{0: string, 1: string}>
+     */
+    public function headersOnSuccess(): array
+    {
+        return $this->headersOnSuccess;
+    }
+
+    /**
      * Whether a header of this name replaces one another part (a controller's response) already has, as opposed to being added
      * beside it: true unless the page began the header with `$replace` false.
      */
@@ -315,7 +335,7 @@ final class PageContext
     /**
      * A forward the page made and went on from (`forward($location, false)`): the response carries it.
      */
-    public function setRedirect(PageRedirect $redirect): void
+    public function setRedirect(?PageRedirect $redirect): void
     {
         $this->redirect = $redirect;
     }

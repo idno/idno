@@ -9,7 +9,9 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RedirectResponse;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -95,6 +97,17 @@ final class PageRequestListener
                 $response->headers->set($name, $value);
             }
         }
+        if ($response->getStatusCode() === 200) {
+            foreach ($context->headersOnSuccess() as [$name, $value]) {
+                $response->headers->set($name, $value, false);
+            }
+        }
+        // Work after the response: the client is told the answer is complete (a legacy page sent `Connection: close` and the length
+        // before it worked), so a server that only flushes (`php -S`, mod_php) lets go of it; FPM lets go in `Response::send()`.
+        if ($context->afterResponseWork() !== [] && !$response instanceof StreamedResponse && !$response instanceof BinaryFileResponse) {
+            $response->headers->set('Connection', 'close');
+            $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
+        }
         // A forward the page made and went on from (`forward($location, false)`): the header is sent with whatever the page answers
         $redirect = $context->redirect();
         if ($redirect !== null) {
@@ -125,12 +138,22 @@ final class PageRequestListener
         } else {
             $response = new RedirectResponse($redirect->location, $redirect->status);
         }
+        // A 200 (the JSON an API request gets, the empty answer of work after the response) is not a redirect: without this the
+        // kernel makes a 500 of any 2xx a listener sets for an exception that is not an HTTP one.
+        $event->allowCustomResponseCode();
         $event->setResponse($response);
+        // The forward that ends the page is the one that counts, over one it made and went on from (a legacy page's second
+        // `Location` header replaced the first)
+        if (PageContext::has($event->getRequest())) {
+            PageContext::of($event->getRequest())->setRedirect(null);
+        }
     }
 
     /**
      * The work a page asked to be done after the visitor has the answer (`AfterResponse::run()`), with no time limit; a failure is
-     * reported and never raised.
+     * reported and never raised. It runs on `kernel.terminate`, which `index.php` calls after sending the response when the
+     * page returned (a controller page never exits): a page that exits skips it, so work that must happen lives in the handler or here
+     * only for a page a controller serves.
      */
     #[AsEventListener(event: KernelEvents::TERMINATE, priority: 0)]
     public function onTerminate(TerminateEvent $event): void
@@ -141,6 +164,11 @@ final class PageRequestListener
         }
         ignore_user_abort(true);
         set_time_limit(0);
+        // Under FPM the client was let go in Response::send(); this is for any other SAPI, and does nothing under the CLI
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        flush();
         foreach (PageContext::of($request)->afterResponseWork() as $work) {
             try {
                 $work();

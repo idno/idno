@@ -37,7 +37,7 @@ final class ControllerPageTest extends TestCase
     /** @var int counts `page/ready` while a test listens; the listener cannot be removed, so it is switched off in tearDown() */
     private int $ready = 0;
 
-    private bool $listening = false;
+    private ?\Closure $readyListener = null;
 
     protected function setUp(): void
     {
@@ -51,7 +51,10 @@ final class ControllerPageTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->listening = false;
+        if ($this->readyListener !== null) {
+            Idno::site()->events()->removeListener('page/ready', $this->readyListener);
+            $this->readyListener = null;
+        }
         $site = Idno::site();
         $site->setCurrentPage($this->previousPage ?: new BarePage());
         $site->config()->walled_garden = $this->previousWalledGarden;
@@ -67,12 +70,10 @@ final class ControllerPageTest extends TestCase
     private function listenForReady(): void
     {
         $this->ready = 0;
-        $this->listening = true;
-        Idno::site()->events()->addListener('page/ready', function (): void {
-            if ($this->listening) {
-                $this->ready++;
-            }
-        });
+        $this->readyListener = function (): void {
+            $this->ready++;
+        };
+        Idno::site()->events()->addListener('page/ready', $this->readyListener);
     }
 
     private function page(string $uri = '/', string $method = 'GET', array $parameters = [], array $server = [], ?SitePage $site = null): ControllerPage
@@ -540,13 +541,17 @@ final class ControllerPageTest extends TestCase
         $headers = $page->context()->headers();
         $this->assertSame(['text/markdown; charset=utf-8'], $headers['Content-Type']);
         $this->assertSame(['nosniff'], $headers['X-Content-Type-Options']);
-        $this->assertArrayHasKey('Link', $headers, 'a 200 carries the canonical link');
+        $this->assertArrayNotHasKey('Link', $headers, 'the canonical link waits for the response that is returned');
+        $link = $page->context()->headersOnSuccess();
+        $this->assertCount(1, $link);
+        $this->assertSame('Link', $link[0][0]);
+        $this->assertStringContainsString('rel="canonical"', $link[0][1]);
 
         $missing = $this->page('/x');
         $missing->setResponse(404);
         Idno::site()->setCurrentPage($missing);
         $missing->drawMarkdown($entity);
-        $this->assertArrayNotHasKey('Link', $missing->context()->headers(), 'a 404 carries none');
+        $this->assertSame($link, $missing->context()->headersOnSuccess(), 'whatever the page\'s own status, the response decides');
         $this->assertSame(404, $missing->response(), 'the process status is not read');
     }
 
@@ -647,6 +652,59 @@ final class ControllerPageTest extends TestCase
         }
         $this->assertFalse((new \Idno\Legacy\LegacyPageLifecycle())->refusesApiRequest($page->context()), 'not an API request');
     }
+
+    public function testDrawMarkdownUsesUpTheSessionsMessages(): void
+    {
+        $session = Idno::site()->session();
+        $session->addMessage('A waiting message');
+        $entity = new \IdnoPlugins\Status\Status();
+        $entity->body = 'Hello';
+        $page = $this->page('/x');
+        Idno::site()->setCurrentPage($page);
+
+        $page->drawMarkdown($entity);
+
+        $this->assertSame([], $session->getMessages(), 'drawn, so used up, as drawPage() did');
+    }
+
+    public function testAnExitingForwardAfterOneThatWentOnReplacesIt(): void
+    {
+        $page = $this->page();
+        $home = Idno::site()->config()->getDisplayURL();
+        $page->forward($home . 'first', false);
+        $this->assertSame($home . 'first', $page->context()->redirect()?->location);
+
+        try {
+            $page->forward($home . 'second');
+            $this->fail('the page forwards');
+        } catch (PageRedirect $redirect) {
+            $this->assertSame($home . 'second', $redirect->location);
+        }
+
+        $this->assertNull($page->context()->redirect(), 'the first is forgotten');
+    }
+
+    public function testAnEmptyAcceptFallsBackToTheOneAWebServerPassedOn(): void
+    {
+        $page = $this->page('/x', 'GET', [], ['HTTP_ACCEPT' => '', 'REDIRECT_HTTP_ACCEPT' => 'application/json']);
+
+        $this->assertTrue($page->isAcceptedContentType('application/json'));
+        $this->assertFalse($page->isAcceptedContentType('text/html'));
+    }
+
+    public function testTheFlagOfTheAttributeStillRefusesWhenTheCurrentPageWasReplaced(): void
+    {
+        $page = $this->page('/', 'GET', [], [], new SitePage('Some\\Flagged\\Page', accountPage: true));
+        Idno::site()->setCurrentPage(new BarePage());
+        $session = Idno::site()->session();
+        $session->authenticateStatelessly(new User());
+        try {
+            $this->assertTrue((new \Idno\Legacy\LegacyPageLifecycle())->refusesApiRequest($page->context()));
+        } finally {
+            $session->resetStatelessAuthentication();
+        }
+    }
+
 }
 
 final class ControllerPageRegisteredFixture extends \Idno\Common\Page

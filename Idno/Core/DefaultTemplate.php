@@ -194,10 +194,11 @@ namespace Idno\Core {
          * neither shown nor used up, the session is left open and no header is sent. For a caller that makes a Response
          * of its own (a controller's 403 page).
          */
-        function drawPageWithoutSideEffects($echo = true, $shell = 'shell')
+        function drawPageWithoutSideEffects($echo = true, $shell = 'shell', $useUpMessages = false)
         {
             $shell = $this->shellForPage($shell);
-            $this->messages = [];
+            // (a caller that makes the page's whole answer, as drawPage() did, uses the session's messages up)
+            $this->messages = $useUpMessages ? \Idno\Core\Idno::site()->session()->getAndFlushMessages() : [];
 
             try {
                 return parent::drawPage($echo, $shell);

@@ -41,6 +41,17 @@ namespace Idno\Core {
         }
 
         /**
+         * Stops notifying $listener of $event (the callable that was given to addListener()).
+         *
+         * @param string   $event
+         * @param callable $listener
+         */
+        function removeListener($event, $listener)
+        {
+            $this->dispatcher->removeListener($event, $listener);
+        }
+
+        /**
          * Shortcut to trigger an event: supply the event name and
          * (optionally) an array of data, and get a variable back.
          *

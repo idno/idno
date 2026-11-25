@@ -205,7 +205,11 @@ final class ControllerPage extends Page
     public function isAcceptedContentType($contentType, $ignore_priority = false)
     {
         $request = $this->context->request();
-        $accept = (string) ($request->headers->get('Accept') ?? $request->server->get('REDIRECT_HTTP_ACCEPT', ''));
+        $accept = (string) $request->headers->get('Accept', '');
+        if ($accept === '') {
+            // (a web server that rewrote the request passes the header on under this name)
+            $accept = (string) $request->server->get('REDIRECT_HTTP_ACCEPT', '');
+        }
         if ($accept === '') {
             return false;
         }
@@ -326,6 +330,8 @@ final class ControllerPage extends Page
             $redirect = new PageRedirect((string) $location);
         }
         if ($exit) {
+            $this->context->setRedirect(null);
+
             throw $redirect;
         }
         $this->context->setRedirect($redirect);
@@ -397,9 +403,15 @@ final class ControllerPage extends Page
             return false;
         }
         $drawn = $template->__(['title' => $object->getTitle(), 'object' => $object, 'markdown_entity' => $object]);
-        $markdown = $drawn->drawPageWithoutSideEffects(false);
-        foreach ($drawn->shellHeaders($this->response()) as [$name, $value]) {
-            $this->context->addHeader($name, $value, ShellHeaders::replaces($name));
+        // The session's messages are used up, as drawPage() did
+        $markdown = $drawn->drawPageWithoutSideEffects(false, 'shell', true);
+        // The canonical link is for an answer of status 200: the response the controller returns decides, not the page's status
+        foreach ($drawn->shellHeaders(200) as [$name, $value]) {
+            if (ShellHeaders::replaces($name)) {
+                $this->context->addHeader($name, $value);
+            } else {
+                $this->context->addHeaderOnSuccess($name, $value);
+            }
         }
 
         return (string) $markdown;

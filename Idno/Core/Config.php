@@ -574,7 +574,7 @@ namespace Idno\Core {
          */
         function hasSSL()
         {
-            if (substr_count(site()->config()->getURL(), 'https://') || !empty($this->config()->force_ssl)) {
+            if (substr_count((string) $this->getURL(), 'https://') || !empty($this->force_ssl)) {
                 return true;
             }
 

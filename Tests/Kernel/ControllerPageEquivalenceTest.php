@@ -113,6 +113,7 @@ final class ControllerPageEquivalenceTest extends TestCase
         yield 'accept duplicates' => $get('/x', ['HTTP_ACCEPT' => 'application/json,application/json,text/html']);
         yield 'accept markdown' => $get('/x', ['HTTP_ACCEPT' => 'text/markdown,text/html;q=0.9']);
         yield 'no accept' => $get('/x', ['HTTP_ACCEPT' => '']);
+        yield 'an empty accept then a redirected one' => $get('/x', ['HTTP_ACCEPT' => '', 'REDIRECT_HTTP_ACCEPT' => 'application/json']);
         yield 'a redirected accept' => $get('/x', ['REDIRECT_HTTP_ACCEPT' => 'application/json']);
     }
 

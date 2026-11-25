@@ -379,4 +379,61 @@ final class PageRequestListenerTest extends TestCase
 
         $this->assertSame([], $this->lifecycle->calls);
     }
+
+    public function testAHeaderOnSuccessIsAddedToA200Only(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        PageContext::of($request)->addHeaderOnSuccess('Link', '<https://example.com/a>; rel="canonical"');
+
+        $ok = new Response('x');
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $ok));
+        $missing = new Response('x', 404);
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $missing));
+
+        $this->assertSame(['<https://example.com/a>; rel="canonical"'], $ok->headers->all('link'));
+        $this->assertFalse($missing->headers->has('Link'));
+    }
+
+    public function testAResponseWithWorkAfterItTellsTheClientItIsComplete(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $plain = new Response('abc');
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $plain));
+        $this->assertFalse($plain->headers->has('Connection'));
+
+        PageContext::of($request)->afterResponse(static fn () => null);
+        $response = new Response('abcdé');
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+
+        $this->assertSame('close', $response->headers->get('Connection'));
+        $this->assertSame('6', $response->headers->get('Content-Length'), 'bytes, not characters');
+    }
+
+    public function testTheForwardThatEndsThePageReplacesOneItWentOnFrom(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/first'));
+        $event = $this->exceptionEvent($request, new PageRedirect('https://example.com/second'));
+
+        $listener->onException($event);
+        $response = $event->getResponse();
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+
+        $this->assertSame('https://example.com/second', $response->headers->get('Location'));
+    }
+
+    public function testAnApiRequestsAnswerMayBeA200(): void
+    {
+        $event = $this->exceptionEvent(Request::create('/'), new PageRedirect('https://example.com/next', '{}', 200));
+
+        $this->listener()->onException($event);
+
+        $this->assertTrue($event->isAllowingCustomResponseCode());
+    }
 }

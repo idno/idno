@@ -594,7 +594,7 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    the router will match to the step route (`UpgradePage::isStepRequest()`: POST as sent and as
    Symfony reads it, despite any `X-HTTP-Method-Override`, to exactly `/_upgrade/step`), which
    reaches `UpgradeController`; so no request reaches the router's legacy catch-all, and steps 4 to
-   6 below do not happen for them (`Kernel::terminate()` still runs; no Idno listener is on it).
+   6 below do not happen for them (`Kernel::terminate()` still runs; the only Idno listener on it is `PageRequestListener::onTerminate()`, for the work a controller page asked to be done after its response).
    While the database is unreachable the legacy application boots as before (its database error
    page), except for an upgrade step, which answers 503 itself (see "The schema gate and the
    upgrade").
@@ -625,7 +625,11 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    throw. `current_url()` is `TemplateHelpers::currentUrlFor($_SERVER['REQUEST_URI'] as the request has it)`: the configured `url`'s scheme, host and port plus the
    request URI, byte for byte what `Page::currentUrl()` builds (`Tests/Kernel/TwigRequestHelpersTest` over a real page, `IdnoTwigExtensionTest`).
 6. If the page returns rather than exits, `index.php` calls `Kernel::terminate()`. Pages
-   that `exit` skip it, so nothing essential may live in a `kernel.terminate` listener.
+   that `exit` skip it, so nothing essential may live in a `kernel.terminate` listener, with one exception: the work a page a controller
+   serves registers with `AfterResponse::run()` runs there (`PageRequestListener::onTerminate()`), which is safe because a controller page never
+   exits (a plugin listener that exits during the draw would skip it). The response says `Connection: close` and its `Content-Length` when such
+   work is registered, so `php -S` and mod_php, which only flush, let the client go as the legacy path did; under FPM `Response::send()`
+   calls `fastcgi_finish_request()`, which does it whatever the headers. A response that streams (a `StreamedResponse`, a file) carries no length.
 
 Because legacy pages run while the response is sent (after `Kernel::handle()` has
 returned), an exception thrown by a legacy page is handled by the legacy exception
@@ -879,7 +883,7 @@ test fixtures is routed to a controller through them yet:
   so a non-null default hides them; the filter runs again on the result when the first answer was empty), `setInput()`, `xhr()` and `$xhr`,
   `$arguments`, `response()`/`setResponse()`, the entity, permalink, owner (false when none) and assets (false when none) accessors,
   `currentUrl()` (the configured `url`'s scheme, host and port plus the raw request address, so `doesPathMatch()` and `matchUrl()` work),
-  `referrer()`/`getReferrer()` (the `Referer`, ''), `isAcceptedContentType()` (the request's `Accept`, else `REDIRECT_HTTP_ACCEPT`, with the old
+  `referrer()`/`getReferrer()` (the `Referer`, ''), `isAcceptedContentType()` (the request's `Accept`, else, when it is absent or empty, `REDIRECT_HTTP_ACCEPT` from the request's server bag, with the old
   algorithm, quirks included: a space after a comma stays in the key and a tie takes 1 off the quality), `isSecure()` (`Page::isSSL()`'s rule read
   from the request), `setNoCache()` (`Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and `Pragma: no-cache`: the legacy page's
   third header, `post-check=0, pre-check=0`, is not sent), `setLastModifiedHeader()`, `pageClassName()` (the attribute's `name`);
@@ -889,18 +893,20 @@ test fixtures is routed to a controller through them yet:
   `GoneHttpException` (each after setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template
   type, when it is not the default, in `_t`; the session closed first, as `finishEarly()` did; `forward_trace` logged and sent as
   `X-Idno-Forward-Trace`; a POST, PUT or DELETE sent as an XHR request does nothing, as before; an API request gets the JSON
-  `{"location": ...}` in the redirect's `body` instead of a `Location`), `sslGatekeeper()` a 307 `PageRedirect`, `exception()` rethrows (the controller
+  `{"location": ...}` in the redirect's `body` instead of a `Location`), `sslGatekeeper()` a 307 `PageRedirect` (when `Config::hasSSL()` says the site wants https: an https `url` or `force_ssl`; `ConfigHasSslTest`), `exception()` rethrows (the controller
   wiring must not leave the exception handler `Page::init()` installs pointing at a `ControllerPage`); `forward($location, false)`, which a
   legacy page used to send the redirect and carry on, records the redirect on the context and returns, and `PageRequestListener::onResponse()`
   puts it on whatever the page answers (a 200 becomes the redirect; an API body is put before the page's); `AfterResponse::run()` for a
   controller page registers its work on the context (`PageContext::afterResponse()`) and forwards, the listener runs it on `kernel.terminate`
   (no time limit; a failure goes to `reportException()`), and the PageRedirect is turned into the response by `PageRequestListener::onException()`
-  (`kernel.exception`, priority 10); `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
+  (`kernel.exception`, priority 10, which calls `allowCustomResponseCode()`: without it Symfony makes a 500 of the 200 an API request's forward or
+  the empty answer of work after the response is; `Tests/Kernel/PageRedirectKernelTest` goes through the real kernel; a forward that went on, then one that exits: the second wins); `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
   `data()` is always empty (the context reads a JSON payload on demand). The Markdown members work from the request: `wantsMarkdown()` (the
   request's `Accept`, `format`, `_t` and the context's suffix flag), `sendVaryAccept()` (a `Vary: Accept` added to the context),
   `selectMarkdownIfWanted()`, and `drawMarkdown()`, which RETURNS the document (a legacy page echoed it and exited) and records the Markdown
-  headers on the context from the page's own status. `DefaultTemplate` reads that status (`pageStatus()`), not `http_response_code()`, for a
-  `ControllerPage` (the canonical `Link` is for a 200). Every other member that would read the process's request, send a header, set the status,
+  headers on the context; the canonical `Link` is kept apart (`PageContext::addHeaderOnSuccess()`) and added by the response listener only to a response whose
+  status is 200, whatever the page's own status was, and the session's messages are used up as `drawPage()` did (`drawPageWithoutSideEffects($echo, $shell, true)`).
+  `DefaultTemplate` reads the page's status (`pageStatus()`), not `http_response_code()`, for a `ControllerPage`. Every other member that would read the process's request, send a header, set the status,
   echo or exit throws a `\LogicException` naming it (`get()`, `post()`, `put()`, `delete()`, `head()`, their `_xhr` forms, `options()`,
   `webmention()`, `parseJSONPayload()`, `flushBrowser()`): the router's dispatch, which a controller replaces. `Tests/Kernel/ControllerPageMembersTest`
   walks every public method `Page` declares and fails for one that `ControllerPage` neither overrides nor lists as pure (with the reason; the list's
@@ -914,12 +920,12 @@ test fixtures is routed to a controller through them yet:
   `Session::publicGatekeeper()` passes the page to `isRoutePublic()`. A route under `/account` or `/admin` whose controller is a site page must
   carry the flag: `Tests/Kernel/SitePageRoutesTest` scans every route (`{lead}`, `{slash}` and a leading subdirectory placeholder
   accepted) and fails for one that does not. The refusal of an API request on an account page is the lifecycle's `refusesApiRequest()`,
-  which asks `isAccountPage()` of the current page (`SitePageLifecycleTest` proves it for a flagged controller, `ControllerPageTest` for a
+  which asks the attribute's own `accountPage` and `isAccountPage()` of the current page (`SitePageLifecycleTest` proves it for a flagged controller, `ControllerPageTest` for a
   class only the router knows). `Page::pageClassName()` is `static::class`, and `getBodyClasses()` builds the page's body class from it.
 - `Idno\Legacy\BarePage` is a page with no content, for an answer no page produced (the 404 page of `LegacyDispatcher`, the 403 of
   `PageHandler` for an API request on an account page and of `LegacyForbiddenPage`, and the stand-in current page of tests): it runs `Page::init()` as
   the home page did, and carries the home page's body class (`pageClassName()` is `Idno\Pages\Homepage`: the golden `not-found.html`).
-  Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
+  A test that listens for an event removes its listener (`Idno\Core\EventDispatcher::removeListener()`). Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
 - The page lifecycle of a controller (`Idno\Http\Page\PageLifecycle`, an interface; `Idno\Legacy\LegacyPageLifecycle` the adapter, aliased
   and public in `config/services.php`): what a legacy page did around its handler, in the same order. `PageRequestListener`
   (`#[AsEventListener]` on `kernel.controller` at priority 0, so before `IsGrantedAttributeListener` at 20; constructor: the kernel and
