@@ -54,6 +54,21 @@ namespace IdnoPlugins\Moderation {
             }
         }
 
+        /**
+         * Is the page being served one of the moderation pages (/admin/moderation/ and
+         * everything under it)? For marking the item in the admin menu: Page::doesPathMatch()
+         * compares the whole address, so it misses a tab (?tab=...), a case or the settings.
+         *
+         * @return bool
+         */
+        public static function isModerationPage()
+        {
+            $current = '/' . trim((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH), '/') . '/';
+            $base = '/' . trim((string) parse_url(Idno::site()->config()->getDisplayURL() . 'admin/moderation', PHP_URL_PATH), '/') . '/';
+
+            return strpos($current, $base) === 0;
+        }
+
         // -----------------------------------------------------------------
         // Settings
         // -----------------------------------------------------------------

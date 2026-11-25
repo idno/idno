@@ -120,6 +120,10 @@ a.mod-tab-active:link, a.mod-tab-active:visited, .mod-tab-active { border-color:
 
 .mod-queue { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; align-items: start; }
 .mod-wide { grid-column: 1 / -1; max-width: 60rem; }
+/* An empty list is one message across the page, the same on every tab: not a narrow box in
+   the column the list would have had */
+.mod-queue > .mod-list:has(> .mod-empty) { grid-column: 1 / -1; max-width: 60rem; position: static; max-height: none; overflow: visible; }
+.mod-queue > .mod-list:has(> .mod-empty) + .mod-detail { display: none; }
 .mod-items { margin: 0; padding: 0; list-style: none; border: 1px solid var(--color-border, #e5e7eb); border-radius: 0.75rem; background: var(--color-surface, #fff); overflow: hidden; }
 .mod-items li + li { border-top: 1px solid var(--color-border-subtle, #f0f0f0); }
 .mod-item, a.mod-item:link, a.mod-item:visited { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.75rem 0.875rem; color: var(--color-text, #374151); text-decoration: none; }

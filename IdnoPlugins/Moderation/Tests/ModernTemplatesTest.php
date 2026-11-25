@@ -50,6 +50,22 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertStringContainsString('idno-admin-nav-item', $html);
         }
 
+        public function testTheAdminMenuItemIsMarkedOnEveryModerationPage()
+        {
+            $pages = ['/admin/moderation/', '/admin/moderation', '/admin/moderation/?tab=banned', '/admin/moderation/?tab=log&offset=30',
+                '/admin/moderation/case/abc-123', '/admin/moderation/member/abc-123/', '/admin/moderation/settings'];
+            foreach ($pages as $uri) {
+                $_SERVER['REQUEST_URI'] = $uri;
+                $this->assertStringContainsString('idno-admin-nav-item active', $this->drawModern('moderation/admin/menu'), "The menu item should be marked on $uri in Twenty26.");
+                $this->assertStringContainsString('class="active"', $this->drawDefault('moderation/admin/menu'), "The menu item should be marked on $uri in the default look.");
+            }
+            foreach (['/admin/users/', '/admin/', '/admin/moderationx/', '/admin/users/?next=/admin/moderation/'] as $uri) {
+                $_SERVER['REQUEST_URI'] = $uri;
+                $this->assertStringNotContainsString(' active', $this->drawModern('moderation/admin/menu'), "The menu item should not be marked on $uri.");
+                $this->assertStringNotContainsString('class="active"', $this->drawDefault('moderation/admin/menu'), "The menu item should not be marked on $uri.");
+            }
+        }
+
         public function testTheMenuItemsTheReportFormAndTheQueue()
         {
             $status = new \IdnoPlugins\Status\Status();
