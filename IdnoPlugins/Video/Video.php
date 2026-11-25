@@ -16,6 +16,8 @@ namespace IdnoPlugins\Video {
      * - video_provider, video_id, video_start, video_key, video_portrait: what VideoUrl
      *   made of that address. The player is built from these, after VideoUrl has checked
      *   them again (see getVideo()).
+     * - video_did, video_cid, video_ratio: for a video in a Bluesky post, whose post it is,
+     *   the video's content id and its shape. Bluesky was asked when the post was saved.
      * - video_host: for a video on an open service (PeerTube, Loops), the host it is on.
      *   The host was asked when the post was saved (OpenVideo); it is not asked again.
      * - title, body (the description, HTML) and tags.
@@ -121,7 +123,15 @@ namespace IdnoPlugins\Video {
                 return null;
             }
 
-            $video = VideoUrl::fromStored($this->video_provider, $this->video_id, $this->video_start, $this->video_key, $this->video_portrait, $this->video_host);
+            $video = VideoUrl::fromStored(
+                $this->video_provider,
+                $this->video_id,
+                $this->video_start,
+                $this->video_key,
+                $this->video_portrait,
+                $this->video_host,
+                ['did' => $this->video_did, 'cid' => $this->video_cid, 'ratio' => $this->video_ratio]
+            );
 
             // A host that anybody can run is framed only while the site's admin allows it
             if ($video && $video->isOpen() && (!self::openServicesAllowed() || self::isBlockedHost($video->getHost()))) {
@@ -162,7 +172,15 @@ namespace IdnoPlugins\Video {
 
             $video = VideoUrl::parse($address);
 
-            if (!$video && self::openServicesAllowed() && ($candidate = VideoUrl::candidate($address))) {
+            $candidate = $video ? null : VideoUrl::candidate($address);
+            if ($candidate && $candidate['provider'] === 'bluesky') {
+                // A Bluesky post: ask Bluesky for its video
+                if ($found = OpenVideo::resolve($candidate)) {
+                    $video = $found['video'];
+                } else {
+                    $this->refusal = \Idno\Core\Idno::site()->language()->_('We couldn\'t find a video in that Bluesky post. Check the address, or try again in a moment.');
+                }
+            } elseif ($candidate && self::openServicesAllowed()) {
                 // The address has the form of one on PeerTube or Loops: ask the host
                 if (!self::isBlockedHost($candidate['host']) && ($found = OpenVideo::resolve($candidate))) {
                     $video = $found['video'];
@@ -186,6 +204,9 @@ namespace IdnoPlugins\Video {
             $this->video_key      = $video->getKey();
             $this->video_portrait = $video->isPortrait();
             $this->video_host     = $video->getHost();
+            $this->video_did      = $video->getDid();
+            $this->video_cid      = $video->getCid();
+            $this->video_ratio    = $video->getRatio();
 
             return true;
         }

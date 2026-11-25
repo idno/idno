@@ -211,10 +211,10 @@ namespace IdnoPlugins\Video\Tests {
 
         public function testServicesNamedToMembers()
         {
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'PeerTube', 'Loops'], Video::serviceNames(), 'Open services are allowed unless the admin has turned them off.');
+            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky', 'PeerTube', 'Loops'], Video::serviceNames(), 'Open services are allowed unless the admin has turned them off.');
 
             Idno::site()->config()->video_open_services = false;
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok'], Video::serviceNames());
+            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky'], Video::serviceNames());
         }
 
         /**
