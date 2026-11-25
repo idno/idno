@@ -29,11 +29,15 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
         'default' => ['', 'text/html;charset=UTF-8'],
         'json' => ['?_t=json', 'application/json'],
         'rss' => ['?_t=rss', 'application/rss+xml'],
+        'jsonp' => ['?_t=jsonp&callback=cb', 'application/x-javascript;charset=utf-8'],
         'markdown' => ['?_t=md', 'text/markdown; charset=utf-8'],
     ];
 
     /** @var array<string, string> the id of the page of each kind, by name */
     private array $ids = [];
+
+    /** @var array<string, string> the address of the page of each kind that exists, by name */
+    private array $paths = [];
 
     /** @var array<string, string> the session cookie of each viewer */
     private array $cookies = ['visitor' => ''];
@@ -55,6 +59,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
             . ' "group" => $mk("Marker group page", $group->getUUID()), "draft" => $mk("Marker draft page", "PUBLIC", ["publish_status" => "draft"]),'
             . ' "forward" => $mk("Marker forwarding page", "PUBLIC", ["forward_url" => ' . $this->literal(self::FORWARD) . ']), "deleted" => $gone, "missing" => "no-such-page"];'
         );
+        $this->paths = $this->runInSite('\Idno\Core\Idno::site()->session()->logUserOn(\Idno\Entities\User::getByHandle("ada")); $paths = []; foreach (json_decode(' . $this->literal((string) json_encode(array_diff_key($this->ids, ['deleted' => 1, 'missing' => 1]))) . ', true) as $kind => $id) { $paths[$kind] = parse_url(\IdnoPlugins\StaticPages\StaticPage::getByID($id)->getURL(), PHP_URL_PATH); } return $paths;');
         foreach (['bob', 'carol', 'ada'] as $handle) {
             $this->cookies[$handle] = $this->loginCookie($handle, 'correct-horse-battery-9');
         }
@@ -130,9 +135,11 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
 
     /**
      * Asks for `/` of each viewer, for each kind of chosen page, and checks the answer against who may read it. `$visitorRefused`: the site
-     * refuses a visitor before the home page is asked anything (a walled garden whose home route is not public).
+     * refuses a visitor before the home page is asked anything (a walled garden whose home route is not public). `$comparePermalink`: also checks
+     * the home page against the page's own address for each viewer (not where a plugin made the home route public and the address is not: a visitor
+     * is shown a public page on the home page there and refused at its address, a decision of its own).
      */
-    private function assertEveryViewerGetsWhatHeMay(string $base, bool $visitorRefused): void
+    private function assertEveryViewerGetsWhatHeMay(string $base, bool $visitorRefused, bool $comparePermalink = true): void
     {
         foreach (self::readers() as $kind => $readers) {
             $id = $this->ids[$kind];
@@ -153,7 +160,6 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
                         $this->assertSame(200, $r['status'], $where);
                         $this->assertStringContainsString($title, $r['body'], $where);
                         $this->assertStringNotContainsString(self::STREAM, $r['body'], $where);
-                        $this->assertSame([$contentType], array_map(static fn (string $v): string => str_replace('; ', ';', $v), $r['headers']['content-type'] ?? []) === [] ? [] : [$contentType], $where);
                         $this->assertSame(strtolower(str_replace('; ', ';', $contentType)), strtolower(str_replace('; ', ';', $r['headers']['content-type'][0] ?? '')), $where);
                         $this->assertSame(['no-store, no-cache, must-revalidate'], $r['headers']['cache-control'] ?? [], $where);
                         $this->assertArrayHasKey('last-modified', $r['headers'], $where);
@@ -174,10 +180,27 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
                     }
                 }
             }
-            // HEAD and OPTIONS of the root, for a viewer who reads the page and one who does not
-            foreach (['bob', 'ada'] as $viewer) {
+            // The home page shows the static page exactly when the page's own address would (the same viewer, the same page): a viewer the permalink
+            // refuses, hides or sends elsewhere is never shown the page on the home page, and one it shows is
+            if ($comparePermalink && isset($this->paths[$kind])) {
+                foreach (['visitor', 'bob', 'carol', 'ada'] as $viewer) {
+                    $permalink = $this->request($base, $viewer, 'GET', $this->paths[$kind]);
+                    $home = $this->request($base, $viewer, 'GET', '/');
+                    $this->assertSame(
+                        $permalink['status'] === 200 && str_contains($permalink['body'], $title),
+                        $home['status'] === 200 && str_contains($home['body'], $title),
+                        'the home page and ' . $this->paths[$kind] . ' agree about ' . $viewer
+                    );
+                    if ($permalink['status'] === 302) {
+                        $this->assertSame($permalink['headers']['location'] ?? [], $home['headers']['location'] ?? [], 'forwarding for ' . $viewer);
+                    }
+                }
+            }
+            // HEAD and OPTIONS of the root, for a visitor, a viewer who reads the page and one who does not (OPTIONS is answered before the walled garden is asked)
+            foreach (['visitor', 'bob', 'ada'] as $viewer) {
                 $head = $this->request($base, $viewer, 'HEAD');
-                $this->assertSame(in_array($viewer, $readers, true) || $kind !== 'forward' ? 200 : 302, $head['status'], 'HEAD ' . $kind . ' for ' . $viewer);
+                $expected = $viewer === 'visitor' && $visitorRefused ? 403 : (in_array($viewer, $readers, true) || $kind !== 'forward' ? 200 : 302);
+                $this->assertSame($expected, $head['status'], 'HEAD ' . $kind . ' for ' . $viewer);
                 $this->assertSame('', $head['body'], 'HEAD ' . $kind . ' for ' . $viewer);
                 $options = $this->request($base, $viewer, 'OPTIONS');
                 $this->assertSame(204, $options['status'], 'OPTIONS ' . $kind . ' for ' . $viewer);
@@ -214,7 +237,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
     {
         $base = $this->startExtraServer(['IDNO_WALLED_GARDEN' => '1', 'IDNO_TEST_HOMEPAGE_LISTENERS' => 'public']);
 
-        $this->assertEveryViewerGetsWhatHeMay($base, false);
+        $this->assertEveryViewerGetsWhatHeMay($base, false, false);
         $this->assertNoDeprecation($base);
     }
 

@@ -45,10 +45,13 @@ namespace Idno\Core {
         }
 
         /**
-         * Set the response variable associated with this event
+         * Set the response variable associated with this event.
+         *
+         * When the event was triggered with a rule for the response it keeps (`keepResponseWhen()`) and the response set so far is one the rule
+         * accepts, nothing is set and the KEPT response is returned; otherwise the value set is returned.
          *
          * @param  $value
-         * @return true|false
+         * @return mixed the response now held (the value given, or the kept one)
          */
         function setResponse($value)
         {
