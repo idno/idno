@@ -91,6 +91,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
      * @param \Closure(): ReceiverInterface  $transport the `idno` transport
      * @param \Closure(): MessageBusInterface $bus
      * @param \Closure(): LoggerInterface    $logger
+     * @param (\Closure(): int)|null         $memoryUsage the bytes the process uses, asked between messages (null: PHP's real usage); a seam for tests, whose own process holds a whole suite
      */
     public function __construct(
         #[AutowireServiceClosure(EventQueue::class)]
@@ -109,6 +110,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
         private readonly KernelInterface $kernel,
         private readonly BootConfig $bootConfig,
         private readonly float $busyGiveUpSeconds = 30.0,
+        private readonly ?\Closure $memoryUsage = null,
     )
     {
         parent::__construct();
@@ -280,7 +282,7 @@ final class QueueWorkCommand extends Command implements SignalableCommandInterfa
                 }
             },
             WorkerRunningEvent::class => function (WorkerRunningEvent $event) use ($output, $memoryLimit): void {
-                if (memory_get_usage(true) > $memoryLimit) {
+                if (($this->memoryUsage !== null ? ($this->memoryUsage)() : memory_get_usage(true)) > $memoryLimit) {
                     $output->writeln('[' . date('r') . '] Stopping: the worker has used a lot of memory; a supervisor starts it again.');
                     $event->getWorker()->stop();
                 }

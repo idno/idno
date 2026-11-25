@@ -2405,7 +2405,7 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   transport ...)`). `--once` stops the worker when it is idle (everything waiting now, exit 0); otherwise it
   runs until SIGTERM, SIGINT or SIGQUIT, sleeping `--interval` seconds when idle, and stops itself with exit 0
   at `QueueWorkCommand::memoryLimitBytes()` (80% of `memory_limit` when set, at most 256 MiB) for a
-  supervisor to restart. SIGTERM, SIGINT and SIGQUIT set a stop flag at any time (also before the worker
+  supervisor to restart (the usage it compares is `memory_get_usage(true)`, or the constructor's `$memoryUsage` closure: a test never lets it read its own process, which in a whole suite uses over 256 MiB and made the time-limit test stop at once). SIGTERM, SIGINT and SIGQUIT set a stop flag at any time (also before the worker
   exists): the drain ends between records, the command does not start consuming, exit 0. `--once` stops on
   a GENUINE empty read (`StopWhenQueueIsEmpty`: `ResilientTransport::lastGetWasInterrupted()` says a read
   returned nothing only because it was ridden out), waiting 0.5 s between reads, and after 30 s of

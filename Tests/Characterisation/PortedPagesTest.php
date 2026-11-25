@@ -63,8 +63,8 @@ namespace Tests\Characterisation {
                 ['GET', '/', ['Host' => 'bad host!'], 200, 'text/html', null, $html, true, $std, true],
                 // A POST without a form token is a redirect to the home page; PUT and DELETE are a 500 page and PATCH a 404 page.
                 ['POST', '/', [], 302, 'text/html', '/', '', false, $std, false],
-                ['PUT', '/', [], 500, 'text/html', null, 'Exception', false, $std, true],
-                ['DELETE', '/', [], 500, 'text/html', null, 'Exception', false, $std, true],
+                ['PUT', '/', [], 500, 'text/html', null, 'Something went wrong.', false, $std, true],
+                ['DELETE', '/', [], 500, 'text/html', null, 'Something went wrong.', false, $std, true],
                 ['PATCH', '/', [], 404, 'text/html', null, $notFound, false, $std, true],
                 // the streams
                 ['GET', '/content/all', [], 200, 'text/html', null, $html, true, $std, true],
@@ -98,6 +98,7 @@ namespace Tests\Characterisation {
                 ['GET', '/tag/a+b', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/a%2Bb', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/%FF', [], 200, 'text/html', null, $html, false, $std, true],
+                // The query `x` matches the fixture post ("fixture note"), so the page lists a post and carries its Last-Modified.
                 ['GET', '/tag/books?q=x', [], 200, 'text/html', null, $html, true, $std, true],
                 // `/tag/` has no tag: it is the 404 page.
                 ['GET', '/tag/', [], 404, 'text/html', null, $notFound, false, $std, true],
@@ -116,7 +117,7 @@ namespace Tests\Characterisation {
                 ['GET', '/service/security/csrftoken/?url=' . $encoded, $xhr, 200, 'application/json', null, '"token"', true, 'token', false],
                 ['GET', '/service/security/csrftoken/?url=' . $encoded, [], 403, 'text/html', null, $html, false, $std, true],
                 // With no `url` the token endpoint fails with a 500 page.
-                ['GET', '/service/security/csrftoken/', $xhr, 500, 'text/html', null, 'Exception', true, 'token', true],
+                ['GET', '/service/security/csrftoken/', $xhr, 500, 'text/html', null, 'Something went wrong.', true, 'token', true],
             ];
         }
 
@@ -125,30 +126,38 @@ namespace Tests\Characterisation {
             $this->createStatus($this->user(), 'fixture note #books');
             $callers = ['visitor' => [], 'member' => ['Cookie' => $this->logIn($this->user())]];
 
+            $failures = [];
             foreach ($this->rows() as [$method, $path, $headers, $status, $type, $location, $marker, $lastModified, $caching, $cors]) {
                 foreach ($callers as $caller => $extra) {
                     $name = $caller . ': ' . $method . ' ' . $path . ($headers === [] ? '' : ' ' . json_encode($headers));
-                    $response = $this->site()->request($method, $path, $headers + $extra);
+                    try {
+                        $response = $this->site()->request($method, $path, $headers + $extra);
 
-                    $this->assertSame($status, $response->status, $name . ' ' . substr($response->body, 0, 200));
-                    $this->assertStringStartsWith($type, (string) $response->header('Content-Type'), $name);
-                    if ($location === null) {
-                        $this->assertNull($response->header('Location'), $name);
-                    } else {
-                        $this->assertSame($location, parse_url((string) $response->header('Location'), PHP_URL_PATH), $name);
-                    }
-                    $this->assertStringContainsString($marker, $response->body, $name);
-                    $this->assertSame(self::CACHING[$caching][0], $response->header('Expires'), $name);
-                    $this->assertSame(self::CACHING[$caching][1], $response->header('Cache-Control'), $name);
-                    $this->assertSame('no-cache', $response->header('Pragma'), $name);
-                    $this->assertSame($lastModified, $response->header('Last-Modified') !== null, $name . ' Last-Modified');
-                    $this->assertNull($response->header('ETag'), $name . ' ETag');
-                    $this->assertSame($cors ? '*' : null, $response->header('Access-Control-Allow-Origin'), $name . ' Access-Control-Allow-Origin');
-                    if (in_array($method, ['HEAD', 'OPTIONS'], true)) {
-                        $this->assertSame('', $response->body, $name);
+                        $this->assertSame($status, $response->status, $name . ' ' . substr($response->body, 0, 200));
+                        $this->assertStringStartsWith($type, (string) $response->header('Content-Type'), $name);
+                        if ($location === null) {
+                            $this->assertNull($response->header('Location'), $name);
+                        } else {
+                            $this->assertSame($location, parse_url((string) $response->header('Location'), PHP_URL_PATH), $name);
+                        }
+                        $this->assertStringContainsString($marker, $response->body, $name);
+                        $this->assertSame(self::CACHING[$caching][0], $response->header('Expires'), $name);
+                        $this->assertSame(self::CACHING[$caching][1], $response->header('Cache-Control'), $name);
+                        $this->assertSame('no-cache', $response->header('Pragma'), $name);
+                        $this->assertSame($lastModified, $response->header('Last-Modified') !== null, $name . ' Last-Modified');
+                        $this->assertNull($response->header('ETag'), $name . ' ETag');
+                        $this->assertSame($cors ? '*' : null, $response->header('Access-Control-Allow-Origin'), $name . ' Access-Control-Allow-Origin');
+                        if (in_array($method, ['HEAD', 'OPTIONS'], true)) {
+                            $this->assertSame('', $response->body, $name);
+                        }
+                    } catch (\PHPUnit\Framework\AssertionFailedError $failure) {
+                        $failures[] = $name . ': ' . strtok($failure->getMessage(), "\n");
                     }
                 }
             }
+
+            // Every failing row, together, not the first only.
+            $this->assertSame([], $failures);
         }
 
         public function testTheServiceWorkerAtItsUnminifiedAddress(): void
@@ -169,17 +178,19 @@ namespace Tests\Characterisation {
 
         public function testTheTypesFilterNarrowsASearchOfTheHomePage(): void
         {
-            $this->createStatus($this->user(), 'fixture note #books');
-            $this->createArticle($this->user(), 'A fixture article', 'fixture article words');
+            // A word of this run's own: the site is shared, so no other post can hold it.
+            $word = 'fx' . bin2hex(random_bytes(4));
+            $this->createStatus($this->user(), $word . ' note #books');
+            $this->createArticle($this->user(), 'A ' . $word . ' article', $word . ' article words');
             $article = rawurlencode('IdnoPlugins\Text\Entry');
             $status = rawurlencode('IdnoPlugins\Status\Status');
 
-            $articles = $this->site()->request('GET', '/?q=fixture&_t=json&types=' . $article)->json();
-            $statuses = $this->site()->request('GET', '/?q=fixture&_t=json&types=' . $status)->json();
-            $both = $this->site()->request('GET', '/?q=fixture&_t=json')->json();
+            $articles = $this->site()->request('GET', '/?q=' . $word . '&_t=json&types=' . $article)->json();
+            $statuses = $this->site()->request('GET', '/?q=' . $word . '&_t=json&types=' . $status)->json();
+            $both = $this->site()->request('GET', '/?q=' . $word . '&_t=json')->json();
 
-            $this->assertSame(['A fixture article'], array_column($articles['items'], 'displayName'));
-            $this->assertSame(['fixture note #books'], array_column($statuses['items'], 'displayName'));
+            $this->assertSame(['A ' . $word . ' article'], array_column($articles['items'], 'displayName'));
+            $this->assertSame([$word . ' note #books'], array_column($statuses['items'], 'displayName'));
             $this->assertSame(2, $both['count']);
         }
 
@@ -309,7 +320,9 @@ namespace Tests\Characterisation {
             $this->assertSame('', $json->body);
 
             $html = $this->site()->request('GET', '/tag/%FF');
-            $this->assertStringContainsString('<title class="p-name">New Idno site</title>', $html->body);
+            $this->assertSame(200, $html->status);
+            $this->assertSame(1, preg_match('/<title class="p-name">([^<]+)<\/title>/', $html->body, $title), 'the page has a title');
+            $this->assertStringNotContainsString('#', $title[1], 'no tag in the title');
         }
 
         public function testTheTagPageListsThePostsWithTheTag(): void

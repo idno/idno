@@ -56,12 +56,16 @@ final class QueueWorkCommandTest extends TestCase
 
     private string $queueSetting = 'AsynchronousQueue';
 
+    /** @var \Closure(): int what the worker is told its process uses: never the real figure, which grows with a suite's tests */
+    private \Closure $memoryUsage;
+
     /** @var list<string> */
     private array $drainSends = [];
 
     protected function setUp(): void
     {
         $this->connection = PrivateDatabase::sqliteMemory();
+        $this->memoryUsage = static fn (): int => 0;
     }
 
     private function legacyRecord(int $n, bool $complete = false): void
@@ -165,6 +169,7 @@ final class QueueWorkCommandTest extends TestCase
             $kernel,
             new BootConfig($this->boot, false),
             $busyGiveUp,
+            $this->memoryUsage,
         );
     }
 
@@ -367,6 +372,17 @@ final class QueueWorkCommandTest extends TestCase
         $this->assertSame(0, $exit);
         $this->assertLessThan(6, microtime(true) - $started);
         $this->assertGreaterThan(0.5, microtime(true) - $started, 'not at once: after the limit');
+    }
+
+    public function testTheDaemonStopsWhenItsProcessUsesTooMuchMemoryAndSaysSo(): void
+    {
+        $this->memoryUsage = static fn (): int => QueueWorkCommand::MEMORY_LIMIT_BYTES + 1;
+        $tester = new CommandTester($this->command($this->emptyButNotForEver(10)));
+
+        $exit = $tester->execute(['--time-limit' => '0', '--interval' => '1']);
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString('used a lot of memory', $tester->getDisplay());
     }
 
     public function testTheTimeLimitIsOneHourByDefaultAndZeroMeansNone(): void
