@@ -26,6 +26,14 @@ use Tests\Templating\PageNormaliser;
  *    test records each case twice, on two sites or two runs of its scenario): the first is kept in memory, the second is compared with it, and only
  *    when every case matches are the files written (a difference fails the run and writes nothing);
  *  - commit the recordings in a commit of their own.
+ *
+ * What a recording may hold. The comparison side normalises what varies: the site's address (in the body AND in every header value: `Location`,
+ * `Link`, `X-Idno-Forward-Trace`, ...), the form token of an `__bTk` input and its time, and `Content-Length` is recorded only as whether it equals
+ * the byte length of the answer's own body (the body's length varies with the digits of the site's port). `Date` and `Set-Cookie` are never
+ * recorded (they differ by nature: a test never compares two separately generated times). A capture additionally REFUSES to write a recording that
+ * holds a 64-digit hex run (a form token or other secret in markup the normaliser does not know) or the value of a cookie the response set (a session
+ * id). Header names are folded to lower case and values are trimmed: a difference only in letter case of a name or in surrounding white space is
+ * not a difference.
  */
 trait RecordedAnswers
 {
@@ -38,17 +46,34 @@ trait RecordedAnswers
     /** @var list<string> the differences a verify capture found, each naming its file */
     private static array $recordedDifferences = [];
 
+    /** @var array<string, true> the CHANGED cases this class has met */
+    private static array $recordedChangedSeen = [];
+
     protected function assertRecordedAnswer(string $group, string $case, SiteResponse $response): void
     {
-        if (defined(static::class . '::CHANGED') && array_key_exists($case, constant(static::class . '::CHANGED'))) {
-            return;
+        foreach ([$group, $case] as $part) {
+            if (preg_match('/\A[a-z0-9][a-z0-9._-]*\z/', $part) !== 1 || str_contains($part, '..')) {
+                \PHPUnit\Framework\Assert::fail('A recording is named by a group and a case of lower case letters, digits, dots, hyphens and underscores: ' . $part);
+            }
         }
         $mode = static::captureMode();
-        if ($mode !== 'compare' && getenv('CI') !== false && getenv('CI') !== '') {
+        if ($mode !== 'compare' && static::ciRefusesCapture()) {
             \PHPUnit\Framework\Assert::fail('IDNO_TEST_CAPTURE_GOLDENS is refused when CI is set: a recording is captured by a person, on purpose.');
+        }
+        $changed = defined(static::class . '::CHANGED') ? constant(static::class . '::CHANGED') : [];
+        if (array_key_exists($case, $changed)) {
+            if (trim((string) $changed[$case]) === '') {
+                \PHPUnit\Framework\Assert::fail('The case ' . $case . ' is listed in CHANGED with no reason.');
+            }
+            self::$recordedChangedSeen[$case] = true;
+
+            return;
         }
         $actual = self::normalise($response, $this->baseUrl());
         $name = $group . '/' . $case . '.txt';
+        if ($mode !== 'compare') {
+            self::refuseSecrets($name, $actual, $response);
+        }
         if ($mode === 'compare') {
             $file = static::recordedAnswersDirectory() . '/' . $name;
             if (!is_file($file)) {
@@ -73,7 +98,7 @@ trait RecordedAnswers
 
             return;
         }
-        // A capture (mode 1) that records a case again keeps the last answer; a verified case's third answer must match too
+        // A case recorded again after it was verified (or again in a plain capture) must still be the same answer: a difference is reported
         if (self::$recordedCaptures[$name] !== $actual) {
             self::$recordedDifferences[] = $name . ' is not the same twice:' . "\n" . self::unifiedDiff(self::$recordedCaptures[$name], $actual);
         }
@@ -83,6 +108,12 @@ trait RecordedAnswers
     protected static function assertRecordedAnswersComplete(): void
     {
         $mode = static::captureMode();
+        $changed = defined(static::class . '::CHANGED') ? constant(static::class . '::CHANGED') : [];
+        $unseen = array_diff(array_keys($changed), array_keys(self::$recordedChangedSeen));
+        if ($unseen !== []) {
+            self::forgetRecordedAnswers();
+            \PHPUnit\Framework\Assert::fail('CHANGED lists cases that no test recorded: ' . implode(', ', $unseen));
+        }
         if ($mode === 'compare') {
             return;
         }
@@ -144,8 +175,15 @@ trait RecordedAnswers
                 if ($name === 'expires') {
                     $at = strtotime($value);
                     if ($at !== false) {
-                        $value = $at < 946684800 ? '<past>' : '<future: ' . (int) round(($at - ($date !== false ? $date : time())) / 86400) . ' days from the request>';
+                        if ($at >= 946684800 && $date === false) {
+                            throw new \InvalidArgumentException('An Expires in the future cannot be recorded without the Date of the answer.');
+                        }
+                        $value = $at < 946684800 ? '<past>' : '<future: ' . (int) round(($at - (int) $date) / 86400) . ' days from the request>';
                     }
+                } elseif ($name === 'content-length') {
+                    $value = $value === (string) strlen($response->body) ? '<the length of the body>' : '<not the length of the body>';
+                } else {
+                    $value = PageNormaliser::normalise($value, $baseUrl);
                 }
                 $out .= $name . ': ' . $value . "\n";
             }
@@ -165,6 +203,12 @@ trait RecordedAnswers
         };
     }
 
+    /** Whether a capture is refused: when `CI` is set. */
+    protected static function ciRefusesCapture(): bool
+    {
+        return getenv('CI') !== false && getenv('CI') !== '';
+    }
+
     protected static function recordedAnswersDirectory(): string
     {
         return dirname(__DIR__) . '/Characterisation/fixtures/answers';
@@ -175,6 +219,21 @@ trait RecordedAnswers
         self::$recordedCaptures = [];
         self::$recordedVerified = [];
         self::$recordedDifferences = [];
+        self::$recordedChangedSeen = [];
+    }
+
+    private static function refuseSecrets(string $name, string $text, SiteResponse $response): void
+    {
+        if (preg_match('/\b[0-9a-f]{64}\b/i', $text) === 1) {
+            \PHPUnit\Framework\Assert::fail($name . ' holds a 64-digit hex value: a form token or another secret in markup the normaliser does not know. It is not written.');
+        }
+        foreach ($response->lines('set-cookie') as $cookie) {
+            $pair = explode(';', $cookie, 2)[0];
+            $value = urldecode(substr($pair, (int) strpos($pair, '=') + 1));
+            if (strlen($value) >= 16 && str_contains($text, $value)) {
+                \PHPUnit\Framework\Assert::fail($name . ' holds the value of a cookie the response set (a session id). It is not written.');
+            }
+        }
     }
 
     private static function hasDifference(string $name): bool
