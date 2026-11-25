@@ -99,7 +99,7 @@ namespace Tests\Core {
         {
             $old = $this->swapUser($this->user());
 
-            $page = new \Idno\Pages\Homepage();
+            $page = new \Idno\Legacy\BarePage();
             $page->setInput('syndication', [self::SERVICE]);
             Idno::site()->setCurrentPage($page);
 
@@ -113,7 +113,7 @@ namespace Tests\Core {
         {
             $old = $this->swapUser($this->user());
 
-            Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
+            Idno::site()->setCurrentPage(new \Idno\Legacy\BarePage());
 
             $this->assertTrue($this->note()->publish(), 'The entity should be published.');
             $this->assertSame([], self::$syndicated, 'Nothing should be syndicated when no service is chosen.');

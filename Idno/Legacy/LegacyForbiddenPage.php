@@ -29,7 +29,7 @@ final class LegacyForbiddenPage implements ForbiddenPage
             return null;
         }
         $site = Idno::site();
-        $page = new \Idno\Pages\Homepage();
+        $page = new BarePage();
         $page->setResponse(403);
         $site->template()->autodetectTemplateType();
         $template = $site->template();

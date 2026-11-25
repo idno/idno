@@ -14,7 +14,7 @@ namespace Idno\Core\Templating {
         function getBodyClasses()
         {
             $classes = '';
-            $classes .= (str_replace('\\', '_', strtolower(get_class(\Idno\Core\Idno::site()->currentPage()))));
+            $classes .= (str_replace('\\', '_', strtolower(\Idno\Core\Idno::site()->currentPage()->pageClassName())));
             if ($path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)) {
                 if ($path == '/') {
                     $classes .= ' homepage';

@@ -84,7 +84,7 @@ final class LegacyDispatcher
                 // Take over page detection
                 \Idno\Core\Idno::site()->template()->autodetectTemplateType();
 
-                (new \Idno\Pages\Homepage())->noContent();
+                (new BarePage())->noContent();
             }
         );
         PageHandler::serve($routes);

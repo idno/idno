@@ -18,12 +18,12 @@ namespace Tests\Core {
         {
             parent::setUp();
             $this->previousPage = Idno::site()->currentPage();
-            Idno::site()->setCurrentPage(new \Idno\Pages\Homepage()); // the link template asks whether the page is an XHR one
+            Idno::site()->setCurrentPage(new \Idno\Legacy\BarePage()); // the link template asks whether the page is an XHR one
         }
 
         protected function tearDown(): void
         {
-            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
             parent::tearDown();
         }
 

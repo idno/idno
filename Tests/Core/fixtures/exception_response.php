@@ -43,7 +43,7 @@ $_SERVER['REQUEST_URI'] = '/';
 
 // Page::init() sets the template type from the _t input, and installs the exception handler
 // that hands uncaught exceptions to Page::exception().
-$page = new \Idno\Pages\Homepage();
+$page = new \Idno\Legacy\BarePage();
 $page->setInput('_t', $template);
 $page->init();
 

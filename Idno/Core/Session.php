@@ -925,8 +925,8 @@ namespace Idno\Core {
 
             if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
                 if (!\Idno\Core\Idno::site()->session()->isLoggedOn()) {
-                    $class = get_class(Idno::site()->currentPage());
-                    if (!\Idno\Core\Idno::site()->routes()->isRoutePublic($class)) {
+                    $page = Idno::site()->currentPage();
+                    if (!\Idno\Core\Idno::site()->routes()->isRoutePublic($page)) {
                         \Idno\Core\Idno::site()->currentPage()->deniedContent();
                     }
                 }

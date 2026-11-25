@@ -21,13 +21,13 @@ class CreateLinkOutputTest extends \Tests\IdnoTestCase
         $this->previousTemplateType = Idno::site()->template()->getTemplateType();
         $this->previousPage = Idno::site()->currentPage();
         // forms/link looks at the current page
-        Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
+        Idno::site()->setCurrentPage(new \Idno\Legacy\BarePage());
     }
 
     public function tearDown(): void
     {
         Idno::site()->template()->setTemplateType($this->previousTemplateType);
-        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
         Idno::site()->template()->extendTemplateWithContent('shell/form-data', '');
     }
 

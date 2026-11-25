@@ -37,7 +37,7 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
     public function tearDown(): void
     {
         Idno::site()->template()->setTemplateType($this->previousTemplateType);
-        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
         foreach ($this->toDelete as $entity) {
             $entity->delete();
         }
@@ -216,7 +216,7 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
      */
     public function testBookmarkOfAnAddressThatIsNotHttpIsNotSaved($input)
     {
-        $page = new \Idno\Pages\Homepage();
+        $page = new \Idno\Legacy\BarePage();
         foreach ($input + ['title' => 'A title', 'access' => 'PUBLIC', 'publish_status' => 'draft'] as $name => $value) {
             $page->setInput($name, $value);
         }
@@ -242,7 +242,7 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
 
     public function testBookmarkOfAnHttpAddressIsSaved()
     {
-        $page = new \Idno\Pages\Homepage();
+        $page = new \Idno\Legacy\BarePage();
         foreach (['body' => ' https://example.com/a?b=1&c=2 ', 'title' => 'A title', 'access' => 'PUBLIC', 'publish_status' => 'draft'] as $name => $value) {
             $page->setInput($name, $value);
         }
@@ -275,7 +275,7 @@ class MemberContentOutputTest extends \Tests\IdnoTestCase
     public function testBookmarkOfAHostThatBeginsWithSIsSavedAndDrawn($input, $field)
     {
         $address = 'https://stackoverflow.com/questions/1?a=1&b=2';
-        $page = new \Idno\Pages\Homepage();
+        $page = new \Idno\Legacy\BarePage();
         foreach ([$input => $address, 'title' => 'A title', 'access' => 'PUBLIC', 'publish_status' => 'draft'] as $name => $value) {
             $page->setInput($name, $value);
         }

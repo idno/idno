@@ -58,6 +58,15 @@ namespace Idno\Common {
         // Page assets that can be registered and set by plugins (javascript, css, etc)
         private $assets = array();
 
+        /**
+         * The name of the page class this page stands for: what the page's body class and the `page/get` event's `page_class`
+         * are made from. A page is its own class; a page a controller serves says which legacy page it replaces.
+         */
+        function pageClassName(): string
+        {
+            return static::class;
+        }
+
         function init()
         {
             if (!defined('IDNO_UNIT_TEST')) { // Don't do header stuff in unit tests

@@ -37,7 +37,7 @@ namespace IdnoPlugins\Event\Tests {
         public function tearDown(): void
         {
             Idno::site()->template()->setTemplateType($this->previousTemplateType);
-            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
             foreach ($this->toDelete as $entity) {
                 $entity->delete();
             }
@@ -236,7 +236,7 @@ namespace IdnoPlugins\Event\Tests {
 
         private function saveFromInput(array $input): RSVP
         {
-            $page = new \Idno\Pages\Homepage();
+            $page = new \Idno\Legacy\BarePage();
             foreach ($input + ['access' => 'SITE'] as $name => $value) {
                 $page->setInput($name, $value);
             }

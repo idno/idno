@@ -6,7 +6,7 @@ namespace Tests\Kernel;
 
 use Idno\Core\Idno;
 use Idno\Legacy\LegacyTemplateHelpers;
-use Idno\Pages\Homepage;
+use Idno\Legacy\BarePage;
 use Idno\Templating\SlotRegistry;
 use Idno\Templating\TemplateHelpers;
 use PHPUnit\Framework\TestCase;
@@ -25,12 +25,12 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->previousPage = Idno::site()->currentPage();
         $this->previousUri = $_SERVER['REQUEST_URI'] ?? null;
         $_SERVER['REQUEST_URI'] = '/some/page?x=1';
-        Idno::site()->setCurrentPage(new Homepage());
+        Idno::site()->setCurrentPage(new BarePage());
     }
 
     protected function tearDown(): void
     {
-        Idno::site()->setCurrentPage($this->previousPage ?: new Homepage());
+        Idno::site()->setCurrentPage($this->previousPage ?: new BarePage());
         if ($this->previousUri === null) {
             unset($_SERVER['REQUEST_URI']);
         } else {
@@ -280,7 +280,7 @@ final class LegacyTemplateHelpersTest extends TestCase
         $helpers = $this->helpers();
         $template = Idno::site()->template();
         $before = $template->vars;
-        $page = new Homepage();
+        $page = new BarePage();
         try {
             Idno::site()->setCurrentPage($page);
             unset($template->vars['user']);

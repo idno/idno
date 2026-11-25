@@ -332,7 +332,9 @@ Idno/
   Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass,
                                MessengerTrimPass, TwigTrimPass
   Http/                        FrontController (what index.php runs); Client/ (HttpClientFactory and
-                               BoundedBody: the site's HTTP clients, see "Kernel and services")
+                               BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
+                               PageContextResolver, PageRedirect: what a controller that draws a site page carries, see
+                               "Legacy pages and routes")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -841,6 +843,43 @@ The only classes outside `Idno\Legacy\` (and outside the legacy `Idno\Core`, `Id
 the entry points (`index.php`, `bin/console`, `Idno/start.php`) and the kernel configuration
 (`config/services.php`, `config/routes.php`, `config/packages/monolog.php`) wire it too. No
 other new code may.
+
+A page a controller draws has a current page too (`Idno::site()->currentPage()`), because templates, helpers and plugins ask it for
+the request's input, address, entity, owner, assets and status (`Idno\Core\Idno`, `DefaultTemplate`, `LegacyTemplateHelpers`,
+`Syndication`, `Webmention`, the bundled plugins' entities all do), and a controller serves no `Page`. Two shims in `Idno\Legacy\`
+(both `final`, excluded from the container scan) provide it; nothing is routed to a controller through them yet:
+
+- `Idno\Http\Page\SitePage` (an attribute on a controller class or method; the method's wins; `SitePage::of()` takes an object, a
+  `Class::method` string, an `[object|class, method]` array or an invokable, cached per class and method) says which legacy page the
+  controller serves: `name` (the page class: the body class, `page/get`'s `page_class`), `replaces` (the shell class whose legacy routes
+  it shadows; empty when the class was deleted), `publicOnPrivateSite`, `accountPage`, `settingsPage` and `defaultType`.
+  `Idno\Http\Page\PageContext` (not a service; the request's attribute `_idno_page`, `PageContext::of()` throws without one, `has()`,
+  `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (a POST field over a
+  query field, never a cookie; then `setInput()`; then the fields of a `json` input and of the body of a request that is not a GET, the earlier
+  winning, as `Page::parseJSONPayload()` merged them), `isXhr()` (`X-Requested-With`), the permalink flag, entity, owner, assets per class,
+  status (200), headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()`
+  replaces; `ownsCaching()` says the page asked), `requestUri()` (the raw `REQUEST_URI`, which `Page::currentUrl()` uses) and `arguments()`
+  (the route's parameters but `lead`, `slash` and the framework's `_*`, in order, or what `setArguments()` set). `PageContextResolver` gives a
+  controller argument typed `PageContext` that of the request. `PageRedirect` (a `\RuntimeException` with the `location`) is what a page throws
+  where a legacy page forwards and exits.
+- `Idno\Legacy\ControllerPage` (a `Page`) answers what the legacy application asks of the current page from the context: `getInput()`
+  (a filter is applied once to the final value), `setInput()`, `xhr()` and `$xhr`, `$arguments`, `response()`/`setResponse()`, the entity,
+  permalink, owner (false when none) and assets (false when none) accessors, `currentUrl()` (the configured `url`'s scheme, host and port
+  plus the raw request address, so `doesPathMatch()` and `matchUrl()` work), `referrer()`/`getReferrer()` (the `Referer`, ''),
+  `isAcceptedContentType()` (the request's `Accept`, with the old algorithm, quirks included), `setNoCache()`, `setLastModifiedHeader()`,
+  `pageClassName()` (the attribute's `name`); `getIcon()` and `forwardToLogin()` work through those. Where a legacy page exits it throws:
+  `deniedContent()` `AccessDeniedHttpException`, `noContent()` `NotFoundHttpException`, `goneContent()` `GoneHttpException` (each after
+  setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template type, when it is not the
+  default, in `_t`), `exception()` rethrows; `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
+  `data()` is always empty (the context reads a JSON payload on demand). Its constructor does not run Component's (no `init()`, no
+  event hooks, no `page/ready`, and it does not make itself the current page): whoever draws the page does. A `null` context is a request for `/` served as the home page.
+  `PageHandler::isRoutePublic()` (which takes a class name or the page), `isAccountPage()` and `isSettingsPage()` answer a `ControllerPage` from its
+  attribute (an account page is a settings page, as a route under `/account/` is), and `Session::publicGatekeeper()` passes the page to
+  `isRoutePublic()`. `Page::pageClassName()` is `static::class`, and `getBodyClasses()` builds the page's body class from it.
+- `Idno\Legacy\BarePage` is a page with no content, for an answer no page produced (the 404 page of `LegacyDispatcher`, the 403 of
+  `PageHandler` for an API request on an account page and of `LegacyForbiddenPage`, and the stand-in current page of tests): it runs `Page::init()` as
+  the home page did, and carries the home page's body class (`pageClassName()` is `Idno\Pages\Homepage`: the golden `not-found.html`).
+  Pinned by `Tests/Unit/Http/Page/PageContextTest` and `SitePageTest` (unit tier) and `Tests/Kernel/ControllerPageTest`.
 
 ### Kernel and services
 

@@ -6,7 +6,7 @@ namespace Tests\Kernel;
 
 use Idno\Core\DefaultTemplate;
 use Idno\Core\Idno;
-use Idno\Pages\Homepage;
+use Idno\Legacy\BarePage;
 use Idno\Templating\ShellHeaders;
 use PHPUnit\Framework\TestCase;
 
@@ -27,7 +27,7 @@ final class ShellHeadersDrawTest extends TestCase
 
     protected function tearDown(): void
     {
-        Idno::site()->setCurrentPage($this->previousPage ?: new Homepage());
+        Idno::site()->setCurrentPage($this->previousPage ?: new BarePage());
         if ($this->previousUri === null) {
             unset($_SERVER['REQUEST_URI']);
         } else {
@@ -46,7 +46,7 @@ final class ShellHeadersDrawTest extends TestCase
     private function pageAt(string $uri): void
     {
         $_SERVER['REQUEST_URI'] = $uri;
-        Idno::site()->setCurrentPage(new Homepage());
+        Idno::site()->setCurrentPage(new BarePage());
     }
 
     public function testEachTypeHasTheHeadersTheTableDeclares(): void

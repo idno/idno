@@ -27,7 +27,7 @@ class ParseHashtagsTest extends \Tests\IdnoTestCase
     public function tearDown(): void
     {
         Idno::site()->template()->setTemplateType($this->previousTemplateType);
-        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+        Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
         foreach ($this->toDelete as $entity) {
             $entity->delete();
         }

@@ -44,11 +44,16 @@ namespace Idno\Core {
          * /account/? Decided by how the page was registered, not by the address of the
          * current request.
          *
+         * A page a controller serves (\Idno\Legacy\ControllerPage) is one when its #[SitePage] says so.
+         *
          * @param  string|object $class
          * @return bool
          */
         function isAccountPage($class) : bool
         {
+            if ($class instanceof \Idno\Legacy\ControllerPage) {
+                return $class->context()->page()->accountPage;
+            }
             if (is_object($class)) {
                 $class = get_class($class);
             }
@@ -71,13 +76,20 @@ namespace Idno\Core {
         /**
          * Was this page class registered for a route under /account/ or /admin/ (a plugin's admin page too)? Decided from how the
          * route was registered, never from the address of the request, which can be written in ways that a string comparison misses
-         * (`//admin/email`, a request seen as https on a site configured for http).
+         * (`//admin/email`, a request seen as https on a site configured for http). A page a controller serves
+         * (\Idno\Legacy\ControllerPage) is one when its #[SitePage] says it is a settings page or an account page (every account
+         * page is a settings page, as a route under /account/ is).
          *
          * @param  string|object $class
          * @return bool
          */
         function isSettingsPage($class) : bool
         {
+            if ($class instanceof \Idno\Legacy\ControllerPage) {
+                $page = $class->context()->page();
+
+                return $page->settingsPage || $page->accountPage;
+            }
             if (is_object($class)) {
                 $class = get_class($class);
             }
@@ -185,7 +197,7 @@ namespace Idno\Core {
                         $site->logging()->warning('API request to an account page refused: ' . ltrim((string) $handler, '\\'));
                         $site->template()->autodetectTemplateType();
                         $site->session()->addErrorMessage($site->language()->_('Account pages are not available to API requests.'));
-                        (new \Idno\Pages\Homepage())->deniedContent();
+                        (new \Idno\Legacy\BarePage())->deniedContent();
                     }
                 }
             );
@@ -290,13 +302,20 @@ namespace Idno\Core {
         }
 
         /**
-         * Does the specified page handler class represent a public page, even on walled gardens?
+         * Does the specified page handler class represent a public page, even on walled gardens? Takes a class name or the
+         * page itself; a page a controller serves (\Idno\Legacy\ControllerPage) is public when its #[SitePage] says so.
          *
-         * @param  $class
+         * @param  string|object $class
          * @return bool
          */
-        function isRoutePublic(string $class) : bool
+        function isRoutePublic(string|object $class) : bool
         {
+            if ($class instanceof \Idno\Legacy\ControllerPage) {
+                return $class->context()->page()->publicOnPrivateSite;
+            }
+            if (is_object($class)) {
+                $class = get_class($class);
+            }
             if (!empty($class)) {
                 if (in_array($class, $this->getPublicRoute())) {
                     return true;

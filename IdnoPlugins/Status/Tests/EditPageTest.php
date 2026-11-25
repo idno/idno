@@ -60,7 +60,7 @@ namespace IdnoPlugins\Status\Tests {
 
         protected function tearDown(): void
         {
-            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Pages\Homepage());
+            Idno::site()->setCurrentPage($this->previousPage ?: new \Idno\Legacy\BarePage());
         }
 
         /**
@@ -110,7 +110,7 @@ namespace IdnoPlugins\Status\Tests {
          */
         public function testFactory($input, $class)
         {
-            $page = new \Idno\Pages\Homepage();
+            $page = new \Idno\Legacy\BarePage();
             foreach ($input as $name => $value) {
                 $page->setInput($name, $value);
             }
