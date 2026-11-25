@@ -58,23 +58,29 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
   Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
   minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
-  Rough times: the unit tier a few seconds; the whole suite about a minute on SQLite, two to four
-  minutes on MySQL or MariaDB.
+  Rough times: the unit tier about ten seconds; the whole suite about 14.5 minutes on SQLite (measured
+  on a development machine; the MySQL and MariaDB runs have not been timed since the suite reached its present size).
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
   whole suite runs in one process: on SQLite it peaks at about 250 MB (6,341 tests; the largest classes each leave 20 MB or
-  less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
+  less behind, about 20 MB: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
   built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
-  (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` (listed in `phpunit.xml`, so not in the unit
-  tier) records, for each test class, the memory in use before its first test and, after a garbage collection, after its last
-  (what the class left behind), and FAILS the run (a message on standard error naming the five classes that left the most
-  behind, exit status 1) when the peak passes `MemoryGuard::LIMIT_MB` (380; `IDNO_TEST_MEMORY_LIMIT_MB=<n>` changes it, 0 turns
-  the failure off). To rank a whole run: `IDNO_TEST_MEMORY_REPORT=/tmp/memory.json composer test` writes every class's figures
+  (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` and its listener
+  `Tests\Support\MemoryGuardListener` (both listed in `phpunit.xml`, so not in the unit tier; the listener forwards the suite
+  events of each class, which bracket `setUpBeforeClass()` and `tearDownAfterClass()`, where a test hook runs after
+  `setUpBeforeClass()`) record, for each test class, the memory in use when its suite starts and, after a garbage collection,
+  when it ends (what the class left behind, what it allocated in `setUpBeforeClass()` included; a class whose tests run in
+  more than one stretch, in a random order, has its figures added up), and FAIL the run (a message on standard error naming the five classes that left the most
+  behind; exit status 2 when a test errored, as PHPUnit's own, else 1) when the peak passes `MemoryGuard::LIMIT_MB` (380;
+  `IDNO_TEST_MEMORY_LIMIT_MB=<n>` changes it, 0 turns the failure off, and a value that is not a whole number stops the run
+  at once with a message). The same `phpunit.xml` runs in CI's MySQL and MariaDB jobs, whose peak has never been measured:
+  record both at the next three-database run (`IDNO_TEST_MEMORY_REPORT` gives the peak) and raise the limit or fix the cause
+  if either is above about 300 MB. To rank a whole run: `IDNO_TEST_MEMORY_REPORT=/tmp/memory.json composer test` writes every class's figures
   (`peak` and, per class, `tests`, `start`, `kept` in bytes). When the guard fires, look for a test case property, a static, a
   listener, a kernel or a `Process` that outlives its test (release it in `tearDown()`), not for a higher limit; a class that
-  keeps more than a few megabytes is worth a look. `Tests/Unit/Support/MemoryGuardTest` pins the verdict and the exit status.
+  keeps more than a few megabytes is worth a look. `Tests/Unit/Support/MemoryGuardTest` pins the verdict, the limit's parsing, the exit status and the class bounds.
   `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
   for `composer test:unit`
 - Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's

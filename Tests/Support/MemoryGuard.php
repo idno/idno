@@ -5,22 +5,27 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use PHPUnit\Runner\AfterLastTestHook;
+use PHPUnit\Runner\AfterTestErrorHook;
+use PHPUnit\Runner\AfterTestFailureHook;
 use PHPUnit\Runner\AfterTestHook;
 use PHPUnit\Runner\BeforeTestHook;
 
 /**
  * A PHPUnit extension (phpunit.xml) that watches the memory of the one process the whole suite runs in.
  *
- * Around each test class it records the memory in use before the class's first test and, after a garbage
- * collection, after its last: what the class left behind. When the run ends it fails the run (exit status 1,
+ * Around each test class (its bounds are the suite events `MemoryGuardListener` forwards: they fall before
+ * the class's `setUpBeforeClass()` and after its `tearDownAfterClass()`, which the test hooks do not) it
+ * records the memory in use at the start and, after a garbage collection, at the end: what the class left
+ * behind, what it allocated in `setUpBeforeClass()` included. When the run ends it fails the run (exit status 1,
  * and a message on standard error naming the five classes that left the most behind) if the peak is over the
  * limit, so that a test class that keeps what it makes alive is found the day it is added, not when the
  * suite dies of memory_limit mid-run.
  *
- * IDNO_TEST_MEMORY_LIMIT_MB changes the limit (default LIMIT_MB; 0 turns the failure off);
+ * IDNO_TEST_MEMORY_LIMIT_MB changes the limit (default LIMIT_MB; 0 turns the failure off; anything that is not a
+ * whole number of megabytes stops the run before it starts: it never turns the failure off by accident);
  * IDNO_TEST_MEMORY_REPORT=<file> writes every class's figures as JSON, for ranking a whole run.
  */
-final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterLastTestHook
+final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterTestErrorHook, AfterTestFailureHook, AfterLastTestHook
 {
     /** The peak, in MiB, that fails a run: the suite's own peak is well under it (see AGENTS.md). */
     public const LIMIT_MB = 380;
@@ -34,20 +39,83 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterLastTestH
 
     private static int $tests = 0;
 
-    public function executeBeforeTest(string $test): void
+    private static bool $errored = false;
+
+    private static bool $failed = false;
+
+    private readonly int $limit;
+
+    public function __construct()
     {
-        $class = explode('::', $test, 2)[0];
-        if ($class !== self::$current) {
-            self::close();
-            self::$current = $class;
+        try {
+            $this->limit = self::limitFrom(getenv('IDNO_TEST_MEMORY_LIMIT_MB'));
+        } catch (\InvalidArgumentException $e) {
+            fwrite(STDERR, $e->getMessage() . "\n");
+            exit(1);
+        }
+    }
+
+    /**
+     * The limit in MiB the environment asks for: the default when it names none, 0 for no limit.
+     *
+     * @throws \InvalidArgumentException for a value that is not a whole number
+     */
+    public static function limitFrom(string|false $value): int
+    {
+        $value = $value === false ? '' : trim($value);
+        if ($value === '') {
+            return self::LIMIT_MB;
+        }
+        if (!ctype_digit($value)) {
+            throw new \InvalidArgumentException(sprintf('IDNO_TEST_MEMORY_LIMIT_MB must be a whole number of megabytes (0 turns the memory check off), not "%s".', substr($value, 0, 40)));
+        }
+
+        return (int) $value;
+    }
+
+    /**
+     * The exit status of a run the memory check fails: PHPUnit's own (2 when a test errored, else 1) and never 0.
+     */
+    public static function exitStatus(bool $errored, bool $failed): int
+    {
+        return $errored ? 2 : 1;
+    }
+
+    /** A class's tests are about to start: called with the name of each suite PHPUnit starts. */
+    public static function suiteStarted(string $name): void
+    {
+        if (self::$current === null && class_exists($name, false)) {
+            self::$current = $name;
             self::$start = memory_get_usage();
             self::$tests = 0;
         }
     }
 
+    /** A class's tests, and its tearDownAfterClass(), are over. */
+    public static function suiteEnded(string $name): void
+    {
+        if (self::$current === $name) {
+            self::close();
+        }
+    }
+
+    public function executeBeforeTest(string $test): void
+    {
+    }
+
     public function executeAfterTest(string $test, float $time): void
     {
         self::$tests++;
+    }
+
+    public function executeAfterTestError(string $test, string $message, float $time): void
+    {
+        self::$errored = true;
+    }
+
+    public function executeAfterTestFailure(string $test, string $message, float $time): void
+    {
+        self::$failed = true;
     }
 
     public function executeAfterLastTest(): void
@@ -57,13 +125,13 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterLastTestH
         if (is_string($report) && $report !== '') {
             file_put_contents($report, json_encode(['peak' => memory_get_peak_usage(true), 'classes' => self::$classes], JSON_PRETTY_PRINT));
         }
-        $limit = getenv('IDNO_TEST_MEMORY_LIMIT_MB');
-        $verdict = self::verdict(self::$classes, memory_get_peak_usage(true), $limit === false || $limit === '' ? self::LIMIT_MB : (int) $limit);
+        $verdict = self::verdict(self::$classes, memory_get_peak_usage(true), $this->limit);
         if ($verdict !== null) {
             fwrite(STDERR, "\n" . $verdict . "\n");
+            $status = self::exitStatus(self::$errored, self::$failed);
             // PHPUnit exits with its own status after this hook: a shutdown function has the last word.
-            register_shutdown_function(static function (): void {
-                exit(1);
+            register_shutdown_function(static function () use ($status): void {
+                exit($status);
             });
         }
     }
@@ -101,7 +169,10 @@ final class MemoryGuard implements BeforeTestHook, AfterTestHook, AfterLastTestH
             return;
         }
         gc_collect_cycles();
-        self::$classes[self::$current] = ['tests' => self::$tests, 'start' => self::$start, 'kept' => max(0, memory_get_usage() - self::$start)];
+        $kept = max(0, memory_get_usage() - self::$start);
+        $before = self::$classes[self::$current] ?? ['tests' => 0, 'start' => self::$start, 'kept' => 0];
+        // A class whose tests are not run together (a random order) is closed more than once: its figures add up.
+        self::$classes[self::$current] = ['tests' => $before['tests'] + self::$tests, 'start' => $before['start'], 'kept' => $before['kept'] + $kept];
         self::$current = null;
     }
 }

@@ -38,6 +38,41 @@ class EntityListenersTest extends \Tests\IdnoTestCase
         $this->assertSame($before, $this->listeners(), 'no listener for an object of a class that has one');
     }
 
+    public function testAClassOfAnotherCollectionHasItsOwnListenerOnce(): void
+    {
+        new Status();
+        $before = $this->listeners();
+        new \Idno\Entities\Reader\Feed();
+        $withReader = $this->listeners();
+        $this->assertSame($before + 1, $withReader, 'a class of the reader collection is looked up in its own collection: it gets its own listener');
+
+        for ($i = 0; $i < 20; $i++) {
+            new \Idno\Entities\Reader\Feed();
+        }
+        $this->assertSame($withReader, $this->listeners(), 'and only one');
+    }
+
+    public function testASecondDispatcherGetsTheListenersAgain(): void
+    {
+        new Status();
+        $site = Idno::site();
+        $property = new \ReflectionProperty($site, 'dispatcher');
+        $property->setAccessible(true);
+        $original = $property->getValue($site);
+        $this->assertGreaterThan(0, $this->listeners());
+
+        $property->setValue($site, new \Idno\Core\EventDispatcher());
+        try {
+            $this->assertSame(0, $this->listeners(), 'a new dispatcher starts with none');
+            new Status();
+            $this->assertSame(1, $this->listeners(), 'a class already seen on another dispatcher is registered on this one');
+            new Status();
+            $this->assertSame(1, $this->listeners());
+        } finally {
+            $property->setValue($site, $original);
+        }
+    }
+
     public function testAnEntityIsNotKeptAliveByTheDispatcher(): void
     {
         new Status();
