@@ -15,6 +15,11 @@ namespace Idno\Core {
     {
         public $plugins = array(); // Property containing instantiated plugin classes
 
+        /// Bundled plugins that have been renamed: the old name, and the name the plugin has now
+        const RENAMED = [
+            'StandardSiteSync' => 'Atmosphere',
+        ];
+
         /**
          * On initialization, the plugin management class loads plugins from the system
          * configuration and saves an instantiated copy of each one in its local $plugins
@@ -47,7 +52,7 @@ namespace Idno\Core {
                 \Idno\Core\Idno::site()->config()->plugins = array_merge(\Idno\Core\Idno::site()->config()->plugins, \Idno\Core\Idno::site()->config()->alwaysplugins);
             }
             if (!empty(\Idno\Core\Idno::site()->config()->plugins)) {
-                \Idno\Core\Idno::site()->config()->plugins = array_unique(\Idno\Core\Idno::site()->config()->plugins);
+                \Idno\Core\Idno::site()->config()->plugins = self::currentNames(\Idno\Core\Idno::site()->config()->plugins);
                 foreach (\Idno\Core\Idno::site()->config()->plugins as $plugin) {
                     if (!in_array($plugin, \Idno\Core\Idno::site()->config()->antiplugins)) {
                         if (is_subclass_of("IdnoPlugins\\{$plugin}\\Main", 'Idno\\Common\\Plugin')) {
@@ -61,6 +66,25 @@ namespace Idno\Core {
             }
 
             \Idno\Core\Idno::site()->events()->triggerEvent('plugins/loaded');
+        }
+
+        /**
+         * A list of plugin names with every renamed plugin under the name it has now, once
+         * each: a site that enabled a plugin under its old name still has it enabled.
+         *
+         * @param  mixed $plugins
+         * @return string[]
+         */
+        public static function currentNames($plugins): array
+        {
+            $names = [];
+            foreach ((array) $plugins as $plugin) {
+                if (is_string($plugin) && $plugin !== '') {
+                    $names[] = self::RENAMED[$plugin] ?? $plugin;
+                }
+            }
+
+            return array_values(array_unique($names));
         }
 
         /**

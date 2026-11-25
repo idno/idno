@@ -1,0 +1,108 @@
+<h1 class="idno-admin-page-title"><?= \Idno\Core\Idno::site()->language()->_('Atmosphere') ?></h1>
+<p class="idno-admin-description">
+    <?= \Idno\Core\Idno::site()->language()->_('Save what you publish here to your own account on the Atmosphere, the network of apps built on the AT Protocol (Bluesky is the best known). When you connect your account, your articles will also appear on apps like <a href="https://leaflet.pub">Leaflet</a>, <a href="https://frontpage.fyi">Frontpage</a>, and other readers that support <a href="https://standard.site">standard.site</a>.') ?>
+</p>
+<p class="idno-admin-description">
+    <?= \Idno\Core\Idno::site()->language()->_('Your content stays on your site &mdash; syncing just makes it discoverable in more places.') ?>
+</p>
+<p class="idno-admin-description">
+    <?= \Idno\Core\Idno::site()->language()->_('Status updates, videos and audio are saved to your account too, as records of their own. They don\'t appear in Bluesky unless you ask for that below. When you edit or delete a post here, its record is changed or deleted too. Only posts that are public and published are shared: drafts and private posts never are.') ?>
+</p>
+
+<?php if (empty($vars['sync_enabled'])) { ?>
+
+<div class="idno-admin-card">
+    <p><?= \Idno\Core\Idno::site()->language()->_('Syncing is not currently available. A site administrator needs to enable it before you can connect.') ?></p>
+</div>
+
+<?php } elseif (!empty($vars['connected'])) { ?>
+
+<div class="idno-admin-card">
+    <?php if (($vars['failure']['kind'] ?? null) === 'expired') { ?>
+    <h2 class="idno-admin-card-title" style="color:var(--color-danger,#dc2626);"><?= \Idno\Core\Idno::site()->language()->_('Your connection has expired') ?></h2>
+    <p role="alert"><?= \Idno\Core\Idno::site()->language()->_('This site can no longer save your posts to your account, so nothing you publish is being synced. Disconnect below, then connect again. Afterwards, &ldquo;Sync all my posts&rdquo; will send what was missed.') ?></p>
+    <?php } else { ?>
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('You\'re connected!') ?></h2>
+    <p><?= \Idno\Core\Idno::site()->language()->_('New posts you publish will automatically be synced. You don\'t need to do anything else.') ?></p>
+        <?php if (!empty($vars['failure'])) { ?>
+        <p role="alert" style="color:var(--color-danger,#dc2626);"><?= \Idno\Core\Idno::site()->language()->_('The last attempt to save a post to your account failed, on %s. It will be tried again the next time that post is saved. If this keeps happening, disconnect and connect again.', [htmlspecialchars(date('j F Y, H:i', $vars['failure']['at']))]) ?></p>
+        <?php } ?>
+    <?php } ?>
+    <?php if (!empty($vars['failure']['detail'])) { ?>
+    <p class="idno-form-help"><?= \Idno\Core\Idno::site()->language()->_('What the server answered: %s', [htmlspecialchars($vars['failure']['detail'])]) ?></p>
+    <?php } ?>
+
+    <details style="margin-top:1rem;">
+        <summary style="cursor:pointer;font-size:0.875rem;color:var(--color-muted,#6b7280);"><?= \Idno\Core\Idno::site()->language()->_('Show technical details') ?></summary>
+        <dl style="margin-top:0.5rem;font-size:0.875rem;">
+            <div style="display:flex;gap:0.5rem;margin-bottom:0.25rem;">
+                <dt style="font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Your identity') ?>:</dt>
+                <dd><code><?= htmlspecialchars($vars['did']) ?></code></dd>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+                <dt style="font-weight:600;"><?= \Idno\Core\Idno::site()->language()->_('Server') ?>:</dt>
+                <dd><code><?= htmlspecialchars($vars['pds']) ?></code></dd>
+            </div>
+        </dl>
+    </details>
+
+    <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/atmosphere/disconnect/" method="post" style="margin-top:1.5rem;">
+        <?= \Idno\Core\Idno::site()->actions()->signForm('/account/settings/atmosphere/disconnect/') ?>
+        <button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);"
+                onclick="return confirm('<?= \Idno\Core\Idno::site()->language()->_('Are you sure you want to disconnect? Your posts will stop syncing.') ?>');">
+            <?= \Idno\Core\Idno::site()->language()->_('Disconnect') ?>
+        </button>
+    </form>
+</div>
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Bluesky') ?></h2>
+    <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/atmosphere/" method="post">
+        <?= \Idno\Core\Idno::site()->actions()->signForm('/account/settings/atmosphere/') ?>
+        <input type="hidden" name="action" value="options">
+        <div class="idno-form-group">
+            <label class="idno-label" for="atproto-bluesky">
+                <input type="checkbox" id="atproto-bluesky" name="bluesky" value="1"<?= !empty($vars['bluesky']) ? ' checked' : '' ?>>
+                <?= \Idno\Core\Idno::site()->language()->_('Also post my status updates, videos and audio to Bluesky') ?>
+            </label>
+            <p class="idno-form-help"><?= \Idno\Core\Idno::site()->language()->_('Your followers on Bluesky will see each one as a post, with a link back here where one is needed. If you turn this off, nothing more is posted there; posts already there stay until you delete them here or there.') ?></p>
+        </div>
+        <button type="submit" class="idno-btn idno-btn-primary"><?= \Idno\Core\Idno::site()->language()->_('Save') ?></button>
+    </form>
+</div>
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Sync older posts') ?></h2>
+    <p><?= \Idno\Core\Idno::site()->language()->_('Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it\'s safe to run this more than once. If you have asked for your posts to go to Bluesky, older status updates, videos and audio will appear there under their original dates.') ?></p>
+
+    <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/atmosphere/backfill/" method="post" style="margin-top:1rem;">
+        <?= \Idno\Core\Idno::site()->actions()->signForm('/account/settings/atmosphere/backfill/') ?>
+        <button type="submit" class="idno-btn idno-btn-primary"
+                onclick="return confirm('<?= \Idno\Core\Idno::site()->language()->_('This will sync all your existing posts. Continue?') ?>');">
+            <?= \Idno\Core\Idno::site()->language()->_('Sync all my posts') ?>
+        </button>
+    </form>
+</div>
+
+<?php } else { ?>
+
+<div class="idno-admin-card">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Get started') ?></h2>
+    <p><?= \Idno\Core\Idno::site()->language()->_('To start syncing, enter the handle for your AT Protocol account (this is usually your Bluesky handle, like <strong>yourname.bsky.social</strong>). You\'ll be taken to your server to approve the connection, then brought back here.') ?></p>
+
+    <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/atmosphere/" method="post" style="margin-top:1rem;">
+        <?= \Idno\Core\Idno::site()->actions()->signForm('/account/settings/atmosphere/') ?>
+        <input type="hidden" name="action" value="connect">
+
+        <div class="idno-form-group">
+            <label class="idno-label" for="atproto-handle"><?= \Idno\Core\Idno::site()->language()->_('Your handle') ?></label>
+            <div style="display:flex;gap:0.5rem;align-items:start;">
+                <input type="text" id="atproto-handle" name="handle" placeholder="yourname.bsky.social" class="idno-input" style="max-width:20rem;" required>
+                <button type="submit" class="idno-btn idno-btn-primary"><?= \Idno\Core\Idno::site()->language()->_('Connect') ?></button>
+            </div>
+            <p class="idno-form-help"><?= \Idno\Core\Idno::site()->language()->_('Don\'t have one? You can create a free account at <a href="https://bsky.app">bsky.app</a> or any AT Protocol provider.') ?></p>
+        </div>
+    </form>
+</div>
+
+<?php }
