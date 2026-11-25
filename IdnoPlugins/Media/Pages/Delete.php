@@ -49,7 +49,7 @@ namespace IdnoPlugins\Media\Pages {
             } else {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("We couldn't delete your media."));
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardAfterDelete($object);
         }
 
     }

@@ -302,6 +302,19 @@ Each content plugin has an `Entry.php` entity class that defines
   search by email address and for a chosen `template`. Don't add a member-facing use (an @mention picker, say)
   to it: write a separate page that returns handle, name, avatar and profile address only.
   `Tests/Pages/Search/UserSearchAccessTest.php` checks this over HTTP.
+- Deleting a post from its edit page: `templates/default/entity/edit/footer.tpl.php`, which every
+  content type's edit template draws after its form, draws `entity/edit/delete` (default and
+  Twenty26 `modern` looks each have one). It shows a Delete control for a saved post
+  (draft or published) that the viewer `canEdit()`, never on the compose page of a new post,
+  as `Actions::createLink()` (a POST with a form token, its own hidden form outside the edit
+  form, with a confirmation naming the post). Every `Pages/Delete.php` ends with
+  `Page::forwardAfterDelete($object)`, not `forward($_SERVER['HTTP_REFERER'])`: it goes back
+  to the referrer unless that was the deleted post's own permalink, edit page or delete page,
+  then to the drafts list for a draft (a theme gives its address by answering the `drafts/url`
+  event; Twenty26 does) and otherwise home. The ActivityPub `delete` hook sends no Delete for
+  an entity whose publish status is set and not `published` (`Main::shouldFederateDeletion()`),
+  as such a post was never delivered. `Tests/Pages/DeleteFromEditPageTest.php` and
+  `IdnoPlugins/ActivityPub/Tests/DeleteDraftFederationTest.php` check this.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
   located `.tpl.php` path onto a private static stack and the scoping closure pops it in the
