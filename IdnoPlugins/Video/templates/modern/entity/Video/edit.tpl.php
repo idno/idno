@@ -39,7 +39,7 @@ if ($address === '' && !empty($vars['url']) && is_string($vars['url'])) {
                 'autofocus' => empty($object->_id)
             ])->draw('forms/input/url') ?>
             <p class="idno-form-help">
-                <?= htmlspecialchars($lang->_('Paste the address of a video on one of: %s.', [implode(', ', \IdnoPlugins\Video\VideoUrl::supportedServices())])) ?>
+                <?= htmlspecialchars($lang->_('Paste the address of a video on one of: %s.', [implode(', ', \IdnoPlugins\Video\Video::serviceNames())])) ?>
             </p>
         </div>
 

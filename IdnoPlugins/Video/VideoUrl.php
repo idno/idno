@@ -17,8 +17,15 @@ namespace IdnoPlugins\Video {
      *
      * To add a service: add it to PROVIDERS, give its hosts in HOSTS, its id pattern in
      * ID_PATTERNS and its player host in EMBED_HOSTS, and add a case to idFromAddress()
-     * and getEmbedUrl(). A service that runs on any host (PeerTube) cannot be added this
-     * way: the player would be framed from a host that nobody has vouched for.
+     * and getEmbedUrl().
+     *
+     * Open services (OPEN_PROVIDERS: PeerTube, Loops) are software that anybody can run,
+     * on any host, so an address alone never gives a video: parse() returns null for one.
+     * candidate() says what such an address would mean, still without a request, and
+     * OpenVideo::resolve() asks the host whether it is so. For these the host is stored
+     * with the provider and the id, and is held to HOST_PATTERN (a plain domain name: no
+     * address literal, port or userinfo). Their players are drawn in a sandbox
+     * (getSandbox()), because nobody has vouched for the host.
      */
     final class VideoUrl
     {
@@ -29,9 +36,14 @@ namespace IdnoPlugins\Video {
             'vimeo'       => 'Vimeo',
             'dailymotion' => 'Dailymotion',
             'tiktok'      => 'TikTok',
+            'peertube'    => 'PeerTube',
+            'loops'       => 'Loops',
         ];
 
-        /// The only hosts a player is ever loaded from
+        /// The providers that are software anybody can run, on any host
+        const OPEN_PROVIDERS = ['peertube', 'loops'];
+
+        /// The only hosts a player of a service with hosts of its own is ever loaded from
         const EMBED_HOSTS = [
             'www.youtube-nocookie.com',
             'player.vimeo.com',
@@ -65,7 +77,20 @@ namespace IdnoPlugins\Video {
             'vimeo'       => '/\A[0-9]{1,12}\z/',
             'dailymotion' => '/\A[a-z0-9]{5,12}\z/',
             'tiktok'      => '/\A[0-9]{15,22}\z/',
+            'peertube'    => '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/',
+            'loops'       => '/\A[A-Za-z0-9_-]{4,32}\z/',
         ];
+
+        /// The short form of a PeerTube id, as in /w/<id>. The host is asked for the full one.
+        const PEERTUBE_SHORT_ID = '/\A[A-Za-z0-9]{20,24}\z/';
+
+        /// The host of an open service: a domain name in lower case, with a top-level
+        /// domain that starts with a letter (so never an IP address), and nothing else
+        const HOST_PATTERN = '/\A(?=.{4,253}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]\z/';
+
+        /// What a player on a host nobody has vouched for may do: run its scripts and keep
+        /// its own storage. It may not navigate this page, open windows or submit forms.
+        const OPEN_SANDBOX = 'allow-scripts allow-same-origin allow-presentation';
 
         /// The key of an unlisted Vimeo video (the "h" in its address)
         const KEY_PATTERN = '/\A[0-9a-f]{6,16}\z/';
@@ -81,9 +106,11 @@ namespace IdnoPlugins\Video {
         private int $start;
         private string $key;
         private bool $portrait;
+        private string $host;
 
-        private function __construct(string $provider, string $id, int $start, string $key, bool $portrait)
+        private function __construct(string $provider, string $id, int $start, string $key, bool $portrait, string $host)
         {
+            $this->host = $host;
             $this->provider = $provider;
             $this->id = $id;
             $this->start = $start;
@@ -98,6 +125,72 @@ namespace IdnoPlugins\Video {
          * @return VideoUrl|null null when it is not the address of a video on a supported service
          */
         public static function parse($address): ?VideoUrl
+        {
+            $read = self::read($address);
+            if ($read === null || !isset(self::HOSTS[$read['host']])) {
+                return null;
+            }
+            list('host' => $host, 'segments' => $segments, 'query' => $query) = $read;
+
+            $provider = self::HOSTS[$host];
+
+            $found = self::idFromAddress($provider, $host, $segments, $query);
+            if ($found === null) {
+                return null;
+            }
+
+            return self::fromStored($provider, $found['id'], $read['start'], $found['key'] ?? '', !empty($found['portrait']));
+        }
+
+        /**
+         * What an address would mean if its host runs an open service (PeerTube, Loops):
+         * the provider, the host, the id as it is in the address and the start time. No
+         * request is made, so this is not yet a video: OpenVideo::resolve() asks the host.
+         *
+         * @param  mixed $address What a member typed
+         * @return array|null 'provider', 'host', 'id' and 'start'; null when the address has no such form,
+         *                    or is on the host of a service with hosts of its own
+         */
+        public static function candidate($address): ?array
+        {
+            $read = self::read($address);
+            if ($read === null || isset(self::HOSTS[$read['host']]) || in_array($read['host'], self::EMBED_HOSTS, true)) {
+                return null;
+            }
+            if (!preg_match(self::HOST_PATTERN, $read['host'])) {
+                return null;
+            }
+            $segments = $read['segments'];
+            $count = count($segments);
+
+            $provider = null;
+            if (($count === 2 && $segments[0] === 'w') || ($count === 3 && $segments[0] === 'videos' && in_array($segments[1], ['watch', 'embed'], true))) {
+                $provider = 'peertube';
+                $id = $segments[$count - 1];
+                if (!preg_match(self::ID_PATTERNS['peertube'], $id) && !preg_match(self::PEERTUBE_SHORT_ID, $id)) {
+                    return null;
+                }
+            } elseif ($count === 2 && in_array($segments[0], ['v', 'embed'], true)) {
+                $provider = 'loops';
+                $id = $segments[1];
+                if (!preg_match(self::ID_PATTERNS['loops'], $id)) {
+                    return null;
+                }
+            }
+            if ($provider === null) {
+                return null;
+            }
+
+            return ['provider' => $provider, 'host' => $read['host'], 'id' => $id, 'start' => $read['start']];
+        }
+
+        /**
+         * Take an address apart, refusing anything that is not a plain https address.
+         *
+         * @param  mixed $address
+         * @return array|null 'host' (lower case), 'segments' (the parts of the path), 'query' and 'start'
+         */
+        private static function read($address): ?array
         {
             if (!is_string($address)) {
                 return null;
@@ -126,11 +219,10 @@ namespace IdnoPlugins\Video {
             // whatever parse_url() made of it
             $authority = substr($address, 8, strcspn($address, '/?#', 8));
             $host = strtolower($parts['host']);
-            if (strtolower($authority) !== $host || !isset(self::HOSTS[$host])) {
+            if (strtolower($authority) !== $host) {
                 return null;
             }
 
-            $provider = self::HOSTS[$host];
             $path = $parts['path'] ?? '/';
             if (strpos($path, '%') !== false || strpos($path, '//') !== false || strpos($path, '..') !== false) {
                 return null;
@@ -141,11 +233,6 @@ namespace IdnoPlugins\Video {
             parse_str($parts['query'] ?? '', $query);
             $fragment = $parts['fragment'] ?? '';
 
-            $found = self::idFromAddress($provider, $host, $segments, $query);
-            if ($found === null) {
-                return null;
-            }
-
             $start = 0;
             foreach ([$query['t'] ?? null, $query['start'] ?? null, self::timeInFragment($fragment)] as $time) {
                 if ($start === 0) {
@@ -153,7 +240,7 @@ namespace IdnoPlugins\Video {
                 }
             }
 
-            return self::fromStored($provider, $found['id'], $start, $found['key'] ?? '', !empty($found['portrait']));
+            return ['host' => $host, 'segments' => $segments, 'query' => $query, 'start' => $start];
         }
 
         /**
@@ -165,9 +252,10 @@ namespace IdnoPlugins\Video {
          * @param  mixed $start    Seconds into the video at which to start
          * @param  mixed $key      The key of an unlisted Vimeo video
          * @param  mixed $portrait Whether the video is taller than it is wide
-         * @return VideoUrl|null null when the provider is unknown or the id or key is not well formed
+         * @param  mixed $host     For an open service (PeerTube, Loops), the host it runs on
+         * @return VideoUrl|null null when the provider is unknown or the id, key or host is not well formed
          */
-        public static function fromStored($provider, $id, $start = 0, $key = '', $portrait = false): ?VideoUrl
+        public static function fromStored($provider, $id, $start = 0, $key = '', $portrait = false, $host = ''): ?VideoUrl
         {
             if (!is_string($provider) || !isset(self::PROVIDERS[$provider])) {
                 return null;
@@ -185,20 +273,37 @@ namespace IdnoPlugins\Video {
             } else {
                 $start = 0;
             }
-            // TikTok videos are always shot upright
-            $portrait = $provider === 'tiktok' || !empty($portrait);
+            if (in_array($provider, self::OPEN_PROVIDERS, true)) {
+                if (!is_string($host) || !preg_match(self::HOST_PATTERN, $host) || isset(self::HOSTS[$host]) || in_array($host, self::EMBED_HOSTS, true)) {
+                    return null;
+                }
+            } elseif ($host !== '' && $host !== null && $host !== false) {
+                return null;
+            } else {
+                $host = '';
+            }
+            // TikTok and Loops videos are always shot upright
+            $portrait = $provider === 'tiktok' || $provider === 'loops' || !empty($portrait);
 
-            return new VideoUrl($provider, $id, $start, $key, $portrait);
+            return new VideoUrl($provider, $id, $start, $key, $portrait, $host);
         }
 
         /**
          * The names of the services whose videos can be posted.
          *
+         * @param  bool $open Whether to name the open services (PeerTube, Loops) too
          * @return string[]
          */
-        public static function supportedServices(): array
+        public static function supportedServices(bool $open = false): array
         {
-            return array_values(self::PROVIDERS);
+            $names = [];
+            foreach (self::PROVIDERS as $provider => $name) {
+                if ($open || !in_array($provider, self::OPEN_PROVIDERS, true)) {
+                    $names[] = $name;
+                }
+            }
+
+            return $names;
         }
 
         /**
@@ -374,8 +479,33 @@ namespace IdnoPlugins\Video {
         }
 
         /**
+         * @return bool Whether this is a video on an open service, which runs on a host of its own
+         */
+        public function isOpen(): bool
+        {
+            return $this->host !== '';
+        }
+
+        /**
+         * @return string The host of an open service, or an empty string
+         */
+        public function getHost(): string
+        {
+            return $this->host;
+        }
+
+        /**
+         * @return string The value of the player's sandbox attribute, or an empty string for none
+         */
+        public function getSandbox(): string
+        {
+            return $this->isOpen() ? self::OPEN_SANDBOX : '';
+        }
+
+        /**
          * The address of the provider's player for this video: https, on a host in
-         * EMBED_HOSTS, made of fixed text and checked values only.
+         * EMBED_HOSTS or, for an open service, on its own host, made of fixed text and
+         * checked values only.
          *
          * @return string
          */
@@ -395,6 +525,14 @@ namespace IdnoPlugins\Video {
                     // www.dailymotion.com/embed/video/<id> only redirects here
                     return 'https://geo.dailymotion.com/player.html?video=' . $this->id
                         . ($this->start ? '&startTime=' . $this->start : '');
+
+                case 'peertube':
+                    return 'https://' . $this->host . '/videos/embed/' . $this->id
+                        . ($this->start ? '?start=' . $this->start . 's' : '');
+
+                case 'loops':
+                    return 'https://' . $this->host . '/embed/' . $this->id
+                        . ($this->start ? '?t=' . $this->start : '');
 
                 case 'tiktok':
                 default:
