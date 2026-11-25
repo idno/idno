@@ -151,9 +151,37 @@ final class SitePageFixtureController
 
                 return $response;
             case 'context-caching':
-                // caching set as a header of the page's context
-                $context->addHeader('Cache-Control', 'public, max-age=45');
+                // caching asked for the supported way
+                $context->setCaching(['Cache-Control' => 'public, max-age=45']);
                 break;
+            case 'binary':
+                // a file, with what a BinaryFileResponse sets by itself (`Cache-Control: public`, a `Last-Modified`)
+                return new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__);
+            case 'binary-public':
+                return (new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__))->setPublic();
+            case 'binary-maxage':
+                return (new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__))->setMaxAge(60);
+            case 'stream':
+                return new \Symfony\Component\HttpFoundation\StreamedResponse(static function (): void {
+                    echo 'streamed';
+                });
+            // What the legacy file page (`Idno\Pages\File\View`) sent, by the supported way: a file anyone may keep; one restricted to
+            // those who may read it; one for administrators only. `Last-Modified` is the entity's, through the context.
+            case 'file-public':
+                $context->setCaching(['Pragma' => 'public', 'Cache-Control' => 'public', 'Expires' => 'Fri, 01 Jan 2027 00:00:00 GMT']);
+                $context->addHeader('Last-Modified', \Idno\Core\Time::timestampToRFC2616(1700000000));
+
+                return new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__);
+            case 'file-restricted':
+                $context->setCaching(['Cache-Control' => 'private, no-cache']);
+                $context->addHeader('Last-Modified', \Idno\Core\Time::timestampToRFC2616(1700000000));
+
+                return new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__);
+            case 'file-admin':
+                $context->setCaching(['Cache-Control' => 'private, no-store', 'Pragma' => 'no-cache']);
+                $context->addHeader('Last-Modified', \Idno\Core\Time::timestampToRFC2616(1700000000));
+
+                return new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__);
             case 'robots-context':
                 // and through the page's context
                 $context->addHeader('X-Robots-Tag', 'noindex');
@@ -289,7 +317,10 @@ final class SitePageFixtureController
             ];
         }
         $response = new JsonResponse($data);
-        $response->headers->set('Cache-Control', 'no-store');
+        if (!PageContext::has($request)) {
+            // (a site page asks for caching only through its context: the session's lines are what it sends)
+            $response->headers->set('Cache-Control', 'no-store');
+        }
 
         return $response;
     }

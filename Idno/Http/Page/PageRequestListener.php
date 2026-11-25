@@ -60,7 +60,7 @@ final class PageRequestListener
             return;
         }
         // Caching is the page's own (`PageContext::setCaching()`, `ControllerPage::setNoCache()`), sent line by line in place of the session's.
-        // Symfony's `#[Cache]` is not applied to a site page (its headers come after the page's, and the controller of a page is wrapped),
+        // Symfony's `#[Cache]` is not applied to a site page (the controller wrapper below is not given it, so its listener never runs),
         // so it is refused where a developer sees it: with debug on.
         if ($this->kernel->isDebug() && $event->getAttributes(Cache::class) !== []) {
             throw new \LogicException('#[Cache] is not applied to a site page: ask for caching with PageContext::setCaching() (or setNoCache()).');

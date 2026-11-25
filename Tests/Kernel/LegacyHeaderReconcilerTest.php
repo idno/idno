@@ -66,9 +66,22 @@ final class RecordingHeaderQueue implements HeaderQueue
     {
     }
 
+    public string $mimetype = 'text/html';
+
     public function defaultContentType(): ?string
     {
         return 'text/html; charset=UTF-8';
+    }
+
+    public function defaultMimetype(): string
+    {
+        return $this->mimetype;
+    }
+
+    public function setDefaultMimetype(string $mimetype): void
+    {
+        $this->calls[] = 'mimetype ' . $mimetype;
+        $this->mimetype = $mimetype;
     }
 
     public function send(string $line, bool $replace): void
@@ -106,9 +119,9 @@ final class LegacyHeaderReconcilerTest extends TestCase
         'Pragma: no-cache',
     ];
 
-    private function kernel(bool $legacyBooted = true): Kernel
+    private function kernel(bool $legacyBooted = true, bool $debug = false): Kernel
     {
-        return new class('test', true, false, $legacyBooted) extends Kernel {
+        return new class('test', $debug, false, $legacyBooted) extends Kernel {
             public function __construct(string $environment, bool $debug, bool $bootLegacy, private readonly bool $legacyIsBooted)
             {
                 parent::__construct($environment, $debug, $bootLegacy);
@@ -327,22 +340,76 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $this->assertSame('noindex', $response->headers->get('X-Robots-Tag'));
     }
 
-    public function testCachingSetAnyOtherWayIsHonouredPerName(): void
+    public function testCachingMerelyOnTheResponseIsNeverThePagesAsk(): void
+    {
+        // not honoured, whatever the value: the session's lines are sent, the response's are taken off it, and in production one warning is logged
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $logged = [];
+        $logger = new class($logged) extends \Psr\Log\AbstractLogger {
+            public function __construct(private array &$logged)
+            {
+            }
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->logged[] = $level . ': ' . $message;
+            }
+        };
+        $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue, static fn () => $logger);
+
+        foreach ([1, 2] as $request) {
+            $response = new Response('x', 200, ['Cache-Control' => 'public, max-age=30', 'Expires' => 'Wed, 01 Jan 2031 00:00:00 GMT']);
+            $reconciler->reconcile($response, $this->context(), false);
+
+            $this->assertSame(self::SESSION, $queue->held);
+            $this->assertFalse($response->headers->has('Cache-Control'));
+            $this->assertFalse($response->headers->has('Expires'));
+        }
+        $this->assertCount(1, $logged, 'once for the process');
+        $this->assertStringStartsWith('warning: ', $logged[0]);
+        $this->assertStringContainsString('setCaching()', $logged[0]);
+    }
+
+    public function testDebugModeRefusesCachingThatIsNotTheFrameworksOwn(): void
+    {
+        $reconciler = new LegacyHeaderReconciler($this->kernel(debug: true), new RecordingHeaderQueue(self::SESSION));
+
+        foreach ([['Cache-Control' => 'public, max-age=30'], ['Expires' => 'Wed, 01 Jan 2031 00:00:00 GMT'], ['Pragma' => 'public']] as $headers) {
+            try {
+                $reconciler->reconcile(new Response('x', 200, $headers), $this->context(), false);
+                $this->fail('refused: ' . json_encode($headers));
+            } catch (\LogicException $e) {
+                $this->assertStringContainsString('setCaching()', $e->getMessage());
+            }
+        }
+        // the framework's own values are not refused: the three a response computes, and the `public` of a file response
+        foreach (['no-cache, private', 'must-revalidate, private'] as $computed) {
+            $response = new Response('x');
+            $response->headers->set('Cache-Control', $computed);
+            $reconciler->reconcile($response, $this->context(), false);
+        }
+        $file = new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__);
+        $this->assertSame('public', $file->headers->get('Cache-Control'));
+        $reconciler->reconcile($file, $this->context(), false);
+        $this->assertFalse($file->headers->has('Cache-Control'), 'and is taken off');
+        // (a `public` on a response that is not a file's is not the framework's)
+        $this->expectException(\LogicException::class);
+        $reconciler->reconcile(new Response('x', 200, ['Cache-Control' => 'public']), $this->context(), false);
+    }
+
+    public function testAFileResponseKeepsExactlyWhatThePageAskedFor(): void
     {
         $queue = new RecordingHeaderQueue(self::SESSION);
         $context = $this->context();
-        $response = new Response('x', 200, ['Cache-Control' => 'public, max-age=30', 'Expires' => 'Wed, 01 Jan 2031 00:00:00 GMT']);
+        $context->setCaching(['Cache-Control' => 'private, no-store', 'Pragma' => 'no-cache']);
+        $file = (new \Symfony\Component\HttpFoundation\BinaryFileResponse(__FILE__))->setMaxAge(60);
 
-        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $context, false);
+        (new LegacyHeaderReconciler($this->kernel(debug: true), $queue))->reconcile($file, $context, false);
 
-        $this->assertSame([
-            'Set-Cookie: sid=1; path=/',
-            'Pragma: no-cache',
-            'Cache-Control: max-age=30, public',
-            'Expires: Wed, 01 Jan 2031 00:00:00 GMT',
-        ], array_map(static fn (string $line): string => str_starts_with($line, 'Cache-Control') ? 'Cache-Control: max-age=30, public' : $line, $queue->held), 'the names it set are the page\'s; Pragma is the session\'s');
-        $this->assertFalse($response->headers->has('Cache-Control'));
-        $this->assertFalse($response->headers->has('Expires'));
+        $this->assertContains('Cache-Control: private, no-store', $queue->held);
+        $this->assertNotContains('Cache-Control: max-age=60, public', $queue->held);
+        $this->assertFalse($file->headers->has('Cache-Control'));
+        $this->assertTrue($file->headers->has('Last-Modified'), 'the file\'s own validator is kept');
     }
 
     public function testTheCacheControlAResponseComputesItselfIsNoAsk(): void
@@ -385,7 +452,7 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $this->assertFalse($response->headers->has('Cache-Control'));
     }
 
-    public function testACacheAttributeThatRunsAfterTheFirstPassIsHonouredByTheSecond(): void
+    public function testWhatSomethingSetsAfterTheFirstPassIsNotTheAskEitherAndIsTakenOff(): void
     {
         $queue = new RecordingHeaderQueue(self::SESSION);
         $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue);
@@ -394,17 +461,10 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $response = new Response('x');
 
         $reconciler->onResponse($this->event($request, $response));
-        $this->assertSame(self::SESSION, $queue->held);
-
-        // Symfony's `#[Cache]` listener (-10) sets its header on the response
         $response->headers->set('Cache-Control', 'max-age=60, public');
         $reconciler->onLateResponse($this->event($request, $response));
 
-        $this->assertSame(
-            ['Set-Cookie: sid=1; path=/', 'Expires: Thu, 19 Nov 1981 08:52:00 GMT', 'Pragma: no-cache', 'Cache-Control: max-age=60, public'],
-            $queue->held,
-            'one Cache-Control line, the attribute\'s'
-        );
+        $this->assertSame(self::SESSION, $queue->held);
         $this->assertFalse($response->headers->has('Cache-Control'));
     }
 
@@ -422,6 +482,41 @@ final class LegacyHeaderReconcilerTest extends TestCase
         (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile(new Response('x'), $this->context(), false);
         (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile(new Response('', 204, ['Content-Type' => 'text/plain']), $this->context(), false);
         $this->assertSame(self::SESSION, $queue->held);
+    }
+
+    public function testTheDefaultMimetypeIsPutBackOnEveryPath(): void
+    {
+        // Symfony switches `default_mimetype` off for the process when it prepares an empty response; it is recorded first
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue);
+        $request = Request::create('/');
+        $this->context($request);
+        $response = new Response('', 204);
+
+        $reconciler->onResponse($this->event($request, $response));
+        $queue->mimetype = '';
+        // something threw before the second pass: the request still ends
+        $reconciler->onTerminate(new \Symfony\Component\HttpKernel\Event\TerminateEvent($this->createMock(\Symfony\Component\HttpKernel\HttpKernelInterface::class), $request, $response));
+        $this->assertSame('text/html', $queue->mimetype, 'put back when the request terminates');
+
+        // and by the second pass, of the response that answered the exception (the request is the same one)
+        $queue->mimetype = 'text/html';
+        $reconciler->onResponse($this->event($request, new Response('', 204)));
+        $queue->mimetype = '';
+        $reconciler->onLateResponse($this->event($request, new Response('', 500)));
+        $this->assertSame('text/html', $queue->mimetype);
+
+        // a response with a body, or another request, records nothing and so changes nothing
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue);
+        $other = Request::create('/o');
+        $this->context($other);
+        $reconciler->onResponse($this->event($other, new Response('x')));
+        $queue->mimetype = '';
+        $reconciler->onLateResponse($this->event($other, new Response('x')));
+        $reconciler->onTerminate(new \Symfony\Component\HttpKernel\Event\TerminateEvent($this->createMock(\Symfony\Component\HttpKernel\HttpKernelInterface::class), $other, new Response('x')));
+        $this->assertSame('', $queue->mimetype);
+        $this->assertNotContains('mimetype text/html', $queue->calls);
     }
 
     public function testNothingWithoutTheLegacyApplication(): void

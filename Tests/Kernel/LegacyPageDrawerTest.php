@@ -67,6 +67,8 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
             public function setStatus(int $code): void { $this->calls[] = 'setStatus ' . $code; }
             public function unsetStatus(): void { $this->calls[] = 'unsetStatus'; }
             public function defaultContentType(): ?string { return null; }
+            public function defaultMimetype(): string { return 'text/html'; }
+            public function setDefaultMimetype(string $mimetype): void { $this->calls[] = 'mimetype ' . $mimetype; }
         };
         (new \Idno\Legacy\LegacyPageDrawer($queue))->drawPage(['title' => 'T', 'body' => 'B'], 404);
 

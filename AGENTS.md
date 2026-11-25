@@ -927,7 +927,7 @@ test fixtures is routed to a controller through them yet:
   `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (`requestField()`, a POST field over a
   query field, never a cookie; then `dataField()`: what `setInput()` set, then the fields of a `json` input and of the body of a request
   whose REAL method is not GET (an override header does not hide a body), the earlier winning, as `Page::parseJSONPayload()` merged them), `isXhr()` (`X-Requested-With`), the permalink flag, entity, owner, assets per class,
-  status (200), the `.md` suffix flag, a recorded redirect and the work to do after the response, headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()` takes the
+  status (200), the `.md` suffix flag, a recorded redirect and the work to do after the response, headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case; never for `Cache-Control`, `Pragma` or `Expires`), caching (`setCaching()` takes the
   lines of `Cache-Control`, `Pragma` and `Expires`, a string or a list for each, and replaces the lines of the names it sets and no others, so the
   router's XHR lines and then `setNoCache()` add up as they did; `ownsCaching()` says the page asked; `cachingLines()`), `requestUri()` (the raw `REQUEST_URI`, which `Page::currentUrl()` uses) and `arguments()`
   (the route's parameters but `lead`, `slash` and the framework's `_*`, in order, or what `setArguments()` set). `PageContextResolver` gives a
@@ -1151,12 +1151,18 @@ test fixtures is routed to a controller through them yet:
   in-process test) the response carries what the page asked for, one line a name; (3) `Last-Modified` is the response's when it has one (PHP's queued line is
   removed), else PHP's stands; (4) a response with no `Content-Type` and a type that declares none (a third party's) takes the `Content-Type` PHP queued, because a response
   with none is given `text/html` when it is prepared and sends it replacing PHP's; (5) everything else (`Link` from `page/head` and the plugins, `Vary`, `X-*`), `Date`
-  and `Set-Cookie` is left alone, the response's lines beside PHP's, so `Link` values add up; (6) caching set any other way (a header of the context, a `Cache-Control`, `Pragma` or `Expires` a controller set on its own response) is honoured as the page
-  asking for it, name by name, unless the page asked for that name with `setCaching()`: its value replaces PHP's lines of the name (the response writes `Cache-Control`
-  directives sorted, and the value it computes by itself is no ask). The rule runs again at priority -20, after Symfony's own listeners; `#[Cache]` is NOT applied to a
-  site page (refused with a `LogicException` in debug mode, ignored otherwise: ask with `setCaching()`); a refusal's own `no-store` (`DeniedResponder`) is not an ask;
+  and `Set-Cookie` is left alone, the response's lines beside PHP's, so `Link` values add up; (6) nothing else is the page asking for caching: a `Cache-Control`, `Pragma` or `Expires` that is merely on the response (a controller set it, or a `BinaryFileResponse` did:
+  it sets `public` by itself) is NOT honoured, so a page is never made more cacheable than the session's lines by accident. It is taken off the response like the computed one; in
+  debug mode a value the framework did not set itself (the three `Cache-Control` values a response computes and a `BinaryFileResponse`'s `public`) is refused with a
+  `LogicException` naming `PageContext::setCaching()`, and otherwise it is ignored and one warning is logged for the process. `PageContext::addHeader()` refuses the three names too.
+  A file-serving site page asks the supported way for what the legacy file page (`Idno\Pages\File\View`) sent: a public file `Pragma: public`, `Cache-Control: public` and a
+  30-day `Expires`; a restricted one `Cache-Control: private, no-cache`; an administrators' one `Cache-Control: private, no-store` and `Pragma: no-cache`; `Last-Modified` is the
+  entity's, through `addHeader()` (it replaces the one `BinaryFileResponse` sets from the file's date); `ETag` is none unless the controller sets one; `Accept-Ranges`, range
+  answers and `Content-Disposition` are the `BinaryFileResponse`'s (`SitePageDrawingTest::testAFileASitePageServesKeepsWhatTheLegacyFilePageSent`). The rule runs again at priority -20,
+  for whatever sets caching on the response after the first pass. Symfony's `#[Cache]` is refused on a site page in debug mode (`PageRequestListener`: a `LogicException`) and ignored
+  otherwise: the controller wrapper is not given the attribute, so its listener never runs; a refusal's own `no-store` (`DeniedResponder`) is not an ask either;
   (7) an empty answer (an OPTIONS 204) is sent the `Content-Type` PHP's `default_mimetype` gives it, as a legacy page's was (a prepared empty response drops its type and
-  switches the default off for the process: put back after); (8) `X-Robots-Tag: noindex`, which Symfony's `DisallowRobotsIndexingListener` (-255) adds in debug mode, is
+  switches the default off for the process: the setting is recorded before and put back by the second pass, and by `kernel.terminate` should something have stopped it); (8) `X-Robots-Tag: noindex`, which Symfony's `DisallowRobotsIndexingListener` (-255) adds in debug mode, is
   taken off a site page's response (priority -300) only if it was not on the response before that listener ran (`noteRobotsTag()`, -250), so a page that says `noindex`
   keeps it in every environment, and a legacy page never had the one Symfony adds; the responses of every other controller (`/_upgrade/step`, `/_test/*`) keep it and keep every header they have. A
   header a draw sends itself with `header()` for one of the three caching names stays in PHP's list (`AddedHeaders` never takes them): it is PHP's to send. The seam over
@@ -1166,7 +1172,7 @@ test fixtures is routed to a controller through them yet:
   `Tests/Kernel/PageListenersWithoutLegacyTest` (no legacy application: nothing changes). Two differences from a legacy page remain, neither of them a caching header: the order of lines of DIFFERENT names (PHP's lines first, then the response's), and
   `Date`, which the response always carries and which therefore comes after PHP's lines, where the server wrote its own first. (OPTIONS had a third, its `Content-Type`:
   it is the same now.) Every call to PHP's header functions on the controller path (`LegacyPageDrawer`, `LegacyPageLifecycle`, the reconciler) goes through `HeaderQueue`
-  (`HeaderSeamTest` scans for a direct call); the drawer asks `listed()` again before it reads PHP's list back, because a draw may have flushed output.
+  (and `ini_get`/`ini_set` of `default_mimetype`: `HeaderQueue::defaultMimetype()`); `HeaderSeamTest` scans every file of `Idno/Http/` and the page-path adapters of `Idno/Legacy/` for a direct call, with `PhpHeaders` and `FrontController` (the install redirect, before any kernel) allowed; the drawer asks `listed()` again before it reads PHP's list back, because a draw may have flushed output.
 
 ### Kernel and services
 

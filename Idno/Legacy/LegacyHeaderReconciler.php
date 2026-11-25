@@ -7,6 +7,11 @@ namespace Idno\Legacy;
 use Idno\Http\Page\PageContext;
 use Idno\Kernel;
 use Idno\Security\DeniedResponder;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Response;
@@ -30,13 +35,15 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * - `Last-Modified`: the response's, when it has one (PHP's queued line is removed); else PHP's.
  * - `Content-Type`: the response's; a response with none and a type that declares none (a third party's) takes PHP's queued line,
  *   because a response with none gets `text/html` when it is prepared and sends it replacing PHP's.
- * - caching set any other way (a header of the page's context, a `Cache-Control`, `Pragma` or `Expires` a controller set on its response, a
- *   `#[Cache]` attribute) is honoured as the page asking for it, name by name, unless the page asked for that name itself: its value is
- *   sent as given, in place of PHP's lines of that name. A `Cache-Control` equal to the one a response computes by itself
- *   (`no-cache, private`, or `must-revalidate, private` once it has `Last-Modified`) is no ask. The rule runs a second time after
- *   Symfony's cache attribute listener (priority -10), which adds its header after the first.
+ * - nothing else is the page asking for caching: a `Cache-Control`, `Pragma` or `Expires` that is merely on the response (a controller set it,
+ *   or `BinaryFileResponse` did: it sets `public`) is removed like the computed one, so a page is never made MORE cacheable than the
+ *   session's lines by accident. Debug mode refuses a value the framework did not set by itself (the three computed `Cache-Control` values and
+ *   a `BinaryFileResponse`'s `public`) with a `\LogicException` naming `PageContext::setCaching()`; otherwise it is ignored and one warning is
+ *   logged for the process. Symfony's `#[Cache]` attribute is refused on a site page (`PageRequestListener`) and is not passed on to the page's
+ *   controller wrapper, so it never sets one; the rule runs again at priority -20 for whatever sets one after the first pass.
  * - an empty answer (a 204, as OPTIONS is) is given the `Content-Type` PHP would have sent it: a response that is prepared drops its own
- *   and tells PHP to send none, where a legacy page's answer had PHP's default.
+ *   and switches PHP's `default_mimetype` off for the process, where a legacy page's answer had PHP's default. The setting is recorded before and put
+ *   back after the response is prepared, and again when the request terminates if anything stopped the second pass.
  * - everything else (`Link` from `page/head`, `Vary`, `X-*`), `Date` and `Set-Cookie`: untouched, the response's lines beside PHP's.
  *
  * The listener is registered after the page's own headers are on the response (`PageRequestListener::onResponse()`) and before
@@ -55,10 +62,17 @@ final class LegacyHeaderReconciler
 
     private const DEFAULT_MIMETYPE = '_idno_default_mimetype';
 
+    private bool $warned = false;
+
+    /**
+     * @param \Closure(): LoggerInterface|null $logger fetched when something is to be logged: the site's logger needs the legacy application
+     */
     public function __construct(
         #[Autowire(service: 'kernel')]
         private readonly Kernel $kernel,
         private readonly HeaderQueue $php,
+        #[AutowireServiceClosure(LoggerInterface::class)]
+        private readonly ?\Closure $logger = null,
     )
     {
     }
@@ -76,7 +90,8 @@ final class LegacyHeaderReconciler
     }
 
     /**
-     * After Symfony's cache attribute listener (-10): what it, or anything before, set on the response is honoured as the page's ask.
+     * After Symfony's own listeners: caching that anything set on the response since the first pass is not the page's ask either; and the
+     * process's `default_mimetype` goes back.
      */
     #[AsEventListener(event: KernelEvents::RESPONSE, priority: -20)]
     public function onLateResponse(ResponseEvent $event): void
@@ -86,11 +101,24 @@ final class LegacyHeaderReconciler
             return;
         }
         $this->reconcile($event->getResponse(), $context, true);
-        // an empty answer was prepared with PHP's default type switched off for the process: back as it was
-        $default = $event->getRequest()->attributes->get(self::DEFAULT_MIMETYPE);
+        $this->restoreDefaultMimetype($event->getRequest());
+    }
+
+    /**
+     * A response that was prepared and then not given its second pass (something threw in between) still leaves PHP's default type as it was.
+     */
+    #[AsEventListener(event: KernelEvents::TERMINATE, priority: 100)]
+    public function onTerminate(TerminateEvent $event): void
+    {
+        $this->restoreDefaultMimetype($event->getRequest());
+    }
+
+    private function restoreDefaultMimetype(Request $request): void
+    {
+        $default = $request->attributes->get(self::DEFAULT_MIMETYPE);
         if (is_string($default)) {
-            ini_set('default_mimetype', $default);
-            $event->getRequest()->attributes->remove(self::DEFAULT_MIMETYPE);
+            $this->php->setDefaultMimetype($default);
+            $request->attributes->remove(self::DEFAULT_MIMETYPE);
         }
     }
 
@@ -129,9 +157,14 @@ final class LegacyHeaderReconciler
     {
         $queue = $this->php->listed();
         $queued = $queue ? $this->php->queued() : [];
-        if ($context->request()->attributes->get(DeniedResponder::ATTRIBUTE) !== true) {
-            // (a refusal's own `no-store` is the responder's and not the page's: a site page's 403 is sent with the session's lines, as a legacy page's was)
-            $this->honour($response, $context);
+        $request = $context->request();
+        if (!$knownType && ($response->isEmpty() || $response->isInformational()) && !$request->attributes->has(self::DEFAULT_MIMETYPE)) {
+            // preparing such a response switches PHP's default type off for the process: remember it, to put it back
+            $request->attributes->set(self::DEFAULT_MIMETYPE, $this->php->defaultMimetype());
+        }
+        // (a refusal's own `no-store` is the responder's and not the page's: a site page's 403 is sent with the session's lines, as a legacy page's was)
+        if ($request->attributes->get(DeniedResponder::ATTRIBUTE) !== true) {
+            $this->refuseCachingOnTheResponse($response, $context);
         }
         $asked = $context->cachingLines();
 
@@ -161,29 +194,42 @@ final class LegacyHeaderReconciler
                 $this->php->remove('Content-Type');
             } elseif ($response->isEmpty() && ($default = $this->php->defaultContentType()) !== null) {
                 // Preparing an empty response drops its type and switches PHP's default off, for the process: so the default is sent
-                // by name here, and the setting is put back after the response is prepared (onLateResponse())
+                // by name here
                 $this->php->send('Content-Type: ' . $default, true);
-                $context->request()->attributes->set(self::DEFAULT_MIMETYPE, (string) ini_get('default_mimetype'));
             }
         }
     }
 
     /**
-     * Caching set on the response (or as a header of the context) is the page asking for it, for each name the page did not ask for with
-     * `setCaching()`: the value is the page's, sent as given. A `Cache-Control` the response computed by itself is no ask.
+     * What is on the response of the three caching names is not the page asking for caching (it asks with `PageContext::setCaching()`, and
+     * a name it asked for is its own whatever the response says): in debug mode a value the framework did not set by itself is refused, and
+     * otherwise it is ignored and warned of once. The response's values are taken off it by the caller.
      */
-    private function honour(Response $response, PageContext $context): void
+    private function refuseCachingOnTheResponse(Response $response, PageContext $context): void
     {
         $asked = $context->caching();
+        $found = [];
         foreach (self::CACHING as $name) {
             if (!$response->headers->has($name) || array_key_exists($name, $asked)) {
                 continue;
             }
             $lines = array_values($response->headers->all($name));
-            if ($name === 'Cache-Control' && count($lines) === 1 && in_array($lines[0], self::COMPUTED_CACHE_CONTROL, true)) {
-                continue;
+            $own = $name === 'Cache-Control' && count($lines) === 1
+                && (in_array($lines[0], self::COMPUTED_CACHE_CONTROL, true) || ($response instanceof BinaryFileResponse && $lines[0] === 'public'));
+            if (!$own) {
+                $found[] = $name;
             }
-            $context->setCaching([$name => $lines]);
+        }
+        if ($found === []) {
+            return;
+        }
+        $message = 'A Cache-Control, Pragma or Expires on a site page\'s response is not the page asking for caching (' . implode(', ', $found) . '): ask with PageContext::setCaching() or setNoCache().';
+        if ($this->kernel->isDebug()) {
+            throw new \LogicException($message);
+        }
+        if (!$this->warned && $this->logger !== null) {
+            $this->warned = true;
+            ($this->logger)()->warning($message);
         }
     }
 

@@ -53,4 +53,11 @@ interface HeaderQueue
      * The `Content-Type` PHP sends a response that names none (`default_mimetype` and `default_charset`), null when it sends none.
      */
     public function defaultContentType(): ?string;
+
+    /**
+     * PHP's `default_mimetype` setting: Symfony switches it off for the whole process when it prepares an empty response.
+     */
+    public function defaultMimetype(): string;
+
+    public function setDefaultMimetype(string $mimetype): void;
 }

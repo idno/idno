@@ -68,4 +68,14 @@ final class PhpHeaders implements HeaderQueue
 
         return $charset !== '' && str_starts_with($type, 'text/') ? $type . '; charset=' . $charset : $type;
     }
+
+    public function defaultMimetype(): string
+    {
+        return (string) ini_get('default_mimetype');
+    }
+
+    public function setDefaultMimetype(string $mimetype): void
+    {
+        ini_set('default_mimetype', $mimetype);
+    }
 }

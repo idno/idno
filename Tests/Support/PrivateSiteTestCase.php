@@ -147,6 +147,14 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
+     * The log of an extra server, by the address startExtraServer() returned.
+     */
+    protected function extraServerLog(string $url): string
+    {
+        return $this->directory . '/extra-' . parse_url($url, PHP_URL_PORT) . '.log';
+    }
+
+    /**
      * The test site's own origin and path, with the trailing slash.
      */
     protected function baseUrl(): string

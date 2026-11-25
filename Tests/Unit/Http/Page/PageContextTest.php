@@ -184,6 +184,23 @@ final class PageContextTest extends TestCase
         );
     }
 
+    public function testCachingIsNotAskedForAsAHeader(): void
+    {
+        $context = $this->context(Request::create('/x'));
+
+        foreach (['Cache-Control', 'pragma', 'EXPIRES'] as $name) {
+            try {
+                $context->addHeader($name, 'public');
+                $this->fail($name);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('setCaching()', $e->getMessage());
+            }
+        }
+        $this->assertSame([], $context->headers());
+        $context->addHeader('Last-Modified', 'Tue, 14 Nov 2023 22:13:20 GMT');
+        $this->assertCount(1, $context->headers());
+    }
+
     public function testOnlyTheCachingHeadersCanBeAskedFor(): void
     {
         $context = $this->context(Request::create('/x'));

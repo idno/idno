@@ -209,9 +209,15 @@ final class PageContext
 
     /**
      * A header the page asks for. A header of the same name (in any letter case) is replaced, or, when `$replace` is false, added to.
+     * Not for caching (`Cache-Control`, `Pragma`, `Expires`): that is `setCaching()`.
+     *
+     * @throws \InvalidArgumentException for a caching header
      */
     public function addHeader(string $name, string $value, bool $replace = true): void
     {
+        if (isset(self::CACHING[strtolower($name)])) {
+            throw new \InvalidArgumentException('Caching is asked for with setCaching(), not as a header: ' . $name);
+        }
         $key = $name;
         foreach (array_keys($this->headers) as $existing) {
             if (strcasecmp($existing, $name) === 0) {

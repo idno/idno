@@ -298,30 +298,79 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         }
     }
 
-    public function testCachingSetAnyOtherWayIsTheCachingTheLegacyPageWouldHaveSent(): void
+    public function testCachingIsOnlyWhatThePageAskedForTheSupportedWay(): void
     {
-        // A page asks for caching with `setCaching()` (or `setNoCache()`). Caching set on the response itself, as a header of the context
-        // is honoured the same way, name by name, as the page asking for it: sent as given, in place of
-        // the session's lines of that name, never beside them and never silently dropped.
         foreach ($this->callers() as $headers) {
-            $response = $this->get('draw-new', 'plain', 'case=response-caching', $headers);
-            $this->assertSame(['max-age=30, public'], $response->lines('Cache-Control'), 'as the response writes it (directives sorted)');
-            $this->assertSame(['Wed, 01 Jan 2031 00:00:00 GMT'], $response->lines('Expires'));
-            $this->assertSame(['no-cache'], $response->lines('Pragma'), 'a name the page did not ask for is the session\'s');
-
-            $context = $this->get('draw-new', 'plain', 'case=context-caching', $headers);
-            $this->assertSame(['max-age=45, public'], $context->lines('Cache-Control'));
-            $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $context->lines('Expires'));
-
+            $asked = $this->get('draw-new', 'plain', 'case=context-caching', $headers);
+            $this->assertSame(['public, max-age=45'], $asked->lines('Cache-Control'), 'exactly as asked');
+            $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $asked->lines('Expires'), 'a name it did not ask for is the session\'s');
+            $this->assertSame(['no-cache'], $asked->lines('Pragma'));
         }
+    }
 
-        // `#[Cache]` is not applied to a site page, and a developer is told so: refused in debug mode, ignored (the session's lines) otherwise
-        $debug = $this->site()->request('GET', '_test/site-page/cache-attribute?case=draw');
-        $this->assertSame(500, $debug->status);
-        $this->assertStringContainsString('setCaching()', $debug->body);
-        $prod = (new HttpSiteClient($this->startExtraServer(['APP_DEBUG' => '0'])))->request('GET', '_test/site-page/cache-attribute?case=draw');
-        $this->assertSame(200, $prod->status);
-        $this->assertSame(['no-store, no-cache, must-revalidate'], $prod->lines('Cache-Control'), 'one line, the session\'s');
+    public function testAResponseThatMerelyCarriesCachingHeadersNeverMakesAPageMoreCacheable(): void
+    {
+        // `BinaryFileResponse` sets `Cache-Control: public` itself, and a controller may set the three on any response: none is the page
+        // asking for caching. Debug mode refuses a value that is not one the framework sets by itself (so that a developer notices);
+        // otherwise they are ignored, the session's lines go out, and one warning is logged.
+        $session = ['no-store, no-cache, must-revalidate'];
+        $prodUrl = $this->startExtraServer(['APP_DEBUG' => '0']);
+        $prod = new HttpSiteClient($prodUrl);
+        foreach ($this->callers() as $headers) {
+            $label = json_encode(array_keys($headers));
+            foreach (['binary', 'binary-public', 'stream'] as $case) {
+                foreach (['debug' => $this->site(), 'prod' => $prod] as $mode => $client) {
+                    $response = $client->request('GET', self::AREAS['plain'] . 'draw-new?case=' . $case, $headers);
+                    $this->assertSame(200, $response->status, "$case $mode $label");
+                    $this->assertSame($session, $response->lines('Cache-Control'), "$case $mode $label");
+                    $this->assertSame(['no-cache'], $response->lines('Pragma'), "$case $mode $label");
+                    $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $response->lines('Expires'), "$case $mode $label");
+                    $this->assertSame([], $response->lines('ETag'), "$case $mode $label");
+                }
+            }
+            foreach (['binary-maxage', 'response-caching'] as $case) {
+                $debug = $this->get('draw-new', 'plain', 'case=' . $case, $headers);
+                $this->assertSame(500, $debug->status, "$case debug $label");
+                $this->assertStringContainsString('setCaching()', $debug->body, "$case debug $label");
+
+                $response = $prod->request('GET', self::AREAS['plain'] . 'draw-new?case=' . $case, $headers);
+                $this->assertSame(200, $response->status, "$case prod $label");
+                $this->assertSame($session, $response->lines('Cache-Control'), "$case prod $label");
+                $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $response->lines('Expires'), "$case prod $label");
+                $this->assertSame(['no-cache'], $response->lines('Pragma'), "$case prod $label");
+            }
+        }
+        $log = (string) file_get_contents($this->extraServerLog($prodUrl));
+        // once for each process of the server (it has four workers), not once for each request
+        $warnings = substr_count($log, 'on a site page\'s response is not the page asking for caching');
+        $this->assertGreaterThanOrEqual(1, $warnings, 'a warning is logged');
+        $this->assertLessThanOrEqual(4, $warnings, 'one a process, not one a request: ' . $warnings);
+    }
+
+    public function testAFileASitePageServesKeepsWhatTheLegacyFilePageSent(): void
+    {
+        // `Idno\Pages\File\View` sent one of three sets of lines by `header()`, and `Last-Modified` of the entity, and no `ETag`: the page asks
+        // for them the supported way, also on a `BinaryFileResponse`, which sets its own `Last-Modified` and `public`
+        $expected = [
+            'file-public' => ['Cache-Control' => ['public'], 'Pragma' => ['public'], 'Expires' => ['Fri, 01 Jan 2027 00:00:00 GMT']],
+            'file-restricted' => ['Cache-Control' => ['private, no-cache'], 'Pragma' => ['no-cache'], 'Expires' => ['Thu, 19 Nov 1981 08:52:00 GMT']],
+            'file-admin' => ['Cache-Control' => ['private, no-store'], 'Pragma' => ['no-cache'], 'Expires' => ['Thu, 19 Nov 1981 08:52:00 GMT']],
+        ];
+        foreach ($this->callers() as $headers) {
+            foreach ($expected as $case => $lines) {
+                foreach (['', 'bytes=0-9'] as $range) {
+                    $response = $this->get('draw-new', 'plain', 'case=' . $case, $headers + ($range === '' ? [] : ['Range' => $range]));
+                    $label = $case . ' ' . $range;
+
+                    $this->assertSame($range === '' ? 200 : 206, $response->status, $label);
+                    foreach ($lines as $name => $values) {
+                        $this->assertSame($values, $response->lines($name), $label . ' ' . $name);
+                    }
+                    $this->assertSame(['Tue, 14 Nov 2023 22:13:20 GMT'], $response->lines('Last-Modified'), $label . ': the entity\'s, not the file\'s');
+                    $this->assertSame([], $response->lines('ETag'), $label);
+                }
+            }
+        }
     }
 
     public function testAnOptionsRequestIsAnsweredAsALegacyPageAnswersIt(): void
