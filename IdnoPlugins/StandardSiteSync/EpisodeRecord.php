@@ -4,13 +4,13 @@ namespace IdnoPlugins\StandardSiteSync;
 
 /**
  * Builds the records of VoxPort's podcast lexicons, which an audio post is written as
- * beside its Bluesky post (Bluesky has no record for audio):
+ * beside its co.idno.feed.audio record, so that podcast software can find it:
  *
  * - live.voxport.podcast.series: one for each member, the series their audio posts
  *   on this site are the episodes of
  * - live.voxport.podcast.episode: one for each audio post, with the address, type and
  *   size of the audio file (the file stays on this site) and, in blueskyPostRef, the
- *   Bluesky post that was written for it
+ *   Bluesky post that was written for it, if the member has those made
  *
  * Both methods work on the values they are given and ask nothing of anybody. The
  * lengths these lexicons give are in bytes.

@@ -7,8 +7,8 @@ use Idno\Entities\User;
 
 /**
  * Writes an audio post to the member's PDS as an episode of their series (see
- * EpisodeRecord), and removes it again. PostSync writes the Bluesky post for the same
- * entity first, so that the episode can name it.
+ * EpisodeRecord), and removes it again. When the member has Bluesky posts made, PostSync
+ * writes that post first, so that the episode can name it.
  *
  * What is remembered: on the entity, standardsitesync_episode_uri, _cid, _hash and
  * _gone (as PostSync does for the post); on the member, standardsitesync_series_uri,

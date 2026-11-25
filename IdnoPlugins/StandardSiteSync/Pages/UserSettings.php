@@ -30,6 +30,7 @@ class UserSettings extends Page
                 'sync_enabled' => $syncEnabled,
                 'did'          => $session['did'] ?? '',
                 'pds'          => $session['pds'] ?? '',
+                'bluesky'      => \IdnoPlugins\StandardSiteSync\Main::postsToBluesky($user),
             ]
         )->draw('standardsitesync/account/settings');
 
@@ -46,6 +47,17 @@ class UserSettings extends Page
         $this->gatekeeper();
 
         $action = $this->getInput('action');
+
+        if ($action === 'options') {
+            // Whether status updates, videos and audio are posted to Bluesky as well
+            $user = \Idno\Core\Idno::site()->session()->currentUser();
+            $user->standardsitesync_bluesky = !empty($this->getInput('bluesky'));
+            $user->save();
+            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your choice has been saved.'));
+            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/settings/standardsitesync/');
+
+            return;
+        }
 
         if ($action === 'connect') {
             $handle = trim($this->getInput('handle'));

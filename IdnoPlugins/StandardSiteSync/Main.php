@@ -236,7 +236,7 @@ class Main extends Plugin
     public static function hasRemoteRecord($object): bool
     {
         return $object instanceof \Idno\Common\Entity
-            && (PostSync::hasRecord($object) || EpisodeSync::hasRecord($object) || !empty($object->standardsitesync_uri));
+            && (FeedSync::hasRecord($object) || PostSync::hasRecord($object) || EpisodeSync::hasRecord($object) || !empty($object->standardsitesync_uri));
     }
 
     /**
@@ -275,7 +275,7 @@ class Main extends Plugin
 
         // The request that saved the post may save its own copy again: keep that copy in step
         if ($changed && $entity !== $object) {
-            foreach (array_merge(PostSync::FIELDS, EpisodeSync::FIELDS, ['standardsitesync_uri', 'posse']) as $field) {
+            foreach (array_merge(FeedSync::FIELDS, PostSync::FIELDS, EpisodeSync::FIELDS, ['standardsitesync_uri', 'posse']) as $field) {
                 $object->$field = $entity->$field;
             }
         }
@@ -283,8 +283,9 @@ class Main extends Plugin
 
     /**
      * Write a single entity to its owner's PDS: a status update, a video or an audio
-     * post as a Bluesky post (see PostRecord), an audio post as a podcast episode too (see
-     * EpisodeRecord), anything else as a standard.site document.
+     * post as a record of Idno's own lexicons (see FeedRecord), an audio post as a podcast
+     * episode too (see EpisodeRecord), and, for a member who has asked for it, each of them
+     * as a Bluesky post (see PostRecord); anything else as a standard.site document.
      * Nothing that goes wrong is passed on: it is logged, without what the server
      * answered and without any token.
      *
@@ -304,15 +305,28 @@ class Main extends Plugin
             $client = new ATProtoClient(self::getATProtoSessionForUser($user));
 
             if (PostSync::handles($entity)) {
+                $bluesky = self::postsToBluesky($user);
                 $audio = EpisodeSync::handles($entity);
-                if ($skipExisting && PostSync::hasRecord($entity) && (!$audio || EpisodeSync::hasRecord($entity))) {
+                if (
+                    $skipExisting && FeedSync::hasRecord($entity)
+                    && (!$audio || EpisodeSync::hasRecord($entity))
+                    && (!$bluesky || PostSync::hasRecord($entity))
+                ) {
                     return false;
                 }
                 $changes = [PostSync::CREATED, PostSync::UPDATED, PostSync::GONE];
-                $outcome = (new PostSync($client))->sync($entity);
-                $changed = in_array($outcome, $changes, true);
+                $changed = false;
 
-                // An audio post is also an episode of the member's series, which names its Bluesky post
+                // Only for a member who asked for it: a Bluesky post, which their followers there see
+                if ($bluesky && in_array((new PostSync($client))->sync($entity), $changes, true)) {
+                    $changed = true;
+                }
+
+                // The record of the post itself, in Idno's own lexicons, which Bluesky does not show
+                $outcome = (new FeedSync($client))->sync($entity);
+                $changed = $changed || in_array($outcome, $changes, true);
+
+                // An audio post is also an episode of the member's podcast series
                 if ($audio && in_array((new EpisodeSync($client))->sync($entity, $user), $changes, true)) {
                     $changed = true;
                 }
@@ -377,6 +391,9 @@ class Main extends Plugin
             $client = new ATProtoClient(self::getATProtoSessionForUser($user));
 
             $changed = PostSync::handles($entity) && (new PostSync($client))->remove($entity);
+            if ((new FeedSync($client))->remove($entity)) {
+                $changed = true;
+            }
             if ((new EpisodeSync($client))->remove($entity)) {
                 $changed = true;
             }
@@ -430,6 +447,15 @@ class Main extends Plugin
             }
         }
         \Idno\Core\Idno::site()->logging()->error('StandardSiteSync: ' . $what . ': ' . $e->getMessage());
+    }
+
+    /**
+     * Whether a member has asked for their status updates, videos and audio to be posted
+     * to Bluesky as well. Nobody has unless they turned it on in their settings.
+     */
+    public static function postsToBluesky(User $user): bool
+    {
+        return !empty($user->standardsitesync_bluesky);
     }
 
     /**

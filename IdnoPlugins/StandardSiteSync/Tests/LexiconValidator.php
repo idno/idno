@@ -29,9 +29,14 @@ class LexiconValidator
         'tid'         => '/\A[234567abcdefghij][234567abcdefghijklmnopqrstuvwxyz]{12}\z/',
     ];
 
-    public function __construct(string $directory)
+    /**
+     * @param string|string[] $directory Where the schema files are: one directory or several
+     */
+    public function __construct($directory)
     {
-        $this->directory = rtrim($directory, '/');
+        $this->directory = array_map(function ($one) {
+            return rtrim($one, '/');
+        }, (array) $directory);
     }
 
     /**
@@ -82,8 +87,14 @@ class LexiconValidator
     private function definition(string $nsid, string $name): ?array
     {
         if (!array_key_exists($nsid, $this->documents)) {
-            $file = $this->directory . '/' . $nsid . '.json';
-            $this->documents[$nsid] = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
+            $this->documents[$nsid] = null;
+            foreach ($this->directory as $directory) {
+                $file = $directory . '/' . $nsid . '.json';
+                if (is_file($file)) {
+                    $this->documents[$nsid] = json_decode((string) file_get_contents($file), true);
+                    break;
+                }
+            }
         }
 
         return $this->documents[$nsid]['defs'][$name] ?? null;

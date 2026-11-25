@@ -1,0 +1,83 @@
+{
+  "lexicon": 1,
+  "id": "co.idno.feed.status",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "A status update: a short post published on a website running Idno.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "text",
+          "url",
+          "createdAt"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 100000,
+            "maxGraphemes": 10000,
+            "description": "The status update, as plain text."
+          },
+          "facets": {
+            "type": "array",
+            "description": "Links and hashtags in text, by the range of UTF-8 bytes each covers.",
+            "items": {
+              "type": "ref",
+              "ref": "app.bsky.richtext.facet"
+            }
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The address of the post on the site it was published on. This is the original; the record is a copy of it."
+          },
+          "inReplyTo": {
+            "type": "array",
+            "maxLength": 10,
+            "description": "The addresses of what this status update replies to, if it is a reply.",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "maxLength": 50,
+            "description": "Tags of the post, without a leading '#', besides any hashtags in text.",
+            "items": {
+              "type": "string",
+              "maxLength": 640,
+              "maxGraphemes": 64
+            }
+          },
+          "langs": {
+            "type": "array",
+            "maxLength": 3,
+            "description": "The human language of the post.",
+            "items": {
+              "type": "string",
+              "format": "language"
+            }
+          },
+          "bskyPostRef": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The Bluesky post (app.bsky.feed.post) that was made for this post, if its author chose to have one."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the post was published."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the post was last changed, if it has been."
+          }
+        }
+      }
+    }
+  }
+}

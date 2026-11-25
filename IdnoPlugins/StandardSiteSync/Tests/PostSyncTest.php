@@ -5,6 +5,8 @@ namespace IdnoPlugins\StandardSiteSync\Tests;
 use Idno\Core\Idno;
 use IdnoPlugins\StandardSiteSync\ATProtoClient;
 use IdnoPlugins\StandardSiteSync\BlueskyLookup;
+use IdnoPlugins\StandardSiteSync\EpisodeSync;
+use IdnoPlugins\StandardSiteSync\FeedSync;
 use IdnoPlugins\StandardSiteSync\Main;
 use IdnoPlugins\StandardSiteSync\PostSync;
 use IdnoPlugins\StandardSiteSync\Tid;
@@ -47,7 +49,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
-        self::$validator = new LexiconValidator(__DIR__ . '/fixtures/lexicons');
+        self::$validator = new LexiconValidator([__DIR__ . '/fixtures/lexicons', dirname(__DIR__) . '/lexicons']);
         self::$dpopKey = ATProtoClient::generateDPoPKeyPair();
     }
 
@@ -99,6 +101,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
         foreach (['uri', 'cid', 'hash'] as $field) {
             $user->{'standardsitesync_series_' . $field} = null;
         }
+        $user->standardsitesync_bluesky = null;
         $user->save(true);
         foreach ($this->toDelete as $entity) {
             $entity->delete();
@@ -152,6 +155,16 @@ class PostSyncTest extends \Tests\IdnoTestCase
             'expires_at'   => time() + 3600,
             'dpop_key'     => self::$dpopKey,
         ];
+    }
+
+    /**
+     * The collections that were written to, in order.
+     */
+    private function collectionsPut(): array
+    {
+        return array_map(function ($put) {
+            return $put['json']['collection'];
+        }, $this->requestsTo('com.atproto.repo.putRecord'));
     }
 
     private function requestsTo(string $nsid): array
@@ -568,27 +581,34 @@ class PostSyncTest extends \Tests\IdnoTestCase
         return $media;
     }
 
-    public function testAnAudioPostIsAlsoAnEpisodeOfTheMembersSeries()
+    public function testAnAudioPostIsAnAudioRecordAndAnEpisodeOfTheMembersSeries()
     {
         $this->connect();
         $media = $this->audio('Episode 1');
 
         $this->assertTrue(Main::syncEntity($media));
 
+        $this->assertSame(['co.idno.feed.audio', 'live.voxport.podcast.series', 'live.voxport.podcast.episode'], $this->collectionsPut());
         $puts = $this->requestsTo('com.atproto.repo.putRecord');
-        $this->assertSame(
-            ['app.bsky.feed.post', 'live.voxport.podcast.series', 'live.voxport.podcast.episode'],
-            array_map(function ($put) {
-                return $put['json']['collection'];
-            }, $puts)
-        );
         foreach ($puts as $put) {
             $this->assertSame([], self::$validator->validateInput('com.atproto.repo.putRecord', $put['json']));
             $this->assertSame([], self::$validator->validateRecord($put['json']['record']), $put['json']['collection']);
             $this->assertTrue(Tid::isValid($put['json']['rkey']));
         }
+        [$audio, $series, $episode] = $puts;
+        $file = Idno::site()->config()->getDisplayURL() . 'file/abc123/episode.mp3';
 
-        [$post, $series, $episode] = $puts;
+        $this->assertSame([
+            '$type'     => 'co.idno.feed.audio',
+            'audio'     => $file,
+            'mimeType'  => 'audio/mpeg',
+            'size'      => 123456,
+            'title'     => 'Episode 1',
+            'text'      => 'Show notes.',
+            'url'       => $media->getURL(),
+            'createdAt' => gmdate('Y-m-d\TH:i:s.000\Z', $media->created),
+        ], array_diff_key($audio['json']['record'], ['langs' => 1]));
+
         $user = \Idno\Entities\User::getByID($this->user()->getID());
         $seriesUri = 'at://' . self::DID . '/live.voxport.podcast.series/' . $series['json']['rkey'];
         $this->assertSame($seriesUri, $user->standardsitesync_series_uri);
@@ -598,17 +618,17 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $this->assertSame(['uri' => $seriesUri], $record['series']);
         $this->assertSame('Episode 1', $record['title']);
         $this->assertSame('Show notes.', $record['summary']);
-        $this->assertSame(Idno::site()->config()->getDisplayURL() . 'file/abc123/episode.mp3', $record['audioUrl']);
+        $this->assertSame($file, $record['audioUrl']);
         $this->assertSame('audio/mpeg', $record['audioType']);
         $this->assertSame(123456, $record['audioLength']);
-        $this->assertSame([
-            'uri' => 'at://' . self::DID . '/app.bsky.feed.post/' . $post['json']['rkey'],
-            'cid' => $this->cidOf($post['json']['record']),
-        ], $record['blueskyPostRef']);
+        $this->assertArrayNotHasKey('blueskyPostRef', $record);
 
         $stored = \Idno\Common\Entity::getByID($media->getID());
+        $this->assertSame('at://' . self::DID . '/co.idno.feed.audio/' . $audio['json']['rkey'], $stored->standardsitesync_record_uri);
         $this->assertSame('at://' . self::DID . '/live.voxport.podcast.episode/' . $episode['json']['rkey'], $stored->standardsitesync_episode_uri);
         $this->assertSame($this->cidOf($record), $stored->standardsitesync_episode_cid);
+        $this->assertFalse(PostSync::hasRecord($stored));
+        $this->assertSame([], $stored->getPosseLinks());
 
         // Again: nothing is written
         $this->assertFalse(Main::syncEntity($stored));
@@ -618,34 +638,45 @@ class PostSyncTest extends \Tests\IdnoTestCase
         // A second episode: the series is not written again
         $second = $this->audio('Episode 2');
         Main::syncEntity($second);
+        $this->assertSame(['co.idno.feed.audio', 'live.voxport.podcast.episode'], array_slice($this->collectionsPut(), 3));
         $puts = $this->requestsTo('com.atproto.repo.putRecord');
-        $this->assertCount(5, $puts);
-        $this->assertSame('app.bsky.feed.post', $puts[3]['json']['collection']);
-        $this->assertSame('live.voxport.podcast.episode', $puts[4]['json']['collection']);
         $this->assertSame(['uri' => $seriesUri], $puts[4]['json']['record']['series']);
         $this->assertNotSame($episode['json']['rkey'], $puts[4]['json']['rkey']);
     }
 
-    public function testAnEditedAudioPostReplacesItsEpisodeAndADeletedOneDeletesIt()
+    public function testAnEditedAudioPostReplacesItsRecordsAndADeletedOneDeletesThem()
     {
-        $this->connect();
+        $this->connect(true);
         $media = $this->audio('Episode 1');
         Main::syncEntity($media);
-        [$post, , $episode] = $this->requestsTo('com.atproto.repo.putRecord');
+        $this->assertSame(
+            ['app.bsky.feed.post', 'co.idno.feed.audio', 'live.voxport.podcast.series', 'live.voxport.podcast.episode'],
+            $this->collectionsPut()
+        );
+        [$post, $audio, , $episode] = $this->requestsTo('com.atproto.repo.putRecord');
+        $postRef = ['uri' => 'at://' . self::DID . '/app.bsky.feed.post/' . $post['json']['rkey'], 'cid' => $this->cidOf($post['json']['record'])];
+        $this->assertSame($postRef, $audio['json']['record']['bskyPostRef']);
+        $this->assertSame($postRef, $episode['json']['record']['blueskyPostRef']);
+        $this->assertSame([], self::$validator->validateRecord($audio['json']['record']));
+        $this->assertSame([], self::$validator->validateRecord($episode['json']['record']));
         $firstCid = $media->standardsitesync_episode_cid;
         $this->requests = [];
 
         $media->title = 'Episode 1, corrected';
         $this->assertTrue(Main::syncEntity($media));
 
+        $this->assertSame(['app.bsky.feed.post', 'co.idno.feed.audio', 'live.voxport.podcast.episode'], $this->collectionsPut());
         $puts = $this->requestsTo('com.atproto.repo.putRecord');
-        $this->assertCount(2, $puts);
-        $this->assertSame(['app.bsky.feed.post', $post['json']['rkey']], [$puts[0]['json']['collection'], $puts[0]['json']['rkey']]);
-        $this->assertSame(['live.voxport.podcast.episode', $episode['json']['rkey']], [$puts[1]['json']['collection'], $puts[1]['json']['rkey']]);
-        $this->assertSame($firstCid, $puts[1]['json']['swapRecord']);
+        $this->assertSame(
+            [$post['json']['rkey'], $audio['json']['rkey'], $episode['json']['rkey']],
+            [$puts[0]['json']['rkey'], $puts[1]['json']['rkey'], $puts[2]['json']['rkey']]
+        );
+        $this->assertSame($firstCid, $puts[2]['json']['swapRecord']);
         $this->assertSame('Episode 1, corrected', $puts[1]['json']['record']['title']);
-        // The episode names the new version of its post
-        $this->assertSame($this->cidOf($puts[0]['json']['record']), $puts[1]['json']['record']['blueskyPostRef']['cid']);
+        $this->assertSame('Episode 1, corrected', $puts[2]['json']['record']['title']);
+        // Both name the new version of the Bluesky post
+        $this->assertSame($this->cidOf($puts[0]['json']['record']), $puts[1]['json']['record']['bskyPostRef']['cid']);
+        $this->assertSame($this->cidOf($puts[0]['json']['record']), $puts[2]['json']['record']['blueskyPostRef']['cid']);
 
         Idno::site()->config()->standardsitesync_enabled = true;
         $media->setAccess('SITE');
@@ -658,6 +689,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
         }
         $this->assertSame([
             'app.bsky.feed.post'           => $post['json']['rkey'],
+            'co.idno.feed.audio'           => $audio['json']['rkey'],
             'live.voxport.podcast.episode' => $episode['json']['rkey'],
         ], $deleted);
         $stored = \Idno\Common\Entity::getByID($media->getID());
@@ -680,18 +712,16 @@ class PostSyncTest extends \Tests\IdnoTestCase
         };
         $media->title = 'Episode 1, again';
         $this->assertTrue(Main::syncEntity($media));
-        $this->assertFalse(\IdnoPlugins\StandardSiteSync\EpisodeSync::hasRecord($media));
-        $this->assertTrue(PostSync::hasRecord($media));
+        $this->assertFalse(EpisodeSync::hasRecord($media));
+        $this->assertTrue(FeedSync::hasRecord($media));
 
         $this->requests = [];
         $media->title = 'Episode 1, once more';
         Main::syncEntity($media);
-        $this->assertSame(['app.bsky.feed.post'], array_map(function ($put) {
-            return $put['json']['collection'];
-        }, $this->requestsTo('com.atproto.repo.putRecord')));
+        $this->assertSame(['co.idno.feed.audio'], $this->collectionsPut());
     }
 
-    public function testAVideoFileInAMediaPostIsNotAnEpisode()
+    public function testAVideoFileInAMediaPostIsAVideoRecordAndNotAnEpisode()
     {
         $this->connect();
         $media = $this->audio('A film');
@@ -700,9 +730,104 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         Main::syncEntity($media);
 
-        $this->assertSame(['app.bsky.feed.post'], array_map(function ($put) {
-            return $put['json']['collection'];
-        }, $this->requestsTo('com.atproto.repo.putRecord')));
+        $this->assertSame(['co.idno.feed.video'], $this->collectionsPut());
+        $record = $this->requests[0]['json']['record'];
+        $this->assertSame([], self::$validator->validateRecord($record));
+        $this->assertSame(Idno::site()->config()->getDisplayURL() . 'file/abc123/episode.mp3', $record['video']);
+        $this->assertSame('video/mp4', $record['mimeType']);
+        $this->assertArrayNotHasKey('provider', $record);
+    }
+
+    // Bluesky is a choice
+
+    public function testNothingGoesToBlueskyUnlessTheMemberAsks()
+    {
+        $this->connect();
+        $status = $this->status('Kept out of Bluesky @maya.students.example https://example.com/a #tag', [
+            'inreplyto' => ['https://bsky.app/profile/maya.students.example/post/3mabcdefghi2b', 'https://blog.example/a-post'],
+        ]);
+        $this->assertFalse(Main::postsToBluesky($this->user()));
+
+        $this->assertTrue(Main::syncEntity($status));
+
+        $this->assertSame(['co.idno.feed.status'], $this->collectionsPut());
+        $this->assertCount(1, $this->requests);
+        $this->assertSame([], $this->asked, 'Nothing is asked of Bluesky');
+        $record = $this->requests[0]['json']['record'];
+        $this->assertSame([], self::$validator->validateRecord($record));
+        $this->assertSame('Kept out of Bluesky @maya.students.example https://example.com/a #tag', $record['text']);
+        $this->assertSame($status->getURL(), $record['url']);
+        $this->assertSame(['https://bsky.app/profile/maya.students.example/post/3mabcdefghi2b', 'https://blog.example/a-post'], $record['inReplyTo']);
+        $this->assertSame(['https://example.com/a', 'tag'], [$record['facets'][0]['features'][0]['uri'], $record['facets'][1]['features'][0]['tag']]);
+        $this->assertArrayNotHasKey('bskyPostRef', $record);
+
+        $stored = \Idno\Common\Entity::getByID($status->getID());
+        $this->assertFalse(PostSync::hasRecord($stored));
+        $this->assertSame([], $stored->getPosseLinks());
+    }
+
+    public function testAMemberWhoAsksGetsABlueskyPostAsWell()
+    {
+        $this->connect(true);
+        $this->assertTrue(Main::postsToBluesky($this->user()));
+        $status = $this->status('To Bluesky too');
+
+        $this->assertTrue(Main::syncEntity($status));
+
+        $this->assertSame(['app.bsky.feed.post', 'co.idno.feed.status'], $this->collectionsPut());
+        [$post, $record] = $this->requestsTo('com.atproto.repo.putRecord');
+        $this->assertSame([], self::$validator->validateRecord($post['json']['record']));
+        $this->assertSame([], self::$validator->validateRecord($record['json']['record']));
+        $this->assertSame([
+            'uri' => 'at://' . self::DID . '/app.bsky.feed.post/' . $post['json']['rkey'],
+            'cid' => $this->cidOf($post['json']['record']),
+        ], $record['json']['record']['bskyPostRef']);
+        $stored = \Idno\Common\Entity::getByID($status->getID());
+        $this->assertTrue(PostSync::hasRecord($stored));
+        $this->assertTrue(FeedSync::hasRecord($stored));
+
+        // They change their mind: an edit no longer reaches Bluesky, but deleting the post still removes its copy there
+        $this->connect(false);
+        $this->requests = [];
+        $stored->body = 'To Bluesky too, edited';
+        Main::syncEntity($stored);
+        $this->assertSame(['co.idno.feed.status'], $this->collectionsPut());
+
+        $this->requests = [];
+        Main::removeEntity($stored, false);
+        $deleted = array_map(function ($delete) {
+            return $delete['json']['collection'];
+        }, $this->requestsTo('com.atproto.repo.deleteRecord'));
+        sort($deleted);
+        $this->assertSame(['app.bsky.feed.post', 'co.idno.feed.status'], $deleted);
+    }
+
+    public function testAVideoPostIsAVideoRecord()
+    {
+        $this->connect();
+        $video = $this->video([
+            'title'          => 'Watch this',
+            'body'           => '<p>From <a href="https://city.example/">the city</a>.</p>',
+            'video_url'      => 'https://bsky.app/profile/bsky.app/post/3n2opitysuc2j',
+            'video_provider' => 'bluesky',
+            'video_id'       => '3n2opitysuc2j',
+            'video_did'      => self::OTHER_DID,
+            'video_cid'      => 'bafkreiapzmyzxc72yow7zhko4fgykat7ppbcvnz4wv7okwcwnesbasy5um',
+            'video_ratio'    => 1.5,
+        ]);
+
+        Main::syncEntity($video);
+
+        $this->assertSame(['co.idno.feed.video'], $this->collectionsPut());
+        $this->assertSame([], $this->asked);
+        $record = $this->requests[0]['json']['record'];
+        $this->assertSame([], self::$validator->validateRecord($record));
+        $this->assertSame('https://bsky.app/profile/bsky.app/post/3n2opitysuc2j', $record['video']);
+        $this->assertSame('bluesky', $record['provider']);
+        $this->assertSame('at://' . self::OTHER_DID . '/app.bsky.feed.post/3n2opitysuc2j', $record['videoRecord']);
+        $this->assertSame('Watch this', $record['title']);
+        $this->assertSame('From the city.', $record['text']);
+        $this->assertSame('https://city.example/', $record['facets'][0]['features'][0]['uri']);
     }
 
     // Failures
@@ -734,9 +859,15 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
     // The hooks
 
-    private function connect(): void
+    /**
+     * The member connects an account.
+     *
+     * @param bool $bluesky Whether they also ask for their posts to go to Bluesky
+     */
+    private function connect(bool $bluesky = false): void
     {
         $user = $this->user();
+        $user->standardsitesync_bluesky = $bluesky;
         $user->standardsitesync_session = $this->sessionData();
         $user->save(true);
     }
@@ -781,7 +912,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $this->assertTrue(Main::syncEntity($status));
         $rkey = $this->requests[0]['json']['rkey'];
         $stored = \Idno\Common\Entity::getByID($status->getID());
-        $this->assertSame('at://' . self::DID . '/app.bsky.feed.post/' . $rkey, $stored->standardsitesync_post_uri);
+        $this->assertSame('at://' . self::DID . '/co.idno.feed.status/' . $rkey, $stored->standardsitesync_record_uri);
 
         Idno::site()->config()->standardsitesync_enabled = true;
         foreach (['draft' => 'PUBLIC', 'published' => 'SITE'] as $publishStatus => $access) {
@@ -794,11 +925,11 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         $deletes = $this->requestsTo('com.atproto.repo.deleteRecord');
         $this->assertCount(1, $deletes);
-        $this->assertSame('app.bsky.feed.post', $deletes[0]['json']['collection']);
+        $this->assertSame('co.idno.feed.status', $deletes[0]['json']['collection']);
         $this->assertSame($rkey, $deletes[0]['json']['rkey']);
 
         $stored = \Idno\Common\Entity::getByID($status->getID());
-        $this->assertFalse(PostSync::hasRecord($stored));
+        $this->assertFalse(Main::hasRemoteRecord($stored));
         $this->assertNull(Main::actionFor($status));
     }
 
@@ -814,7 +945,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         $deletes = $this->requestsTo('com.atproto.repo.deleteRecord');
         $this->assertCount(1, $deletes);
-        $this->assertSame(['repo' => self::DID, 'collection' => 'app.bsky.feed.post', 'rkey' => $rkey], $deletes[0]['json']);
+        $this->assertSame(['repo' => self::DID, 'collection' => 'co.idno.feed.status', 'rkey' => $rkey], $deletes[0]['json']);
     }
 
     public function testBackfillLeavesAPostAloneThatHasItsRecord()
@@ -846,7 +977,8 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         $stored = \Idno\Common\Entity::getByID($status->getID());
         $this->assertEmpty($stored->standardsitesync_uri);
-        $this->assertTrue(PostSync::hasRecord($stored));
+        $this->assertTrue(FeedSync::hasRecord($stored));
+        $this->assertSame(['co.idno.feed.status'], $this->collectionsPut());
     }
 
     public function testSavingEditingHidingAndDeletingAPostThroughTheHooks()
@@ -868,9 +1000,9 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $puts = $this->requestsTo('com.atproto.repo.putRecord');
         $this->assertCount(1, $puts);
         $rkey = $puts[0]['json']['rkey'];
-        $uri = 'at://' . self::DID . '/app.bsky.feed.post/' . $rkey;
-        $this->assertSame($uri, \Idno\Common\Entity::getByID($status->getID())->standardsitesync_post_uri);
-        $this->assertSame($uri, $status->standardsitesync_post_uri, 'The copy that was saved knows its record');
+        $uri = 'at://' . self::DID . '/co.idno.feed.status/' . $rkey;
+        $this->assertSame($uri, \Idno\Common\Entity::getByID($status->getID())->standardsitesync_record_uri);
+        $this->assertSame($uri, $status->standardsitesync_record_uri, 'The copy that was saved knows its record');
         $this->assertCount(1, $this->requests, 'Remembering the record on the post is not a change to write');
 
         // Saved again without a change: nothing
@@ -892,7 +1024,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $deletes = $this->requestsTo('com.atproto.repo.deleteRecord');
         $this->assertCount(1, $deletes);
         $this->assertSame($rkey, $deletes[0]['json']['rkey']);
-        $this->assertFalse(PostSync::hasRecord(\Idno\Common\Entity::getByID($status->getID())));
+        $this->assertFalse(Main::hasRemoteRecord(\Idno\Common\Entity::getByID($status->getID())));
         $this->assertCount(2, $this->requestsTo('com.atproto.repo.putRecord'));
 
         // Edited while private: nothing
@@ -915,6 +1047,10 @@ class PostSyncTest extends \Tests\IdnoTestCase
         $this->toDelete[] = $draft;
         $this->assertCount(3, $this->requestsTo('com.atproto.repo.putRecord'));
 
+        // Nothing went to Bluesky, and nothing was asked of it
+        $this->assertSame(['co.idno.feed.status'], array_values(array_unique($this->collectionsPut())));
+        $this->assertSame([], $this->asked);
+
         // Deleted: deleted
         array_shift($this->toDelete);
         $status->delete();
@@ -935,7 +1071,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
 
         $stored = \Idno\Common\Entity::getByID($status->getID());
         $this->assertSame('Saved whatever the PDS says', $stored->body);
-        $this->assertFalse(PostSync::hasRecord($stored));
+        $this->assertFalse(Main::hasRemoteRecord($stored));
         // And it is tried again the next time the post is saved
         Idno::site()->config()->standardsitesync_enabled = true;
         $this->assertSame('sync', Main::actionFor($stored));

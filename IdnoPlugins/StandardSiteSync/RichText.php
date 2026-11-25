@@ -355,18 +355,20 @@ PATTERN;
      * @param  string $text
      * @param  array  $facets    What facets() returned for $text
      * @param  string $permalink The address of the whole post; may be empty
+     * @param  int    $maxGraphemes What the text may hold: a Bluesky post's limits unless given
+     * @param  int    $maxBytes
      * @return array 'text', 'facets' and 'truncated'
      */
-    public static function fit(string $text, array $facets, string $permalink = ''): array
+    public static function fit(string $text, array $facets, string $permalink = '', int $maxGraphemes = self::MAX_GRAPHEMES, int $maxBytes = self::MAX_BYTES): array
     {
-        if (self::length($text) <= self::MAX_GRAPHEMES && strlen($text) <= self::MAX_BYTES) {
+        if (self::length($text) <= $maxGraphemes && strlen($text) <= $maxBytes) {
             return ['text' => $text, 'facets' => $facets, 'truncated' => false];
         }
 
         $label = self::isHttpUri($permalink) ? self::shortUrl($permalink) : '';
         $suffix = $label === '' ? '…' : '… ' . $label;
 
-        $cut = self::cutPoint($text, $facets, self::MAX_GRAPHEMES - self::length($suffix), self::MAX_BYTES - strlen($suffix));
+        $cut = self::cutPoint($text, $facets, $maxGraphemes - self::length($suffix), $maxBytes - strlen($suffix));
         $kept = rtrim(substr($text, 0, $cut));
 
         $facets = array_values(array_filter($facets, function ($facet) use ($kept) {

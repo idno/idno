@@ -3,8 +3,10 @@
 namespace IdnoPlugins\StandardSiteSync;
 
 /**
- * Builds app.bsky.feed.post records (Bluesky posts) for the kinds of post that are
- * short updates rather than documents: status updates, videos and audio.
+ * Builds app.bsky.feed.post records (Bluesky posts) for status updates, videos and
+ * audio. A record of this collection is a post in the member's Bluesky feed, so these
+ * are only written for a member who has asked for that (Main::postsToBluesky()); the
+ * post itself is recorded with FeedRecord either way.
  *
  * | Kind   | Text                          | Embed                                              |
  * |--------|-------------------------------|----------------------------------------------------|
@@ -195,7 +197,7 @@ class PostRecord
      * @param  mixed $langs
      * @return string[] At most three language tags
      */
-    private static function langs($langs): array
+    public static function langs($langs): array
     {
         $kept = [];
         foreach ((array) $langs as $lang) {
@@ -215,7 +217,7 @@ class PostRecord
      * @param  array $facets
      * @return string[]
      */
-    private static function tags($tags, array $facets): array
+    public static function tags($tags, array $facets, int $max = self::MAX_TAGS): array
     {
         $seen = [];
         foreach ($facets as $facet) {
@@ -236,7 +238,7 @@ class PostRecord
             }
         }
 
-        return array_slice($kept, 0, self::MAX_TAGS);
+        return array_slice($kept, 0, $max);
     }
 
     /**

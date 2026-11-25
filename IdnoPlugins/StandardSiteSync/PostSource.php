@@ -63,13 +63,17 @@ class PostSource
         $source['fallback_title'] = (string) $entity->getTitle();
         $source['html'] = is_string($entity->body) ? $entity->body : '';
 
-        if ($kind === 'media' && ($audio = self::audio($entity))) {
-            $source['audio'] = $audio;
+        if ($kind === 'media' && ($file = self::file($entity))) {
+            $source['file'] = $file;
+            if (strpos($file['type'], 'audio/') === 0) {
+                $source['audio'] = $file;
+            }
         }
 
         if ($kind === 'video') {
             $source['video_url'] = (string) $entity->getVideoAddress();
             if ($video = $entity->getVideo()) {
+                $source['provider'] = $video->getProvider();
                 if ($video->getProvider() === 'bluesky' && $video->getDid() !== '') {
                     $source['quote_of'] = 'at://' . $video->getDid() . '/' . PostRecord::COLLECTION . '/' . $video->getId();
                 }
@@ -84,15 +88,12 @@ class PostSource
     }
 
     /**
-     * The audio file of a Media post: its address on this site, its type and its size.
+     * The file of a Media post: its address on this site, its type and its size.
      *
-     * @return array|null 'url', 'type' and 'length'; null when the post is not audio or has no file
+     * @return array|null 'url', 'type' and 'length'; null when the post has no file
      */
-    private static function audio(Entity $entity): ?array
+    private static function file(Entity $entity): ?array
     {
-        if (!is_string($entity->media_type) || strpos($entity->media_type, 'audio/') !== 0) {
-            return null;
-        }
         $attachment = $entity->getAttachments()[0] ?? null;
         if (!is_array($attachment) || !is_string($attachment['url'] ?? null)) {
             return null;
@@ -104,7 +105,7 @@ class PostSource
             return null;
         }
 
-        return ['url' => $url, 'type' => $entity->media_type, 'length' => (int) ($attachment['length'] ?? 0)];
+        return ['url' => $url, 'type' => is_string($entity->media_type) ? $entity->media_type : '', 'length' => (int) ($attachment['length'] ?? 0)];
     }
 
     /**
