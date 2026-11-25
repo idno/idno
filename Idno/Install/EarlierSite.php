@@ -11,8 +11,11 @@ namespace Idno\Install;
  * any sign, the web installer asks for the code from the server (InstallCode) before it sets up anything.
  *
  * The signs: an SQLite database file that is not empty anywhere under data/; a stored file under the upload folder (anything but
- * the readme and the .htaccess the project ships there); a file in configuration/ other than the .htaccess the project ships and
- * the install code itself. A checkout as shipped has none.
+ * the readme and the .htaccess the project ships there, in any letter case); a file in configuration/ other than the .htaccess the
+ * project ships and the install code itself. A stray .DS_Store or .gitkeep is no sign anywhere. A checkout as shipped has none.
+ *
+ * A site whose data is only remote (a MySQL server, an s3:// upload path) leaves nothing on this server's disk, so it shows no sign
+ * and this rule cannot tell it from a new site.
  */
 final class EarlierSite
 {
@@ -23,6 +26,9 @@ final class EarlierSite
     /** The files the project ships in the upload folder and in configuration/, which are no sign */
     private const SHIPPED_UPLOADS = ['readme.txt', '.htaccess'];
     private const SHIPPED_CONFIGURATION = ['.htaccess', InstallCode::FILE_NAME];
+
+    /** Files an operating system or a version control tool leaves in a folder: no sign of a site, in any folder */
+    private const STRAY = ['.DS_Store', '.gitkeep'];
 
     /**
      * @return list<string> the signs found, in the order DATABASE, UPLOADS, CONFIGURATION
@@ -37,19 +43,41 @@ final class EarlierSite
             }
         }
         foreach (self::files($paths->uploadDir()) as $relative => $size) {
-            if (!in_array($relative, self::SHIPPED_UPLOADS, true)) {
+            if (!self::ignored($relative, self::SHIPPED_UPLOADS)) {
                 $signs[] = self::UPLOADS;
                 break;
             }
         }
         foreach (self::files($paths->configDir(), false) as $relative => $size) {
-            if (!in_array($relative, self::SHIPPED_CONFIGURATION, true)) {
+            if (!self::ignored($relative, self::SHIPPED_CONFIGURATION)) {
                 $signs[] = self::CONFIGURATION;
                 break;
             }
         }
 
         return $signs;
+    }
+
+    /**
+     * Whether a file is one the project ships there (the whole relative path, ignoring letter case: a file system may not keep it)
+     * or a stray one (by its own name, at any depth).
+     *
+     * @param list<string> $shipped
+     */
+    private static function ignored(string $relative, array $shipped): bool
+    {
+        foreach ($shipped as $name) {
+            if (strcasecmp($relative, $name) === 0) {
+                return true;
+            }
+        }
+        foreach (self::STRAY as $name) {
+            if (strcasecmp(basename($relative), $name) === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

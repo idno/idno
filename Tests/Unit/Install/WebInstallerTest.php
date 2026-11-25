@@ -328,6 +328,25 @@ final class WebInstallerTest extends TestCase
         self::assertSame([], $this->filesInRoot());
     }
 
+    /**
+     * A refused connection is cleaned up after as every other refusal is: the database file this request made is removed.
+     */
+    public function testAFailedConnectionLeavesNoDatabaseFile(): void
+    {
+        $choice = new class(new InstallPaths($this->root)) extends \Idno\Install\DatabaseChoice {
+            public function params(string $type, array $input): array
+            {
+                $params = parent::params($type, $input);
+                throw new \Idno\Install\DatabaseConnectionFailed('The server did not answer.');
+            }
+        };
+        $request = Request::create('https://example.com/', 'POST', ['step' => 'database', 'title' => 'Ada', 'domain' => 'example.com', 'database' => 'sqlite', 'token' => WebInstaller::fieldFor(self::COOKIE)], [WebInstaller::COOKIE => self::COOKIE]);
+        $html = (string) (new WebInstaller(new InstallPaths($this->root), '', new \Psr\Log\NullLogger(), static fn (): \Idno\Install\DatabaseChoice => $choice))->handle($request)->getContent();
+
+        self::assertStringContainsString(\Idno\Install\InstallPage::e(WebInstaller::CONNECTION_FAILED), $html);
+        self::assertSame([], $this->filesInRoot(), 'no data/idno.sqlite is left');
+    }
+
     private function makeAnExistingSite(): string
     {
         $path = $this->root . '/data/idno.sqlite';

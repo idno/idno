@@ -18,15 +18,25 @@ if (PHP_SAPI !== 'cli-server') {
  */
 
 $root = dirname(__DIR__, 2);
-// The path as a web server matches its rules: decoded once, repeated slashes made one and `.` segments removed (`//Uploads/x`
-// and `/./Uploads/x` are `/Uploads/x`). Read from the request URI itself: parse_url() takes `//Uploads/...` for a host.
+// The path as a web server matches its rules: decoded once, repeated slashes made one, `.` segments removed and `..` segments resolved (`//Uploads/x`,
+// `/./Uploads/x` and `/y/../Uploads/x` are `/Uploads/x`). Read from the request URI itself: parse_url() takes `//Uploads/...` for a host.
 $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
 $path = rawurldecode(explode('?', $uri, 2)[0]);
 do {
     $before = $path;
     $path = (string) preg_replace(['#/+#', '#/\.(?=/|$)#'], ['/', ''], $path);
 } while ($path !== $before);
-$path = '/' . ltrim($path, '/');
+// `..` segments are resolved the way a web server does, BEFORE any rule is matched (`/x/../configuration/install-code` is
+// `/configuration/install-code`); one that would climb above the root stays at `/`.
+$segments = [];
+foreach (explode('/', $path) as $segment) {
+    if ($segment === '..') {
+        array_pop($segments);
+    } elseif ($segment !== '') {
+        $segments[] = $segment;
+    }
+}
+$path = '/' . implode('/', $segments);
 
 // Never expose things the .htaccess file denies (directories case-insensitively, as on a
 // case-insensitive filesystem)
@@ -35,7 +45,6 @@ if (preg_match('#^/(\.git|\.github)(/|$)#', $path)
     || preg_match('#\.(dist|ini|yml|bak|lock)$#', $path)
     || preg_match('#\.(sqlite|sqlite-wal|sqlite-shm)$#i', $path)
     || (preg_match('#(\.xml|/composer\.json|/package\.json)$#', $path) && is_file($root . $path))
-    || strpos($path, '..') !== false
 ) {
     http_response_code(403);
     return true;

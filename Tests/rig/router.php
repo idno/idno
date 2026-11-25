@@ -13,15 +13,25 @@ if (PHP_SAPI !== 'cli-server') {
  */
 
 $root = dirname(__DIR__, 2);
-// The path as a web server matches its rules: decoded once, repeated slashes made one and `.` segments removed (`//Uploads/x`
-// and `/./Uploads/x` are `/Uploads/x`). Read from the request URI itself: parse_url() takes `//Uploads/...` for a host.
+// The path as a web server matches its rules: decoded once, repeated slashes made one, `.` segments removed and `..` segments resolved (`//Uploads/x`,
+// `/./Uploads/x` and `/y/../Uploads/x` are `/Uploads/x`). Read from the request URI itself: parse_url() takes `//Uploads/...` for a host.
 $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
 $path = rawurldecode(explode('?', $uri, 2)[0]);
 do {
     $before = $path;
     $path = (string) preg_replace(['#/+#', '#/\.(?=/|$)#'], ['/', ''], $path);
 } while ($path !== $before);
-$path = '/' . ltrim($path, '/');
+// `..` segments are resolved the way a web server does, BEFORE any rule is matched (`/x/../configuration/install-code` is
+// `/configuration/install-code`); one that would climb above the root stays at `/`.
+$segments = [];
+foreach (explode('/', $path) as $segment) {
+    if ($segment === '..') {
+        array_pop($segments);
+    } elseif ($segment !== '') {
+        $segments[] = $segment;
+    }
+}
+$path = '/' . implode('/', $segments);
 // A NUL byte in a path (`%00`) is never a file: realpath() would throw. Real web servers refuse such a request
 // before PHP runs; the built-in server hands it on, so the rig answers it as there being nothing there.
 if (str_contains($path, "\0")) {

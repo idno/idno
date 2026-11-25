@@ -104,6 +104,21 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * A `..` segment is resolved as a web server resolves it before its rules are matched: the folders that are never served
+         * stay refused when they are named through one, and a path that climbs back to a served file is that file. Sent as written.
+         */
+        public function testDotDotSegmentsAreResolvedBeforeTheDenyRules(): void
+        {
+            foreach (['/x/../configuration/install-code', '/x/../Uploads/a.file', '/x/%2e%2e/configuration/config.ini', '/x/%2E%2E/Uploads/a.file', '/../configuration/install-code', '/x/y/../../data/idno.sqlite'] as $raw) {
+                [$status, $body] = $this->rawGet($raw);
+                $this->assertSame(403, $status, $raw);
+            }
+            [$status, $body] = $this->rawGet('/x/../css/idno-2026.min.css');
+            $this->assertSame(200, $status, 'served as /css/idno-2026.min.css');
+            $this->assertSame((string) file_get_contents(dirname(__DIR__, 2) . '/css/idno-2026.min.css'), $body);
+        }
+
+        /**
          * A GET of a path exactly as written, `.` segments and repeated slashes included.
          *
          * @return array{0: int, 1: string} the status and the body

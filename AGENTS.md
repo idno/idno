@@ -620,10 +620,13 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      earlier site: `Idno\Install\EarlierSite::signs()`, the one rule, read from the folders before anything
      is created and never from the request: an SQLite file that is not empty anywhere under `data/`, any file
      under the upload folder but its shipped `readme.txt` and `.htaccess`, any file in `configuration/` but the
-     shipped `.htaccess` and the code itself (`EarlierSiteTest`, and over HTTP for each sign with and without
+     shipped `.htaccess` and the code itself (the shipped names compared ignoring letter case, and a stray `.DS_Store` or
+     `.gitkeep` never a sign) (`EarlierSiteTest`, and over HTTP for each sign with and without
      the code, and a MySQL server of the visitor's that does not avoid it:
      `WebInstallFlowTest::testASignOfAnEarlierSiteMakesAnyInstallAskForTheCode`). A checkout as shipped asks
-     for none. Without the code the step writes nothing but that code, a random 32-hex value in `configuration/install-code`
+     for none. A site whose data is only remote (a MySQL server, an `s3://` upload path) leaves no sign on this server's disk, so the
+     web installer cannot tell it from a new site: its lost configuration must be restored before the site is reachable again. A
+     connection the installer could not make is cleaned up after as every other refusal is. Without the code the step writes nothing but that code, a random 32-hex value in `configuration/install-code`
      (`InstallCode::relativePath()`, mode 0600, an exclusive create, refused by every shipped server
      configuration), which the page asks for by its path from the project and the command to read it. The
      code is proof of access to the server's files: a site whose configuration file was lost is an
@@ -5004,9 +5007,9 @@ no installer writes one.
   first matching regex in the file's order): the uploads are refused by `^~ /Uploads/` and `^~ /uploads/`, which no regex can
   override, and by the case-insensitive deny regex placed before the static-asset and `.php` locations, so a reordering that
   hands `/UPLOADS/x.png` to the static location fails it. Both test routers match their rules on the path as a web server does
-  (read from the request URI, decoded once, repeated slashes made one, `.` segments removed: `//Uploads/x`, `/./Uploads/x`).
+  (read from the request URI, decoded once, repeated slashes made one, `.` segments removed and `..` segments resolved, one that would climb above the root staying at `/`: `//Uploads/x`, `/./Uploads/x`, `/x/../Uploads/x`; `Tests/build/router.php` no longer refuses a `..` inside a name once the segments are resolved).
   `DeniedPathsTest::testStoredFilesUnderTheUploadsDirectoryAreRefused` asks the rig for a stored `.file` and `.data`, in those
-  spellings too (sent as written).
+  spellings too (sent as written), and `testDotDotSegmentsAreResolvedBeforeTheDenyRules` the `..` ones.
   An upload path elsewhere in the document root needs a rule of its own (`docs/install/instructions.md`).
 - Private sites (`walled_garden`) and pages that controllers serve: `PageRequestListener` applies `LegacyPageLifecycle::mayView()` (a public site, a logged-on visitor, or `#[SitePage(publicOnPrivateSite: true)]`, which
   the legacy `addRoute(..., true)` and `addPublicRoute()` of the page's class also set) after OPTIONS and before the page is entered; a refusal is the site's 403 page in the request's template type, fires no

@@ -106,4 +106,27 @@ final class EarlierSiteTest extends TestCase
 
         self::assertSame([], $this->signs());
     }
+
+    public function testAnOperatingSystemsStrayFileIsNoSign(): void
+    {
+        foreach (['.DS_Store', '.gitkeep'] as $name) {
+            foreach (['configuration/', 'Uploads/', 'Uploads/example.com/a/', 'data/'] as $folder) {
+                $this->put($folder . $name);
+            }
+        }
+
+        self::assertSame([], $this->signs());
+    }
+
+    public function testTheShippedNamesIgnoreCase(): void
+    {
+        $this->put('Uploads/README.TXT');
+        $this->put('Uploads/.HTACCESS');
+        $this->put('configuration/.HTACCESS');
+        $this->put('configuration/INSTALL-CODE');
+        self::assertSame([], $this->signs());
+
+        $this->put('Uploads/another.txt');
+        self::assertSame([EarlierSite::UPLOADS], $this->signs());
+    }
 }
