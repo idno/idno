@@ -79,7 +79,8 @@ Tests/                         Core unit tests
   `aria-current="page"`. At most one item is current; Home on the home feed and `/content/...`,
   Search on a search or a tag page, Profile on the viewer's own profile only, Drafts, Log in.
   Account and admin pages are drawn in the settings shell, which has no side navigation. An error
-  page marks nothing. A new item goes through `attributes()` and gets a case in `currentItem()`.
+  page marks nothing. A visitor to a private site is offered Log in only: Home and Search would
+  both refuse them. A new item goes through `attributes()` and gets a case in `currentItem()`.
   `Tests/Pages/Twenty26NavCurrentPageTest.php` checks this over HTTP.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
@@ -425,6 +426,8 @@ site's name when empty), `reply_to_email` (used unless the message names a reply
   `/admin/emailtest`): the stored password is never a template variable and never printed,
   in any template type; an empty password field keeps the stored one, and a checkbox removes
   it. `Idno\Pages\Admin\Email::validate()` checks what was typed, and nothing is saved while anything is wrong.
+  A setting that `config.ini` or the environment sets wins over the stored one, so the page
+  names those (`Email::settingsFromFile()`: names only).
   The "Using a mail service" block (`admin/email/services`, drawn by both looks) holds the
   values for the common services, checked against their documentation in November 2026:
   check them again before changing them.

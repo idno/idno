@@ -229,6 +229,22 @@ namespace Tests\Pages\Admin {
             $this->assertStringContainsString('Mail is sent through 127.0.0.1', $page);
         }
 
+        public function testThePageNamesTheSettingsThatTheConfigurationFileSets()
+        {
+            $config = Idno::site()->config();
+            $before = $config->ini_config;
+            try {
+                $config->ini_config = ['dbname' => 'x'];
+                $this->assertSame([], \Idno\Pages\Admin\Email::settingsFromFile());
+                $config->ini_config = ['dbname' => 'x', 'smtp_host' => 'smtp.example.com', 'smtp_password' => 'from-the-file'];
+                $this->assertSame(['smtp_host', 'smtp_password'], \Idno\Pages\Admin\Email::settingsFromFile(), 'Names only, never values');
+            } finally {
+                $config->ini_config = $before;
+            }
+            // The test site's configuration file sets no mail setting, so its page has no such note
+            $this->assertStringNotContainsString('config.ini', $this->get('/admin/email', static::$admin)['body']);
+        }
+
         public function testTheHelpBlockGivesTheValuesForTheCommonServices()
         {
             foreach (['', '?_t=default'] as $type) {
