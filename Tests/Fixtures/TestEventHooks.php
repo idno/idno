@@ -8,7 +8,7 @@ use Idno\Core\EventDispatcher;
 
 /**
  * Test-environment only: the configurator of the legacy event dispatcher (config/services_test.php), which installs
- * the recorders and stand-ins that are inert unless their environment variable is set (EventRecorder, AuthHook).
+ * the recorders and stand-ins that are inert unless their environment variable is set (EventRecorder, AuthHook, PageEventRecorder).
  */
 final class TestEventHooks
 {
@@ -16,5 +16,6 @@ final class TestEventHooks
     {
         EventRecorder::install($dispatcher);
         AuthHook::install($dispatcher);
+        PageEventRecorder::install($dispatcher);
     }
 }
