@@ -133,6 +133,11 @@ namespace Idno\Core {
              * Homepage
             */
             $this->routes()->addRoute('/?', '\Idno\Pages\Homepage');
+            // (the feeds, search, tags, small files and the token endpoint are served by controllers: core's registrations stay where they were, held by a
+            // placeholder, so that the legacy router's rules still decide what a plugin's registration does to them: see \Idno\Legacy\ControllerRoute)
+            $this->routes()->addRoute('/feed\.xml', \Idno\Legacy\ControllerRoute::class);
+            $this->routes()->addRoute('/feed/?', \Idno\Legacy\ControllerRoute::class);
+            $this->routes()->addRoute('/rss\.xml', \Idno\Legacy\ControllerRoute::class);
             $this->routes()->addRoute('/content/([A-Za-z\-\/]+)+', '\Idno\Pages\Homepage');
 
             /**
@@ -162,6 +167,16 @@ namespace Idno\Core {
             $this->routes()->addRoute('/share/?', '\Idno\Pages\Entity\Share');
 
             /**
+             * Mobile integrations
+            */
+            $this->routes()->addRoute('/chrome/manifest\.json', \Idno\Legacy\ControllerRoute::class);
+
+            /**
+             * Service worker
+            */
+            $this->routes()->addRoute('/service-worker(\.min)?\.js', \Idno\Legacy\ControllerRoute::class);
+
+            /**
              * Files
             */
             $this->routes()->addRoute('/file/mint/?', \Idno\Pages\File\Mint::class);
@@ -181,7 +196,15 @@ namespace Idno\Core {
             /**
              * Search
             */
+            $this->routes()->addRoute('/search/?', \Idno\Legacy\ControllerRoute::class);
+            $this->routes()->addRoute('/search/mentions\.json', \Idno\Legacy\ControllerRoute::class);
+            $this->routes()->addRoute('/tag/([^\s]+)\/?', \Idno\Legacy\ControllerRoute::class);
             $this->routes()->addRoute('/search/users/?', '\Idno\Pages\Search\User');
+
+            /**
+             * robots.txt
+            */
+            $this->routes()->addRoute('/robots\.txt', \Idno\Legacy\ControllerRoute::class);
 
             /**
              * Autosave / preview
@@ -207,6 +230,7 @@ namespace Idno\Core {
              * Add some services
             */
             $this->routes()->addRoute('/service/db/optimise/?', '\Idno\Pages\Service\Db\Optimise');
+            $this->routes()->addRoute('/service/security/csrftoken/?', \Idno\Legacy\ControllerRoute::class);
             $this->routes()->addRoute('/service/system/log/?', '\Idno\Pages\Service\System\Log');
             $this->routes()->addRoute('/service/geo/geocoder/?', '\Idno\Pages\Service\Geo\Geocoder');
             // Shared inbox route is registered by the ActivityPub plugin

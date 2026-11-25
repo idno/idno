@@ -86,7 +86,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
         'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
-        'Legacy' => ['BarePage.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
+        'Legacy' => ['BarePage.php', 'ControllerRoute.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;

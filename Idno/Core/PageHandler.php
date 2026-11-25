@@ -24,9 +24,6 @@ namespace Idno\Core {
         /// Page classes registered under /account/ or /admin/ (the settings pages), as lower-case class names without a leading backslash
         private $settings_pages = [];
 
-        /// The patterns put in front of every other with hijackRoute(), as keyed in the table: the one way to get ahead of what core registered
-        private $hijacked = [];
-
         /// Whether the request being served asked for a post's Markdown form with the `.md` suffix
         private static $markdown_suffix = false;
 
@@ -211,43 +208,15 @@ namespace Idno\Core {
         }
 
         /**
-         * Whether a key of the route table matches a path, as Toro::serve() asks it: the pattern (its own three tokens replaced once more) between
-         * `^/?` and `/?$`.
-         */
-        private static function patternMatches(string $key, string $path): bool
-        {
-            return preg_match('#^/?' . strtr($key, [':string' => '([a-zA-Z]+)', ':number' => '([0-9]+)', ':alpha' => '([a-zA-Z0-9-_]+)']) . '/?$#', $path) === 1;
-        }
-
-        /**
-         * The keys a pattern has in the route table, written as `addRoute()` received it: with the site's subdirectory in front (`addRoute()` puts it
-         * there) and without (`hijackRoute()` does not), the tokens (`:id`) replaced.
-         *
-         * @return list<string>
-         */
-        public static function keysFor(string $pattern): array
-        {
-            $prefixed = $pattern;
-            if (defined('IDNO_SUBDIRECTORY')) {
-                if (substr($prefixed, 0, 1) != '/') {
-                    $prefixed = '/' . $prefixed;
-                }
-                $prefixed = '/' . IDNO_SUBDIRECTORY . $prefixed;
-            }
-
-            return array_values(array_unique([strtr($prefixed, static::tokens()), strtr($pattern, static::tokens())]));
-        }
-
-        /**
-         * The paths of the request that decide who serves it, for the patterns to be asked about. Two routers read one request: Symfony's matches
+         * The paths of the request that decide who serves it, for the legacy router to be asked about. Two routers read one request: Symfony's matches
          * `rawurldecode($request->getPathInfo())` (the `REQUEST_URI` path, an absolute-form target and a fragment taken off by
          * `Request::prepareRequestUri()`, without the BASE URL, the script's name `/index.php` or `/blog/index.php`, decoded once, never with slash
          * runs collapsed), and the legacy router (Toro) routes what `toroPath()` says (`PATH_INFO` where the server sets it, decoded by the built-in
-         * server, split off by Apache's rewrite, unset under nginx's shipped configuration; else the raw `REQUEST_URI`). A claim is found by the
-         * PATTERN it is registered under (see `claimsOf()`), so a pattern is only asked whether it matches: the path Symfony matched (the path info
-         * with the site's subdirectory in front, the way the table has it: never the base URL) raw and decoded once, what the legacy router is
-         * given, and each with runs of slashes made one (a pattern's `^/?` allows one leading slash). The request's own `REQUEST_URI` is not asked: the
-         * path info is that, less the base URL, which no pattern holds.
+         * server, split off by Apache's rewrite, unset under nginx's shipped configuration; else the raw `REQUEST_URI`). The table is keyed with the site's
+         * subdirectory in front of every pattern `addRoute()` registers, so the paths asked are: the path Symfony matched (the path info with the
+         * subdirectory in front: never the base URL) raw and decoded once, and what the legacy router is given (`toroPath()`, as it is: a server's
+         * `PATH_INFO` is decoded already), each with runs of slashes made one (a pattern's `^/?` allows one leading slash). The request's own
+         * `REQUEST_URI` is not asked: the path info is that, less the base URL, which no pattern holds.
          *
          * @return list<string>
          */
@@ -263,69 +232,33 @@ namespace Idno\Core {
         }
 
         /**
-         * The patterns hijackRoute() put in front, which are still in the table.
+         * The pages the legacy router would choose for this request, under every spelling of its path (`spellingsOf()`), by its own lookup
+         * (`handlerFor()`: the exact key first, then the patterns in registration order, Toro's algorithm over the whole table, pinned by
+         * `RouteLookupTest`): each as a class name (see `chosenFor()`) with whether it serves the request as the Markdown form of a permalink
+         * (`routeMarkdownSuffix()`: for a GET or HEAD whose path ends in `.md`, the path as given matches a route whose page is a `MarkdownPermalink`, or
+         * matches none and without the suffix it does).
          *
-         * @return list<string>
-         */
-        public function hijackedPatterns(): array
-        {
-            return array_values(array_filter(array_keys($this->hijacked), fn ($pattern): bool => isset($this->routes[$pattern])));
-        }
-
-        /**
-         * The pages a plugin holds a controller's path with, which the legacy router would serve it with: each as a class name (see `chosenFor()`)
-         * with whether it serves the request as the Markdown form of a permalink (`routeMarkdownSuffix()`: for a GET or HEAD whose path ends in
-         * `.md`, the path as given matches the page's route, or matches none and without the suffix it does and the page is a `MarkdownPermalink`).
+         * The table is what it was before any page moved to a controller (core registered the page's pattern where it always did, with a placeholder
+         * for the class: `\Idno\Legacy\ControllerRoute`), so the answer is what the legacy router has always answered, whoever registered the pattern
+         * and whenever: a plugin's `addRoute()` of the identical pattern, `hijackRoute()`, an exact key, a pattern registered before core's.
          *
-         * The legacy router chooses the FIRST pattern that matches, in registration order, and core registers its pages before any plugin
-         * registers its own (`LegacyBootstrap::boot()` builds `Idno`, whose `registerPages()` ends by building the plugins, which register theirs
-         * as they are built). A plugin's page took a core path only by a pattern that is core's own (`addRoute()` of the identical pattern replaces the
-         * handler under the key and keeps its place; `hijackRoute()` of it removes the key and puts it in front) or by a pattern hijacked in
-         * front of every other, whatever it matches: nothing else can put a route ahead of core's (`addRoute()` appends, `offsetSet()` of a new key too,
-         * and a key that exists keeps its place). A pattern registered after core's, however broad (a short link page, a catch-all), never took a path core had a
-         * page for, and does not now that the class and its pattern are gone. So a claim is exactly: a handler under one of the controller's own
-         * `$legacyPatterns` (the ones core registered for the route), or under any hijacked pattern, that matches one of the request's paths
-         * (`spellingsOf()`). A kept shell's patterns hold the shell's class, which the controller lists in `replaces`: not a claim.
-         *
-         * @param  list<string> $legacyPatterns the controller's `#[SitePage]` `legacyPatterns`, as `addRoute()` received them
+         * @param  iterable $routes pattern => handler, also readable as an array
          * @return list<array{class: string, markdown: bool}>
          */
-        public static function claimsOf(PageHandler $routes, \Symfony\Component\HttpFoundation\Request $request, array $legacyPatterns): array
+        public static function claimsOf($routes, \Symfony\Component\HttpFoundation\Request $request): array
         {
-            $held = [];
-            foreach ($legacyPatterns as $pattern) {
-                foreach (static::keysFor($pattern) as $key) {
-                    if (isset($routes->routes[$key])) {
-                        $held[$key] = $routes->routes[$key];
-                    }
-                }
-            }
-            foreach ($routes->hijackedPatterns() as $key) {
-                $held[$key] = $routes->routes[$key];
-            }
-            if ($held === []) {
-                return [];
-            }
-            $name = static fn ($handler): string => is_string($handler) ? ltrim($handler, '\\') : '(not a class name)';
             $reads = in_array(strtoupper((string) $request->server->get('REQUEST_METHOD', $request->getMethod())), ['GET', 'HEAD'], true);
             $claims = [];
             foreach (static::spellingsOf($request) as $path) {
                 $stripped = $reads ? \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path) : null;
-                $givenMatched = false;
-                foreach ($held as $key => $handler) {
-                    if (static::patternMatches((string) $key, $path)) {
-                        $givenMatched = true;
-                        $class = $name($handler);
-                        $markdown = $stripped !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true);
-                        $claims[$class . '|' . (int) $markdown] = ['class' => $class, 'markdown' => $markdown];
-                    }
-                }
-                if (!$givenMatched && $stripped !== null) {
-                    foreach ($held as $key => $handler) {
-                        $class = $name($handler);
-                        if (is_a($class, \Idno\Common\MarkdownPermalink::class, true) && static::patternMatches((string) $key, $stripped)) {
-                            $claims[$class . '|1'] = ['class' => $class, 'markdown' => true];
-                        }
+                $class = static::chosenFor($routes, $path);
+                if ($class !== null) {
+                    $markdown = $stripped !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true);
+                    $claims[$class . '|' . (int) $markdown] = ['class' => $class, 'markdown' => $markdown];
+                } elseif ($stripped !== null) {
+                    $class = static::chosenFor($routes, $stripped);
+                    if ($class !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true)) {
+                        $claims[$class . '|1'] = ['class' => $class, 'markdown' => true];
                     }
                 }
             }
@@ -404,11 +337,6 @@ namespace Idno\Core {
 
         function routeTokens()
         {
-            return static::tokens();
-        }
-
-        private static function tokens(): array
-        {
             return array(
                 ':string' => '([a-zA-Z]+)',
                 ':number' => '([0-9]+)',
@@ -471,7 +399,6 @@ namespace Idno\Core {
                 unset($this->routes[$pattern]);
                 unset($this->public_routes[$pattern]);
                 $this->routes = array($pattern => $handler) + $this->routes;
-                $this->hijacked[$pattern] = true;
                 if ($public == true) {
                     $this->public_routes = array($pattern => $handler) + $this->public_routes;
                 }
@@ -616,7 +543,7 @@ namespace Idno\Core {
 
         public function offsetUnset($offset): void
         {
-            unset($this->routes[$offset], $this->hijacked[$offset]);
+            unset($this->routes[$offset]);
         }
 
         function rewind(): void

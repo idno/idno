@@ -26,10 +26,10 @@ final class SitePage
      *                                          route's last parameter ends in `.md` is the request for it, the suffix is taken off the parameter and the `markdown` type selected
      *                                          (the route may take the suffix with its parameter, as the legacy pattern took it); a page that replaces a `MarkdownPermalink` says so
      * @param list<string>|null $legacyPatterns The patterns core registered with the legacy router for the addresses this route serves, as `addRoute()` received them (`/feed\.xml`,
-     *                                          `/tag/([^\s]+)\/?`): those of a kept shell are still registered (and its class is in `replaces`), those of a deleted class are not. A plugin's page
-     *                                          holds the path only under exactly one of them (`hijackRoute()` or an identical `addRoute()` put it there) or under a pattern hijacked in front of
-     *                                          every other: a pattern registered after core's never took a path core had a page for, and still does not. `[]` says core registered none (an
-     *                                          address the site never had a page for); null (not declared) fails the convention's check
+     *                                          `/tag/([^\s]+)\/?`). Core still registers each, where and when it always did, for the class the controller `replaces` (a kept shell) or for a
+     *                                          placeholder (`Idno\Legacy\ControllerRoute`, when the class is deleted), so the legacy route table is what it was before the page moved; this
+     *                                          declaration is what the checks hold the table to (`SitePageClaimsTest`). `[]` says core registered none (an address the site never had a page
+     *                                          for); null (not declared) fails the check. It plays no part at run time
      */
     public function __construct(
         public readonly string $name,

@@ -677,6 +677,88 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $this->assertNotSame('claimed', $this->raw($base, 'GET', '/tag/books')['body']);
     }
 
+    /**
+     * A page that moved to a controller keeps its place in the legacy router's table (a placeholder under core's own pattern, registered where
+     * core registered the page), so everything the legacy router's own rules decided before the page moved is still decided by them: a plugin's
+     * `addRoute()` of the identical pattern replaces the handler in place, `hijackRoute()` moves it to the front, an exact key beats every pattern,
+     * a pattern registered before core's wins and one after loses, and a registration core makes later overwrites an earlier one. `/feed.xml` is registered by
+     * `Idno::registerPages()` before the plugins are built, `/.well-known/webfinger` by a component built after them.
+     *
+     * @return array<string, array{0: string, 1: string}> mode => who serves `/feed.xml`, who serves `/.well-known/webfinger` ('controller' or 'plugin')
+     */
+    public static function movedModes(): array
+    {
+        return [
+            'moved-none' => ['controller', 'controller'],
+            'moved-identical' => ['plugin', 'plugin'],
+            'moved-hijack' => ['plugin', 'plugin'],
+            'moved-exact' => ['plugin', 'plugin'],
+            'moved-broad' => ['controller', 'plugin'],
+            'moved-prehijack' => ['plugin', 'controller'],
+        ];
+    }
+
+    public function testAMovedPathIsServedAsTheLegacyRoutersOwnRulesChooseIt(): void
+    {
+        foreach (self::movedModes() as $mode => $expected) {
+            $base = $this->server($mode);
+            [$cookie, $token] = $this->token($base);
+            foreach (['/feed.xml' => $expected[0], '/.well-known/webfinger' => $expected[1]] as $path => $who) {
+                $label = $mode . ' ' . $path;
+                $get = $this->raw($base, 'GET', $path);
+                $head = $this->raw($base, 'HEAD', $path);
+                $post = $this->raw($base, 'POST', $path, ['Cookie' => $cookie, 'Content-Type' => 'application/x-www-form-urlencoded'], http_build_query($token));
+                if ($who === 'plugin') {
+                    $this->assertSame('claimed', $get['body'], $label . ' GET');
+                    $this->assertSame([ClaimingPage::class], $head['pages'], $label . ' HEAD');
+                    $this->assertSame('claimed-post', $post['body'], $label . ' POST');
+                } else {
+                    $this->assertNotSame('claimed', $get['body'], $label . ' GET');
+                    $this->assertContains(ControllerPage::class, $get['pages'], $label . ' GET: the controller');
+                    $this->assertContains(ControllerPage::class, $head['pages'], $label . ' HEAD');
+                    $this->assertSame(404, $post['status'], $label . ' POST: a method the controller does not take is the legacy router\'s, which has no page');
+                    $this->assertNotSame('claimed-post', $post['body'], $label . ' POST');
+                }
+            }
+        }
+    }
+
+    public function testAnExactKeyOfAPluginTakesTheHomePage(): void
+    {
+        // `addRoute('/')`: the key is exactly the path, which Toro looks up before any pattern
+        $base = $this->server('moved-exact');
+
+        $this->assertSame('claimed', $this->raw($base, 'GET', '/')['body']);
+        // by the front controller's name the legacy router has no page for the path (it never had), so it answers its 404: what is never served is the controller's home page
+        $bare = $this->raw($base, 'GET', '/index.php');
+        $this->assertNotContains(ControllerPage::class, $bare['pages']);
+        $this->assertSame(404, $bare['status']);
+        // (the built-in server gives the legacy router `/` for `/index.php/`, whose exact key is the plugin's)
+        $slash = $this->raw($base, 'GET', '/index.php/');
+        $this->assertNotContains(ControllerPage::class, $slash['pages']);
+        $this->assertSame('claimed', $this->raw($base, 'GET', '/feed.xml')['body'], 'an exact, unescaped key');
+    }
+
+    public function testAHijackOfTheRootTakesTheHomePageOfASiteInASubdirectory(): void
+    {
+        foreach ([false, true] as $noPathInfo) {
+            $base = $this->server('moved-hijackroot', $noPathInfo, 'blog');
+            $label = $noPathInfo ? ' (REQUEST_URI only)' : ' (PATH_INFO)';
+
+            $this->assertSame('claimed', $this->raw($base, 'GET', '/blog/')['body'], 'GET /blog/' . $label);
+            $this->assertSame([ClaimingPage::class], $this->raw($base, 'HEAD', '/blog/')['pages'], 'HEAD /blog/' . $label);
+        }
+    }
+
+    public function testABroadPatternServesThePathsCoreNeverHadAndLosesTheOnesItHadFirst(): void
+    {
+        $base = $this->server('moved-broad');
+
+        $this->assertSame('claimed', $this->raw($base, 'GET', '/zzz-short')['body']);
+        $this->assertNotSame('claimed', $this->raw($base, 'GET', '/feed.xml')['body'], 'registered after core\'s early pattern');
+        $this->assertSame('claimed', $this->raw($base, 'GET', '/.well-known/webfinger')['body'], 'registered before core\'s late pattern, so it matched first');
+    }
+
     public function testATripleLeadingSlashIsNoAddressOfThePage(): void
     {
         $base = $this->server('');

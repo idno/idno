@@ -49,6 +49,13 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->autoconfigure(false)
         ->tag('doctrine.middleware');
 
+    // The registrations of a "plugin" that come after every core component's (IDNO_TEST_CLAIM_ROUTES, `moved-*`): see Tests\Fixtures\LateRoutes. Inert otherwise.
+    $container->services()
+        ->set(\Tests\Fixtures\LateRoutes::class)
+        ->autowire(false)
+        ->autoconfigure(false)
+        ->tag('kernel.event_listener', ['event' => 'kernel.request', 'priority' => 1000]);
+
     // When the environment variable IDNO_TEST_TEMPLATE_TRACE names a file, every template draw of a request appends
     // a line to it (type, name, the file found): see Tests\Fixtures\TemplateTrace. Inert otherwise.
     $container->services()

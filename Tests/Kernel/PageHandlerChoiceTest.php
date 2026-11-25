@@ -7,6 +7,7 @@ namespace Tests\Kernel;
 use Idno\Core\PageHandler;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
+use Idno\Legacy\ControllerRoute;
 use Tests\Fixtures\ClaimingPage;
 use Tests\Fixtures\ReplacedPage;
 use Tests\Fixtures\SubclassedPage;
@@ -112,7 +113,6 @@ final class PageHandlerChoiceTest extends TestCase
         $this->assertNotNull($output);
 
         $this->assertSame([
-            'keys' => ['/blog/_test/claimable/?', '/_test/claimable/?'],
             'frontController' => [ReplacedPage::class],
             'frontControllerHome' => [ClaimingPage::class],
             'frontControllerHomeSlash' => [ClaimingPage::class],
@@ -123,8 +123,6 @@ final class PageHandlerChoiceTest extends TestCase
         ], json_decode($output, true), $output);
     }
 
-
-    private const CLAIMABLE = ['/_test/claimable/?'];
 
     /**
      * @param list<array{class: string, markdown: bool}> $claims
@@ -144,68 +142,61 @@ final class PageHandlerChoiceTest extends TestCase
         return new Request([], [], [], [], [], $server + ['REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET', 'SCRIPT_NAME' => '/index.php', 'PHP_SELF' => '/index.php', 'SCRIPT_FILENAME' => '/srv/index.php', 'HTTP_HOST' => 'localhost']);
     }
 
-    /**
-     * @param list<string> $patterns
-     */
-    private function claims(PageHandler $routes, string $uri, array $patterns = self::CLAIMABLE, array $server = []): array
+    private function claims(PageHandler $routes, string $uri, array $server = []): array
     {
-        return self::classes(PageHandler::claimsOf($routes, $this->front($uri, $server), $patterns));
+        return self::classes(PageHandler::claimsOf($routes, $this->front($uri, $server)));
     }
 
-    public function testACoreRegistrationIsTheControllersOwnShellAndNoPluginsClaim(): void
+    public function testTheRouterIsAskedForItsOwnChoiceOverTheWholeTable(): void
     {
+        $placeholder = ControllerRoute::class;
         $routes = new PageHandler();
-        $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
+        $routes->addRoute('/(.*)', ClaimingPage::class);     // a plugin registered before core's page
+        $routes->addRoute('/_test/claimable/?', $placeholder);
 
-        // the handler under the pattern core registered is what the controller replaces: the override finds it in `replaces`
-        $this->assertSame([ReplacedPage::class], $this->claims($routes, '/_test/claimable'));
-        $this->assertSame([], $this->claims($routes, '/_test/other'), 'a path the pattern does not match');
-        $this->assertSame([], $this->claims(new PageHandler(), '/_test/claimable'), 'nothing registered: no legacy page, the controller\'s');
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/_test/claimable'), 'first match: the plugin\'s, as the legacy router would');
+
+        $routes = new PageHandler();
+        $routes->addRoute('/_test/claimable/?', $placeholder);
+        $routes->addRoute('/(.*)', ClaimingPage::class);     // registered after core's
+        $this->assertSame([$placeholder], $this->claims($routes, '/_test/claimable'), 'core\'s place is held: the placeholder');
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/zzz'), 'a path core never had');
+        $this->assertSame([], $this->claims(new PageHandler(), '/_test/claimable'), 'nothing registered');
     }
 
-    public function testAnIdenticalPatternAndAHijackOfItAreClaims(): void
+    public function testEveryRuleOfTheTableAppliesToAMovedPagesPlaceholder(): void
     {
-        $routes = new PageHandler();
-        $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $routes->addRoute('/_test/claimable/?', ClaimingPage::class);
-        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/_test/claimable'), 'the key keeps its place and takes the later class');
+        $placeholder = ControllerRoute::class;
+        $table = static function () use ($placeholder): PageHandler {
+            $routes = new PageHandler();
+            $routes->addRoute('/feed\.xml', $placeholder);
+            $routes->addRoute('/other/?', ReplacedPage::class);
 
-        $routes = new PageHandler();
-        $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $routes->hijackRoute('/_test/claimable/?', ClaimingPage::class);
-        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/_test/claimable'));
+            return $routes;
+        };
+
+        $routes = $table();
+        $routes->addRoute('/feed\.xml', ClaimingPage::class);
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/feed.xml'), 'an identical addRoute() replaces it in place');
+
+        $routes = $table();
+        $routes->hijackRoute('/feed\.xml', ClaimingPage::class);
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/feed.xml'), 'hijackRoute() moves it to the front');
+
+        $routes = $table();
+        $routes->hijackRoute('/(?:feed|other)(.*)', ClaimingPage::class);
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/feed.xml'), 'a hijacked pattern of any shape that matches');
+
+        $routes = $table();
+        $routes->addRoute('/feed.xml', ClaimingPage::class);
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/feed.xml'), 'an exact key beats every pattern, wherever it is');
+
+        $routes = $table();
+        $routes->addRoute('/feed(.*)', ClaimingPage::class);
+        $this->assertSame([$placeholder], $this->claims($routes, '/feed.xml'), 'a broader pattern after it loses');
     }
 
-    public function testAPatternRegisteredAfterCoresIsNoClaimHoweverBroad(): void
-    {
-        $routes = new PageHandler();
-        $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $routes->addRoute('/(.*)', ClaimingPage::class);
-        $routes->addRoute('/_test/(claimable|other)/?', ClaimingPage::class);
-
-        $this->assertSame([ReplacedPage::class], $this->claims($routes, '/_test/claimable'), 'core\'s pattern is first: the shell it holds, never the plugin\'s');
-        // and with the shell's registration gone (a deleted class): the broad patterns are not core\'s place
-        $gone = new PageHandler();
-        $gone->addRoute('/(.*)', ClaimingPage::class);
-        $this->assertSame([], $this->claims($gone, '/_test/claimable'), 'registered after core\'s: it never took the path');
-        $this->assertSame([], $this->claims($gone, '/feed.xml', ['/feed\.xml']));
-    }
-
-    public function testAHijackedPatternIsAClaimWhateverItIs(): void
-    {
-        $routes = new PageHandler();
-        $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
-        $routes->hijackRoute('/_test/(?:claimable|other)/?', ClaimingPage::class);
-
-        $this->assertEqualsCanonicalizing([ClaimingPage::class, ReplacedPage::class], $this->claims($routes, '/_test/claimable'), 'in front of every other, as it always was (the shell is listed too: `replaces` filters it)');
-        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/_test/other', []), 'a hijack of a pattern the controller never declared');
-        $this->assertSame(['/_test/(?:claimable|other)/?'], $routes->hijackedPatterns());
-
-        unset($routes['/_test/(?:claimable|other)/?']);
-        $this->assertSame([], $routes->hijackedPatterns());
-    }
-
-    public function testEverySpellingSymfonyMatchedIsAskedOfAPatternTheControllerDeclares(): void
+    public function testEverySpellingSymfonyMatchedIsAskedOfTheTable(): void
     {
         $routes = new PageHandler();
         $routes->addRoute('/_test/claimable/?', ClaimingPage::class);
@@ -215,7 +206,7 @@ final class PageHandlerChoiceTest extends TestCase
             $this->assertSame([ClaimingPage::class], $this->claims($routes, $uri), $uri);
         }
         $both = $this->front('/_test/claim%61ble?x=1', ['PATH_INFO' => '/_test/claimable']);
-        $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $both, self::CLAIMABLE)));
+        $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $both)));
         $this->assertSame([], $this->claims($routes, '/_test/claimable/more'));
     }
 
@@ -233,7 +224,7 @@ final class PageHandlerChoiceTest extends TestCase
         $this->assertSame([], $this->claims($routes, '/INDEX.PHP/_test/claimable'));
         // the home page by the front controller's name
         foreach (['/index.php', '/index.php/'] as $uri) {
-            $this->assertSame([ReplacedPage::class], $this->claims($routes, $uri, ['/?']), $uri);
+            $this->assertSame([ReplacedPage::class], $this->claims($routes, $uri), $uri);
         }
         // an absolute-form request target and a fragment are taken off before either router reads the path
         $this->assertSame([ClaimingPage::class], $this->claims($routes, 'http://localhost/_test/claim%61ble'));
@@ -246,7 +237,7 @@ final class PageHandlerChoiceTest extends TestCase
 
         // the built-in server sets PATH_INFO decoded: `%2561` in the address is `%61` there, and is not `a`
         $request = $this->front('/_test/x%2561', ['PATH_INFO' => '/_test/x%61']);
-        $this->assertSame([], PageHandler::claimsOf($routes, $request, ['/_test/xa/?']));
+        $this->assertSame([], PageHandler::claimsOf($routes, $request));
         $this->assertNotContains('/_test/xa', PageHandler::spellingsOf($request));
     }
 
@@ -259,15 +250,24 @@ final class PageHandlerChoiceTest extends TestCase
         $this->assertSame(['(not a class name)'], $this->claims($routes, '/_test/claimable'));
     }
 
+    public function testASubdirectorysHomeAliasIsAnExactKeyThatIsAsked(): void
+    {
+        // LegacyDispatcher::routes() writes `/blog/` => the handler of `/` into the table: the legacy router serves `/blog/` by that exact key
+        $routes = new PageHandler();
+        $routes->hijackRoute('/', ClaimingPage::class);
+        $routes['/blog/'] = $routes['/'];
+
+        $this->assertSame([ClaimingPage::class], $this->claims($routes, '/blog/', ['SCRIPT_NAME' => '/blog/index.php', 'SCRIPT_FILENAME' => '/srv/blog/index.php', 'PHP_SELF' => '/blog/index.php']));
+    }
+
     public function testTheMarkdownFormOfAPathIsTheClaimOfThePageThatServesIt(): void
     {
         $routes = new PageHandler();
         $routes->addRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class);
         $routes->addRoute('/_test/other/([^/.]+)/?', ReplacedPage::class);
         $routes->addRoute('/_test/plain/([^/.]+)/?', ClaimingPage::class);
-        $patterns = ['/_test/markdown/([^/]+)/?', '/_test/other/([^/.]+)/?', '/_test/plain/([^/.]+)/?'];
 
-        $claims = fn (string $uri, string $method = 'GET'): array => PageHandler::claimsOf($routes, $this->front($uri, ['REQUEST_METHOD' => $method]), $patterns);
+        $claims = fn (string $uri, string $method = 'GET'): array => PageHandler::claimsOf($routes, $this->front($uri, ['REQUEST_METHOD' => $method]));
 
         // the path as given matches a Markdown permalink's pattern (it takes the rest of the path): its Markdown form
         $this->assertSame([['class' => SubclassedPage::class, 'markdown' => true]], $claims('/_test/markdown/abc.md'));
@@ -278,13 +278,6 @@ final class PageHandlerChoiceTest extends TestCase
         // a POST is no request for Markdown, and a page that is no Markdown permalink has none
         $this->assertSame([], $claims('/_test/other/abc.md', 'POST'));
         $this->assertSame([], $claims('/_test/plain/abc.md'));
-    }
-
-    public function testThePatternsOfAPageAreKeyedAsTheTableKeysThem(): void
-    {
-        // tokens replaced, and the subdirectory in front for addRoute() and not for hijackRoute() (in a process with none, the two are one)
-        $this->assertSame(['/view/([A-Za-z0-9\-]+)/?'], PageHandler::keysFor('/view/:id/?'));
-        $this->assertSame(['/n/([0-9]+)'], PageHandler::keysFor('/n/:number'));
     }
 
     public function testToroPathPrefersPathInfo(): void

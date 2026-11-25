@@ -7,6 +7,7 @@ namespace Tests\Kernel;
 use Idno\Core\Idno;
 use Idno\Core\PageHandler;
 use Idno\Kernel;
+use Idno\Legacy\ControllerRoute;
 use Idno\Legacy\LegacyController;
 use Idno\Legacy\LegacyDispatcher;
 use Idno\Legacy\LegacyRouteOverride;
@@ -310,25 +311,38 @@ final class LegacyRouteOverrideTest extends TestCase
 
     public function testABroadPatternRegisteredAfterCoresIsNoClaimOnAMovedPage(): void
     {
-        // a moved page whose class and registration are gone (`replaces: []`): a plugin's catch-all matches the path now that nothing of core's holds it
+        // a moved page: core's pattern is registered with a placeholder where core registered it, and a plugin's catch-all comes after it
+        $this->routes->addRoute('/_test/unclaimed/?', ControllerRoute::class);
         $this->routes->addRoute('/(.*)', ClaimingPage::class);
-        $this->routes->addRoute('/_test/(unclaimed|other)/?', ClaimingPage::class);
 
         $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
         $this->listener()->onRequest($event);
 
-        $this->assertSame(SitePageFixtureController::class . '::unclaimed', $event->getRequest()->attributes->get('_controller'), 'it never took a path core had a page for');
+        $this->assertSame(SitePageFixtureController::class . '::unclaimed', $event->getRequest()->attributes->get('_controller'), 'the first match is core\'s placeholder');
     }
 
-    public function testAnIdenticalPatternAHijackAndAHijackedOtherPatternAreClaimsOnAMovedPage(): void
+    public function testABroadPatternRegisteredBeforeCoresIsAClaim(): void
+    {
+        // a page registered after the plugins (WebFinger): a plugin's earlier, broader pattern matched first and still does
+        $this->routes->addRoute('/(.*)', ClaimingPage::class);
+        $this->routes->addRoute('/_test/unclaimed/?', ControllerRoute::class);
+
+        $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
+        $this->listener()->onRequest($event);
+
+        $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'));
+    }
+
+    public function testEveryRuleOfTheTableDecidesAClaimOnAMovedPage(): void
     {
         foreach ([
             'identical' => fn (PageHandler $routes) => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
             'hijack' => fn (PageHandler $routes) => $routes->hijackRoute('/_test/unclaimed/?', ClaimingPage::class),
             'hijacked other' => fn (PageHandler $routes) => $routes->hijackRoute('/_test/(?:unclaimed|other)', ClaimingPage::class),
+            'exact key' => fn (PageHandler $routes) => $routes->addRoute('/_test/unclaimed', ClaimingPage::class),
         ] as $name => $register) {
             $this->routes = new PageHandler();
-            $this->routes->addRoute('/(.*)', ReplacedPage::class);
+            $this->routes->addRoute('/_test/unclaimed/?', ControllerRoute::class);
             $register($this->routes);
 
             $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
@@ -336,6 +350,30 @@ final class LegacyRouteOverrideTest extends TestCase
 
             $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'), $name);
         }
+    }
+
+    public function testAHijackCoreOverwritesLaterIsNotAClaim(): void
+    {
+        // a plugin's hijack made before the component that registers the pattern was built: core's addRoute() of the same key replaces the handler in place
+        $this->routes->hijackRoute('/_test/unclaimed/?', ClaimingPage::class);
+        $this->routes->addRoute('/_test/unclaimed/?', ControllerRoute::class);
+
+        $event = $this->matched('/_test/unclaimed', 'GET', [], SitePageFixtureController::class . '::unclaimed');
+        $this->listener()->onRequest($event);
+
+        $this->assertSame(SitePageFixtureController::class . '::unclaimed', $event->getRequest()->attributes->get('_controller'));
+    }
+
+    public function testASubdirectorysHijackOfTheRootIsAClaimOnTheHomePage(): void
+    {
+        $this->routes->addRoute('/?', ControllerRoute::class);
+        $this->routes->hijackRoute('/', ClaimingPage::class);
+        $this->routes['/blog/'] = $this->routes['/'];   // what LegacyDispatcher::routes() writes for a site in /blog
+
+        $event = $this->matched('/blog/', 'GET', ['SCRIPT_NAME' => '/blog/index.php', 'PHP_SELF' => '/blog/index.php', 'SCRIPT_FILENAME' => '/srv/blog/index.php'], SitePageManyPatternsController::class . '::page');
+        $this->listener()->onRequest($event);
+
+        $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'));
     }
 
     public function testNothingIsAskedOfTheRouterForARequestThatIsNotASitePages(): void

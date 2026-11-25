@@ -16,24 +16,25 @@ use Symfony\Component\HttpKernel\KernelEvents;
 /**
  * Keeps the legacy router's choice for a path a controller serves as a site page.
  *
- * A controller's route (`#[SitePage]`) is matched by Symfony's router before the legacy router is asked anything, so it would
- * shadow every legacy page registered for the same path, a plugin's too. A plugin that took the path with `addRoute()` of an
- * identical pattern, with `hijackRoute()`, or with a subclass of the page the controller replaces, must still be served as it is
- * today. This listener runs right after the router (`RouterListener`, priority 32) and, for a request whose route is a site
- * page's, asks the legacy router which page it would serve the path with: `PageHandler::claimsOf()`, the router's own lookup
- * (`handlerFor()`: the exact key, then the patterns in the order they were registered). When any page it finds is not one the
- * controller's `#[SitePage]` `replaces`, the legacy page keeps the path: the request is handed to the legacy controller, with none of
- * the route's parameters.
+ * A controller's route (`#[SitePage]`) is matched by Symfony's router before the legacy router is asked anything, so it would shadow every
+ * legacy page registered for the same path, a plugin's too. The legacy route table is exactly what it was before any page moved: core registers a
+ * moved page's pattern where and when it always did, with a placeholder (`ControllerRoute`) in place of the class that was deleted (a kept shell
+ * is still registered under its own class). So there is ONE question, put to the legacy router's own lookup over that table, which applies every rule
+ * it has (an exact key first, then the patterns in registration order; `addRoute()` replaces a key in place, `hijackRoute()` puts one in front):
+ * which page would you choose for this path? (`PageHandler::claimsOf()`, `handlerFor()`, pinned against Toro by `RouteLookupTest`.) When the
+ * answer is a placeholder or a class the controller's `#[SitePage]` lists in `replaces` (its kept shell), core's place is held and the controller
+ * serves; when it is anything else a plugin took the path and the request is handed to the legacy controller, with none of the route's parameters.
  *
- * Which paths are asked is derived from what the two routers actually do (`PageHandler::spellingsOf()` has the whole derivation): the
- * rule is that the path Symfony matched (its path info: the `REQUEST_URI` path without the base URL, the script's name, decoded once, with
- * the site's subdirectory put back in front as the legacy table has it) is ALWAYS asked, in addition to what the legacy router itself is
- * given (the server's `PATH_INFO`, else the raw `REQUEST_URI`, which carries the front controller's name where the server does not split it:
- * nginx's shipped configuration), raw, decoded once and with slash runs collapsed. A variant of the address that reaches the controller is
- * therefore a variant the lookup sees, whichever server and whatever the base URL.
+ * The paths asked are the ones the two routers can be given (`PageHandler::spellingsOf()` has the derivation from `Request::prepareBaseUrl()`,
+ * `preparePathInfo()`, the matcher and Toro): the path Symfony matched (its path info with the site's subdirectory in front, as the table is keyed:
+ * never the base URL, the script's name) raw and decoded once, and the path the legacy router itself is given (`toroPath()`: the server's `PATH_INFO`,
+ * else the raw `REQUEST_URI`, which carries the front controller's name where the server does not split it: nginx's shipped configuration), each
+ * with slash runs collapsed. Any of them naming another page is a claim, so a variant of the address that reaches the controller is a variant the
+ * lookup sees, whichever server and whatever the base URL. A request that serves a permalink's Markdown form (`routeMarkdownSuffix()`'s rule) and
+ * whose controller is no Markdown permalink is the shell's: handed back too.
  *
- * (`LegacyDispatcher::routes()` also writes the subdirectory's alias of the home page into the router's table: it did when the request
- * was dispatched, and does it here a moment earlier, once, whoever asks first.)
+ * (`LegacyDispatcher::routes()` also writes the subdirectory's alias of the home page into the router's table, so that a plugin's `hijackRoute('/')`
+ * is chosen for `/blog/` by its exact key: it did when the request was dispatched, and does it here a moment earlier, once, whoever asks first.)
  *
  * It does nothing, and builds nothing, for a request that is not a site page's (every other route, the legacy catch-all among them,
  * is left alone before the router's table is touched) or when this kernel did not boot the legacy application (a `bootLegacy: false`
@@ -70,13 +71,12 @@ final class LegacyRouteOverride
             return;
         }
 
-        // Every page the legacy router could serve this request with, under every spelling of its path it could be given (the router
-        // matched the DECODED path, the legacy router reads the raw one or, where the server sets it, a decoded PATH_INFO): one that is not a
-        // page this controller replaces keeps the path, and so does one that serves the request as a permalink's Markdown form where
-        // the controller is no Markdown permalink itself
-        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), $page->replaces);
+        // The legacy router's choice, for each spelling of the path: core's place held (a placeholder, or the shell this controller replaces) is the
+        // controller's; any other page is a plugin's, and so is one that serves the request as a permalink's Markdown form where the controller is no
+        // Markdown permalink itself
+        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), [ControllerRoute::class, ...$page->replaces]);
         $kept = false;
-        foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request, $page->legacyPatterns ?? []) as $claim) {
+        foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request) as $claim) {
             if (!in_array(strtolower($claim['class']), $replaced, true) || ($claim['markdown'] && !$page->markdownPermalink)) {
                 $kept = true;
                 break;

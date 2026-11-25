@@ -20,6 +20,19 @@ final class TestEventHooks
         EventRecorder::install($dispatcher);
         AuthHook::install($dispatcher);
         PageEventRecorder::install($dispatcher);
+        // The patterns core registered for the pages of the routing fixtures that have no legacy class (a placeholder where core's own registrations are): the first
+        // listener of `plugins/loaded`, so before the boundary of plugin time registered below
+        $dispatcher->addListener('plugins/loaded', static function (): void {
+            foreach (['/_test/unclaimed/?', '/_test/markdown/([^/]+)/?'] as $pattern) {
+                Idno::site()->routes()->addRoute($pattern, \Idno\Legacy\ControllerRoute::class);
+            }
+            // and the shell of the claimable path, which a controller replaces
+            Idno::site()->routes()->addRoute('/_test/claimable/?', ReplacedPage::class);
+        });
+        // a legacy page that only answers, for the lifecycle tests to hold a controller's page to
+        $dispatcher->addListener('plugins/loaded', static function (): void {
+            Idno::site()->routes()->addRoute('/_test/legacy-plain/?', LegacyPlainPage::class);
+        });
         // The legacy page the drawing tests compare the controller's answer with, in each directory that has a shell of its own
         $dispatcher->addListener('plugins/loaded', static function (): void {
             foreach (['_test/site-page/' => LegacyDrawPage::class, 'admin/_test-site-page/' => LegacyAdminDrawPage::class, 'account/_test-site-page/' => LegacyAccountDrawPage::class] as $directory => $page) {
@@ -42,14 +55,10 @@ final class TestEventHooks
         //   corehijack     a plugin's hijackRoute() of each pattern core registered for the home page, its streams, the feeds, the search and the tags
         //   coreidentical  a plugin's addRoute() of the identical patterns
         //   feedhijack     a plugin's hijackRoute() of `/feed\.xml` alone
+        //   moved-*   a plugin's registrations for a path that moved to a controller, EARLY (`/feed.xml`, registered before the WebFinger component's) and,
+        //             in Tests\Fixtures\LateRoutes, LATE (`/.well-known/webfinger`, registered after every core component's): identical addRoute(),
+        //             hijackRoute(), an exact unescaped key, a broad pattern, a hijack made before core's later registration, a hijack of the root
         //   hijackbroad    a plugin's hijackRoute() of a pattern that matches the feed paths and others, a different pattern from core's
-        // The shell of the claimable path, which a controller replaces: always registered, as core's own pages are (before any plugin's page, which
-        // `plugins/loaded` follows), so that the route table holds what the controller's `legacyPatterns` declare
-        $dispatcher->addListener('plugins/loaded', static function (): void {
-            Idno::site()->routes()->addRoute('/_test/claimable/?', ReplacedPage::class);
-            // a legacy page that only answers, for the lifecycle tests to hold a controller's page to
-            Idno::site()->routes()->addRoute('/_test/legacy-plain/?', LegacyPlainPage::class);
-        });
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
             $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
@@ -68,6 +77,12 @@ final class TestEventHooks
                     'homepage-hijack' => $routes->hijackRoute('/', ThirdPartyHomepage::class),
                     'homepage-route' => $routes->addRoute('/third-party-home/?', ThirdPartyHomepage::class),
                     'broad' => $routes->addRoute('/(.*)', ClaimingPage::class),
+                    'moved-identical' => $routes->addRoute('/feed\.xml', ClaimingPage::class),
+                    'moved-hijack' => $routes->hijackRoute('/feed\.xml', ClaimingPage::class),
+                    'moved-exact' => [$routes->addRoute('/feed.xml', ClaimingPage::class), $routes->addRoute('/', ClaimingPage::class)],
+                    'moved-broad' => $routes->addRoute('/(.*)', ClaimingPage::class),
+                    'moved-prehijack' => [$routes->hijackRoute('/feed\.xml', ClaimingPage::class), $routes->hijackRoute('/\.well\-known/webfinger/?', ClaimingPage::class)],
+                    'moved-hijackroot' => $routes->hijackRoute('/', ClaimingPage::class),
                     'corehijack' => array_map(static fn (string $pattern) => $routes->hijackRoute($pattern, ClaimingPage::class), $coreHome),
                     'coreidentical' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), $coreHome),
                     'feedhijack' => $routes->hijackRoute('/feed\.xml', ClaimingPage::class),
