@@ -848,6 +848,12 @@ namespace IdnoPlugins\Moderation {
                     if (!$subject) {
                         return $refuse($language->_("There is no member of this site to ban here."), 400);
                     }
+                    // The post goes first: once the member is banned nothing is sent to other
+                    // servers in their name, and the removal has to reach them
+                    $removedHere = false;
+                    if (!empty($options['remove_content']) && $case->target_type !== 'profile' && !$subject->isBanned() && $subject->canBeBannedBy($admin->getUUID())) {
+                        $removedHere = static::removeContent($case, $entity);
+                    }
                     $result = static::banMember(
                         $subject, $admin, [
                         'reason' => $options['reason'] ?? '',
@@ -861,11 +867,9 @@ namespace IdnoPlugins\Moderation {
                     }
                     $case->banned_here = empty($result['already']);
                     $case->hid_all = !empty($options['hide_all']) && empty($result['already']);
-                    if (!empty($options['remove_content']) && $case->target_type !== 'profile') {
-                        if (static::removeContent($case, $entity)) {
-                            static::log($admin, 'remove', $case);
-                            static::tellSubject($case, 'content-removed');
-                        }
+                    if ($removedHere) {
+                        static::log($admin, 'remove', $case);
+                        static::tellSubject($case, 'content-removed');
                     }
                     static::resolve($case, $admin, 'banned');
                     static::tellReporters($case, true);

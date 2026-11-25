@@ -440,6 +440,18 @@ class ActivityHandler
      */
     private static function resolveLocalUser(string $actorId)
     {
+        $user = self::findLocalUser($actorId);
+
+        // A banned member takes part in nothing: no follows are accepted for them
+        return ($user instanceof User && $user->isBanned()) ? false : $user;
+    }
+
+    /**
+     * @param string $actorId
+     * @return User|false
+     */
+    private static function findLocalUser(string $actorId)
+    {
         $siteUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
 
         // Try to extract handle from actor URL pattern: {siteUrl}actor/{handle}

@@ -554,10 +554,7 @@ namespace Idno\Entities {
          */
         function ban($reason, $by_uuid, $hide_profile = false)
         {
-            if ((string) $by_uuid === (string) $this->getUUID()) {
-                return false;
-            }
-            if (!empty($this->admin) && !$this->isBanned() && static::countUnbannedAdmins() <= 1) {
+            if (!$this->canBeBannedBy($by_uuid)) {
                 return false;
             }
 
@@ -566,6 +563,25 @@ namespace Idno\Entities {
             $this->banned_by = (string) $by_uuid;
             $this->ban_hides_profile = (bool) $hide_profile;
             $this->setAdmin(false);
+
+            return true;
+        }
+
+        /**
+         * May this member be banned by a given administrator? Nobody can ban themselves, and
+         * the last administrator who is not banned cannot be banned.
+         *
+         * @param  string $by_uuid The UUID of the administrator who would ban
+         * @return bool
+         */
+        function canBeBannedBy($by_uuid)
+        {
+            if ((string) $by_uuid === (string) $this->getUUID()) {
+                return false;
+            }
+            if (!empty($this->admin) && !$this->isBanned() && static::countUnbannedAdmins() <= 1) {
+                return false;
+            }
 
             return true;
         }

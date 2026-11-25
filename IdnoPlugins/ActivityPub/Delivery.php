@@ -76,6 +76,11 @@ class Delivery
      */
     public static function deliverToFollowers(User $user, array $activity): void
     {
+        // Nothing new goes out in the name of a banned member
+        if ($user->isBanned()) {
+            return;
+        }
+
         $inboxes = ActivityPubFollower::getUniqueInboxesForUser($user->getUUID());
 
         if (empty($inboxes)) {
