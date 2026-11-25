@@ -719,6 +719,24 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertStringNotContainsString('Fatal', $added);
     }
 
+    public function testAPageWhoseErrorPageCannotBeDrawnIsTheSafePlain500InDebugAndProdModeAndNeverAnException(): void
+    {
+        // The plain answer is the site's own and never cached: it is exempt from the rule that a response must not set Cache-Control itself
+        // (debug mode throws for that), and its `no-store` stays
+        $prod = new HttpSiteClient($this->startExtraServer(['APP_DEBUG' => '0']));
+        foreach ($this->callers() as $headers) {
+            foreach (['debug' => $this->site(), 'prod' => $prod] as $mode => $client) {
+                $label = $mode . ' ' . json_encode(array_keys($headers));
+                $response = $client->request('GET', self::AREAS['plain'] . 'draw-new?case=throw-nested', $headers);
+
+                $this->assertSame(500, $response->status, $label);
+                $this->assertSame("Internal Server Error\n", $response->body, $label);
+                $this->assertStringStartsWith('text/plain', (string) $response->header('Content-Type'), $label);
+                $this->assertSame(['no-store, no-cache, must-revalidate'], $response->lines('Cache-Control'), $label . ': one line, the session\'s, never cached (not the response\'s own beside it)');
+            }
+        }
+    }
+
     public function testAWalledGardenRefusalIsTheDrawn403(): void
     {
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));

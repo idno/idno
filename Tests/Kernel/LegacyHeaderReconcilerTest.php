@@ -519,6 +519,24 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $this->assertNotContains('mimetype text/html', $queue->calls);
     }
 
+    public function testAnExceptionsSecondResponseNeverRecordsTheSwitchedOffMimetypeAsTheDefault(): void
+    {
+        // The first response was prepared (so PHP's default type is now ''), then something threw and the exception's response goes through
+        // the first pass again on the same request: it must not record '' as what to put back
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue);
+        $request = Request::create('/');
+        $this->context($request);
+
+        $reconciler->onResponse($this->event($request, new Response('', 204)));
+        $queue->mimetype = '';
+        // (a response is empty by its status: 204 and 304)
+        $reconciler->onResponse($this->event($request, new Response('', 304)));
+        $reconciler->onLateResponse($this->event($request, new Response('', 304)));
+
+        $this->assertSame('text/html', $queue->mimetype, 'the first recording stands: the process\'s default is not left as an empty one');
+    }
+
     public function testNothingWithoutTheLegacyApplication(): void
     {
         $queue = new RecordingHeaderQueue(self::SESSION);

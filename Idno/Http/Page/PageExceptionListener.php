@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Idno\Http\Page;
 
 use Idno\Kernel;
+use Idno\Security\DeniedResponder;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -100,7 +102,7 @@ final class PageExceptionListener
             $response = $draw(($this->renderer)());
         } catch (\Throwable $drawing) {
             ($this->lifecycle)()->reportException($drawing);
-            $response = self::plain($status);
+            $response = self::plain($request, $status);
         }
 
         // What a server error HTTP exception asks to be sent with it (`Retry-After` of a 503) goes with the page, as Symfony's own answer would send it
@@ -116,11 +118,14 @@ final class PageExceptionListener
     }
 
     /**
-     * What is answered when the site's page cannot be drawn: the status's own words, as plain text, never cached.
+     * What is answered when the site's page cannot be drawn: the status's own words, as plain text, never cached. Its `Cache-Control` is
+     * the site's own and not a page's ask for caching, so the request is marked as a refusal's is (`DeniedResponder::ATTRIBUTE`): the header
+     * reconciler takes it off like any response's and sends the session's no-store lines, and never refuses it.
      */
-    private static function plain(int $status): Response
+    private static function plain(Request $request, int $status): Response
     {
         $status = $status === 0 ? 500 : $status;
+        $request->attributes->set(DeniedResponder::ATTRIBUTE, true);
 
         return new Response((Response::$statusTexts[$status] ?? 'Error') . "\n", $status, [
             'Content-Type' => 'text/plain; charset=UTF-8',
