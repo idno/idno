@@ -144,7 +144,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **IndiePub** | IndieAuth + Micropub server |
 | **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
-| **StandardSiteSync** | AT Protocol: writes posts to the member's PDS (see below) |
+| **Atmosphere** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
 | **Portfolios** | Members collect their own posts into named lists shown from their profile (see below) |
 | **Moderation** | Reporting by members and a moderation queue for administrators (see below) |
@@ -213,11 +213,19 @@ Each content plugin has an `Entry.php` entity class that defines
 - The `ActivityBuilder::CONTEXT_WITH_QUOTES` constant is the canonical `@context`
   for all outgoing activities
 
-## AT Protocol plugin (StandardSiteSync)
+## AT Protocol plugin (Atmosphere)
 
-`IdnoPlugins/StandardSiteSync/` writes a member's public, published posts to their own PDS
-(the account they connect at `/account/settings/standardsitesync`, with OAuth and DPoP), when a
+`IdnoPlugins/Atmosphere/` writes a member's public, published posts to their own PDS
+(the account they connect at `/account/settings/atmosphere`, with OAuth and DPoP), when a
 post is saved, changed or deleted, through the queue.
+
+The plugin was called StandardSiteSync until it wrote more than standard.site documents.
+What it stored under that name keeps it: the fields on members and posts are still
+`standardsitesync_*` (renaming them would lose track of records already on members' PDSes),
+and a site that enabled the plugin or turned syncing on under the old name still has both
+(`Plugins::RENAMED`, `Main::isEnabled()`). The OAuth client id is the address of
+`/atmosphere/client-metadata.json`, so a member who connected before the rename must connect
+again; their settings page tells them their connection has expired.
 
 | Content | Collection | What the record holds | On update | On delete |
 |---|---|---|---|---|
@@ -280,7 +288,7 @@ post is saved, changed or deleted, through the queue.
 - Tests replace `ATProtoClient::$transport` and `BlueskyLookup::$fetch`; no test talks to a
   PDS. Records are checked against the lexicon files (`lexicons/`, and copies of the published
   ones in `Tests/fixtures/lexicons` with their source and version) by
-  `Tests/LexiconValidator.php`. `IdnoPlugins/StandardSiteSync/Tests/` checks all of this.
+  `Tests/LexiconValidator.php`. `IdnoPlugins/Atmosphere/Tests/` checks all of this.
 
 ## Moderation
 

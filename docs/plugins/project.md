@@ -23,7 +23,7 @@ and live in the main repository under `IdnoPlugins/`. They are listed here so yo
 * **IndiePub** – Support for IndieAuth and Micropub on single-user Idno sites. Must be used with a single-user theme.
 * **Bridgy** – Receive comments from external services on your Idno site.
 * **Webhooks** – Syndicate via webhooks.
-* **StandardSiteSync** – Sync your writing to standard.site records on an AT Protocol PDS. Supports OAuth
+* **Atmosphere** (formerly StandardSiteSync) – Save what you publish to your own account on the AT Protocol network: articles as standard.site documents, status updates, videos and audio as records of their own. Supports OAuth
   authentication, automatic sync of new content, and backfill of existing posts.
 
 ### Appearance

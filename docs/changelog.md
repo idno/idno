@@ -15,7 +15,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Every post has a "More" menu with "Copy link"; plugins add items to it through `content/menu/items`
 * Fixed the page description being printed unescaped in the Open Graph tags, and the JSON Feed of a page that has no description failing
 * New Twenty26 theme, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor
-* New StandardSiteSync plugin, which syncs posts to standard.site records on an AT Protocol PDS
+* New Atmosphere plugin (first called StandardSiteSync), which saves a member's posts to their own AT Protocol PDS: articles as standard.site documents, status updates, videos and audio as records of their own (`co.idno.feed.*`), and as Bluesky posts only if the member asks. A site that enabled it under the old name keeps it enabled; members who had connected an account must connect again
 * Link previews are now fetched by the server instead of the browser
 * The language tools (formerly the separate known-language-tools package) are part of core
 * The MongoDB driver was upgraded to version 2 and is now an optional dependency
