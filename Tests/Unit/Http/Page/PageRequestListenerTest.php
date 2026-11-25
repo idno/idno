@@ -17,6 +17,7 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -249,7 +250,8 @@ final class PageRequestListenerTest extends TestCase
         try {
             $this->listener()->onController($event);
             $this->fail('the page is refused');
-        } catch (AccessDeniedException) {
+        } catch (AccessDeniedHttpException) {
+            // the page's own refusal (`deniedContent()`: PageExceptionListener draws the site's 403 page), not Security's
             $this->assertSame(['begin', 'refusesApiRequest', 'mayView'], $this->lifecycle->calls);
         }
     }

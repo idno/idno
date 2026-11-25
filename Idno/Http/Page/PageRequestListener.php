@@ -15,6 +15,7 @@ use Symfony\Component\HttpKernel\Event\ControllerEvent;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\Event\TerminateEvent;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
@@ -80,8 +81,10 @@ final class PageRequestListener
 
             return;
         }
+        // The walled garden: what `publicGatekeeper()` did was `deniedContent()`, the site's own 403 page in the request's template type
+        // (PageExceptionListener draws it), so it is the page's refusal and not Security's.
         if (!$lifecycle->mayView($context)) {
-            throw new AccessDeniedException();
+            throw new AccessDeniedHttpException();
         }
         $lifecycle->enter($context);
     }

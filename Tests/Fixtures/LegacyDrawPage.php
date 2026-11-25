@@ -49,6 +49,28 @@ class LegacyDrawPage extends Page
             case 'technical':
                 $this->exception(self::technicalPage());
                 break;
+            // Cases that stop the page by a call or an exception, as the pages of the site do: `SitePageDrawingTest` compares each with the controller's
+            case 'throw-missing':
+                $this->noContent();
+                break;
+            case 'throw-gone':
+                $this->goneContent();
+                break;
+            case 'throw-denied':
+                $this->deniedContent((string) $this->getInput('title', ''));
+                break;
+            case 'throw-redirect':
+                $this->forward((string) $this->getInput('to', ''));
+                break;
+            case 'throw-runtime':
+                throw self::brokenPage();
+            case 'throw-technical':
+                throw self::technicalPage();
+            case 'throw-echo':
+                echo 'Output before the exception. ';
+                throw self::brokenPage();
+            case 'throw-error':
+                throw new \Error('A PHP error in the page');
             case 'redirect201':
                 $this->setResponse(201);
                 $this->forward((string) $this->getInput('to', ''));

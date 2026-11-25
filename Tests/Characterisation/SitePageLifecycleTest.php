@@ -271,7 +271,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame(200, $this->site()->request('GET', $other, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $other))->status, 'a page that is not an account page answers an API request');
     }
 
-    public function testAWalledGardenRefusalIsTheSites403PageOrJsonAndIsNotLoggedAsAnError(): void
+    public function testAWalledGardenRefusalIsTheDrawn403AndIsNotLoggedAsAnError(): void
     {
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
 
@@ -279,13 +279,18 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame(403, $html->status);
         $this->assertStringContainsString('text/html', (string) $html->header('Content-Type'));
         $this->assertStringContainsString('id="soft-forward"', $html->body, 'the site\'s 403 page of a visitor');
-        $this->assertStringContainsString('no-store', (string) $html->header('Cache-Control'));
         $this->assertNull($html->header('Location'), 'no login redirect: a legacy refusal drew the 403 page too');
+        $this->assertSame('GNU Terry Pratchett', $html->header('X-Clacks-Overhead'), 'the headers every page sends');
 
-        $json = $client->request('GET', self::STATE, ['Accept' => 'application/json']);
+        // The type follows `_t`, as a legacy refusal's did (`publicGatekeeper()` ran before the `Accept` header was read), so the JSON
+        // refusal is the JSON shell's, not a bare error object.
+        $json = $client->request('GET', self::STATE . '?_t=json');
         $this->assertSame(403, $json->status);
-        $this->assertSame(['error' => 'forbidden'], $json->json());
-        $this->assertStringContainsString('no-store', (string) $json->header('Cache-Control'));
+        $this->assertStringContainsString('json', (string) $json->header('Content-Type'));
+        $this->assertIsArray($json->json());
+        $accept = $client->request('GET', self::STATE, ['Accept' => 'application/json']);
+        $this->assertSame(403, $accept->status);
+        $this->assertStringContainsString('text/html', (string) $accept->header('Content-Type'), 'an Accept header does not choose the type of a walled garden\'s refusal');
 
         $log = $this->serverLogContents();
         $this->assertStringNotContainsString('request.ERROR', $log);

@@ -39,6 +39,9 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
 
     private string $member = '';
 
+    /** The client whose address `observed()` makes the same (the test's own site when null). */
+    private ?SiteClient $siteClient = null;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -88,10 +91,18 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         }
         ksort($headers);
 
+        $body = $this->named($response->body, $area, $page);
+        if ($response->status === 500) {
+            // The one difference of a 500 page, a defect of the legacy one: a legacy page's exception was answered by the exception handler, after
+            // the request had left the request stack, so the page's address in its structured data (`"url"`) was empty. A controller's
+            // page is answered while its request is the current one, and says its address.
+            $body = preg_replace('/"url": "[^"]*"/', '"url": "(the page)"', $body, 1) ?? $body;
+        }
+
         return [
             'status' => $response->status,
             'headers' => $headers,
-            'body' => PageNormaliser::normalise($this->named($response->body, $area, $page), $this->site()->baseUrl(), $html),
+            'body' => PageNormaliser::normalise($body, ($this->siteClient ?? $this->site())->baseUrl(), $html),
         ];
     }
 
@@ -319,5 +330,188 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertTheSamePage('case=permalink', ['Cookie' => $this->member]);
         $this->assertTheSamePage('case=permalink&_t=json', ['Cookie' => $this->member]);
         $this->assertTheSamePage('case=permalink&_t=markdown', ['Cookie' => $this->member]);
+    }
+
+    // ------------------------------------------------------------------ what a page that stops answers with
+
+    /**
+     * What the site logged since `$before` was read: the lines of its own log, without the web server's own (a connection accepted and
+     * closed) and the warning every request of a site with no asynchronous queue writes.
+     *
+     * @return list<string>
+     */
+    private function loggedSince(string $before): array
+    {
+        $added = substr($this->serverLogContents(), strlen($before));
+
+        return array_values(array_filter(
+            explode("\n", $added),
+            static fn (string $line): bool => $line !== '' && preg_match('/ (Accepted|Closing)$|ActivityPub requires the asynchronous event queue/', $line) !== 1
+        ));
+    }
+
+    /** What a case answers with, by its name. */
+    private const STOPS = ['throw-missing' => 404, 'throw-gone' => 410, 'throw-denied' => 403, 'throw-runtime' => 500, 'throw-technical' => 500];
+
+    public function testErrorPages(): void
+    {
+        $titles = ['throw-missing' => "This page can't be found.", 'throw-gone' => "This content isn't here."];
+        foreach (self::STOPS as $case => $status) {
+            // thrown directly, and through the current page as legacy code calls it (`via=page`), in the types a request may ask for
+            foreach (['', '&via=page'] as $via) {
+                foreach (['default', 'json', 'jsonp', 'markdown', 'rss'] as $type) {
+                    $response = $this->assertTheSamePage('case=' . $case . '&title=No+entry&_t=' . $type . $via, ['Cookie' => $this->member]);
+                    $this->assertSame($status, $response->status, $case . $via . ' ' . $type);
+                }
+                $response = $this->assertTheSamePage('case=' . $case . '&title=No+entry' . $via);
+                $this->assertSame($status, $response->status);
+                // the site's page, with its title
+                $this->assertStringContainsString('<title>' . ($titles[$case] ?? ($case === 'throw-denied' ? 'No entry' : 'Exception')) . '</title>', html_entity_decode($response->body, ENT_QUOTES), $case);
+                if ($status === 500) {
+                    // A legacy 500 page was drawn by the exception handler, after the request had left the request stack, so the shell of a
+                    // settings page was chosen without its address: an `/admin` page that threw was drawn in the account shell. A controller's
+                    // page is drawn in the shell of its own directory.
+                    $this->assertStringContainsString('idno-admin-main', $this->get('draw-new', 'admin', 'case=' . $case . $via, ['Cookie' => $this->member])->body);
+                    $this->assertStringContainsString('idno-account-main', $this->get('draw-new', 'account', 'case=' . $case . $via, ['Cookie' => $this->member])->body);
+
+                    continue;
+                }
+                $this->assertTheSamePage('case=' . $case . $via, ['Cookie' => $this->member], 'admin');
+                $this->assertTheSamePage('case=' . $case . $via, [], 'account');
+            }
+        }
+    }
+
+    public function testAMissingPageOfAnXhrRequestAndAHeadRequestIsTheSame(): void
+    {
+        $this->assertTheSamePage('case=throw-missing', ['X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertTheSamePage('case=throw-missing', [], method: 'HEAD');
+        $this->assertTheSamePage('case=throw-runtime', ['Cookie' => $this->member], method: 'HEAD');
+    }
+
+    public function testAForwardCalledByLegacyCodeIsTheSameRedirect(): void
+    {
+        foreach (['', '&_t=json', '&_t=rss'] as $type) {
+            $response = $this->assertTheSamePage('case=throw-redirect&to=' . rawurlencode($this->site()->baseUrl() . 'content/all') . $type, ['Cookie' => $this->member]);
+            $this->assertSame(302, $response->status);
+            $this->assertNotNull($response->header('Location'));
+        }
+        $key = $this->apiKeyOf('ada');
+        $path = static fn (string $page): string => '/' . self::AREAS['plain'] . $page . '?case=throw-redirect&to=' . rawurlencode('https://example.com/elsewhere');
+        $legacy = $this->site()->request('GET', ltrim($path('draw-legacy'), '/'), self::signedHeadersFor('ada', $key, $path('draw-legacy')));
+        $new = $this->site()->request('GET', ltrim($path('draw-new'), '/'), self::signedHeadersFor('ada', $key, $path('draw-new')));
+        $this->assertSame($legacy->body, $new->body, 'an API request is given the JSON, not a redirect');
+        $this->assertSame(200, $new->status);
+    }
+
+    public function testARedirectAndA404LogNothing(): void
+    {
+        foreach (['case=throw-missing', 'case=throw-missing&via=page', 'case=throw-gone', 'case=throw-denied', 'case=throw-redirect&to=' . rawurlencode('https://example.com/x')] as $query) {
+            $before = $this->serverLogContents();
+
+            $response = $this->get('draw-new', 'plain', $query, ['Cookie' => $this->member]);
+
+            $this->assertContains($response->status, [302, 403, 404, 410], $query);
+            $this->assertSame([], $this->loggedSince($before), 'no line is logged for ' . $query);
+        }
+    }
+
+    public function testA500LogsOneCriticalLine(): void
+    {
+        $lines = [];
+        foreach (['legacy', 'new'] as $side) {
+            $before = $this->serverLogContents();
+
+            $response = $this->get('draw-' . $side, 'plain', 'case=throw-runtime', ['Cookie' => $this->member]);
+
+            $this->assertSame(500, $response->status, $side);
+            $added = implode("\n", $this->loggedSince($before));
+            $lines[$side] = array_values(array_filter($this->loggedSince($before), static fn (string $line): bool => str_contains($line, 'Broken <b>page</b>')));
+            $this->assertCount(1, $lines[$side], $side . ': one line, however many handlers saw the exception: ' . $added);
+            $this->assertCount(1, $this->loggedSince($before), $side . ': and nothing else');
+            $this->assertStringNotContainsString('request.CRITICAL', $added, $side);
+            $this->assertStringNotContainsString('request.ERROR', $added, $side);
+        }
+        $this->assertMatchesRegularExpression('/: critical - Broken <b>page<\/b> \[.+LegacyDrawPage\.php:\d+\]$/', $lines['new'][0], 'the site logger\'s line');
+        // the same line, but for the address of the file and line the exception was made at (the same function made both)
+        $this->assertSame($lines['legacy'][0], $lines['new'][0]);
+    }
+
+    public function testAnExceptionThrownAfterOutputBeganIsAnsweredAsALegacyPageDid(): void
+    {
+        $response = $this->assertTheSamePage('case=throw-echo', ['Cookie' => $this->member]);
+
+        $this->assertStringStartsWith('Output before the exception. ', $response->body);
+        $this->assertStringContainsString('Something went wrong', $response->body);
+    }
+
+    public function testAnErrorIsThePlainErrorPage(): void
+    {
+        $before = $this->serverLogContents();
+
+        $response = $this->get('draw-new', 'plain', 'case=throw-error', ['Cookie' => $this->member]);
+
+        // Deliberately not what a legacy page answered (the site's 500 page): an \Error is not an exception to Symfony here
+        // (`handle_all_throwables` is off), so it ends at the fatal-error page, which logs and mails it once.
+        $this->assertSame(500, $response->status);
+        $this->assertStringContainsString("Idno experienced a problem with this page and couldn't continue.", $response->body);
+        $this->assertStringNotContainsString('Something went wrong.', $response->body, 'not pages/500');
+        $added = implode("\n", $this->loggedSince($before));
+        $this->assertSame(1, substr_count($added, 'Fatal Error: '), 'logged once by the site: ' . $added);
+        $this->assertStringContainsString('A PHP error in the page', $added);
+        $legacy = $this->get('draw-legacy', 'plain', 'case=throw-error', ['Cookie' => $this->member]);
+        $this->assertSame(500, $legacy->status);
+        $this->assertStringContainsString('Something went wrong.', $legacy->body, 'what a legacy page answered');
+    }
+
+    public function testAPageThatCannotBeDrawnEndsAsPlainTextAndIsReportedOnce(): void
+    {
+        $before = $this->serverLogContents();
+
+        $response = $this->get('draw-new', 'plain', 'case=throw-nested', ['Cookie' => $this->member]);
+
+        $this->assertSame(500, $response->status);
+        $this->assertStringStartsWith('text/plain', (string) $response->header('Content-Type'));
+        $this->assertSame("Internal Server Error\n", $response->body);
+        $added = implode("\n", $this->loggedSince($before));
+        $this->assertSame(1, substr_count($added, 'Broken, and so is its page'), 'the exception, once: ' . $added);
+        $this->assertSame(1, substr_count($added, 'The exception cannot be printed'), 'the failure of its page, once: ' . $added);
+        $this->assertStringNotContainsString('Fatal', $added);
+    }
+
+    public function testAWalledGardenRefusalIsTheDrawn403(): void
+    {
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+        $pair = function (string $query, array $headers) use ($client): array {
+            return [
+                $client->request('GET', self::AREAS['plain'] . 'draw-legacy?' . $query, $headers),
+                $client->request('GET', self::AREAS['plain'] . 'draw-new?' . $query, $headers),
+            ];
+        };
+        foreach (['', '&_t=json', '&_t=jsonp', '&_t=markdown', '&_t=rss'] as $type) {
+            [$legacy, $new] = $pair('case=draw' . $type, []);
+            $this->assertSame(403, $legacy->status, $type);
+            $this->assertSame(
+                $this->observedBy($client, $legacy, 'draw-legacy', !str_contains($type, '_t=') || str_contains($type, 'default')),
+                $this->observedBy($client, $new, 'draw-new', !str_contains($type, '_t=') || str_contains($type, 'default')),
+                'a visitor of a walled garden, ' . $type
+            );
+        }
+        [$legacy, $new] = $pair('case=draw', ['Cookie' => $this->member]);
+        $this->assertSame(200, $legacy->status);
+        $this->assertSame(200, $new->status, 'a member is let in');
+    }
+
+    /**
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    private function observedBy(SiteClient $client, SiteResponse $response, string $page, bool $html): array
+    {
+        $this->siteClient = $client;
+        try {
+            return $this->observed($response, 'plain', $page, $html);
+        } finally {
+            $this->siteClient = null;
+        }
     }
 }

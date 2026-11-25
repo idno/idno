@@ -11,6 +11,9 @@ use Idno\Http\Page\SitePage;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\GoneHttpException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
@@ -140,6 +143,42 @@ final class SitePageFixtureController
                 return $renderer->error($context, LegacyDrawPage::brokenPage());
             case 'technical':
                 return $renderer->error($context, LegacyDrawPage::technicalPage());
+            // Cases that stop the page as a legacy page did (see LegacyDrawPage): by the call a legacy page made, which a controller's page
+            // turns into an exception (`via=page`), or by throwing it. `SitePageDrawingTest` compares each with the legacy page's.
+            case 'throw-missing':
+                $this->stop($request, 'noContent', new NotFoundHttpException());
+                // no break
+            case 'throw-gone':
+                $this->stop($request, 'goneContent', new GoneHttpException());
+                // no break
+            case 'throw-denied':
+                $title = (string) $context->input('title', '');
+                if ($context->input('via') === 'page') {
+                    Idno::site()->currentPage()->deniedContent($title);
+                }
+                throw new AccessDeniedHttpException($title);
+            case 'throw-redirect':
+                // what legacy code calls: the current page forwards, which throws the redirect
+                Idno::site()->currentPage()->forward((string) $context->input('to', ''));
+
+                return new Response('A forward that did not forward');
+            case 'throw-runtime':
+                throw LegacyDrawPage::brokenPage();
+            case 'throw-technical':
+                throw LegacyDrawPage::technicalPage();
+            case 'throw-echo':
+                echo 'Output before the exception. ';
+                throw LegacyDrawPage::brokenPage();
+            case 'throw-error':
+                throw new \Error('A PHP error in the page');
+            case 'throw-nested':
+                // An exception whose page cannot be drawn: the 500 page prints the exception (the site is in debug mode)
+                throw new class('Broken, and so is its page') extends \RuntimeException {
+                    public function __toString(): string
+                    {
+                        throw new \LogicException('The exception cannot be printed');
+                    }
+                };
             case 'redirect201':
                 $context->setStatus(201);
 
@@ -149,6 +188,18 @@ final class SitePageFixtureController
         }
 
         return $renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $renderer->template('pages/home/blurb', ['offset' => 0])]);
+    }
+
+    /**
+     * The call a legacy page made to stop (`via=page`: through the current page, which throws what a controller's page throws) or the exception itself.
+     */
+    private function stop(Request $request, string $method, \Throwable $exception): never
+    {
+        if (PageContext::of($request)->input('via') === 'page') {
+            Idno::site()->currentPage()->{$method}();
+        }
+
+        throw $exception;
     }
 
     private function describe(Request $request): JsonResponse

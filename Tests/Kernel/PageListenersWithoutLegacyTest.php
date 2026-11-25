@@ -65,4 +65,33 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $this->assertSame($handler, self::errorHandler());
         $kernel->shutdown();
     }
+
+    public function testAnExceptionOutsideASitePageBuildsNothingLegacy(): void
+    {
+        $kernel = $this->kernel();
+        $handler = self::errorHandler();
+        // Symfony logs what it handles (to PHP's error log): keep it out of the test output
+        $log = (string) tempnam(sys_get_temp_dir(), 'idno-listener-log-');
+        $previousLog = ini_set('error_log', $log);
+
+        try {
+            $thrown = $kernel->handle(Request::create('/_test/throw'));
+            // (the fixture page's controller takes the renderer, so it is built once that page is asked for: look now)
+            $built = $kernel->getContainer()->initialized(\Idno\Http\Page\PageRenderer::class);
+            $page = $kernel->handle(Request::create('/_test/site-page/state'));
+        } finally {
+            ini_set('error_log', (string) $previousLog);
+            $lines = (string) file_get_contents($log);
+            unlink($log);
+        }
+
+        $this->assertSame(500, $thrown->getStatusCode(), 'as KernelExceptionTest pins: Symfony answers it');
+        $this->assertSame(1, substr_count($lines, 'request.CRITICAL'), 'and logs it, once: ' . $lines);
+        $this->assertSame(200, $page->getStatusCode());
+        $this->assertFalse($kernel->legacyBooted());
+        $this->assertFalse($built, 'no renderer was built for an exception that is not a site page\'s');
+        $this->assertFalse($kernel->getContainer()->initialized(LegacyPageLifecycle::class), 'no lifecycle was built');
+        $this->assertSame($handler, self::errorHandler(), 'no PHP error handler was installed');
+        $kernel->shutdown();
+    }
 }

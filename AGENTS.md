@@ -650,6 +650,9 @@ exception thrown by a new-style controller is handled by Symfony: it is logged t
 error log by the `symfony` Monolog handler (see "Kernel and services") and shown as
 Symfony's error page.
 
+A controller marked as a site page (`#[SitePage]`) is the exception to that last rule: what it throws is answered with the site's own
+error pages, as a legacy page's was, by `Idno\Http\Page\PageExceptionListener` (see "Errors on a site page" below).
+
 ### Adding a route (the new way)
 
 New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
@@ -968,11 +971,13 @@ test fixtures is routed to a controller through them yet:
      declared on a controller's page and then gets the token check and `page/patch` (a legacy page had no PATCH: the router answered 404); and a method
      the page did not declare is a 405 with an `Allow` header (every legacy page had `post()`, `put()` and `delete()`, so PUT and DELETE reached the
      handler's defaults and only PATCH was a 404).
-  A refusal (step 3 and 5) is Symfony Security's `AccessDeniedException`, so the firewall's `DeniedResponder` answers it: status 403 with the site's
-  403 page for a caller of the web page type, `{"error":"forbidden"}` for one answered in JSON (`_t=json`, `Accept`, and a signed API request, as the
-  legacy JSON shell was), `Cache-Control: no-store`, and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
-  refusal: the type of the answer follows `Accept` too for a visitor of a walled garden (a legacy 403 followed `_t` only), a JSON refusal has no
-  `messages`, and the 403 is drawn in the page itself (a legacy API refusal built a second page, which said `page/ready` again).
+  A refusal of an API request (step 3) is Symfony Security's `AccessDeniedException`, so the firewall's `DeniedResponder` answers it: status 403 with
+  the site's 403 page for a caller of the web page type, `{"error":"forbidden"}` for one answered in JSON (`_t=json`, `Accept`, and a signed API request,
+  as the legacy JSON shell was), `Cache-Control: no-store`, and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
+  refusal: a JSON refusal has no `messages`, and the 403 is drawn in the page itself (a legacy API refusal built a second page, which said `page/ready`
+  again). The walled garden's refusal (step 5) is the PAGE's: an `AccessDeniedHttpException`, which `PageExceptionListener` draws as `deniedContent()` did
+  (the 403 page in the shell and the template type of the request, from `_t` only: `publicGatekeeper()` ran before `Accept` was read), through the renderer, with
+  the headers of the type and the page's own, and nothing is logged as an error. Neither runs `page/head` or `page/get`.
   On the response (`kernel.response`, priority 0) of a site page the listener adds `standardHeaders()` (`X-Powered-By: https://idno.co`,
   `X-Clacks-Overhead`, `X-Idno-Build-Fingerprint`: none when `IDNO_UNIT_TEST` is defined, as `init()` sent none), the context's default headers
   (only where the response has none of the name), the context's headers (a name replaces the controller's unless the page began it with
@@ -980,10 +985,41 @@ test fixtures is routed to a controller through them yet:
   `LegacyPageLifecycle::reportException()` is what a legacy `Page::exception()` reported (one critical line `<message> [<file>:<line>]`, the
   `error.exception` statistic, `Logging::oopsAlert()`) and never throws; `PageRequestListener::onTerminate()` calls it for work after the response
   that fails. Pinned by `Tests/Characterisation/SitePageLifecycleTest` (over HTTP, on `Tests\Fixtures\SitePageFixtureController`: the routes
-  `/{lead}_test/site-page/{state,public,account,typed,args/{word},post,undeclared}{slash}`, in the convention of a page's routes),
+  `/{lead}_test/site-page/{state,public,account,typed,args/{word},post,patch,undeclared}{slash}`, in the convention of a page's routes),
   `SitePageLifecycleEquivalenceTest` (the same request through a real legacy page and the fixture: the events with their order and data, the
   refusals, the headers) and `Tests/Kernel/LegacyPageLifecycleTest`. `Tests/Kernel/SitePageRoutesTest` scans the real route collection for a
   site page under `/account` or `/admin` without its flag.
+- Errors on a site page (`Idno\Http\Page\PageExceptionListener`, `#[AsEventListener]` on `kernel.exception` at priority 2, a service in a scanned
+  directory; constructor: the kernel, and the renderer and the lifecycle as SERVICE CLOSURES). It does nothing, and builds nothing, unless the request is the main one,
+  `Kernel::legacyBooted()` and the request carries a page context (`PageContext::has()`): the legacy catch-all, `/_test/*` routes, `/_upgrade/step`, a `bootLegacy:
+  false` kernel and a closed schema gate never fetch the renderer or the lifecycle (`PageExceptionListenerTest`, `PageListenersWithoutLegacyTest`; `KernelExceptionTest`
+  is unchanged). Priority 2 puts it above the firewall's exception listener (1), which answers the Security exceptions this one leaves alone (`AccessDeniedException`:
+  the lifecycle's API refusal and a failed `#[IsCsrfTokenValid]`; `AuthenticationException`), and above Symfony's `ErrorListener` (0), which logs: a response set here
+  stops propagation, so Symfony never logs a site page's exception (no `request.ERROR` or `request.CRITICAL` line for it). What it answers, in the request's template
+  type, each with `allowCustomResponseCode()` so that the kernel keeps the status:
+  - `NotFoundHttpException` (what `ControllerPage::noContent()` throws): `PageRenderer::notFound()`; `GoneHttpException` (`goneContent()`): `gone()`;
+    `AccessDeniedHttpException` (`deniedContent($title)`, its message the title, and the walled garden's refusal): `denied()`; each logs nothing.
+  - a `PageRedirect` (`forward()`): `PageRenderer::redirectFor()`, nothing logged. `PageRequestListener::onException()` (priority 10) answers it first and also forgets a
+    forward the page made and went on from; this is only the same answer, should that listener ever not have.
+  - any other `\Exception`: `PageLifecycle::reportException()` FIRST (what `Page::exception()` reported: one critical line `<message> [<file>:<line>]` from the site's
+    logger, the `error.exception` statistic, `Logging::oopsAlert()` under the same conditions), then `PageRenderer::error()`: status 500, `pages/500`, which shows the
+    exception's message only when `ExceptionMessage::forVisitor()` says so (friendly, or `debug`), and for `json` and `jsonp` the shells' `exception` object. So a 500 is logged
+    once, by the site's logger, as a legacy page's was.
+  - any other HTTP exception (a bad request, a method not allowed, a 5xx a page chose to throw) is left to Symfony, which logs and answers it as it does for any controller.
+  - when drawing the answer throws (a template, a plugin's extension of the shell), the answer is a plain-text response of the same status (the status's own words, `Cache-Control:
+    no-store`; for the 500 nothing of the exception), and the drawing failure is reported once; no second error page is drawn, so nothing loops.
+  `framework.handle_all_throwables` stays FALSE (`config/packages/framework.php`): turning it on would also change what an `\Error` in any `kernel.request` listener of any
+  request becomes, which is not needed here. So an `\Error` (a `TypeError`, a call on null) in a site page is not an exception event: it escapes `Kernel::handle()` and ends at
+  `FatalErrorPage` (status 500, `statics/error-page.php`'s plain page, the error logged once through the site's logger and the oops mail sent), where a legacy page's exception handler drew `pages/500`. That is a
+  deliberate difference, pinned by `SitePageDrawingTest::testAnErrorIsThePlainErrorPage`. Other differences from a legacy page's error, each pinned in `SitePageDrawingTest`: a legacy
+  500 page was drawn after its request had left the request stack, so the `url` of its structured data was empty and a page under `/admin` or `/account` that threw was drawn in
+  the account shell; a controller's 500 page says its address and is drawn in the shell of its directory. An exception after output began is answered as before (the output
+  stays, the page follows it, the status is what PHP could still change). Pinned by `PageExceptionListenerTest` (unit tier), `SitePageDrawingTest` (`testErrorPages`:
+  the 404, 410, 403 and 500 against a real legacy page for the same case, thrown directly and through the current page as legacy code calls it, in five template types, as
+  a visitor and a member, in the settings directories; `testARedirectAndA404LogNothing`, `testA500LogsOneCriticalLine`,
+  `testAnExceptionThrownAfterOutputBeganIsAnsweredAsALegacyPageDid`, `testAPageThatCannotBeDrawnEndsAsPlainTextAndIsReportedOnce`,
+  `testAWalledGardenRefusalIsTheDrawn403`) and `SitePageLifecycleTest::testAWalledGardenRefusalIsTheDrawn403AndIsNotLoggedAsAnError`. The `throw-*` cases of the two
+  fixtures (`LegacyDrawPage`, `SitePageFixtureController`) stay identical.
 - Drawing a site page into a Response (`Idno\Http\Page\PageRenderer`, a service in a scanned directory, public because `ControllerPage::forward()` takes the
   forward rule from it; it depends on the interfaces `PageDrawer` and `Idno\Templating\TemplateTranslation`, so that a later service's test can double it, and
   `Idno\Legacy\LegacyPageDrawer` implements `PageDrawer` over `Idno::site()`, built when the renderer is and reading the application only when something is
@@ -1027,7 +1063,7 @@ test fixtures is routed to a controller through them yet:
   (doubles), `Tests/Kernel/LegacyPageDrawerTest` (the CLI's status) and, over HTTP on a private site, `Tests/Characterisation/SitePageDrawingTest`: a REAL legacy page
   (`Tests\Fixtures\LegacyDrawPage`, registered in the test environment by `TestEventHooks` on `plugins/loaded` at `.../draw-legacy`, with a class of its own under `/admin/`
   and `/account/`) and the fixture controller (`.../draw-new`, `Tests\Fixtures\SitePageFixtureController`) do the same for each `case` (`draw`, `drawmessage`, `permalink`,
-  `notfound`, `gone`, `denied`, `error`, `technical`, `redirect`) and the two answers are compared whole: the status, every header by name with a repeated header's values in
+  `notfound`, `gone`, `denied`, `error`, `technical`, `redirect`, and the `throw-*` cases that stop the page by a call or an exception: see "Errors on a site page") and the two answers are compared whole: the status, every header by name with a repeated header's values in
   order, and the body, in every template type (`default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `markdown`, `activitypub`), as a visitor and a member, in the two
   directories that have a shell of their own, by `Accept` and as an XHR request, for a HEAD, and for a signed API request (also of a blocked member). What the
   comparison treats as the same: the name of the page in its own address (also in the base64 of a `fwd` link, and the class in the body's classes), a stack trace, the
@@ -1046,7 +1082,8 @@ test fixtures is routed to a controller through them yet:
   asks the schema gate (`Idno\Upgrade\SchemaGate`, a public service, unless a kernel has already
   booted the legacy application in this process: `LegacyBootstrap::bootedInThisProcess()`), and
   boots the legacy application through `Idno\Legacy\LegacyBootstrap` only when the gate is open;
-  `Kernel::legacyBooted()` says whether it did. Pass `bootLegacy: false` to the constructor to boot
+  `Kernel::legacyBooted()` says whether it did. `framework.handle_all_throwables` is FALSE: an `\Error` is not an exception event, so it ends at
+  `FatalErrorPage`, and only an `\Exception` thrown by a site page reaches `PageExceptionListener` (see "Errors on a site page"). Pass `bootLegacy: false` to the constructor to boot
   the kernel alone, as some tests do: such a kernel never asks the gate, and the gate's listener
   does nothing in it.
 - The legacy application is a process-wide singleton (`Idno::site()`, `Idno::container()`,
