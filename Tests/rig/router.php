@@ -54,8 +54,11 @@ foreach (['APP_ENV', 'APP_DEBUG'] as $name) {
         $_SERVER[$name] = getenv($name);
     }
 }
-// Idno derives its subdirectory from PHP_SELF, which the built-in server sets to the request path.
-$_SERVER['PHP_SELF'] = '/index.php';
-$_SERVER['SCRIPT_NAME'] = '/index.php';
+// Idno derives its subdirectory from PHP_SELF, which the built-in server sets to the request path. (A test that needs a site in a
+// subdirectory names it in IDNO_TEST_SUBDIRECTORY: its front controller is then `/<name>/index.php`.)
+$subdirectory = getenv('IDNO_TEST_SUBDIRECTORY');
+$prefix = is_string($subdirectory) && preg_match('/^[a-z0-9-]+$/', $subdirectory) === 1 ? '/' . $subdirectory : '';
+$_SERVER['PHP_SELF'] = $prefix . '/index.php';
+$_SERVER['SCRIPT_NAME'] = $prefix . '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $root . '/index.php';
 require $root . '/index.php';

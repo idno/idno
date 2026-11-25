@@ -177,7 +177,9 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `tearDown()`, with an assertion that the rig's shared upload directory gained no file), and stops it and drops the
   database in `tearDown()`. The site is SYNCHRONOUS. It gives `site()`, `baseUrl()`, `console()`, `runInSite()`,
   `registerUser()`/`publishStatus()` (over HTTP), `sessionCookie()`, `formToken()`, `serverLog()`, and a subclass
-  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches). `startExtraServer(array $environment, array $ini = []): string`
+  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches) and to its PHP settings by overriding `siteIni()` (a test that counts session files
+  makes `session.save_path` its own `sessionDirectory()`: the system's shared one is written by every process of the machine; `IDNO_TEST_SERVER_NO_PATH_INFO=1` and
+  `IDNO_TEST_SUBDIRECTORY=<name>` in the environment make the server behave as Apache or nginx do for the legacy router's path, and serve a site under `/<name>/`). `startExtraServer(array $environment, array $ini = []): string`
   starts a second `php -S` (a free port, stopped in `tearDown()`) on the same database and upload directory, with other
   environment variables or PHP settings (the production environment, opcache), and returns its base URL.
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
@@ -699,7 +701,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   router. For GET and HEAD, Symfony also answers the trailing-slash variant of the path
   (`/foo/` for `/foo`, and the reverse) with a 301 redirect to the route's own path. A route that is a SITE PAGE (a
   `#[SitePage]` controller, see "Legacy pages and routes") is the exception to both: it follows the route convention below, so that
-  no spelling of an address is redirected, and the legacy router's own choice for the path still wins where a plugin took it.
+  no spelling of an address is redirected, and the legacy router's own choice for the path still wins where a plugin took it. A page that
+  moves to a controller must check, and declare, what the legacy router does with its paths once it is gone: it keeps its shell's registration (and class) while the
+  controller serves it, or lists in `replaces` every class the stock table would choose for its paths (a broader pattern registered after the shell takes the path
+  back through the override), says `markdownPermalink: true` when it is a permalink, and follows the route convention; `Tests/Kernel/SitePageClaimsTest` and
+  `PageRoutesTest` fail for a page that does not (see "Legacy pages and routes").
 - It must return a `Symfony\Component\HttpFoundation\Response`, and must take its input
   from the `Request` (inject it as an argument), never from `$_GET`, `$_POST`,
   `$_SERVER` or other superglobals, and must not call `header()`, `echo` or `exit`.
@@ -865,43 +871,75 @@ state-changing browser request): the admin page `/admin/legacytables` is one, fo
 A page that a controller serves (a site page: a controller method or class carrying `#[Idno\Http\Page\SitePage]`, whose `replaces` lists the page
 class core still registers for the path, if any) and the legacy router share the site's addresses:
 
-- The route convention, checked by `Tests/Unit/Http/PageRoutesTest` for every site page route in the collection: the path is `/{lead}<rest>{slash}`
+- The route convention, checked by `Tests/Kernel/PageRoutesTest` for every site page route in the container's route collection (the check itself,
+  `Tests\Unit\Http\PageRouteConvention`, is pure and proven on synthetic routes by `PageRouteConventionTest` in the unit tier): the path is `/{lead}<rest>{slash}`
   (`/{slash}` for the root) with `requirements: ['lead' => '/?', 'slash' => '/?']` and `defaults: ['lead' => '', 'slash' => '']`; the methods are
   exactly those the page declares plus HEAD (with GET) and OPTIONS (`SitePage::allowedMethods()`, so `GET`, `HEAD`, `OPTIONS` for a page that reads);
   a route whose last parameter may hold any byte (a requirement that is not a plain ASCII class) sets `utf8: false`, as the legacy catch-all does.
   `{lead}` and `{slash}` make one route answer `/x`, `/x/`, `//x` and `//x/`, which the legacy patterns (`/x/?` under Toro's `^/?`) answered, with no
   redirect (verified against the installed `CompiledUrlMatcher`; the optional slashes are captured, so Symfony's trailing-slash redirect never applies). Symfony
-  also lets ONE more trailing slash match (`/x//`), which the legacy patterns did not; an address nobody links to, pinned in `RouteOverrideTest`.
+  also lets ONE more trailing slash match (`/x//`); a legacy pattern that ends in `/?` (most do) matched it too, one that does not answered its 404 (pinned in
+  `RouteOverrideTest`).
 - A POST, PUT, DELETE or PATCH (any method the route does not list) never matches the route: it reaches the catch-all, so a kept shell still
   serves it through `Page::post()` and the other handlers, with its own form token check; a path with no shell answers the legacy 404 as before. A
   controller that serves a state-changing method lists it in `#[SitePage(methods: [...])]` and in its route.
 - The legacy router's choice wins. `Idno\Legacy\LegacyRouteOverride` (`kernel.request`, priority 31, just after `RouterListener` at 32) runs for a
-  main request whose matched route is a site page's, with the legacy application booted: it asks `PageHandler::chosenFor($dispatcher->routes(),
-  PageHandler::toroPath($request))`, the router's OWN lookup (`handlerFor()`: the exact key, then the patterns in registration order, pinned against Toro
-  by `Tests/Unit/Markdown/RouteLookupTest`; `toroPath()` is the path Toro routes, from `PATH_INFO`, `ORIG_PATH_INFO`, `REQUEST_URI`, percent-encoded and with
-  the site's subdirectory, which `routeMarkdownSuffix()` shares through `pathFrom()`), never a second implementation of route matching. When the
-  chosen class is not one the controller's `#[SitePage]` `replaces` (compared without a leading backslash, ignoring case), the legacy page keeps the path:
-  `_controller` becomes `LegacyController`, the route's parameters are removed and `_route` is `idno_legacy`, so the catch-all's code serves it as if no
-  controller had matched, for every method including HEAD and OPTIONS. So a plugin's `hijackRoute()`, its `addRoute()` of an identical pattern (the same
-  key keeps its place and takes the later class), a plugin's subclass of a kept shell, and a plugin's page for a path no shell was ever registered
-  for all still win, as they do today; a different pattern registered after the shell does not (the router would have chosen the shell). The shell
-  itself is shadowed for GET, HEAD and OPTIONS only. The `.md` suffix is the legacy router's still: `<path>.md` matches no controller route, so a path
-  whose shell is a `MarkdownPermalink` keeps serving its Markdown form, and a controller that is a permalink must keep its shell or declare the suffix itself.
-  A request Symfony rejects before routing (a malformed `Host`) is served by the legacy router (`LegacyFallbackListener`), which serves what it registered: the
-  shell where there is one, its 404 where the page is only a controller. `?_t=` types are the page's, whoever serves it (`?_t[]=x` asks for no type).
+  main request whose matched route is a site page's, with the legacy application booted. Symfony's router matches the DECODED path, while the legacy router
+  is given the raw `REQUEST_URI` (Apache, nginx) or, where the server sets it, a decoded `PATH_INFO` with dot segments and doubled slashes removed (PHP's
+  built-in server): so the override asks the legacy router about EVERY spelling it could be given (`PageHandler::spellingsOf()`: the path Toro routes
+  (`toroPath()`), the request's own `REQUEST_URI`, each as it is, percent-decoded once and with runs of slashes made one) by its OWN lookup
+  (`handlerFor()` through `chosenFor()` and `claimsOf()`: the exact key, then the patterns in registration order, pinned against Toro by
+  `Tests/Unit/Markdown/RouteLookupTest`; `routeMarkdownSuffix()` shares the path with `toroPath()` through `pathFrom()`), never a second implementation of route
+  matching. When ANY spelling gives a class the controller's `#[SitePage]` does not list in `replaces` (compared without a leading backslash, ignoring case; a handler
+  that is no class name counts as one), the legacy page keeps the path: `_controller` becomes `LegacyController`, the route's parameters are removed and `_route` is
+  `idno_legacy`, so the catch-all's code serves it as if no controller had matched, for every method including HEAD and OPTIONS. Toro then routes the path it is
+  given: where that is a spelling its patterns do not match (an encoded one, with only `REQUEST_URI`) it answers the 404 it always did; the controller's page is never
+  served for an address a plugin took, in any spelling. So a plugin's `hijackRoute()`, its `addRoute()` of an identical pattern (the same key keeps its place
+  and takes the later class), a plugin's subclass of a kept shell, and a plugin's page for a path no shell was ever registered for all still win, as they do
+  today; a different pattern registered after the shell does not (the router would have chosen the shell). The shell itself is shadowed for GET, HEAD and
+  OPTIONS only. What changes: an encoded spelling of a path nobody took (`/x%61`, `/%2Fx`, `/x%2F`) is now served by the controller as the plain spelling is, where
+  a server that gave the legacy router only the raw path answered a 404; a dot segment (`/y/../x`) is no spelling Symfony matches, so it stays the legacy router's
+  (the shell, where there is one and the server removed the segment; the 404 otherwise). `LegacyDispatcher::routes()` writes the subdirectory's alias of the home
+  page into the router's table when asked: it did at dispatch, and now a moment earlier, once.
+- The `.md` suffix. A GET or HEAD whose path ends in `.md` is the Markdown form of a permalink where the legacy router would treat it as one
+  (`PageHandler::routeMarkdownSuffix()`: the path as given matches a `MarkdownPermalink`'s route, or matches none and without the suffix routes to one);
+  `claimsOf()` reports that as a claim with `markdown: true`. The convention: a page that replaces a `MarkdownPermalink` (or is the permalink of a post) says so,
+  `#[SitePage(markdownPermalink: true)]`, and then it answers the form itself: `PageRequestListener` takes the `.md` off the last route parameter (the route may take
+  it with its parameter, as the legacy pattern did: `[^/]+`; `_route_params` and the request attribute are rewritten, so the controller reads the same slug in both
+  forms), `PageContext::markdownSuffixRequested()` is set and `LegacyPageLifecycle::begin()` selects the `markdown` type as a permalink page's
+  `selectMarkdownIfWanted()` did (an explicit `?_t=` of another type wins, as for a legacy permalink). A page that is not marked while its shell is a `MarkdownPermalink`
+  is a violation (`SitePageClaimsTest`), and at run time the override hands its `.md` request back to the legacy router, so the Markdown form is served by the shell
+  while that is registered. A Markdown permalink a plugin took (a `MarkdownPermalink` class not in `replaces`) keeps its Markdown form and its HTML form, whichever
+  the controller is. A route that takes no free parameter never matches `<path>.md`, which the legacy router then serves as it did.
+- Moving a page to a controller. The legacy router's lookup is first-match in registration order, so a shell's own pattern shadows every broader pattern after it,
+  and the controller wins because the shell is in `replaces`. Deleting the shell's registration hands the path to the next pattern that matches (a profile's
+  edit page falling to `User\View`'s `/profile/([^\/]+)/([A-Za-z\-\/]+)+`, `/tag/...`, `/content/...`, the permalink route), and deleting the shell CLASS makes
+  `addRoute()` skip it silently and breaks a plugin's subclass of it. So a moved page keeps its shell's registration (and class) while the controller serves
+  it, or lists in `replaces` every class the stock table chooses for its paths (and a malformed `Host` request, which the legacy router serves, then still
+  finds the shell: where there is none, the legacy router answers 404 for it). `Tests/Kernel/SitePageClaimsTest` enforces it over the real route collection and
+  the booted site's real table (core and the plugins the site enables): for each site page route it asks, for its fixed path and a sample for each parameter, what the
+  legacy router would serve, and fails for a class the controller does not list in `replaces`, and for a page that replaces a `MarkdownPermalink` without saying it is
+  one; a conflicting table and controller prove it can fail.
 - Cost: the listener does nothing for any request that is not a site page's (a check of the request and one attribute lookup, cached per controller), and
   builds nothing when the legacy application is not booted (the dispatcher is a service closure: `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`;
-  `KernelExceptionTest`, the upgrade tests and `PageListenersWithoutLegacyTest` stay as they were). For a site page's request it makes one scan of the
-  router's table, about 50 microseconds at the 180 or so routes core and the bundled plugins register (measured on 220 synthetic patterns; the router did the same
-  scan for those requests when it served them), and a hit stops at the matching pattern.
-- Pinned by `Tests/Unit/Http/PageRoutesTest` (convention, spellings, methods, base URL), `Tests/Kernel/PageHandlerChoiceTest` (the choice: hijack, identical and later
-  patterns, the exact key, the subdirectory in a subprocess, `toroPath()`), `Tests/Kernel/LegacyRouteOverrideTest` (in process, with the router's table) and, over
-  HTTP on a site of its own with the fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`,
-  `plugin`, registered on `plugins/loaded`, the first event after every plugin's `registerPages()`), `Tests/Characterisation/RouteOverrideTest`.
+  `LegacyFallbackListener` takes the legacy controller as a service closure too, so in a kernel with no legacy application the dispatcher is never built, pinned by
+  `PageListenersWithoutLegacyTest`; `KernelExceptionTest` and the upgrade tests stay as they were). For a site page's request it makes one scan of the router's table
+  for each spelling (at most a handful, most of them equal to the first: `array_unique`), about 50 microseconds a scan at the 180 or so routes core and the bundled plugins
+  register (measured on 220 synthetic patterns; the router did the same scan for those requests when it served them), and a hit stops at the matching pattern.
+- A malformed `Host`, and a site in a subdirectory. A request Symfony rejects before routing (a malformed `Host`) is served by the legacy router (`LegacyFallbackListener`),
+  which serves what it registered. A site in `/blog` registers its patterns under it (`addRoute()` adds `IDNO_SUBDIRECTORY`, which the legacy bootstrap derives from
+  `PHP_SELF`; `hijackRoute()` adds no prefix, so in a subdirectory it never matches), Symfony's base URL is `/blog`, and the router is asked about the path with it
+  (`toroPath()` and `REQUEST_URI` carry it). `?_t=` types are the page's, whoever serves it (`?_t[]=x` asks for no type).
+- Pinned by `Tests/Kernel/PageRoutesTest` (convention, spellings, methods, base URL) and `Tests/Unit/Http/PageRouteConventionTest`, `Tests/Kernel/PageHandlerChoiceTest` (the
+  choice and the spellings: hijack, identical and later patterns, the exact key, encoded paths, the `.md` form, the subdirectory in a subprocess, `toroPath()`),
+  `Tests/Kernel/LegacyRouteOverrideTest` (in process, with the router's table), `Tests/Kernel/SitePageClaimsTest` and, over HTTP on a site of its own with the
+  fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`, `plugin`, `mdclaim`, registered on `plugins/loaded`, the first
+  event after every plugin's `registerPages()`; `IDNO_TEST_SERVER_NO_PATH_INFO=1` makes the server give the legacy router only the raw path, as Apache and nginx do;
+  `IDNO_TEST_SUBDIRECTORY=blog` serves the front controller as `/blog/index.php`), `Tests/Characterisation/RouteOverrideTest`.
 
 `Idno\Legacy\` is where the shims between the kernel and the legacy application live
 (`LegacyBootstrap`, `LegacyServiceFactory`, `LegacySiteSettings`, `LegacyController`,
-`LegacyDispatcher`, `LegacyResponse`, `LegacyFallbackListener`, `FatalErrorPage`,
+`LegacyDispatcher`, `LegacyRouteOverride`, `LegacyResponse`, `LegacyFallbackListener`, `FatalErrorPage`,
 `VerbatimLogFormatter`, `NotInstalledException`, and for storage `LegacyRecordStoreFactory`,
 `LegacyRecordDefaults`, `LegacyAccessContext`, and the `db()` service of SQL sites,
 `RepositoryDataConcierge`, with `LegacySqlMaintenance`). They
@@ -922,7 +960,7 @@ test fixtures is routed to a controller through them yet:
 - `Idno\Http\Page\SitePage` (an attribute on a controller class or method; the method's wins; `SitePage::of()` takes an object, a
   `Class::method` string, an `[object|class, method]` array or an invokable, cached per class and method; a method that does not exist has the class's attribute) says which legacy page the
   controller serves: `name` (the page class: the body class and, through the controller wiring, `page/get`'s `page_class`; `Page::pageClassName()` is what the body class reads, and a legacy event carries `get_called_class()`, the same for a page that is its own class), `replaces` (the shell class whose legacy routes
-  it shadows; empty when the class was deleted), `publicOnPrivateSite`, `accountPage`, `settingsPage` and `defaultType`.
+  it shadows; empty when the class was deleted), `publicOnPrivateSite`, `accountPage`, `settingsPage`, `defaultType`, `methods` and `markdownPermalink` (a permalink that answers its `.md` form: see "Legacy pages and routes" and "Markdown output").
   `Idno\Http\Page\PageContext` (not a service; the request's attribute `_idno_page`, `PageContext::of()` throws without one, `has()`,
   `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (`requestField()`, a POST field over a
   query field, never a cookie; then `dataField()`: what `setInput()` set, then the fields of a `json` input and of the body of a request
@@ -3451,6 +3489,11 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
 Every page but a settings page can be fetched as Markdown, and a post's permalink in three ways (proposed by John Evdemon, idno/idno#3407, whose
 standalone implementation, https://github.com/jevdemon/idno-markdown, was the reference for the behaviour of permalinks). The pieces:
 
+- A permalink served by a controller (`#[SitePage(markdownPermalink: true)]`): the router matches the `.md` form with the route (a free last parameter `[^/]+`
+  takes `abc.md`), `PageRequestListener` takes the suffix off that parameter and sets `PageContext::markdownSuffixRequested()`, and `LegacyPageLifecycle::begin()`
+  selects the `markdown` type first, as `selectMarkdownIfWanted()` did (an explicit other `_t` wins); the controller then checks the viewer and draws as a
+  permalink page does. A permalink the legacy router still serves (a shell, or a plugin's `MarkdownPermalink`) keeps its `.md` form: `LegacyRouteOverride` hands the request
+  to the legacy router when a claim serves it as Markdown and the controller is not marked, or the claim is a plugin's.
 - Asking ANY page: `?_t=markdown`, or `?_t=md` (`TypeChain::requested()` is the one place the short name is read: `Page::init()`
   and `DefaultTemplate::autodetectTemplateType()` pass a `_t` value through it). `markdown` is an ordinary requestable template
   type (`TypeChain`: `markdown`, `classic`, `default`; `.tpl.php` only), so the page runs as it does for any type, with its own

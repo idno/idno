@@ -22,6 +22,9 @@ final class SitePage
      * @param bool         $settingsPage        A page under /account/ or /admin/ (holds stored secrets)
      * @param string|null  $defaultType         The template type the page is drawn in when the request names none
      * @param list<string> $methods             The HTTP methods the page serves besides OPTIONS (always) and HEAD (with GET): a method it does not name is refused
+     * @param bool         $markdownPermalink   The page is the permalink of a post and answers its Markdown form (a legacy page was a `MarkdownPermalink`): a GET or HEAD request whose
+     *                                          route's last parameter ends in `.md` is the request for it, the suffix is taken off the parameter and the `markdown` type selected
+     *                                          (the route may take the suffix with its parameter, as the legacy pattern took it); a page that replaces a `MarkdownPermalink` says so
      */
     public function __construct(
         public readonly string $name,
@@ -31,6 +34,7 @@ final class SitePage
         public readonly bool $settingsPage = false,
         public readonly ?string $defaultType = null,
         public readonly array $methods = ['GET'],
+        public readonly bool $markdownPermalink = false,
     )
     {
     }

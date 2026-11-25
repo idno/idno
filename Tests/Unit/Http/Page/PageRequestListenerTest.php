@@ -51,6 +51,15 @@ final class ListenerErrorController
     }
 }
 
+#[SitePage('Fixture\MarkdownPage', markdownPermalink: true)]
+final class ListenerMarkdownController
+{
+    public function page(): Response
+    {
+        return new Response('markdown');
+    }
+}
+
 final class ListenerPlainController
 {
     public function plain(): Response
@@ -700,5 +709,57 @@ final class PageRequestListenerTest extends TestCase
         $this->expectExceptionMessage('Plain');
 
         $this->listener()->onController($this->controllerEvent(Request::create('/'), new ListenerPageController(), 'page'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: array<string, string>, 2: ?string, 3: bool}> method, route parameters, the last parameter after, whether Markdown is asked
+     */
+    public static function markdownRequests(): array
+    {
+        return [
+            'GET' => ['GET', ['name' => 'abc.md', 'slash' => ''], 'abc', true],
+            'HEAD' => ['HEAD', ['name' => 'abc.md', 'slash' => ''], 'abc', true],
+            'the last parameter only' => ['GET', ['id' => 'x.md', 'name' => 'abc.md', 'slash' => '/'], 'abc', true],
+            'no suffix' => ['GET', ['name' => 'abc', 'slash' => ''], 'abc', false],
+            'only the suffix' => ['GET', ['name' => '.md', 'slash' => ''], '.md', false],
+            'a POST' => ['POST', ['name' => 'abc.md', 'slash' => ''], 'abc.md', false],
+        ];
+    }
+
+    /**
+     * @dataProvider markdownRequests
+     */
+    public function testAMarkdownPermalinkPageTakesTheSuffixOffItsLastParameter(string $method, array $parameters, string $after, bool $asked): void
+    {
+        $request = Request::create('/_test/markdown/x', $method);
+        $request->attributes->add($parameters + ['_route_params' => $parameters]);
+        $this->lifecycle->failures = [];
+
+        try {
+            $this->listener()->onController($this->controllerEvent($request, new ListenerMarkdownController(), 'page'));
+        } catch (MethodNotAllowedHttpException) {
+            // (the page declares GET only: the method was refused after the address was read, which is what is looked at)
+        }
+
+        $last = array_key_last(array_diff_key($parameters, ['slash' => 1]));
+        $this->assertSame($after, $request->attributes->get($last));
+        $this->assertSame($after, $request->attributes->get('_route_params')[$last]);
+        if ($method === 'POST') {
+            $this->assertFalse(PageContext::has($request));
+
+            return;
+        }
+        $this->assertSame($asked, PageContext::of($request)->markdownSuffixRequested());
+    }
+
+    public function testAPageThatIsNoMarkdownPermalinkKeepsTheSuffixOfItsParameter(): void
+    {
+        $request = Request::create('/tag/x.md');
+        $request->attributes->add(['name' => 'x.md', '_route_params' => ['name' => 'x.md']]);
+
+        $this->listener()->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+
+        $this->assertSame('x.md', $request->attributes->get('name'));
+        $this->assertFalse(PageContext::of($request)->markdownSuffixRequested());
     }
 }

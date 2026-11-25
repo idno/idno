@@ -19,6 +19,15 @@ use Tests\Fixtures\ReplacedPage;
 use Tests\Fixtures\SitePageFixtureController;
 use Tests\Fixtures\SubclassedPage;
 
+/** A controller that replaces a Markdown permalink without saying it is one (not routed) */
+#[\Idno\Http\Page\SitePage(name: 'Fixture\UnmarkedShell', replaces: [ReplacedPage::class])]
+final class SitePageUnmarkedShellController
+{
+    public function page(): void
+    {
+    }
+}
+
 /**
  * The listener that keeps the legacy router's page for a path a site page's route matched, in process: when it acts, what it leaves
  * alone, and that it asks the router's table only for a request that needs it.
@@ -85,7 +94,7 @@ final class LegacyRouteOverrideTest extends TestCase
         $this->assertSame('idno_legacy', $attributes->get('_route'), $why);
         $this->assertFalse($attributes->has('lead') || $attributes->has('slash'), $why . ': none of the route\'s parameters are left');
         $this->assertSame(['path'], array_keys($attributes->get('_route_params')), $why . ': what the catch-all route would have given');
-        $this->assertSame(rtrim($attributes->get('path'), '/'), '_test/claimable', $why);
+        $this->assertNotSame('', (string) $attributes->get('path'), $why);
     }
 
     public function testAPathNoLegacyPageWasRegisteredForStaysTheControllers(): void
@@ -199,6 +208,80 @@ final class LegacyRouteOverrideTest extends TestCase
             $this->listener()->onRequest($event);
             $this->assertHandedToTheLegacyRouter($event, $method);
         }
+    }
+
+    public function testAPathAPluginTookIsTheLegacyRoutersUnderEverySpellingOfIt(): void
+    {
+        $this->routes->addRoute('/_test/claimable/?', ReplacedPage::class);
+        $this->routes->hijackRoute('/_test/claimable/?', ClaimingPage::class);
+
+        foreach (['/_test/claim%61ble', '/%2F_test/claimable', '/%2f_test/claimable', '/_test/claimable%2F', '//_test//claimable'] as $uri) {
+            $event = $this->matched($uri);
+            $this->listener()->onRequest($event);
+            $this->assertHandedToTheLegacyRouter($event, $uri);
+        }
+    }
+
+    public function testTheShellTheControllerReplacesIsNoClaimUnderAnySpelling(): void
+    {
+        $this->routes->addRoute('/_test/claimable/?', ReplacedPage::class);
+
+        foreach (['/_test/claim%61ble', '/%2F_test/claimable', '/_test/claimable%2F'] as $uri) {
+            $event = $this->matched($uri);
+            $this->listener()->onRequest($event);
+            $this->assertLeftAlone($event, $uri);
+        }
+    }
+
+    public function testADecodedPathInfoIsAskedToo(): void
+    {
+        $this->routes->addRoute('/_test/claimable/?', ClaimingPage::class);
+
+        $event = $this->matched('/_test/claim%61ble', 'GET', ['PATH_INFO' => '/_test/claimable']);
+        $this->listener()->onRequest($event);
+
+        $this->assertHandedToTheLegacyRouter($event, 'PATH_INFO');
+    }
+
+    public function testTheMarkdownFormOfAPermalinkAPluginServesIsTheLegacyRouters(): void
+    {
+        $this->routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class);
+
+        foreach (['/_test/markdown/abc.md', '/_test/markdown/abc'] as $uri) {
+            $event = $this->matched($uri, 'GET', [], SitePageFixtureController::class . '::markdown');
+            $this->listener()->onRequest($event);
+            $this->assertSame(LegacyController::class, $event->getRequest()->attributes->get('_controller'), $uri);
+        }
+    }
+
+    public function testAMarkdownPermalinkControllerKeepsItsMarkdownFormWhenNoPluginTookThePath(): void
+    {
+        $event = $this->matched('/_test/markdown/abc.md', 'GET', [], SitePageFixtureController::class . '::markdown');
+
+        $this->listener()->onRequest($event);
+
+        $this->assertSame(SitePageFixtureController::class . '::markdown', $event->getRequest()->attributes->get('_controller'));
+    }
+
+    public function testAControllerThatIsNoMarkdownPermalinkLeavesTheMarkdownFormOfItsShellToTheLegacyRouter(): void
+    {
+        $this->routes->addRoute('/_test/claimable/?', ReplacedPage::class);
+
+        // the shell is a Markdown permalink and the controller replaces it without saying it is one: the suffix is the shell's
+        $controller = SitePageUnmarkedShellController::class . '::page';
+        $suffix = $this->matched('/_test/claimable.md', 'GET', [], $controller);
+        $this->listener()->onRequest($suffix);
+        $this->assertSame(LegacyController::class, $suffix->getRequest()->attributes->get('_controller'));
+        $plain = $this->matched('/_test/claimable', 'GET', [], $controller);
+        $this->listener()->onRequest($plain);
+        $this->assertSame($controller, $plain->getRequest()->attributes->get('_controller'), 'the HTML form is still the controller\'s');
+        $post = $this->matched('/_test/claimable.md', 'POST', [], $controller);
+        $this->listener()->onRequest($post);
+        $this->assertSame($controller, $post->getRequest()->attributes->get('_controller'), 'a POST is no request for Markdown');
+        // (and a controller that says it is a Markdown permalink answers the form itself)
+        $marked = $this->matched('/_test/claimable.md');
+        $this->listener()->onRequest($marked);
+        $this->assertLeftAlone($marked, 'the fixture\'s controller is a Markdown permalink');
     }
 
     public function testNothingIsAskedOfTheRouterForARequestThatIsNotASitePages(): void

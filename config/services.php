@@ -365,6 +365,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The lifecycle of a page a controller serves (Idno\Http\Page\PageRequestListener), over the legacy application: public so that a
     // test can tell it was never built for a request that is not a site page.
     $services->set(\Idno\Legacy\LegacyPageLifecycle::class)->public();
+    // The legacy router's dispatcher is public so that a test can tell it was never built for a request the legacy router did not serve
+    // (nothing builds it for one: LegacyFallbackListener and LegacyRouteOverride take what needs it as service closures).
+    $services->set(\Idno\Legacy\LegacyDispatcher::class)->public();
     $services->alias(\Idno\Http\Page\PageLifecycle::class, \Idno\Legacy\LegacyPageLifecycle::class)->public();
     // What a controller draws a site page with (Idno\Http\Page\PageRenderer), over the site's template object: the drawer is built
     // when the renderer is, and touches the legacy application only when a page is drawn.

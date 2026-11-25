@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Idno\Http\Page;
 
 use Idno\Kernel;
+use Idno\Markdown\MarkdownRequest;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Attribute\Cache;
@@ -71,8 +73,10 @@ final class PageRequestListener
             throw new MethodNotAllowedHttpException($page->allowedMethods());
         }
         $lifecycle = ($this->lifecycle)();
+        $markdown = $page->markdownPermalink && in_array($request->getMethod(), ['GET', 'HEAD'], true) && self::takeOffMarkdownSuffix($request);
         $context = new PageContext($request, $page);
         $context->attachTo($request);
+        $context->setMarkdownSuffix($markdown);
         // An \Error from a listener of a plugin (the page's own events fire in begin() and enter()) is answered as one from the controller is:
         // Symfony dispatches no exception event for an \Error, so it is carried as a PageError.
         try {
@@ -101,6 +105,36 @@ final class PageRequestListener
         } catch (\Error $error) {
             throw new PageError($error);
         }
+    }
+
+    /**
+     * The request for the Markdown form of a permalink: the last parameter the route matched (the post's slug, its id) ends in `.md`, as the
+     * legacy pattern of a permalink took it. The suffix is taken off, so the controller reads the same parameter whichever form is asked.
+     */
+    private static function takeOffMarkdownSuffix(Request $request): bool
+    {
+        $parameters = $request->attributes->get('_route_params');
+        if (!is_array($parameters)) {
+            return false;
+        }
+        foreach (array_reverse(array_keys($parameters)) as $name) {
+            $name = (string) $name;
+            if ($name === 'lead' || $name === 'slash' || str_starts_with($name, '_')) {
+                continue;
+            }
+            $value = $parameters[$name];
+            $stripped = is_string($value) ? MarkdownRequest::pathWithoutSuffix($value) : null;
+            if ($stripped === null) {
+                return false;
+            }
+            $parameters[$name] = $stripped;
+            $request->attributes->set('_route_params', $parameters);
+            $request->attributes->set($name, $stripped);
+
+            return true;
+        }
+
+        return false;
     }
 
     /**

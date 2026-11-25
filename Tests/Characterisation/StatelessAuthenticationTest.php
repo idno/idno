@@ -22,6 +22,12 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         return ['IDNO_TEST_AUTH_HOOK' => '1'];
     }
 
+    protected function siteIni(): array
+    {
+        // the session files of this site are in a directory of the test's own: the shared one is written by every process of the machine
+        return ['session.save_path' => $this->sessionDirectory()];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -284,14 +290,13 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         $this->registerUser('root');
         $this->addUser('ada');
         $key = $this->apiKeyOf('ada');
-        $directory = $this->runInSite('return session_save_path() ?: sys_get_temp_dir();');
-        if (!is_string($directory) || !is_dir($directory)) {
-            $this->markTestSkipped('sessions are not files here');
-        }
-        $before = count(glob(rtrim($directory, '/') . '/sess_*') ?: []);
+        $directory = $this->sessionDirectory();
+        $sessions = static fn (): array => glob($directory . '/sess_*') ?: [];
+        $this->assertNotSame([], $sessions(), 'the site writes its session files here (registering the users made some)');
+        $before = $sessions();
 
         $this->site()->request('GET', '_test/whoami', self::signedHeadersFor('ada', $key, '/_test/whoami'));
 
-        $this->assertSame($before, count(glob(rtrim($directory, '/') . '/sess_*') ?: []), 'no session file is left behind by an API client');
+        $this->assertSame($before, $sessions(), 'no session file is left behind by an API client, and none of the others is touched');
     }
 }

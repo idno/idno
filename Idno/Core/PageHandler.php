@@ -189,7 +189,8 @@ namespace Idno\Core {
 
         /**
          * The page class the legacy router serves a path with: the handler `handlerFor()` finds, as a class name without a leading
-         * backslash, or null when no route matches (or the handler is not a class name).
+         * backslash, or null when no route matches. A handler that is no class name (Toro also calls a callable) is named
+         * `(not a class name)`, which is no page a controller replaces.
          *
          * @param  iterable $routes pattern => handler, also readable as an array
          * @return string|null
@@ -197,8 +198,67 @@ namespace Idno\Core {
         public static function chosenFor($routes, string $path): ?string
         {
             $handler = static::handlerFor($routes, $path);
+            if ($handler === null || $handler === '') {
+                return null;
+            }
 
-            return is_string($handler) && $handler !== '' ? ltrim($handler, '\\') : null;
+            return is_string($handler) ? ltrim($handler, '\\') : '(not a class name)';
+        }
+
+        /**
+         * Every spelling of the request's path that the legacy router could be given, or that a controller's route may have matched it
+         * under: the path Toro routes (PATH_INFO, which a server may set decoded, else REQUEST_URI), the request's own REQUEST_URI, each
+         * as it is, percent-decoded once (Symfony's router matches the decoded path) and with runs of slashes made one. The three
+         * servers Idno runs on differ here (PHP's built-in server sets PATH_INFO decoded, Apache and nginx usually leave only the raw
+         * REQUEST_URI), and a request is the legacy router's whichever spelling it is given.
+         *
+         * @return list<string>
+         */
+        public static function spellingsOf(\Symfony\Component\HttpFoundation\Request $request): array
+        {
+            $bases = [static::toroPath($request)];
+            $uri = $request->server->get('REQUEST_URI');
+            if (is_string($uri) && $uri !== '') {
+                $bases[] = (strpos($uri, '?') > 0) ? strstr($uri, '?', true) : $uri;
+            }
+            $spellings = [];
+            foreach ($bases as $base) {
+                foreach ([$base, rawurldecode($base)] as $path) {
+                    $spellings[] = $path;
+                    $spellings[] = preg_replace('~/{2,}~', '/', $path) ?? $path;
+                }
+            }
+
+            return array_values(array_unique($spellings));
+        }
+
+        /**
+         * The pages the legacy router could serve this request with, under every spelling of its path (`spellingsOf()`), by its own
+         * lookup (`handlerFor()`): each as a class name (see `chosenFor()`) with whether it serves the request as the Markdown form of
+         * a permalink, as `routeMarkdownSuffix()` decides it for a GET or HEAD request whose path ends in `.md`: the path as given
+         * matches a route whose page is a Markdown permalink, or it matches none and without the suffix it routes to one.
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return list<array{class: string, markdown: bool}>
+         */
+        public static function claimsOf($routes, \Symfony\Component\HttpFoundation\Request $request): array
+        {
+            $reads = in_array(strtoupper((string) $request->server->get('REQUEST_METHOD', $request->getMethod())), ['GET', 'HEAD'], true);
+            $claims = [];
+            foreach (static::spellingsOf($request) as $path) {
+                $stripped = $reads ? \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path) : null;
+                $class = static::chosenFor($routes, $path);
+                if ($class !== null) {
+                    $claims[$class . '|' . (int) ($stripped !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true))] = ['class' => $class, 'markdown' => $stripped !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true)];
+                } elseif ($stripped !== null) {
+                    $class = static::chosenFor($routes, $stripped);
+                    if ($class !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true)) {
+                        $claims[$class . '|1'] = ['class' => $class, 'markdown' => true];
+                    }
+                }
+            }
+
+            return array_values($claims);
         }
 
         /**

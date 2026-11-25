@@ -38,9 +38,18 @@ final class LegacyFallbackListener
     public const MAX_DETAIL_LENGTH = 200;
 
     /**
-     * @param \Closure(): LoggerInterface $logger
+     * Both are service closures: the listener is built whenever the firewall removes its own listener from the dispatcher (every request,
+     * in debug), and the controller needs the legacy router's dispatcher, which is built only for a request the legacy router serves.
+     *
+     * @param \Closure(): LegacyController $controller
+     * @param \Closure(): LoggerInterface  $logger
      */
-    public function __construct(private readonly LegacyController $controller, #[AutowireServiceClosure(Logging::class)] private readonly \Closure $logger)
+    public function __construct(
+        #[AutowireServiceClosure(LegacyController::class)]
+        private readonly \Closure $controller,
+        #[AutowireServiceClosure(Logging::class)]
+        private readonly \Closure $logger,
+    )
     {
     }
 
@@ -69,7 +78,7 @@ final class LegacyFallbackListener
         ));
 
         $event->allowCustomResponseCode();
-        $event->setResponse($this->controller->response($event->getRequest()));
+        $event->setResponse(($this->controller)()->response($event->getRequest()));
     }
 
     /**

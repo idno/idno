@@ -140,7 +140,9 @@ abstract class PrivateSiteTestCase extends TestCase
     {
         $port = self::freePort();
         $url = 'http://127.0.0.1:' . $port . '/';
-        $environment += ['IDNO_URL' => $this->configuredScheme() . substr($url, strlen('http')), 'IDNO_TEST_HTTP_ALLOW' => '127.0.0.1:' . $port];
+        // a site in a subdirectory (IDNO_TEST_SUBDIRECTORY=blog: the rig's router serves the front controller as /blog/index.php) is configured at it
+        $subdirectory = isset($environment['IDNO_TEST_SUBDIRECTORY']) ? $environment['IDNO_TEST_SUBDIRECTORY'] . '/' : '';
+        $environment += ['IDNO_URL' => $this->configuredScheme() . substr($url, strlen('http')) . $subdirectory, 'IDNO_TEST_HTTP_ALLOW' => '127.0.0.1:' . $port];
         $this->extraServers[] = $this->launch($port, $environment, $ini, $this->directory . '/extra-' . $port . '.log');
 
         return $url;
@@ -417,7 +419,33 @@ abstract class PrivateSiteTestCase extends TestCase
     private function startServer(int $port): void
     {
         $this->serverLog = $this->directory . '/server.log';
-        $this->server = $this->launch($port, [], [], $this->serverLog);
+        $this->server = $this->launch($port, [], $this->siteIni(), $this->serverLog);
+    }
+
+    /**
+     * PHP settings (`-d name=value`) of the test site's own web server, read when it starts: a test class overrides this for a
+     * site that needs one (startExtraServer() takes its own).
+     *
+     * @return array<string, string>
+     */
+    protected function siteIni(): array
+    {
+        return [];
+    }
+
+    /**
+     * A directory of the test's own for the site's session files (removed with the site's directory in tearDown()): a test that
+     * counts or reads session files makes `session.save_path` this one in siteIni(), because the system's shared directory is written
+     * by every other process of the machine.
+     */
+    protected function sessionDirectory(): string
+    {
+        $directory = $this->directory . '/sessions';
+        if (!is_dir($directory)) {
+            mkdir($directory, 0700, true);
+        }
+
+        return $directory;
     }
 
     /**
@@ -439,6 +467,9 @@ abstract class PrivateSiteTestCase extends TestCase
             . "if (PHP_SAPI !== 'cli-server') { http_response_code(404); exit; }\n"
             . "foreach (array_keys(getenv()) as \$name) { if (str_starts_with(\$name, 'IDNO_')) { \$_SERVER[\$name] = getenv(\$name); } }\n"
             . "if (getenv('IDNO_TEST_SERVER_HTTPS') === '1') { \$_SERVER['HTTPS'] = 'on'; }\n"
+            // Apache and nginx leave PATH_INFO unset for a front controller's request, and the legacy router then routes the raw REQUEST_URI;
+            // the built-in server sets it, decoded and with dot segments removed: IDNO_TEST_SERVER_NO_PATH_INFO=1 makes this server the first
+            . "if (getenv('IDNO_TEST_SERVER_NO_PATH_INFO') === '1') { unset(\$_SERVER['PATH_INFO'], \$_SERVER['ORIG_PATH_INFO']); }\n"
             . 'return require ' . $this->literal($root . '/Tests/rig/router.php') . ";\n";
         file_put_contents($router, $script);
         $command = [PHP_BINARY, '-d', 'error_reporting=22527'];

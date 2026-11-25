@@ -50,14 +50,20 @@ final class RouteOverrideTest extends PrivateSiteTestCase
     /**
      * The site served with a mode of IDNO_TEST_CLAIM_ROUTES ('' registers nothing).
      */
-    private function server(string $mode): string
+    private function server(string $mode, bool $noPathInfo = false, string $subdirectory = ''): string
     {
         $environment = ['IDNO_TEST_RECORD_PAGES' => $this->recordFile];
         if ($mode !== '') {
             $environment['IDNO_TEST_CLAIM_ROUTES'] = $mode;
         }
+        if ($noPathInfo) {
+            $environment['IDNO_TEST_SERVER_NO_PATH_INFO'] = '1';
+        }
+        if ($subdirectory !== '') {
+            $environment['IDNO_TEST_SUBDIRECTORY'] = $subdirectory;
+        }
 
-        return $this->servers[$mode] ??= $this->startExtraServer($environment);
+        return $this->servers[$mode . '|' . (int) $noPathInfo . '|' . $subdirectory] ??= $this->startExtraServer($environment);
     }
 
     /**
@@ -315,6 +321,190 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $base = $this->server('replaced');
 
         $this->assertSame('controller', $this->raw($base, 'GET', '/_test/claimable//')['body']);
+    }
+
+    /**
+     * The spellings of `/_test/claimable` the router matches and each server hands the legacy router: the second says whether the raw
+     * spelling is one the legacy router's patterns match (`/_test/claimable/?` under `^/?`) where the server sets no PATH_INFO.
+     *
+     * @return list<array{0: string, 1: bool}>
+     */
+    private static function spellings(string $prefix = ''): array
+    {
+        return [
+            [$prefix . '/_test/claimable', true],
+            [$prefix . '/_test/claimable/', true],
+            // (under a subdirectory the pattern carries it, `^/?` allows the one slash before it and not another after it)
+            [$prefix . '//_test/claimable', $prefix === ''],
+            [$prefix . '//_test/claimable/', $prefix === ''],
+            [$prefix . '/_test/claim%61ble', false],
+            [$prefix . '/_test/%63laimable/', false],
+            [$prefix . '/%2F_test/claimable', false],
+            [$prefix . '/%2f_test/claimable', false],
+            [$prefix . '/_test/claimable%2F', false],
+            [$prefix . '/_test/claimable%2f', false],
+        ];
+    }
+
+    /**
+     * What the legacy router gives a claimed path under each spelling, with and without the PATH_INFO the built-in server sets
+     * (decoded, dot segments removed): the claim whenever it is given a spelling its patterns match, the 404 it always was when it
+     * is given an encoded one. Never the controller's page: an address a plugin took is not the controller's in any spelling.
+     */
+    public function testAnEncodedSpellingNeverBypassesAPluginsClaim(): void
+    {
+        foreach (['1', 'identical'] as $mode) {
+            foreach ([false, true] as $noPathInfo) {
+                $base = $this->server($mode, $noPathInfo);
+                foreach (self::spellings() as [$target, $rawMatches]) {
+                    foreach (['GET', 'HEAD'] as $method) {
+                        $label = $mode . ($noPathInfo ? ' (REQUEST_URI only)' : ' (PATH_INFO)') . ' ' . $method . ' ' . $target;
+                        $response = $this->raw($base, $method, $target);
+                        $this->assertNotSame('controller', $response['body'], $label);
+                        $this->assertNotContains(ControllerPage::class, $response['pages'], $label);
+                        if (!$noPathInfo || $rawMatches) {
+                            $this->assertSame(200, $response['status'], $label);
+                            $this->assertSame($method === 'GET' ? 'claimed' : '', $response['body'], $label);
+                            $this->assertSame([ClaimingPage::class], $response['pages'], $label);
+                        } else {
+                            $this->assertSame(404, $response['status'], $label . ': the legacy router has no page for the raw spelling, as before');
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public function testEveryMethodOfAnEncodedSpellingOfAClaimedPathIsTheLegacyRouters(): void
+    {
+        $base = $this->server('1');
+        [$cookie, $token] = $this->token($base);
+
+        $post = $this->raw($base, 'POST', '/_test/claim%61ble', ['Cookie' => $cookie, 'Content-Type' => 'application/x-www-form-urlencoded'], http_build_query($token));
+        $this->assertSame('claimed-post', $post['body']);
+        $this->assertSame('claimed-put', $this->raw($base, 'PUT', '/%2F_test/claimable?' . http_build_query($token), ['Cookie' => $cookie])['body']);
+        $this->assertSame([ClaimingPage::class], $this->raw($base, 'OPTIONS', '/_test/claim%61ble')['pages']);
+    }
+
+    /**
+     * An encoded spelling of a path nobody claimed: the controller serves it as it serves the plain one (the legacy router, given only
+     * the raw path, answered a 404; given a decoded PATH_INFO, it served the shell), under either server.
+     */
+    public function testAnEncodedSpellingOfAnUnclaimedPathIsTheControllers(): void
+    {
+        foreach (['replaced', ''] as $mode) {
+            foreach ([false, true] as $noPathInfo) {
+                $base = $this->server($mode, $noPathInfo);
+                foreach (self::spellings() as [$target]) {
+                    $label = ($mode ?: 'no registration') . ($noPathInfo ? ' (REQUEST_URI only)' : ' (PATH_INFO)') . ' ' . $target;
+                    $response = $this->raw($base, 'GET', $target);
+                    $this->assertSame(200, $response['status'], $label);
+                    $this->assertSame('controller', $response['body'], $label);
+                    $this->assertSame([ControllerPage::class], $response['pages'], $label);
+                    $this->assertSame([ControllerPage::class], $this->raw($base, 'HEAD', $target)['pages'], $label . ' HEAD');
+                }
+            }
+        }
+    }
+
+    public function testAnEncodedSpellingOfAPathWithOnlyAPluginsPageIsThePlugins(): void
+    {
+        foreach ([false, true] as $noPathInfo) {
+            $base = $this->server('plugin', $noPathInfo);
+            foreach (['/_test/unclaimed', '/_test/unclaim%65d', '/%2F_test/unclaimed', '/_test/unclaimed%2F'] as $target) {
+                $response = $this->raw($base, 'GET', $target);
+                $this->assertNotSame('controller', $response['body'], $target);
+                if ($noPathInfo && $target !== '/_test/unclaimed') {
+                    $this->assertSame(404, $response['status'], $target . ': the legacy router given only the raw path, as before');
+                } else {
+                    $this->assertSame('claimed', $response['body'], $target);
+                }
+            }
+        }
+    }
+
+    /**
+     * A dot segment is no spelling Symfony's router matches (it takes the path literally), so the request is the legacy router's whatever
+     * the server makes of it: the built-in server removes the segment from PATH_INFO and the router serves the page, a server that
+     * leaves only the raw path answers the legacy 404.
+     */
+    public function testADotSegmentIsTheLegacyRoutersWhateverTheServerMakesOfIt(): void
+    {
+        $withPathInfo = $this->raw($this->server('1'), 'GET', '/_test/x/../claimable');
+        $this->assertSame('claimed', $withPathInfo['body']);
+        $this->assertSame('legacy', $this->raw($this->server('replaced'), 'GET', '/_test/x/../claimable')['body'], 'the kept shell, as before');
+        $rawOnly = $this->raw($this->server('1', true), 'GET', '/_test/x/../claimable');
+        $this->assertSame(404, $rawOnly['status']);
+        $this->assertNotSame('controller', $rawOnly['body']);
+    }
+
+    /**
+     * The same in a site in a subdirectory (`/blog`): a registered pattern carries it, the router's base URL is it, and a plugin's
+     * `addRoute()` is chosen under every spelling. (`hijackRoute()` adds no prefix, so in a subdirectory it never matches the path:
+     * the router's old behaviour, which the controller's own claim on the path then does not hide.)
+     */
+    public function testTheSameHoldsInASubdirectory(): void
+    {
+        foreach ([false, true] as $noPathInfo) {
+            $label = $noPathInfo ? ' (REQUEST_URI only)' : ' (PATH_INFO)';
+            $claimed = $this->server('identical', $noPathInfo, 'blog');
+            foreach (self::spellings('/blog') as [$target, $rawMatches]) {
+                $response = $this->raw($claimed, 'GET', $target);
+                $this->assertNotSame('controller', $response['body'], 'identical' . $label . ' ' . $target);
+                if (!$noPathInfo || $rawMatches) {
+                    $this->assertSame('claimed', $response['body'], 'identical' . $label . ' ' . $target);
+                } else {
+                    $this->assertSame(404, $response['status'], 'identical' . $label . ' ' . $target);
+                }
+            }
+            $this->assertSame([ClaimingPage::class], $this->raw($claimed, 'HEAD', '/blog/_test/claimable')['pages']);
+
+            $replaced = $this->server('replaced', $noPathInfo, 'blog');
+            foreach (self::spellings('/blog') as [$target]) {
+                $response = $this->raw($replaced, 'GET', $target);
+                $this->assertSame('controller', $response['body'], 'replaced' . $label . ' ' . $target);
+                $this->assertSame([ControllerPage::class], $response['pages'], 'replaced' . $label . ' ' . $target);
+            }
+        }
+    }
+
+    public function testAPermalinkWithAFreeParameterAnswersItsMarkdownFormWhenItIsAMarkdownPermalink(): void
+    {
+        $base = $this->server('');
+
+        $html = $this->raw($base, 'GET', '/_test/markdown/abc');
+        $this->assertSame(200, $html['status']);
+        $this->assertStringContainsString('The name is', $html['body']);
+        $this->assertStringContainsString('text/html', $html['headers']['content-type'][0] ?? '');
+        $this->assertStringNotContainsString('---', substr($html['body'], 0, 4));
+
+        foreach (['GET', 'HEAD'] as $method) {
+            $markdown = $this->raw($base, $method, '/_test/markdown/abc.md');
+            $this->assertSame(200, $markdown['status'], $method);
+            $this->assertStringContainsString('text/markdown', $markdown['headers']['content-type'][0] ?? '', $method);
+            if ($method === 'GET') {
+                $this->assertStringStartsWith('---', $markdown['body']);
+                $this->assertStringContainsString('abc', $markdown['body']);
+                $this->assertStringContainsString('The name is **abc**.', $markdown['body'], 'the suffix is no part of the name');
+            }
+            $this->assertSame([ControllerPage::class], $markdown['pages'], $method);
+        }
+        // an explicit template type other than Markdown wins over the suffix, as it does for a legacy permalink
+        $json = $this->raw($base, 'GET', '/_test/markdown/abc.md?_t=json');
+        $this->assertStringNotContainsString('text/markdown', $json['headers']['content-type'][0] ?? '');
+        // a name that is only the suffix is a name
+        $this->assertStringContainsString('.md', $this->raw($base, 'GET', '/_test/markdown/.md')['body']);
+    }
+
+    public function testAMarkdownPermalinkAPluginServesKeepsItsMarkdownFormWhateverTheControllerIs(): void
+    {
+        $base = $this->server('mdclaim');
+
+        $this->assertSame('subclass', $this->raw($base, 'GET', '/_test/markdown/abc')['body']);
+        $markdown = $this->raw($base, 'GET', '/_test/markdown/abc.md');
+        $this->assertSame('subclass-markdown', $markdown['body']);
+        $this->assertSame([SubclassedPage::class], $markdown['pages']);
+        $this->assertSame([SubclassedPage::class], $this->raw($base, 'HEAD', '/_test/markdown/abc.md')['pages']);
     }
 
     public function testATripleLeadingSlashIsNoAddressOfThePage(): void

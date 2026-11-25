@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Kernel;
 
 use Idno\Kernel;
+use Idno\Legacy\LegacyDispatcher;
 use Idno\Legacy\LegacyPageLifecycle;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -71,10 +72,6 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
-    /**
-     * (That the override does not even fetch the legacy router's table in such a kernel is `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`,
-     * on a counting closure: the container builds the dispatcher anyway, as a listener of another event refers to it, so this test cannot see it.)
-     */
     public function testTheRouteOverrideLeavesEveryRouteAloneWithoutTheLegacyApplication(): void
     {
         $kernel = $this->kernel();
@@ -93,6 +90,7 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $this->assertSame('controller', $doubled->getContent());
         $this->assertSame(200, $ping->getStatusCode());
         $this->assertSame(200, $step->getStatusCode());
+        $this->assertFalse($kernel->getContainer()->initialized(LegacyDispatcher::class), 'the legacy router\'s dispatcher (its routes, its configuration) was never built');
         $this->assertSame($handler, self::errorHandler(), 'no PHP error handler was installed');
         $kernel->shutdown();
     }

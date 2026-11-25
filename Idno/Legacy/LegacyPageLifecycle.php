@@ -47,6 +47,10 @@ final class LegacyPageLifecycle implements PageLifecycle
             }
         }
         $site->setCurrentPage($page);
+        // The request for a permalink's Markdown form (the `.md` the router took off its address): what a permalink page's `selectMarkdownIfWanted()` did first
+        if ($context->markdownSuffixRequested()) {
+            $page->selectMarkdownIfWanted();
+        }
 
         // Templates read the referrer from here, and it is never empty.
         $_SERVER['HTTP_REFERER'] = $_SERVER['HTTP_REFERER'] ?? '';

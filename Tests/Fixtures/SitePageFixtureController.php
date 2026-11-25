@@ -277,7 +277,7 @@ final class SitePageFixtureController
      * `addRoute()` or `hijackRoute()`) is served by the legacy router, the controller's route notwithstanding.
      */
     #[Route('/{lead}_test/claimable{slash}', name: 'idno_test_claimable', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class])]
+    #[SitePage(name: 'Tests\Fixtures\ReplacedPage', replaces: [ReplacedPage::class], markdownPermalink: true)]
     public function claimable(): Response
     {
         return new Response('controller');
@@ -295,6 +295,20 @@ final class SitePageFixtureController
     public function bytes(Request $request): JsonResponse
     {
         return new JsonResponse(['rest' => bin2hex((string) $request->attributes->get('rest'))]);
+    }
+
+    /**
+     * A permalink with a free last parameter, which takes the `.md` suffix as the legacy pattern of a permalink did: the page says it is a
+     * Markdown permalink, so the listener takes the suffix off `name` and the page is drawn in the `markdown` type.
+     */
+    #[Route('/{lead}_test/markdown/{name}{slash}', name: 'idno_test_markdown', requirements: ['lead' => '/?', 'slash' => '/?', 'name' => '[^/]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'], utf8: false)]
+    #[SitePage(name: 'Tests\Fixtures\MarkdownFixture', markdownPermalink: true)]
+    public function markdown(Request $request): Response
+    {
+        $context = PageContext::of($request);
+        $name = (string) $request->attributes->get('name');
+
+        return $this->renderer->page($context, ['title' => 'A permalink', 'description' => 'A permalink drawn for a test.', 'body' => '<p>The name is <b>' . htmlspecialchars($name) . '</b>.</p>']);
     }
 
     private function describe(Request $request): JsonResponse

@@ -11,6 +11,6 @@ final class SubclassedPage extends ReplacedPage
 {
     public function getContent()
     {
-        echo 'subclass';
+        echo $this->wantsMarkdown() ? 'subclass-markdown' : 'subclass';
     }
 }

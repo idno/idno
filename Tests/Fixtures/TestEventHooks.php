@@ -33,6 +33,7 @@ final class TestEventHooks
         //   identical the shell, then a plugin's addRoute() of the identical pattern for ClaimingPage
         //   subclass  the shell, then a plugin's hijackRoute() of the same pattern for a subclass of the shell
         //   plugin    a plugin's addRoute() for a path no shell was ever registered for
+        //   mdclaim   a plugin's hijackRoute() of the permalink route of the Markdown fixture, for a Markdown permalink of its own
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
             $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
@@ -45,6 +46,7 @@ final class TestEventHooks
                     'identical' => $routes->addRoute('/_test/claimable/?', ClaimingPage::class),
                     'subclass' => $routes->hijackRoute('/_test/claimable/?', SubclassedPage::class),
                     'plugin' => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
+                    'mdclaim' => $routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class),
                     default => null,
                 };
             });
