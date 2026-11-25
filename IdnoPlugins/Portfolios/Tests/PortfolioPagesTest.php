@@ -499,6 +499,41 @@ namespace IdnoPlugins\Portfolios\Tests {
         }
 
         /**
+         * "Add to portfolio" and the Moderation plugin's "Report" are items of the same
+         * menu of a post: its author gets the first, another member the second, and neither
+         * sees a second menu for it.
+         *
+         * @dataProvider looks
+         */
+        #[\PHPUnit\Framework\Attributes\DataProvider('looks')]
+        public function testPortfoliosAndReportingShareThePostsOneMenu($theme)
+        {
+            if (!Idno::site()->plugins()->get('Moderation')) {
+                $this->markTestSkipped('The Moderation plugin is not enabled in this configuration.');
+            }
+            $this->look($theme);
+            $owner = static::member('pfshared');
+            $post = $this->entry($owner);
+            $copies = $this->attribute('href', $post->getDisplayURL());
+
+            foreach ([$post->getDisplayURL(), $owner->getDisplayURL()] as $page) {
+                foreach (['author' => $owner, 'another member' => static::$bob] as $who => $as) {
+                    $body = $this->get($page, $as)['body'];
+                    preg_match_all('#<details class="idno-more".*?</details>#s', $body, $menus);
+                    $menu = array_values(array_filter($menus[0], function ($markup) use ($copies) {
+                        return (bool) preg_match($copies, $markup);
+                    }));
+                    $this->assertCount(1, $menu, "The post has one menu for the $who on $page.");
+                    $this->assertSame($who === 'author', strpos($menu[0], 'data-portfolio-pick') !== false, "\"Add to portfolio\" is in it for the author only ($who, $page).");
+                    $this->assertSame($who !== 'author', strpos($menu[0], 'data-mod-report') !== false, "\"Report\" is in it for other members only ($who, $page).");
+                    $this->assertStringNotContainsString('idno-entry-kebab', $body, 'There is no second menu of the old kind.');
+                    $outside = str_replace($menus[0], '', $body);
+                    $this->assertStringNotContainsString('data-portfolio-pick', $outside, 'Nothing offers portfolios outside a menu.');
+                }
+            }
+        }
+
+        /**
          * @dataProvider looks
          */
         #[\PHPUnit\Framework\Attributes\DataProvider('looks')]
