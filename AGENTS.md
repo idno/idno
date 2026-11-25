@@ -158,12 +158,14 @@ Each content plugin has an `Entry.php` entity class that defines
 | File | Purpose |
 |---|---|
 | `Main.php` | Route registration, event hooks for save/update/delete → federation |
-| `ActivityBuilder.php` | Builds outgoing activities (Create, Update, Delete, Accept) and objects (Note, Article, Event) |
+| `ActivityBuilder.php` | Builds outgoing activities (Create, Update, Delete, Accept), the one object of a post (`buildObject()`, `buildDocument()`), the actor (`buildActor()`) and quote stamps |
+| `PageDocument.php` | What a page answers when it is asked for as ActivityPub: the post, the actor, or an error |
+| `templates/activitypub/shell.tpl.php` | The shell of the `activitypub` template type; prints what `PageDocument` decided |
 | `ActivityHandler.php` | Processes incoming inbox activities (Follow, Undo, Delete, QuoteRequest) |
 | `Delivery.php` | Signs and POSTs activities to remote inboxes; fan-out to followers via queue |
 | `HTTPSignature.php` | HTTP Signature signing (draft-cavage) and verification |
 | `RemoteActor.php` | Fetches and parses remote actor profiles, keys |
-| `Pages/Actor.php` | Actor profile endpoint (Person object) |
+| `Pages/Actor.php` | Actor profile endpoint (Person object, from `ActivityBuilder::buildActor()`) |
 | `Pages/Inbox.php` | Per-user inbox (POST handling with CSRF bypass) |
 | `Pages/SharedInbox.php` | Shared inbox for multi-user delivery |
 | `Pages/Outbox.php` | Paginated outbox (OrderedCollection of Create activities) |
@@ -182,7 +184,9 @@ Each content plugin has an `Entry.php` entity class that defines
 /actor/{handle}/followers     Followers collection
 /actor/{handle}/following     Following collection
 /inbox                        Shared inbox
-/activitypub/quote-stamp      Quote authorization stamp (FEP-044f)
+/activitypub/quote-stamp/{quoted}/{quoting}/{hmac}   Quote authorization stamp (FEP-044f)
+/activitypub/quote-stamp?target=&object=&sig=      The address stamps had before; still served
+/view/{id}, a post's address  The post as ActivityPub, when asked for with Accept: application/activity+json
 /.well-known/nodeinfo          NodeInfo discovery
 /nodeinfo/2.0                 NodeInfo document
 /admin/activitypub            Admin panel
@@ -195,13 +199,80 @@ Each content plugin has an `Entry.php` entity class that defines
    which enqueues signed POSTs to each follower's inbox.
 2. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
-3. **Quote posts (FEP-044f)**: All outgoing notes include
+3. **Quote posts (FEP-044f)**: Every post's object includes
    `interactionPolicy.canQuote.automaticApproval` set to `as:Public`. Incoming
-   QuoteRequests are auto-accepted with an HMAC-signed stamp URL. The stamp
-   endpoint serves `QuoteAuthorization` objects for third-party verification.
+   QuoteRequests for a public post are auto-accepted with an HMAC-signed stamp URL. The stamp
+   endpoint serves `QuoteAuthorization` objects for third-party verification (see
+   "Quote stamps" below).
 4. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
+
+### One object per post, wherever it is read
+
+A server that follows the author is sent a post in a `Create`. Every other server fetches it,
+by its `id` (`/view/<id>`, the entity's UUID) or by its address, when a member of that server
+looks the post up, replies to it or is shown a quote of it. Both must read the same object.
+
+- `ActivityBuilder::buildObject()` is the only place a post becomes an ActivityPub object.
+  Deliveries (`buildCreate()`, `buildUpdate()`) and the outbox embed it;
+  `buildDocument()` is that object under `CONTEXT_WITH_QUOTES`, for the post's own address.
+  Don't build a post's object anywhere else, and don't add a field to one of these and not
+  the others: there is nothing to add it to.
+- A page asked for as ActivityPub (`Accept: application/activity+json`, or
+  `application/ld+json; profile="https://www.w3.org/ns/activitystreams"`) is drawn with the
+  `activitypub` template type, whose shell is in the plugin and prints
+  `PageDocument::forPage()`: the post for the permalink of a post, `buildActor()` for a
+  member's profile (the same document as `/actor/<handle>`), the page's own error, and 406 for
+  anything else (a page that is no permalink, a portfolio, a post only its author can see). It decides from the page
+  (`Page::getEntity()`, `Page::response()`), never from `$vars['user']` or
+  `$vars['object']`: template variables stay set between draws, and the default picture of
+  a member is drawn by a template that sets `user`, which made every post of a member
+  without a picture answer with the member. `templates/default/shell/activitypub.tpl.php`
+  (the `<link rel="alternate">` of a page) reads the page's entity for the same reason.
+- `ActivityBuilder::isFederated()` says which posts other servers may have: public, published
+  (or with no publish status), of a real content type, by a member who is not banned. Only
+  such a post is served as ActivityPub, has a quote request accepted, or has a stamp served.
+  A draft, a private post and a post the moderators took down answer 404 or 410.
+- Every answer whose form depends on the `Accept` header carries `Vary: Accept`
+  (`DefaultTemplate::autodetectTemplateType()`), and the ActivityPub form has
+  `Content-Type: application/activity+json`. Mastodon reads a document only with that type
+  (or `ld+json` with the profile), status 200, no redirect, and an `id` equal to the address
+  it asked for.
+- A check-in whose place is to be kept vague (`Checkin::isAnonymous()`) has no `location`
+  in its object: other servers are never signed in, and are not given the exact position.
+- `IdnoPlugins/ActivityPub/Tests/PostDocumentTest.php` checks all of this for every bundled
+  content type, over HTTP with Mastodon's `Accept` header.
+
+### Quote stamps (FEP-044f)
+
+A quote is shown by a third server only if it can fetch a `QuoteAuthorization` stamp from
+the quoted post's server. The quoting server does not check the stamp (it trusts the
+`Accept`), so a stamp that cannot be verified shows as a working quote to the person who
+quoted and as "post unavailable" to everybody else.
+
+- `ActivityHandler::acceptQuoteRequest()` answers a `QuoteRequest` for a federated post with
+  an `Accept` whose `result` is `ActivityBuilder::buildQuoteStampUrl()`. The embedded request
+  holds ids only (`id`, `type`, `actor`, `object`, `instrument`).
+- The stamp's address is `/activitypub/quote-stamp/<quoted>/<quoting>/<hmac>`: the two posts'
+  URIs as unpadded base64url and an HMAC-SHA256 of both with `site_secret`. Nothing is
+  stored. **The address must be one that a URL library leaves alone**: letters, digits, `-`,
+  `_` and `/` only, no query string, no percent-encoding. Mastodon normalises an address
+  before requesting it and then drops the answer unless the address it requested, the address
+  it was given and the document's `id` are the same string; the earlier address
+  (`?target=https%3A%2F%2F...`) was rewritten to `?target=https://...`, so Mastodon never
+  accepted one of those stamps. They are still served, with the `id` they were given out
+  with (`buildLegacyQuoteStampUrl()`), for servers that do accept them.
+- `Pages/QuoteStamp.php` serves `ActivityBuilder::buildQuoteAuthorization()`: `id` (the
+  address as given out), `attributedTo` (the author's actor, on the stamp's host),
+  `interactingObject` (the quoting post) and `interactionTarget` (the quoted post's `id`).
+  A verifier compares these with the quoted post as it fetched it, so the stamp names the
+  post by `Entity::getUUID()`, which is the `id` of the fetched object. A stamp is served
+  only while its post is federated; afterwards it is 404, which revokes the quote.
+- The interaction policy on the object is advisory (FEP-044f): servers use it to offer or
+  hide their "Quote" button, not to verify a quote.
+- `IdnoPlugins/ActivityPub/Tests/QuoteStampTest.php` walks the request, the accept and the
+  stamp as a verifying server reads them.
 
 ### Patterns to follow
 

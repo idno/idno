@@ -287,7 +287,8 @@ namespace IdnoPlugins\Portfolios\Tests {
                 foreach ([$draft->getURL(), Idno::site()->config()->getDisplayURL() . 'profile/' . static::$alice->getHandle() . '/portfolio/' . (string) $draft->getID()] as $address) {
                     $result = $this->get($address . $type, $as);
                     if ($allowed) {
-                        $this->assertEquals(200, $result['status'], "The draft is there for its owner and administrators ($type).");
+                        // A portfolio is not federated: asked for as ActivityPub, the page is there but has no such form
+                        $this->assertEquals($type === '?_t=activitypub' ? 406 : 200, $result['status'], "The draft is there for its owner and administrators ($type).");
                     } else {
                         $this->assertEquals(404, $result['status'], "A draft answers like a missing page ($type).");
                         $this->assertStringNotContainsString($name, $result['body']);

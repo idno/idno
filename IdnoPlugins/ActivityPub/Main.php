@@ -37,7 +37,9 @@ class Main extends Plugin
         // Shared inbox
         \Idno\Core\Idno::site()->routes()->addRoute('/inbox/?', '\IdnoPlugins\ActivityPub\Pages\SharedInbox', true);
 
-        // Quote authorization stamp endpoint (FEP-044f)
+        // Quote authorization stamp endpoint (FEP-044f): the quoted post and the quoting post
+        // as base64url, and an HMAC. The second route is the address stamps had before.
+        \Idno\Core\Idno::site()->routes()->addRoute('/activitypub/quote-stamp/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)/([0-9a-f]+)', '\IdnoPlugins\ActivityPub\Pages\QuoteStamp', true);
         \Idno\Core\Idno::site()->routes()->addRoute('/activitypub/quote-stamp/?', '\IdnoPlugins\ActivityPub\Pages\QuoteStamp', true);
 
         // NodeInfo (public discovery endpoints)
