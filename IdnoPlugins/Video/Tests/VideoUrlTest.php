@@ -201,7 +201,7 @@ namespace IdnoPlugins\Video\Tests {
         {
             $this->assertSame('YouTube', VideoUrl::parse('https://youtu.be/dQw4w9WgXcQ')->getProviderName());
             $this->assertSame('Vimeo', VideoUrl::parse('https://vimeo.com/76979871')->getProviderName());
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok'], VideoUrl::supportedServices());
+            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky'], VideoUrl::supportedServices());
         }
 
         /**

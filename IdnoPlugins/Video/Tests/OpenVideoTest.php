@@ -319,8 +319,8 @@ namespace IdnoPlugins\Video\Tests {
 
         public function testServiceNames()
         {
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok'], VideoUrl::supportedServices());
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'PeerTube', 'Loops'], VideoUrl::supportedServices(true));
+            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky'], VideoUrl::supportedServices());
+            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky', 'PeerTube', 'Loops'], VideoUrl::supportedServices(true));
         }
     }
 

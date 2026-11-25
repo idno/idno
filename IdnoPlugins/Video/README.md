@@ -18,6 +18,8 @@ Supported services
 The open social web
 -------------------
 
+* Bluesky, and other apps on the AT Protocol whose videos are Bluesky posts, such as
+  Skylight (`bsky.app/profile/.../post/...`)
 * PeerTube (`/w/...`, `/videos/watch/...` on any PeerTube site)
 * Loops (`/v/...` on any Loops site)
 
@@ -29,6 +31,12 @@ sandboxed frame that can't navigate the page, open windows or submit forms, is s
 referrer, and is captioned with the name of the site it comes from. An administrator can
 turn these services off, or block particular sites, under Administration, then Video;
 that also takes the player away from posts already made, leaving the link.
+
+A Bluesky post's address doesn't hold what a player needs, so Idno asks Bluesky's public
+API once, when the post is saved, for the video in that post. The video is then played
+by the visitor's own browser from Bluesky's video host, with no frame; nothing but the
+still picture is fetched until they press play. A browser that can't play that kind of
+stream (HLS) shows the picture, linked to the post on Bluesky.
 
 For YouTube, Vimeo, Dailymotion and TikTok everything is worked out from the address itself (`VideoUrl.php`): the site makes no
 request to the service. The player is an `<iframe>` whose address is built from the

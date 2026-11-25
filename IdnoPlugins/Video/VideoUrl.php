@@ -26,6 +26,11 @@ namespace IdnoPlugins\Video {
      * with the provider and the id, and is held to HOST_PATTERN (a plain domain name: no
      * address literal, port or userinfo). Their players are drawn in a sandbox
      * (getSandbox()), because nobody has vouched for the host.
+     *
+     * A video in a Bluesky post (AT Protocol) is different again: the address of the post
+     * does not hold what a player needs, so candidate() reads it and OpenVideo::resolve()
+     * asks Bluesky's public API. It has no frame (getEmbedUrl() is empty): the browser
+     * plays the stream itself from Bluesky's video host (getStreamUrl(), isNative()).
      */
     final class VideoUrl
     {
@@ -36,12 +41,28 @@ namespace IdnoPlugins\Video {
             'vimeo'       => 'Vimeo',
             'dailymotion' => 'Dailymotion',
             'tiktok'      => 'TikTok',
+            'bluesky'     => 'Bluesky',
             'peertube'    => 'PeerTube',
             'loops'       => 'Loops',
         ];
 
         /// The providers that are software anybody can run, on any host
         const OPEN_PROVIDERS = ['peertube', 'loops'];
+
+        /// The providers whose videos the browser plays itself, from a stream
+        const NATIVE_PROVIDERS = ['bluesky'];
+
+        /// The host of Bluesky's web app, whose post addresses are read
+        const BLUESKY_HOST = 'bsky.app';
+
+        /// The host Bluesky serves video from: the only one a stream or its picture is loaded from
+        const STREAM_HOST = 'video.bsky.app';
+
+        /// An AT Protocol identity: did:plc, or did:web on a plain domain name
+        const DID_PATTERN = '/\Adid:(?:plc:[a-z2-7]{24}|web:(?=.{4,200}\z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9])\z/';
+
+        /// The content id of a video in a Bluesky post
+        const CID_PATTERN = '/\Ab[a-z2-7]{40,100}\z/';
 
         /// The only hosts a player of a service with hosts of its own is ever loaded from
         const EMBED_HOSTS = [
@@ -77,6 +98,7 @@ namespace IdnoPlugins\Video {
             'vimeo'       => '/\A[0-9]{1,12}\z/',
             'dailymotion' => '/\A[a-z0-9]{5,12}\z/',
             'tiktok'      => '/\A[0-9]{15,22}\z/',
+            'bluesky'     => '/\A[a-z2-7]{13}\z/',
             'peertube'    => '/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/',
             'loops'       => '/\A[A-Za-z0-9_-]{4,32}\z/',
         ];
@@ -107,10 +129,16 @@ namespace IdnoPlugins\Video {
         private string $key;
         private bool $portrait;
         private string $host;
+        private string $did;
+        private string $cid;
+        private float $ratio;
 
-        private function __construct(string $provider, string $id, int $start, string $key, bool $portrait, string $host)
+        private function __construct(string $provider, string $id, int $start, string $key, bool $portrait, string $host, string $did = '', string $cid = '', float $ratio = 0.0)
         {
             $this->host = $host;
+            $this->did = $did;
+            $this->cid = $cid;
+            $this->ratio = $ratio;
             $this->provider = $provider;
             $this->id = $id;
             $this->start = $start;
@@ -156,6 +184,22 @@ namespace IdnoPlugins\Video {
             $read = self::read($address);
             if ($read === null || isset(self::HOSTS[$read['host']]) || in_array($read['host'], self::EMBED_HOSTS, true)) {
                 return null;
+            }
+            if ($read['host'] === self::BLUESKY_HOST) {
+                // bsky.app/profile/<handle or DID>/post/<record key>
+                $segments = $read['segments'];
+                if (count($segments) !== 4 || $segments[0] !== 'profile' || $segments[2] !== 'post') {
+                    return null;
+                }
+                $actor = preg_match(self::DID_PATTERN, $segments[1]) ? $segments[1] : strtolower($segments[1]);
+                if (!preg_match(self::DID_PATTERN, $actor) && !preg_match(self::HOST_PATTERN, $actor)) {
+                    return null;
+                }
+                if (!preg_match(self::ID_PATTERNS['bluesky'], $segments[3])) {
+                    return null;
+                }
+
+                return ['provider' => 'bluesky', 'host' => self::BLUESKY_HOST, 'id' => $segments[3], 'start' => 0, 'actor' => $actor];
             }
             if (!preg_match(self::HOST_PATTERN, $read['host'])) {
                 return null;
@@ -253,9 +297,10 @@ namespace IdnoPlugins\Video {
          * @param  mixed $key      The key of an unlisted Vimeo video
          * @param  mixed $portrait Whether the video is taller than it is wide
          * @param  mixed $host     For an open service (PeerTube, Loops), the host it runs on
-         * @return VideoUrl|null null when the provider is unknown or the id, key or host is not well formed
+         * @param  mixed $more     For a Bluesky video: 'did' (whose post it is), 'cid' (the video) and 'ratio' (width over height)
+         * @return VideoUrl|null null when the provider is unknown or the id, key, host or the rest is not well formed
          */
-        public static function fromStored($provider, $id, $start = 0, $key = '', $portrait = false, $host = ''): ?VideoUrl
+        public static function fromStored($provider, $id, $start = 0, $key = '', $portrait = false, $host = '', $more = []): ?VideoUrl
         {
             if (!is_string($provider) || !isset(self::PROVIDERS[$provider])) {
                 return null;
@@ -282,10 +327,31 @@ namespace IdnoPlugins\Video {
             } else {
                 $host = '';
             }
+            $more = is_array($more) ? $more : [];
+            $did = $more['did'] ?? '';
+            $cid = $more['cid'] ?? '';
+            $ratio = 0.0;
+            if (in_array($provider, self::NATIVE_PROVIDERS, true)) {
+                if (!is_string($did) || !preg_match(self::DID_PATTERN, $did) || !is_string($cid) || !preg_match(self::CID_PATTERN, $cid)) {
+                    return null;
+                }
+                $given = $more['ratio'] ?? null;
+                if ((is_int($given) || is_float($given) || (is_string($given) && is_numeric($given))) && (float) $given > 0) {
+                    $ratio = min(3.0, max(0.4, (float) $given));
+                } else {
+                    $ratio = !empty($portrait) ? 9 / 16 : 16 / 9;
+                }
+                $portrait = $ratio < 1;
+            } elseif (($did !== '' && $did !== null) || ($cid !== '' && $cid !== null)) {
+                return null;
+            } else {
+                $did = '';
+                $cid = '';
+            }
             // TikTok and Loops videos are always shot upright
             $portrait = $provider === 'tiktok' || $provider === 'loops' || !empty($portrait);
 
-            return new VideoUrl($provider, $id, $start, $key, $portrait, $host);
+            return new VideoUrl($provider, $id, $start, $key, $portrait, $host, $did, $cid, $ratio);
         }
 
         /**
@@ -495,6 +561,59 @@ namespace IdnoPlugins\Video {
         }
 
         /**
+         * @return bool Whether the browser plays this video itself, from a stream, with no frame
+         */
+        public function isNative(): bool
+        {
+            return in_array($this->provider, self::NATIVE_PROVIDERS, true);
+        }
+
+        /**
+         * @return float Width over height, for a video whose shape is known; otherwise 0
+         */
+        public function getRatio(): float
+        {
+            return $this->ratio;
+        }
+
+        /**
+         * @return string The AT Protocol identity whose post a Bluesky video is in, or an empty string
+         */
+        public function getDid(): string
+        {
+            return $this->did;
+        }
+
+        /**
+         * @return string The content id of a Bluesky video, or an empty string
+         */
+        public function getCid(): string
+        {
+            return $this->cid;
+        }
+
+        /**
+         * The address of the stream of a video the browser plays itself (HLS), on
+         * STREAM_HOST, made of fixed text and checked values only.
+         *
+         * @return string An empty string for a video that is played in a frame
+         */
+        public function getStreamUrl(): string
+        {
+            return $this->isNative() ? 'https://' . self::STREAM_HOST . '/watch/' . rawurlencode($this->did) . '/' . $this->cid . '/playlist.m3u8' : '';
+        }
+
+        /**
+         * The address of the still picture shown before such a video is played.
+         *
+         * @return string An empty string for a video that is played in a frame
+         */
+        public function getPosterUrl(): string
+        {
+            return $this->isNative() ? 'https://' . self::STREAM_HOST . '/watch/' . rawurlencode($this->did) . '/' . $this->cid . '/thumbnail.jpg' : '';
+        }
+
+        /**
          * @return string The value of the player's sandbox attribute, or an empty string for none
          */
         public function getSandbox(): string
@@ -507,11 +626,14 @@ namespace IdnoPlugins\Video {
          * EMBED_HOSTS or, for an open service, on its own host, made of fixed text and
          * checked values only.
          *
-         * @return string
+         * @return string An empty string for a video the browser plays itself (isNative())
          */
         public function getEmbedUrl(): string
         {
             switch ($this->provider) {
+                case 'bluesky':
+                    return '';
+
                 case 'youtube':
                     return 'https://www.youtube-nocookie.com/embed/' . $this->id
                         . ($this->start ? '?start=' . $this->start : '');
