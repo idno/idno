@@ -52,6 +52,11 @@
     font-weight: 600;
   }
 
+  /* The current page: a heavier icon as a second cue beside the bold, darker label */
+  .idno-nav-item[aria-current="page"] .idno-nav-icon {
+    stroke-width: 2.5;
+  }
+
   .idno-nav-icon {
     width: 1.25rem;
     height: 1.25rem;
