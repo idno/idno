@@ -418,7 +418,7 @@ site's name when empty), `reply_to_email` (used unless the message names a reply
 - Tests point the site's mail settings at `Tests\SmtpSink`, a small SMTP server on 127.0.0.1
   in its own PHP process that keeps what it is sent (`Tests/Core/fixtures/smtp_sink.php`). No
   test sends real mail. `Tests/Core/EmailTest.php` and `Tests/Pages/Admin/EmailSettingsTest.php`
-  (and its Twenty26 twin) check all of this.
+  (run again in the modern look by `EmailSettingsModernLookTest`) check all of this.
 
 ### Invitations
 
@@ -457,8 +457,10 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
   invited; `Invitation::MAX_PER_BATCH` (50) addresses at most per submission.
 - The invitation mail (`templates/email/account/invite`, `templates/email-text/account/invite`)
   escapes everything a person typed. Mail templates escape nothing by themselves either.
-- `Tests/Pages/Account/InvitationFlowTest.php` (and its Twenty26 twin) checks all of this over
-  HTTP on a private site.
+- `Tests/Pages/Account/InvitationFlowTest.php` (run again in the modern look by
+  `InvitationFlowModernLookTest`) checks all of this over HTTP on a private site.
+- A test of the modern look uses the `Tests\ModernLook` trait and is named for the look, not
+  for the theme that draws it today: the trait alone names that theme.
 
 ## Twenty26 theme and plugin templates
 
