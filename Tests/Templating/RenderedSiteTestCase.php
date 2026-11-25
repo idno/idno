@@ -335,7 +335,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $this->page($directory . '/tag-templates.html', 'tag/templates');
         $this->page($directory . '/tag-books.html', 'tag/books');
         $this->page($directory . '/login.html', 'session/login');
-        $this->page($directory . '/register.html', 'begin/register');
+        $this->page($directory . '/register.html', 'account/register');
         $this->page($directory . '/password-request.html', 'account/password/');
         $this->page($directory . '/not-found.html', 'no/such/page/here', 404);
         $this->page($directory . '/admin-visitor.html', 'admin/', 403);

@@ -110,8 +110,8 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
     ];
 
     /**
-     * Pages beyond the golden ones, by who asks: `visitor`, `admin`, `member` (not an administrator) and `new` (a user who has
-     * just registered, for the onboarding pages). Each must answer, not fail: a status below 500.
+     * Pages beyond the golden ones, by who asks: `visitor`, `admin`, `member` (not an administrator) and `new` (a member added
+     * last). Each must answer, not fail: a status below 500.
      *
      * @var list<array{string, string}>
      */
@@ -127,8 +127,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['member', 'admin/'],
         ['member', 'admin/users/'],
         ['member', 'account/settings/'],
-        ['member', 'begin/profile/'],
         ['admin', 'admin/about/'],
+        ['admin', 'admin/welcome/'],
+        ['member', 'admin/welcome/'],
         ['admin', 'admin/dependencies/'],
         ['admin', 'admin/diagnostics/'],
         ['admin', 'admin/email/'],
@@ -166,10 +167,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['admin', 'search/users/?q=ada'],
         ['admin', 'drafts/'],
         ['admin', 'staticpages/edit/'],
-        ['new', 'begin/'],
-        ['new', 'begin/connect/'],
-        ['new', 'begin/connect-forwarder/'],
-        ['new', 'begin/publish/'],
     ];
 
     /**
@@ -180,15 +177,11 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
      */
     public const DRAWS = [
         ['default', 'js/idno', []],
-        ['default', 'shell/simple/messages', ['messages' => [['message' => 'Saved. <a href="/x">See it</a>', 'message_type' => 'alert-success'], ['message' => 'Plain text', 'message_type' => 'alert-danger']]]],
-        ['default', 'shell/simple/messages', ['messages' => []]],
         ['default', 'shell/pagination', ['count' => 'abc', 'offset' => '3', 'items_per_page' => '12abc']],
         ['default', 'shell/pagination', ['count' => '45xyz', 'offset' => 'abc', 'items_per_page' => 'abc']],
         ['default', 'shell/pagination', ['count' => 45, 'offset' => 20, 'items_per_page' => 10, 'control-id' => 'c', 'source-url' => '/s?a=1&b=2']],
-        ['default', 'shell/simple', ['title' => 'Welcome', 'description' => 'A <b>fresh</b> site', 'body' => '<p>Hello</p>']],
         ['email', 'shell', ['body' => '<p>Hello</p>']],
         ['email', 'shell', ['body' => '<p>Hello</p>', 'title' => 'Password reset', 'preheader' => 'A preview line']],
-        ['default', 'shell/simple', ['title' => '', 'description' => 'Some words that make a long description of more than ten words in all', 'body' => '', 'bootstrap' => true]],
     ];
 
     protected bool $compareGoldens = false;
@@ -374,9 +367,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         }
         $code = <<<'PHP'
         // A page of the site is being served: the templates read its address and the page itself
-        $uri = '/begin/?a=1&b=2';
+        $uri = '/content/all/?a=1&b=2';
         $_SERVER['REQUEST_URI'] = $uri;
-        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $drawn = [];
         foreach (json_decode(%DRAWS%, true) as [$type, $name, $vars]) {
@@ -405,7 +398,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $code = <<<'PHP'
         $uri = '/profile/ada';
         $_SERVER['REQUEST_URI'] = $uri;
-        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         $user = \Idno\Entities\User::getByHandle('ada');
         $user->profile = ['url' => ['https://example.org/ada', '@ada_l', 'mailto:ada@example.com', 'SMS:+15555550100', 'tel:+15555550100', 'javascript:alert(1)', 'data:text/html,x', 'mailto:a b@c', '']];
@@ -446,7 +439,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             $ada->image = $images['ada'] ?? null;
             $status->getOwner()->image = $images['ada'] ?? null;
             $bob->image = $images['bob'] ?? null;
-            $page = new \Idno\Pages\Onboarding\Begin();
+            $page = new \Idno\Pages\Homepage();
             if ($owner) {
                 $page->setOwner($owner);
             }
@@ -489,7 +482,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         \$uri = '{$path}';
         \$_SERVER['REQUEST_URI'] = \$uri;
         \\Idno\\Core\\Idno::container()->get('request_stack')->push(\\Symfony\\Component\\HttpFoundation\\Request::create(\$uri, 'GET', [], [], [], ['REQUEST_URI' => \$uri]));
-        \\Idno\\Core\\Idno::site()->setCurrentPage(new \\Idno\\Pages\\Onboarding\\Begin());
+        \\Idno\\Core\\Idno::site()->setCurrentPage(new \\Idno\\Pages\\Homepage());
         \$site = \\Idno\\Core\\Idno::site();
         \$ada = \\Idno\\Entities\\User::getByHandle('ada');
         \$bob = \\Idno\\Entities\\User::getByHandle('bob');
@@ -622,7 +615,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $code = $this->siteDrawPrelude() . <<<'PHP'
         $base = $site->config()->getURL();
         $page = static function (bool $permalink) use ($site): void {
-            $page = new \Idno\Pages\Onboarding\Begin();
+            $page = new \Idno\Pages\Homepage();
             $property = new \ReflectionProperty(\Idno\Common\Page::class, 'isPermalinkPage');
             $property->setValue($page, $permalink);
             $site->setCurrentPage($page);
@@ -961,7 +954,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ] as $label => $links) {
             $object->posse = $links;
             foreach ([true, false] as $permalink) {
-                $page = new \Idno\Pages\Onboarding\Begin();
+                $page = new \Idno\Pages\Homepage();
                 $property = new \ReflectionProperty(\Idno\Common\Page::class, 'isPermalinkPage');
                 $property->setValue($page, $permalink);
                 $site->setCurrentPage($page);
@@ -1208,11 +1201,11 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['image field, a visitor'] = $draw('forms/input/image-file', ['name' => 'photo', 'object' => $photo]);
 
         // In an XHR response no shell draws the forms of the links: the link is followed by its form
-        $xhrPage = new \Idno\Pages\Onboarding\Begin();
+        $xhrPage = new \Idno\Pages\Homepage();
         $xhrPage->xhr = true;
         $site->setCurrentPage($xhrPage);
         $out['a link in an XHR response'] = $draw('forms/link', ['url' => '/status/delete', 'label' => 'Remove', 'data' => ['uuid' => 'abc'], 'confirm' => false, 'method' => 'POST']);
-        $site->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        $site->setCurrentPage(new \Idno\Pages\Homepage());
 
         // A row of the user search, for another member and for oneself, with a member blocked
         $site->session()->logUserOn($ada);
@@ -1281,10 +1274,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
     }
 
     /**
-     * The account and onboarding pages with every branch they have: the login with a forwarding address, with only a referrer and with
+     * The account pages with every branch they have: the login with a forwarding address, with only a referrer and with
      * neither, with registration open and closed; the tools page with and without an API key; the password reset with values a request
-     * supplied; the cards of the follow bookmarklet (a full card, one address, no photo, a plain email, a hostile card); the onboarding
-     * pages with and without a name to set and a message.
+     * supplied; the cards of the follow bookmarklet (a full card, one address, no photo, a plain email, a hostile card).
      */
     private function drawAccountCases(): void
     {
@@ -1337,11 +1329,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         foreach ($cards as $label => $card) {
             $out['mf2user, ' . $label] = $draw('account/settings/following/mf2user', ['mf2' => $card]);
         }
-
-        $out['onboarding begin'] = $draw('onboarding/begin') . $draw('onboarding/begin', ['messages' => [['message' => 'Hello <b>there</b>', 'message_type' => 'alert-info']]]);
-        $out['onboarding connect'] = $draw('onboarding/connect');
-        $out['onboarding register'] = $draw('onboarding/register') . $draw('onboarding/register', ['set_name' => 'Ada Lovelace', 'messages' => [['message' => 'Oops', 'message_type' => 'alert-danger']]]) . $draw('onboarding/register', ['set_name' => $hostile]) . $draw('onboarding/register', ['set_name' => '0']);
-        $out['onboarding profile'] = $draw('onboarding/profile', ['user' => $ada]);
 
         return $out;
         PHP;

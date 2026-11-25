@@ -217,7 +217,7 @@ abstract class PrivateSiteTestCase extends TestCase
             '$first = \Idno\Core\Idno::container()->get(\Idno\Install\FirstAdministrator::class);'
             . ' if ($first->administratorExists()) { return false; }'
             . ' return $first->create(new \Idno\Install\AdministratorDetails(' . $this->literal(ucfirst($handle)) . ', ' . $this->literal($handle) . ', ' . $this->literal($handle . '@example.com')
-            . ', ' . $this->literal($password) . ', ' . $this->literal($password) . '), '');'
+            . ', ' . $this->literal($password) . ', ' . $this->literal($password) . '), "");'
         );
         if ($created === false) {
             $this->addUser($handle, $password);

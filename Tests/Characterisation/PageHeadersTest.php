@@ -8,7 +8,7 @@ use Tests\Support\PrivateSiteTestCase;
 
 /**
  * No template sends a header: the code that draws a page does. Header values are what the templates sent before.
- * On a site of its own so that the onboarding page of a site with no user can be asked for.
+ * On a site of its own so that the page of a site with no user can be asked for.
  */
 final class PageHeadersTest extends PrivateSiteTestCase
 {
@@ -16,14 +16,13 @@ final class PageHeadersTest extends PrivateSiteTestCase
     {
         $site = $this->site();
 
-        $register = $site->request('GET', 'begin/register');
-        $this->assertSame(200, $register->status, $this->serverLog());
-        $this->assertStringStartsWith('text/html', (string) $register->header('Content-Type'));
-        $this->assertSame('*', $register->header('Access-Control-Allow-Origin'));
-        // two header() calls with one name: the second replaces the first, as it did when the shell sent them
-        $this->assertSame('<' . $this->baseUrl() . 'webmention/>; rel="webmention"', $register->header('Link'));
+        // a site with no user says that it is being set up: a page of its own, which no template draws
+        $pending = $site->request('GET', '');
+        $this->assertSame(503, $pending->status, $this->serverLog());
+        $this->assertStringStartsWith('text/html', (string) $pending->header('Content-Type'));
+        $this->assertSame('no-store', $pending->header('Cache-Control'));
+        $this->assertStringContainsString("default-src 'none'", (string) $pending->header('Content-Security-Policy'));
 
-        // a site with no user sends its visitors to onboarding: the home page needs one
         $this->registerUser('writer');
         $home = $site->request('GET', '');
         $this->assertSame(200, $home->status, $this->serverLog());

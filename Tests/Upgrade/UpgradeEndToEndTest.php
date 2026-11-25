@@ -966,17 +966,19 @@ final class UpgradeEndToEndTest extends TestCase
         $page = $this->request('GET', '/', ['Accept: text/html']);
         $this->assertSame(503, $page['status']);
         $this->assertStringContainsString('<h1>Idno is setting up its database</h1>', $page['body']);
-        // Where the web installer sends the browser once it has written the configuration.
-        $this->assertSame(503, $this->request('GET', '/begin/register', ['Accept: text/html'])['status']);
+        $this->assertSame(503, $this->request('GET', '/account/register', ['Accept: text/html'])['status']);
 
         $answer = $this->request('POST', '/_upgrade/step', ['Accept: application/json']);
         $this->assertSame(200, $answer['status'], $answer['body'] . $this->log());
         $this->assertSame('current', json_decode($answer['body'], true)['status'] ?? null, $answer['body']);
 
-        $register = $this->request('GET', '/begin/register', ['Accept: text/html']);
-        $this->assertNotSame(503, $register['status']);
-        $this->assertSame(200, $register['status'], substr($register['body'], 0, 2000) . $this->log());
-        $this->assertNotSame(503, $this->request('GET', '/', ['Accept: text/html'])['status']);
+        // The tables exist and the site has no account: its administrator is made by the installation's last step
+        // (or `idno:admin:create`), so every visitor is told that the site is being set up, and nobody can register.
+        $home = $this->request('GET', '/', ['Accept: text/html']);
+        $this->assertSame(503, $home['status'], substr($home['body'], 0, 2000) . $this->log());
+        $this->assertStringContainsString('<h1>This site is being set up</h1>', $home['body']);
+        $this->assertStringNotContainsString('Idno is setting up its database', $home['body']);
+        $this->assertSame(302, $this->request('GET', '/account/register', ['Accept: text/html'])['status']);
     }
 
     public function testATooOldDatabaseIsToldToUpgradeFirst(): void

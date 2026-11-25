@@ -291,22 +291,12 @@ final class MarkdownOutputTest extends RenderedSiteTestCase
     }
 
     /**
-     * The onboarding pages draw a shell of their own (`shell/simple`), in HTML, whatever type is asked for: they are the steps a
-     * new member clicks through, and have no Markdown form. The registration and password pages are account pages: a line
-     * that says so, and none of their form.
+     * The registration and password pages are account pages: a line that says they have no Markdown form, and none of
+     * their form.
      */
-    public function testTheOnboardingPagesStayHtmlAndTheAccountFormsHaveNoMarkdownForm(): void
+    public function testTheAccountFormsHaveNoMarkdownForm(): void
     {
         $this->seedSite();
-
-        foreach (['begin/', 'begin/register'] as $page) {
-            $plain = $this->get($page);
-            $asked = $this->get($page . '?_t=markdown');
-            $this->assertSame($plain->status, $asked->status, $page);
-            if ($asked->status === 200) {
-                $this->assertSame('html', $this->kind($asked), $page);
-            }
-        }
 
         foreach (['account/register', 'account/password'] as $page) {
             $asked = $this->get($page . '?_t=markdown');

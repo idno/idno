@@ -20,7 +20,7 @@ namespace Tests\Characterisation {
         protected function setUp(): void
         {
             parent::setUp();
-            // An empty site redirects to onboarding; make it look installed.
+            // A site with no user answers that it is being set up; give it its users.
             $this->admin();
             $this->user();
         }
