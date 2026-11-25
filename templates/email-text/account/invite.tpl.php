@@ -1,26 +1,43 @@
-<?php $joinus = \Idno\Core\Idno::site()->language()->_('Join us!');
+<?php
 
-    echo $joinus . "\n";
+    $lang = \Idno\Core\Idno::site()->language();
+    $config = \Idno\Core\Idno::site()->config();
+    // Plain text: one line per value, so nothing typed can look like a line of the mail's own
+    $line = function ($text) {
+        return trim(preg_replace('/\s+/u', ' ', (string) $text) ?? '');
+    };
+    $site = $line($config->title);
+    $inviter = $line($vars['inviter'] ?? '');
+    // What the site says it is, unless that is still the text every new site starts with
+    $description = $line($config->description);
+    if ($description === 'A social website powered by Idno') {
+        $description = '';
+    }
 
-    $underline = mb_strlen($joinus);
+    $heading = $lang->_("You're invited to join %s", [$site]);
+    echo $heading . "\n" . str_repeat('=', mb_strlen($heading)) . "\n\n";
 
-for($u = 1; $u < $underline; $u++) {
-    echo '=';
+if ($inviter !== '') {
+    if (!empty($vars['is_admin'])) {
+        echo $lang->_('%s has invited you to join %s as an administrator.', [$inviter, $site]);
+    } else {
+        echo $lang->_('%s has invited you to join %s.', [$inviter, $site]);
+    }
+} else {
+    if (!empty($vars['is_admin'])) {
+        echo $lang->_('You have been invited to join %s as an administrator.', [$site]);
+    } else {
+        echo $lang->_('You have been invited to join %s.', [$site]);
+    }
 }
-
-?>
-
-
-<?php echo \Idno\Core\Idno::site()->language()->_('Hi there! Your friend *%s* has invited you to join %s', [$vars['inviter'],\Idno\Core\Idno::site()->config()->title]) ?>: <?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>.
-
-
-<?php echo \Idno\Core\Idno::site()->language()->_('You can use this space to publish your stories, share things that interest you, and discuss things that matter.') ?>
-
-
-<?php echo \Idno\Core\Idno::site()->language()->_('Get started with *%s* by setting up your account', [\Idno\Core\Idno::site()->config()->title]) ?>.
-
-
-<?php echo \Idno\Core\Idno::site()->language()->_('Sign up now') ?>: <?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>account/register/?email=<?php echo urlencode($vars['email'])?>&code=<?php echo urlencode($vars['code'])?>
-
-
-<?php echo \Idno\Core\Idno::site()->language()->_('If you have any questions at all, please don\'t hesitate to contact us by sending an email to %s', [\Idno\Core\Idno::site()->config()->from_email]);
+    echo "\n\n";
+if ($description !== '') {
+    echo $description . "\n\n";
+}
+if (!empty($vars['is_admin'])) {
+    echo $lang->_('As an administrator you will be able to change the site\'s settings, manage its members and invite others.') . "\n\n";
+}
+    echo $lang->_('To accept, create your account:') . "\n\n";
+    echo $vars['link'] . "\n\n";
+    echo $lang->_('This invitation is for %s only and works until %s.', [$line($vars['email']), date('j F Y', (int) $vars['expires'])]) . ' ';
+    echo $lang->_("If you weren't expecting it, you can ignore this email.") . "\n";

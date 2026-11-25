@@ -70,6 +70,8 @@ class ActivityBuilder
      * content type, and by a member who is not banned? Only such a post is served as an
      * ActivityPub object, has quote requests accepted and has stamps answered for it.
      *
+     * No post is, on a private site (Main::federates()).
+     *
      * A post with no publish status counts as published (posts from before there were
      * drafts have none).
      *
@@ -79,6 +81,10 @@ class ActivityBuilder
     public static function isFederated($entity): bool
     {
         if (!($entity instanceof Entity) || $entity instanceof User) {
+            return false;
+        }
+        // A private site tells no other server what its members post
+        if (!Main::federates()) {
             return false;
         }
         if ($entity instanceof \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower

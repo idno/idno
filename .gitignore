@@ -72,7 +72,7 @@ IdnoPlugins/
 !IdnoPlugins/Webhooks
 !IdnoPlugins/ActivityPub
 !IdnoPlugins/Moderation
-!IdnoPlugins/StandardSiteSync
+!IdnoPlugins/Atmosphere
 
 ConsolePlugins/*
 !ConsolePlugins/BuildLanguage

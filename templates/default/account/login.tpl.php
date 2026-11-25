@@ -9,6 +9,12 @@
 
         <div class="col-md-10 col-md-offset-1">
 
+            <?php if (!\Idno\Core\Idno::site()->config()->isPublicSite()) { ?>
+                <p>
+                    <?php echo \Idno\Core\Idno::site()->language()->esc_('%s is a private community. Sign in to read it. If you have been invited, use the link in your invitation email to create your account.', [\Idno\Core\Idno::site()->config()->title]); ?>
+                </p>
+            <?php } ?>
+
             <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>session/login" method="post">
                 <div class="form-group">
                     <input type="text" id="inputEmail" name="email" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Your email address or username'); ?>" class="form-control">

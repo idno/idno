@@ -16,7 +16,7 @@
                 <label class="control-label" for="inputEmail"><?php echo \Idno\Core\Idno::site()->language()->_('Your email address'); ?><br />
                     <small><?php echo \Idno\Core\Idno::site()->language()->_('The address associated with your %s account.', [\Idno\Core\Idno::site()->config()->title]); ?></small></label>
                 <div class="controls">
-                    <input type="email" id="inputEmail" placeholder="Email" class="form-control" name="email" value="<?php echo $vars['email']?>" required>
+                    <input type="email" id="inputEmail" placeholder="Email" class="form-control" name="email" value="<?php echo htmlspecialchars((string) $vars['email']) ?>" required>
                 </div>
             </div>
             <div class="control-group">
@@ -35,7 +35,7 @@
             <div class="control-group">
                 <div class="controls">
                     <button type="submit" class="btn btn-primary"><?php echo \Idno\Core\Idno::site()->language()->_('Reset password'); ?></button>
-                    <input type="hidden" name="code" value="<?php echo $vars['code']?>">
+                    <input type="hidden" name="code" value="<?php echo htmlspecialchars((string) $vars['code']) ?>">
                     <?php echo \Idno\Core\Idno::site()->actions()->signForm('/account/password/reset') ?>
                 </div>
             </div>

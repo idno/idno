@@ -11,6 +11,8 @@
         </p>
 
 
+        <?php echo $this->draw('account/password/nomail'); ?>
+
         <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>account/password" method="post">
 
             <div class="row">

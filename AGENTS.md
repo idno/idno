@@ -144,7 +144,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **IndiePub** | IndieAuth + Micropub server |
 | **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
-| **StandardSiteSync** | AT Protocol: writes posts to the member's PDS (see below) |
+| **Atmosphere** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
 | **Portfolios** | Members collect their own posts into named lists shown from their profile (see below) |
 | **Moderation** | Reporting by members and a moderation queue for administrators (see below) |
@@ -231,7 +231,8 @@ looks the post up, replies to it or is shown a quote of it. Both must read the s
   without a picture answer with the member. `templates/default/shell/activitypub.tpl.php`
   (the `<link rel="alternate">` of a page) reads the page's entity for the same reason.
 - `ActivityBuilder::isFederated()` says which posts other servers may have: public, published
-  (or with no publish status), of a real content type, by a member who is not banned. Only
+  (or with no publish status), of a real content type, by a member who is not banned, on a
+  site that federates (`Main::federates()`: none on a private site). Only
   such a post is served as ActivityPub, has a quote request accepted, or has a stamp served.
   A draft, a private post and a post the moderators took down answer 404 or 410.
 - Every answer whose form depends on the `Accept` header carries `Vary: Accept`
@@ -274,6 +275,37 @@ quoted and as "post unavailable" to everybody else.
 - `IdnoPlugins/ActivityPub/Tests/QuoteStampTest.php` walks the request, the accept and the
   stamp as a verifying server reads them.
 
+### Private sites
+
+A private site (the `walled_garden` setting; `Config::isPublicSite()` is false) does not
+federate, and tells no other server what its members post. `Main::federates()` is the
+rule, asked on every request and every delivery, so making a site private or public again
+takes effect at once and no post is saved again.
+
+- `Main::registerPages()` gives every federation address (actor, outbox, followers,
+  following, both inboxes, the quote stamp, both NodeInfo addresses) to
+  `Pages\NotFederating`, which answers 404 to any method, for a member who exists and one
+  who does not, to a visitor and to a member. Not 401 or 403, after which other servers ask
+  again with a signature, and not 410, which makes them forget the member for good. A new
+  federation address goes in the list in `registerPages()`, never in an `addRoute()` call
+  of its own.
+- `ActivityHandler::handle()` answers 404 before it reads the activity or asks anything of
+  the sender, so no Follow is accepted; `Delivery::deliverToFollowers()` queues nothing and
+  `Delivery::deliver()` sends nothing, which also stops deliveries that were queued while
+  the site was public.
+- Webfinger (`Idno\Pages\Webfinger\View`, core) finds no member on a private site.
+- Followers are kept. Posts that were delivered before the site was made private stay on
+  the servers that have them; posts made while it was private are in the outbox when it is
+  public again but are not delivered then.
+- The same rule in core and in Atmosphere: `Webmention::pingMentions()` and
+  `sendWebmentionPayload()` send nothing, `PubSubHubbub::publish()` pings no hub, and
+  Atmosphere's `Main::shouldSync()` is false, so nothing is written to a member's PDS (a
+  record written earlier is deleted when its post is next saved). Anything new that sends
+  a post, or word of one, to another server must ask `Config::isPublicSite()` first.
+- `IdnoPlugins/ActivityPub/Tests/PrivateSiteTest.php` (over HTTP),
+  `Tests/Core/PrivateSiteOutboundTest.php` and `IdnoPlugins/Atmosphere/Tests/PostSyncTest.php`
+  check this.
+
 ### Patterns to follow
 
 - Activities are plain PHP arrays, not ORM objects — `ActivityBuilder` returns arrays
@@ -284,11 +316,19 @@ quoted and as "post unavailable" to everybody else.
 - The `ActivityBuilder::CONTEXT_WITH_QUOTES` constant is the canonical `@context`
   for all outgoing activities
 
-## AT Protocol plugin (StandardSiteSync)
+## AT Protocol plugin (Atmosphere)
 
-`IdnoPlugins/StandardSiteSync/` writes a member's public, published posts to their own PDS
-(the account they connect at `/account/settings/standardsitesync`, with OAuth and DPoP), when a
+`IdnoPlugins/Atmosphere/` writes a member's public, published posts to their own PDS
+(the account they connect at `/account/settings/atmosphere`, with OAuth and DPoP), when a
 post is saved, changed or deleted, through the queue.
+
+The plugin was called StandardSiteSync until it wrote more than standard.site documents.
+What it stored under that name keeps it: the fields on members and posts are still
+`standardsitesync_*` (renaming them would lose track of records already on members' PDSes),
+and a site that enabled the plugin or turned syncing on under the old name still has both
+(`Plugins::RENAMED`, `Main::isEnabled()`). The OAuth client id is the address of
+`/atmosphere/client-metadata.json`, so a member who connected before the rename must connect
+again; their settings page tells them their connection has expired.
 
 | Content | Collection | What the record holds | On update | On delete |
 |---|---|---|---|---|
@@ -328,8 +368,9 @@ post is saved, changed or deleted, through the queue.
   so a post written twice is one record (the PDS refuses any other key for
   `app.bsky.feed.post`). A change is a `putRecord` with `swapRecord` (`RecordWriter`): if the
   record is gone from the PDS, the member deleted it there, and it is not put back.
-- Only a post that is public and published is ever written (`Main::shouldSync()`). One that
-  stops being so is deleted from the PDS, whichever records it has. For Bluesky only: a reply
+- Only a post that is public and published, on a site that is public, is ever written
+  (`Main::shouldSync()`): nothing is written from a private site (the `walled_garden`
+  setting). One that stops being so is deleted from the PDS, whichever records it has. For Bluesky only: a reply
   to something that is not on Bluesky, and a post that already has a Bluesky syndication
   link, are not posted.
 - Audio: neither Bluesky nor anybody else has a shared record for it, so besides
@@ -351,7 +392,7 @@ post is saved, changed or deleted, through the queue.
 - Tests replace `ATProtoClient::$transport` and `BlueskyLookup::$fetch`; no test talks to a
   PDS. Records are checked against the lexicon files (`lexicons/`, and copies of the published
   ones in `Tests/fixtures/lexicons` with their source and version) by
-  `Tests/LexiconValidator.php`. `IdnoPlugins/StandardSiteSync/Tests/` checks all of this.
+  `Tests/LexiconValidator.php`. `IdnoPlugins/Atmosphere/Tests/` checks all of this.
 
 ## Moderation
 
@@ -458,6 +499,83 @@ Rules to keep:
   `IdnoPlugins/ActivityPub/Tests/ModerationTest.php` checks this.
 - Settings: `moderation_contact_email` (the address for appeals; the site's `from_email`
   when empty) and `moderation_notify_admins`.
+
+## Email and invitations
+
+### Sending mail
+
+`Idno\Core\Email` sends through SwiftMailer over SMTP, from the stored settings `smtp_host`,
+`smtp_port`, `smtp_secure`, `smtp_username`, `smtp_password`, `from_email`, `from_name` (the
+site's name when empty), `reply_to_email` (used unless the message names a reply address) and
+`smtp_timeout` (seconds, 10 when unset, so a wrong host does not hold a page).
+
+- `smtp_secure` holds SwiftMailer's names: `tls` is STARTTLS (what mail services expect on
+  port 587), `ssl` is TLS from the first byte (port 465), empty is no encryption. With no port
+  stored, `Email::port()` gives the usual one for the security setting
+  (`Email::SECURITY_PORTS`). `Email::transport()` builds the connection; build it nowhere else.
+- `Email::isConfigured()` is true when there is a server and a valid From address. Without a
+  server a mail server on this machine is still tried, as before. Pages that send mail warn
+  when it is false: the invite form (`admin/users/invite`), the password reset pages
+  (`account/password/nomail`) and the settings page.
+- `send()` returns the number of recipients the server took the message for, 0 on failure,
+  and then `$error` (plain words for an administrator) and `$errorKind` (`connect`, `tls`,
+  `auth`, `sender`, `rejected`, `recipient`, `temporary`, `unconfigured`, `unknown`) say why.
+  `Email::explain()` writes them and `Email::scrub()` takes the user name and the password out
+  of anything that is shown or logged, in plain and base64 form: for some services the user
+  name is the secret. Show `$error`, never an exception's own message.
+- A subject and a From name are made one line (`Email::headerText()`), so nothing typed into
+  either can start a header.
+- **The settings page** (`/admin/email`, `Idno\Pages\Admin\Email`, test mail at
+  `/admin/emailtest`): the stored password is never a template variable and never printed,
+  in any template type; an empty password field keeps the stored one, and a checkbox removes
+  it. `Idno\Pages\Admin\Email::validate()` checks what was typed, and nothing is saved while anything is wrong.
+  The "Using a mail service" block (`admin/email/services`, drawn by both looks) holds the
+  values for the common services, checked against their documentation in November 2026:
+  check them again before changing them.
+- Tests point the site's mail settings at `Tests\SmtpSink`, a small SMTP server on 127.0.0.1
+  in its own PHP process that keeps what it is sent (`Tests/Core/fixtures/smtp_sink.php`). No
+  test sends real mail. `Tests/Core/EmailTest.php` and `Tests/Pages/Admin/EmailSettingsTest.php`
+  (and its Twenty26 twin) check all of this.
+
+### Invitations
+
+An administrator invites people from the Users page (`Idno\Pages\Admin\Users`,
+`admin/users/invite` and `admin/users/invitations`, both drawn by both looks); the invited
+person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
+
+- **An invitation (`Idno\Entities\Invitation`) holds** the address (lower case), a code (64
+  hex characters from `random_bytes()`, compared with `hash_equals()`), the role (`member` or
+  `admin`), who made it, and when it expires (`Invitation::LIFETIME_DAYS`, 14, or the
+  `invitation_lifetime_days` setting). There is one per address: inviting an address again
+  renews it with the role given last. Sending again keeps the link unless it had expired.
+- **Invitations are for administrators only**, like moderation records: an access value no
+  group matches, `canRead()` / `canEdit()` true for administrators, an empty
+  `jsonSerialize()`, a slug that says nothing. The registration page, which a visitor uses,
+  looks them up through `Invitation::unrestricted()` (`check()`, `consume()`).
+- **The role and the address come from the stored invitation, never from the request.** The
+  registration form shows the address read-only and the account gets the invitation's
+  address whatever the form sends; an account is an administrator only if the invitation
+  says so. Inviting as administrator needs the `confirm_admin` checkbox.
+- **An invitation works once.** `Register::postContent()` calls `consume()` (re-read, then
+  delete) after everything else has passed and before the account is made; the entity layer
+  has no transactions, so this narrows the window rather than closing it, and the check that
+  no account has the address already catches the rest.
+- **A private site** (`walled_garden`) with registration closed: `/account/register`,
+  `/account/password`, `/account/password/reset` and `/session/login` are public routes, and
+  nothing else is. A visitor who may not register is told why on a page of its own
+  (`account/register/refused`, status 403: `invalid`, `expired`, `closed`), not sent to the
+  home page, which would only refuse them. A finished password reset goes to the sign-in page
+  for the same reason. A visitor to any other page gets `pages/403`, which in Twenty26 says
+  the site is private and how to get in.
+- **When the mail cannot be sent** the invitation is still made, the administrator is told why
+  (`Invitation::$sendError`), and the pending list shows each invitation's link to copy. The
+  link holds the code, so that list is drawn on the administrators' page only.
+- An address that already has an account or is blocked (`Config::emailIsBlocked()`) is not
+  invited; `Invitation::MAX_PER_BATCH` (50) addresses at most per submission.
+- The invitation mail (`templates/email/account/invite`, `templates/email-text/account/invite`)
+  escapes everything a person typed. Mail templates escape nothing by themselves either.
+- `Tests/Pages/Account/InvitationFlowTest.php` (and its Twenty26 twin) checks all of this over
+  HTTP on a private site.
 
 ## Twenty26 theme and plugin templates
 

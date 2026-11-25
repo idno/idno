@@ -4,6 +4,15 @@
 
         <h1><?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub federation'); ?></h1>
 
+        <?php if (!\IdnoPlugins\ActivityPub\Main::federates()) { ?>
+        <div class="alert alert-info">
+            <strong><?php echo \Idno\Core\Idno::site()->language()->_('This site is private, so federation is off'); ?></strong>
+            <p>
+                <?php echo \Idno\Core\Idno::site()->language()->_('Nothing posted here is sent to other servers, members cannot be found or followed from them, and no new follower is accepted. Followers from before the site was made private are kept, and are sent new posts again if the site is made public.'); ?>
+            </p>
+        </div>
+        <?php } ?>
+
         <?php if (empty($vars['queue_ok'])) { ?>
         <div class="alert alert-danger">
             <strong><?php echo \Idno\Core\Idno::site()->language()->_('Asynchronous queue required'); ?></strong>

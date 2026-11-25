@@ -22,10 +22,10 @@ namespace Idno\Pages\Admin {
             $users = User::getFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"], [], [], $limit, $offset);
             $count = User::countFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"]);
 
-            $invitations = Invitation::get();
+            $invitations = Invitation::all();
 
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
+            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
             $t->title = \Idno\Core\Idno::site()->language()->_('User Management');
             $t->drawPage();
 
@@ -64,57 +64,24 @@ namespace Idno\Pages\Admin {
                     }
                     break;
                 case 'invite_users':
-                    $emails = $this->getInput('invitation_emails');
-
-                    preg_match_all('/[a-z\d._%\+\-]+@[a-z\d.-]+\.[a-z]{2,4}\b/i', $emails, $matches);
-
-                    $invitation_count = 0;
-                    $invitations_sent = 0;
-                    if (!empty($matches[0])) {
-                        if (is_array($matches[0])) {
-                            foreach ($matches[0] as $email) {
-                                if (!($user = User::getByEmail($email))) {
-                                    $invitation = new Invitation();
-                                    if ($invitation->sendToEmail($email, \Idno\Core\Idno::site()->session()->currentUser()->email) !== 0) {
-                                        $invitations_sent++;
-                                    }
-                                    $invitation_count++;
-                                }
-                            }
-                        }
-                    }
-
-                    if ($invitation_count > 1) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%d invitations were sent.", [$invitation_count]));
-                    } else if ($invitation_count == 1) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your invitation was sent."));
-                    } else if ($invitations_sent == 0 && $invitation_count > 0) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Something went wrong and we couldn't send emails to your recipients."));
-                    } else {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("No email addresses were found or all the people you invited are already members of this site."));
-                    }
+                    $this->inviteUsers();
                     break;
                 case 'remove_invitation':
-                    $invitation_id = $this->getInput('invitation_id');
-
-                    if ($invitation = Invitation::getByID($invitation_id)) {
-                        if ($invitation->delete()) {
-                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("The invitation was removed."));
-                        }
+                    $invitation = $this->invitationFromInput();
+                    if ($invitation && $invitation->delete()) {
+                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The invitation for %s was withdrawn. Its link no longer works.", [$invitation->email]));
                     }
 
                     break;
                 case 'resend_invitation':
-
-                    $invitation_id = $this->getInput('invitation_id');
-
-                    if ($invitation = Invitation::getByID($invitation_id)) {
-                        $email = $invitation->email;
-                        if ($invitation->delete()) {
-                            $new_invitation = new Invitation();
-                            if ($new_invitation->sendToEmail($email)) {
-                                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("The invitation was resent."));
-                            }
+                    if ($invitation = $this->invitationFromInput()) {
+                        // The same invitation, with its role: its time starts again
+                        $invitation->renew();
+                        $invitation->save();
+                        if ($invitation->send()) {
+                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The invitation was sent to %s again.", [$invitation->email]));
+                        } else {
+                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("The invitation for %s is still good, but the email was not sent. %s You can copy its link from the list below and send it yourself.", [$invitation->email, $invitation->sendError]));
                         }
                     }
 
@@ -234,6 +201,120 @@ namespace Idno\Pages\Admin {
 
             $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/users');
 
+        }
+
+
+        /**
+         * The invitation a form names, if there is one
+         *
+         * @return Invitation|null
+         */
+        protected function invitationFromInput()
+        {
+            $id = $this->getInput('invitation_id');
+            if (!is_string($id) || !preg_match('/^[A-Za-z0-9-]+$/', $id)) {
+                return null;
+            }
+            $invitation = Invitation::unrestricted(
+                function () use ($id) {
+                    return Invitation::getByID($id);
+                }
+            );
+
+            return $invitation instanceof Invitation ? $invitation : null;
+        }
+
+        /**
+         * Invite the addresses typed into the invite form, as members or as administrators.
+         * An invitation is made and kept even when its email cannot be sent: the
+         * administrator is told why, and can copy the link from the list.
+         */
+        protected function inviteUsers()
+        {
+            $site = \Idno\Core\Idno::site();
+            $lang = $site->language();
+            $session = $site->session();
+            $inviter = $session->currentUser();
+
+            $role = $this->getInput('invitation_role') === Invitation::ROLE_ADMIN ? Invitation::ROLE_ADMIN : Invitation::ROLE_MEMBER;
+            if ($role === Invitation::ROLE_ADMIN && !$this->getInput('confirm_admin')) {
+                $session->addErrorMessage($lang->_("Nobody was invited. To invite someone as an administrator, tick the box that says you understand what administrators can do."));
+
+                return;
+            }
+
+            list($addresses, $invalid) = Invitation::parseAddresses($this->getInput('invitation_emails'));
+            if ($invalid) {
+                $session->addErrorMessage($lang->esc_("These don't look like email addresses and were skipped: %s", [implode(', ', $invalid)]));
+            }
+            if (!$addresses) {
+                $session->addErrorMessage($lang->_("No email addresses were found. Enter one or more addresses, separated by commas or new lines."));
+
+                return;
+            }
+            if (count($addresses) > Invitation::MAX_PER_BATCH) {
+                $session->addErrorMessage($lang->esc_("Nobody was invited: that is %d addresses, and at most %d can be invited at once.", [count($addresses), Invitation::MAX_PER_BATCH]));
+
+                return;
+            }
+            if (!$site->config()->canAddUsers()) {
+                $session->addErrorMessage($lang->_("You can't add any more users to your site."));
+
+                return;
+            }
+
+            $sent = [];
+            $unsent = [];
+            $members = [];
+            $blocked = [];
+            $reason = '';
+            foreach ($addresses as $email) {
+                if ($site->config()->emailIsBlocked($email)) {
+                    $blocked[] = $email;
+                    continue;
+                }
+                if (User::getByEmail($email)) {
+                    $members[] = $email;
+                    continue;
+                }
+                // One invitation per address: inviting again renews the one there is
+                $invitation = Invitation::getByEmail($email);
+                if (!$invitation) {
+                    $invitation = new Invitation();
+                    if (!$invitation->associateWithEmail($email)) {
+                        continue;
+                    }
+                }
+                $invitation->renew();
+                $invitation->setRole($role);
+                $invitation->inviter_name = $inviter->getTitle();
+                $invitation->invited_by = $inviter->getUUID();
+                $invitation->inviter_email = (string) $inviter->email;
+                $invitation->save();
+                if ($invitation->send()) {
+                    $sent[] = $email;
+                } else {
+                    $unsent[] = $email;
+                    $reason = $invitation->sendError;
+                }
+            }
+
+            if ($sent) {
+                if ($role === Invitation::ROLE_ADMIN) {
+                    $session->addMessage($lang->esc_("Invited as administrators: %s", [implode(', ', $sent)]));
+                } else {
+                    $session->addMessage($lang->esc_("Invited: %s", [implode(', ', $sent)]));
+                }
+            }
+            if ($unsent) {
+                $session->addErrorMessage($lang->esc_("Invitations were made for %s, but the email was not sent. %s You can copy each invitation's link from the list below and send it yourself.", [implode(', ', $unsent), $reason]));
+            }
+            if ($members) {
+                $session->addMessage($lang->esc_("Already members, so not invited: %s", [implode(', ', $members)]));
+            }
+            if ($blocked) {
+                $session->addErrorMessage($lang->esc_("These addresses are blocked from this site, so they were not invited: %s", [implode(', ', $blocked)]));
+            }
         }
 
     }

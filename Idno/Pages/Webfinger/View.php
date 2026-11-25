@@ -15,6 +15,11 @@ namespace Idno\Pages\Webfinger {
         function getContent()
         {
 
+            // A private site names no member to anybody
+            if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+                $this->noContent();
+            }
+
             $acct = $this->getInput('resource');
             if (!empty($acct)) {
                 if (substr($acct, 0, 5) == 'acct:' && strlen($acct) > 8) {
