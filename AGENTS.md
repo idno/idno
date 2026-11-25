@@ -419,6 +419,15 @@ Each content plugin has an `Entry.php` entity class that defines
   site). The annotation templates of both looks (`templates/default/entity/annotations/`,
   `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
   `Tests/Common/AnnotationOutputTest.php` checks this.
+- "Is this a permalink": `Page::isPermalink()` says only that the page is the permalink of
+  something. The profile is the permalink of a member (`User\View` sets the member as the page's
+  entity) and draws that member's posts as a list, so a template that draws one entity asks
+  `currentPage()->isPermalinkFor($vars['object'])`, which is true only when the page's entity is
+  that entity (or the page has none). The comment block and form, `syndication` links, the
+  `in-reply-to` marker on links in a post's text, the photo limit of a list and the page's Open
+  Graph, Dublin Core and JSON-LD description of a post all use it, in both looks and in the
+  bundled themes. Don't test `isPermalink()` in an entity template. `Tests/Pages/ProfileFeedViewTest.php`
+  checks this over HTTP.
 - Redirect targets taken from user input must go through
   `\Idno\Pages\Session\Login::sanitizeRedirectUrl()` (same-origin only)
 - Error page: an exception thrown while a page is being served goes to

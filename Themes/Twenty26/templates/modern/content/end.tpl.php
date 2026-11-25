@@ -85,13 +85,13 @@ if (!empty($owner)) {
                 <?= $this->draw('content/end/links') ?>
             </span>
 
-            <?php if (\Idno\Core\Idno::site()->currentPage()->isPermalink() && \Idno\Core\Idno::site()->config()->indieweb_citation) { ?>
+            <?php if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object']) && \Idno\Core\Idno::site()->config()->indieweb_citation) { ?>
                 <span class="idno-entry-citation"><?= $vars['object']->getCitation() ?></span>
             <?php } ?>
         </div>
         <?php
 
-        if (\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+        if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
 
             if (!empty($likes) || !empty($replies) || !empty($shares) || !empty($rsvps) || !empty($mentions)) {
 
