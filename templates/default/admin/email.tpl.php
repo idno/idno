@@ -53,6 +53,11 @@
                 <?php echo $lang->_('Until you enter a mail server and a From address below, invitations and password reset emails will probably not arrive.') ?>
             </p>
         <?php } ?>
+        <?php if (!empty($vars['fixed'])) { ?>
+            <p class="alert alert-info" role="note">
+                <?php echo $lang->esc_("These settings are set in the site's configuration file (config.ini) or environment, which wins over what is saved here: %s. Change them there.", [implode(', ', $vars['fixed'])]) ?>
+            </p>
+        <?php } ?>
     </div>
     <div class="col-md-10 col-md-offset-1">
         <form action="<?php echo $url ?>admin/email" class="form-horizontal" method="post" id="mail-settings-form" novalidate>

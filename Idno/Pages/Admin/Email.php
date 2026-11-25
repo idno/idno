@@ -37,10 +37,24 @@ namespace Idno\Pages\Admin {
                     'has_password' => (string) $config->smtp_password !== '',
                     'configured'   => \Idno\Core\Email::isConfigured(),
                     'test_to'      => $user ? (string) $user->email : '',
+                    'fixed'        => static::settingsFromFile(),
                 ]
             )->draw('admin/email');
             $t->title = \Idno\Core\Idno::site()->language()->_('Email');
             $t->drawPage();
+        }
+
+        /**
+         * The mail settings that the site's configuration file or environment sets. Those win
+         * over what this page stores, so the page says which they are.
+         *
+         * @return string[] Setting names
+         */
+        static function settingsFromFile()
+        {
+            $fixed = array_keys((array) \Idno\Core\Idno::site()->config()->ini_config);
+
+            return array_values(array_intersect(array_merge(self::FIELDS, ['smtp_password']), $fixed));
         }
 
         /**

@@ -42,6 +42,12 @@
     </div>
 <?php } ?>
 
+<?php if (!empty($vars['fixed'])) { ?>
+    <div class="idno-notice" role="note">
+        <?= $lang->esc_("These settings are set in the site's configuration file (config.ini) or environment, which wins over what is saved here: %s. Change them there.", [implode(', ', $vars['fixed'])]) ?>
+    </div>
+<?php } ?>
+
 <form action="<?= $url ?>admin/email" method="post" id="mail-settings-form" novalidate>
     <div class="idno-admin-card">
         <h2 class="idno-admin-card-title"><?= $lang->_('Who the mail is from') ?></h2>

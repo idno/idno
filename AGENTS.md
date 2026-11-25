@@ -79,7 +79,8 @@ Tests/                         Core unit tests
   `aria-current="page"`. At most one item is current; Home on the home feed and `/content/...`,
   Search on a search or a tag page, Profile on the viewer's own profile only, Drafts, Log in.
   Account and admin pages are drawn in the settings shell, which has no side navigation. An error
-  page marks nothing. A new item goes through `attributes()` and gets a case in `currentItem()`.
+  page marks nothing. A visitor to a private site is offered Log in only: Home and Search would
+  both refuse them. A new item goes through `attributes()` and gets a case in `currentItem()`.
   `Tests/Pages/Twenty26NavCurrentPageTest.php` checks this over HTTP.
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
@@ -457,13 +458,15 @@ site's name when empty), `reply_to_email` (used unless the message names a reply
   `/admin/emailtest`): the stored password is never a template variable and never printed,
   in any template type; an empty password field keeps the stored one, and a checkbox removes
   it. `Idno\Pages\Admin\Email::validate()` checks what was typed, and nothing is saved while anything is wrong.
+  A setting that `config.ini` or the environment sets wins over the stored one, so the page
+  names those (`Email::settingsFromFile()`: names only).
   The "Using a mail service" block (`admin/email/services`, drawn by both looks) holds the
   values for the common services, checked against their documentation in November 2026:
   check them again before changing them.
 - Tests point the site's mail settings at `Tests\SmtpSink`, a small SMTP server on 127.0.0.1
   in its own PHP process that keeps what it is sent (`Tests/Core/fixtures/smtp_sink.php`). No
   test sends real mail. `Tests/Core/EmailTest.php` and `Tests/Pages/Admin/EmailSettingsTest.php`
-  (and its Twenty26 twin) check all of this.
+  (run again in the modern look by `EmailSettingsModernLookTest`) check all of this.
 
 ### Invitations
 
@@ -502,8 +505,10 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
   invited; `Invitation::MAX_PER_BATCH` (50) addresses at most per submission.
 - The invitation mail (`templates/email/account/invite`, `templates/email-text/account/invite`)
   escapes everything a person typed. Mail templates escape nothing by themselves either.
-- `Tests/Pages/Account/InvitationFlowTest.php` (and its Twenty26 twin) checks all of this over
-  HTTP on a private site.
+- `Tests/Pages/Account/InvitationFlowTest.php` (run again in the modern look by
+  `InvitationFlowModernLookTest`) checks all of this over HTTP on a private site.
+- A test of the modern look uses the `Tests\ModernLook` trait and is named for the look, not
+  for the theme that draws it today: the trait alone names that theme.
 
 ## Twenty26 theme and plugin templates
 

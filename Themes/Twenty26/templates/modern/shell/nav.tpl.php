@@ -3,6 +3,9 @@
     $is_admin = !empty($user) && $user->isAdmin();
     // Which item is the current page is decided in one place, from the page being served
     $nav_current = \Themes\Twenty26\Navigation::currentItem();
+    // A visitor to a private site can open neither the home feed nor the search: both would
+    // only tell them to sign in, so the navigation offers them the sign-in page alone
+    $closed = empty($user) && !\Idno\Core\Idno::site()->config()->isPublicSite();
 ?>
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
     <a href="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-nav-logo">
@@ -10,12 +13,14 @@
     </a>
 
     <ul class="idno-nav-items">
+        <?php if (!$closed) { ?>
         <li>
             <a href="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" <?= \Themes\Twenty26\Navigation::attributes('home', $nav_current) ?>>
                 <svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                 <span class="idno-nav-label"><?= \Idno\Core\Idno::site()->language()->_('Home') ?></span>
             </a>
         </li>
+        <?php } ?>
         <?php if (!empty($user)) { ?>
         <li>
             <a href="<?= $user->getDisplayURL() ?>" <?= \Themes\Twenty26\Navigation::attributes('profile', $nav_current) ?>>
@@ -26,12 +31,14 @@
         <?php } ?>
         <?php /* Items that plugins add (each an <li>); the key of the current item is in $vars['nav_current'] */ ?>
         <?= $this->__(['nav_current' => $nav_current])->draw('shell/nav/items') ?>
+        <?php if (!$closed) { ?>
         <li>
             <button type="button" <?= \Themes\Twenty26\Navigation::attributes('search', $nav_current) ?> x-data x-on:click="$dispatch('open-search')">
                 <svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <span class="idno-nav-label"><?= \Idno\Core\Idno::site()->language()->_('Search') ?></span>
             </button>
         </li>
+        <?php } ?>
         <?php if (!empty($user)) { ?>
         <li>
             <a href="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>drafts/" <?= \Themes\Twenty26\Navigation::attributes('drafts', $nav_current) ?>>

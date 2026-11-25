@@ -605,6 +605,10 @@ namespace Tests\Pages\Account {
             $this->assertNotNull($message);
             $this->assertStringContainsString(Idno::site()->config()->title, $message['headers']['subject']);
             $this->assertSame(1, preg_match('#https?://\S+/account/password/reset/\?email=\S+?&code=[0-9a-f]+#', $message['text'], $match));
+            $this->assertStringContainsString('text/plain', $message['data']);
+            $this->assertStringContainsString('text/html', $message['data']);
+            $this->assertStringContainsString('within three hours', $message['text']);
+            $this->assertStringContainsString('you can ignore this email', $message['text']);
 
             $reset = static::onThisSite($match[0]);
             $page = $this->visit($jar, 'GET', $reset);
