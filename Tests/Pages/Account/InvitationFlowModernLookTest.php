@@ -2,34 +2,29 @@
 
 namespace Tests\Pages\Account {
 
-    use Idno\Core\Idno;
-
     /**
-     * The invitation tests again with the Twenty26 theme, whose pages for a visitor (joining,
-     * the private site's front door, the password reset) are templates of its own, and which
-     * loads no jQuery.
+     * The invitation tests again in the modern look, where the pages for a visitor (joining,
+     * the private site's front door, the password reset) are templates of their own, drawn
+     * without jQuery.
      */
-    class Twenty26InvitationFlowTest extends InvitationFlowTest
+    class InvitationFlowModernLookTest extends InvitationFlowTest
     {
 
-        private static $savedTheme;
+        use \Tests\ModernLook;
 
         public static function setUpBeforeClass(): void
         {
-            static::$savedTheme = Idno::site()->config()->theme;
-            Idno::site()->config()->theme = 'Twenty26';
-            Idno::site()->config()->save();
+            static::useModernLook();
             parent::setUpBeforeClass();
         }
 
         public static function tearDownAfterClass(): void
         {
             parent::tearDownAfterClass();
-            Idno::site()->config()->theme = static::$savedTheme;
-            Idno::site()->config()->save();
+            static::restoreLook();
         }
 
-        public function testTheVisitorsPagesAreTwenty26Markup()
+        public function testTheVisitorsPagesAreDrawnInTheModernLook()
         {
             $address = static::address('modern');
             $this->invite($address);
@@ -43,13 +38,9 @@ namespace Tests\Pages\Account {
                 'the reset confirmation' => $this->visit($jar, 'GET', '/account/password/?sent=true'),
             ];
             foreach ($pages as $name => $page) {
-                $this->assertStringContainsString('Themes/Twenty26/dist/modern.min.css', $page['body'], $name);
                 $this->assertStringContainsString('class="idno-gate', $page['body'], $name . ' is a centred panel');
-                // Nothing of the default look: its grid, its form classes, its jQuery ...
                 // ... and nothing of the account settings pages, which are for people who are signed in
-                foreach (['col-md-', 'form-horizontal', 'control-group', 'jumbotron', '$(', 'jQuery', 'idno-account-', 'account/settings'] as $mark) {
-                    $this->assertStringNotContainsString($mark, $page['body'], $name . ' should not hold "' . $mark . '"');
-                }
+                $this->assertModernLook($page['body'], $name, ['idno-account-', 'account/settings']);
             }
             $this->assertStringContainsString('is private', $pages['the front door']['body']);
             $this->assertStringContainsString('invitation', $pages['the front door']['body']);
