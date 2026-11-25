@@ -35,6 +35,22 @@ if (preg_match('#^/(js|css)/[0-9]+/(.+)$#', $path, $matches)) {
     }
 }
 
+// The rewriting check of the installer: /js/canary.js -> /js/idno.min.js
+if ($path === '/js/canary.js') {
+    header('Content-Type: application/javascript');
+    readfile($root . '/js/idno.min.js');
+    return true;
+}
+
+// The installer is a directory with an index.php of its own, which a web server serves as it is
+if (preg_match('#^/warmup/(index\.php)?$#', $path)) {
+    $_SERVER['PHP_SELF']        = '/warmup/index.php';
+    $_SERVER['SCRIPT_NAME']     = '/warmup/index.php';
+    $_SERVER['SCRIPT_FILENAME'] = $root . '/warmup/index.php';
+    require $root . '/warmup/index.php';
+    return true;
+}
+
 // Existing files (other than PHP scripts outside the front controller) are served directly
 if ($path !== '/' && is_file($root . $path) && !preg_match('#\.php$#', $path)) {
     return false;

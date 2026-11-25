@@ -106,6 +106,10 @@ Tests/                         Core unit tests
   to the list in `checkAndUpgradeSchema()`, and make the same change in `mysql.sql`
   (including its version line). `Tests/Data/MySQLUtf8mb4Test.php` checks that the two
   agree.
+- The `_id` of each main table is a `UNIQUE KEY` in `mysql.sql`: the `_search` and
+  `_metadata` tables refer to it with a foreign key, and MySQL 8.4 refuses to create a
+  foreign key to a column that is not unique. Installations made before November 2026 have
+  a plain key on `site` and `config`, which keeps working; there is no upgrade file for it.
 - An upgrade that fails is logged and tried again from the top on the next connection,
   and MySQL can't roll back an `ALTER TABLE`, so every statement in an upgrade file
   must be safe to apply to a table it has already changed.
@@ -501,6 +505,51 @@ Rules to keep:
   `IdnoPlugins/ActivityPub/Tests/ModerationTest.php` checks this.
 - Settings: `moderation_contact_email` (the address for appeals; the site's `from_email`
   when empty) and `moderation_notify_admins`.
+
+## Installation
+
+A site with no configuration file sends every request to the installer (`Idno::init()`
+redirects to `warmup/` beside `index.php`, wherever in the site the request was for). The web
+installer (`warmup/WebInstaller.php`, templates in `warmup/templates/`) and the command line
+one (`warmup/CLI/CLIInstaller.php`) only collect what is typed and show what came of it:
+every check and everything that is written is in `Idno\Core\Installer`, and both call
+`Installer::install()`. Add a check or a setting there, never in one of the two.
+
+- **The installer does nothing once there is a configuration file** (`isInstalled()`), and
+  acts only on a POST. It never replaces a configuration file or an `.htaccess` file.
+- **Database server**: `parseDatabaseHost()` reads a name or address, with the port after a
+  colon (`db:3307`, `[::1]:3307`) or in the port field. The configuration gets `dbhost` and,
+  only when a port was given, `dbport`, which is what `Idno\Data\AbstractSQL` reads. A
+  socket path is refused: the MySQL back end has no setting for one (`localhost` uses the
+  server's default socket). Only MySQL is installed; for MongoDB the command line installer
+  writes the file and touches no database, as before.
+- **Upload folder**: `checkUploadDirectory()` checks exactly the folder that was typed (a
+  slash is added at the end, nothing else is changed): it is created if it does not exist,
+  and a file is saved in it and deleted again. A folder inside the installation is refused,
+  except `Uploads`, which `.htaccess` and the sample nginx configuration close to visitors.
+- **`config.ini`** is built by `buildConfig()` from `warmup/webserver-configs/config.ini.template`.
+  Every value goes through `Installer::iniValue()`, which writes it so that
+  `parse_ini_file()` reads back exactly that value (quotes, `$`, `#`, `;` and spaces
+  included) and refuses a line break, so no value can add or change a setting. Never put a
+  value into an ini file any other way. `writeConfig()` writes the file beside its place and
+  links it there, so it is complete or absent and an existing one is never replaced.
+  `canWriteConfig()` is asked before anything is changed; when the file can't be saved, the
+  page shows its contents and where they go, and `?stage=finish` goes on once the file is there.
+- **Schema**: `installSchema()` loads `mysql.sql` only into a database with no `schema` row
+  in `versions`; an existing site's database is left as it is (its upgrades run when Idno
+  connects). If a statement fails, the tables that attempt created are dropped and the
+  server's own message is shown.
+- **Problems** are `Installer::problem()` arrays (`text`, `commands`), by field name, plain
+  text; the templates escape them and draw each beside its field
+  (`pages/elements/problem`). What was typed is kept, except the password, which is never
+  sent back in a form (it is in the contents of `config.ini` shown for saving by hand).
+- **The first account** made on a site is its administrator (`Idno\Pages\Account\Register`),
+  and registration closes with it. Until then anybody who reaches the site can make it, as
+  anybody can run the installer on a site that has no configuration: finish both at once.
+- `Tests/Core/InstallerSettingsTest.php` checks the decisions;
+  `Tests/Core/InstallerFlowTest.php` runs the web pages and the command line installer in
+  their own processes into a temporary folder and a scratch database, and registers the
+  first administrator on a site served from it.
 
 ## Email and invitations
 

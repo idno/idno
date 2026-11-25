@@ -56,7 +56,8 @@ namespace Idno\Core {
             $this->dispatcher = new EventDispatcher();
             $this->config     = new Config();
             if ($this->config->isDefaultConfig()) {
-                header('Location: ./warmup/');
+                // The installer is beside index.php, wherever in the site the request was for
+                header('Location: ' . Installer::address((string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php')));
                 exit; // Load the installer
             }
 

@@ -13,7 +13,7 @@
             Idno needs a few system components and PHP extensions in order to run properly. We'll check them now.
         </p>
         <p>
-            (If you have everything you need, there's a "continue" button at the bottom of the page.)
+            (If you have everything you need, there's a button to continue at the bottom of the page.)
         </p>
 
         <div class="components">
@@ -89,9 +89,11 @@
                 ?>
                 <div class="component">
 
-                    <h3>Apache mod_rewrite</h3>
+                    <h3>Address rewriting</h3>
                     <p>
-                        We couldn't detect if mod_rewrite was installed. Idno cannot process page URLs without it. Proceed with caution.
+                        Idno needs the web server to pass page addresses on to it (mod_rewrite on Apache, the
+                        <code>try_files</code> rule of the sample configuration on nginx). That can't be told
+                        from here on this server; the next screen checks it.
                     </p>
 
                 </div>
@@ -149,8 +151,7 @@ if ($ok) {
         </h2>
         <p>
             Unfortunately it looks like you need to install a few things. If you need to, ask your system administrator.
-            Scroll up for more details, and <a href="https://idno.co">check out our website</a> for more services
-            and information.
+            Scroll up for the details, then reload this page.
         </p>
         <p>
             <small><a href="http://docs.idno.co/">Want more information? Here's our documentation.</a></small>

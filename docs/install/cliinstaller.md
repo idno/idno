@@ -12,7 +12,9 @@ To install a brand new Idno using an interactive install simply run
 ./CLIInstaller.php install
 ```
 
-The installer asks for the site name, database type (default `MySQL`), database name, user, password and host, and the upload path. It checks the requirements, loads the MySQL schema (this is skipped for MongoDB), writes the `.htaccess` rules, and writes `configuration/config.ini`. It stops with an error if Idno is already installed.
+The installer asks for the site name, database type (default `MySQL`), database name, user, password, host and port, and the upload path. It makes the same checks as the web installer: the upload folder is created if it can be and tested by saving a file in it, the database is connected to, the MySQL schema is loaded into a database that has none (this is skipped for MongoDB), `.htaccess` is created if there is none, and `configuration/config.ini` is written. If anything is wrong it says what, changes nothing, and exits with status 1. It never replaces a configuration file, and stops with an error if Idno is already installed.
+
+The host can carry the port (`db.example.com:3307`), or the port can be given on its own; leave it empty for 3306. A socket path is not accepted: use `localhost` for the server's default socket.
 
 # The Manifest
 
@@ -24,7 +26,7 @@ First, generate a manifest template:
 ./CLIInstaller.php generate-manifest /path/to/manifest
 ```
 
-Next, edit that file and fill in the appropriate options. The manifest is an INI file with the keys `site_title`, `database`, `mysql_name`, `mysql_user`, `mysql_pass`, `mysql_host` and `upload_path`.
+Next, edit that file and fill in the appropriate options. The manifest is an INI file with the keys `site_title`, `database`, `mysql_name`, `mysql_user`, `mysql_pass`, `mysql_host`, `mysql_port` and `upload_path`. Put a value that has anything but letters and digits in it in quotes.
 
 Now, you are able to pass these options to the installer:
 

@@ -20,14 +20,30 @@ class CLIInstaller extends \Idno\Core\Installer
         'mysql_user' => '"Database username"',
         'mysql_pass' => '"Database password"',
         'mysql_host' => '"Database host (usually \'localhost\')"',
+        'mysql_port' => '"Database port (leave empty for 3306)"',
         'upload_path' => '"Upload path"',
     ];
 
-    public function __construct()
+    public function __construct($install_path = null)
     {
         $this->application = new \Symfony\Component\Console\Application('Idno Console Installer', \Idno\Core\Version::version());
 
-        parent::__construct();
+        parent::__construct($install_path ?: (getenv('IDNO_INSTALL_PATH') ?: null));
+    }
+
+    /**
+     * Print the problems the installer found, each with the commands that would fix it
+     *
+     * @param array $errors Field name => problem, see \Idno\Core\Installer::problem()
+     */
+    protected function printProblems(array $errors, \Symfony\Component\Console\Output\OutputInterface $output)
+    {
+        foreach ($errors as $field => $problem) {
+            $output->writeln($field . ': ' . $problem['text'], \Symfony\Component\Console\Output\OutputInterface::OUTPUT_RAW);
+            foreach ($problem['commands'] as $command) {
+                $output->writeln("\t" . $command, \Symfony\Component\Console\Output\OutputInterface::OUTPUT_RAW);
+            }
+        }
     }
 
     protected function requirements(\Symfony\Component\Console\Input\InputInterface $input, \Symfony\Component\Console\Output\OutputInterface $output)
@@ -83,6 +99,7 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     $this->requirements($input, $output);
 
+                    return 0;
                 }
             );
 
@@ -99,20 +116,32 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     if ($filename = $input->getArgument('manifest')) {
                         if (file_exists($filename)) {
-                            $this->config = @parse_ini_file($filename);
+                            $this->config = @parse_ini_file($filename) ?: [];
                         }
                     }
 
+                    // The same checks as an installation, without touching the database or the upload folder
+                    $checked = $this->normaliseSettings((array) $this->config);
+                    if (!empty($checked['errors'])) {
+                        $this->printProblems($checked['errors'], $output instanceof \Symfony\Component\Console\Output\ConsoleOutputInterface ? $output->getErrorOutput() : $output);
+
+                        return 1;
+                    }
+                    $values = $checked['values'];
+
                     echo $this->buildConfig(
                         [
-                        'dbname' => $this->config['mysql_name'],
-                        'dbpass' => $this->config['mysql_pass'],
-                        'dbuser' => $this->config['mysql_user'],
-                        'dbhost' => $this->config['mysql_host'],
-                        'uploadpath' => $this->config['upload_path'],
-                        'database' => $this->config['database'],
+                        'dbname' => $values['mysql_name'],
+                        'dbpass' => $values['mysql_pass'],
+                        'dbuser' => $values['mysql_user'],
+                        'dbhost' => $values['mysql_host'],
+                        'dbport' => $values['mysql_port'],
+                        'uploadpath' => $values['upload_path'],
+                        'database' => $values['database'],
                         ]
                     );
+
+                    return 0;
 
                 }
             );
@@ -137,7 +166,7 @@ class CLIInstaller extends \Idno\Core\Installer
 
                     } else {
 
-                        $output->writeln("Couldn't open " . $input->getArgument('filename'));
+                        $output->writeln("Couldn't open " . $input->getArgument('manifest'));
 
                     }
                 }
@@ -167,7 +196,7 @@ class CLIInstaller extends \Idno\Core\Installer
                     // Load manifest if given
                     if ($filename = $input->getArgument('manifest')) {
                         if (file_exists($filename)) {
-                            $this->config = @parse_ini_file($filename);
+                            $this->config = @parse_ini_file($filename) ?: [];
                         }
                     }
 
@@ -200,7 +229,7 @@ class CLIInstaller extends \Idno\Core\Installer
 
                         $this->config['mysql_user'] = $helper->ask($input, $output, $question);
                     }
-                    if (empty($this->config['mysql_pass'])) {
+                    if (!isset($this->config['mysql_pass'])) {
                         $question = new Symfony\Component\Console\Question\Question('Please enter the database password: ');
                         $question->setHidden(true);
 
@@ -211,44 +240,39 @@ class CLIInstaller extends \Idno\Core\Installer
 
                         $this->config['mysql_host'] = $helper->ask($input, $output, $question);
                     }
+                    if (!isset($this->config['mysql_port'])) {
+                        $question = new Symfony\Component\Console\Question\Question('Please enter the database port (leave empty for 3306): ', '');
+
+                        $this->config['mysql_port'] = $helper->ask($input, $output, $question);
+                    }
                     if (empty($this->config['upload_path'])) {
-                        $question = new Symfony\Component\Console\Question\Question('Please enter the upload path: ', $this->root_path . '/Uploads/');
+                        $question = new Symfony\Component\Console\Question\Question('Please enter the upload path: ', $this->defaultUploadPath());
 
                         $this->config['upload_path'] = $helper->ask($input, $output, $question);
                         if (empty($this->config['upload_path'])) {
-                            $this->config['upload_path'] = $this->root_path . '/Uploads/';
+                            $this->config['upload_path'] = $this->defaultUploadPath();
                         }
                     }
 
-                    // Check upload path
-                    if (!empty($this->config['upload_path'])) {
-                        $this->checkUploadDirectory($this->config['upload_path']);
+                    // The same checks and the same steps as the web installer
+                    $result = $this->install((array) $this->config, $config_name);
+                    if (!empty($result['errors'])) {
+                        $output->writeln('Idno was not installed, and nothing was changed:');
+                        $this->printProblems($result['errors'], $output);
+
+                        return 1;
+                    }
+                    if (!$result['config_written']) {
+                        $output->writeln('The configuration file could not be saved. Save these contents as ' . $result['config_path'] . ':', \Symfony\Component\Console\Output\OutputInterface::OUTPUT_RAW);
+                        $output->writeln($result['config'], \Symfony\Component\Console\Output\OutputInterface::OUTPUT_RAW);
+
+                        return 1;
                     }
 
-                    $this->installSchema(
-                        $this->config['mysql_host'],
-                        $this->config['mysql_name'],
-                        $this->config['mysql_user'],
-                        $this->config['mysql_pass'],
-                        $this->config['database']
-                    );
-
-                    $this->writeApacheConfig();
-
-                    $ini_file = $this->buildConfig(
-                        [
-                        'dbname' => $this->config['mysql_name'],
-                        'dbpass' => $this->config['mysql_pass'],
-                        'dbuser' => $this->config['mysql_user'],
-                        'dbhost' => $this->config['mysql_host'],
-                        'uploadpath' => $this->config['upload_path'],
-                        'database' => $this->config['database'],
-                        ]
-                    );
-
-                    $this->writeConfig($ini_file, $config_name);
-
+                    $output->writeln('The configuration was saved as ' . $result['config_path'] . '. Make sure the web server\'s user can read it.', \Symfony\Component\Console\Output\OutputInterface::OUTPUT_RAW);
                     $output->writeln("Your site should now be installed. Visit your site to create your first user!");
+
+                    return 0;
                 }
             );
 
