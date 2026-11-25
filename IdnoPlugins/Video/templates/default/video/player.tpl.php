@@ -8,8 +8,9 @@
      * frame except the title, escaped. Without a video that passes the check there is no
      * frame, only the link. Feeds get the link alone. A player on a host that anybody can
      * run (PeerTube, Loops) is sandboxed, sent no referrer, and named in the caption. A
-     * Bluesky video has no frame: the browser plays its stream, and nothing but the still
-     * picture is fetched until a visitor presses play.
+     * Bluesky video has no frame: the browser plays its stream, and the video itself is not
+     * fetched until a visitor presses play. A browser that cannot play HLS by itself is
+     * given this site's copy of hls.js (Video::hlsLibraryUrl()), never one from elsewhere.
      */
 
     $object = $vars['object'];
@@ -37,26 +38,84 @@ if ($framed) {
                poster="<?php echo htmlspecialchars($video->getPosterUrl()) ?>"
                title="<?php echo htmlspecialchars($lang->_('Video player: %s', [strip_tags($object->getTitle())])) ?>"
                data-link="<?php echo htmlspecialchars($address) ?>"
+               data-hls="<?php echo htmlspecialchars(\IdnoPlugins\Video\Video::hlsLibraryUrl()) ?>"
                controls
                playsinline
                preload="none"
                crossorigin="anonymous"
                style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;background:#000"></video>
         <script>
-            // A browser that cannot play this kind of stream shows the picture, linked to the video
+            // Bluesky serves HLS. A browser that plays it by itself (Safari, phones) needs
+            // nothing more. Any other is given this site's own copy of hls.js; if that is not
+            // there, or cannot play the video either, the picture is shown, linked to the video.
+            // Everything is read from the element: this script holds no value from the post.
             (function () {
                 var video = document.currentScript.previousElementSibling;
                 if (!video || video.tagName !== 'VIDEO' || video.canPlayType('application/vnd.apple.mpegurl')) {
                     return;
                 }
-                var link = document.createElement('a');
-                link.href = video.getAttribute('data-link') || '#';
-                link.rel = 'noopener';
-                link.title = video.title;
-                link.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000 center / contain no-repeat;color:#fff;font-size:3rem;text-decoration:none';
-                link.style.backgroundImage = 'url("' + video.poster + '")';
-                link.textContent = '\u25B6';
-                video.parentNode.replaceChild(link, video);
+                var stream = video.getAttribute('src');
+                var library = video.getAttribute('data-hls');
+
+                var showLink = function () {
+                    if (!video.parentNode) {
+                        return;
+                    }
+                    var link = document.createElement('a');
+                    link.href = video.getAttribute('data-link') || '#';
+                    link.rel = 'noopener';
+                    link.title = video.title;
+                    link.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000 center / contain no-repeat;color:#fff;font-size:3rem;text-decoration:none';
+                    link.style.backgroundImage = 'url("' + video.poster + '")';
+                    link.textContent = '\u25B6';
+                    video.parentNode.replaceChild(link, video);
+                };
+
+                var attach = function () {
+                    if (!window.Hls || !window.Hls.isSupported()) {
+                        showLink();
+                        return;
+                    }
+                    // The list of what the video is made of is read now; the video itself is
+                    // not fetched until a visitor presses play
+                    var hls = new window.Hls({autoStartLoad: false});
+                    var started = false;
+                    hls.on(window.Hls.Events.ERROR, function (event, data) {
+                        if (data && data.fatal) {
+                            hls.destroy();
+                            showLink();
+                        }
+                    });
+                    video.addEventListener('play', function () {
+                        if (!started) {
+                            started = true;
+                            hls.startLoad();
+                        }
+                    });
+                    video.removeAttribute('src');
+                    hls.loadSource(stream);
+                    hls.attachMedia(video);
+                };
+
+                if (!library) {
+                    showLink();
+                    return;
+                }
+                if (window.Hls) {
+                    attach();
+                    return;
+                }
+                // One copy of the library for the page, however many videos it has
+                var loader = document.querySelector('script[data-idno-hls]');
+                if (!loader) {
+                    loader = document.createElement('script');
+                    loader.src = library;
+                    loader.async = true;
+                    loader.setAttribute('data-idno-hls', '');
+                    document.head.appendChild(loader);
+                }
+                loader.addEventListener('load', attach);
+                loader.addEventListener('error', showLink);
             })();
         </script>
     <?php } else { ?>

@@ -34,9 +34,12 @@ that also takes the player away from posts already made, leaving the link.
 
 A Bluesky post's address doesn't hold what a player needs, so Idno asks Bluesky's public
 API once, when the post is saved, for the video in that post. The video is then played
-by the visitor's own browser from Bluesky's video host, with no frame; nothing but the
-still picture is fetched until they press play. A browser that can't play that kind of
-stream (HLS) shows the picture, linked to the post on Bluesky.
+by the visitor's own browser from Bluesky's video host, with no frame, and the video
+itself isn't fetched until they press play. Bluesky's streams are HLS, which Safari and
+phones play by themselves; other browsers (Chrome and Firefox on a desktop) are given
+hls.js, which Composer installs (`npm-asset/hls.js`) and the site serves itself. If that
+file is missing, or the browser can't play the video even so, the picture is shown,
+linked to the post on Bluesky.
 
 For YouTube, Vimeo, Dailymotion and TikTok everything is worked out from the address itself (`VideoUrl.php`): the site makes no
 request to the service. The player is an `<iframe>` whose address is built from the

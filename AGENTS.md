@@ -536,8 +536,12 @@ Each content plugin has an `Entry.php` entity class that defines
   There is no frame: the post is drawn with a `<video>` whose `src` and `poster`
   `VideoUrl::getStreamUrl()` and `getPosterUrl()` build on `VideoUrl::STREAM_HOST` from
   those values, with `preload="none"`. The addresses Bluesky returns are never used. The
-  small script beside the player holds no value from the post: it reads the element's own
-  attributes. A Skylight video is a Bluesky post and is posted by its bsky.app address.
+  streams are HLS, which desktop Chrome and Firefox do not play by themselves, so the
+  script beside the player loads hls.js for them: the site's own copy
+  (`Video::hlsLibraryUrl()`, `vendor/npm-asset/hls.js`, installed by Composer), once per
+  page, and never a copy from another site. Without it, or if it fails, the picture is
+  shown, linked to the post. That script holds no value from the post and no address: it
+  reads the element's own attributes. A Skylight video is a Bluesky post and is posted by its bsky.app address.
   `IdnoPlugins/Video/Tests/BlueskyVideoTest.php` checks this.
 - A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
   for example; `/content/<category>/` for the whole site). The profile itself lists
