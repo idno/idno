@@ -529,6 +529,117 @@ namespace Idno\Entities {
         }
 
         /**
+         * Has this member been banned from the site? A banned member cannot sign in: Session
+         * refuses them wherever it refuses a blocked email address, which ends their browser
+         * sessions on the next request and stops their API key and access tokens.
+         *
+         * @return bool
+         */
+        function isBanned()
+        {
+            return !empty($this->banned);
+        }
+
+        /**
+         * Ban this member. The caller saves the member.
+         *
+         * Nobody can ban themselves, and the last administrator who is not banned cannot be
+         * banned. Banning an administrator takes the administrator right away; lifting the
+         * ban does not give it back.
+         *
+         * @param  string $reason       Why, for the administrators. Never shown to anyone else.
+         * @param  string $by_uuid      The UUID of the administrator who is banning
+         * @param  bool   $hide_profile Whether the member's profile is hidden too (see isHiddenByBan())
+         * @return bool False (and nothing changed) if this member must not be banned
+         */
+        function ban($reason, $by_uuid, $hide_profile = false)
+        {
+            if (!$this->canBeBannedBy($by_uuid)) {
+                return false;
+            }
+
+            $this->banned = time();
+            $this->ban_reason = trim(strip_tags((string) $reason));
+            $this->banned_by = (string) $by_uuid;
+            $this->ban_hides_profile = (bool) $hide_profile;
+            $this->setAdmin(false);
+
+            return true;
+        }
+
+        /**
+         * May this member be banned by a given administrator? Nobody can ban themselves, and
+         * the last administrator who is not banned cannot be banned.
+         *
+         * @param  string $by_uuid The UUID of the administrator who would ban
+         * @return bool
+         */
+        function canBeBannedBy($by_uuid)
+        {
+            if ((string) $by_uuid === (string) $this->getUUID()) {
+                return false;
+            }
+            if (!empty($this->admin) && !$this->isBanned() && static::countUnbannedAdmins() <= 1) {
+                return false;
+            }
+
+            return true;
+        }
+
+        /**
+         * Lift this member's ban. The caller saves the member.
+         */
+        function unban()
+        {
+            $this->banned = false;
+            $this->ban_reason = '';
+            $this->banned_by = '';
+            $this->ban_hides_profile = false;
+        }
+
+        /**
+         * Is this member banned in a way that hides their profile from everyone but the
+         * administrators? The profile page then answers as if there were no such member.
+         *
+         * @return bool
+         */
+        function isHiddenByBan()
+        {
+            return $this->isBanned() && !empty($this->ban_hides_profile);
+        }
+
+        /**
+         * When, why and by whom this member was banned. For administrators' pages only.
+         *
+         * @return array|null 'time', 'reason' and 'by' (a UUID), or null if the member is not banned
+         */
+        function getBan()
+        {
+            if (!$this->isBanned()) {
+                return null;
+            }
+
+            return ['time' => (int) $this->banned, 'reason' => (string) $this->ban_reason, 'by' => (string) $this->banned_by];
+        }
+
+        /**
+         * How many administrators the site has who are not banned
+         *
+         * @return int
+         */
+        static function countUnbannedAdmins()
+        {
+            $count = 0;
+            foreach (static::get(['admin' => true], [], 10000) ?: [] as $user) {
+                if (!empty($user->admin) && !$user->isBanned()) {
+                    $count++;
+                }
+            }
+
+            return $count;
+        }
+
+        /**
          * Can a specified user (either an explicitly specified user ID
          * or the currently logged-in user if this is left blank) edit
          * this user?
@@ -1126,6 +1237,7 @@ namespace Idno\Entities {
 
             unset($data['updated']);
             unset($data['published']);
+            unset($data['banned'], $data['ban_reason'], $data['banned_by'], $data['ban_hides_profile']);
 
             $data['image'] = array('url' => $this->getIcon());
             if (!empty($this->profile['url'])) {

@@ -26,6 +26,10 @@ namespace Idno\Pages\User {
             if (empty($user)) {
                 $this->noContent();
             }
+            // A member banned together with everything they posted has no profile to show
+            if ($user->isHiddenByBan() && !\Idno\Core\Idno::site()->session()->isAdmin()) {
+                $this->noContent();
+            }
 
             // Users own their own profiles
             $this->setOwner($user);

@@ -175,6 +175,33 @@ class Main extends Plugin
         });
 
         // -------------------------------------------------------
+        // Moderation: a post that the moderators take down is deleted on other
+        // servers, and announced again if it is put back. (Saving a post that is
+        // hidden delivers nothing: see the 'updated' listener above.) Other
+        // servers may not show a post again once they have deleted it.
+        // -------------------------------------------------------
+        foreach (['moderation/takedown' => 'buildDelete', 'moderation/restore' => 'buildCreate'] as $moderationEvent => $builder) {
+            \Idno\Core\Idno::site()->events()->addListener($moderationEvent, function (\Idno\Core\Event $event) use ($builder) {
+
+                $object = $event->data()['object'] ?? null;
+                if (!($object instanceof \Idno\Common\Entity) || $object instanceof User) return;
+                if (!$object->isPublic()) return;
+
+                $type = $object->getActivityStreamsObjectType();
+                if (empty($type) || $type === 'entity') return;
+
+                $user = $object->getOwner();
+                if (!$user || !($user instanceof User)) return;
+
+                try {
+                    Delivery::deliverToFollowers($user, ActivityBuilder::$builder($object));
+                } catch (\Exception $e) {
+                    \Idno\Core\Idno::site()->logging()->error('ActivityPub: Error building moderation activity: ' . $e->getMessage());
+                }
+            });
+        }
+
+        // -------------------------------------------------------
         // Handle queued delivery (dispatched by the async queue)
         // -------------------------------------------------------
         \Idno\Core\Idno::site()->events()->addListener('activitypub/deliver', function (\Idno\Core\Event $event) {

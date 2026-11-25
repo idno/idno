@@ -1,4 +1,5 @@
 <link href="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>css/<?php echo $this->getModifiedTS('css/idno.min.css'); ?>/idno.min.css" rel="stylesheet">
+<link href="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>css/moremenu.css" rel="stylesheet">
 
 <!-- Syndication -->
 <link

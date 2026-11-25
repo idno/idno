@@ -47,6 +47,7 @@ if (empty($vars['user']) && !empty($vars['object'])) {
                         <h1 class="p-profile">
                             <a href="<?php echo $vars['user']->getDisplayURL() ?>"
                                class="u-url p-name fn"><?php echo htmlentities(strip_tags($vars['user']->getTitle()), ENT_QUOTES, 'UTF-8') ?></a>
+                            <?php echo $this->draw('entity/User/menu') ?>
                         </h1>
                     </div>
                 </div>

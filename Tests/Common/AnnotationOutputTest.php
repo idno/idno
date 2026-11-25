@@ -167,7 +167,9 @@ class AnnotationOutputTest extends \Tests\IdnoTestCase
         $allowed = ['href', 'src', 'alt', 'class', 'rel', 'id', 'style', 'datetime', 'target',
             'action', 'method', 'type', 'name', 'value', 'title', 'aria-label', 'role',
             'data-confirm', 'width', 'height', 'viewbox', 'fill', 'stroke', 'd', 'xmlns',
-            'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'points', 'x1', 'x2', 'y1', 'y2', 'aria-hidden'];
+            'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'points', 'x1', 'x2', 'y1', 'y2', 'aria-hidden',
+            // The comment's "More" menu: attributes with fixed names, whose values are checked like the others
+            'data-idno-more-menu', 'data-idno-copy-link', 'data-copied-text', 'aria-live', 'focusable', 'cx', 'cy', 'r', 'data-mod-report'];
 
         foreach ($doc->getElementsByTagName('*') as $element) {
             $this->assertNotContains($element->nodeName, ['script', 'iframe', 'object', 'embed'], 'No such element should be drawn: ' . $html);
