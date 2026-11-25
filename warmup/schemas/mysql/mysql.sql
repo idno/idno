@@ -5,6 +5,11 @@
 -- character, emoji included. Everything else is ASCII (identifiers, URLs, class and field
 -- names) and stays in utf8 with its shorter index keys. See 2026111401.sql.
 --
+-- The `_id` of every main table is a UNIQUE KEY: the _search and _metadata tables refer to
+-- it with a foreign key, and MySQL 8.4 refuses a foreign key to a column that is not unique
+-- (restrict_fk_on_non_standard_key). `site` and `config` had a plain KEY until November 2026;
+-- installations made before then keep it, which MySQL allows for tables that exist.
+--
 
 --
 -- Table structure for table `config`
@@ -22,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `site` (
 
     PRIMARY KEY (`uuid`),
     KEY `owner` (`owner`,`created`),
-    KEY `_id` (`_id`),
+    UNIQUE KEY `_id` (`_id`),
     KEY `entity_subtype` (`entity_subtype`),
     KEY `publish_status` (`publish_status`),
     KEY `siteid` (`siteid`)
@@ -59,7 +64,7 @@ CREATE TABLE IF NOT EXISTS `config` (
   `publish_status` varchar(255) NOT NULL DEFAULT 'published',
   PRIMARY KEY (`uuid`),
   KEY `owner` (`owner`,`created`),
-  KEY `_id` (`_id`),
+  UNIQUE KEY `_id` (`_id`),
   KEY `entity_subtype` (`entity_subtype`),
   KEY `publish_status` (`publish_status`),
   KEY `siteid` (`siteid`)

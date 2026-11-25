@@ -4,12 +4,12 @@
 # Built: %datetime%
 #
 
-database = '%database%'
-dbname = '%dbname%'
-dbpass = '%dbpass%'
-dbuser = '%dbuser%'
-dbhost = '%dbhost%'
-
-filesystem = '%filesystem%'
-uploadpath = '%uploadpath%'
+database = %database%
+dbname = %dbname%
+dbuser = %dbuser%
+dbpass = %dbpass%
+dbhost = %dbhost%
+%dbport_setting%
+filesystem = %filesystem%
+uploadpath = %uploadpath%
 

@@ -386,6 +386,13 @@ namespace Tests\Data {
             $this->scratchDatabases[] = $name;
 
             $client = $this->connectTo($name);
+            try {
+                // The schema of an older installation has foreign keys to a column with a plain
+                // key, which MySQL 8.4 makes only when told to. Other servers have no such setting.
+                $client->exec('set session restrict_fk_on_non_standard_key = off');
+            } catch (\PDOException $e) {
+                // Not MySQL 8.4, or not allowed: the schema is loaded as the server permits
+            }
             foreach (explode(";\n", file_get_contents($schemaFile)) as $statement) {
                 if (trim($statement) !== '') {
                     $client->exec($statement);
