@@ -11,6 +11,9 @@
             <p>
                 <?php echo \Idno\Core\Idno::site()->language()->_('Your content stays on your site &mdash; syncing just makes it discoverable in more places.'); ?>
             </p>
+            <p>
+                <?php echo \Idno\Core\Idno::site()->language()->_('Status updates, videos and audio are saved to your account too, as records of their own. They don\'t appear in Bluesky unless you ask for that below. When you edit or delete a post here, its record is changed or deleted too. Only posts that are public and published are shared: drafts and private posts never are.'); ?>
+            </p>
         </div>
 
         <?php if (empty($vars['sync_enabled'])) { ?>
@@ -48,11 +51,28 @@
             </form>
         </div>
 
+        <!-- Bluesky -->
+        <div class="well">
+            <h3><?php echo \Idno\Core\Idno::site()->language()->_('Bluesky'); ?></h3>
+            <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>account/settings/standardsitesync/" method="post">
+                <?php echo \Idno\Core\Idno::site()->actions()->signForm('/account/settings/standardsitesync/') ?>
+                <input type="hidden" name="action" value="options">
+                <div class="checkbox">
+                    <label for="atproto-bluesky">
+                        <input type="checkbox" id="atproto-bluesky" name="bluesky" value="1"<?php echo !empty($vars['bluesky']) ? ' checked' : '' ?>>
+                        <?php echo \Idno\Core\Idno::site()->language()->_('Also post my status updates, videos and audio to Bluesky'); ?>
+                    </label>
+                </div>
+                <p class="help-block"><?php echo \Idno\Core\Idno::site()->language()->_('Your followers on Bluesky will see each one as a post, with a link back here where one is needed. If you turn this off, nothing more is posted there; posts already there stay until you delete them here or there.'); ?></p>
+                <button type="submit" class="btn btn-primary"><?php echo \Idno\Core\Idno::site()->language()->_('Save'); ?></button>
+            </form>
+        </div>
+
         <!-- Backfill -->
         <div class="well">
             <h3><?php echo \Idno\Core\Idno::site()->language()->_('Sync older posts'); ?></h3>
             <p>
-                <?php echo \Idno\Core\Idno::site()->language()->_('Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it\'s safe to run this more than once.'); ?>
+                <?php echo \Idno\Core\Idno::site()->language()->_('Already have posts on this site? You can sync them all at once. Posts that have already been synced will be skipped, so it\'s safe to run this more than once. If you have asked for your posts to go to Bluesky, older status updates, videos and audio will appear there under their original dates.'); ?>
             </p>
 
             <form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>account/settings/standardsitesync/backfill/" method="post" style="margin-top: 1em;">

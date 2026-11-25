@@ -91,308 +91,371 @@ class Main extends Plugin
 
     public function registerEventHooks()
     {
+        $events = \Idno\Core\Idno::site()->events();
 
-        // -------------------------------------------------------
-        // Sync new content to PDS on save (via queue)
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener('saved', function (\Idno\Core\Event $event) {
-
-            $eventdata = $event->data();
-            $object = $eventdata['object'];
-
-            if (!$this->shouldSync($object)) {
-                return;
+        // A post was saved for the first time, or changed: write it to the PDS, or take
+        // it away from there when it is no longer public and published (via the queue)
+        $saved = function (\Idno\Core\Event $event) {
+            $object = $event->data()['object'] ?? null;
+            if ($action = self::actionFor($object)) {
+                \Idno\Core\Idno::site()->queue()->enqueue('default', 'standardsitesync/' . $action, ['object' => $object]);
             }
+        };
+        $events->addListener('saved', $saved);
+        $events->addListener('updated', $saved);
 
-            // Prevent infinite loop: syncEntity saves the AT-URI back
-            // on the entity, which triggers 'saved' again.
-            if (in_array($object->getID(), self::$syncingEntities)) {
-                return;
+        // A post is being deleted: delete its record (via the queue)
+        $events->addListener('delete', function (\Idno\Core\Event $event) {
+            $object = $event->data()['object'] ?? null;
+            if (self::isContent($object) && self::isEnabled() && (self::shouldSync($object) || self::hasRemoteRecord($object)) && self::sessionFor($object)) {
+                \Idno\Core\Idno::site()->queue()->enqueue('default', 'standardsitesync/delete', ['object' => $object]);
             }
-
-            $user = $object->getOwner();
-            if (!$user || !($user instanceof User)) {
-                return;
-            }
-
-            if (empty($this->getATProtoSessionForUser($user))) {
-                return;
-            }
-
-            \Idno\Core\Idno::site()->queue()->enqueue(
-                'default',
-                'standardsitesync/sync',
-                ['object' => $object]
-            );
         });
 
-        // -------------------------------------------------------
-        // Sync updates to PDS (via queue)
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener('updated', function (\Idno\Core\Event $event) {
-
-            $eventdata = $event->data();
-            $object = $eventdata['object'];
-
-            if (!$this->shouldSync($object)) {
+        // Queued: backfill one post
+        $events->addListener('standardsitesync/backfill', function (\Idno\Core\Event $event) {
+            $data = $event->data();
+            if (empty($data['entity_id'])) {
+                \Idno\Core\Idno::site()->logging()->warning('StandardSiteSync: Backfill event missing entity_id');
                 return;
             }
-
-            if (in_array($object->getID(), self::$syncingEntities)) {
+            $entity = \Idno\Common\Entity::getByID($data['entity_id']);
+            if (!$entity) {
+                \Idno\Core\Idno::site()->logging()->warning('StandardSiteSync: Entity not found for backfill: ' . $data['entity_id']);
                 return;
             }
-
-            $user = $object->getOwner();
-            if (!$user || !($user instanceof User)) {
-                return;
+            if (self::isEnabled() && self::shouldSync($entity)) {
+                self::syncEntity($entity, true);
             }
-
-            if (empty($this->getATProtoSessionForUser($user))) {
-                return;
-            }
-
-            \Idno\Core\Idno::site()->queue()->enqueue(
-                'default',
-                'standardsitesync/sync',
-                ['object' => $object]
-            );
         });
 
-        // -------------------------------------------------------
-        // Delete from PDS when content is deleted (via queue)
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener('delete', function (\Idno\Core\Event $event) {
-
-            $eventdata = $event->data();
-            $object = $eventdata['object'];
-
-            if (!$this->shouldSync($object)) {
+        // Queued: write one post
+        $events->addListener('standardsitesync/sync', function (\Idno\Core\Event $event) {
+            $object = $event->data()['object'] ?? null;
+            if (!($object instanceof \Idno\Common\Entity)) {
+                \Idno\Core\Idno::site()->logging()->warning('StandardSiteSync: Sync event missing valid object');
                 return;
             }
-
-            $user = $object->getOwner();
-            if (!$user || !($user instanceof User)) {
-                return;
-            }
-
-            if (empty($this->getATProtoSessionForUser($user))) {
-                return;
-            }
-
-            \Idno\Core\Idno::site()->queue()->enqueue(
-                'default',
-                'standardsitesync/delete',
-                ['object' => $object]
-            );
+            self::syncQueued($object);
         });
 
-        // -------------------------------------------------------
-        // Handle queued backfill events
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener(
-            'standardsitesync/backfill',
-            function (\Idno\Core\Event $event) {
-
-                $data = $event->data();
-
-                if (empty($data['entity_id'])) {
-                    \Idno\Core\Idno::site()->logging()->warning(
-                        'StandardSiteSync: Backfill event missing entity_id'
-                    );
-                    return;
-                }
-
-                $entity = \Idno\Common\Entity::getByID($data['entity_id']);
-                if (!$entity) {
-                    \Idno\Core\Idno::site()->logging()->warning(
-                        'StandardSiteSync: Entity not found for backfill: ' . $data['entity_id']
-                    );
-                    return;
-                }
-
-                $user = $entity->getOwner();
-                if (!$user || !($user instanceof User)) {
-                    return;
-                }
-
-                $session = $this->getATProtoSessionForUser($user);
-                if (empty($session)) {
-                    \Idno\Core\Idno::site()->logging()->warning(
-                        'StandardSiteSync: No AT Protocol session for backfill user'
-                    );
-                    return;
-                }
-
-                $this->syncEntity($entity, $session, $user, true);
+        // Queued: take one post away that is no longer public and published
+        $events->addListener('standardsitesync/unsync', function (\Idno\Core\Event $event) {
+            $object = $event->data()['object'] ?? null;
+            if ($object instanceof \Idno\Common\Entity) {
+                self::syncQueued($object);
             }
-        );
+        });
 
-        // -------------------------------------------------------
-        // Handle queued sync events
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener(
-            'standardsitesync/sync',
-            function (\Idno\Core\Event $event) {
-
-                $data = $event->data();
-                $object = $data['object'] ?? null;
-
-                if (empty($object) || !($object instanceof \Idno\Common\Entity)) {
-                    \Idno\Core\Idno::site()->logging()->warning(
-                        'StandardSiteSync: Sync event missing valid object'
-                    );
-                    return;
-                }
-
-                $user = $object->getOwner();
-                if (!$user || !($user instanceof User)) {
-                    return;
-                }
-
-                $session = $this->getATProtoSessionForUser($user);
-                if (empty($session)) {
-                    return;
-                }
-
-                $this->syncEntity($object, $session, $user);
+        // Queued: delete the record of a post that has been deleted
+        $events->addListener('standardsitesync/delete', function (\Idno\Core\Event $event) {
+            $object = $event->data()['object'] ?? null;
+            if (!($object instanceof \Idno\Common\Entity)) {
+                \Idno\Core\Idno::site()->logging()->warning('StandardSiteSync: Delete event missing valid object');
+                return;
             }
-        );
-
-        // -------------------------------------------------------
-        // Handle queued delete events
-        // -------------------------------------------------------
-        \Idno\Core\Idno::site()->events()->addListener(
-            'standardsitesync/delete',
-            function (\Idno\Core\Event $event) {
-
-                $data = $event->data();
-                $object = $data['object'] ?? null;
-
-                if (empty($object) || !($object instanceof \Idno\Common\Entity)) {
-                    \Idno\Core\Idno::site()->logging()->warning(
-                        'StandardSiteSync: Delete event missing valid object'
-                    );
-                    return;
-                }
-
-                $user = $object->getOwner();
-                if (!$user || !($user instanceof User)) {
-                    return;
-                }
-
-                $session = $this->getATProtoSessionForUser($user);
-                if (empty($session)) {
-                    return;
-                }
-
-                try {
-                    $client = new ATProtoClient($session);
-                    $client->deleteDocument($object);
-                    $this->saveATProtoSessionForUser($user, $client->getSession());
-                    \Idno\Core\Idno::site()->logging()->debug(
-                        'StandardSiteSync: Deleted document for entity ' . $object->getID()
-                    );
-                } catch (\Exception $e) {
-                    \Idno\Core\Idno::site()->logging()->error(
-                        'StandardSiteSync: Error deleting document: ' . $e->getMessage()
-                    );
-                }
-            }
-        );
+            self::removeEntity($object, false);
+        });
     }
 
     /**
-     * Determine whether an entity should be synced to the PDS.
-     */
-    private function shouldSync($object): bool
-    {
-        // Skip non-content entities
-        if ($object instanceof User) {
-            return false;
-        }
-        if ($object instanceof \Idno\Entities\AsynchronousQueuedEvent) {
-            return false;
-        }
-
-        // Must be a content entity
-        if (!($object instanceof \Idno\Common\Entity)) {
-            return false;
-        }
-
-        // Only sync public, published content
-        if (method_exists($object, 'isPublic') && !$object->isPublic()) {
-            return false;
-        }
-        if (method_exists($object, 'getPublishStatus') && $object->getPublishStatus() !== 'published') {
-            return false;
-        }
-
-        // Must have a real content type
-        $type = $object->getActivityStreamsObjectType();
-        if (empty($type) || $type === 'entity') {
-            return false;
-        }
-
-        // Check if sync is enabled site-wide
-        if (empty(\Idno\Core\Idno::site()->config()->standardsitesync_enabled)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Sync a single entity to the PDS.
+     * What saving an entity asks of this plugin.
      *
-     * @param \Idno\Common\Entity $entity
-     * @param array               $session      AT Protocol session data
-     * @param User                $user         The entity owner
-     * @param bool                $skipExisting If true, skip entities already synced
+     * @param  mixed $object The entity that was saved
+     * @return string|null "sync" (write it to the owner's PDS), "unsync" (it has a record there and is
+     *                     no longer public and published: take it away) or null (nothing)
      */
-    private function syncEntity(
-        \Idno\Common\Entity $entity,
-        array $session,
-        User $user,
-        bool $skipExisting = false
-    ): void
+    public static function actionFor($object): ?string
+    {
+        if (!self::isContent($object) || !self::isEnabled()) {
+            return null;
+        }
+        // Writing a post saves its record's address on the entity, which is not a change to write
+        if (in_array($object->getID(), self::$syncingEntities)) {
+            return null;
+        }
+        if (!self::sessionFor($object)) {
+            return null;
+        }
+        if (self::shouldSync($object)) {
+            return 'sync';
+        }
+
+        return self::hasRemoteRecord($object) ? 'unsync' : null;
+    }
+
+    /**
+     * Whether an object is a post: an entity with a content type.
+     *
+     * @param  mixed $object
+     * @return bool
+     */
+    private static function isContent($object): bool
+    {
+        if (!($object instanceof \Idno\Common\Entity) || $object instanceof User || $object instanceof \Idno\Entities\AsynchronousQueuedEvent) {
+            return false;
+        }
+        $type = $object->getActivityStreamsObjectType();
+
+        return !empty($type) && $type !== 'entity';
+    }
+
+    /**
+     * Whether an administrator has turned syncing on for the site.
+     */
+    private static function isEnabled(): bool
+    {
+        return !empty(\Idno\Core\Idno::site()->config()->standardsitesync_enabled);
+    }
+
+    /**
+     * Whether a post may be on the PDS: only one that is public and published. A draft,
+     * a private post or a post for members only is never written there.
+     *
+     * @param  mixed $object
+     * @return bool
+     */
+    public static function shouldSync($object): bool
+    {
+        if (!self::isContent($object)) {
+            return false;
+        }
+        if (!$object->isPublic()) {
+            return false;
+        }
+
+        return $object->getPublishStatus() === 'published';
+    }
+
+    /**
+     * Whether a record has been written to a PDS for an entity (a post or a document).
+     *
+     * @param  mixed $object
+     * @return bool
+     */
+    public static function hasRemoteRecord($object): bool
+    {
+        return $object instanceof \Idno\Common\Entity
+            && (FeedSync::hasRecord($object) || PostSync::hasRecord($object) || EpisodeSync::hasRecord($object) || !empty($object->standardsitesync_uri));
+    }
+
+    /**
+     * The owner of an entity, when they have connected an account.
+     *
+     * @return User|null
+     */
+    private static function sessionFor(\Idno\Common\Entity $entity): ?User
+    {
+        $user = $entity->getOwner();
+
+        return ($user instanceof User && !empty(self::getATProtoSessionForUser($user))) ? $user : null;
+    }
+
+    /**
+     * Handle a queued write. The queue may run long after the post was saved, and with a
+     * copy of it made then, so the post is read again: one that has been deleted or
+     * hidden since is not written, and one that is no longer public is taken away.
+     */
+    private static function syncQueued(\Idno\Common\Entity $object): void
+    {
+        if (!self::isEnabled()) {
+            return;
+        }
+        $entity = \Idno\Common\Entity::getByID($object->getID());
+        if (!$entity) {
+            // Deleted since, or hidden from whoever runs the queue. A post that was to be taken
+            // away still is, from the copy the queue was handed; nothing is ever written from it.
+            if (!self::shouldSync($object)) {
+                self::removeEntity($object, false);
+            }
+
+            return;
+        }
+        $changed = self::shouldSync($entity) ? self::syncEntity($entity) : self::removeEntity($entity, true);
+
+        // The request that saved the post may save its own copy again: keep that copy in step
+        if ($changed && $entity !== $object) {
+            foreach (array_merge(FeedSync::FIELDS, PostSync::FIELDS, EpisodeSync::FIELDS, ['standardsitesync_uri', 'posse']) as $field) {
+                $object->$field = $entity->$field;
+            }
+        }
+    }
+
+    /**
+     * Write a single entity to its owner's PDS: a status update, a video or an audio
+     * post as a record of Idno's own lexicons (see FeedRecord), an audio post as a podcast
+     * episode too (see EpisodeRecord), and, for a member who has asked for it, each of them
+     * as a Bluesky post (see PostRecord); anything else as a standard.site document.
+     * Nothing that goes wrong is passed on: it is logged, without what the server
+     * answered and without any token.
+     *
+     * @param  \Idno\Common\Entity $entity       A public, published post
+     * @param  bool                $skipExisting If true, leave a post alone that already has its record
+     * @return bool Whether the entity was changed and saved
+     */
+    public static function syncEntity(\Idno\Common\Entity $entity, bool $skipExisting = false): bool
     {
         $entityId = $entity->getID();
+        $user = self::sessionFor($entity);
+        if (!$user) {
+            return false;
+        }
 
         try {
-            $client = new ATProtoClient($session);
+            $client = new ATProtoClient(self::getATProtoSessionForUser($user));
+
+            if (PostSync::handles($entity)) {
+                $bluesky = self::postsToBluesky($user);
+                $audio = EpisodeSync::handles($entity);
+                if (
+                    $skipExisting && FeedSync::hasRecord($entity)
+                    && (!$audio || EpisodeSync::hasRecord($entity))
+                    && (!$bluesky || PostSync::hasRecord($entity))
+                ) {
+                    return false;
+                }
+                $changes = [PostSync::CREATED, PostSync::UPDATED, PostSync::GONE];
+                $changed = false;
+
+                // Only for a member who asked for it: a Bluesky post, which their followers there see
+                if ($bluesky && in_array((new PostSync($client))->sync($entity), $changes, true)) {
+                    $changed = true;
+                }
+
+                // The record of the post itself, in Idno's own lexicons, which Bluesky does not show
+                $outcome = (new FeedSync($client))->sync($entity);
+                $changed = $changed || in_array($outcome, $changes, true);
+
+                // An audio post is also an episode of the member's podcast series
+                if ($audio && in_array((new EpisodeSync($client))->sync($entity, $user), $changes, true)) {
+                    $changed = true;
+                }
+
+                // Earlier versions wrote these posts as standard.site documents: that record is replaced
+                if ($outcome !== PostSync::SKIPPED && !empty($entity->standardsitesync_uri)) {
+                    $client->deleteDocument($entity);
+                    $entity->standardsitesync_uri = null;
+                    $changed = true;
+                }
+                self::saveATProtoSessionForUser($user, $client->getSession());
+                if ($changed) {
+                    self::saveQuietly($entity);
+                }
+                \Idno\Core\Idno::site()->logging()->debug('StandardSiteSync: Post for entity ' . $entityId . ': ' . $outcome);
+
+                return $changed;
+            }
 
             if ($skipExisting && $client->documentExists($entity)) {
-                \Idno\Core\Idno::site()->logging()->debug(
-                    'StandardSiteSync: Skipping already-synced entity ' . $entityId
-                );
-                $this->saveATProtoSessionForUser($user, $client->getSession());
-                return;
+                \Idno\Core\Idno::site()->logging()->debug('StandardSiteSync: Skipping already-synced entity ' . $entityId);
+                self::saveATProtoSessionForUser($user, $client->getSession());
+
+                return false;
             }
 
             $result = $client->putDocument($entity);
-            $this->saveATProtoSessionForUser($user, $client->getSession());
+            self::saveATProtoSessionForUser($user, $client->getSession());
 
             // Store the AT-URI on the entity so we can emit a <link> tag.
-            // Use a re-entrancy guard so the save() here does not trigger
-            // another sync via the 'saved' event listener.
+            $changed = false;
             if (!empty($result['uri']) && ($entity->standardsitesync_uri ?? null) !== $result['uri']) {
-                self::$syncingEntities[] = $entityId;
-                try {
-                    $entity->standardsitesync_uri = $result['uri'];
-                    $entity->save();
-                } finally {
-                    self::$syncingEntities = array_diff(self::$syncingEntities, [$entityId]);
+                $entity->standardsitesync_uri = $result['uri'];
+                self::saveQuietly($entity);
+                $changed = true;
+            }
+            \Idno\Core\Idno::site()->logging()->debug('StandardSiteSync: Synced entity ' . $entityId . ' -> ' . ($result['uri'] ?? 'unknown'));
+
+            return $changed;
+        } catch (\Exception $e) {
+            self::logFailure('Error syncing entity ' . $entityId, $e, $user, $client ?? null);
+
+            return false;
+        }
+    }
+
+    /**
+     * Delete the record of an entity from its owner's PDS.
+     *
+     * @param  \Idno\Common\Entity $entity
+     * @param  bool                $save Whether the entity still exists and is to be saved without its record
+     * @return bool Whether the entity was changed (and saved, if asked)
+     */
+    public static function removeEntity(\Idno\Common\Entity $entity, bool $save): bool
+    {
+        $user = self::sessionFor($entity);
+        if (!$user || (PostSync::handles($entity) && !self::hasRemoteRecord($entity))) {
+            return false;
+        }
+
+        try {
+            $client = new ATProtoClient(self::getATProtoSessionForUser($user));
+
+            $changed = PostSync::handles($entity) && (new PostSync($client))->remove($entity);
+            if ((new FeedSync($client))->remove($entity)) {
+                $changed = true;
+            }
+            if ((new EpisodeSync($client))->remove($entity)) {
+                $changed = true;
+            }
+            if (!PostSync::handles($entity) || !empty($entity->standardsitesync_uri)) {
+                $client->deleteDocument($entity);
+                if (!empty($entity->standardsitesync_uri)) {
+                    $entity->standardsitesync_uri = null;
+                    $changed = true;
                 }
             }
+            self::saveATProtoSessionForUser($user, $client->getSession());
+            if ($changed && $save) {
+                self::saveQuietly($entity);
+            }
+            \Idno\Core\Idno::site()->logging()->debug('StandardSiteSync: Deleted record for entity ' . $entity->getID());
 
-            \Idno\Core\Idno::site()->logging()->debug(
-                'StandardSiteSync: Synced entity ' . $entityId . ' -> ' . ($result['uri'] ?? 'unknown')
-            );
+            return $changed;
         } catch (\Exception $e) {
-            \Idno\Core\Idno::site()->logging()->error(
-                'StandardSiteSync: Error syncing entity ' . $entityId . ': ' . $e->getMessage()
-            );
+            self::logFailure('Error deleting record for entity ' . $entity->getID(), $e, $user, $client ?? null);
+
+            return false;
         }
+    }
+
+    /**
+     * Save an entity without that save being taken for a change to the post.
+     */
+    private static function saveQuietly(\Idno\Common\Entity $entity): void
+    {
+        $entityId = $entity->getID();
+        self::$syncingEntities[] = $entityId;
+        try {
+            $entity->save(true);
+        } finally {
+            self::$syncingEntities = array_diff(self::$syncingEntities, [$entityId]);
+        }
+    }
+
+    /**
+     * Log a failure. A refusal by the server is logged as its status and the name of the
+     * error (XrpcException); anything else as its message, which this plugin wrote.
+     */
+    private static function logFailure(string $what, \Exception $e, User $user, ?ATProtoClient $client): void
+    {
+        if ($client) {
+            try {
+                // Keep what the client learned (a refreshed token, a new nonce)
+                self::saveATProtoSessionForUser($user, $client->getSession());
+            } catch (\Exception $ignored) {
+                // Nothing more can be done here
+            }
+        }
+        \Idno\Core\Idno::site()->logging()->error('StandardSiteSync: ' . $what . ': ' . $e->getMessage());
+    }
+
+    /**
+     * Whether a member has asked for their status updates, videos and audio to be posted
+     * to Bluesky as well. Nobody has unless they turned it on in their settings.
+     */
+    public static function postsToBluesky(User $user): bool
+    {
+        return !empty($user->standardsitesync_bluesky);
     }
 
     /**

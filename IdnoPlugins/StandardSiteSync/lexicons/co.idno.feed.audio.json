@@ -1,0 +1,95 @@
+{
+  "lexicon": 1,
+  "id": "co.idno.feed.audio",
+  "defs": {
+    "main": {
+      "type": "record",
+      "description": "An audio post published on a website running Idno: an audio file, by its address, with a title and a description.",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": [
+          "audio",
+          "url",
+          "createdAt"
+        ],
+        "properties": {
+          "audio": {
+            "type": "string",
+            "format": "uri",
+            "description": "The address of the audio file."
+          },
+          "mimeType": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "The media type of the file, when the address is that of a file."
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The size of the file in bytes, when the address is that of a file."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 3000,
+            "maxGraphemes": 300,
+            "description": "The title of the post, if it has one."
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 100000,
+            "maxGraphemes": 10000,
+            "description": "The description of the audio, as plain text."
+          },
+          "facets": {
+            "type": "array",
+            "description": "Links and hashtags in text, by the range of UTF-8 bytes each covers.",
+            "items": {
+              "type": "ref",
+              "ref": "app.bsky.richtext.facet"
+            }
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The address of the post on the site it was published on. This is the original; the record is a copy of it."
+          },
+          "tags": {
+            "type": "array",
+            "maxLength": 50,
+            "description": "Tags of the post, without a leading '#', besides any hashtags in text.",
+            "items": {
+              "type": "string",
+              "maxLength": 640,
+              "maxGraphemes": 64
+            }
+          },
+          "langs": {
+            "type": "array",
+            "maxLength": 3,
+            "description": "The human language of the post.",
+            "items": {
+              "type": "string",
+              "format": "language"
+            }
+          },
+          "bskyPostRef": {
+            "type": "ref",
+            "ref": "com.atproto.repo.strongRef",
+            "description": "The Bluesky post (app.bsky.feed.post) that was made for this post, if its author chose to have one."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the post was published."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "When the post was last changed, if it has been."
+          }
+        }
+      }
+    }
+  }
+}

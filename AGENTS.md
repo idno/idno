@@ -144,6 +144,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **IndiePub** | IndieAuth + Micropub server |
 | **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
+| **StandardSiteSync** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
 | **Portfolios** | Members collect their own posts into named lists shown from their profile (see below) |
 | **Moderation** | Reporting by members and a moderation queue for administrators (see below) |
@@ -211,6 +212,70 @@ Each content plugin has an `Entry.php` entity class that defines
   and a corresponding `private static function handleXxx()` method
 - The `ActivityBuilder::CONTEXT_WITH_QUOTES` constant is the canonical `@context`
   for all outgoing activities
+
+## AT Protocol plugin (StandardSiteSync)
+
+`IdnoPlugins/StandardSiteSync/` writes a member's public, published posts to their own PDS
+(the account they connect at `/account/settings/standardsitesync`, with OAuth and DPoP), when a
+post is saved, changed or deleted, through the queue.
+
+| Content | Collection | What the record holds | On update | On delete |
+|---|---|---|---|---|
+| Status update | `co.idno.feed.status` | text, facets, `url`, `inReplyTo` | `putRecord`, same key | `deleteRecord` |
+| Video (Video plugin; a video file in Media) | `co.idno.feed.video` | the video's address, `provider`, `videoRecord`, title, text, `url` | same | same |
+| Audio (Media) | `co.idno.feed.audio` | the file's address, type and size, title, text, `url` | same | same |
+| Audio (Media), as well | `live.voxport.podcast.episode`, in the member's `live.voxport.podcast.series` | the file's address, type and size, title, summary | same | same (the series stays) |
+| Any of the three, only for a member who turned it on | `app.bsky.feed.post` | text and facets; an external card, a quote or `reply` | same | same |
+| Everything else | `site.standard.document` | | same | same |
+
+- **Nothing is written to Bluesky's collections unless the member asks.** A record in
+  `app.bsky.feed.post` is a post in the member's Bluesky feed, which their followers see; the
+  PDS is otherwise only where the member's data is kept. So status updates, videos and audio
+  go to Idno's own lexicons (`co.idno.feed.*`, the files in `lexicons/`, with how to publish
+  them), and a Bluesky post is made as well only when the member has turned on "Also post my
+  status updates, videos and audio to Bluesky" (`Main::postsToBluesky()`, off for everybody
+  until they do). Don't write a record of an `app.bsky` collection anywhere else. A record
+  that has a Bluesky post names it in `bskyPostRef`.
+- A published lexicon can only grow: new fields optional, nothing removed, renamed or made
+  stricter. Change the files in `lexicons/` with that in mind.
+- `FeedRecord::build()` (Idno's lexicons), `EpisodeRecord` (the podcast lexicons) and
+  `PostRecord::build()` (Bluesky) build records from plain values and ask nothing of anybody;
+  `RichText` makes text and facets; `PostSource` reads the values from an entity. `FeedSync`,
+  `EpisodeSync` and `PostSync` write each record and remember it on the entity
+  (`standardsitesync_record_*`, `standardsitesync_episode_*`, `standardsitesync_post_*`: `uri`,
+  `cid`, `hash`, `gone`). Only `PostSync` asks anything of another server (through
+  `BlueskyLookup`: the DID of a mentioned handle, the post replied to or quoted, a picture for
+  a YouTube card), so nothing is asked of Bluesky for a member who has not opted in. `Main`
+  holds the hooks, which only decide (`Main::actionFor()`) and enqueue. A new kind of post goes
+  in `PostSource::KINDS` and gets a lexicon file and a case in `FeedRecord`.
+- Facets count BYTES of the UTF-8 text. A Bluesky post holds 300 graphemes and 3000 bytes;
+  Idno's records hold 10000 and 100000; the podcast lexicons count bytes. Use `RichText` for
+  all of it: never `substr()`, `mb_substr()` or `strlen()` on text that goes into a record.
+  Text that is too long is cut between graphemes, outside any facet; a Bluesky post then ends
+  with a link to the post on this site.
+- The key of every one of these records is a TID made from the entity (`Tid::forEntity()`),
+  so a post written twice is one record (the PDS refuses any other key for
+  `app.bsky.feed.post`). A change is a `putRecord` with `swapRecord` (`RecordWriter`): if the
+  record is gone from the PDS, the member deleted it there, and it is not put back.
+- Only a post that is public and published is ever written (`Main::shouldSync()`). One that
+  stops being so is deleted from the PDS, whichever records it has. For Bluesky only: a reply
+  to something that is not on Bluesky, and a post that already has a Bluesky syndication
+  link, are not posted.
+- Audio: neither Bluesky nor anybody else has a shared record for it, so besides
+  `co.idno.feed.audio` an audio post is an episode in VoxPort's podcast lexicons, the only
+  published podcast lexicons there are. Each member has one series record, remembered on the
+  member (`standardsitesync_series_uri`, `_cid`, `_hash`). The audio file stays on this site;
+  it is not uploaded as a blob.
+- `app.bsky.embed.video` is for a video file uploaded to the member's PDS; nothing uses it
+  until the site keeps video files itself.
+- A refusal by a PDS is an `XrpcException`: its message is the HTTP status and the name of the
+  error, never the server's answer or a token. Keep it that way; the message is logged.
+- The OAuth scope is `atproto transition:generic`, which lets the site write any record and
+  upload blobs. Asking for other scopes means every connected member must connect again.
+- Tests replace `ATProtoClient::$transport` and `BlueskyLookup::$fetch`; no test talks to a
+  PDS. Records are checked against the lexicon files (`lexicons/`, and copies of the published
+  ones in `Tests/fixtures/lexicons` with their source and version) by
+  `Tests/LexiconValidator.php`. `IdnoPlugins/StandardSiteSync/Tests/` checks all of this.
 
 ## Moderation
 

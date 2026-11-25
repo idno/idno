@@ -65,21 +65,8 @@ class Backfill extends Page
         $count = 0;
 
         foreach ($entities as $entity) {
-            // Skip non-content entities
-            if ($entity instanceof \Idno\Entities\User) {
-                continue;
-            }
-            if ($entity instanceof \Idno\Entities\AsynchronousQueuedEvent) {
-                continue;
-            }
-
-            $type = $entity->getActivityStreamsObjectType();
-            if (empty($type) || $type === 'entity') {
-                continue;
-            }
-
-            // Only sync public content
-            if (method_exists($entity, 'isPublic') && !$entity->isPublic()) {
+            // Only posts that are public and published are ever written to a PDS
+            if (!Main::shouldSync($entity)) {
                 continue;
             }
 
@@ -88,20 +75,8 @@ class Backfill extends Page
                     'entity_id' => $entity->getID(),
                 ], $user->getUUID());
             } else {
-                // Synchronous fallback: sync directly
-                try {
-                    $latestSession = Main::getATProtoSessionForUser($user);
-                    $client = new ATProtoClient($latestSession);
-
-                    if (!$client->documentExists($entity)) {
-                        $client->putDocument($entity);
-                        Main::saveATProtoSessionForUser($user, $client->getSession());
-                    }
-                } catch (\Exception $e) {
-                    \Idno\Core\Idno::site()->logging()->error(
-                        'StandardSiteSync: Backfill error for entity ' . $entity->getID() . ': ' . $e->getMessage()
-                    );
-                }
+                // Synchronous fallback: sync directly. A post that has its record is left alone.
+                Main::syncEntity($entity, true);
             }
 
             $count++;

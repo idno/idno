@@ -18,6 +18,15 @@ class ATProtoClient
     private $session;
 
     /**
+     * Replaces the HTTP transport, for tests: a callable that takes the method, the
+     * address, the body (or null) and the list of header lines, and returns what
+     * httpGet() and httpPost() do: ['status' => int, 'body' => string, 'headers' => string[]].
+     *
+     * @var callable|null
+     */
+    public static $transport = null;
+
+    /**
      * @param array $session Stored session data from the user entity
      */
     public function __construct(array $session = [])
@@ -498,8 +507,9 @@ class ATProtoClient
         }
 
         if ($response['status'] !== 200) {
+            // The answer of the server is not repeated: only its status and the name of the error
             $err = json_decode($response['body'], true);
-            throw new \Idno\Exceptions\TechnicalException('Token refresh failed: ' . ($err['error_description'] ?? $err['error'] ?? $response['body']));
+            throw new XrpcException('Token refresh failed', (int) $response['status'], is_array($err) ? ($err['error'] ?? null) : null);
         }
 
         $tokenData = json_decode($response['body'], true);
@@ -568,7 +578,7 @@ class ATProtoClient
     /**
      * Make an authenticated request with DPoP proof and automatic nonce retry.
      */
-    private function authenticatedRequest(string $method, string $url, ?string $body = null): array
+    private function authenticatedRequest(string $method, string $url, ?string $body = null, string $contentType = 'application/json'): array
     {
         $dpopKey = $this->session['dpop_key'];
         $dpopNonce = $this->session['dpop_nonce_pds'] ?? null;
@@ -588,13 +598,13 @@ class ATProtoClient
         ];
 
         if ($body !== null) {
-            $headers[] = 'Content-Type: application/json';
+            $headers[] = 'Content-Type: ' . $contentType;
         }
 
         if ($method === 'POST') {
             $response = self::httpPost($url, $body, $headers);
         } else {
-            $response = self::httpGet($url, $headers);
+            $response = self::httpGet($url, $headers) ?? ['status' => 0, 'body' => '', 'headers' => []];
         }
 
         // Handle DPoP nonce challenge
@@ -620,13 +630,13 @@ class ATProtoClient
             ];
 
             if ($body !== null) {
-                $headers[] = 'Content-Type: application/json';
+                $headers[] = 'Content-Type: ' . $contentType;
             }
 
             if ($method === 'POST') {
                 $response = self::httpPost($url, $body, $headers);
             } else {
-                $response = self::httpGet($url, $headers);
+                $response = self::httpGet($url, $headers) ?? ['status' => 0, 'body' => '', 'headers' => []];
             }
 
             $newNonce = self::extractDPoPNonce($response);
@@ -635,15 +645,101 @@ class ATProtoClient
             }
         }
 
-        if ($response['status'] >= 400) {
+        if ($response['status'] >= 400 || $response['status'] < 200) {
+            // The answer of the server is not repeated: only its status and the name of the error
             $err = json_decode($response['body'], true);
-            throw new \Idno\Exceptions\TechnicalException(
-                'XRPC error (' . $response['status'] . '): ' .
-                ($err['message'] ?? $err['error'] ?? $response['body'])
-            );
+            throw new XrpcException('XRPC error', (int) $response['status'], is_array($err) ? ($err['error'] ?? null) : null);
         }
 
         return json_decode($response['body'], true) ?: [];
+    }
+
+    // ------------------------------------------------------------------
+    // Records of any collection
+    // ------------------------------------------------------------------
+
+    /**
+     * The DID of the account this client writes to.
+     */
+    public function getDid(): string
+    {
+        return (string) ($this->session['did'] ?? '');
+    }
+
+    /**
+     * Write a record under a key: it is created, or the record that has the key is
+     * replaced (com.atproto.repo.putRecord). Writing the same record twice leaves one.
+     *
+     * @param  string      $collection The NSID of the collection
+     * @param  string      $rkey       The record key
+     * @param  array       $record     The record
+     * @param  string|null $swapRecord When given, the write is refused (error "InvalidSwap") unless the
+     *                                 record now under the key has this CID
+     * @return array 'uri' and 'cid' of the record
+     */
+    public function putRecord(string $collection, string $rkey, array $record, ?string $swapRecord = null): array
+    {
+        $body = [
+            'repo'       => $this->session['did'],
+            'collection' => $collection,
+            'rkey'       => $rkey,
+            'record'     => $record,
+        ];
+        if ($swapRecord !== null) {
+            $body['swapRecord'] = $swapRecord;
+        }
+
+        return $this->xrpcPost('com.atproto.repo.putRecord', $body);
+    }
+
+    /**
+     * Delete a record (com.atproto.repo.deleteRecord). Deleting a record that is not
+     * there is not an error.
+     */
+    public function deleteRecord(string $collection, string $rkey): array
+    {
+        return $this->xrpcPost('com.atproto.repo.deleteRecord', [
+            'repo'       => $this->session['did'],
+            'collection' => $collection,
+            'rkey'       => $rkey,
+        ]);
+    }
+
+    /**
+     * Read a record of the account's own repository.
+     *
+     * @return array|null 'uri', 'cid' and 'value'; null when there is no such record
+     */
+    public function getRecord(string $collection, string $rkey): ?array
+    {
+        try {
+            return $this->xrpcGet('com.atproto.repo.getRecord', [
+                'repo'       => $this->session['did'],
+                'collection' => $collection,
+                'rkey'       => $rkey,
+            ]);
+        } catch (XrpcException $e) {
+            if ($e->getErrorName() === 'RecordNotFound' || $e->getStatus() === 404) {
+                return null;
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Upload a file to be referenced from a record (com.atproto.repo.uploadBlob).
+     *
+     * @param  string $bytes    The file
+     * @param  string $mimeType Its type
+     * @return array|null The blob, to be put into a record as it is; null when the answer had none
+     */
+    public function uploadBlob(string $bytes, string $mimeType): ?array
+    {
+        $this->ensureValidToken();
+
+        $answer = $this->authenticatedRequest('POST', $this->session['pds'] . '/xrpc/com.atproto.repo.uploadBlob', $bytes, $mimeType);
+
+        return is_array($answer['blob'] ?? null) ? $answer['blob'] : null;
     }
 
     // ------------------------------------------------------------------
@@ -867,6 +963,10 @@ class ATProtoClient
      */
     private static function httpGet(string $url, array $extraHeaders = []): ?array
     {
+        if (self::$transport) {
+            return call_user_func(self::$transport, 'GET', $url, null, $extraHeaders);
+        }
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
@@ -910,6 +1010,10 @@ class ATProtoClient
      */
     private static function httpPost(string $url, string $body, array $headers = []): array
     {
+        if (self::$transport) {
+            return call_user_func(self::$transport, 'POST', $url, $body, $headers);
+        }
+
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_POST, true);

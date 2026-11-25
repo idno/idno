@@ -1,0 +1,324 @@
+{
+  "id": "live.voxport.podcast.episode",
+  "defs": {
+    "main": {
+      "key": "tid",
+      "type": "record",
+      "record": {
+        "type": "object",
+        "required": [
+          "series",
+          "title",
+          "createdAt"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "maxLength": 20,
+            "description": "Episode tags/keywords"
+          },
+          "audio": {
+            "type": "blob",
+            "accept": [
+              "audio/mpeg",
+              "audio/mp4",
+              "audio/wav",
+              "audio/ogg",
+              "audio/aac"
+            ],
+            "maxSize": 524288000,
+            "description": "Audio file reference"
+          },
+          "image": {
+            "type": "blob",
+            "accept": [
+              "image/png",
+              "image/jpeg"
+            ],
+            "maxSize": 2097152,
+            "description": "Episode-specific cover art"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Episode title"
+          },
+          "series": {
+            "ref": "live.voxport.podcast.series#seriesRef",
+            "type": "ref",
+            "description": "Reference to parent series (uri + optional cid)"
+          },
+          "persons": {
+            "type": "array",
+            "items": {
+              "ref": "#person",
+              "type": "ref"
+            },
+            "maxLength": 50,
+            "description": "People associated with this episode \u2014 hosts, guests, co-hosts (Podcasting 2.0 podcast:person)"
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 10000,
+            "description": "Episode description/show notes (supports markdown)"
+          },
+          "audioUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "External audio URL (if not using blob)"
+          },
+          "chapters": {
+            "type": "array",
+            "items": {
+              "ref": "#chapter",
+              "type": "ref"
+            },
+            "maxLength": 100,
+            "description": "Episode chapters/timestamps"
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Duration in seconds"
+          },
+          "explicit": {
+            "type": "boolean",
+            "description": "Whether episode is explicit"
+          },
+          "audioType": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "MIME type of the audio file when using audioUrl. Pairs with audioLength for RSS enclosure reconstruction.",
+            "knownValues": [
+              "audio/mpeg",
+              "audio/mp4",
+              "audio/wav",
+              "audio/ogg",
+              "audio/aac"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "datetime"
+          },
+          "soundbites": {
+            "type": "array",
+            "items": {
+              "ref": "#soundbite",
+              "type": "ref"
+            },
+            "maxLength": 20,
+            "description": "Short clip markers for apps to surface (Podcasting 2.0 podcast:soundbite)"
+          },
+          "transcript": {
+            "ref": "#transcript",
+            "type": "ref",
+            "description": "Episode transcript (singular \u2014 deprecated, prefer transcripts array)"
+          },
+          "audioLength": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Byte size of the audio file when using audioUrl. Required for a valid RSS enclosure \u2014 without this, a firehose consumer cannot reconstruct the feed from records alone."
+          },
+          "episodeType": {
+            "type": "string",
+            "default": "full",
+            "maxLength": 16,
+            "description": "Episode type per RSS spec",
+            "knownValues": [
+              "full",
+              "trailer",
+              "bonus"
+            ]
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Publication date (null = draft)"
+          },
+          "transcripts": {
+            "type": "array",
+            "items": {
+              "ref": "#transcript",
+              "type": "ref"
+            },
+            "maxLength": 20,
+            "description": "Episode transcripts \u2014 multiple entries for different languages/formats (Podcasting 2.0 podcast:transcript). Preferred over the singular transcript field."
+          },
+          "importedGuid": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Original GUID from RSS feed (for imported episodes)"
+          },
+          "seasonNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Season number"
+          },
+          "episodeNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Episode number in series"
+          },
+          "blueskyPostRef": {
+            "ref": "com.atproto.repo.strongRef",
+            "type": "ref",
+            "description": "Reference to the Atmosphere cross-post (app.bsky.feed.post) for this episode. Set when the episode is auto-cross-posted, enabling custom feed operators to discover the cross-post from the episode record."
+          }
+        }
+      },
+      "description": "A podcast episode belonging to a series"
+    },
+    "person": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "did": {
+          "type": "string",
+          "format": "did",
+          "description": "ATProto DID if the person has a verified identity"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "External profile URL (maps to podcast:person href attribute)"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Full name or alias of the person (spec: max 128 chars)"
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Role from the Podcast Taxonomy Project (e.g. host, guest, co-host). Defaults to 'host' if absent."
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "Group from the Podcast Taxonomy Project (e.g. cast, writing, visuals). Defaults to 'cast' if absent."
+        },
+        "image": {
+          "type": "string",
+          "format": "uri",
+          "description": "Profile image URL (maps to podcast:person img attribute)"
+        },
+        "handle": {
+          "type": "string",
+          "format": "handle",
+          "description": "ATProto handle (e.g. alice.bsky.social) if the person has a Bluesky account"
+        }
+      }
+    },
+    "chapter": {
+      "type": "object",
+      "required": [
+        "title",
+        "startTime"
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Chapter link URL (Podcasting 2.0 chapter url)"
+        },
+        "image": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Whether the chapter is hidden from the table of contents (Podcasting 2.0 toc:false)"
+        },
+        "endTime": {
+          "type": "integer",
+          "description": "End time in seconds (optional)"
+        },
+        "startTime": {
+          "type": "integer",
+          "description": "Start time in seconds"
+        }
+      }
+    },
+    "soundbite": {
+      "type": "object",
+      "required": [
+        "startTime",
+        "duration"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Title/label for the soundbite (spec: max 128 chars)"
+        },
+        "duration": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "Duration in fractional seconds (e.g. '60.0', '42.25'). Matches Podcasting 2.0 spec exactly."
+        },
+        "startTime": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "Start time in fractional seconds (e.g. '73.0', '1234.5'). Matches Podcasting 2.0 spec exactly."
+        }
+      }
+    },
+    "transcript": {
+      "type": "object",
+      "required": [
+        "url",
+        "type"
+      ],
+      "properties": {
+        "rel": {
+          "type": "string",
+          "maxLength": 16,
+          "description": "If 'captions', the file is a closed captions file with time codes",
+          "knownValues": [
+            "captions"
+          ]
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL of the transcript file"
+        },
+        "type": {
+          "type": "string",
+          "maxLength": 64,
+          "description": "MIME type of the transcript file",
+          "knownValues": [
+            "text/plain",
+            "text/html",
+            "text/vtt",
+            "application/x-subrip",
+            "application/json"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "format": "language",
+          "description": "Language of the transcript (defaults to feed language if absent)"
+        }
+      }
+    }
+  },
+  "$type": "com.atproto.lexicon.schema",
+  "lexicon": 1,
+  "description": "A podcast episode belonging to a series"
+}
