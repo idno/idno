@@ -272,6 +272,12 @@ takedown lock and the "More" menu are in core; everything else is the bundled pl
 | `Pages/Admin/*` | The queue, a case, actions on a case, a member's record, settings (`/admin/moderation/...`) |
 | `moderation.css`, `moderation.js` | Styles for both looks; the report dialog and the confirmation dialog |
 
+The plugin's pages are one set of templates for both looks, in `templates/default`, with
+markup of their own (classes beginning `mod-`) styled by `moderation.css`: no Bootstrap,
+no Font Awesome, no jQuery, so Twenty26 draws them as they are. Only the admin menu item
+has a `modern` template. `Tests/ModernTemplatesTest.php` checks that what Twenty26 draws
+has no marks of the default look; keep it that way rather than adding a second set.
+
 Rules to keep:
 
 - **The reported member never learns who reported them, and a reporter never learns which
@@ -310,6 +316,40 @@ Rules to keep:
   `IdnoPlugins/ActivityPub/Tests/ModerationTest.php` checks this.
 - Settings: `moderation_contact_email` (the address for appeals; the site's `from_email`
   when empty) and `moderation_notify_admins`.
+
+## Twenty26 theme and plugin templates
+
+`Themes/Twenty26/` sets the template type to `modern`. A plugin's templates for it live in
+`IdnoPlugins/<Plugin>/templates/modern/`. A template that is missing there is not an error:
+the one in `templates/default/` is drawn instead, with Bootstrap and Font Awesome markup
+the theme has no styles for and scripts that need jQuery, which Twenty26 does not load. So
+a plugin that draws a post, a form or a page needs a `modern` template for each, and a
+test that extends `Tests\ModernTemplatesTestCase`
+(`IdnoPlugins/<Plugin>/Tests/ModernTemplatesTest.php`): it lists the templates the plugin
+must have and checks that what they draw is Twenty26 markup.
+
+- Styles and scripts are built: sources in `Themes/Twenty26/src/`, output in
+  `Themes/Twenty26/dist/` (tracked). After changing a source, run `npm ci` and
+  `npm run build` in `Themes/Twenty26/` and commit `dist/`. Tailwind reads class names
+  from the theme's templates and from `IdnoPlugins/*/templates/modern/`.
+- Posts are built from shared parts in `src/css/components/content-types.css`; use them
+  rather than styles of the plugin's own or inline styles:
+  `idno-entry-title`, then `idno-media-frame` > `idno-media-player` (a player; the Video
+  plugin's `idno-video-frame` / `idno-video-player` are styled the same), then
+  `idno-entry-body e-content`, then the tag row (`forms/output/tags`). `idno-details` >
+  `idno-details-row` is a list of facts with icons (events), `idno-entry-kicker` a small
+  line with an icon (the host of a bookmark, the address of a check-in), `idno-photo-grid`
+  the pictures of a photo post, `idno-map` a Leaflet map.
+- A compose form is `entity/edit/header`, a `<form>` holding one `div.idno-editor` with an
+  `h4.idno-editor-heading`, fields in `div.idno-form-field` with a `label.idno-label`, and
+  the buttons in `div.idno-editor-actions`, then `entity/edit/footer`.
+  `forms/input/richtext` takes `label` and `placeholder`.
+- Icons come from `shell/icon` (`$this->__(['icon' => 'play', 'class' => '...'])`). Always
+  pass `class`: template variables stay set between draws, so an icon drawn without one
+  takes the class of the icon drawn before it.
+- An audio file is an `<audio controls>` element inside `x-data="audioPlayer"`
+  (`src/js/modules/audio.js`), which swaps the native controls for the theme's; without
+  JavaScript the native ones remain.
 
 ## IndieWeb Standards
 
@@ -637,8 +677,12 @@ Rules to keep:
   There is no frame: the post is drawn with a `<video>` whose `src` and `poster`
   `VideoUrl::getStreamUrl()` and `getPosterUrl()` build on `VideoUrl::STREAM_HOST` from
   those values, with `preload="none"`. The addresses Bluesky returns are never used. The
-  small script beside the player holds no value from the post: it reads the element's own
-  attributes. A Skylight video is a Bluesky post and is posted by its bsky.app address.
+  streams are HLS, which desktop Chrome and Firefox do not play by themselves, so the
+  script beside the player loads hls.js for them: the site's own copy
+  (`Video::hlsLibraryUrl()`, `vendor/npm-asset/hls.js`, installed by Composer), once per
+  page, and never a copy from another site. Without it, or if it fails, the picture is
+  shown, linked to the post. That script holds no value from the post and no address: it
+  reads the element's own attributes. A Skylight video is a Bluesky post and is posted by its bsky.app address.
   `IdnoPlugins/Video/Tests/BlueskyVideoTest.php` checks this.
 - A member's posts of one kind: `/profile/<handle>/<category>` (`/profile/<handle>/videos`,
   for example; `/content/<category>/` for the whole site). The profile itself lists

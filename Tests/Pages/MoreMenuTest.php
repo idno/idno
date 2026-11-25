@@ -77,6 +77,19 @@ namespace Tests\Pages {
             $this->assertMenuCopies($result['body'], static::$entry->getDisplayURL() . '#' . $anchor, "The comment's menu should copy the address of its anchor.");
         }
 
+        public function testFeedsOfAListKeepTheirPosts()
+        {
+            // The menu's variables must not take the place of a page's own: a list keeps its posts in "items"
+            $this->post(static::$author);
+            $this->post(static::$author);
+
+            foreach ([static::$author->getDisplayURL() . '?_t=rss', '/?_t=rss'] as $feed) {
+                $this->assertGreaterThanOrEqual(3, substr_count($this->get($feed)['body'], '<item>'), "$feed should list every post.");
+            }
+            $json = json_decode($this->get(static::$author->getDisplayURL() . '?_t=json')['body'], true);
+            $this->assertGreaterThanOrEqual(3, count($json['items'] ?? []), 'The JSON of a profile should list every post.');
+        }
+
         private function assertMenuCopies($page, $url, $message)
         {
             $this->assertStringContainsString('data-idno-more-menu', $page, 'The page should have a "More" menu.');

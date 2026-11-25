@@ -4,7 +4,11 @@
     $value = !empty($vars['value']) ? $vars['value'] : '';
     $placeholder = !empty($vars['placeholder']) ? $vars['placeholder'] : \Idno\Core\Idno::site()->language()->_('Write something...');
     $required = !empty($vars['required']);
+    $label = !empty($vars['label']) ? $vars['label'] : '';
 ?>
+<?php if ($label !== '') { ?>
+<span class="idno-editor-field-label" id="<?= htmlspecialchars($unique_id) ?>-label"><?= htmlspecialchars($label) ?></span>
+<?php } ?>
 <div class="idno-editor" x-data="tiptapEditor('<?= $unique_id ?>')">
     <div class="idno-editor-toolbar">
         <button type="button" class="idno-editor-toolbar-btn" title="Bold" x-on:click="editor.chain().focus().toggleBold().run()" :class="{ 'active': editor?.isActive('bold') }">
@@ -53,6 +57,6 @@
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>
         </button>
     </div>
-    <div class="idno-editor-content" id="<?= $unique_id ?>-editor"></div>
+    <div class="idno-editor-content" id="<?= $unique_id ?>-editor" data-placeholder="<?= htmlspecialchars($placeholder) ?>"></div>
     <textarea name="<?= htmlspecialchars($name) ?>" id="<?= $unique_id ?>" style="display:none" <?= $required ? 'required' : '' ?>><?= htmlspecialchars($value) ?></textarea>
 </div>

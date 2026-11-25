@@ -11,5 +11,6 @@
 @import "./components/admin.css";
 @import "./components/annotations.css";
 @import "../../../../css/moremenu.css";
+@import "./components/content-types.css";
 @source "../../templates/";
 @source "../../../../IdnoPlugins/*/templates/modern/";

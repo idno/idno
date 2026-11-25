@@ -26,7 +26,7 @@ if ($object instanceof \Idno\Common\Entity && is_array($annotation) && $local !=
         [
         'label' => $language->_('More options for this comment by %s', [strip_tags((string) ($annotation['owner_name'] ?? ''))]),
         'copy_url' => $object->getDisplayURL() . '#' . \Idno\Common\Entity::annotationAnchor($local),
-        'items' => $items,
+        'menu_items' => $items,
         ]
     )->draw('shell/moremenu');
 }

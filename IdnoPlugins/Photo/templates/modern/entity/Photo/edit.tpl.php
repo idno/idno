@@ -75,7 +75,7 @@
 
                 <?= \Idno\Core\Idno::site()->actions()->signForm('/photo/edit') ?>
 
-                <div style="display:flex;gap:0.5rem;margin-top:var(--spacing-section)">
+                <div class="idno-editor-actions">
                     <button type="submit" class="idno-btn idno-btn-primary" name="publish_status" value="published">
                         <?= \Idno\Core\Idno::site()->language()->_('Publish') ?>
                     </button>

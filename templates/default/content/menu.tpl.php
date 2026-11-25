@@ -16,7 +16,7 @@ if ($object instanceof \Idno\Common\Entity) {
         [
         'label' => \Idno\Core\Idno::site()->language()->_('More options for this post by %s', [$name]),
         'copy_url' => $object->getDisplayURL(),
-        'items' => $items,
+        'menu_items' => $items,
         ]
     )->draw('shell/moremenu');
 }

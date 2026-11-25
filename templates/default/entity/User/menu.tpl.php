@@ -13,7 +13,7 @@ if ($user instanceof \Idno\Entities\User) {
         [
         'label' => \Idno\Core\Idno::site()->language()->_('More options for %s', [strip_tags((string) $user->getTitle())]),
         'copy_url' => $user->getDisplayURL(),
-        'items' => $items,
+        'menu_items' => $items,
         ]
     )->draw('shell/moremenu');
 }

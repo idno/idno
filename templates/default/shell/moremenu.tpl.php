@@ -11,7 +11,9 @@
      *
      * $vars['label']     What the menu is for, read out by screen readers ("More options for ...")
      * $vars['copy_url']  The address "Copy link" copies
-     * $vars['items']     Markup of the items that follow "Copy link"
+     * $vars['menu_items'] Markup of the items that follow "Copy link". (Not "items": that is the
+     *                    list of posts of a feed page, which the RSS and JSON shells read after
+     *                    the page's body has been drawn.)
      */
 
     $copyUrl = \Idno\Core\UrlValidator::httpUrl((string) ($vars['copy_url'] ?? ''));
@@ -27,7 +29,7 @@
         <a class="idno-more-item" role="menuitem" data-idno-copy-link href="<?php echo htmlspecialchars($copyUrl, ENT_QUOTES) ?>"
            data-copied-text="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->language()->_('Link copied'), ENT_QUOTES) ?>"><?php echo \Idno\Core\Idno::site()->language()->_('Copy link') ?></a>
         <?php } ?>
-        <?php echo $vars['items'] ?? '' ?>
+        <?php echo $vars['menu_items'] ?? '' ?>
     </div>
     <span class="idno-more-status" role="status" aria-live="polite"></span>
 </details>
@@ -36,4 +38,4 @@
     // Prevent scope pollution
     unset($this->vars['label']);
     unset($this->vars['copy_url']);
-    unset($this->vars['items']);
+    unset($this->vars['menu_items']);
