@@ -44,12 +44,12 @@ namespace IdnoPlugins\Moderation\Tests {
         public function testAnotherMemberIsOfferedReportOnPostCommentAndProfile()
         {
             $page = $this->get(static::$entry->getDisplayURL(), static::$reader)['body'];
-            $this->assertStringContainsString('type=post&amp;id=' . static::$entry->getID(), $page);
-            $this->assertStringContainsString('type=comment&amp;id=' . static::$entry->getID() . '&amp;comment=' . basename(static::$commentUrl), $page);
-            $this->assertStringContainsString('type=profile&amp;id=' . static::$author->getID(), $page);
+            $this->assertStringContainsString('type=post&amp;id=' . ((string) static::$entry->getID()), $page);
+            $this->assertStringContainsString('type=comment&amp;id=' . ((string) static::$entry->getID()) . '&amp;comment=' . basename(static::$commentUrl), $page);
+            $this->assertStringContainsString('type=profile&amp;id=' . ((string) static::$author->getID()), $page);
 
             $profile = $this->get(static::$author->getDisplayURL(), static::$reader)['body'];
-            $this->assertStringContainsString('type=profile&amp;id=' . static::$author->getID(), $profile);
+            $this->assertStringContainsString('type=profile&amp;id=' . ((string) static::$author->getID()), $profile);
         }
 
         public function testNobodyIsOfferedReportOnTheirOwnThings()
@@ -101,8 +101,8 @@ namespace IdnoPlugins\Moderation\Tests {
         public function testFormForAThingThatDoesNotExistIsNotFound()
         {
             $this->assertEquals(404, $this->get('/moderation/report?type=post&id=doesnotexist', static::$reader)['status']);
-            $this->assertEquals(404, $this->get('/moderation/report?type=nonsense&id=' . static::$entry->getID(), static::$reader)['status']);
-            $this->assertEquals(404, $this->get('/moderation/report?type=comment&id=' . static::$entry->getID() . '&comment=0000', static::$reader)['status']);
+            $this->assertEquals(404, $this->get('/moderation/report?type=nonsense&id=' . ((string) static::$entry->getID()), static::$reader)['status']);
+            $this->assertEquals(404, $this->get('/moderation/report?type=comment&id=' . ((string) static::$entry->getID()) . '&comment=0000', static::$reader)['status']);
         }
 
         // -----------------------------------------------------------------
@@ -114,7 +114,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $entry = $this->post(static::$author);
             $path = $this->reportPath('post', $entry);
 
-            $result = $this->submit('/moderation/report', ['type' => 'post', 'id' => $entry->getID(), 'reason' => 'harassment', 'description' => 'Look at this'], static::$reader, $path);
+            $result = $this->submit('/moderation/report', ['type' => 'post', 'id' => ((string) $entry->getID()), 'reason' => 'harassment', 'description' => 'Look at this'], static::$reader, $path);
 
             $this->assertEquals(302, $result['status']);
             $case = Moderation::openCaseFor(ModerationCase::keyFor('post', $entry->getUUID()));
@@ -136,12 +136,12 @@ namespace IdnoPlugins\Moderation\Tests {
             $entry = $this->post(static::$author);
             $path = $this->reportPath('post', $entry);
 
-            $result = $this->submit('/moderation/report', ['type' => 'post', 'id' => $entry->getID(), 'reason' => 'spam', 'response' => 'json'], static::$reader, $path);
+            $result = $this->submit('/moderation/report', ['type' => 'post', 'id' => ((string) $entry->getID()), 'reason' => 'spam', 'response' => 'json'], static::$reader, $path);
 
             $this->assertEquals(200, $result['status']);
             $this->assertEquals(true, json_decode($result['body'], true)['ok']);
 
-            $bad = $this->submit('/moderation/report', ['type' => 'post', 'id' => $entry->getID(), 'reason' => 'nonsense', 'response' => 'json'], static::$reader, $path);
+            $bad = $this->submit('/moderation/report', ['type' => 'post', 'id' => ((string) $entry->getID()), 'reason' => 'nonsense', 'response' => 'json'], static::$reader, $path);
             $this->assertEquals(400, $bad['status']);
             $this->assertEquals(false, json_decode($bad['body'], true)['ok']);
         }
@@ -202,7 +202,7 @@ namespace IdnoPlugins\Moderation\Tests {
         public function testReportNeedsAFormTokenAndASignedInBrowser()
         {
             $entry = $this->post(static::$author);
-            $fields = ['type' => 'post', 'id' => $entry->getID(), 'reason' => 'spam'];
+            $fields = ['type' => 'post', 'id' => ((string) $entry->getID()), 'reason' => 'spam'];
 
             $this->request('POST', '/moderation/report', $fields, static::$reader);
             $this->request('POST', '/moderation/report', $fields);
@@ -221,7 +221,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertTrue($first['new']);
             $this->assertTrue($second['ok']);
             $this->assertFalse($second['new']);
-            $this->assertEquals($first['case']->getID(), $second['case']->getID());
+            $this->assertEquals(((string) $first['case']->getID()), ((string) $second['case']->getID()));
             $case = static::freshCase($first['case']);
             $this->assertEquals(1, $case->report_count, 'The same member reporting again is still one report.');
             $reports = $case->getReports();
@@ -261,7 +261,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $first = $this->report(static::$reader, 'post', $entry, 'spam');
             $second = $this->report($third, 'post', $entry, 'violence');
 
-            $this->assertEquals($first['case']->getID(), $second['case']->getID());
+            $this->assertEquals(((string) $first['case']->getID()), ((string) $second['case']->getID()));
             $case = static::freshCase($first['case']);
             $this->assertEquals(2, $case->report_count);
             $this->assertEquals(['spam' => 1, 'violence' => 1], $case->reasons);
@@ -293,7 +293,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
             $this->assertTrue($second['ok']);
             $this->assertTrue($second['new']);
-            $this->assertNotEquals($first['case']->getID(), $second['case']->getID());
+            $this->assertNotEquals(((string) $first['case']->getID()), ((string) $second['case']->getID()));
         }
 
         // -----------------------------------------------------------------
@@ -319,7 +319,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $marker = static::marker();
             $result = $this->report(static::$reader, 'post', $entry, 'other', '"><img src=x onerror=alert(1)> &lt;b&gt; ' . $marker);
 
-            $page = $this->get('/admin/moderation/case/' . $result['case']->getID(), static::$admin);
+            $page = $this->get('/admin/moderation/case/' . ((string) $result['case']->getID()), static::$admin);
 
             $this->assertEquals(200, $page['status']);
             $this->assertStringContainsString($marker, $page['body']);

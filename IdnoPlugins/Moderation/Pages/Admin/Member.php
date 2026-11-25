@@ -74,7 +74,7 @@ namespace IdnoPlugins\Moderation\Pages\Admin {
             }
             $back = (string) $this->getInput('back') === 'banned'
                 ? Idno::site()->config()->getDisplayURL() . 'admin/moderation/?tab=banned'
-                : Idno::site()->config()->getDisplayURL() . 'admin/moderation/member/' . $member->getID();
+                : Idno::site()->config()->getDisplayURL() . 'admin/moderation/member/' . ((string) $member->getID());
             $this->forward($back);
         }
 

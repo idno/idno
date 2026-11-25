@@ -59,10 +59,10 @@ namespace IdnoPlugins\Moderation\Tests {
         public function testRecordsCannotBeFetchedByTheirAddress($who)
         {
             $as = $who ? static::$$who : null;
-            $log = LogEntry::find(['case_id' => static::$case->getID()])[0];
+            $log = LogEntry::find(['case_id' => ((string) static::$case->getID())])[0];
 
             foreach ([static::$case, static::$report, $log] as $record) {
-                foreach (['/view/' . $record->getID(), '/view/' . $record->getID() . '?_t=json', '/view/' . $record->getID() . '?_t=jsonp', '/view/' . $record->getID() . '?_t=rss', '/' . date('Y') . '/' . $record->getSlug()] as $path) {
+                foreach (['/view/' . ((string) $record->getID()), '/view/' . ((string) $record->getID()) . '?_t=json', '/view/' . ((string) $record->getID()) . '?_t=jsonp', '/view/' . ((string) $record->getID()) . '?_t=rss', '/' . date('Y') . '/' . $record->getSlug()] as $path) {
                     $result = $this->get($path, $as);
                     $this->assertNotEquals(200, $result['status'], "$path must not be served.");
                     foreach ($this->secrets() as $secret) {
@@ -143,7 +143,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
         public function testAnAdministratorCanReadTheCase()
         {
-            $result = $this->get('/admin/moderation/case/' . static::$case->getID(), static::$admin);
+            $result = $this->get('/admin/moderation/case/' . ((string) static::$case->getID()), static::$admin);
 
             $this->assertEquals(200, $result['status']);
             $this->assertStringContainsString(static::$marker, $result['body']);

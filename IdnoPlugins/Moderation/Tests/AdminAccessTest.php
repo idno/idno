@@ -45,10 +45,10 @@ namespace IdnoPlugins\Moderation\Tests {
                 '/admin/moderation/?tab=resolved',
                 '/admin/moderation/?tab=banned',
                 '/admin/moderation/?tab=log',
-                '/admin/moderation/case/' . static::$case->getID(),
-                '/admin/moderation/case/' . static::$case->getID() . '/action',
-                '/admin/moderation/member/' . static::$author->getID(),
-                '/admin/moderation/member/' . static::$reporter->getID(),
+                '/admin/moderation/case/' . ((string) static::$case->getID()),
+                '/admin/moderation/case/' . ((string) static::$case->getID()) . '/action',
+                '/admin/moderation/member/' . ((string) static::$author->getID()),
+                '/admin/moderation/member/' . ((string) static::$reporter->getID()),
                 '/admin/moderation/settings',
             ];
         }
@@ -90,7 +90,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
         public function testMembersCannotAct()
         {
-            $path = '/admin/moderation/case/' . static::$case->getID() . '/action';
+            $path = '/admin/moderation/case/' . ((string) static::$case->getID()) . '/action';
             // A form token of their own, from a page they can open
             foreach ([static::$author, static::$reporter] as $member) {
                 $tokens = $this->formFields($this->get('/account/settings/', $member)['body']);
@@ -99,7 +99,7 @@ namespace IdnoPlugins\Moderation\Tests {
                     $result = $this->request('POST', $path, $tokens + ['action' => $action, 'revision' => static::freshCase(static::$case)->revision, 'note' => 'hello'], $member);
                     $this->assertEquals(403, $result['status']);
                 }
-                $ban = $this->request('POST', '/admin/moderation/member/' . static::$reporter->getID(), $tokens + ['action' => 'ban'], $member);
+                $ban = $this->request('POST', '/admin/moderation/member/' . ((string) static::$reporter->getID()), $tokens + ['action' => 'ban'], $member);
                 $this->assertEquals(403, $ban['status']);
                 $settings = $this->request('POST', '/admin/moderation/settings', $tokens + ['moderation_contact_email' => 'evil@example.com'], $member);
                 $this->assertEquals(403, $settings['status']);

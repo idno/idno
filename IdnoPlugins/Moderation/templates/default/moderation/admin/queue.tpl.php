@@ -49,7 +49,7 @@
                 $who = (string) ($snapshot['author_name'] ?? '') !== '' ? (string) $snapshot['author_name'] : (string) $item->subject_name;
                 $excerpt = trim((string) ($item->target_type === 'profile' ? ($snapshot['title'] ?? '') : (($snapshot['text'] ?? '') ?: ($snapshot['title'] ?? ''))));
                 $excerpt = mb_strlen($excerpt) > 90 ? mb_substr($excerpt, 0, 90) . '…' : $excerpt;
-                $current = $case && $case->getID() === $item->getID();
+                $current = $case && ((string) $case->getID()) === ((string) $item->getID());
                 $reasons = is_array($item->reasons) ? $item->reasons : [];
                 ?>
             <li>
@@ -106,7 +106,7 @@
             <?php foreach ($vars['banned'] as $member) {
                 $ban = $member->getBan();
                 $by = !empty($ban['by']) ? \Idno\Entities\User::getByUUID($ban['by']) : null;
-                $memberUrl = $base . 'member/' . $member->getID();
+                $memberUrl = $base . 'member/' . ((string) $member->getID());
                 ?>
                 <tr>
                     <td>

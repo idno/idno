@@ -129,7 +129,9 @@ namespace IdnoPlugins\Moderation {
          */
         public static function resolveTarget($type, $id, $comment = '')
         {
-            if (!is_string($id) || !preg_match('/^[A-Za-z0-9-]+$/', $id)) {
+            // The id of an entity is a string in SQL and an object in MongoDB
+            $id = (is_scalar($id) || (is_object($id) && method_exists($id, '__toString'))) ? (string) $id : '';
+            if (!preg_match('/^[A-Za-z0-9-]+$/', $id)) {
                 return null;
             }
             $entity = Entity::getByID($id);
@@ -325,7 +327,7 @@ namespace IdnoPlugins\Moderation {
             $case = static::openCaseFor($target['key']);
             $report = null;
             if ($case) {
-                $existing = Report::find(['case_id' => $case->getID(), 'reporter_uuid' => $reporter->getUUID()], 1);
+                $existing = Report::find(['case_id' => ((string) $case->getID()), 'reporter_uuid' => $reporter->getUUID()], 1);
                 $report = $existing ? $existing[0] : null;
             }
 
@@ -398,7 +400,7 @@ namespace IdnoPlugins\Moderation {
                 $case->save();
             }
 
-            $report->case_id = $case->getID();
+            $report->case_id = ((string) $case->getID());
             $report->save();
 
             if ($new) {
@@ -587,7 +589,7 @@ namespace IdnoPlugins\Moderation {
             $entry->actor_uuid = $actor ? $actor->getUUID() : '';
             $entry->actor_name = $actor ? static::cleanText($actor->getTitle(), 200) : '';
             $entry->action = (string) $action;
-            $entry->case_id = $case ? $case->getID() : '';
+            $entry->case_id = $case ? ((string) $case->getID()) : '';
             $entry->subject_uuid = $subject ? $subject->getUUID() : ($case ? (string) $case->subject_uuid : '');
             $entry->subject_name = $subject ? static::cleanText($subject->getTitle(), 200) : ($case ? (string) $case->subject_name : '');
             $entry->detail = static::cleanText($detail, 500);

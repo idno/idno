@@ -82,11 +82,11 @@ namespace IdnoPlugins\Moderation\Pages\Admin {
                 $vars['history'] = array_values(
                     array_filter(
                         Moderation::casesAbout($case->subject_uuid), function ($other) use ($case) {
-                            return $other->getID() !== $case->getID();
+                            return ((string) $other->getID()) !== ((string) $case->getID());
                         }
                     )
                 );
-                $vars['case_log'] = Moderation::logEntries(['case_id' => $case->getID()], 200);
+                $vars['case_log'] = Moderation::logEntries(['case_id' => ((string) $case->getID())], 200);
                 $vars['subject'] = $case->getSubject();
             }
 

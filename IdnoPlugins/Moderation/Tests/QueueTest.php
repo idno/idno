@@ -48,14 +48,14 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertEquals(200, $unresolved['status']);
             $this->assertStringContainsString($openMarker, $unresolved['body']);
             $this->assertStringNotContainsString($doneMarker, $unresolved['body']);
-            $this->assertStringContainsString('/admin/moderation/case/' . $open->getID(), $unresolved['body']);
+            $this->assertStringContainsString('/admin/moderation/case/' . ((string) $open->getID()), $unresolved['body']);
 
             $resolved = $this->get('/admin/moderation/?tab=resolved', static::$admin);
             $this->assertStringContainsString($doneMarker, $resolved['body']);
             $this->assertStringNotContainsString($openMarker, $resolved['body']);
             $this->assertStringContainsString('Dismissed', $resolved['body']);
 
-            $case = $this->get('/admin/moderation/case/' . $open->getID(), static::$admin);
+            $case = $this->get('/admin/moderation/case/' . ((string) $open->getID()), static::$admin);
             $this->assertEquals(200, $case['status']);
             foreach (['Why ' . $openMarker, static::$reporter->getTitle(), static::$author->getTitle(), 'Dismiss', 'Remove post', 'Reports filed', 'Moderator notes', 'Saved copy'] as $expected) {
                 $this->assertStringContainsString($expected, $case['body']);
@@ -77,15 +77,15 @@ namespace IdnoPlugins\Moderation\Tests {
 
             $ids = array_map(
                 function ($case) {
-                    return $case->getID();
+                    return ((string) $case->getID());
                 }, Moderation::cases(ModerationCase::OPEN, static::fresh(static::$admin))
             );
 
-            $this->assertLessThan(array_search($old->getID(), $ids), array_search($urgent->getID(), $ids), 'An urgent case comes before older ones.');
-            $this->assertLessThan(array_search($newer->getID(), $ids), array_search($old->getID(), $ids), 'Then the oldest first.');
+            $this->assertLessThan(array_search(((string) $old->getID()), $ids), array_search(((string) $urgent->getID()), $ids), 'An urgent case comes before older ones.');
+            $this->assertLessThan(array_search(((string) $newer->getID()), $ids), array_search(((string) $old->getID()), $ids), 'Then the oldest first.');
 
             $page = $this->get('/admin/moderation/', static::$admin)['body'];
-            $this->assertLessThan(strpos($page, 'case/' . $old->getID()), strpos($page, 'case/' . $urgent->getID()));
+            $this->assertLessThan(strpos($page, 'case/' . ((string) $old->getID())), strpos($page, 'case/' . ((string) $urgent->getID())));
         }
 
         public function testBadgeCountsUnresolvedCases()
@@ -106,7 +106,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
             $page = $this->get('/admin/moderation/', static::$admin)['body'];
 
-            $this->assertEquals(1, substr_count($page, 'admin/moderation/case/' . $case->getID() . '"'));
+            $this->assertEquals(1, substr_count($page, 'admin/moderation/case/' . ((string) $case->getID()) . '"'));
             $this->assertStringContainsString('2 reports', $page);
         }
 
@@ -124,7 +124,7 @@ namespace IdnoPlugins\Moderation\Tests {
         {
             $page = $this->get('/search/users/?query=' . static::$author->getHandle(), static::$admin);
 
-            $this->assertStringContainsString('admin/moderation/member/' . static::$author->getID(), str_replace('\\/', '/', $page['body']));
+            $this->assertStringContainsString('admin/moderation/member/' . ((string) static::$author->getID()), str_replace('\\/', '/', $page['body']));
         }
 
         public function testSettingsAreSaved()

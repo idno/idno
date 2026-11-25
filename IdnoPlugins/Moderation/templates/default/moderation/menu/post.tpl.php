@@ -27,10 +27,10 @@ if ($object instanceof \Idno\Common\Entity && $session->isLoggedOn() && \IdnoPlu
         ?>
         <div class="idno-more-separator" role="separator"></div>
         <a class="idno-more-item idno-more-item-danger" role="menuitem" data-mod-report
-           href="<?php echo htmlspecialchars($base . http_build_query(['type' => 'post', 'id' => $object->getID()]), ENT_QUOTES) ?>"><?php echo $language->_('Report post') ?></a>
+           href="<?php echo htmlspecialchars($base . http_build_query(['type' => 'post', 'id' => ((string) $object->getID())]), ENT_QUOTES) ?>"><?php echo $language->_('Report post') ?></a>
         <?php if ($owner instanceof \Idno\Entities\User && !($owner instanceof \Idno\Entities\RemoteUser)) { ?>
         <a class="idno-more-item idno-more-item-danger" role="menuitem" data-mod-report
-           href="<?php echo htmlspecialchars($base . http_build_query(['type' => 'profile', 'id' => $owner->getID()]), ENT_QUOTES) ?>"><?php echo htmlspecialchars($language->_('Report %s', [strip_tags((string) $owner->getTitle())])) ?></a>
+           href="<?php echo htmlspecialchars($base . http_build_query(['type' => 'profile', 'id' => ((string) $owner->getID())]), ENT_QUOTES) ?>"><?php echo htmlspecialchars($language->_('Report %s', [strip_tags((string) $owner->getTitle())])) ?></a>
         <?php } ?>
         <?php
     }

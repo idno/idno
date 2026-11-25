@@ -60,22 +60,22 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertIsTwenty26Markup($this->drawModern('content/menu', ['object' => $post]), 'The menu of a post');
             $this->assertStringContainsString('data-mod-report', $this->drawModern('content/menu', ['object' => $post]));
 
-            $target = Moderation::resolveTarget('post', $post->getID());
+            $target = Moderation::resolveTarget('post', ((string) $post->getID()));
             $this->assertNotEmpty($target);
             $form = $this->drawModern(
                 'moderation/report', ['target' => $target, 'heading' => 'Report this post', 'error' => '', 'own' => false,
-                'id' => $post->getID(), 'comment' => '', 'reason' => '', 'description' => '']
+                'id' => ((string) $post->getID()), 'comment' => '', 'reason' => '', 'description' => '']
             );
             $this->assertIsTwenty26Markup($form, 'The report form');
             $this->assertStringContainsString('name="reason" value="spam"', $form);
 
-            $result = Moderation::fileReport($this->admin(), 'post', $post->getID(), '', 'spam', 'Some <i>context</i>');
+            $result = Moderation::fileReport($this->admin(), 'post', ((string) $post->getID()), '', 'spam', 'Some <i>context</i>');
             $this->assertTrue($result['ok'], $result['message']);
-            $case = ModerationCase::load($result['case']->getID());
+            $case = ModerationCase::load(((string) $result['case']->getID()));
             $vars = [
                 'tab' => 'unresolved', 'case' => $case, 'cases' => [$case], 'open_count' => 1, 'banned_count' => 0, 'offset' => 0,
                 'per_page' => 30, 'total' => 1, 'admin' => $this->admin(), 'only_admin' => false, 'reports' => $case->getReports(),
-                'history' => [], 'case_log' => Moderation::logEntries(['case_id' => $case->getID()]), 'subject' => $case->getSubject(),
+                'history' => [], 'case_log' => Moderation::logEntries(['case_id' => ((string) $case->getID())]), 'subject' => $case->getSubject(),
             ];
             $queue = $this->drawModern('moderation/admin/queue', $vars);
             $this->assertIsTwenty26Markup($queue, 'The queue with a case open');

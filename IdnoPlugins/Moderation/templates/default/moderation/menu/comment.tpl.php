@@ -32,7 +32,7 @@ if ($object instanceof \Idno\Common\Entity && is_array($annotation) && $local !=
         ?>
         <div class="idno-more-separator" role="separator"></div>
         <a class="idno-more-item idno-more-item-danger" role="menuitem" data-mod-report
-           href="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'moderation/report?' . http_build_query(['type' => 'comment', 'id' => $object->getID(), 'comment' => $hash]), ENT_QUOTES) ?>"><?php echo $language->_('Report comment') ?></a>
+           href="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'moderation/report?' . http_build_query(['type' => 'comment', 'id' => ((string) $object->getID()), 'comment' => $hash]), ENT_QUOTES) ?>"><?php echo $language->_('Report comment') ?></a>
         <?php
     }
 }

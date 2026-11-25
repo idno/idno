@@ -47,7 +47,7 @@ namespace IdnoPlugins\Moderation\Entities {
          */
         public function getReports()
         {
-            $reports = Report::find(['case_id' => $this->getID()]);
+            $reports = Report::find(['case_id' => ((string) $this->getID())]);
             usort(
                 $reports, function ($a, $b) {
                     return $a->created <=> $b->created;
@@ -102,7 +102,7 @@ namespace IdnoPlugins\Moderation\Entities {
 
         public function getAdminURL()
         {
-            return \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/moderation/case/' . $this->getID();
+            return \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/moderation/case/' . ((string) $this->getID());
         }
 
         /**

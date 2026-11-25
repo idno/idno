@@ -61,7 +61,7 @@ namespace IdnoPlugins\Moderation\Tests {
          */
         private function press($case, $action, array $fields = [], $as = null)
         {
-            $path = '/admin/moderation/case/' . $case->getID();
+            $path = '/admin/moderation/case/' . ((string) $case->getID());
 
             return $this->submit($path . '/action', ['action' => $action, 'revision' => static::freshCase($case)->revision] + $fields, $as ?? static::$admin, $path);
         }
@@ -101,10 +101,10 @@ namespace IdnoPlugins\Moderation\Tests {
             $actions = array_map(
                 function ($entry) {
                     return $entry->action;
-                }, Moderation::logEntries(['case_id' => $case->getID()])
+                }, Moderation::logEntries(['case_id' => ((string) $case->getID())])
             );
             $this->assertEquals(['reopen', 'dismiss', 'report'], $actions, 'Every action is in the log.');
-            $this->assertEquals(static::$admin->getUUID(), Moderation::logEntries(['case_id' => $case->getID()])[0]->actor_uuid);
+            $this->assertEquals(static::$admin->getUUID(), Moderation::logEntries(['case_id' => ((string) $case->getID())])[0]->actor_uuid);
         }
 
         public function testOnlyADismissedCaseCanBeReopened()
@@ -166,7 +166,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $fresh = static::freshCase($case);
             $this->assertTrue($fresh->content_deleted);
             $this->assertStringContainsString($marker, $fresh->snapshot['text'], 'The case keeps its copy of what was reported.');
-            $page = $this->get('/admin/moderation/case/' . $case->getID(), static::$admin);
+            $page = $this->get('/admin/moderation/case/' . ((string) $case->getID()), static::$admin);
             $this->assertEquals(200, $page['status']);
             $this->assertStringContainsString($marker, $page['body']);
 
@@ -188,7 +188,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertStringContainsString('already gone', $result['message']);
             $this->assertEquals(ModerationCase::RESOLVED, static::freshCase($case)->status);
             $this->assertEmpty($this->mails('content-removed'));
-            $this->assertEquals(200, $this->get('/admin/moderation/case/' . $case->getID(), static::$admin)['status']);
+            $this->assertEquals(200, $this->get('/admin/moderation/case/' . ((string) $case->getID()), static::$admin)['status']);
         }
 
         public function testRemovedCommentIsGoneAndComesBackWhereItWas()
@@ -372,7 +372,7 @@ namespace IdnoPlugins\Moderation\Tests {
         public function testMemberRecordPageBansAndLiftsWithoutAReport()
         {
             $target = static::member('acttarget');
-            $path = '/admin/moderation/member/' . $target->getID();
+            $path = '/admin/moderation/member/' . ((string) $target->getID());
 
             $this->assertEquals(200, $this->get($path, static::$admin)['status']);
             $this->submit($path, ['action' => 'ban', 'ban_reason' => 'Direct'], static::$admin);
@@ -384,7 +384,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
         public function testAnAdministratorCannotBanThemselfFromTheirRecordPage()
         {
-            $path = '/admin/moderation/member/' . static::$admin->getID();
+            $path = '/admin/moderation/member/' . ((string) static::$admin->getID());
 
             $this->request('POST', $path, ['action' => 'ban'] + $this->formFields($this->get('/admin/moderation/settings', static::$admin)['body']), static::$admin);
 
@@ -414,7 +414,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertEquals('published', $this->stored($entry)->getPublishStatus(), 'The second action must not have happened.');
 
             // And over HTTP, with the revision the page showed before
-            $path = '/admin/moderation/case/' . $case->getID();
+            $path = '/admin/moderation/case/' . ((string) $case->getID());
             $this->submit($path . '/action', ['action' => 'remove', 'revision' => $seen], $second, $path);
             $this->assertEquals('published', $this->stored($entry)->getPublishStatus());
         }
@@ -424,23 +424,23 @@ namespace IdnoPlugins\Moderation\Tests {
             $second = static::member('actadmintwo', true);
             [$entry, $case] = $this->reportedPost(null, $second);
 
-            $this->assertEquals(404, $this->get('/admin/moderation/case/' . $case->getID(), $second)['status']);
-            $this->assertStringNotContainsString($case->getID(), $this->get('/admin/moderation/', $second)['body']);
-            $this->assertStringNotContainsString($case->getID(), $this->get('/admin/moderation/?tab=log', $second)['body']);
-            $this->assertEquals(404, $this->get('/admin/moderation/member/' . $second->getID(), $second)['status']);
-            $path = '/admin/moderation/case/' . $case->getID();
+            $this->assertEquals(404, $this->get('/admin/moderation/case/' . ((string) $case->getID()), $second)['status']);
+            $this->assertStringNotContainsString(((string) $case->getID()), $this->get('/admin/moderation/', $second)['body']);
+            $this->assertStringNotContainsString(((string) $case->getID()), $this->get('/admin/moderation/?tab=log', $second)['body']);
+            $this->assertEquals(404, $this->get('/admin/moderation/member/' . ((string) $second->getID()), $second)['status']);
+            $path = '/admin/moderation/case/' . ((string) $case->getID());
             $this->request('POST', $path . '/action', ['action' => 'dismiss', 'revision' => static::freshCase($case)->revision] + $this->formFields($this->get('/admin/moderation/settings', $second)['body']), $second);
             $this->assertEquals(ModerationCase::OPEN, static::freshCase($case)->status, 'An administrator must not dismiss a report about themself.');
             $this->assertFalse($this->act($case, $second, 'dismiss')['ok']);
 
             $this->assertEquals(200, $this->get($path, static::$admin)['status'], 'Another administrator handles it.');
-            $this->assertStringContainsString($case->getID(), $this->get('/admin/moderation/', static::$admin)['body']);
+            $this->assertStringContainsString(((string) $case->getID()), $this->get('/admin/moderation/', static::$admin)['body']);
         }
 
         public function testActionsNeedAFormToken()
         {
             [$entry, $case] = $this->reportedPost();
-            $path = '/admin/moderation/case/' . $case->getID() . '/action';
+            $path = '/admin/moderation/case/' . ((string) $case->getID()) . '/action';
 
             $this->request('POST', $path, ['action' => 'remove', 'revision' => static::freshCase($case)->revision], static::$admin);
 
@@ -459,7 +459,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertEquals(ModerationCase::OPEN, $fresh->status);
             $this->assertCount(1, $fresh->notes);
             $this->assertEquals('Seen this before ' . $marker, $fresh->notes[0]['text']);
-            $this->assertStringContainsString($marker, $this->get('/admin/moderation/case/' . $case->getID(), static::$admin)['body']);
+            $this->assertStringContainsString($marker, $this->get('/admin/moderation/case/' . ((string) $case->getID()), static::$admin)['body']);
             // A note does not get in the way of the next action
             $this->press($case, 'dismiss');
             $this->assertEquals('dismissed', static::freshCase($case)->outcome);

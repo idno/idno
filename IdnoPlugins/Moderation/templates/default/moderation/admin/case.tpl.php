@@ -109,7 +109,7 @@
                     <li class="mod-report-entry">
                         <p class="mod-report-who">
                             <?php if ($reporter) { ?>
-<a href="<?php echo htmlspecialchars($base . 'member/' . $reporter->getID(), ENT_QUOTES) ?>"><strong><?php echo htmlspecialchars(strip_tags((string) $reporter->getTitle())) ?></strong></a>
+<a href="<?php echo htmlspecialchars($base . 'member/' . ((string) $reporter->getID()), ENT_QUOTES) ?>"><strong><?php echo htmlspecialchars(strip_tags((string) $reporter->getTitle())) ?></strong></a>
                             <?php } else { ?>
 <strong><?php echo htmlspecialchars((string) $report->reporter_name) ?></strong> <span class="mod-muted"><?php echo $language->_('(account deleted)') ?></span><?php
                             } ?>
@@ -141,7 +141,7 @@
                     ?>
                     <p>
                         <?php echo htmlspecialchars($language->_('Member since %s', [date('M Y', (int) $subject->created)])) ?>
-                        · <a href="<?php echo htmlspecialchars($base . 'member/' . $subject->getID(), ENT_QUOTES) ?>"><?php echo $language->_('Moderation record') ?></a>
+                        · <a href="<?php echo htmlspecialchars($base . 'member/' . ((string) $subject->getID()), ENT_QUOTES) ?>"><?php echo $language->_('Moderation record') ?></a>
                     </p>
                     <p><?php echo htmlspecialchars($language->_('Reported before: %d · Content removed: %d', [count($earlier), $removed])) ?></p>
                     <?php if ($subject->isBanned()) { ?>

@@ -97,7 +97,9 @@ namespace IdnoPlugins\Moderation\Entities {
          */
         public static function load($id)
         {
-            if (!is_string($id) || !preg_match('/^[A-Za-z0-9-]+$/', $id)) {
+            // The id of an entity is a string in SQL and an object in MongoDB
+            $id = (is_scalar($id) || (is_object($id) && method_exists($id, '__toString'))) ? (string) $id : '';
+            if (!preg_match('/^[A-Za-z0-9-]+$/', $id)) {
                 return null;
             }
 

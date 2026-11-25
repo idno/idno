@@ -74,7 +74,7 @@ class ModerationTest extends \Tests\BrowserTestCase
 
         $this->assertEquals(['Delete'], $this->types());
         $this->assertEquals('https://remote.invalid/users/someone/inbox', static::$queued[0]['inbox']);
-        $this->assertStringContainsString($entry->getID(), json_encode(static::$queued[0]['activity']));
+        $this->assertStringContainsString(((string) $entry->getID()), json_encode(static::$queued[0]['activity']));
         static::$queued = [];
 
         Idno::site()->events()->triggerEvent('moderation/restore', ['object' => $entry]);

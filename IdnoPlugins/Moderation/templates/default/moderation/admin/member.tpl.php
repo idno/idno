@@ -10,7 +10,7 @@
     $member = $vars['member'];
     $name = strip_tags((string) $member->getTitle());
     $base = \Idno\Core\Idno::site()->config()->getDisplayURL() . 'admin/moderation/';
-    $url = $base . 'member/' . $member->getID();
+    $url = $base . 'member/' . ((string) $member->getID());
     $sign = \Idno\Core\Idno::site()->actions()->signForm($url);
     $ban = $member->getBan();
     $outcomes = \IdnoPlugins\Moderation\Outcomes::labels();

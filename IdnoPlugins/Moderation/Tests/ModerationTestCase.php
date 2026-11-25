@@ -58,7 +58,7 @@ namespace IdnoPlugins\Moderation\Tests {
         protected function report($reporter, $type, $target, $reason = 'spam', $description = '', $comment = '')
         {
             $old = $this->swapUser($reporter);
-            $result = Moderation::fileReport($reporter, $type, $target->getID(), $comment, $reason, $description);
+            $result = Moderation::fileReport($reporter, $type, ((string) $target->getID()), $comment, $reason, $description);
             $this->swapUser($old);
 
             return $result;
@@ -70,7 +70,7 @@ namespace IdnoPlugins\Moderation\Tests {
         protected function act($case, $admin, $action, array $options = [])
         {
             $old = $this->swapUser($admin);
-            $fresh = ModerationCase::load($case->getID());
+            $fresh = ModerationCase::load(((string) $case->getID()));
             $result = Moderation::act($fresh, $admin, $action, $options + ['revision' => $fresh->revision]);
             $this->swapUser($old);
 
@@ -79,7 +79,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
         protected static function freshCase($case)
         {
-            return ModerationCase::load($case->getID());
+            return ModerationCase::load(((string) $case->getID()));
         }
 
         /**
@@ -101,7 +101,7 @@ namespace IdnoPlugins\Moderation\Tests {
          */
         protected function reportPath($type, $target, $comment = '')
         {
-            return '/moderation/report?' . http_build_query(array_filter(['type' => $type, 'id' => $target->getID(), 'comment' => $comment]));
+            return '/moderation/report?' . http_build_query(array_filter(['type' => $type, 'id' => ((string) $target->getID()), 'comment' => $comment]));
         }
     }
 
