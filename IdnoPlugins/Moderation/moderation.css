@@ -69,7 +69,7 @@ li > a > .mod-badge { margin-left: 0.375rem; }
 .mod-report-actions { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-top: 1.25rem; }
 
 /* The dialog (moderation.js): the same form, one step at a time */
-.mod-dialog { width: min(26rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 0; border-radius: 1rem; background: var(--color-surface, #fff); color: var(--color-text, #374151); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); overflow: hidden; }
+.mod-dialog { position: fixed; inset: 0; margin: auto; width: min(26rem, calc(100vw - 2rem)); max-height: min(44rem, calc(100vh - 2rem)); padding: 0; border: 0; border-radius: 1rem; background: var(--color-surface, #fff); color: var(--color-text, #374151); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2); overflow: hidden; }
 .mod-dialog::backdrop { background: rgba(17, 17, 17, 0.45); }
 .mod-dialog[open] { display: flex; flex-direction: column; }
 .mod-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.875rem 1rem 0.875rem 1.25rem; border-bottom: 1px solid var(--color-border-subtle, #f0f0f0); }
@@ -98,6 +98,10 @@ li > a > .mod-badge { margin-left: 0.375rem; }
 }
 
 /* ------------------------------------------------------------------ The queue */
+.idno-admin-content:has(.mod-header) { max-width: 76rem; min-width: 0; }
+.idno-admin-main:has(.mod-header) { min-width: 0; }
+.mod-list, .mod-detail, .mod-wide, .mod-items li { min-width: 0; }
+.mod-item > * { min-width: 0; max-width: 100%; }
 .mod-header { margin-bottom: 1rem; }
 .mod-title { margin-bottom: 0.5rem; }
 .mod-tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--color-border, #e5e7eb); overflow-x: auto; }
@@ -126,7 +130,7 @@ a.mod-tab-active:link, a.mod-tab-active:visited, .mod-tab-active { border-color:
 .mod-item-age { flex: none; font-size: 0.75rem; color: var(--color-text-secondary, #6b7280); }
 .mod-item-excerpt { font-size: 0.8125rem; color: var(--color-text-secondary, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mod-item-pills { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.mod-back, a.mod-back:link { display: none; margin-bottom: 0.75rem; font-size: 0.875rem; color: var(--color-text-secondary, #6b7280); text-decoration: none; }
+.mod-back, a.mod-back:link, a.mod-back:visited { display: none; margin-bottom: 0.75rem; font-size: 0.875rem; color: var(--color-text-secondary, #6b7280); text-decoration: none; }
 .mod-pager { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 0.75rem; font-size: 0.8125rem; }
 
 @media (min-width: 1100px) {
@@ -136,7 +140,7 @@ a.mod-tab-active:link, a.mod-tab-active:visited, .mod-tab-active { border-color:
 @media (max-width: 1099px) {
     /* One thing at a time: the list, or the case with a way back */
     .mod-queue-has-case .mod-list { display: none; }
-    .mod-queue-has-case .mod-back { display: inline-block; }
+    .mod-queue-has-case a.mod-back:link, .mod-queue-has-case a.mod-back:visited { display: inline-block; }
     .mod-empty-detail { display: none; }
 }
 
@@ -176,8 +180,9 @@ a.mod-tab-active:link, a.mod-tab-active:visited, .mod-tab-active { border-color:
 .mod-ban-form p { margin: 0 0 0.5rem; font-size: 0.875rem; }
 .mod-ban-buttons { display: flex; justify-content: flex-end; margin-top: 0.75rem; }
 @media (max-width: 640px) {
-    .mod-actions { position: sticky; bottom: 0; margin-left: -1rem; margin-right: -1rem; padding: 0.75rem 1rem; background: var(--color-surface, #fff); box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.06); z-index: 5; }
-    .mod-actions-hint { display: none; }
+    /* Full-width buttons, easy to hit with a thumb. (Not pinned to the bottom: the admin
+       navigation of Twenty26 sits there on a phone.) */
+    .mod-actions > form, .mod-actions > form > .mod-btn, .mod-ban, .mod-ban > summary { width: 100%; }
 }
 
 .mod-log { margin: 0; padding: 0; list-style: none; font-size: 0.8125rem; color: var(--color-text, #374151); }

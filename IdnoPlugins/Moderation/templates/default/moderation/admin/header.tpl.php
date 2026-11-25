@@ -12,13 +12,15 @@
         'settings' => [$language->_('Settings'), $base . 'settings', null],
     ];
 
-?>
+    ?>
 <div class="mod-header">
     <h1 class="idno-admin-page-title mod-title"><?php echo $language->_('Moderation') ?></h1>
     <nav class="mod-tabs" aria-label="<?php echo htmlspecialchars($language->_('Moderation sections'), ENT_QUOTES) ?>">
         <?php foreach ($tabs as $key => $tab) { ?>
         <a class="mod-tab<?php if (($vars['tab'] ?? '') === $key) echo ' mod-tab-active'; ?>" href="<?php echo htmlspecialchars($tab[1], ENT_QUOTES) ?>"
-            <?php if (($vars['tab'] ?? '') === $key) echo 'aria-current="page"'; ?>><?php echo htmlspecialchars($tab[0]) ?><?php if ($tab[2]) { ?> <span class="mod-count"><?php echo $tab[2] ?></span><?php } ?></a>
+            <?php if (($vars['tab'] ?? '') === $key) echo 'aria-current="page"'; ?>><?php echo htmlspecialchars($tab[0]) ?><?php if ($tab[2]) { ?>
+<span class="mod-count"><?php echo $tab[2] ?></span><?php
+            } ?></a>
         <?php } ?>
     </nav>
 </div>

@@ -208,6 +208,11 @@ namespace IdnoPlugins\Moderation {
             $owner = $entity->getOwner();
             $title = static::cleanText((string) $entity->getTitle(), 300);
             $text = static::plain((string) ($entity->body ?? '') !== '' ? $entity->body : $entity->getDescription());
+            // A post with no title of its own has the start of its text for one: don't keep that twice
+            $start = (string) preg_replace('/[\s.\x{2026}]+$/u', '', $title);
+            if ($start !== '' && mb_strpos($text, $start) === 0) {
+                $title = '';
+            }
 
             return [
                 'title' => $title,

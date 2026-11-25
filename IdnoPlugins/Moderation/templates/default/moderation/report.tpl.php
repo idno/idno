@@ -59,7 +59,9 @@ if (mb_strlen($excerpt) > 240) {
 
         <blockquote class="mod-quote">
             <strong><?php echo htmlspecialchars($name) ?></strong>
-            <?php if ($excerpt !== '') { ?><span><?php echo nl2br(htmlspecialchars($excerpt)) ?></span><?php } ?>
+            <?php if ($excerpt !== '') { ?>
+<span><?php echo nl2br(htmlspecialchars($excerpt)) ?></span><?php
+            } ?>
         </blockquote>
 
         <label class="mod-label" for="mod-report-description"><?php echo $language->_('Anything the moderators should know?') ?> <span class="mod-muted"><?php echo $language->_('(optional)') ?></span></label>
@@ -77,10 +79,12 @@ if (mb_strlen($excerpt) > 240) {
     <input type="hidden" name="type" value="<?php echo htmlspecialchars((string) $target['type'], ENT_QUOTES) ?>">
     <input type="hidden" name="id" value="<?php echo htmlspecialchars((string) $vars['id'], ENT_QUOTES) ?>">
     <input type="hidden" name="comment" value="<?php echo htmlspecialchars((string) $vars['comment'], ENT_QUOTES) ?>">
-    <?php echo \Idno\Core\Idno::site()->actions()->signForm($action) ?>
+        <?php echo \Idno\Core\Idno::site()->actions()->signForm($action) ?>
 
     <div class="mod-report-actions">
-        <?php if ($back !== '') { ?><a class="mod-btn mod-btn-ghost" data-mod-cancel href="<?php echo htmlspecialchars($back, ENT_QUOTES) ?>"><?php echo $language->_('Cancel') ?></a><?php } ?>
+        <?php if ($back !== '') { ?>
+<a class="mod-btn mod-btn-ghost" data-mod-cancel href="<?php echo htmlspecialchars($back, ENT_QUOTES) ?>"><?php echo $language->_('Cancel') ?></a><?php
+        } ?>
         <button type="submit" class="mod-btn mod-btn-primary"><?php echo $language->_('Send report') ?></button>
     </div>
 

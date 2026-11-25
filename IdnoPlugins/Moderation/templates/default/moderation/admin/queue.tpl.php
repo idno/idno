@@ -27,7 +27,7 @@
 
     echo $this->__(['tab' => $tab])->draw('moderation/admin/header');
 
-?>
+    ?>
 <div class="mod-queue<?php if ($case) echo ' mod-queue-has-case'; ?>">
 
     <?php if ($tab === 'unresolved' || $tab === 'resolved') { ?>
@@ -58,19 +58,23 @@
                         <span class="mod-item-title"><?php echo htmlspecialchars(sprintf($kinds[$item->target_type] ?? '%s', $who !== '' ? $who : $language->_('someone'))) ?></span>
                         <span class="mod-item-age"><?php echo htmlspecialchars($ago($item->isOpen() ? $item->first_reported : $item->resolved_at)) ?></span>
                     </span>
-                    <?php if ($excerpt !== '') { ?><span class="mod-item-excerpt"><?php echo htmlspecialchars($excerpt) ?></span><?php } ?>
+                    <?php if ($excerpt !== '') { ?>
+<span class="mod-item-excerpt"><?php echo htmlspecialchars($excerpt) ?></span>
+                    <?php } ?>
                     <span class="mod-item-pills">
                         <?php foreach (array_keys($reasons) as $slug) { ?>
                         <span class="mod-pill<?php if (\IdnoPlugins\Moderation\Reasons::isUrgent($slug)) echo ' mod-pill-urgent'; ?>"><?php echo htmlspecialchars(\IdnoPlugins\Moderation\Reasons::label($slug)) ?></span>
                         <?php } ?>
                         <span class="mod-pill mod-pill-quiet"><?php echo (int) $item->report_count === 1 ? $language->_('1 report') : htmlspecialchars($language->_('%d reports', [(int) $item->report_count])) ?></span>
-                        <?php if (!$item->isOpen()) { ?><span class="mod-pill mod-pill-outcome"><?php echo htmlspecialchars($outcomes[$item->outcome] ?? (string) $item->outcome) ?></span><?php } ?>
+                        <?php if (!$item->isOpen()) { ?>
+<span class="mod-pill mod-pill-outcome"><?php echo htmlspecialchars($outcomes[$item->outcome] ?? (string) $item->outcome) ?></span>
+                        <?php } ?>
                     </span>
                 </a>
             </li>
             <?php } ?>
         </ul>
-        <?php echo $this->__(['base' => $base . '?tab=' . $tab])->draw('moderation/admin/pager'); ?>
+            <?php echo $this->__(['base' => $base . '?tab=' . $tab])->draw('moderation/admin/pager'); ?>
         <?php } ?>
     </section>
 
@@ -111,7 +115,9 @@
                             <span><strong><?php echo htmlspecialchars(strip_tags((string) $member->getTitle())) ?></strong><small>@<?php echo htmlspecialchars((string) $member->getHandle()) ?><?php if ($member->isHiddenByBan()) echo ' · ' . $language->_('posts hidden'); ?></small></span>
                         </a>
                     </td>
-                    <td><?php echo htmlspecialchars(date('j M Y', (int) $ban['time'])) ?><?php if ($by) { ?><small><?php echo htmlspecialchars($language->_('by %s', [strip_tags((string) $by->getTitle())])) ?></small><?php } ?></td>
+                    <td><?php echo htmlspecialchars(date('j M Y', (int) $ban['time'])) ?><?php if ($by) { ?>
+<small><?php echo htmlspecialchars($language->_('by %s', [strip_tags((string) $by->getTitle())])) ?></small>
+                   <?php } ?></td>
                     <td><?php echo (string) $ban['reason'] !== '' ? nl2br(htmlspecialchars((string) $ban['reason'])) : '<span class="mod-muted">' . $language->_('No reason recorded') . '</span>' ?></td>
                     <td class="mod-table-actions">
                         <form method="post" action="<?php echo htmlspecialchars($memberUrl, ENT_QUOTES) ?>"
@@ -129,7 +135,7 @@
             </tbody>
         </table>
         </div>
-        <?php echo $this->__(['base' => $base . '?tab=banned'])->draw('moderation/admin/pager'); ?>
+            <?php echo $this->__(['base' => $base . '?tab=banned'])->draw('moderation/admin/pager'); ?>
         <?php } ?>
     </section>
     <?php } ?>
@@ -145,7 +151,7 @@
         <div class="mod-card">
             <?php echo $this->__(['entries' => $vars['entries'], 'links' => true])->draw('moderation/admin/log'); ?>
         </div>
-        <?php echo $this->__(['base' => $base . '?tab=log'])->draw('moderation/admin/pager'); ?>
+            <?php echo $this->__(['base' => $base . '?tab=log'])->draw('moderation/admin/pager'); ?>
         <?php } ?>
     </section>
     <?php } ?>

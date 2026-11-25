@@ -9,7 +9,7 @@
     var selector = 'details[data-idno-more-menu]';
 
     function items(menu) {
-        return Array.prototype.slice.call(menu.querySelectorAll('[role="menuitem"]'));
+        return Array.prototype.slice.call(menu.querySelectorAll('.idno-more-item'));
     }
 
     function close(menu, focus) {

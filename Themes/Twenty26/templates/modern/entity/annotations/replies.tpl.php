@@ -54,9 +54,6 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         <?php
             $this->annotation_permalink = $locallink;
             echo '<span class="idno-annotation-menu">' . $this->__(['annotation' => $annotation, 'annotation_permalink' => $locallink])->draw('entity/annotations/menu') . '</span>';
-            if ($vars['object']->canEditAnnotation($annotation)) {
-                echo $this->draw('content/annotation/edit');
-            }
         ?>
     </div>
 <?php

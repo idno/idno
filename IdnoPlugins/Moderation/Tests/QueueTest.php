@@ -57,7 +57,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
             $case = $this->get('/admin/moderation/case/' . $open->getID(), static::$admin);
             $this->assertEquals(200, $case['status']);
-            foreach (['Why ' . $openMarker, static::$reporter->getTitle(), static::$author->getTitle(), 'Dismiss', 'Remove post', 'has filed', 'Moderator notes', 'Saved copy'] as $expected) {
+            foreach (['Why ' . $openMarker, static::$reporter->getTitle(), static::$author->getTitle(), 'Dismiss', 'Remove post', 'Reports filed', 'Moderator notes', 'Saved copy'] as $expected) {
                 $this->assertStringContainsString($expected, $case['body']);
             }
             $this->assertStringContainsString('name="revision" value="' . static::freshCase($open)->revision . '"', $case['body']);

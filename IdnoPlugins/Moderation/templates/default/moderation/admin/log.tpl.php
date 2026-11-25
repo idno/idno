@@ -18,7 +18,7 @@
         'note' => $language->get('%s added a note'),
     ];
 
-?>
+    ?>
 <ol class="mod-log">
     <?php foreach ($vars['entries'] as $entry) {
         $actor = (string) $entry->actor_name !== '' ? (string) $entry->actor_name : $language->_('Someone');

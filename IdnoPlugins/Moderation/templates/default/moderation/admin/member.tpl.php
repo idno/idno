@@ -26,9 +26,13 @@
             <h2 class="mod-case-title"><?php echo htmlspecialchars($name) ?></h2>
             <p class="mod-muted">@<?php echo htmlspecialchars((string) $member->getHandle()) ?> · <?php echo htmlspecialchars($language->_('Member since %s', [date('M Y', (int) $member->created)])) ?> · <a href="<?php echo htmlspecialchars($member->getDisplayURL(), ENT_QUOTES) ?>"><?php echo $language->_('Profile') ?></a></p>
             <p>
-                <?php if ($ban) { ?><span class="mod-pill mod-pill-urgent"><?php echo $language->_('Banned') ?></span><?php } ?>
-                <?php if (!empty($member->admin)) { ?><span class="mod-pill"><?php echo $language->_('Administrator') ?></span><?php } ?>
-                <span class="mod-muted"><?php echo htmlspecialchars($language->_('Has filed %d reports, %d dismissed', [$vars['reporter_record']['filed'], $vars['reporter_record']['dismissed']])) ?></span>
+                <?php if ($ban) { ?>
+<span class="mod-pill mod-pill-urgent"><?php echo $language->_('Banned') ?></span>
+                <?php } ?>
+                <?php if (!empty($member->admin)) { ?>
+<span class="mod-pill"><?php echo $language->_('Administrator') ?></span>
+                <?php } ?>
+                <span class="mod-muted"><?php echo htmlspecialchars($language->_('Reports filed: %d · dismissed: %d', [$vars['reporter_record']['filed'], $vars['reporter_record']['dismissed']])) ?></span>
             </p>
         </div>
     </div>
@@ -39,7 +43,9 @@
     <div class="mod-card">
         <h3 class="mod-card-title"><?php echo htmlspecialchars($language->_('Banned on %s', [date('j M Y, H:i', (int) $ban['time'])])) ?><?php if ($by) echo ' ' . htmlspecialchars($language->_('by %s', [strip_tags((string) $by->getTitle())])); ?></h3>
         <p><?php echo (string) $ban['reason'] !== '' ? nl2br(htmlspecialchars((string) $ban['reason'])) : '<span class="mod-muted">' . $language->_('No reason recorded') . '</span>' ?></p>
-        <?php if ($member->isHiddenByBan()) { ?><p class="mod-muted"><?php echo $language->_('Their profile and posts are hidden.') ?></p><?php } ?>
+        <?php if ($member->isHiddenByBan()) { ?>
+<p class="mod-muted"><?php echo $language->_('Their profile and posts are hidden.') ?></p>
+        <?php } ?>
         <form method="post" action="<?php echo htmlspecialchars($url, ENT_QUOTES) ?>"
               data-mod-confirm-title="<?php echo htmlspecialchars($language->_('Lift the ban on %s?', [$name]), ENT_QUOTES) ?>"
               data-mod-confirm-text="<?php echo htmlspecialchars($language->_('They will be able to sign in and post again, and any posts the ban hid will come back. They get an email saying so.'), ENT_QUOTES) ?>"
@@ -79,8 +85,12 @@
                 $text = mb_strlen($text) > 70 ? mb_substr($text, 0, 70) . '…' : $text;
                 ?>
                 <tr>
-                    <td><a href="<?php echo htmlspecialchars($case->getAdminURL(), ENT_QUOTES) ?>"><strong><?php echo htmlspecialchars($kinds[$case->target_type] ?? '') ?></strong></a><?php if ($text !== '') { ?><small><?php echo htmlspecialchars($text) ?></small><?php } ?></td>
-                    <td><?php foreach (array_keys(is_array($case->reasons) ? $case->reasons : []) as $slug) { ?><span class="mod-pill<?php if (\IdnoPlugins\Moderation\Reasons::isUrgent($slug)) echo ' mod-pill-urgent'; ?>"><?php echo htmlspecialchars(\IdnoPlugins\Moderation\Reasons::label($slug)) ?></span> <?php } ?></td>
+                    <td><a href="<?php echo htmlspecialchars($case->getAdminURL(), ENT_QUOTES) ?>"><strong><?php echo htmlspecialchars($kinds[$case->target_type] ?? '') ?></strong></a><?php if ($text !== '') { ?>
+<small><?php echo htmlspecialchars($text) ?></small>
+                   <?php } ?></td>
+                    <td><?php foreach (array_keys(is_array($case->reasons) ? $case->reasons : []) as $slug) { ?>
+<span class="mod-pill<?php if (\IdnoPlugins\Moderation\Reasons::isUrgent($slug)) echo ' mod-pill-urgent'; ?>"><?php echo htmlspecialchars(\IdnoPlugins\Moderation\Reasons::label($slug)) ?></span>
+                   <?php } ?></td>
                     <td><?php echo htmlspecialchars(date('j M Y', (int) $case->first_reported)) ?></td>
                     <td><?php echo $case->isOpen() ? $language->_('Unresolved') : htmlspecialchars($outcomes[$case->outcome] ?? '') ?></td>
                 </tr>

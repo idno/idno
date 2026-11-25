@@ -15,7 +15,7 @@
 <hr/>
 <br>
 <?php foreach ($mail['paragraphs'] as $paragraph) { ?>
-<?php echo nl2br(htmlspecialchars((string) $paragraph)) ?>
+    <?php echo nl2br(htmlspecialchars((string) $paragraph)) ?>
 <br><br>
 <?php } ?>
 <?php if ((string) $mail['quote'] !== '') { ?>
@@ -27,4 +27,4 @@
 <?php if ($linkUrl !== '') { ?>
 <a href="<?php echo htmlspecialchars($linkUrl, ENT_QUOTES) ?>" style="color: #73b2e3; text-decoration: none;"><?php echo htmlspecialchars((string) $mail['link']['label']) ?></a>
 <br><br>
-<?php } ?>
+<?php }

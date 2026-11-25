@@ -114,3 +114,5 @@
 .idno-annotation { position: relative; }
 .idno-annotation-menu { margin-left: auto; }
 .idno-annotation:target { box-shadow: 0 0 0 2px var(--color-link, #2563eb); border-radius: 0.5rem; }
+.idno-profile-header > div:not(.idno-profile-menu) { flex: 1 1 auto; min-width: 0; }
+.idno-profile-name { overflow-wrap: anywhere; }
