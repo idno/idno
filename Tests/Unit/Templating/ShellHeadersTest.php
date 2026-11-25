@@ -84,6 +84,54 @@ final class ShellHeadersTest extends TestCase
         $this->assertTrue(ShellHeaders::replaces('Access-Control-Allow-Origin'));
     }
 
+    /** @return iterable<string, array{string, int}> */
+    public static function sources(): iterable
+    {
+        yield 'a call' => ['<?php header("X: y");', 1];
+        yield 'a fully qualified call' => ['<?php \\header("X: y");', 1];
+        yield 'a call with white space' => ["<?php header\n  ('X: y');", 1];
+        yield 'a namespaced call' => ['<?php \\Foo\\header("X: y");', 0];
+        yield 'a comment' => ['<?php // header("X: y")' . "\n" . '/* header("X: y") */', 0];
+        yield 'a string' => ['<?php echo \'header("X: y")\';', 0];
+        yield 'a method' => ['<?php $a->header("x"); A::header("x"); function header() {}', 0];
+        yield 'html text' => ['<p>header(1)</p><?php echo 1;', 0];
+    }
+
+    /**
+     * @dataProvider sources
+     */
+    public function testHeaderCallsAreFoundInPhpSourceByTokens(string $source, int $expected): void
+    {
+        $this->assertCount($expected, self::headerCalls($source));
+    }
+
+    /** @return list<int> the lines of the calls of the global function header() in a PHP source */
+    private static function headerCalls(string $source): array
+    {
+        $tokens = token_get_all($source);
+        $lines = [];
+        foreach ($tokens as $i => $token) {
+            if (!is_array($token) || !in_array($token[0], [T_STRING, T_NAME_FULLY_QUALIFIED], true) || strtolower($token[1]) !== ($token[0] === T_STRING ? 'header' : '\\header')) {
+                continue;
+            }
+            $next = $i + 1;
+            while (isset($tokens[$next]) && is_array($tokens[$next]) && in_array($tokens[$next][0], [T_WHITESPACE, T_COMMENT], true)) {
+                $next++;
+            }
+            $prev = $i - 1;
+            while ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_WHITESPACE) {
+                $prev--;
+            }
+            $before = $tokens[$prev] ?? null;
+            $isMember = is_array($before) && in_array($before[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION, T_NS_SEPARATOR], true);
+            if (($tokens[$next] ?? null) === '(' && !$isMember) {
+                $lines[] = $token[2];
+            }
+        }
+
+        return $lines;
+    }
+
     public function testNoCoreOrBundledTemplateCallsHeader(): void
     {
         $root = dirname(__DIR__, 3);
@@ -95,26 +143,10 @@ final class ShellHeadersTest extends TestCase
             foreach ($it as $file) {
                 $path = $file->getPathname();
                 $source = (string) file_get_contents($path);
-                if (str_ends_with($path, '.tpl.php')) {
+                if (str_ends_with($path, '.php')) {
                     $checked++;
-                    $tokens = token_get_all($source);
-                    foreach ($tokens as $i => $token) {
-                        if (!is_array($token) || $token[0] !== T_STRING || strtolower($token[1]) !== 'header') {
-                            continue;
-                        }
-                        $next = $i + 1;
-                        while (isset($tokens[$next]) && is_array($tokens[$next]) && $tokens[$next][0] === T_WHITESPACE) {
-                            $next++;
-                        }
-                        $prev = $i - 1;
-                        while ($prev >= 0 && is_array($tokens[$prev]) && $tokens[$prev][0] === T_WHITESPACE) {
-                            $prev--;
-                        }
-                        $before = $tokens[$prev] ?? null;
-                        $isMember = is_array($before) && in_array($before[0], [T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR, T_DOUBLE_COLON, T_FUNCTION], true);
-                        if (($tokens[$next] ?? null) === '(' && !$isMember) {
-                            $found[] = substr($path, strlen($root) + 1) . ':' . $token[2];
-                        }
+                    foreach (self::headerCalls($source) as $line) {
+                        $found[] = substr($path, strlen($root) + 1) . ':' . $line;
                     }
                 } elseif (str_ends_with($path, '.twig')) {
                     $checked++;

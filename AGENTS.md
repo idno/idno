@@ -3063,8 +3063,11 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
   `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,
   `Connect`, `Profile`); `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
-  `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
-  (`Tests/Characterisation/PageHeadersTest`). `Bonita\Templates::__()` writes template variables only, whatever their names (a variable named
+  `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (it scans every `.php` file, `.tpl.php` and plain, by tokens, `\header(` included, and every `.twig` file; a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
+  (`Tests/Characterisation/PageHeadersTest`; `Tests/Kernel/ShellHeadersDrawTest` pins `DefaultTemplate::shellHeaders()` per type and status). Two behaviours changed with the table: `drawPageWithoutSideEffects()`
+  no longer sends the two HTML headers (`text/html; charset=utf-8`, `nosniff`) for JSONP on an `/admin` or `/account` page (it sends no header at all, as it says; the
+  private flag that makes the JSONP settings shell HTML is reset when that draw ends), and a third-party `json` or `jsonp` shell that calls no `header()` itself now gets core's headers for its type
+  (one that does call `header()` still wins, its call runs later). `Bonita\Templates::__()` writes template variables only, whatever their names (a variable named
   `templateType`, `vars` or `fallbackToDefault` no longer sets the object's own property of that name: use `setTemplateType()`;
   `TemplateContractTest::testUnderscoreUnderscoreNeverSetsTheObjectsOwnProperties`); `Actions::createLink()` and `createForm()` and
   `DefaultTemplate::drawSyndication()` and `drawPagination()` draw on a `clone`, so their variables stay off the site's template object

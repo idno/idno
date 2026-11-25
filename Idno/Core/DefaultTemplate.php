@@ -199,7 +199,12 @@ namespace Idno\Core {
             $shell = $this->shellForPage($shell);
             $this->messages = [];
 
-            return parent::drawPage($echo, $shell);
+            try {
+                return parent::drawPage($echo, $shell);
+            } finally {
+                // (the flag describes this draw: a later draw or header query on this object is not a settings page's)
+                $this->settingsShellAsJsonp = false;
+            }
         }
 
         /**
@@ -229,9 +234,10 @@ namespace Idno\Core {
         }
 
         /**
-         * Sends the headers every page of the default type has: what the `shell/headers` template sent, before no template sent a
-         * header. `shell/headers` is still drawn by the shells, as a place a plugin can extend (an extension may call `header()`),
-         * and has no file of its own. Another template type has the headers of its own shell.
+         * Sends the headers of a page of this object's template type, as ShellHeaders declares them (`default`, `json`, `jsonp`,
+         * `rss`, `kml`, `jsonfeed`, `activitypub`, `markdown`; another type has none): what each shell sent itself, before no
+         * template sent a header. `shell/headers` is still drawn by the shells, as a place a plugin can extend (an extension may
+         * call `header()`), and has no file of its own.
          */
         function sendShellHeaders()
         {
