@@ -160,17 +160,6 @@ namespace Idno\Core {
              * Bookmarklets and sharing
             */
             $this->routes()->addRoute('/share/?', '\Idno\Pages\Entity\Share');
-            $this->routes()->addRoute('/bookmarklet\.js', '\Idno\Pages\Entity\Bookmarklet', true);
-
-            /**
-             * Mobile integrations
-            */
-            $this->routes()->addRoute('/chrome/manifest\.json', '\Idno\Pages\Chrome\Manifest', true);
-
-            /**
-             * Service worker
-            */
-            $this->routes()->addRoute('/service-worker(\.min)?\.js', '\Idno\Pages\Chrome\ServiceWorker', true);
 
             /**
              * Files
@@ -192,13 +181,7 @@ namespace Idno\Core {
             /**
              * Search
             */
-            $this->routes()->addRoute('/search/mentions\.json', '\Idno\Pages\Search\Mentions');
             $this->routes()->addRoute('/search/users/?', '\Idno\Pages\Search\User');
-
-            /**
-             * robots.txt
-            */
-            $this->routes()->addRoute('/robots\.txt', '\Idno\Pages\Txt\Robots');
 
             /**
              * Autosave / preview
@@ -224,7 +207,6 @@ namespace Idno\Core {
              * Add some services
             */
             $this->routes()->addRoute('/service/db/optimise/?', '\Idno\Pages\Service\Db\Optimise');
-            $this->routes()->addRoute('/service/security/csrftoken/?', '\Idno\Pages\Service\Security\CSRFToken');
             $this->routes()->addRoute('/service/system/log/?', '\Idno\Pages\Service\System\Log');
             $this->routes()->addRoute('/service/geo/geocoder/?', '\Idno\Pages\Service\Geo\Geocoder');
             // Shared inbox route is registered by the ActivityPub plugin

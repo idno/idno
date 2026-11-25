@@ -284,7 +284,6 @@ namespace Tests\Pages {
             $year = date('Y');
             $expected = [
                 '/'                              => 'Idno\Pages\Homepage',
-                '/robots.txt'                    => 'Idno\Pages\Txt\Robots',
                 '/profile/testuser'              => 'Idno\Pages\User\View',
                 '/admin/'                        => 'Idno\Pages\Admin\Home',
                 '/session/login'                 => 'Idno\Pages\Session\Login',
@@ -308,15 +307,17 @@ namespace Tests\Pages {
 
             // The feeds and the tag pages are the home page controller's now: the legacy router has no page for them, and the
             // symfony router sends them to it, the tag with its non-ASCII letters as written.
-            foreach (['/feed.xml', '/feed', '/rss.xml', '/search', '/tag/café', '/tag/caf%C3%A9'] as $path) {
+            // (so are robots.txt, the manifest, the service worker, WebFinger, the mention search and the token endpoint, which were pages of their
+            // own, and the bookmarklet's address, which is no page)
+            foreach (['/feed.xml', '/feed', '/rss.xml', '/search', '/tag/café', '/tag/caf%C3%A9', '/robots.txt', '/chrome/manifest.json', '/service-worker.js', '/service-worker.min.js', '/.well-known/webfinger', '/search/mentions.json', '/service/security/csrftoken/', '/bookmarklet.js'] as $path) {
                 $this->assertFalse(Idno::site()->routes()->getRoute($path), "$path should have no legacy page.");
             }
             $router = Idno::container()->get('router');
-            foreach (['/feed.xml' => 'idno_feed_xml', '/tag/café' => 'idno_tag', '/tag/caf%C3%A9' => 'idno_tag', '/search' => 'idno_search'] as $path => $route) {
+            foreach (['/feed.xml' => 'idno_feed_xml', '/tag/café' => 'idno_tag', '/tag/caf%C3%A9' => 'idno_tag', '/search' => 'idno_search', '/robots.txt' => 'idno_robots', '/chrome/manifest.json' => 'idno_manifest', '/service-worker.js' => 'idno_service_worker', '/service-worker.min.js' => 'idno_service_worker_min', '/.well-known/webfinger' => 'idno_webfinger', '/search/mentions.json' => 'idno_mention_search', '/service/security/csrftoken/' => 'idno_csrf_token'] as $path => $route) {
                 $request = new \Symfony\Component\HttpFoundation\Request([], [], [], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
                 $match = $router->matchRequest($request);
                 $this->assertSame($route, $match['_route'], $path);
-                $this->assertSame(\Idno\Http\Controller\HomepageController::class, explode('::', (string) $match['_controller'])[0], $path);
+                $this->assertStringStartsWith('Idno\\Http\\Controller\\', explode('::', (string) $match['_controller'])[0], $path);
             }
         }
 

@@ -133,8 +133,8 @@ final class PageContractTest extends PrivateSiteTestCase
 
             $this->assertSame(['page/ready', 'page/head', 'page/get'], array_column($events, 'event'), $path);
             $this->assertSame($class, $events[2]['page_class'], $path);
-            // the home page's streams are a controller's: its current page is the controller page
-            $this->assertSame($path === '/content/all' ? 'Idno\Legacy\ControllerPage' : $class, $events[2]['current'], $path);
+            // each is a controller's now: its current page is the controller page, while its events keep the name of the class that was the page
+            $this->assertSame('Idno\Legacy\ControllerPage', $events[2]['current'], $path);
         }
     }
 

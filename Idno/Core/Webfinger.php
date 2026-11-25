@@ -16,9 +16,11 @@ namespace Idno\Core {
         {
         }
 
+        /**
+         * WebFinger is served by `Idno\Http\Controller\WebfingerController`; this component registers no page.
+         */
         function registerpages()
         {
-            \Idno\Core\Idno::site()->routes()->addRoute('/\.well\-known/webfinger/?', '\Idno\Pages\Webfinger\View', true);
         }
 
     }

@@ -6,7 +6,7 @@ namespace Tests\Characterisation;
 
 /**
  * A webmention aimed at the address of a page whose class is deleted. The endpoint asks the legacy router which page a target is and
- * hands the mention to it; the feeds and the tag pages are served by a controller now and have no legacy page, so the router finds
+ * hands the mention to it; the feeds, the tag pages and the small public endpoints (robots.txt, the manifest, the service worker, WebFinger, the mention search, the token endpoint) are served by a controller now and have no legacy page, so the router finds
  * nothing for their addresses and the target is not found. Remote hosts are `.invalid`: nothing leaves the machine.
  */
 final class WebmentionToADeletedPageTest extends CharacterisationTestCase
@@ -16,7 +16,7 @@ final class WebmentionToADeletedPageTest extends CharacterisationTestCase
      */
     public static function targets(): array
     {
-        return ['the feed' => ['feed.xml'], 'the other feeds' => ['rss.xml'], 'a tag' => ['tag/x'], 'a search' => ['search']];
+        return ['the feed' => ['feed.xml'], 'the other feeds' => ['rss.xml'], 'a tag' => ['tag/x'], 'a search' => ['search'], 'robots.txt' => ['robots.txt'], 'the manifest' => ['chrome/manifest.json'], 'the service worker' => ['service-worker.min.js'], 'the mention search' => ['search/mentions.json'], 'the token endpoint' => ['service/security/csrftoken/'], 'WebFinger' => ['.well-known/webfinger']];
     }
 
     /**

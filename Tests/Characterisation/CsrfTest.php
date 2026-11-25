@@ -216,20 +216,26 @@ final class CsrfTest extends CharacterisationTestCase
         $this->assertSame(403, $plain->status, 'only an XHR request is given a token');
         $this->assertSame(200, $xhr->status);
         $this->assertStringContainsString('application/json', (string) $xhr->header('Content-Type'));
-        $this->assertStringContainsString('no-cache', (string) $xhr->header('Cache-Control'));
+        $this->assertSame('no-store', $xhr->header('Cache-Control'), 'the token is never cached');
         $json = $xhr->json();
         $this->assertSame(['time', 'token'], array_keys($json));
         $this->postSettings($cookie, ['__bTs' => (string) $json['time'], '__bTk' => $json['token'], '__bTa' => $url], 'Changed By Script');
         $this->assertSame('Changed By Script', $this->titleOfMember(), 'the token a script is given works for the session that asked');
     }
 
-    public function testCsrfTokenEndpointWithoutAnAddressIsAnError(): void
+    public function testTheTokenEndpointNeedsNoUrl(): void
     {
         $cookie = $this->logIn($this->member());
+        $headers = ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'];
 
-        $response = $this->site()->request('GET', 'service/security/csrftoken/', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest']);
+        $response = $this->site()->request('GET', 'service/security/csrftoken/', $headers);
 
-        $this->assertSame(500, $response->status);
+        // (it was a 500 page: the token is the session's one stored token, so there is no address to make one for)
+        $this->assertSame(200, $response->status);
+        $json = $response->json();
+        $this->assertSame(['time', 'token'], array_keys($json));
+        $this->assertSame($json['token'], $this->site()->request('GET', 'service/security/csrftoken/?url=x', $headers)->json()['token'], 'the same token, whatever address is named');
+        $this->assertSame(200, $this->site()->request('GET', 'service/security/csrftoken/?url[]=x', $headers)->status);
     }
 
     public function testCsrfTokenEndpointAnswersAVisitorToo(): void

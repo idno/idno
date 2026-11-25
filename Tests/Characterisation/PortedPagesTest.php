@@ -17,11 +17,11 @@ namespace Tests\Characterisation {
 
         private const STANDARD_CACHE_CONTROL = 'no-store, no-cache, must-revalidate';
 
-        /** The headers of the pages Toro answers for an XHR request, and of the token endpoint. */
+        /** The headers of the pages Toro answers for an XHR request, and of the token endpoint (the session's `Expires`, one `Cache-Control: no-store`). */
         private const CACHING = [
             'standard' => [self::STANDARD_EXPIRES, self::STANDARD_CACHE_CONTROL],
             'xhr' => ['Mon, 26 Jul 1997 05:00:00 GMT', 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0'],
-            'token' => ['Mon, 26 Jul 1997 05:00:00 GMT', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0'],
+            'token' => [self::STANDARD_EXPIRES, 'no-store'],
         ];
 
         /**
@@ -119,16 +119,18 @@ namespace Tests\Characterisation {
                 ['GET', '//robots.txt', [], 200, 'text/plain', null, 'User-agent: *', false, $std, false],
                 ['GET', '/chrome/manifest.json', [], 200, 'application/json', null, '"short_name"', false, $std, false],
                 ['GET', '/service-worker.min.js', [], 200, 'application/javascript', null, '"use strict"', false, $std, false],
-                // The bookmarklet's address answers an HTML fragment (a paragraph holding the link) as text/html.
-                ['GET', '/bookmarklet.js', [], 200, 'text/html', null, 'class="bookmarklet"', false, $std, false],
+                ['GET', '/robots.txt', ['Host' => 'bad host!'], 404, 'text/html', null, $notFound, false, $std, true],
+                // The bookmarklet's address answered an HTML fragment (a paragraph holding the link) as text/html: nothing links it, and it is no page now.
+                ['GET', '/bookmarklet.js', [], 404, 'text/html', null, $notFound, false, $std, true],
                 ['GET', '/.well-known/webfinger', [], 404, 'text/html', null, $notFound, false, $std, true],
-                ['POST', '/.well-known/webfinger', [], 302, 'text/html', '/', '', false, $std, false],
-                // The mention search answers JSON as `text/json`.
-                ['GET', '/search/mentions.json', [], 200, 'text/json', null, '[{"username"', false, $std, false],
-                ['GET', '/service/security/csrftoken/?url=' . $encoded, $xhr, 200, 'application/json', null, '"token"', true, 'token', false],
+                // (a POST was the invalid-token redirect home: the class is deleted, so it is the legacy router's 404 page)
+                ['POST', '/.well-known/webfinger', [], 404, 'text/html', null, $notFound, false, $std, true],
+                // The mention search answered JSON as `text/json`.
+                ['GET', '/search/mentions.json', [], 200, 'application/json', null, '[{"username"', false, $std, false],
+                ['GET', '/service/security/csrftoken/?url=' . $encoded, $xhr, 200, 'application/json', null, '"token"', false, 'token', false],
                 ['GET', '/service/security/csrftoken/?url=' . $encoded, [], 403, 'text/html', null, $html, false, $std, true],
-                // With no `url` the token endpoint fails with a 500 page.
-                ['GET', '/service/security/csrftoken/', $xhr, 500, 'text/html', null, 'Something went wrong.', true, 'token', true],
+                // With no `url` the token endpoint answered a 500 page: it needs none.
+                ['GET', '/service/security/csrftoken/', $xhr, 200, 'application/json', null, '"token"', false, 'token', false],
             ];
         }
 
@@ -173,17 +175,25 @@ namespace Tests\Characterisation {
 
         public function testTheServiceWorkerAtItsUnminifiedAddress(): void
         {
-            // The page reads `js/service-worker.js`, a file the Grunt build writes and git ignores: a 500 page where it is
-            // not there, and its text where a developer has built it.
-            $built = dirname(__DIR__, 2) . '/js/service-worker.js';
+            // The page read `js/service-worker.js`, a file the Grunt build writes and git ignores: a 500 page wherever it was not built (every
+            // release). Both addresses are the shipped script now.
             $response = $this->site()->request('GET', '/service-worker.js');
 
-            if (is_file($built)) {
-                $this->assertSame(200, $response->status);
-                $this->assertSame((string) file_get_contents($built), $response->body);
-            } else {
-                $this->assertSame(500, $response->status);
-                $this->assertStringStartsWith('text/html', (string) $response->header('Content-Type'));
+            $this->assertSame(200, $response->status);
+            $this->assertStringStartsWith('application/javascript', (string) $response->header('Content-Type'));
+            $this->assertSame((string) file_get_contents(dirname(__DIR__, 2) . '/js/service-worker.min.js'), $response->body);
+        }
+
+        public function testAnyOtherMethodOfASmallEndpointIsTheLegacy404Page(): void
+        {
+            foreach (['/robots.txt', '/chrome/manifest.json', '/service-worker.js', '/service-worker.min.js', '/search/mentions.json', '/service/security/csrftoken/?url=x'] as $path) {
+                foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+                    $response = $this->site()->request($method, $path);
+
+                    $this->assertSame(404, $response->status, $method . ' ' . $path);
+                    $this->assertNull($response->header('Location'), $method . ' ' . $path);
+                    $this->assertStringContainsString('This page can&#039;t be found.', $response->body, $method . ' ' . $path);
+                }
             }
         }
 
@@ -229,8 +239,8 @@ namespace Tests\Characterisation {
 
         public function testAPostWithoutATokenIsRefusedWithAMessageOnTheNextPage(): void
         {
-            // For the home page and webfinger the refusal is a redirect home and a session message. (The feed and search are no page for a POST.)
-            foreach (['/', '/.well-known/webfinger'] as $path) {
+            // For the home page the refusal is a redirect home and a session message. (The feeds, search and small endpoints are no page for a POST.)
+            foreach (['/'] as $path) {
                 $first = $this->site()->request('GET', '/');
                 $cookie = explode(';', (string) $first->header('Set-Cookie'))[0];
 

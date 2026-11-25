@@ -152,13 +152,12 @@ namespace Tests\Characterisation {
 
         public function testXhrRequestReachesLegacy(): void
         {
-            // No "url" parameter: the legacy page throws, and its own exception handler
-            // renders the 500 page (not a Symfony error page).
-            $r = $this->site()->request('GET', 'service/security/csrftoken', ['X-Requested-With' => 'XMLHttpRequest']);
+            // The legacy page throws, and its own exception handler renders the 500 page (not a Symfony error page).
+            $r = $this->site()->request('GET', '_test/legacy-plain?throw=1', ['X-Requested-With' => 'XMLHttpRequest']);
 
             $this->assertSame(500, $r->status);
             $this->assertSame('text/html;charset=UTF-8', $r->header('Content-Type'));
-            $this->assertStringContainsString('RuntimeException: URL missing', $r->body);
+            $this->assertStringContainsString('RuntimeException: the legacy page broke', $r->body);
         }
 
         public function testUnusualPathsReachLegacy(): void

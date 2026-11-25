@@ -27,10 +27,10 @@ namespace Tests\Characterisation {
                 'Cache-Control' => ['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'],
                 'Pragma' => ['no-cache'],
             ],
-            // the router's, then the page's `setNoCache()` over it
+            // the token endpoint's: the session's `Expires` and `Pragma`, and one `Cache-Control: no-store` of its own
             'token' => [
-                'Expires' => ['Mon, 26 Jul 1997 05:00:00 GMT'],
-                'Cache-Control' => ['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'],
+                'Expires' => ['Thu, 19 Nov 1981 08:52:00 GMT'],
+                'Cache-Control' => ['no-store'],
                 'Pragma' => ['no-cache'],
             ],
         ];
@@ -127,7 +127,8 @@ namespace Tests\Characterisation {
                 ['GET', '/service-worker.min.js', [], 200, $s, null],
                 ['GET', $this->webfinger(), [], 200, $s, null],
                 ['GET', '/search/mentions.json', [], 200, $s, null],
-                ['GET', '/bookmarklet.js', [], 200, $s, null],
+                // (the bookmarklet's address is no page now: the legacy router's 404 page, with the session's lines)
+                ['GET', '/bookmarklet.js', [], 404, $s, null],
                 // the pages that refuse or are not there
                 ['GET', '/content/', [], 404, $s, null],
                 ['GET', '/service/security/csrftoken/?url=x', [], 403, $s, null],
@@ -154,7 +155,7 @@ namespace Tests\Characterisation {
             // home page is a controller's now, and answers an XHR request with the headers of the same request that is not XHR)
             $this->checkRows([
                 ['HEAD', '/', self::XHR, 200, 'session', 'newest'],
-                ['HEAD', '/robots.txt', self::XHR, 200, 'xhr', 'any'],
+                ['HEAD', '/robots.txt', self::XHR, 200, 'session', null],
             ]);
         }
 
@@ -178,7 +179,6 @@ namespace Tests\Characterisation {
             // (now, or the page's own when it sets one). The pages a controller serves (the home page and its streams) send the headers of the
             // same request that is not XHR: the session's (the feeds, the tag pages and the search among them). The others become so when they are served
             // by controllers.
-            $x = 'xhr';
             $this->checkRows([
                 ['GET', '/', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/?_t=json', self::XHR, 200, 'session', 'newest'],
@@ -187,23 +187,23 @@ namespace Tests\Characterisation {
                 ['GET', '/feed.xml', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/tag/books', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/search?q=a', self::XHR, 302, 'session', null],
-                ['GET', '/robots.txt', self::XHR, 200, $x, 'any'],
-                ['GET', '/chrome/manifest.json', self::XHR, 200, $x, 'any'],
-                ['GET', '/service-worker.min.js', self::XHR, 200, $x, 'any'],
-                ['GET', $this->webfinger(), self::XHR, 200, $x, 'any'],
-                ['GET', '/search/mentions.json', self::XHR, 200, $x, 'any'],
+                ['GET', '/robots.txt', self::XHR, 200, 'session', null],
+                ['GET', '/chrome/manifest.json', self::XHR, 200, 'session', null],
+                ['GET', '/service-worker.min.js', self::XHR, 200, 'session', null],
+                ['GET', $this->webfinger(), self::XHR, 200, 'session', null],
+                ['GET', '/search/mentions.json', self::XHR, 200, 'session', null],
             ]);
         }
 
         public function testTheTokenEndpointsCaching(): void
         {
-            // Today the token page asks for no caching over the router's XHR headers: a 1997 `Expires`, two `Cache-Control` lines, `Pragma` and
-            // `Last-Modified` now. It will become `Cache-Control: no-store` only.
+            // The token page asks for `Cache-Control: no-store` and nothing else: the session's `Expires` and `Pragma` are as on every page, and
+            // there is no `Last-Modified` (it was the router's XHR headers' and the moment's: a 1997 `Expires`, two `Cache-Control` lines).
+            // The address it once needed is not read: with none the answer is the same (it was a 500 page).
             $t = 'token';
             $this->checkRows([
-                ['GET', '/service/security/csrftoken/?url=http%3A%2F%2Fexample.invalid%2F', self::XHR, 200, $t, 'any'],
-                // with no `url` the endpoint fails with the 500 page, which the headers it had set stay on
-                ['GET', '/service/security/csrftoken/', self::XHR, 500, $t, 'any'],
+                ['GET', '/service/security/csrftoken/?url=http%3A%2F%2Fexample.invalid%2F', self::XHR, 200, $t, null],
+                ['GET', '/service/security/csrftoken/', self::XHR, 200, $t, null],
             ]);
         }
     }

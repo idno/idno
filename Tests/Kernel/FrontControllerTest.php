@@ -128,7 +128,37 @@ final class FrontControllerTest extends TestCase
             }
         }
         // what is not theirs: no tag, a space in the tag, any other method, a third slash, a longer name
-        foreach ([['GET', '/tag/'], ['GET', '/tag'], ['GET', '/tag/a%20b'], ['POST', '/feed.xml'], ['PUT', '/search'], ['DELETE', '/tag/x'], ['PATCH', '/rss.xml'], ['GET', '///feed.xml'], ['GET', '/feeds'], ['GET', '/search/users'], ['GET', '/search/mentions.json']] as [$method, $path]) {
+        foreach ([['GET', '/tag/'], ['GET', '/tag'], ['GET', '/tag/a%20b'], ['POST', '/feed.xml'], ['PUT', '/search'], ['DELETE', '/tag/x'], ['PATCH', '/rss.xml'], ['GET', '///feed.xml'], ['GET', '/feeds'], ['GET', '/search/users']] as [$method, $path]) {
+            $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+            $this->assertSame('idno_legacy', $router->matchRequest($request)['_route'], "$method $path");
+        }
+    }
+
+    public function testTheSmallPublicEndpointRoutes(): void
+    {
+        $this->kernel = new Kernel('test', true, bootLegacy: false);
+        $this->kernel->boot();
+        $router = $this->kernel->getContainer()->get('router');
+
+        $routes = [
+            'idno_robots' => ['/robots.txt', '//robots.txt', '/robots.txt/'],
+            'idno_manifest' => ['/chrome/manifest.json', '//chrome/manifest.json/'],
+            'idno_service_worker' => ['/service-worker.js', '/service-worker.js/'],
+            'idno_service_worker_min' => ['/service-worker.min.js', '//service-worker.min.js'],
+            'idno_webfinger' => ['/.well-known/webfinger', '/.well-known/webfinger/', '//.well-known/webfinger'],
+            'idno_mention_search' => ['/search/mentions.json', '/search/mentions.json/'],
+            'idno_csrf_token' => ['/service/security/csrftoken', '/service/security/csrftoken/'],
+        ];
+        foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+            foreach ($routes as $name => $paths) {
+                foreach ($paths as $path) {
+                    $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+                    $this->assertSame($name, $router->matchRequest($request)['_route'], "$method $path");
+                }
+            }
+        }
+        // any other method, and the bookmarklet's address (no page now), are the legacy router's
+        foreach ([['POST', '/robots.txt'], ['PUT', '/chrome/manifest.json'], ['DELETE', '/search/mentions.json'], ['POST', '/.well-known/webfinger'], ['POST', '/service/security/csrftoken'], ['GET', '/bookmarklet.js']] as [$method, $path]) {
             $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
             $this->assertSame('idno_legacy', $router->matchRequest($request)['_route'], "$method $path");
         }

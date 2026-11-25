@@ -10,7 +10,7 @@ use Tests\Support\PrivateSiteTestCase;
 /**
  * The same request answered by a real legacy page and by the fixture page a controller serves: the events each fires,
  * in order and with their data, who is let in and refused, the headers every page sends and, for an XHR request, the
- * router's. The legacy pages are `/robots.txt` (`Idno\Pages\Txt\Robots`, a page that does nothing in its handler but
+ * router's. The legacy pages are `/_test/legacy-plain` (`Tests\Fixtures\LegacyPlainPage`, a page that does nothing in its handler but
  * answer) and `/account/settings/` (an account page); the fixtures are `/_test/site-page/state` and `/account`.
  * Nothing is typed in from `PageContractTest`: both sides are run and compared, so a case the legacy tests do not
  * pin is held to the legacy page all the same.
@@ -21,7 +21,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
 {
     use LogsIn;
 
-    private const LEGACY = '/robots.txt';
+    private const LEGACY = '/_test/legacy-plain';
 
     private const FIXTURE = '/_test/site-page/state';
 
@@ -100,7 +100,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         $client ??= $this->site();
         $legacyPath = $account ? self::LEGACY_ACCOUNT : self::LEGACY;
         $fixturePath = $account ? self::FIXTURE_ACCOUNT : self::FIXTURE;
-        $legacyClass = $account ? 'Idno\Pages\Account\Settings' : 'Idno\Pages\Txt\Robots';
+        $legacyClass = $account ? 'Idno\Pages\Account\Settings' : 'Tests\Fixtures\LegacyPlainPage';
         $legacy = $this->observe($client, $method, $legacyPath, $legacyClass, $headers);
         $fixture = $this->observe($client, $method, $fixturePath, 'Tests\Fixtures\SitePageFixture', $headers);
         foreach ($skip as $key) {
@@ -183,7 +183,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         $this->assertSame(['page/ready'], array_column($fixture['events'], 'event'));
         $this->assertSame($legacy['events'][0], $fixture['events'][0]);
         // The same request signed for a page that is not an account page is let in by both.
-        $this->assertSame(200, $this->observe($this->site(), 'GET', self::LEGACY, 'Idno\Pages\Txt\Robots', self::signedHeadersFor('ada', $key, self::LEGACY))['status']);
+        $this->assertSame(200, $this->observe($this->site(), 'GET', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', self::signedHeadersFor('ada', $key, self::LEGACY))['status']);
         $this->assertSame(200, $this->observe($this->site(), 'GET', self::FIXTURE, 'Tests\Fixtures\SitePageFixture', self::signedHeadersFor('ada', $key, self::FIXTURE))['status']);
     }
 
@@ -204,7 +204,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
     public function testAPostWithItsTokenFiresTheSameEvents(): void
     {
         [$headers, $token] = $this->sessionAndToken();
-        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Idno\Pages\Txt\Robots', $headers, $token);
+        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers, $token);
         $fixture = $this->observe($this->site(), 'POST', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers, $token);
 
         $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($legacy['events'], 'event'));
@@ -215,7 +215,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
     public function testAPostWithoutItsTokenIsSentAwayByBothButTheControllersPageNeverHearsOfIt(): void
     {
         [$headers] = $this->sessionAndToken();
-        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Idno\Pages\Txt\Robots', $headers);
+        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers);
         $fixture = $this->observe($this->site(), 'POST', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers);
 
         $this->assertSame(302, $legacy['status']);
@@ -229,7 +229,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
     public function testAPutWithoutItsTokenIsAServerErrorForBoth(): void
     {
         [$headers] = $this->sessionAndToken();
-        $legacy = $this->observe($this->site(), 'PUT', self::LEGACY, 'Idno\Pages\Txt\Robots', $headers);
+        $legacy = $this->observe($this->site(), 'PUT', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers);
         $fixture = $this->observe($this->site(), 'PUT', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers);
 
         $this->assertSame(500, $legacy['status']);
@@ -269,7 +269,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         [$headers] = $this->sessionAndToken();
         $headers += ['X-Requested-With' => 'XMLHttpRequest'];
 
-        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Idno\Pages\Txt\Robots', $headers);
+        $legacy = $this->observe($this->site(), 'POST', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers);
         $fixture = $this->observe($this->site(), 'POST', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers);
 
         // `forward()` does nothing for an XHR request, so a legacy page went on and answered 200 with no body; a controller's page is refused.

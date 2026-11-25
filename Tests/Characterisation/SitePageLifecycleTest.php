@@ -144,7 +144,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
     public function testAnXhrGetOrHeadGetsTheHeadersOfARequestThatIsNotXhr(): void
     {
         $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
-        $legacy = $this->site()->request('GET', '/robots.txt', $xhr);
+        $legacy = $this->site()->request('GET', '/_test/legacy-plain', $xhr);
         $plain = $this->site()->request('GET', self::STATE);
 
         // The legacy router gave an XHR request its own `Expires`, `Cache-Control`, `Pragma` and `Last-Modified` (now): a controller's page
@@ -169,7 +169,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
     public function testAnXhrPostStillGetsTheHeadersTheLegacyRouterSentForIt(): void
     {
         [$cookie, $token] = $this->sessionAndToken();
-        $legacy = $this->site()->request('GET', '/robots.txt', ['X-Requested-With' => 'XMLHttpRequest']);
+        $legacy = $this->site()->request('GET', '/_test/legacy-plain', ['X-Requested-With' => 'XMLHttpRequest']);
 
         $response = $this->site()->request('POST', '/_test/site-page/post', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], $token);
 
@@ -212,7 +212,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
     public function testTheStandardHeaders(): void
     {
-        $legacy = $this->site()->request('GET', '/robots.txt');
+        $legacy = $this->site()->request('GET', '/_test/legacy-plain');
         $response = $this->site()->request('GET', self::STATE);
 
         $this->assertSame('https://idno.co', $response->header('X-Powered-By'));

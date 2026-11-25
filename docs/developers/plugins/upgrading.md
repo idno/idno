@@ -94,6 +94,26 @@ Core pages are moving from `Idno\Common\Page` classes run by the legacy router t
   * **The tag is decoded once.** `/tag/<tag>` takes the tag from the path as it was sent and decodes it once: `+` is a space and `%2B` a plus (`/tag/a%2Bb` lists `#a+b`; it listed `#a b`, because the path was decoded twice). One trailing slash is not part of the tag (`/tag/books/` lists `#books`, not `#books/`), and the tag wins over a `q` in the query string (`/tag/books?q=x` lists `#books`; the request's `q` replaced it). A tag with a space in it was no page and still is none, and a tag that is only slashes is none either: `/tag//` was the tag `/` (the page listed `#/`) and is the site's 404 page, as a deliberate change.
   * **`/search` with a `q` that is not text** (`?q[]=x`) is a redirect with an empty query; it was a 500 page.
   * **XHR.** An XHR GET of these pages gets the headers of the same request that is not XHR (see the home page above).
+* **The small public endpoints are controllers too, and seven page classes are deleted.** Each has a controller and a service that holds its logic (`Idno\Http\Controller\Discovery\`):
+
+  | Deleted class | Address | Now |
+  |---|---|---|
+  | `Idno\Pages\Txt\Robots` | `/robots.txt` | `SiteFilesController::robots()`, `SiteFiles::robots()` (still the `txt/robots` template, so an extension of it still applies) |
+  | `Idno\Pages\Chrome\Manifest` | `/chrome/manifest.json` | `SiteFilesController::manifest()`, `SiteFiles::manifest()` (the same JSON; its site facts come through `Discovery\SiteIcons`) |
+  | `Idno\Pages\Chrome\ServiceWorker` | `/service-worker.js`, `/service-worker.min.js` | `SiteFilesController::serviceWorker()`, `SiteFiles::serviceWorker()` |
+  | `Idno\Pages\Webfinger\View` | `/.well-known/webfinger` | `WebfingerController`, `Discovery\Webfinger::answer()` (the links are still the `webfinger` event's, through `Discovery\WebfingerDirectory`) |
+  | `Idno\Pages\Search\Mentions` | `/search/mentions.json` | `MentionSearchController`, `Discovery\MentionSearch::answer()` (the `search/mentions` event still fires, through `Discovery\MentionCandidates`) |
+  | `Idno\Pages\Service\Security\CSRFToken` | `/service/security/csrftoken/` | `FormTokenController` |
+  | `Idno\Pages\Entity\Bookmarklet` | `/bookmarklet.js` | none: the address is gone (it answered an HTML fragment under a `.js` name, and nothing linked it; the `entity/bookmarklet` template stays, the tools page draws it) |
+
+  A plugin that extends one of these classes stops the site booting: disable it before you upgrade. `Idno\Core\Webfinger` still exists and registers no page. The events, template extensions, walled-garden rule (the manifest, the service worker and WebFinger are public on a private site; the others are not) and body class (`page_class` of the page events is the deleted class's name) are as they were. Differences:
+  * **`/service-worker.js` serves the script that ships**, `js/service-worker.min.js`, as `application/javascript`, at both addresses. The page read `js/service-worker.js`, a file the Grunt build writes and git ignores, so it answered a 500 page on every site that had not built it; a release without the shipped file answers the 404 page.
+  * **`/search/mentions.json` is `application/json`** (it was `text/json`). Who may call it, and what it returns (handle, name and avatar of each member), are unchanged.
+  * **The form token endpoint needs no `url`.** The token is the session's one stored token, so there is nothing to make it for: a request without `url` is answered (it was a 500 page) and the address is not read. Its caching is `Cache-Control: no-store` (the session's `Expires` and `Pragma` as on every page, and no `Last-Modified`): it was the router's XHR headers with `setNoCache()` over them. It still answers only an XHR request (the 403 page otherwise), and a visitor of a private site is still refused.
+  * **WebFinger** answers `resource[]=x` with the 404 page (it was a 500 page). The JRD, its `application/jrd+json` type and `Access-Control-Allow-Origin: *` are unchanged.
+  * **`robots.txt`** is sent as `text/plain; charset=UTF-8` (it was `text/plain`).
+  * **Other methods, a malformed `Host`, webmentions and XHR** are as for the feeds above: POST, PUT, PATCH and DELETE of these addresses (a POST to `/.well-known/webfinger` was the invalid-token redirect home) and a request with a malformed `Host` are the legacy router's 404 page; a webmention to one of them is answered `400 target_not_found`; an XHR GET gets the headers of the same request that is not XHR.
+  * **`hijackRoute()` and `addRoute()`**: as for the feeds, a plugin page registered with `hijackRoute()` or an identical `addRoute()` of core's pattern (`/robots\.txt`, `/chrome/manifest\.json`, `/service-worker(\.min)?\.js`, `/\.well\-known/webfinger/?`, `/search/mentions\.json`, `/service/security/csrftoken/?`) still takes the path.
 
 ### Replacing the home page: the `homepage/replace` event
 

@@ -47,6 +47,8 @@ final class TestEventHooks
         // `plugins/loaded` follows), so that the route table holds what the controller's `legacyPatterns` declare
         $dispatcher->addListener('plugins/loaded', static function (): void {
             Idno::site()->routes()->addRoute('/_test/claimable/?', ReplacedPage::class);
+            // a legacy page that only answers, for the lifecycle tests to hold a controller's page to
+            Idno::site()->routes()->addRoute('/_test/legacy-plain/?', LegacyPlainPage::class);
         });
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {

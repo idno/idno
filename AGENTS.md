@@ -354,7 +354,9 @@ Idno/
                                DrawnPage: what a controller that draws a site page carries, the lifecycle run around it and
                                how it draws, see "Legacy pages and routes"); Controller/ (the controllers of site pages:
                                HomepageController, with Home/HomePages, the one implementation of the home page, the feeds, the search
-                               and the tag pages, and HomeStream, the interface of what it lists, see "Querying entities in new code")
+                               and the tag pages, and HomeStream, the interface of what it lists, see "Querying entities in new code";
+                               SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
+                               Discovery/ holding the services of the small public endpoints and the interfaces of what they ask the site)
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -937,6 +939,21 @@ the invalid-token redirect home). A webmention to one of these addresses is `tar
 page and there is none (`WebmentionToADeletedPageTest`). A plugin that `addRoute()`s a page for one of these paths now serves it (`RouteOverrideTest::testAPluginsPageOnAFeedSearchOrTagPathTakes...`, mode
 `feeds` of `IDNO_TEST_CLAIM_ROUTES`); a plugin that EXTENDS one of the deleted classes stops the site booting until it is disabled (`docs/install/upgrade.md`).
 
+**The small public endpoints.** `robots.txt`, the web app manifest, the service worker script, WebFinger, the mention search and the form token endpoint are controllers (`SiteFilesController`, `WebfingerController`,
+`MentionSearchController`, `FormTokenController`), and `Idno\Pages\Txt\Robots`, `Chrome\Manifest`, `Chrome\ServiceWorker`, `Webfinger\View`, `Search\Mentions`, `Service\Security\CSRFToken` and `Entity\Bookmarklet` are DELETED
+with their `addRoute()`s (`Idno\Core\Webfinger` stays and registers no page). Each is one call of a service in `Idno\Http\Controller\Discovery\` (`SiteFiles`, `Webfinger`, `MentionSearch`; the form token's logic is in its controller),
+whose legacy-backed facts are interfaces (`SiteIcons`, `WebfingerDirectory`, `MentionCandidates`) implemented in `Idno\Legacy\` (`LegacySiteIcons`, `LegacyWebfingerDirectory`, `LegacyMentionCandidates`), so each service is
+built and unit-tested without the legacy application (`Tests/Unit/Http/Controller/Discovery/`, `Tests/Kernel/LegacyWebfingerDirectoryTest`). Each `#[SitePage]` carries the deleted class's name (the page events' `page_class`), `replaces: []` and
+`legacyPatterns` exactly as core registered them (`/robots\.txt`, `/chrome/manifest\.json`, `/service-worker(\.min)?\.js`, `/\.well\-known/webfinger/?`, `/search/mentions\.json`, `/service/security/csrftoken/?`); `publicOnPrivateSite` is
+true for the manifest, the service worker and WebFinger, as `addRoute(..., true)` said, and false for `robots.txt`, the mention search and the token endpoint (a visitor of a private site is refused). Deliberate changes, each pinned:
+`/bookmarklet.js` is gone (404: it answered an HTML fragment as `text/html`; the `entity/bookmarklet` template stays for the tools page); `/service-worker.js` AND `/service-worker.min.js` serve the committed `js/service-worker.min.js`
+as `application/javascript` (the unminified address read `js/service-worker.js`, a gitignored build output, and was a 500 page wherever it was not built; a release without the shipped file is the 404 page: `SiteFiles::serviceWorker()`);
+`/search/mentions.json` is `application/json` (was `text/json`; open to whoever may see the site, nothing but handle, name and avatar); the token endpoint reads no `url` (a missing one was a 500 page), answers the session's one stored
+token (`FormToken::value()`) with `Cache-Control: no-store` through `setCaching()` (the session's `Expires` and `Pragma` stay as on every page, no `Last-Modified`), and still answers only an XHR request (the drawn 403 otherwise);
+WebFinger answers a `resource` that is not text with the 404 page (was a 500 page); `robots.txt` is `text/plain; charset=UTF-8`; other methods and a malformed `Host` are the legacy router's 404 page; a webmention to any of these paths is
+`target_not_found` (`WebmentionToADeletedPageTest`); an XHR GET gets the headers of the same request that is not XHR. A plugin that extends a deleted class stops the site booting until it is disabled (`docs/install/upgrade.md`,
+`docs/developers/plugins/upgrading.md`). `Tests\Fixtures\LegacyPlainPage` (`/_test/legacy-plain`, `?throw=1` to fail) is the legacy page the lifecycle tests hold a controller's page to now that `robots.txt` is a controller's.
+
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
 ['page' => $page, 'renderer' => $renderer], $keepResponse)` (an `Idno\Queue\EventTrigger` taken as a service closure, like the logger, so the service is built in a kernel with no
@@ -1006,7 +1023,7 @@ class core still registers for the path, if any) and the legacy router share the
   then `registerPages()`), whose `registerPages()` ends with `self::container()->get(Plugins::class)`, and `Plugins::init()` builds each plugin, whose `Component` constructor
   runs ITS `registerPages()` (`Idno.php` "These must be loaded last", `Plugins.php`); themes follow. (The routes of `Account`, `Admin`, `Webfinger`, `Webmention` and
   `PubSubHubbub` are registered after the plugins', by `LegacyBootstrap::boot()` building them after `Idno`: a page moved from one of THOSE keeps the plugin's broader
-  pattern ahead of it today and does not under this rule.) `addRoute()` appends a new key at the end and, for a key that exists, replaces the handler IN PLACE (the key keeps
+  pattern ahead of it today and does not under this rule. WebFinger (`/.well-known/webfinger`) is such a page and has moved: a broad pattern a plugin registered used to win that path, and does not now.) `addRoute()` appends a new key at the end and, for a key that exists, replaces the handler IN PLACE (the key keeps
   its place); `hijackRoute()` removes the key and puts it in FRONT of every other (and the table remembers it: `PageHandler::hijackedPatterns()`); `offsetSet()` of a new key
   appends. So nothing puts a route ahead of core's but `hijackRoute()`, and a plugin's page took a core path only (a) under core's own pattern (`hijackRoute()` of it, or
   `addRoute()` of the identical pattern: the same key) or (b) under any pattern it hijacked in front, whatever the pattern matches. A pattern registered after core's, however
@@ -3594,7 +3611,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   by `drawPage()` and by the two pages that draw the shell with `draw('shell')` (`Account\Register`, `Account\Password`);
   `DefaultTemplate::sendSimpleShellHeaders()` (the simple shell's text/html, the webmention `Link` sent twice, the second replacing the first, as
   `header()` does, and the cross-origin header) is called by the four pages that draw `shell/simple` (`Account\Register` in onboarding, and `Onboarding\Begin`,
-  `Connect`, `Profile`); `Pages\Txt\Robots` sends `text/plain`; `chrome/manifest` is no template: `Pages\Chrome\Manifest` builds the JSON and sends
+  `Connect`, `Profile`); `SiteFilesController` sends `robots.txt` as `text/plain`; `chrome/manifest` is no template: `Discovery\SiteFiles` builds the JSON and the controller sends
   `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (it scans every `.php` file, `.tpl.php` and plain, by tokens, `\header(` included, and every `.twig` file; a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
   (`Tests/Characterisation/PageHeadersTest`; `Tests/Kernel/ShellHeadersDrawTest` pins `DefaultTemplate::shellHeaders()` per type and status). Two behaviours changed with the table: `drawPageWithoutSideEffects()`
   no longer sends the two HTML headers (`text/html; charset=utf-8`, `nosniff`) for JSONP on an `/admin` or `/account` page (it sends no header at all, as it says; the

@@ -383,6 +383,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->alias(\Idno\Http\Controller\Home\HomeStream::class, \Idno\Legacy\LegacyHomeStream::class)->public();
     // The home page itself; public: the deprecated legacy page (Idno\Pages\Homepage) draws it through the service, as the controller does
     $services->set(\Idno\Http\Controller\Home\HomePages::class)->public();
+    // The small public endpoints (robots.txt, the manifest, the service worker, WebFinger, the mention search): their services take these
+    // interfaces, implemented over the legacy application and read only when a request asks
+    $services->alias(\Idno\Http\Controller\Discovery\SiteIcons::class, \Idno\Legacy\LegacySiteIcons::class);
+    $services->alias(\Idno\Http\Controller\Discovery\WebfingerDirectory::class, \Idno\Legacy\LegacyWebfingerDirectory::class);
+    $services->alias(\Idno\Http\Controller\Discovery\MentionCandidates::class, \Idno\Legacy\LegacyMentionCandidates::class);
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);
