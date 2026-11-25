@@ -67,7 +67,12 @@ switch ($operation) {
         } else {
             $outcome['document'] = null;
         }
-        $outcome['created'] = array_values(array_diff(scandir($temporary) ?: [], $before));
+        // Only this install's own working directories count: the temporary directory is shared with every other process of the
+        // machine, and something unrelated that appears in it while the export runs is no leftover of ours.
+        $outcome['created'] = array_values(array_filter(
+            array_diff(scandir($temporary) ?: [], $before),
+            static fn (string $name): bool => preg_match('~^idno-(export|import|archive)-[0-9a-f]{32}$~', $name) === 1
+        ));
         break;
 
     case 'export_large':

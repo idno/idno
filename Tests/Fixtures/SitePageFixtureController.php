@@ -70,6 +70,14 @@ final class SitePageFixtureController
         return $this->describe($request);
     }
 
+    /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */
+    #[Route('/{lead}_test/site-page/patch{slash}', name: 'idno_test_site_page_patch', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'PATCH'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'])]
+    public function patch(Request $request): JsonResponse
+    {
+        return $this->describe($request);
+    }
+
     /** A route that lets a method through that the page never declared. */
     #[Route('/{lead}_test/site-page/undeclared{slash}', name: 'idno_test_site_page_undeclared', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE'])]
     public function undeclared(Request $request): JsonResponse

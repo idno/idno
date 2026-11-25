@@ -963,6 +963,11 @@ test fixtures is routed to a controller through them yet:
      token is checked (a signed API request needs none) and only then `page/<method>` fires: a POST without it logs `Invalid token.`, adds the
      session message and forwards (a `PageRedirect`; an XHR page is refused instead), the others throw `SecurityException` ("The page you were on
      timed out."); a legacy page fired `page/post` before it checked, which a listener may no longer see for a request that fails.
+     Stated differences from a legacy page, each pinned in `SitePageLifecycleEquivalenceTest`: an XHR POST, PUT or DELETE with a bad form token is
+     refused with a 403 (a legacy page's `forward()` did nothing for an XHR request, so it went on and answered 200 with no body); PATCH can be
+     declared on a controller's page and then gets the token check and `page/patch` (a legacy page had no PATCH: the router answered 404); and a method
+     the page did not declare is a 405 with an `Allow` header (every legacy page had `post()`, `put()` and `delete()`, so PUT and DELETE reached the
+     handler's defaults and only PATCH was a 404).
   A refusal (step 3 and 5) is Symfony Security's `AccessDeniedException`, so the firewall's `DeniedResponder` answers it: status 403 with the site's
   403 page for a caller of the web page type, `{"error":"forbidden"}` for one answered in JSON (`_t=json`, `Accept`, and a signed API request, as the
   legacy JSON shell was), `Cache-Control: no-store`, and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
