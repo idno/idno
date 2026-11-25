@@ -396,6 +396,83 @@ Rules to keep:
 - Settings: `moderation_contact_email` (the address for appeals; the site's `from_email`
   when empty) and `moderation_notify_admins`.
 
+## Email and invitations
+
+### Sending mail
+
+`Idno\Core\Email` sends through SwiftMailer over SMTP, from the stored settings `smtp_host`,
+`smtp_port`, `smtp_secure`, `smtp_username`, `smtp_password`, `from_email`, `from_name` (the
+site's name when empty), `reply_to_email` (used unless the message names a reply address) and
+`smtp_timeout` (seconds, 10 when unset, so a wrong host does not hold a page).
+
+- `smtp_secure` holds SwiftMailer's names: `tls` is STARTTLS (what mail services expect on
+  port 587), `ssl` is TLS from the first byte (port 465), empty is no encryption. With no port
+  stored, `Email::port()` gives the usual one for the security setting
+  (`Email::SECURITY_PORTS`). `Email::transport()` builds the connection; build it nowhere else.
+- `Email::isConfigured()` is true when there is a server and a valid From address. Without a
+  server a mail server on this machine is still tried, as before. Pages that send mail warn
+  when it is false: the invite form (`admin/users/invite`), the password reset pages
+  (`account/password/nomail`) and the settings page.
+- `send()` returns the number of recipients the server took the message for, 0 on failure,
+  and then `$error` (plain words for an administrator) and `$errorKind` (`connect`, `tls`,
+  `auth`, `sender`, `rejected`, `recipient`, `temporary`, `unconfigured`, `unknown`) say why.
+  `Email::explain()` writes them and `Email::scrub()` takes the user name and the password out
+  of anything that is shown or logged, in plain and base64 form: for some services the user
+  name is the secret. Show `$error`, never an exception's own message.
+- A subject and a From name are made one line (`Email::headerText()`), so nothing typed into
+  either can start a header.
+- **The settings page** (`/admin/email`, `Idno\Pages\Admin\Email`, test mail at
+  `/admin/emailtest`): the stored password is never a template variable and never printed,
+  in any template type; an empty password field keeps the stored one, and a checkbox removes
+  it. `Idno\Pages\Admin\Email::validate()` checks what was typed, and nothing is saved while anything is wrong.
+  The "Using a mail service" block (`admin/email/services`, drawn by both looks) holds the
+  values for the common services, checked against their documentation in November 2026:
+  check them again before changing them.
+- Tests point the site's mail settings at `Tests\SmtpSink`, a small SMTP server on 127.0.0.1
+  in its own PHP process that keeps what it is sent (`Tests/Core/fixtures/smtp_sink.php`). No
+  test sends real mail. `Tests/Core/EmailTest.php` and `Tests/Pages/Admin/EmailSettingsTest.php`
+  (and its Twenty26 twin) check all of this.
+
+### Invitations
+
+An administrator invites people from the Users page (`Idno\Pages\Admin\Users`,
+`admin/users/invite` and `admin/users/invitations`, both drawn by both looks); the invited
+person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
+
+- **An invitation (`Idno\Entities\Invitation`) holds** the address (lower case), a code (64
+  hex characters from `random_bytes()`, compared with `hash_equals()`), the role (`member` or
+  `admin`), who made it, and when it expires (`Invitation::LIFETIME_DAYS`, 14, or the
+  `invitation_lifetime_days` setting). There is one per address: inviting an address again
+  renews it with the role given last. Sending again keeps the link unless it had expired.
+- **Invitations are for administrators only**, like moderation records: an access value no
+  group matches, `canRead()` / `canEdit()` true for administrators, an empty
+  `jsonSerialize()`, a slug that says nothing. The registration page, which a visitor uses,
+  looks them up through `Invitation::unrestricted()` (`check()`, `consume()`).
+- **The role and the address come from the stored invitation, never from the request.** The
+  registration form shows the address read-only and the account gets the invitation's
+  address whatever the form sends; an account is an administrator only if the invitation
+  says so. Inviting as administrator needs the `confirm_admin` checkbox.
+- **An invitation works once.** `Register::postContent()` calls `consume()` (re-read, then
+  delete) after everything else has passed and before the account is made; the entity layer
+  has no transactions, so this narrows the window rather than closing it, and the check that
+  no account has the address already catches the rest.
+- **A private site** (`walled_garden`) with registration closed: `/account/register`,
+  `/account/password`, `/account/password/reset` and `/session/login` are public routes, and
+  nothing else is. A visitor who may not register is told why on a page of its own
+  (`account/register/refused`, status 403: `invalid`, `expired`, `closed`), not sent to the
+  home page, which would only refuse them. A finished password reset goes to the sign-in page
+  for the same reason. A visitor to any other page gets `pages/403`, which in Twenty26 says
+  the site is private and how to get in.
+- **When the mail cannot be sent** the invitation is still made, the administrator is told why
+  (`Invitation::$sendError`), and the pending list shows each invitation's link to copy. The
+  link holds the code, so that list is drawn on the administrators' page only.
+- An address that already has an account or is blocked (`Config::emailIsBlocked()`) is not
+  invited; `Invitation::MAX_PER_BATCH` (50) addresses at most per submission.
+- The invitation mail (`templates/email/account/invite`, `templates/email-text/account/invite`)
+  escapes everything a person typed. Mail templates escape nothing by themselves either.
+- `Tests/Pages/Account/InvitationFlowTest.php` (and its Twenty26 twin) checks all of this over
+  HTTP on a private site.
+
 ## Twenty26 theme and plugin templates
 
 `Themes/Twenty26/` sets the template type to `modern`. A plugin's templates for it live in

@@ -29,6 +29,9 @@ namespace Idno\Pages\Account {
                 $t->title = \Idno\Core\Idno::site()->language()->_('Recover password');
             }
 
+            // The plain shell, with its messages: drawPage() would pick the account settings
+            // shell for an address under /account/, which is for people who are signed in
+            $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
             echo $t->draw('shell');
 
         }
@@ -49,7 +52,7 @@ namespace Idno\Pages\Account {
                     $t->setTemplateType('email');
 
                     $email = new Email();
-                    $email->setSubject("Password reset");
+                    $email->setSubject(\Idno\Core\Idno::site()->language()->_("Reset your password for %s", [\Idno\Core\Idno::site()->config()->title]));
                     $email->addTo($user->email);
                     $email->setHTMLBody($t->__(array('email' => $email_address, 'code' => $auth_code))->draw('account/password'));
                     $email->setTextBodyFromTemplate('account/password', array('email' => $email_address, 'code' => $auth_code));

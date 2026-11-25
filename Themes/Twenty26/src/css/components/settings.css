@@ -1,0 +1,284 @@
+/*
+ * Parts of settings pages and of the pages a visitor sees before signing in: notices, field
+ * errors, fields side by side, badges, a help block that opens, a centred panel.
+ */
+@layer components {
+  /* Two fields side by side where there is room */
+  .idno-field-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    column-gap: var(--spacing-gap);
+  }
+
+  @media (min-width: 640px) {
+    .idno-field-row {
+      grid-template-columns: 2fr 1fr;
+    }
+  }
+
+  .idno-input[aria-invalid="true"],
+  .idno-textarea[aria-invalid="true"] {
+    border-color: var(--color-error-text, #b91c1c);
+  }
+
+  .idno-form-error {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-error-text, #b91c1c);
+    margin-top: 0.25rem;
+  }
+
+  .idno-input[readonly] {
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+  }
+
+  /* A notice at the top of a page or a card */
+  .idno-notice {
+    border: 1px solid var(--color-info-border, #bfdbfe);
+    background: var(--color-info-bg, #eff6ff);
+    color: var(--color-info-text, #1e40af);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    margin-bottom: var(--spacing-gap);
+    font-size: var(--font-size-sm);
+    overflow-wrap: anywhere;
+  }
+
+  .idno-notice a {
+    color: inherit;
+    text-decoration: underline;
+  }
+
+  .idno-notice-warning {
+    border-color: var(--color-warning-border, #fde68a);
+    background: var(--color-warning-bg, #fffbeb);
+    color: var(--color-warning-text, #92400e);
+  }
+
+  .idno-notice-ok {
+    border-color: var(--color-success-border, #bbf7d0);
+    background: var(--color-success-bg, #f0fdf4);
+    color: var(--color-success-text, #166534);
+  }
+
+  .idno-badge {
+    display: inline-block;
+    font-size: var(--font-size-xs, 0.6875rem);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius-full);
+    background: var(--color-bg);
+    color: var(--color-text-secondary);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .idno-badge-ok {
+    background: var(--color-success-bg, #f0fdf4);
+    color: var(--color-success-text, #166534);
+  }
+
+  .idno-badge-strong {
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+  }
+
+  .idno-badge-warning {
+    background: var(--color-warning-subtle, #fef3c7);
+    color: var(--color-warning-strong, #92400e);
+  }
+
+  /* "Using a mail service": a block that opens (admin/email/services) */
+  .mail-help {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    margin: var(--spacing-gap) 0;
+  }
+
+  .mail-help > summary {
+    cursor: pointer;
+    padding: var(--spacing-card);
+    font-weight: 600;
+    color: var(--color-text-strong);
+  }
+
+  .mail-help > summary:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+  }
+
+  .mail-help-body {
+    padding: 0 var(--spacing-card) var(--spacing-card);
+    font-size: var(--font-size-sm);
+  }
+
+  .mail-help-body > p {
+    margin-bottom: 0.75rem;
+  }
+
+  .mail-help-body h3 {
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    color: var(--color-text-strong);
+    margin: 1.25rem 0 0.5rem;
+  }
+
+  .mail-help-service {
+    border-top: 1px solid var(--color-border-subtle);
+    padding-bottom: 0.25rem;
+  }
+
+  .mail-help-service dl {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.125rem 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .mail-help-service dt {
+    color: var(--color-text-secondary);
+  }
+
+  .mail-help-service dd {
+    margin: 0 0 0.375rem;
+    overflow-wrap: anywhere;
+  }
+
+  @media (min-width: 640px) {
+    .mail-help-service dl {
+      grid-template-columns: 10rem 1fr;
+    }
+
+    .mail-help-service dd {
+      margin-bottom: 0;
+    }
+  }
+
+  .mail-help code,
+  .idno-notice code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.95em;
+    background: var(--color-bg);
+    border-radius: 0.25rem;
+    padding: 0.0625rem 0.3125rem;
+  }
+
+  .mail-help-note {
+    color: var(--color-text-secondary);
+    margin-bottom: 0.5rem;
+  }
+
+  .mail-help-fill {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--color-link);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .mail-help-fill:hover {
+    text-decoration: underline;
+  }
+
+  /* Invitations on the admin Users page */
+  .idno-invite-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .idno-invite-row:last-child {
+    border-bottom: none;
+  }
+
+  @media (min-width: 640px) {
+    .idno-invite-row {
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+  }
+
+  .idno-invite-address {
+    font-weight: 600;
+    color: var(--color-text-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .idno-invite-meta {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+  }
+
+  .idno-invite-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .idno-invite-actions form {
+    display: inline;
+  }
+
+  .idno-invite-link {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .idno-invite-link .idno-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .idno-invite-link .idno-input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--font-size-sm);
+    min-width: 0;
+  }
+
+  /* A panel in the middle of the page, for a visitor who has not signed in: joining, a private
+     site, a password reset */
+  .idno-gate {
+    max-width: 26rem;
+    margin: 2rem auto;
+  }
+
+  .idno-gate-wide {
+    max-width: 30rem;
+  }
+
+  .idno-gate-lead {
+    color: var(--color-text-secondary);
+    margin-bottom: var(--spacing-gap);
+  }
+
+  .idno-gate-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: var(--spacing-gap);
+  }
+
+  .idno-gate-actions .idno-btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .idno-gate-foot {
+    margin-top: 1rem;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+}
