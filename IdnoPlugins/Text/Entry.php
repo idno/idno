@@ -153,7 +153,7 @@ namespace IdnoPlugins\Text {
                         $autosave->clearContext('entry');
 
                         if ($this->getAccess() == 'PUBLIC') {
-                            \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
+                            \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
                         }
 
                         return true;
@@ -170,7 +170,7 @@ namespace IdnoPlugins\Text {
         function deleteData()
         {
             if ($this->getAccess() == 'PUBLIC') {
-                \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
+                \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
             }
         }
 

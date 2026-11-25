@@ -57,7 +57,62 @@ namespace Idno\Core {
                 }
             }
 
-            return self::mentionClient()->sendMentions($pageURL, $text);
+            // With no text there is nothing to mine, and the client reads the page itself instead
+            if (!$text) {
+                return self::mentionClient()->sendMentions($pageURL, $text);
+            }
+
+            // Each link on its own: one that fails must not stop the links after it, nor fail the event
+            // that is running this (a failed event is not run again, so the links already sent are not
+            // sent twice)
+            $client   = self::mentionClient();
+            $accepted = 0;
+            foreach (MentionClient::findOutgoingLinks($text) as $target) {
+                try {
+                    if ($client->sendFirstSupportedMention($pageURL, $target)) {
+                        $accepted++;
+                    }
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->warning('Webmention to ' . preg_replace('/[^\x20-\x7e]/', '?', substr((string) $target, 0, 200)) . ' failed: ' . $e::class);
+                }
+            }
+
+            return $accepted;
+        }
+
+        /**
+         * Sends webmentions from a post to the pages its text links to, through the queue: the one way a
+         * content type announces a post. With the asynchronous queue the save returns at once and the
+         * worker does the sending (the event `webmention/sendall`, run as the user who saved the post);
+         * otherwise the queue runs the event at once, as a direct call would have.
+         *
+         * Whether to send is decided HERE, in the request, because the worker has no request: nothing is
+         * queued while an import is running, when the request asks for no webmentions (`nomention`, the
+         * constant IDNO_NOMENTION) or on a site that is not public. pingMentions() asks again when the
+         * event runs, so an event that is queued anyway still announces nothing during an import.
+         *
+         * @param string $pageURL The address of the post
+         * @param string $text    The text of the post with its addresses made into links (the template's
+         *                        parseURLs()): built in the request, because the worker has no template state
+         */
+        static function queueMentions(string $pageURL, string $text): void
+        {
+            if (!Idno::site()->config()->isPublicSite()) {
+                return;
+            }
+
+            if (\Idno\Core\Idno::importInProgress() || defined('IDNO_NOMENTION')) {
+                return;
+            }
+
+            if (($current_page = \Idno\Core\Idno::site()->currentPage()) && $current_page->getInput('nomention')) {
+                return;
+            }
+
+            Idno::site()->queue()->enqueue('default', 'webmention/sendall', [
+                'source' => $pageURL,
+                'text'   => $text,
+            ]);
         }
 
         /**

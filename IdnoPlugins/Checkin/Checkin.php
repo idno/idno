@@ -184,7 +184,7 @@ namespace IdnoPlugins\Checkin {
                     $this->setPublishStatus('published');
                     if ($this->publish($new)) {
                         if ($new && $access == 'PUBLIC') {
-                            \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
+                            \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
                         }
 
                         return true;
@@ -201,7 +201,7 @@ namespace IdnoPlugins\Checkin {
         function deleteData()
         {
             if ($this->getAccess() == 'PUBLIC') {
-                \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
+                \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getTitle() . ' ' . $this->getDescription()));
             }
         }
 

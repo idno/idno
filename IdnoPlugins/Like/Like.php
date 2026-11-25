@@ -194,7 +194,7 @@ namespace IdnoPlugins\Like {
                         $this->setPublishStatus('published');
                         if ($this->publish($new)) {
                             if ($this->getAccess() == 'PUBLIC') {
-                                \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
+                                \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
                             }
                             return true;
                         }
@@ -214,7 +214,7 @@ namespace IdnoPlugins\Like {
         function deleteData()
         {
             if ($this->getAccess() == 'PUBLIC') {
-                \Idno\Core\Webmention::pingMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
+                \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
             }
         }
 

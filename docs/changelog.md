@@ -41,6 +41,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Export and import: imports never announce what they bring in (no federation, syndication, webmentions or hub pings), keep private posts private and drafts as drafts, import Blogger comments and drafts, and fail cleanly, with the failure mail, on a file that is empty, not XML or has no posts; pictures are fetched through the site's HTTP client with its limits
 * Export and import: the work runs in the queue's worker when the queue is asynchronous, and after the response otherwise, without the ten seconds of waiting; the import form for "Idno" RSS files, which never worked, is gone (choose WordPress)
 * Fixed the queue's worker using another upload directory than the site's pages (its host was empty)
+* Every content type sends its webmentions through the queue: with the background queue on, saving a post with many links no longer waits for the sites it links to; one link that fails no longer stops the others
 
 1.6.4
 -----

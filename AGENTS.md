@@ -3015,6 +3015,30 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   re-reads settings and plugins, and on `messenger:stop-workers` (FrameworkBundle's
   `StopWorkerOnRestartSignalListener`, a subscriber on the event dispatcher the command's worker runs on, so
   `--once` runs stop too; pinned by a subprocess test); it needs a supervisor (systemd `Restart=always`, or cron with `--once`).
+- Webmentions are sent through the queue, for every bundled content type, by ONE helper:
+  `Idno\Core\Webmention::queueMentions(string $pageURL, string $text)` enqueues the event `webmention/sendall` (data
+  `source` and `text`, queue `default`, run as the user who saved) and `Webmention::pingMentions()` sends them when the
+  event runs (the listener is in `Webmention`'s `registerEventHooks()`). Status, Text (articles), Photo, Media, Like
+  (bookmarks), Event, RSVP and Checkin call it from their save (and from `deleteData()`, which tells the pages a post
+  linked to that it is gone); no bundled code calls `pingMentions()` directly, and a plugin that announces a post
+  should call the helper, not `pingMentions()` (which still works, and sends at once, in the request). So with the
+  asynchronous queue a save makes no outbound request however many links its text holds, and without it the queue
+  runs the event at once in the request, as a direct call did. The caller builds `text` in the request (the
+  template's `parseURLs()` of the post's title and description: the worker has no request or template state) and the
+  helper checks the request-only facts HERE, because the worker cannot: nothing is queued on a site that is not public,
+  while an import runs (`Idno::importInProgress()`), when the request carries `nomention` or the constant
+  `IDNO_NOMENTION` is defined; `pingMentions()` asks about the site and the import again when the event runs. When each
+  type calls it is unchanged: every save of a PUBLIC post that is published (not a draft; Media and RSVP have no draft)
+  for all types but Checkin, which sends only for a new post; a delete of a post whose access is PUBLIC (a draft
+  included, which tells its links about an address that was never public). `pingMentions()` sends to each link on its own: a link that throws is logged
+  (`Webmention to <address> failed: <exception class>`) and the next is tried, so one bad link never fails the event
+  (a failed event is not run again by itself, so links already sent are not sent twice; `Webservice::safeSend()`
+  already turns an unreachable or slow host into a failed result, never an exception). Pinned by
+  `Tests/Queue/ContentTypeWebmentionsQueuedTest` (every type on an asynchronous site: nothing sent by the save, one
+  event queued with the post's address, the worker sends once as the member; edits, private posts and drafts, `nomention`,
+  a delete, a slow link, an unreachable link and the failure transport), `ContentTypeWebmentionsSynchronousTest` (the
+  same types sent during the request) and `Tests/Kernel/WebmentionQueueTest` (the helper's data and checks, a link
+  that throws).
 - Events run in the worker's process (the console), so their listeners must be registered there: the
   link-preview listener is registered by the console boot too (it was web-only). A listener must not read the
   request. `Page::isSSL()` in a console process (no `REQUEST_METHOD`) is true exactly when the explicit boot
@@ -4582,7 +4606,7 @@ Each content plugin has an `Entry.php` entity class that defines
 
 | Standard | Implementation |
 |---|---|
-| **Webmention** | `Idno\Core\Webmention` — sends and receives webmentions; endpoint at `/webmention/endpoint` |
+| **Webmention** | `Idno\Core\Webmention` — sends and receives webmentions; endpoint at `/webmention/endpoint`; every bundled content type sends through the queue with `Webmention::queueMentions()` (the event `webmention/sendall`) |
 | **Micropub** | `IdnoPlugins\IndiePub` — full Micropub server at `/micropub/endpoint` |
 | **IndieAuth** | `IdnoPlugins\IndiePub` — authorization at `/indieauth/auth`, token at `/indieauth/token` |
 | **Webfinger** | `Idno\Http\Controller\WebfingerController` and `Discovery\Webfinger` — `/.well-known/webfinger`; the links are the `webfinger` event's (`LegacyWebfingerDirectory`); `Idno\Core\Webfinger` only registers the legacy route's placeholder |
