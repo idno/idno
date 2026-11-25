@@ -46,40 +46,58 @@ namespace Idno\Common {
             parent::__construct();
         }
 
+        /**
+         * The classes that already have an `object/getbyurl` listener, by event dispatcher.
+         * Keyed by the dispatcher so that a replaced dispatcher gets its own listeners and a
+         * discarded one is not kept alive by this list.
+         *
+         * @var \WeakMap|null
+         */
+        private static $getByUrlListeners = null;
+
         public function registerEventHooks()
         {
+            $dispatcher = \Idno\Core\Idno::site()->events();
+            if (empty($dispatcher)) {
+                return;
+            }
+
+            // Every entity that is built calls this, so a listener bound to the entity would
+            // keep each of them alive for the life of the process, and would run once for each.
+            // One static listener for each class does the same lookups in the same order (the
+            // order in which the classes were first built) and holds no entity.
+            $class = static::class;
+            self::$getByUrlListeners ??= new \WeakMap();
+            $registered = self::$getByUrlListeners[$dispatcher] ?? [];
+            if (isset($registered[$class])) {
+                return;
+            }
+            $registered[$class] = true;
+            self::$getByUrlListeners[$dispatcher] = $registered;
 
             // Attempt to find content by URL
-            \Idno\Core\Idno::site()->events()->addListener('object/getbyurl', function (\Idno\Core\Event $event) {
+            $dispatcher->addListener('object/getbyurl', static function (\Idno\Core\Event $event) use ($class) {
 
                 $url = $event->data()['url'];
                 $object = $event->response();
 
                 if (!empty($url) && empty($object)) {
 
-                    $found = false;
-
-                    if ($result = static::getOneFromAll(array('url' => $url))) {
+                    if ($result = $class::getOneFromAll(array('url' => $url))) {
                         $event->setResponse($result);
-                        $found = true;
+                        return;
                     }
 
-                    if (!$found) {
-                        if ($result = static::getOneFromAll(array('canonical' => $url))) {
-                            $event->setResponse($result);
-                            $found = true;
-                        }
+                    if ($result = $class::getOneFromAll(array('canonical' => $url))) {
+                        $event->setResponse($result);
+                        return;
                     }
 
-                    if (!$found) {
+                    $bits = explode('/', $url);
+                    $slug = end($bits);
 
-                        $bits = explode('/', $url);
-                        $slug = end($bits);
-
-                        if ($result = static::getBySlug($slug)) {
-                            $event->setResponse($result);
-                            $found = true;
-                        }
+                    if ($result = $class::getBySlug($slug)) {
+                        $event->setResponse($result);
                     }
                 }
             });
