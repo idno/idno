@@ -1,0 +1,75 @@
+#: ./ContentType.php:8
+msgid "Video"
+msgstr ""
+
+#: ./ContentType.php:9
+msgid "Videos"
+msgstr ""
+
+#: ./Video.php
+msgid "Video on %s"
+msgstr ""
+
+#: ./Video.php
+msgid "That doesn't look like the address of a video we can show. Paste the address of a video on one of: %s."
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Edit video"
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "New video"
+msgstr ""
+
+#: ./Pages/Edit.php
+msgid "Your draft has been saved."
+msgstr ""
+
+#: ./Pages/Delete.php
+msgid "You don't have permission to perform this task."
+msgstr ""
+
+#: ./Pages/Delete.php
+msgid "Your video was deleted."
+msgstr ""
+
+#: ./Pages/Delete.php
+msgid "We couldn't delete %s."
+msgstr ""
+
+#: ./templates/default/video/player.tpl.php
+msgid "Video player: %s"
+msgstr ""
+
+#: ./templates/default/video/player.tpl.php
+msgid "Watch on %s"
+msgstr ""
+
+#: ./templates/default/video/player.tpl.php
+msgid "Watch the video"
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Video address"
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Paste the address of a video on one of: %s."
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Title"
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Give it a title (optional)"
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Describe your video..."
+msgstr ""
+
+#: ./templates/default/entity/Video/edit.tpl.php
+msgid "Description"
+msgstr ""

@@ -118,6 +118,13 @@ namespace Tests\Pages {
                     $e->long = -0.12;
                     return $e;
                 }],
+                'video'   => ['video', function ($m) {
+                    $e = new \IdnoPlugins\Video\Video();
+                    $e->setVideoAddress('https://vimeo.com/76979871');
+                    $e->title = $m . ' video';
+                    $e->body = 'Video description';
+                    return $e;
+                }],
                 'like'    => ['like', function ($m) {
                     $e = new \IdnoPlugins\Like\Like();
                     $e->title = 'Bookmark title';
