@@ -467,7 +467,8 @@ Rules to keep:
 - **The reported member never learns who reported them, and a reporter never learns which
   administrator acted or what was done.** Neither identity, and nothing a reporter wrote,
   goes into a page, a feed, any template type, an entity address or a mail that those
-  people can get. `Mailer::compose()` is the only place mails are written.
+  people can get. `Mailer::compose()` is the only place mails are written; its footer line (`reason`) says
+  why the reader got the mail and never who else is involved.
   `Tests/MailTest.php` and `Tests/RecordPrivacyTest.php` check this.
 - **Moderation records are for administrators only.** `Record::save()` gives a record an
   access value that no access group matches and an owner that is no member (so deleting a
@@ -540,6 +541,84 @@ site's name when empty), `reply_to_email` (used unless the message names a reply
   test sends real mail. `Tests/Core/EmailTest.php` and `Tests/Pages/Admin/EmailSettingsTest.php`
   (run again in the modern look by `EmailSettingsModernLookTest`) check all of this.
 
+### What a mail looks like
+
+Every mail has the same shell and is written with the same parts, so that all of them look
+like the modern look of the site and work in mail clients, which are not browsers.
+
+- **The shell** is `templates/email/shell.tpl.php` (and `templates/email-text/shell.tpl.php`,
+  the footer of the text body). They are in core, not in a theme, so every site has them
+  whatever its theme; a theme or plugin that wants another look supplies its own
+  `templates/email/shell.tpl.php`, which the template cascade finds first. The shell is
+  the site's name as text, the body in a card, and a footer that says why the reader got
+  the mail and names the site and its address.
+- **Colours and the dark look**: every colour of a mail is in `Email::PALETTE`, by role
+  (`bg`, `card`, `strong`, `text`, `muted`, `footer`, `link`, `button`, `box`, `rule`,
+  `preheader`), each with a light and a dark value. The light ones are the modern look's
+  tokens; that look has no dark variant, so the dark ones are designed here, from its dark
+  administration bar. An element gets its light colour inline (`Email::colour(,
+  )`) and the class `idno-mail-<role>`; the shell prints `Email::darkCss()`, the
+  dark colour of every role under `@media (prefers-color-scheme: dark)` and again for
+  Outlook's own dark mode (`[data-ogsc]` for text, `[data-ogsb]` for backgrounds). So a
+  new colour is a new role or an existing one, never a hex value in a template:
+  `assertDarkLookIsComplete()` refuses a mail with a colour that has no role.
+- **Mail clients that turn colours over themselves** (the Gmail apps, Outlook) ignore the
+  dark block and invert the light colours, all of them or only light backgrounds and dark
+  text. The palette is chosen to stay readable then: a label and its background are set
+  together on the same element (the button, on its cell and on its link); the header and
+  the footer name the page's background themselves instead of leaving their text on a
+  transparent cell; the button has a border that keeps its shape when the card around it
+  has turned dark; and the link blue is darker than the look's own (`#1e40af`, not
+  `#2563eb`, which turned over is too dim on a card turned black).
+  `Tests/Core/MailDarkModeTest.php` works out all four views (light, dark, all turned
+  over, partly turned over) from the palette and asks 4.5:1 of every text on its background
+  (`Email::READ_ON`) and 3:1 of the button's edge. It is an approximation of those
+  clients, not a rendering in them.
+- **Mail clients**: layout is tables, each with `role="presentation"`; every style that
+  matters is inline (the `<style>` element only adds the phone and dark variants, and some
+  clients drop it); one column, 600px at most. No image, no web font, no stylesheet, no
+  script and nothing else to fetch: a mail must look whole with images blocked, and must
+  not tell anybody that it was opened. No tracking parameters on links. Don't add a logo
+  or the site's icon as a remote image.
+- **A mail is one template** of `templates/email/`, which prints nothing but parts and
+  says the rest with `Email::describe()`: `subject`, `preheader` (the line a mail client
+  shows beside the subject, hidden in the mail) and `reason` (the footer's "You got this
+  email because ..."). `Email::setBodyFromTemplate($name, $vars)` draws it twice, as HTML
+  and as text, so the two bodies always say the same, and sets the subject. There are no
+  per-mail templates in `templates/email-text/`.
+- **The parts** are `templates/email/parts/` and, with the same names and variables,
+  `templates/email-text/parts/`: `heading`, `paragraph` (`text`, or `format` and `values`
+  for a sentence with values in bold; `muted`), `button` (the one main thing to do: a table
+  cell and a VML shape for Outlook, with the address printed underneath), `link`, `quote`
+  (words somebody typed), `rows` (label => value) and `code` (an error message). Draw one
+  with `Email::part($t, 'button', [...])`, which gives each part a copy of the template, so
+  no variable of one part is read by the next. Every variable is plain text and the part
+  escapes it; `button` and `link` draw nothing unless `UrlValidator::httpUrl()` accepts
+  the address. A new kind of block is a new part in both directories, not markup in a
+  mail's template.
+- **Addresses** in a mail come from `Email::siteUrl($path)`, the address the site is
+  configured with. Not `getDisplayURL()`, which takes its scheme from the request at hand:
+  a mail sent from the queue of an https site would link to http.
+- **Subjects** name the site, are one line, and have no exclamation mark. A value in the
+  text body is made one line (`Email::oneLine()`), and text is wrapped to 72 characters
+  (`Email::wrapText()`) with an address on a line of its own.
+- **A plugin that draws its own body** still calls `setHTMLBody($html)` (put in the shell;
+  pass `['preheader' => ..., 'reason' => ...]` as the third argument) and
+  `setTextBody($text)` (sent as given; `true` as the second argument adds the footer), or
+  `setHTMLBodyFromTemplate()` / `setTextBodyFromTemplate()` with a template of each type.
+  A mail that is put together now and sent later (the Moderation plugin's, through the
+  queue) uses `Email::drawBodies()`.
+- The mails: `account/invite`, `account/password`, `admin/emailtest`, `admin/export`,
+  `admin/import`, `admin/import_failure`, `admin/oops` (to the addresses of the
+  `oops_notify` setting; the request's User-Agent, query string and referrer are in it as
+  they were sent) and the Moderation plugin's `moderation/mail`.
+- `Tests\MailAssertions::assertWellMadeMail()` is what every mail must pass (both bodies,
+  the shell, presentation tables, nothing to fetch, well-formed, links on the configured
+  address and on their own line in the text, wrapped text). `Tests/Core/MailTemplatesTest.php`
+  runs it on every core mail with hostile values, and
+  `IdnoPlugins/Moderation/Tests/MailTest.php` on that plugin's. A new mail is added to one
+  of them.
+
 ### Invitations
 
 An administrator invites people from the Users page (`Idno\Pages\Admin\Users`,
@@ -575,8 +654,8 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
   link holds the code, so that list is drawn on the administrators' page only.
 - An address that already has an account or is blocked (`Config::emailIsBlocked()`) is not
   invited; `Invitation::MAX_PER_BATCH` (50) addresses at most per submission.
-- The invitation mail (`templates/email/account/invite`, `templates/email-text/account/invite`)
-  escapes everything a person typed. Mail templates escape nothing by themselves either.
+- The invitation mail (`templates/email/account/invite`) is written with the mail parts, which
+  escape everything a person typed (see "What a mail looks like").
 - `Tests/Pages/Account/InvitationFlowTest.php` (run again in the modern look by
   `InvitationFlowModernLookTest`) checks all of this over HTTP on a private site.
 - A test of the modern look uses the `Tests\ModernLook` trait and is named for the look, not
@@ -840,8 +919,8 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   query string and referrer of a request (`templates/email/admin/oops.tpl.php`) come from
   other sites or from the request, and are stored or passed on as they were sent, so the
   templates escape them with `htmlspecialchars()` and put an address into `href` or `src`
-  only through `UrlValidator::httpUrl()`. The text part of the mail
-  (`templates/email-text/admin/oops.tpl.php`) is not HTML and is not escaped.
+  only through `UrlValidator::httpUrl()`. The error mail is written with the mail parts,
+  which escape them in its HTML body; its text body is not HTML and is not escaped.
   `Tests/Core/RemoteFeedOutputTest.php` checks this.
 - Entities in already-escaped text: `Parsing::parseHashtags()` runs on HTML that has been sanitized
   or escaped (post bodies, `htmlentities()` output), and decodes named letters such as `&auml;` so

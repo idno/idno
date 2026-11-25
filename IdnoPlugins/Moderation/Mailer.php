@@ -15,8 +15,10 @@ namespace IdnoPlugins\Moderation {
      *   reason. Never who reported them, and never which administrator acted;
      * - administrators are told about a new report, with the reporter's own words.
      *
-     * A mail is a heading, paragraphs, an optional quotation and an optional link; the two
-     * templates (HTML and text) print them, and the HTML one escapes every part.
+     * A mail is a heading, paragraphs, an optional quotation, closing paragraphs and an
+     * optional link; one template (templates/email/moderation/mail) draws them with the
+     * parts every mail of the site is written with, as HTML, where every part is escaped,
+     * and as text.
      */
     class Mailer
     {
@@ -29,7 +31,7 @@ namespace IdnoPlugins\Moderation {
          *
          * @param  string $kind 'received', 'reviewed', 'content-removed', 'banned', 'restored', 'ban-lifted' or 'new-report'
          * @param  array  $vars 'case' (ModerationCase) and, by kind: 'action_taken', 'category', 'reason', 'description'
-         * @return array 'subject', 'html', 'text'
+         * @return array 'subject', 'html', 'text' (the two bodies, without the shell), 'preheader', 'reason'
          */
         public static function compose($kind, array $vars = [])
         {
@@ -43,11 +45,16 @@ namespace IdnoPlugins\Moderation {
                 : $language->_("If you think this is a mistake, you can contact the site's administrators.");
             $category = !empty($vars['category']) ? Reasons::label($vars['category']) : '';
 
-            $mail = ['heading' => '', 'paragraphs' => [], 'quote' => '', 'link' => null];
+            $mail = ['heading' => '', 'paragraphs' => [], 'quote' => '', 'closing' => [], 'link' => null];
+            // Why the reader gets the mail, for its footer. It never says who else is involved.
+            $toReporter = $language->_('You got this email because you reported something on %s.', [$site]);
+            $toMember = $language->_('You got this email because it is about your account on %s.', [$site]);
+            $toAdmin = $language->_('You got this email because you are an administrator of %s. The moderation settings say whether administrators are emailed about new reports.', [$site]);
 
             switch ($kind) {
                 case 'received':
-                    $mail['subject'] = $language->_('We received your report');
+                    $mail['reason'] = $toReporter;
+                    $mail['subject'] = $language->_('We received your report to %s', [$site]);
                     $mail['heading'] = $language->_('Thanks for your report');
                     $mail['paragraphs'][] = $language->_('You reported %s on %s.', [$what, $site]);
                     $mail['paragraphs'][] = $language->_("A moderator will review it. We'll email you when it has been looked at.");
@@ -55,7 +62,8 @@ namespace IdnoPlugins\Moderation {
                     break;
 
                 case 'reviewed':
-                    $mail['subject'] = $language->_('Your report has been reviewed');
+                    $mail['reason'] = $toReporter;
+                    $mail['subject'] = $language->_('Your report to %s has been reviewed', [$site]);
                     $mail['heading'] = $language->_('Your report has been reviewed');
                     $mail['paragraphs'][] = $language->_('You reported %s on %s.', [$what, $site]);
                     if (!empty($vars['action_taken'])) {
@@ -68,8 +76,9 @@ namespace IdnoPlugins\Moderation {
 
                 case 'content-removed':
                     $comment = $case && $case->target_type === 'comment';
-                    $mail['subject'] = $comment ? $language->_('Your comment was removed') : $language->_('Your post was removed');
-                    $mail['heading'] = $mail['subject'];
+                    $mail['reason'] = $toMember;
+                    $mail['subject'] = $comment ? $language->_('Your comment on %s was removed', [$site]) : $language->_('Your post on %s was removed', [$site]);
+                    $mail['heading'] = $comment ? $language->_('Your comment was removed') : $language->_('Your post was removed');
                     $mail['paragraphs'][] = $comment
                         ? $language->_('The moderators of %s have removed a comment of yours.', [$site])
                         : $language->_('The moderators of %s have removed a post of yours. You can still see it when you are signed in; nobody else can.', [$site]);
@@ -77,13 +86,14 @@ namespace IdnoPlugins\Moderation {
                         $mail['paragraphs'][] = $language->_('Reason: %s.', [$category]);
                     }
                     $mail['quote'] = $case ? static::excerpt($case) : '';
-                    $mail['paragraphs'][] = $appeal;
+                    $mail['closing'][] = $appeal;
                     break;
 
                 case 'restored':
                     $comment = $case && $case->target_type === 'comment';
-                    $mail['subject'] = $comment ? $language->_('Your comment was restored') : $language->_('Your post was restored');
-                    $mail['heading'] = $mail['subject'];
+                    $mail['reason'] = $toMember;
+                    $mail['subject'] = $comment ? $language->_('Your comment on %s was restored', [$site]) : $language->_('Your post on %s was restored', [$site]);
+                    $mail['heading'] = $comment ? $language->_('Your comment was restored') : $language->_('Your post was restored');
                     $mail['paragraphs'][] = $comment
                         ? $language->_('The moderators of %s have put back a comment of yours that had been removed.', [$site])
                         : $language->_('The moderators of %s have put back a post of yours that had been removed.', [$site]);
@@ -94,6 +104,7 @@ namespace IdnoPlugins\Moderation {
                     break;
 
                 case 'banned':
+                    $mail['reason'] = $toMember;
                     $mail['subject'] = $language->_('Your account on %s has been banned', [$site]);
                     $mail['heading'] = $language->_('Your account has been banned');
                     $mail['paragraphs'][] = $language->_('The moderators of %s have banned your account. You can no longer sign in or post.', [$site]);
@@ -104,15 +115,17 @@ namespace IdnoPlugins\Moderation {
                     break;
 
                 case 'ban-lifted':
+                    $mail['reason'] = $toMember;
                     $mail['subject'] = $language->_('Your account on %s is no longer banned', [$site]);
                     $mail['heading'] = $language->_('Your ban has been lifted');
                     $mail['paragraphs'][] = $language->_('The moderators of %s have lifted the ban on your account. You can sign in again.', [$site]);
-                    $mail['link'] = ['url' => Idno::site()->config()->getDisplayURL() . 'session/login', 'label' => $language->_('Sign in')];
+                    $mail['link'] = ['url' => \Idno\Core\Email::siteUrl('session/login'), 'label' => $language->_('Sign in'), 'button' => true];
                     break;
 
                 case 'new-report':
                     $reason = (string) ($vars['reason'] ?? '');
                     $urgent = Reasons::isUrgent($reason);
+                    $mail['reason'] = $toAdmin;
                     $mail['subject'] = ($urgent ? $language->_('Urgent') . ': ' : '') . $language->_('New report on %s: %s', [$site, Reasons::label($reason)]);
                     $mail['heading'] = $urgent ? $language->_('An urgent report needs review') : $language->_('A new report needs review');
                     $mail['paragraphs'][] = $language->_('A member reported %s.', [$what]);
@@ -123,7 +136,7 @@ namespace IdnoPlugins\Moderation {
                         $mail['quote'] = $description;
                     }
                     if ($case) {
-                        $mail['link'] = ['url' => $case->getAdminURL(), 'label' => $language->_('Open in the moderation queue')];
+                        $mail['link'] = ['url' => \Idno\Core\Email::siteUrl('admin/moderation/case/' . ((string) $case->getID())), 'label' => $language->_('Open in the moderation queue'), 'button' => true];
                     }
                     break;
 
@@ -131,15 +144,17 @@ namespace IdnoPlugins\Moderation {
                     throw new \InvalidArgumentException('Unknown mail.');
             }
 
-            $html = clone Idno::site()->template();
-            $html->setTemplateType('email');
-            $text = clone Idno::site()->template();
-            $text->setTemplateType('email-text');
+            // What a mail client shows beside the subject: how the mail begins
+            $mail['preheader'] = (string) ($mail['paragraphs'][0] ?? '');
+
+            $bodies = \Idno\Core\Email::drawBodies('moderation/mail', ['mail' => $mail]);
 
             return [
-                'subject' => $mail['subject'],
-                'html' => $html->__(['mail' => $mail])->draw('moderation/mail'),
-                'text' => $text->__(['mail' => $mail])->draw('moderation/mail'),
+                'subject' => \Idno\Core\Email::headerText($mail['subject']),
+                'html' => $bodies['html'],
+                'text' => $bodies['text'],
+                'preheader' => $bodies['preheader'],
+                'reason' => $bodies['reason'],
             ];
         }
 
@@ -162,7 +177,7 @@ namespace IdnoPlugins\Moderation {
             if (defined('IDNO_UNIT_TEST')) {
                 return; // The test suite sends no mail
             }
-            Idno::site()->queue()->enqueue('default', 'moderation/mail', ['to' => $to, 'subject' => $mail['subject'], 'html' => $mail['html'], 'text' => $mail['text']]);
+            Idno::site()->queue()->enqueue('default', 'moderation/mail', ['to' => $to] + $mail);
         }
 
         /**
@@ -173,12 +188,26 @@ namespace IdnoPlugins\Moderation {
             if (empty($mail['to']) || empty($mail['subject'])) {
                 return;
             }
+            static::message($mail)->send();
+        }
+
+        /**
+         * The message for a mail that compose() put together: its bodies in the shell every
+         * mail of the site has
+         *
+         * @param  array $mail 'to', 'subject', 'html', 'text' and, from compose(), 'preheader' and 'reason'
+         * @return \Idno\Core\Email
+         */
+        public static function message(array $mail)
+        {
+            $about = ['preheader' => (string) ($mail['preheader'] ?? ''), 'reason' => (string) ($mail['reason'] ?? '')];
             $email = new \Idno\Core\Email();
             $email->setSubject((string) $mail['subject']);
             $email->addTo((string) $mail['to']);
-            $email->setHTMLBody((string) ($mail['html'] ?? ''));
-            $email->setTextBody((string) ($mail['text'] ?? ''));
-            $email->send();
+            $email->setHTMLBody((string) ($mail['html'] ?? ''), true, $about);
+            $email->setTextBody((string) ($mail['text'] ?? ''), true, $about);
+
+            return $email;
         }
 
         /**

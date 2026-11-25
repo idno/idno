@@ -1,13 +1,20 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Your data import is done!
-</div><br>
-<hr/>
-<br>
-We've taken the data you uploaded and turned it into Idno posts. Enjoy!
-<br><br>
-<div align="center">
-    <a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Visit your site</a>
-</div>
-<br>
-<br>
-<br>
+<?php
+
+    /* Tells the administrator who started an import that it is done. No variables. */
+
+    use Idno\Core\Email;
+
+    $lang = \Idno\Core\Idno::site()->language();
+    $site = Email::siteName();
+
+    Email::describe(
+        [
+        'subject' => $lang->_('Your import into %s is complete', [$site]),
+        'preheader' => $lang->_('The posts from your file are on the site.'),
+        'reason' => $lang->_('You got this email because you started an import into %s.', [$site]),
+        ]
+    );
+
+    echo Email::part($t, 'heading', ['text' => $lang->_('Your import is complete')]);
+    echo Email::part($t, 'paragraph', ['format' => $lang->get('The file you uploaded has been turned into posts on %s.'), 'values' => [$site]]);
+    echo Email::part($t, 'button', ['label' => $lang->_('Visit your site'), 'url' => Email::siteUrl()]);

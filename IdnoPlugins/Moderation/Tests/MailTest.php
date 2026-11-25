@@ -13,6 +13,8 @@ namespace IdnoPlugins\Moderation\Tests {
     class MailTest extends ModerationTestCase
     {
 
+        use \Tests\MailAssertions;
+
         private static $author;
         private static $reporter;
         private static $second;
@@ -55,6 +57,74 @@ namespace IdnoPlugins\Moderation\Tests {
                     $this->assertStringNotContainsString($identity, $mail[$part], $message);
                 }
             }
+        }
+
+        /**
+         * Every kind of mail the plugin sends, as it is sent: in the shell every mail of the
+         * site has, with a text body that says the same, links on the site's own address,
+         * and no name it must not hold.
+         */
+        public function testEveryMailIsWellMadeAndNamesNobodyItShouldNot()
+        {
+            $config = Idno::site()->config();
+            $before = [$config->url, $config->title];
+            $config->url = 'http://press.example/';
+            $config->title = 'Press <b>Room</b> & "Co"';
+            try {
+                $marker = static::marker();
+                // A reporter of this test's own: a member can file only so many reports an hour
+                $reporter = static::member('mailwellmade');
+                $entry = $this->post(static::$author, 'Zebra <b>bold</b> ' . $marker);
+                $case = $this->report($reporter, 'post', $entry, 'spam', 'reporterwords <script>alert(1)</script> ' . $marker)['case'];
+
+                $mails = [
+                    'received' => ['case' => $case],
+                    'reviewed' => ['case' => $case, 'action_taken' => true],
+                    'content-removed' => ['case' => $case, 'category' => 'spam'],
+                    'restored' => ['case' => $case],
+                    'banned' => ['category' => 'spam'],
+                    'ban-lifted' => [],
+                    'new-report' => ['case' => $case, 'reason' => 'spam', 'description' => 'reporterwords <script>alert(1)</script> ' . $marker],
+                ];
+                foreach ($mails as $kind => $vars) {
+                    $composed = Mailer::compose($kind, $vars);
+                    $mail = $this->mailParts(Mailer::message(['to' => 'reader@example.com'] + $composed));
+
+                    $this->assertWellMadeMail($mail, 'http://press.example/', $kind);
+                    $this->assertStringContainsString('Press', $mail['subject'], $kind . ': the subject names the site');
+                    $this->assertStringNotContainsString('<b>', $this->withoutComments($mail['html']), $kind . ': no markup from the name of the site or the post');
+                    $this->assertStringNotContainsString('<script', $mail['html']);
+                    $this->assertStringContainsString('Press &lt;b&gt;Room&lt;/b&gt; &amp; &quot;Co&quot;', $mail['html']);
+
+                    // Who must not be named: the administrators always, the reporter to the member
+                    $this->assertNames($mail, static::$admin, $kind . ' must not name an administrator.');
+                    if (in_array($kind, ['content-removed', 'restored', 'banned', 'ban-lifted'], true)) {
+                        $this->assertNames($mail, $reporter, $kind . ' must not name the reporter.');
+                        $this->assertStringNotContainsString('reporterwords', $mail['html'] . $mail['text']);
+                        $this->assertStringContainsString('about your account', $mail['text']);
+                    }
+                    if ($kind === 'new-report') {
+                        $this->assertNames($mail, $reporter, 'The mail to administrators does not name the reporter either.');
+                        $this->assertStringContainsString('reporterwords &lt;script&gt;alert(1)&lt;/script&gt; ' . $marker, $mail['html']);
+                        $this->assertContains('http://press.example/admin/moderation/case/' . $case->getID(), $this->mailLinks($mail['html']));
+                        $this->assertStringContainsString('<v:roundrect', $mail['html'], 'The queue is the button of this mail');
+                    }
+                    if ($kind === 'ban-lifted') {
+                        $this->assertContains('http://press.example/session/login', $this->mailLinks($mail['html']));
+                    }
+                }
+            } finally {
+                list($config->url, $config->title) = $before;
+            }
+        }
+
+        public function testAMailQueuedBeforeMailsHadAPreheaderIsStillSent()
+        {
+            $mail = $this->mailParts(Mailer::message(['to' => 'reader@example.com', 'subject' => 'Your report has been reviewed', 'html' => '<div>Old body</div>', 'text' => "Old body\n"]));
+
+            $this->assertStringStartsWith('<!DOCTYPE html>', $mail['html']);
+            $this->assertStringContainsString('<div>Old body</div>', $mail['html']);
+            $this->assertStringStartsWith("Old body\n", $mail['text']);
         }
 
         public function testReporterIsThankedAndAdministratorsAreTold()

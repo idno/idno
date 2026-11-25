@@ -70,7 +70,7 @@
                 }
 
                 try {
-                    \Idno\Core\Logging::oopsAlert($error_message, 'Oh no! Idno experienced a problem!');
+                    \Idno\Core\Logging::oopsAlert($error_message, 'Fatal error');
                 } catch (Exception $ex) {
                     error_log($ex->getMessage());
                 }
