@@ -378,6 +378,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->alias(\Idno\Legacy\HeaderQueue::class, \Idno\Legacy\PhpHeaders::class);
     // public: the page a controller serves (Idno\Legacy\ControllerPage) takes the rule of a forward from it
     $services->set(\Idno\Http\Page\PageRenderer::class)->autowire()->public();
+    // What the home page lists, over the legacy finders; public: the legacy home page asks for it with Idno::container()->get()
+    $services->set(\Idno\Legacy\LegacyHomeStream::class);
+    $services->alias(\Idno\Http\Controller\Home\HomeStream::class, \Idno\Legacy\LegacyHomeStream::class)->public();
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);

@@ -337,7 +337,8 @@ Idno/
                                BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
                                PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener, PageRenderer, PageDrawer,
                                DrawnPage: what a controller that draws a site page carries, the lifecycle run around it and
-                               how it draws, see "Legacy pages and routes")
+                               how it draws, see "Legacy pages and routes"); Controller/Home/ (HomeStream, the
+                               interface of what the home page lists, see "Querying entities in new code")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -1629,6 +1630,21 @@ test fixtures is routed to a controller through them yet:
     session, not the AccessContext, and ignores ignore-access); null where `getObject()` gives false;
   - `save()` / `delete()` only write to the store (`saveObject()` / `deleteRecord()`): events,
     permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
+- What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`; the legacy home page,
+  `Idno\Pages\Homepage`, fetches it with `Idno::container()->get()` and so do the feeds (`Pages\Feed`) and the tag search (`Pages\Search\Tags`), which build a
+  `Homepage`). It holds what `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the
+  template variables are what they were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the
+  warning logged when there is not exactly one), `types($friendly, $query, $requested)` (the friendly path's types, `all` for every one; without a path and
+  without a query the configured home page types; without a path and with a query the request's `types` as given; empty is every registered class; the
+  friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`), `page($types, $query, $offset)` (published posts
+  only, by the viewer's read groups: `Entity::countFromX()` then `getFromX()` with `items_per_page`; `items` is what the finder returned, false included),
+  `creatableTypes()` (the logged-in member's content types, each with `editUrl` set; false for a visitor), `titles()`, `lastModified($timestamp)` and
+  `profilePageWebmention()` (what a webmention to the home page of a single-user site does: the profile page's own `webmentionContent()`). `$query` is
+  `string|array|null` because a request can carry `q[]`, which the stores read as a query that matches nothing. What stays in the legacy class: the redirect of an
+  empty site, the page's owner, `Last-Modified`, the template variables and the draw, and a webmention's single-user check. A new code path takes
+  `HomeStream` by constructor injection; it is a legacy-backed service (it needs the legacy application) until the listing moves to `EntityRepository`.
+  `Tests/Kernel/LegacyHomeStreamTest` compares it with the home page's own code, written out in the test, for every viewer (visitor, member, administrator), friendly
+  path, query, requested types and offset on a seeded site with private posts and a draft.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`
