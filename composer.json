@@ -58,7 +58,7 @@
         "composer/installers": "^2",
         "vlucas/phpdotenv": "^5.3",
         "landrok/activitypub": "^0.8.1",
-        "npm-asset/hls.js": "1.7.4"
+        "npm-asset/hls.js": "1.7.5-patch0"
     },
     "license": "Apache-2.0",
     "prefer-stable": true,
