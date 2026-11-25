@@ -9,9 +9,9 @@ use Tests\Support\PrivateSiteTestCase;
 /**
  * The home stream (`Idno\Http\Controller\Home\HomeStream`, `Idno\Legacy\LegacyHomeStream`), on a site of the test's own with a seeded set of
  * posts (public, private, a draft, three content types) and three kinds of viewer: what each friendly path, search, requested type and offset gives,
- * as pinned values. (The whole page, the statements it makes and its feeds are pinned by the golden pages and the page tests.)
+ * as pinned values: what the home page lists, never a copy of the stream's code. (The whole page, the statements it makes and its feeds are pinned by the golden pages and the page tests.)
  */
-final class LegacyHomeStreamTest extends PrivateSiteTestCase
+final class LegacyHomeStreamBehaviourTest extends PrivateSiteTestCase
 {
     /** The seed: the site's users and posts, written as the rendered-pages fixture writes them, and a function that makes a viewer the session's user. */
     private const SEED = <<<'PHP'
@@ -57,6 +57,84 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         }
     };
     PHP;
+
+    public function testTheStreamIsTheNewestPublishedPostsTheViewerMayRead(): void
+    {
+        $result = $this->runInSite(self::SEED . <<<'PHP'
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $all = \Idno\Common\ContentType::getRegisteredClasses();
+        $out = [];
+        foreach ([null, 'ada', 'bob'] as $viewer) {
+            $viewAs($viewer);
+            $out[$viewer ?? 'visitor'] = array_map(static fn ($item) => (string) ($item->body ?? $item->title), $stream->page($all, null, 0)['items']);
+        }
+
+        return $out;
+        PHP);
+
+        foreach (['visitor', 'ada', 'bob'] as $viewer) {
+            $created = array_map(static fn (string $text): bool => !str_contains($text, 'draft'), $result[$viewer]);
+            $this->assertNotContains(false, $created, $viewer . ' is never shown a draft');
+        }
+        $this->assertSame('https://example.org/garden', $result['visitor'][0], 'the newest public post comes first');
+        $this->assertSame('<p>Gardens and templates.</p>', $result['visitor'][1]);
+        $this->assertSame('A note about gardens, number 6 #garden', $result['visitor'][2], 'then the notes, newest first');
+        $this->assertCount(8, $result['visitor'], 'six notes, an article and a bookmark');
+        $this->assertCount(10, $result['ada'], 'the administrator also reads both private notes');
+        $this->assertCount(9, $result['bob'], 'a member reads the public posts and their own private one');
+        $this->assertContains('Bobs private garden note.', $result['bob']);
+        $this->assertNotContains('A private garden note only Ada can read.', $result['bob']);
+    }
+
+    public function testAFriendlyPathNamesTheContentTypes(): void
+    {
+        $result = $this->runInSite(<<<'PHP'
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+
+        return [
+            'statusupdates' => $stream->types('statusupdates', null, null)['types'],
+            'posts' => $stream->types('posts', null, null)['types'],
+            'both' => $stream->types('statusupdates/posts', null, null)['types'],
+            'unknown' => $stream->types('bogus', null, null)['types'] === \Idno\Common\ContentType::getRegisteredClasses(),
+            'friendly' => array_values($stream->types('statusupdates/posts', null, null)['friendly']),
+        ];
+        PHP);
+
+        $this->assertSame([\IdnoPlugins\Status\Status::class], $result['statusupdates']);
+        $this->assertSame([\IdnoPlugins\Text\Entry::class], $result['posts']);
+        $this->assertSame([\IdnoPlugins\Status\Status::class, \IdnoPlugins\Text\Entry::class], $result['both']);
+        $this->assertTrue($result['unknown'], 'a path that names no type lists every type');
+        $this->assertSame(['statusupdates', 'posts'], $result['friendly']);
+    }
+
+    public function testASiteWithUsersIsNotBeingSetUp(): void
+    {
+        $this->assertSame(503, $this->site()->request('GET', '')->status, 'a site with no user is being set up');
+        $this->addUser('ada', 'correct-horse-battery-9', null, true);
+
+        $this->assertSame(200, $this->site()->request('GET', '')->status, 'once it has a user the home page is the stream');
+    }
+
+    public function testTheSingleUserOwnerIsTheOneAdministrator(): void
+    {
+        $result = $this->runInSite(self::SEED . <<<'PHP'
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $site->config()->single_user = true;
+        $first = $stream->singleUserOwner()?->handle;
+        $bob->setAdmin(true);
+        $bob->save(true);
+        $log = tempnam(sys_get_temp_dir(), 'idno-log-');
+        ini_set('error_log', $log);
+        $second = $stream->singleUserOwner();
+        unlink($log);
+
+        return ['first' => $first, 'second' => $second, 'isSingle' => $stream->isSingleUser()];
+        PHP);
+
+        $this->assertSame('ada', $result['first']);
+        $this->assertNull($result['second'], 'two administrators: there is no one owner');
+        $this->assertTrue($result['isSingle']);
+    }
 
     public function testTheContainerAliasesTheInterfaceToTheAdapter(): void
     {
