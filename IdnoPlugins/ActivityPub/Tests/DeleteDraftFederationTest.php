@@ -64,6 +64,10 @@ namespace IdnoPlugins\ActivityPub\Tests {
                 $this->markTestSkipped('The ActivityPub plugin is not enabled.');
             }
 
+            if (!(Idno::site()->queue() instanceof \Idno\Core\AsynchronousQueue)) {
+                $this->markTestSkipped('ActivityPub needs the asynchronous event queue.');
+            }
+
             $user = $this->user();
             $follower = new ActivityPubFollower();
             $follower->entity_subtype = 'IdnoPlugins\\ActivityPub\\Entities\\ActivityPubFollower';

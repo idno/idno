@@ -157,6 +157,7 @@ namespace Tests\Pages {
          */
         public function testDraftEditPageHasADeleteControl($selector, $make, $look)
         {
+            $this->requirePluginFor($selector);
             $marker = $this->marker();
             $draft = $this->saveDraft($make, $marker);
 
@@ -185,6 +186,7 @@ namespace Tests\Pages {
          */
         public function testPublishedPostEditPageHasTheSameControl($selector, $make, $look)
         {
+            $this->requirePluginFor($selector);
             $published = $this->savePost($make, $this->marker());
 
             $page = $this->request('owner', 'GET', $this->path($published->getEditURL()) . '?_t=' . $look);
@@ -197,6 +199,7 @@ namespace Tests\Pages {
          */
         public function testComposePageOfANewPostHasNoDeleteControl($selector, $make, $look)
         {
+            $this->requirePluginFor($selector);
             $page = $this->request('owner', 'GET', "$selector/edit?_t=$look");
 
             $this->assertEquals(200, $page['status'], "The page for a new $selector should load.");
@@ -232,6 +235,7 @@ namespace Tests\Pages {
          */
         public function testDeletingADraftFromItsEditPageRemovesItAndLandsOnTheDraftsList($selector, $make, $look)
         {
+            $this->requirePluginFor($selector);
             $draft = $this->saveDraft($make, $this->marker());
             $edit = $this->request('owner', 'GET', $this->path($draft->getEditURL()) . '?_t=' . $look);
             $form = $this->deleteForm($edit['body'], $draft->getDeleteURL());
@@ -241,12 +245,18 @@ namespace Tests\Pages {
 
             $this->assertNull($this->reload($draft), 'The draft should be gone.');
             $this->assertContains($result['status'], [301, 302, 303], 'Deleting should redirect.');
-            $this->assertStringStartsWith($this->urlPath(Idno::site()->config()->getURL()) . 'drafts/', $this->urlPath($result['location']), 'The member should land on the drafts list, not on the page of the post that no longer exists.');
 
-            // ... where the usual confirmation message is shown, and the list itself loads
-            $list = $this->request('owner', 'GET', 'drafts/');
-            $this->assertEquals(200, $list['status']);
-            $this->assertStringContainsString('was deleted', $list['body'], 'The usual confirmation message should be shown.');
+            // The drafts list exists when the theme provides one (Twenty26); otherwise the home page
+            $drafts = Idno::site()->events()->triggerEvent('drafts/url', [], '');
+            $expected = $this->urlPath($drafts ?: Idno::site()->config()->getURL());
+            $this->assertEquals($expected, $this->urlPath(strtok($result['location'], '?')), 'The member should land on the drafts list (or home, where the site has none), not on the page of the post that no longer exists.');
+
+            if ($drafts) {
+                // ... where the usual confirmation message is shown, and the list itself loads
+                $list = $this->request('owner', 'GET', 'drafts/');
+                $this->assertEquals(200, $list['status']);
+                $this->assertStringContainsString('was deleted', $list['body'], 'The usual confirmation message should be shown.');
+            }
         }
 
         public function testAnotherMemberCannotDeleteADraft()
@@ -291,6 +301,15 @@ namespace Tests\Pages {
         // -----------------------------------------------------------------
         // Helpers
         // -----------------------------------------------------------------
+
+        /// Skip for a content type whose plugin is not enabled on this site
+        private function requirePluginFor($selector)
+        {
+            $plugins = ['event' => 'Event'];
+            if (isset($plugins[$selector]) && !Idno::site()->plugins()->get($plugins[$selector])) {
+                $this->markTestSkipped("The {$plugins[$selector]} plugin is not enabled.");
+            }
+        }
 
         private function marker()
         {
