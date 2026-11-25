@@ -47,7 +47,7 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
     for ($i = 1; $i <= 6; $i++) {
         $post(new \IdnoPlugins\Status\Status(), $i % 2 ? $ada : $bob, ['body' => "A note about gardens, number $i #garden"]);
     }
-    $post(new \IdnoPlugins\Text\Entry(), $ada, ['title' => 'An article about gardens', 'body' => '<p>Gardens and templates.</p>']);
+    $post(new \IdnoPlugins\Text\Entry(), $ada, ['title' => 'An article about the garden', 'body' => '<p>Gardens and templates.</p>']);
     $post(new \IdnoPlugins\Like\Like(), $bob, ['body' => 'https://example.org/garden', 'bookmarkof' => 'https://example.org/garden', 'pageTitle' => 'A garden page']);
     $post(new \IdnoPlugins\Status\Status(), $ada, ['body' => 'A private garden note only Ada can read.'], $ada->getUUID());
     $post(new \IdnoPlugins\Status\Status(), $ada, ['body' => 'A garden draft, not yet published.'], 'PUBLIC', 'draft');

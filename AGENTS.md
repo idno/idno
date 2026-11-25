@@ -58,13 +58,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
   Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
   minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
-  Rough times: the unit tier about ten seconds; the whole suite about 18.5 minutes on SQLite (measured
-  on a development machine; the MySQL and MariaDB runs have not been timed since the suite reached its present size).
+  Rough times: the unit tier about ten seconds; the whole suite (6,508 tests) about 14 minutes on SQLite, 32 minutes on MySQL 8.0 and 29 minutes on
+  MariaDB 10.6 (measured on one development machine with other work running beside it; the figures move with the machine's load).
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
-  whole suite runs in one process: on SQLite it peaks at about 275 MB (6,500 tests, 388 skipped; the largest classes each leave about 20 MB or
+  whole suite runs in one process: the peak is 213 MB on SQLite (388 skipped), 221 MB on MySQL 8.0 (22 skipped) and 221 MB on MariaDB 10.6 (23 skipped), of 6,508 tests, well under the guard's 380 MB; the largest classes each leave about 20 MB or
   less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
   built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
   (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` and its listener
