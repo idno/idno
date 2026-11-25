@@ -55,7 +55,7 @@ final class LegacyPageLifecycle implements PageLifecycle
     public function refusesApiRequest(PageContext $context): bool
     {
         $site = Idno::site();
-        if (!$context->page()->accountPage || !$site->session()->isAPIRequest()) {
+        if (!$site->session()->isAPIRequest() || !$site->routes()->isAccountPage($site->currentPage())) {
             return false;
         }
         $site->logging()->warning('API request to an account page refused: ' . ltrim($context->page()->name, '\\'));

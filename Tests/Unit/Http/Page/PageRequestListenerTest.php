@@ -6,13 +6,17 @@ namespace Tests\Unit\Http\Page;
 
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageLifecycle;
+use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\PageRequestListener;
 use Idno\Http\Page\SitePage;
 use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpKernel\Event\ControllerEvent;
+use Symfony\Component\HttpKernel\Event\ExceptionEvent;
+use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -272,5 +276,107 @@ final class PageRequestListenerTest extends TestCase
 
         $this->assertSame(0, $this->fetched);
         $this->assertFalse(PageContext::has($request));
+    }
+
+    private function exceptionEvent(Request $request, \Throwable $e, int $type = HttpKernelInterface::MAIN_REQUEST): ExceptionEvent
+    {
+        return new ExceptionEvent($this->createMock(HttpKernelInterface::class), $request, $type, $e);
+    }
+
+    public function testAPageRedirectBecomesARedirectResponse(): void
+    {
+        $event = $this->exceptionEvent(Request::create('/'), new PageRedirect('https://example.com/next'));
+
+        $this->listener()->onException($event);
+
+        $response = $event->getResponse();
+        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertSame('https://example.com/next', $response->headers->get('Location'));
+        $this->assertSame(302, $response->getStatusCode());
+
+        $keep = $this->exceptionEvent(Request::create('/'), new PageRedirect('https://example.com/post', null, 307));
+        $this->listener()->onException($keep);
+        $this->assertSame(307, $keep->getResponse()->getStatusCode());
+    }
+
+    public function testAnApiRequestGetsTheBodyInsteadOfARedirect(): void
+    {
+        $event = $this->exceptionEvent(Request::create('/'), new PageRedirect('https://example.com/next', '{"location":"https:\/\/example.com\/next"}', 200));
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(200, $event->getResponse()->getStatusCode());
+        $this->assertFalse($event->getResponse()->headers->has('Location'));
+        $this->assertSame('{"location":"https:\/\/example.com\/next"}', $event->getResponse()->getContent());
+    }
+
+    public function testOtherExceptionsAndSubRequestsAreLeftAlone(): void
+    {
+        $other = $this->exceptionEvent(Request::create('/'), new \RuntimeException('x'));
+        $this->listener()->onException($other);
+        $this->assertNull($other->getResponse());
+
+        $sub = $this->exceptionEvent(Request::create('/'), new PageRedirect('/x'), HttpKernelInterface::SUB_REQUEST);
+        $this->listener()->onException($sub);
+        $this->assertNull($sub->getResponse());
+    }
+
+    public function testARecordedForwardIsCarriedByTheResponseThePageMade(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/later'));
+        $response = new Response('page');
+
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+
+        $this->assertSame('https://example.com/later', $response->headers->get('Location'));
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('page', $response->getContent());
+
+        $error = new Response('no', 404);
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $error));
+        $this->assertSame(404, $error->getStatusCode(), 'only a 200 becomes the redirect');
+
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/later', '{"a":1}'));
+        $api = new Response('page');
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $api));
+        $this->assertSame('{"a":1}page', $api->getContent());
+        $this->assertFalse($api->headers->has('Location'));
+    }
+
+    public function testTheWorkAfterTheResponseRunsOnTerminateAndAFailureIsReported(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $ran = [];
+        PageContext::of($request)->afterResponse(function () use (&$ran): void {
+            $ran[] = 'first';
+            throw new \RuntimeException('the first fails');
+        });
+        PageContext::of($request)->afterResponse(function () use (&$ran): void {
+            $ran[] = 'second';
+        });
+        $this->lifecycle->calls = [];
+
+        $listener->onTerminate(new TerminateEvent($this->createMock(HttpKernelInterface::class), $request, new Response()));
+
+        $this->assertSame(['first', 'second'], $ran);
+        $this->assertSame(['reportException'], $this->lifecycle->calls);
+    }
+
+    public function testNothingRunsOnTerminateWithoutWork(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+        $this->lifecycle->calls = [];
+
+        $listener->onTerminate(new TerminateEvent($this->createMock(HttpKernelInterface::class), $request, new Response()));
+        $listener->onTerminate(new TerminateEvent($this->createMock(HttpKernelInterface::class), Request::create('/'), new Response()));
+
+        $this->assertSame([], $this->lifecycle->calls);
     }
 }

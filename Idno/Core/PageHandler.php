@@ -28,6 +28,24 @@ namespace Idno\Core {
         private static $markdown_suffix = false;
 
         /**
+         * Whether the class a controller's page stands for, or one it replaces, was registered in a table of the router (the
+         * account pages, the settings pages): what was registered with the legacy router for the class keeps applying to the page
+         * that replaced it, so a flag left off the attribute never opens a door the registration closed.
+         *
+         * @param array<string, bool> $registered lower-case class names without a leading backslash
+         */
+        private function anyRegistered(array $registered, \Idno\Http\Page\SitePage $page): bool
+        {
+            foreach ([$page->name, ...$page->replaces] as $class) {
+                if (isset($registered[strtolower(ltrim($class, '\\'))])) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /**
          * Is this pattern for a page under /account/? Those are the account pages: where a
          * user's password, email address, API key and access tokens are managed.
          *
@@ -52,7 +70,9 @@ namespace Idno\Core {
         function isAccountPage($class) : bool
         {
             if ($class instanceof \Idno\Legacy\ControllerPage) {
-                return $class->context()->page()->accountPage;
+                $page = $class->context()->page();
+
+                return $page->accountPage || $this->anyRegistered($this->account_pages, $page);
             }
             if (is_object($class)) {
                 $class = get_class($class);
@@ -88,7 +108,8 @@ namespace Idno\Core {
             if ($class instanceof \Idno\Legacy\ControllerPage) {
                 $page = $class->context()->page();
 
-                return $page->settingsPage || $page->accountPage;
+                return $page->settingsPage || $page->accountPage
+                    || $this->anyRegistered($this->settings_pages, $page) || $this->anyRegistered($this->account_pages, $page);
             }
             if (is_object($class)) {
                 $class = get_class($class);
@@ -311,7 +332,17 @@ namespace Idno\Core {
         function isRoutePublic(string|object $class) : bool
         {
             if ($class instanceof \Idno\Legacy\ControllerPage) {
-                return $class->context()->page()->publicOnPrivateSite;
+                $page = $class->context()->page();
+                if ($page->publicOnPrivateSite || $this->isRoutePublic($page->name)) {
+                    return true;
+                }
+                foreach ($page->replaces as $replaced) {
+                    if ($this->isRoutePublic($replaced)) {
+                        return true;
+                    }
+                }
+
+                return false;
             }
             if (is_object($class)) {
                 $class = get_class($class);

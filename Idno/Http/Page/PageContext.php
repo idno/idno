@@ -46,6 +46,13 @@ final class PageContext
     /** @var list<string>|null */
     private ?array $arguments = null;
 
+    private bool $markdownSuffix = false;
+
+    private ?PageRedirect $redirect = null;
+
+    /** @var list<\Closure> */
+    private array $afterResponse = [];
+
     public function __construct(private readonly Request $request, private readonly SitePage $page)
     {
     }
@@ -89,20 +96,35 @@ final class PageContext
         if ($name === '') {
             return $default;
         }
+
+        return $this->requestField($name) ?? $this->dataField($name) ?? $default;
+    }
+
+    /**
+     * A form field of the request alone (a POST field over a query field; never a cookie): null when the request has none.
+     */
+    public function requestField(string $name): mixed
+    {
         foreach ([$this->request->request->all(), $this->request->query->all()] as $fields) {
             if (isset($fields[$name])) {
                 return $fields[$name];
             }
         }
+
+        return null;
+    }
+
+    /**
+     * What a legacy page kept in its `data`: the value the page set (setInput()), else a field of a `json` input or of a JSON
+     * body; null when there is none.
+     */
+    public function dataField(string $name): mixed
+    {
         if (isset($this->inputs[$name])) {
             return $this->inputs[$name];
         }
-        $json = $this->json();
-        if (isset($json[$name])) {
-            return $json[$name];
-        }
 
-        return $default;
+        return $this->json()[$name] ?? null;
     }
 
     /**
@@ -278,6 +300,48 @@ final class PageContext
     }
 
     /**
+     * Whether the request's path had the `.md` suffix of a post's Markdown form (and was routed without it); the route sets it.
+     */
+    public function setMarkdownSuffix(bool $requested = true): void
+    {
+        $this->markdownSuffix = $requested;
+    }
+
+    public function markdownSuffixRequested(): bool
+    {
+        return $this->markdownSuffix;
+    }
+
+    /**
+     * A forward the page made and went on from (`forward($location, false)`): the response carries it.
+     */
+    public function setRedirect(PageRedirect $redirect): void
+    {
+        $this->redirect = $redirect;
+    }
+
+    public function redirect(): ?PageRedirect
+    {
+        return $this->redirect;
+    }
+
+    /**
+     * Work the page asks to be done once the visitor has the answer (`AfterResponse::run()`).
+     */
+    public function afterResponse(\Closure $work): void
+    {
+        $this->afterResponse[] = $work;
+    }
+
+    /**
+     * @return list<\Closure>
+     */
+    public function afterResponseWork(): array
+    {
+        return $this->afterResponse;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function json(): array
@@ -290,7 +354,7 @@ final class PageContext
         if (is_string($field) && trim($field) !== '') {
             $fields = $this->merge($fields, self::decode($field));
         }
-        if ($this->request->getMethod() !== 'GET') {
+        if ($this->request->getRealMethod() !== 'GET') {
             $fields = $this->merge($fields, self::decode($this->request->getContent()));
         }
 

@@ -854,36 +854,68 @@ other new code may.
 
 A page a controller draws has a current page too (`Idno::site()->currentPage()`), because templates, helpers and plugins ask it for
 the request's input, address, entity, owner, assets and status (`Idno\Core\Idno`, `DefaultTemplate`, `LegacyTemplateHelpers`,
-`Syndication`, `Webmention`, the bundled plugins' entities all do), and a controller serves no `Page`. Two shims in `Idno\Legacy\`
-(both `final`, excluded from the container scan) provide it; nothing but test fixtures is routed to a controller through them yet:
+`Syndication`, `Webmention`, the bundled plugins' entities all do), and a controller serves no `Page`. An attribute and a per-request
+context in `Idno\Http\Page\` and two shims in `Idno\Legacy\` (all `final`, excluded from the container scan) provide it; nothing but
+test fixtures is routed to a controller through them yet:
 
 - `Idno\Http\Page\SitePage` (an attribute on a controller class or method; the method's wins; `SitePage::of()` takes an object, a
-  `Class::method` string, an `[object|class, method]` array or an invokable, cached per class and method) says which legacy page the
-  controller serves: `name` (the page class: the body class, `page/get`'s `page_class`), `replaces` (the shell class whose legacy routes
+  `Class::method` string, an `[object|class, method]` array or an invokable, cached per class and method; a method that does not exist has the class's attribute) says which legacy page the
+  controller serves: `name` (the page class: the body class and, through the controller wiring, `page/get`'s `page_class`; `Page::pageClassName()` is what the body class reads, and a legacy event carries `get_called_class()`, the same for a page that is its own class), `replaces` (the shell class whose legacy routes
   it shadows; empty when the class was deleted), `publicOnPrivateSite`, `accountPage`, `settingsPage` and `defaultType`.
   `Idno\Http\Page\PageContext` (not a service; the request's attribute `_idno_page`, `PageContext::of()` throws without one, `has()`,
-  `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (a POST field over a
-  query field, never a cookie; then `setInput()`; then the fields of a `json` input and of the body of a request that is not a GET, the earlier
-  winning, as `Page::parseJSONPayload()` merged them), `isXhr()` (`X-Requested-With`), the permalink flag, entity, owner, assets per class,
-  status (200), headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()`
+  `attachTo()`) is the state a legacy page kept in its properties and the superglobals, for one request: `input()` (`requestField()`, a POST field over a
+  query field, never a cookie; then `dataField()`: what `setInput()` set, then the fields of a `json` input and of the body of a request
+  whose REAL method is not GET (an override header does not hide a body), the earlier winning, as `Page::parseJSONPayload()` merged them), `isXhr()` (`X-Requested-With`), the permalink flag, entity, owner, assets per class,
+  status (200), the `.md` suffix flag, a recorded redirect and the work to do after the response, headers (`addHeader()` replaces, or adds with `$replace` false, the name in any letter case), caching (`setCaching()`
   replaces; `ownsCaching()` says the page asked), `requestUri()` (the raw `REQUEST_URI`, which `Page::currentUrl()` uses) and `arguments()`
   (the route's parameters but `lead`, `slash` and the framework's `_*`, in order, or what `setArguments()` set). `PageContextResolver` gives a
-  controller argument typed `PageContext` that of the request. `PageRedirect` (a `\RuntimeException` with the `location`) is what a page throws
-  where a legacy page forwards and exits.
-- `Idno\Legacy\ControllerPage` (a `Page`) answers what the legacy application asks of the current page from the context: `getInput()`
-  (a filter is applied once to the final value), `setInput()`, `xhr()` and `$xhr`, `$arguments`, `response()`/`setResponse()`, the entity,
-  permalink, owner (false when none) and assets (false when none) accessors, `currentUrl()` (the configured `url`'s scheme, host and port
-  plus the raw request address, so `doesPathMatch()` and `matchUrl()` work), `referrer()`/`getReferrer()` (the `Referer`, ''),
-  `isAcceptedContentType()` (the request's `Accept`, with the old algorithm, quirks included), `setNoCache()`, `setLastModifiedHeader()`,
-  `pageClassName()` (the attribute's `name`); `getIcon()` and `forwardToLogin()` work through those. Where a legacy page exits it throws:
-  `deniedContent()` `AccessDeniedHttpException`, `noContent()` `NotFoundHttpException`, `goneContent()` `GoneHttpException` (each after
-  setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template type, when it is not the
-  default, in `_t`), `exception()` rethrows; `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
-  `data()` is always empty (the context reads a JSON payload on demand). Its constructor does not run Component's (no `init()`, no
+  controller argument typed `PageContext` that of the request. `PageRedirect` (a `\RuntimeException` with the `location`, an optional `body` that an API request gets in place of a redirect, and the `status`, 302
+  unless a 307 keeps the method) is what a page throws where a legacy page forwards and exits.
+- `Idno\Legacy\ControllerPage` (a `Page`) answers what the legacy application asks of the current page from the context, and
+  answers as `Page` does (`Tests/Kernel/ControllerPageEquivalenceTest` asks a real legacy page and a controller page the same questions
+  of 36 requests: queries, an encoded plus, HEAD and PUT, `X-Forwarded-Proto`, `HTTPS`, port 443, XHR, a referrer, a malformed Host, a
+  subdirectory install, `?_t=` types, POST over query, a `json` field, tables of `Accept` headers): `getInput()` is `Page::getInput()` line for
+  line (the request's field, else a non-null default, goes through the filter; only when that is null is `setInput()` or the JSON payload read,
+  so a non-null default hides them; the filter runs again on the result when the first answer was empty), `setInput()`, `xhr()` and `$xhr`,
+  `$arguments`, `response()`/`setResponse()`, the entity, permalink, owner (false when none) and assets (false when none) accessors,
+  `currentUrl()` (the configured `url`'s scheme, host and port plus the raw request address, so `doesPathMatch()` and `matchUrl()` work),
+  `referrer()`/`getReferrer()` (the `Referer`, ''), `isAcceptedContentType()` (the request's `Accept`, else `REDIRECT_HTTP_ACCEPT`, with the old
+  algorithm, quirks included: a space after a comma stays in the key and a tie takes 1 off the quality), `isSecure()` (`Page::isSSL()`'s rule read
+  from the request), `setNoCache()` (`Cache-Control: no-store, no-cache, must-revalidate, max-age=0` and `Pragma: no-cache`: the legacy page's
+  third header, `post-check=0, pre-check=0`, is not sent), `setLastModifiedHeader()`, `pageClassName()` (the attribute's `name`);
+  `getIcon()` and `forwardToLogin()` work through those. The one deliberate difference in input: a cookie is never input (a legacy page's
+  `$_REQUEST` held cookies where PHP's `request_order` let it). Where a legacy page exits it throws what the response is made from:
+  `deniedContent($title)` `AccessDeniedHttpException` (the title is its message), `noContent()` `NotFoundHttpException`, `goneContent()`
+  `GoneHttpException` (each after setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template
+  type, when it is not the default, in `_t`; the session closed first, as `finishEarly()` did; `forward_trace` logged and sent as
+  `X-Idno-Forward-Trace`; a POST, PUT or DELETE sent as an XHR request does nothing, as before; an API request gets the JSON
+  `{"location": ...}` in the redirect's `body` instead of a `Location`), `sslGatekeeper()` a 307 `PageRedirect`, `exception()` rethrows (the controller
+  wiring must not leave the exception handler `Page::init()` installs pointing at a `ControllerPage`); `forward($location, false)`, which a
+  legacy page used to send the redirect and carry on, records the redirect on the context and returns, and `PageRequestListener::onResponse()`
+  puts it on whatever the page answers (a 200 becomes the redirect; an API body is put before the page's); `AfterResponse::run()` for a
+  controller page registers its work on the context (`PageContext::afterResponse()`) and forwards, the listener runs it on `kernel.terminate`
+  (no time limit; a failure goes to `reportException()`), and the PageRedirect is turned into the response by `PageRequestListener::onException()`
+  (`kernel.exception`, priority 10); `lastModifiedGatekeeper()` does nothing (the response answers a conditional request) and
+  `data()` is always empty (the context reads a JSON payload on demand). The Markdown members work from the request: `wantsMarkdown()` (the
+  request's `Accept`, `format`, `_t` and the context's suffix flag), `sendVaryAccept()` (a `Vary: Accept` added to the context),
+  `selectMarkdownIfWanted()`, and `drawMarkdown()`, which RETURNS the document (a legacy page echoed it and exited) and records the Markdown
+  headers on the context from the page's own status. `DefaultTemplate` reads that status (`pageStatus()`), not `http_response_code()`, for a
+  `ControllerPage` (the canonical `Link` is for a 200). Every other member that would read the process's request, send a header, set the status,
+  echo or exit throws a `\LogicException` naming it (`get()`, `post()`, `put()`, `delete()`, `head()`, their `_xhr` forms, `options()`,
+  `webmention()`, `parseJSONPayload()`, `flushBrowser()`): the router's dispatch, which a controller replaces. `Tests/Kernel/ControllerPageMembersTest`
+  walks every public method `Page` declares and fails for one that `ControllerPage` neither overrides nor lists as pure (with the reason; the list's
+  methods are token-scanned for `header()`, `http_response_code()`, `echo` and `exit`; the static `isSSL()`, `getallheaders()`, `getBearerToken()` read
+  the process's request and are called by class name, never through a page). Its constructor does not run Component's (no `init()`, no
   event hooks, no `page/ready`, and it does not make itself the current page): whoever draws the page does. A `null` context is a request for `/` served as the home page.
   `PageHandler::isRoutePublic()` (which takes a class name or the page), `isAccountPage()` and `isSettingsPage()` answer a `ControllerPage` from its
-  attribute (an account page is a settings page, as a route under `/account/` is), and `Session::publicGatekeeper()` passes the page to
-  `isRoutePublic()`. `Page::pageClassName()` is `static::class`, and `getBodyClasses()` builds the page's body class from it.
+  attribute OR what was registered with the legacy router for the class it stands for (its `name` and every class it `replaces`: `addRoute()` under
+  `/account/` or `/admin/`, `addPublicRoute()`, `hijackRoute()` and the public flag of `addRoute()`), so a flag left off the attribute never opens what a
+  registration closed and a plugin's opt-in keeps applying (an account page is a settings page, as a route under `/account/` is), and
+  `Session::publicGatekeeper()` passes the page to `isRoutePublic()`. A route under `/account` or `/admin` whose controller is a site page must
+  carry the flag: `Tests/Kernel/SitePageRoutesTest` scans every route (`{lead}`, `{slash}` and a leading subdirectory placeholder
+  accepted) and fails for one that does not. The refusal of an API request on an account page is the lifecycle's `refusesApiRequest()`,
+  which asks `isAccountPage()` of the current page (`SitePageLifecycleTest` proves it for a flagged controller, `ControllerPageTest` for a
+  class only the router knows). `Page::pageClassName()` is `static::class`, and `getBodyClasses()` builds the page's body class from it.
 - `Idno\Legacy\BarePage` is a page with no content, for an answer no page produced (the 404 page of `LegacyDispatcher`, the 403 of
   `PageHandler` for an API request on an account page and of `LegacyForbiddenPage`, and the stand-in current page of tests): it runs `Page::init()` as
   the home page did, and carries the home page's body class (`pageClassName()` is `Idno\Pages\Homepage`: the golden `not-found.html`).

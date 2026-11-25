@@ -34,6 +34,11 @@ final class ControllerPageTest extends TestCase
 
     private string $previousType = 'default';
 
+    /** @var int counts `page/ready` while a test listens; the listener cannot be removed, so it is switched off in tearDown() */
+    private int $ready = 0;
+
+    private bool $listening = false;
+
     protected function setUp(): void
     {
         $site = Idno::site();
@@ -46,6 +51,7 @@ final class ControllerPageTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->listening = false;
         $site = Idno::site();
         $site->setCurrentPage($this->previousPage ?: new BarePage());
         $site->config()->walled_garden = $this->previousWalledGarden;
@@ -58,6 +64,17 @@ final class ControllerPageTest extends TestCase
         }
     }
 
+    private function listenForReady(): void
+    {
+        $this->ready = 0;
+        $this->listening = true;
+        Idno::site()->events()->addListener('page/ready', function (): void {
+            if ($this->listening) {
+                $this->ready++;
+            }
+        });
+    }
+
     private function page(string $uri = '/', string $method = 'GET', array $parameters = [], array $server = [], ?SitePage $site = null): ControllerPage
     {
         $request = Request::create($uri, $method, $parameters, [], [], $server);
@@ -68,16 +85,13 @@ final class ControllerPageTest extends TestCase
     public function testConstructingRunsNoInit(): void
     {
         $before = Idno::site()->currentPage();
-        $ready = 0;
-        Idno::site()->events()->addListener('page/ready', static function () use (&$ready): void {
-            $ready++;
-        });
+        $this->listenForReady();
 
         $page = $this->page();
         $page->xhr();
         new ControllerPage();
 
-        $this->assertSame(0, $ready);
+        $this->assertSame(0, $this->ready);
         $this->assertSame($before, Idno::site()->currentPage());
         $this->assertNotSame($page, Idno::site()->currentPage());
     }
@@ -302,7 +316,7 @@ final class ControllerPageTest extends TestCase
 
         Idno::site()->template()->setTemplateType('json');
         try {
-            $page->forward($home . 'somewhere', false);
+            $page->forward($home . 'somewhere');
             $this->fail('the page forwards');
         } catch (PageRedirect $redirect) {
             $this->assertSame($home . 'somewhere?_t=json', $redirect->location);
@@ -373,15 +387,12 @@ final class ControllerPageTest extends TestCase
 
     public function testBarePageRunsInitLikeAPage(): void
     {
-        $ready = 0;
-        Idno::site()->events()->addListener('page/ready', static function () use (&$ready): void {
-            $ready++;
-        });
+        $this->listenForReady();
 
         $page = new BarePage();
 
         $this->assertSame($page, Idno::site()->currentPage());
-        $this->assertGreaterThanOrEqual(1, $ready);
+        $this->assertGreaterThanOrEqual(1, $this->ready);
         $this->assertSame('Idno\Pages\Homepage', $page->pageClassName());
         $this->assertSame('idno_pages_homepage', str_replace('\\', '_', strtolower($page->pageClassName())));
     }
@@ -390,4 +401,262 @@ final class ControllerPageTest extends TestCase
     {
         $this->assertSame(\Idno\Pages\Homepage::class, (new \Idno\Pages\Homepage())->pageClassName());
     }
+
+    public function testForwardWithNoExitRecordsTheRedirectAndReturns(): void
+    {
+        $page = $this->page();
+        $location = Idno::site()->config()->getDisplayURL() . 'later';
+
+        $page->forward($location, false);
+
+        $redirect = $page->context()->redirect();
+        $this->assertNotNull($redirect);
+        $this->assertSame($location, $redirect->location);
+        $this->assertNull($redirect->body);
+        $this->assertSame(302, $redirect->status);
+    }
+
+    public function testAnXhrPostCannotForward(): void
+    {
+        $request = Request::create('/x', 'POST', [], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
+        $page = new ControllerPage(new PageContext($request, new SitePage('Idno\Pages\Homepage')));
+
+        $page->forward('/somewhere');
+        $page->forward('/somewhere', false);
+
+        $this->assertNull($page->context()->redirect());
+    }
+
+    public function testAnApiRequestGetsTheJsonALegacyPageEchoed(): void
+    {
+        $session = Idno::site()->session();
+        $session->authenticateStatelessly(new User());
+        try {
+            $page = $this->page();
+            $location = Idno::site()->config()->getDisplayURL() . 'api-place';
+            try {
+                $page->forward($location);
+                $this->fail('the page forwards');
+            } catch (PageRedirect $redirect) {
+                $this->assertSame(['location' => $location], json_decode((string) $redirect->body, true));
+            }
+        } finally {
+            $session->resetStatelessAuthentication();
+        }
+    }
+
+    public function testForwardTraceIsRecordedAsAHeaderAndLogged(): void
+    {
+        $config = Idno::site()->config();
+        $previous = $config->forward_trace;
+        $config->forward_trace = true;
+        try {
+            $page = $this->page();
+            $page->forward($config->getDisplayURL() . 'traced', false);
+        } finally {
+            $config->forward_trace = $previous;
+        }
+
+        $trace = $page->context()->headers()['X-Idno-Forward-Trace'][0] ?? '';
+        $this->assertStringContainsString('Forward at ' . __FILE__ . ':', $trace);
+        $this->assertStringContainsString('called by', $trace);
+    }
+
+    public function testAfterResponseWorkIsKeptNotSkippedAndThePageForwards(): void
+    {
+        $page = $this->page();
+        $ran = false;
+
+        try {
+            \Idno\Core\AfterResponse::run($page, Idno::site()->config()->getDisplayURL() . 'done', function () use (&$ran): void {
+                $ran = true;
+            });
+            $this->fail('the page forwards');
+        } catch (PageRedirect $redirect) {
+            $this->assertSame(Idno::site()->config()->getDisplayURL() . 'done', $redirect->location);
+        }
+
+        $this->assertFalse($ran, 'the work waits for the response');
+        $this->assertCount(1, $page->context()->afterResponseWork());
+        ($page->context()->afterResponseWork()[0])();
+        $this->assertTrue($ran);
+    }
+
+    public function testDeniedContentCarriesTheTitle(): void
+    {
+        try {
+            $this->page()->deniedContent('Not for you');
+            $this->fail('refused');
+        } catch (AccessDeniedHttpException $e) {
+            $this->assertSame('Not for you', $e->getMessage());
+        }
+    }
+
+    public function testMarkdownIsWantedFromTheRequestNotTheProcess(): void
+    {
+        $_SERVER['HTTP_ACCEPT'] = 'text/html';
+        $this->assertTrue($this->page('/x', 'GET', [], ['HTTP_ACCEPT' => 'text/markdown'])->wantsMarkdown());
+        $this->assertTrue($this->page('/x?format=markdown')->wantsMarkdown());
+        $this->assertTrue($this->page('/x?_t=md')->wantsMarkdown());
+        $this->assertFalse($this->page('/x', 'GET', [], ['HTTP_ACCEPT' => 'text/html'])->wantsMarkdown());
+
+        $page = $this->page('/x', 'GET', [], ['HTTP_ACCEPT' => 'text/html']);
+        $this->assertFalse($page->wantsMarkdown());
+        $page->context()->setMarkdownSuffix();
+        $this->assertTrue($page->wantsMarkdown());
+        unset($_SERVER['HTTP_ACCEPT']);
+    }
+
+    public function testSendVaryAcceptIsRecordedOnTheContext(): void
+    {
+        $page = $this->page();
+        $page->sendVaryAccept();
+        $page->sendVaryAccept();
+
+        $this->assertSame(['Vary' => ['Accept', 'Accept']], $page->context()->headers());
+        $this->assertFalse($page->context()->replacesHeader('Vary'));
+    }
+
+    public function testSelectMarkdownIfWantedSelectsTheType(): void
+    {
+        $page = $this->page('/x?format=markdown');
+
+        $this->assertTrue($page->selectMarkdownIfWanted());
+        $this->assertSame('markdown', Idno::site()->template()->getTemplateType());
+    }
+
+    public function testDrawMarkdownReturnsTheDocumentAndRecordsItsHeaders(): void
+    {
+        $entity = new \IdnoPlugins\Status\Status();
+        $entity->body = 'Hello';
+        $entity->setOwner(new User());
+        $page = $this->page('/x');
+        Idno::site()->setCurrentPage($page);
+
+        $markdown = $page->drawMarkdown($entity);
+
+        $this->assertIsString($markdown);
+        $this->assertStringStartsWith('---', $markdown);
+        $headers = $page->context()->headers();
+        $this->assertSame(['text/markdown; charset=utf-8'], $headers['Content-Type']);
+        $this->assertSame(['nosniff'], $headers['X-Content-Type-Options']);
+        $this->assertArrayHasKey('Link', $headers, 'a 200 carries the canonical link');
+
+        $missing = $this->page('/x');
+        $missing->setResponse(404);
+        Idno::site()->setCurrentPage($missing);
+        $missing->drawMarkdown($entity);
+        $this->assertArrayNotHasKey('Link', $missing->context()->headers(), 'a 404 carries none');
+        $this->assertSame(404, $missing->response(), 'the process status is not read');
+    }
+
+    public function testTheStatusTheTemplateAsksIsTheControllerPagesNotTheProcess(): void
+    {
+        $page = $this->page();
+        $page->setResponse(404);
+        Idno::site()->setCurrentPage($page);
+        $method = new \ReflectionMethod(Idno::site()->template(), 'pageStatus');
+        $method->setAccessible(true);
+
+        $this->assertSame(404, $method->invoke(Idno::site()->template()));
+
+        Idno::site()->setCurrentPage(new BarePage());
+        $this->assertSame(http_response_code() ?: 200, $method->invoke(Idno::site()->template()));
+    }
+
+    public function testTheRouterDispatchIsNotAvailable(): void
+    {
+        $page = $this->page();
+
+        foreach (['head', 'get', 'post', 'put', 'delete', 'options', 'webmention', 'flushBrowser', 'parseJSONPayload', 'get_xhr', 'post_xhr', 'put_xhr', 'delete_xhr', 'head_xhr'] as $method) {
+            try {
+                $page->$method();
+                $this->fail($method . ' must not run');
+            } catch (\LogicException $e) {
+                $this->assertStringContainsString('Page::' . $method . '()', $e->getMessage());
+            }
+        }
+    }
+
+    public function testIsSecureReadsTheRequest(): void
+    {
+        $this->assertFalse($this->page()->isSecure());
+        $this->assertTrue($this->page('/x', 'GET', [], ['HTTPS' => 'on'])->isSecure());
+        $this->assertTrue($this->page('/x', 'GET', [], ['HTTP_X_FORWARDED_PROTO' => 'HTTPS'])->isSecure());
+        $this->assertTrue($this->page('/x', 'GET', [], ['SERVER_PORT' => '443'])->isSecure());
+        $this->assertFalse($this->page('/x', 'GET', [], ['HTTPS' => 'off', 'SERVER_PORT' => '443'])->isSecure());
+    }
+
+    public function testSslGatekeeperRedirectsWith307WhenTheSiteWantsHttps(): void
+    {
+        $config = Idno::site()->config();
+        $previous = $config->url;
+        $config->url = 'https://' . preg_replace('~^https?://~', '', (string) $previous);
+        try {
+            $page = $this->page('/secret');
+            try {
+                $page->sslGatekeeper();
+                $this->fail('the page redirects');
+            } catch (PageRedirect $redirect) {
+                $this->assertSame(307, $redirect->status);
+                $this->assertStringStartsWith('https://', $redirect->location);
+                $this->assertStringEndsWith('/secret', $redirect->location);
+            }
+            $this->page('/secret', 'GET', [], ['HTTPS' => 'on'])->sslGatekeeper();
+        } finally {
+            $config->url = $previous;
+        }
+        $this->addToAssertionCount(1);
+    }
+
+    public function testWhatWasRegisteredWithTheRouterForTheClassStillApplies(): void
+    {
+        $routes = Idno::site()->routes();
+        $routes->addRoute('/account/controller-page-fixture', ControllerPageRegisteredFixture::class);
+        $routes->addRoute('/admin/controller-page-fixture-admin', ControllerPageRegisteredAdminFixture::class);
+        $routes->addPublicRoute(ControllerPagePublicFixture::class);
+
+        $account = $this->page('/', 'GET', [], [], new SitePage(ControllerPageRegisteredFixture::class));
+        $admin = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name', replaces: ['\\' . ControllerPageRegisteredAdminFixture::class]));
+        $public = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name', replaces: [ControllerPagePublicFixture::class]));
+        $publicByName = $this->page('/', 'GET', [], [], new SitePage(ControllerPagePublicFixture::class));
+        $none = $this->page('/', 'GET', [], [], new SitePage('Some\\New\\Name'));
+
+        $this->assertTrue($routes->isAccountPage($account), 'registered under /account/, the flag left off');
+        $this->assertTrue($routes->isSettingsPage($account));
+        $this->assertFalse($routes->isAccountPage($admin));
+        $this->assertTrue($routes->isSettingsPage($admin), 'a replaced class registered under /admin/');
+        $this->assertTrue($routes->isRoutePublic($public), 'a replaced class a plugin made public');
+        $this->assertTrue($routes->isRoutePublic($publicByName));
+        $this->assertFalse($routes->isAccountPage($none));
+        $this->assertFalse($routes->isSettingsPage($none));
+        $this->assertFalse($routes->isRoutePublic($none));
+    }
+
+    public function testAnApiRequestOnAnAccountPageThatOnlyTheRouterKnowsIsRefused(): void
+    {
+        Idno::site()->routes()->addRoute('/account/controller-page-fixture', ControllerPageRegisteredFixture::class);
+        $page = $this->page('/', 'GET', [], [], new SitePage(ControllerPageRegisteredFixture::class));
+        Idno::site()->setCurrentPage($page);
+        $session = Idno::site()->session();
+        $session->authenticateStatelessly(new User());
+        try {
+            $this->assertTrue((new \Idno\Legacy\LegacyPageLifecycle())->refusesApiRequest($page->context()));
+        } finally {
+            $session->resetStatelessAuthentication();
+        }
+        $this->assertFalse((new \Idno\Legacy\LegacyPageLifecycle())->refusesApiRequest($page->context()), 'not an API request');
+    }
+}
+
+final class ControllerPageRegisteredFixture extends \Idno\Common\Page
+{
+}
+
+final class ControllerPageRegisteredAdminFixture extends \Idno\Common\Page
+{
+}
+
+final class ControllerPagePublicFixture extends \Idno\Common\Page
+{
 }

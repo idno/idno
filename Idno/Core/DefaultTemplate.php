@@ -241,7 +241,7 @@ namespace Idno\Core {
          */
         function sendShellHeaders()
         {
-            $this->sendHeaders($this->shellHeaders(http_response_code() ?: 200));
+            $this->sendHeaders($this->shellHeaders($this->pageStatus()));
         }
 
         /**
@@ -262,6 +262,20 @@ namespace Idno\Core {
             }
 
             return \Idno\Templating\ShellHeaders::for($type, $status, is_string($canonical) ? $canonical : null, $this->settingsShellAsJsonp);
+        }
+
+        /**
+         * The status the page being drawn is answered with: the page's own for a page a controller serves (the process's status
+         * is not set for it), else the one PHP has.
+         */
+        private function pageStatus(): int
+        {
+            $page = \Idno\Core\Idno::site()->currentPage();
+            if ($page instanceof \Idno\Legacy\ControllerPage) {
+                return $page->response();
+            }
+
+            return http_response_code() ?: 200;
         }
 
         private function sendHeaders(array $headers)
@@ -320,7 +334,7 @@ namespace Idno\Core {
          */
         function sendMarkdownHeaders()
         {
-            $status    = http_response_code() ?: 200;
+            $status    = $this->pageStatus();
             $entity    = $this->vars['markdown_entity'] ?? null;
             $canonical = $status === 200 ? ($entity instanceof \Idno\Common\Entity ? $entity->getURL() : $this->markdownPageAddress()) : null;
             $this->sendHeaders(\Idno\Templating\ShellHeaders::for('markdown', $status, is_string($canonical) ? $canonical : null));

@@ -213,4 +213,45 @@ final class PageContextTest extends TestCase
         $this->assertSame('/tag/a%2Bb', $this->context(Request::create('/tag/a%2Bb'))->requestUri());
         $this->assertSame('/search/?q=a+b&x=1', $this->context(Request::create('/search/?q=a+b&x=1'))->requestUri());
     }
+
+    public function testRequestFieldAndDataFieldAreSeparate(): void
+    {
+        $context = $this->context(Request::create('/x?q=query', 'POST', ['p' => 'post', 'json' => '{"j":"json","q":"json"}']));
+        $context->setInput('s', 'set');
+
+        $this->assertSame('query', $context->requestField('q'));
+        $this->assertSame('post', $context->requestField('p'));
+        $this->assertNull($context->requestField('s'));
+        $this->assertSame('set', $context->dataField('s'));
+        $this->assertSame('json', $context->dataField('j'));
+        $this->assertSame('json', $context->dataField('q'), 'the data is not the request\'s');
+        $this->assertNull($context->dataField('nope'));
+    }
+
+    public function testAMethodOverrideDoesNotHideTheBodyOfARealPost(): void
+    {
+        $request = Request::create('/x', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HTTP_METHOD_OVERRIDE' => 'GET'], '{"a":"body"}');
+
+        $this->assertSame('body', $this->context($request)->input('a'), 'the real method is what decides');
+    }
+
+    public function testMarkdownSuffixRedirectAndAfterResponseWork(): void
+    {
+        $context = $this->context(Request::create('/x'));
+        $this->assertFalse($context->markdownSuffixRequested());
+        $this->assertNull($context->redirect());
+        $this->assertSame([], $context->afterResponseWork());
+
+        $context->setMarkdownSuffix();
+        $redirect = new \Idno\Http\Page\PageRedirect('/somewhere');
+        $context->setRedirect($redirect);
+        $work = static fn () => 1;
+        $context->afterResponse($work);
+
+        $this->assertTrue($context->markdownSuffixRequested());
+        $this->assertSame($redirect, $context->redirect());
+        $this->assertSame([$work], $context->afterResponseWork());
+        $this->assertSame(302, $redirect->status);
+        $this->assertNull($redirect->body);
+    }
 }

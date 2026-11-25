@@ -59,8 +59,9 @@ namespace Idno\Common {
         private $assets = array();
 
         /**
-         * The name of the page class this page stands for: what the page's body class and the `page/get` event's `page_class`
-         * are made from. A page is its own class; a page a controller serves says which legacy page it replaces.
+         * The name of the page class this page stands for: what the page's body class is made from (and what the controller
+         * wiring gives `page/get` as its `page_class`; a legacy page's event carries `get_called_class()`, the same for a page that
+         * is its own class). A page a controller serves says which legacy page it replaces.
          */
         function pageClassName(): string
         {

@@ -15,7 +15,7 @@ final class SitePage
     private static array $cache = [];
 
     /**
-     * @param string       $name                The legacy page class whose page this draws (the body class, `page/get`'s `page_class`)
+     * @param string       $name                The legacy page class whose page this draws (the body class and `page/get`'s `page_class`: the controller wiring gives the event this name)
      * @param list<string> $replaces            The shell class whose legacy routes this controller shadows (empty when the class was deleted)
      * @param bool         $publicOnPrivateSite The page is served to a visitor on a walled garden site
      * @param bool         $accountPage         A page under /account/ (closed to API requests)
@@ -35,7 +35,7 @@ final class SitePage
 
     /**
      * The attribute of a controller: the method's, else the class's. Takes an invokable object, a `Class::method` string, a
-     * class name (invokable) or an `[object|class, method]` array; null for anything else (a closure, an unknown class).
+     * class name (invokable) or an `[object|class, method]` array; null for anything else (a closure, an unknown class). A `Class::method` whose method does not exist has the class's attribute.
      */
     public static function of(object|string|array $controller): ?self
     {

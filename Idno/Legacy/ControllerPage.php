@@ -12,6 +12,8 @@ use Idno\Entities\User;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
+use Idno\Markdown\MarkdownRequest;
+use Idno\Templating\ShellHeaders;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
@@ -25,6 +27,11 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  *
  * It does not run Component's constructor (no init(), no event hooks, no routes): building one neither makes it the
  * current page nor triggers `page/ready`; the controller's caller does that.
+ *
+ * No inherited member may send a header, set the process's status, echo or exit for a page a controller serves. Each member of
+ * `Page` that would is overridden here to work from the request and record its effect on the context (headers, status, a
+ * redirect), or throws a \LogicException naming the method: `get()`, `post()` and the like are the router's dispatch, which a
+ * controller replaces. `Tests\Kernel\ControllerPageMembersTest` walks the members of `Page` and fails for a new one that is neither.
  */
 final class ControllerPage extends Page
 {
@@ -54,13 +61,39 @@ final class ControllerPage extends Page
         return $this->context->page()->name;
     }
 
+    /**
+     * Answers as `Page::getInput()` does, line for line: the request's form field (else a non-null default) goes through the
+     * filter, and only when that is null is what the page holds (setInput(), a JSON payload) looked at; so a non-null default
+     * hides the page's own values. The filter runs again on the result when the first answer was empty.
+     */
     public function getInput($name, $default = null, ?callable $filter = null)
     {
         if (empty($name)) {
             return null;
         }
-        $value = $this->context->input((string) $name, $default);
+        $value = null;
+
+        // What `Input::getInput()` answered from `$_REQUEST`
+        $request = $this->context->requestField((string) $name);
+        if ($request === null && $default !== null) {
+            $request = $default;
+        }
         if ($filter !== null) {
+            $request = call_user_func($filter, $name, $request);
+        }
+
+        if ($request !== null) {
+            $value = $request;
+        } else {
+            $data = $this->context->dataField((string) $name);
+            if ($data !== null) {
+                $value = $data;
+            }
+        }
+        if ($value === null && $default !== null) {
+            $value = $default;
+        }
+        if ($filter !== null && empty($request)) {
             $value = call_user_func($filter, $name, $value);
         }
 
@@ -164,9 +197,15 @@ final class ControllerPage extends Page
         return $this->referrer();
     }
 
+    /**
+     * The old algorithm, quirks included: ranges are keyed as written (a space after a comma stays in the key), a tie is broken by
+     * taking 1 off the quality (the old code wrote that as the octal literal `000000000001`) and the first of the ordered ranges
+     * decides. The header is the request's `Accept`, else the one a web server passed on as `REDIRECT_HTTP_ACCEPT`.
+     */
     public function isAcceptedContentType($contentType, $ignore_priority = false)
     {
-        $accept = (string) $this->context->request()->headers->get('Accept', '');
+        $request = $this->context->request();
+        $accept = (string) ($request->headers->get('Accept') ?? $request->server->get('REDIRECT_HTTP_ACCEPT', ''));
         if ($accept === '') {
             return false;
         }
@@ -180,7 +219,7 @@ final class ControllerPage extends Page
                 [$range, $q] = explode(';q=', $range);
             }
             while (in_array($q, $types)) {
-                $q -= 0.000000000001;
+                $q -= 1;
             }
             $types[$range] = $q;
         }
@@ -209,11 +248,14 @@ final class ControllerPage extends Page
     {
     }
 
+    /**
+     * @param string $title what the refusal page is titled (the exception's message)
+     */
     public function deniedContent($title = '')
     {
         $this->context->setStatus(403);
 
-        throw new AccessDeniedHttpException();
+        throw new AccessDeniedHttpException((string) $title);
     }
 
     public function noContent()
@@ -231,11 +273,19 @@ final class ControllerPage extends Page
     }
 
     /**
-     * Where a legacy page sends a Location header and exits, this throws PageRedirect with the location the page would have sent
-     * (the template type, when it is not the default, carried in `_t`).
+     * Where a legacy page sends a `Location` header and exits, this throws a PageRedirect that the response is made from (the
+     * template type, when it is not the default, carried in `_t`); `forward($location, false)`, which sends the header and goes
+     * on, records the redirect on the context and returns, and the response carries it. An API request is not redirected: it
+     * gets the JSON `{"location": ...}` (with the trace when `forward_trace` is set), as it got from the legacy page. The
+     * session is closed first when the page ends, as `finishEarly()` did. A page that cannot forward (a POST, PUT or DELETE sent
+     * as an XHR request) does nothing, as before.
      */
     public function forward(string $location = '', bool $exit = true)
     {
+        $request = $this->context->request();
+        if ($this->context->isXhr() && in_array($request->getRealMethod(), ['POST', 'PUT', 'DELETE'], true)) {
+            return;
+        }
         $site = Idno::site();
         if (empty($location)) {
             $location = $site->config()->getDisplayURL();
@@ -244,8 +294,41 @@ final class ControllerPage extends Page
         if ($template->getTemplateType() != 'default') {
             $location = $template->getURLWithVar('_t', $template->getTemplateType(), $location);
         }
+        if ($exit) {
+            $site->session()->finishEarly();
+        }
 
-        throw new PageRedirect((string) $location);
+        $trace = null;
+        if (!empty($site->config()->forward_trace)) {
+            $frames = debug_backtrace();
+            if (!empty($frames[1])) {
+                $trace = '';
+                if (!empty($frames[0])) {
+                    $trace .= "Forward at {$frames[0]['file']}:{$frames[0]['line']}";
+                }
+                $file = !empty($frames[1]['file']) ? $frames[1]['file'] : 'UNKNOWN';
+                $line = !empty($frames[1]['line']) ? $frames[1]['line'] : 'xxx';
+                $trace .= ", called by {$frames[1]['function']} in {$file}:{$line}";
+                $site->logging()->debug($trace);
+            }
+        }
+
+        if ($site->session()->isAPIRequest()) {
+            $answer = ['location' => $location];
+            if ($trace !== null) {
+                $answer['trace'] = $trace;
+            }
+            $redirect = new PageRedirect((string) $location, (string) json_encode($answer), $this->response());
+        } else {
+            if ($trace !== null) {
+                $this->context->addHeader('X-Idno-Forward-Trace', $trace);
+            }
+            $redirect = new PageRedirect((string) $location);
+        }
+        if ($exit) {
+            throw $redirect;
+        }
+        $this->context->setRedirect($redirect);
     }
 
     /**
@@ -254,5 +337,149 @@ final class ControllerPage extends Page
     public function exception($e)
     {
         throw $e;
+    }
+
+    /**
+     * Whether the request was made over HTTPS, as `Page::isSSL()` decides from the process's request (the server's HTTPS
+     * variable, the port, `X-Forwarded-Proto`), read from this page's request.
+     */
+    public function isSecure(): bool
+    {
+        $server = $this->context->request()->server;
+        $https = $server->get('HTTPS');
+        if ($https !== null) {
+            if ($https == '1' || strtolower((string) $https) === 'on') {
+                return true;
+            }
+        } elseif ($server->get('SERVER_PORT') == '443') {
+            return true;
+        }
+
+        return strtolower((string) $server->get('HTTP_X_FORWARDED_PROTO', '')) === 'https';
+    }
+
+    /**
+     * Where a legacy page redirects with a 307 (so that a POST is kept) and exits, this throws that redirect.
+     */
+    public function sslGatekeeper()
+    {
+        $config = Idno::site()->config();
+        if (!$this->isSecure() && empty($config->ignore_ssl_gatekeeper) && $config->hasSSL()) {
+            throw new PageRedirect(str_replace('http://', 'https://', $this->currentUrl()), null, 307);
+        }
+    }
+
+    public function wantsMarkdown()
+    {
+        return MarkdownRequest::wanted(
+            $this->context->markdownSuffixRequested(),
+            $this->getInput('format'),
+            $this->getInput('_t'),
+            $this->context->request()->headers->get('Accept')
+        );
+    }
+
+    public function sendVaryAccept()
+    {
+        $this->context->addHeader('Vary', 'Accept', false);
+    }
+
+    /**
+     * Draws the Markdown form of an entity and RETURNS it (a legacy page echoed it and exited): the headers of a Markdown
+     * document are recorded on the context for the response.
+     *
+     * @return string|false false when the site has no `markdown` template type
+     */
+    public function drawMarkdown(Entity $object)
+    {
+        $template = Idno::site()->template();
+        if (!$template->setTemplateType('markdown')) {
+            return false;
+        }
+        $drawn = $template->__(['title' => $object->getTitle(), 'object' => $object, 'markdown_entity' => $object]);
+        $markdown = $drawn->drawPageWithoutSideEffects(false);
+        foreach ($drawn->shellHeaders($this->response()) as [$name, $value]) {
+            $this->context->addHeader($name, $value, ShellHeaders::replaces($name));
+        }
+
+        return (string) $markdown;
+    }
+
+    // The router's dispatch (the legacy handlers' entry points). A controller is its own handler: none of these may run on a
+    // page it serves, and they would read the process's request and send headers.
+
+    public function head_xhr()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function head()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function parseJSONPayload()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function get_xhr()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function get($params = array())
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function post_xhr()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function post()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function options()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function put_xhr()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function put()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function delete_xhr()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function delete()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function webmention()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function flushBrowser()
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    private function unavailable(string $method): never
+    {
+        throw new \LogicException('Page::' . $method . '() is not available on a page a controller serves: the controller answers, from the request.');
     }
 }

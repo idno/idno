@@ -19,6 +19,13 @@ namespace Idno\Core {
          */
         static function run(\Idno\Common\Page $page, string $location, callable $work): never
         {
+            if ($page instanceof \Idno\Legacy\ControllerPage) {
+                // A controller answers once, with a Response: the work runs when the kernel terminates, after it has been sent.
+                $page->context()->afterResponse(\Closure::fromCallable($work));
+                $page->forward($location);
+                // (a page that cannot forward, an XHR POST, has nothing to send: the work still runs, behind an empty answer)
+                throw new \Idno\Http\Page\PageRedirect($location, '', 200);
+            }
             session_write_close();
             $page->forward($location, false);
 
