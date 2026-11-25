@@ -149,9 +149,10 @@ namespace Tests\Characterisation {
 
         public function testAnXhrHeadHasTheRoutersLinesToo(): void
         {
-            // (the router answers an XHR HEAD with its own headers as it does a GET, and the page sends the same ones it does for a GET)
+            // (the router answers an XHR HEAD with its own headers as it does a GET, and the page sends the same ones it does for a GET: the
+            // home page is a controller's now, and answers an XHR request with the headers of the same request that is not XHR)
             $this->checkRows([
-                ['HEAD', '/', self::XHR, 200, 'xhr', 'newest'],
+                ['HEAD', '/', self::XHR, 200, 'session', 'newest'],
                 ['HEAD', '/robots.txt', self::XHR, 200, 'xhr', 'any'],
             ]);
         }
@@ -172,14 +173,15 @@ namespace Tests\Characterisation {
 
         public function testAnXhrGetOfThePortedPages(): void
         {
-            // Today the router answers an XHR GET of a page with its own headers: a 1997 `Expires`, two `Cache-Control` lines and `Last-Modified`
-            // (now, or the page's own when it sets one). These will become the headers of the same request that is not XHR: the session's.
+            // The router answers an XHR GET of a legacy page with its own headers: a 1997 `Expires`, two `Cache-Control` lines and `Last-Modified`
+            // (now, or the page's own when it sets one). The pages a controller serves (the home page and its streams) send the headers of the
+            // same request that is not XHR: the session's. The others become so when they are served by controllers.
             $x = 'xhr';
             $this->checkRows([
-                ['GET', '/', self::XHR, 200, $x, 'newest'],
-                ['GET', '/?_t=json', self::XHR, 200, $x, 'newest'],
-                ['GET', '/?_t=rss', self::XHR, 200, $x, 'newest'],
-                ['GET', '/content/all', self::XHR, 200, $x, 'newest'],
+                ['GET', '/', self::XHR, 200, 'session', 'newest'],
+                ['GET', '/?_t=json', self::XHR, 200, 'session', 'newest'],
+                ['GET', '/?_t=rss', self::XHR, 200, 'session', 'newest'],
+                ['GET', '/content/all', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/feed.xml', self::XHR, 200, $x, 'newest'],
                 ['GET', '/tag/books', self::XHR, 200, $x, 'newest'],
                 ['GET', '/search?q=a', self::XHR, 302, $x, 'any'],

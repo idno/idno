@@ -60,7 +60,8 @@ final class PageContractTest extends PrivateSiteTestCase
         $this->assertSame(200, $response->status);
         $this->assertSame(['page/ready', 'page/head', 'page/get'], array_column($events, 'event'));
         foreach ($events as $event) {
-            $this->assertSame('Idno\Pages\Homepage', $event['current']);
+            // a controller serves the home page: its current page is the controller page, which stands for the legacy class
+            $this->assertSame('Idno\Legacy\ControllerPage', $event['current']);
             $this->assertSame('idno_pages_homepage', $event['body_class']);
             $this->assertSame('default', $event['type']);
             $this->assertFalse($event['xhr']);
@@ -129,7 +130,8 @@ final class PageContractTest extends PrivateSiteTestCase
 
             $this->assertSame(['page/ready', 'page/head', 'page/get'], array_column($events, 'event'), $path);
             $this->assertSame($class, $events[2]['page_class'], $path);
-            $this->assertSame($class, $events[2]['current'], $path);
+            // the home page's streams are a controller's: its current page is the controller page
+            $this->assertSame($path === '/content/all' ? 'Idno\Legacy\ControllerPage' : $class, $events[2]['current'], $path);
         }
     }
 
@@ -168,7 +170,7 @@ final class PageContractTest extends PrivateSiteTestCase
             $this->assertNull($response->header('X-Idno-Test-Page-Head'), $path);
             $events = array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile)))));
             $this->assertSame(['page/ready'], array_column($events, 'event'), $path);
-            $this->assertSame($class, $events[0]['current'], $path);
+            $this->assertSame($path === '/' ? 'Idno\Legacy\ControllerPage' : $class, $events[0]['current'], $path);
         }
     }
 

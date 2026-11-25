@@ -6,72 +6,29 @@
 
 namespace Idno\Pages {
 
-    use Idno\Entities\User;
-    use Idno\Http\Controller\Home\HomeStream;
+    use Idno\Core\Idno;
+    use Idno\Http\Controller\Home\HomePages;
+    use Idno\Http\Page\PageContext;
+    use Symfony\Component\HttpFoundation\Response;
 
     /**
-     * Default class to serve the homepage
+     * The page of the site's home: a deprecated shell, removed in 3.0.
+     *
+     * The home page is served by \Idno\Http\Controller\HomepageController. This class has no logic of its own: it hands its requests to the
+     * same service (\Idno\Http\Controller\Home\HomePages), so a plugin's page that extends it, a route a plugin registered for it and the
+     * pages that build one (the feed, the tag search) are served as before, and logging a deprecation when a subclass is.
+     *
+     * @deprecated Use \Idno\Http\Controller\HomepageController (the route `idno_home`), or extend \Idno\Common\Page; removed in 3.0.
      */
-    class Homepage extends \Idno\Common\Page
+    class Homepage extends \Idno\Legacy\PageShell
     {
+        protected const SHELL = self::class;
 
         // Handle GET requests to the homepage
 
         function getContent()
         {
-
-            $stream         = \Idno\Core\Idno::container()->get(HomeStream::class);
-            $query          = $this->getInput('q');
-            $offset         = (int)$this->getInput('offset');
-
-            // Check for an empty site
-            if (!$stream->siteHasUsers()) {
-                $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'begin/');
-            }
-
-            // Set the homepage owner for single-user sites
-            if (!$this->getOwner() && ($owner = $stream->singleUserOwner())) {
-                $this->setOwner($owner);
-            }
-
-            // The friendly content-specific URL (if any) and the request's own types
-            $resolved       = $stream->types($this->arguments[0] ?? null, $query, $this->getInput('types'));
-            $friendly_types = $resolved['friendly'];
-
-            $page   = $stream->page($resolved['types'], $query, $offset);
-            $feed   = $page['items'];
-            $count  = $page['count'];
-            $create = $stream->creatableTypes();
-            $titles = $stream->titles();
-
-            // If we have a feed, set our last modified flag to the time of the latest returned entry
-            if (!empty($feed)) {
-                if (is_array($feed)) {
-                    $feed = array_filter($feed);
-                    $this->setLastModifiedHeader(reset($feed)->updated);
-                }
-            }
-
-            $t = \Idno\Core\Idno::site()->template();
-            $t->__(
-                array(
-
-                'title'       => $titles['title'],
-                'description' => $titles['description'],
-                'content'     => $friendly_types,
-                'body'        => $t->__(
-                    array(
-                    'items'        => $feed,
-                    'contentTypes' => $create,
-                    'offset'       => $offset,
-                    'count'        => $count,
-                    'subject'      => $query,
-                    'content'      => $friendly_types
-                    )
-                )->draw('pages/home'),
-
-                )
-            )->drawPage();
+            return $this->delegate(fn (PageContext $page): Response => !empty($page->arguments()[0]) ? Idno::container()->get(HomePages::class)->content($page, $page->arguments()[0]) : Idno::container()->get(HomePages::class)->home($page));
         }
 
         /**
@@ -79,23 +36,7 @@ namespace Idno\Pages {
          */
         function webmentionContent($source, $target, $source_response, $source_mf2)
         {
-            // if this is a single-user site, let's forward on the root mention
-            // to their user page
-
-            \Idno\Core\Idno::site()->logging()->info("received homepage mention from $source");
-
-            if (\Idno\Core\Idno::site()->config()->single_user) {
-                $user = \Idno\Entities\User::getOne(['admin' => true]);
-                if ($user) {
-                    return \Idno\Core\Idno::container()->get(HomeStream::class)->profilePageWebmention($user, $source, $target, $source_response, $source_mf2);
-                } else {
-                    \Idno\Core\Idno::site()->logging()->debug("query for an admin-user failed to find one");
-                }
-            } else {
-                \Idno\Core\Idno::site()->logging()->debug("disregarding mention to multi-user site");
-            }
-
-            return false;
+            return $this->delegateWebmention(fn (): bool => Idno::container()->get(HomePages::class)->receiveWebmention($source, $target, $source_response, $source_mf2));
         }
 
     }

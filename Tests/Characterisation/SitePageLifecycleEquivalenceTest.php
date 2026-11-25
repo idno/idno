@@ -134,21 +134,24 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         $this->assertSameAnswer('OPTIONS', skip: ['content_type']);
     }
 
-    public function testAnXhrRequestFiresTheSameEventsAndGetsTheSameRouterHeaders(): void
+    public function testAnXhrRequestFiresTheSameEventsAndGetsTheHeadersOfARequestThatIsNotXhr(): void
     {
         $headers = ['X-Requested-With' => 'XMLHttpRequest'];
         $this->assertSameAnswer('GET', $headers, skip: ['content_type']);
         $this->assertSameAnswer('HEAD', $headers, skip: ['content_type']);
 
+        // The one difference, on purpose: the legacy router sent an XHR GET its own caching lines, a controller's page sends the lines of the
+        // same request that is not XHR.
         $legacy = $this->site()->request('GET', self::LEGACY, $headers);
         $fixture = $this->site()->request('GET', self::FIXTURE, $headers);
-        $this->assertSame($legacy->lines('Expires'), $fixture->lines('Expires'));
-        $this->assertSame($legacy->lines('Pragma'), $fixture->lines('Pragma'));
-        $this->assertCount(1, $legacy->lines('Last-Modified'));
-        $this->assertCount(1, $fixture->lines('Last-Modified'));
-        // line by line, as sent: the router's two lines, and no third a response computes
+        $plain = $this->site()->request('GET', self::FIXTURE);
+        $this->assertSame(['Mon, 26 Jul 1997 05:00:00 GMT'], $legacy->lines('Expires'));
         $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $legacy->lines('Cache-Control'));
-        $this->assertSame($legacy->lines('Cache-Control'), $fixture->lines('Cache-Control'));
+        foreach (['Expires', 'Pragma', 'Last-Modified', 'Cache-Control'] as $name) {
+            $this->assertSame($plain->lines($name), $fixture->lines($name), $name);
+        }
+        $this->assertSame(['no-store, no-cache, must-revalidate'], $fixture->lines('Cache-Control'));
+        $this->assertSame([], $fixture->lines('Last-Modified'));
     }
 
     public function testAMethodsRefusalAndEventsAreTheSameOnAWalledGarden(): void

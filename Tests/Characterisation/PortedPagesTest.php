@@ -57,8 +57,9 @@ namespace Tests\Characterisation {
                 ['GET', '/', ['Accept' => 'application/json'], 200, 'application/json', null, $json, true, $std, true],
                 ['GET', '/', ['Accept' => 'application/activity+json'], 200, 'application/activity+json', null, 'https://www.w3.org/ns/activitystreams', true, $std, false],
                 ['GET', '/?q=fixture', [], 200, 'text/html', null, $html, true, $std, true],
-                // An XHR GET is the HTML page with Toro's own Expires date and a longer Cache-Control, not JSON.
-                ['GET', '/', $xhr, 200, 'text/html', null, $html, true, 'xhr', true],
+                // An XHR GET is the HTML page, not JSON, with the headers of a GET that is not XHR: a controller serves it (the legacy router
+                // gave an XHR request Toro's own Expires date and a longer Cache-Control).
+                ['GET', '/', $xhr, 200, 'text/html', null, $html, true, $std, true],
                 // A request whose Host header is not a host name is served as the home page.
                 ['GET', '/', ['Host' => 'bad host!'], 200, 'text/html', null, $html, true, $std, true],
                 // A POST without a form token is a redirect to the home page; PUT and DELETE are a 500 page and PATCH a 404 page.

@@ -52,7 +52,8 @@ namespace Tests\Characterisation {
 
         public function testLegacyPageHasNoSymfonyDefaultHeaders(): void
         {
-            $r = $this->site()->request('GET', '');
+            $this->user();
+            $r = $this->site()->request('GET', 'profile/testuser');
 
             $this->assertSame('no-store, no-cache, must-revalidate', $r->header('Cache-Control'));
             $this->assertNull($r->header('X-Robots-Tag'));
@@ -60,10 +61,10 @@ namespace Tests\Characterisation {
 
         public function testHeaderSetIsUnchangedForLegacyPages(): void
         {
-            // The home page sends Last-Modified only when it lists a post: this test must not depend on what an
-            // earlier test left on the site.
+            // A profile is a legacy page (the home page is a controller's: testHeaderSetOfAPortedPage). It sends
+            // Last-Modified only when it lists a post: this test must not depend on what an earlier test left on the site.
             $this->createStatus($this->user(), 'Routing test ' . bin2hex(random_bytes(6)));
-            $r = $this->site()->request('GET', '');
+            $r = $this->site()->request('GET', 'profile/testuser');
 
             $this->assertSame(200, $r->status);
             $this->assertSame(
@@ -86,6 +87,34 @@ namespace Tests\Characterisation {
             $this->assertSame('https://idno.co', $r->header('X-Powered-By'));
         }
 
+        public function testHeaderSetOfAPortedPage(): void
+        {
+            // The home page is a controller's: it sends the header names and the Cache-Control it sent as a legacy page.
+            $this->createStatus($this->user(), 'Routing test ' . bin2hex(random_bytes(6)));
+            $r = $this->site()->request('GET', '');
+
+            $this->assertSame(200, $r->status);
+            $this->assertSame(
+                [
+                    'access-control-allow-origin',
+                    'cache-control',
+                    'content-type',
+                    'expires',
+                    'last-modified',
+                    'link',
+                    'pragma',
+                    'set-cookie',
+                    'x-clacks-overhead',
+                    'x-idno-build-fingerprint',
+                    'x-powered-by',
+                ],
+                $this->applicationHeaderNames($r)
+            );
+            $this->assertSame('no-store, no-cache, must-revalidate', $r->header('Cache-Control'));
+            $this->assertNull($r->header('X-Robots-Tag'));
+            $this->assertSame('https://idno.co', $r->header('X-Powered-By'));
+        }
+
         public function testAllMethodsReachLegacy(): void
         {
             $expected = ['HEAD' => 404, 'POST' => 404, 'PUT' => 404, 'DELETE' => 404, 'PATCH' => 404, 'OPTIONS' => 404];
@@ -100,10 +129,10 @@ namespace Tests\Characterisation {
 
         public function testHeadRequestReachesLegacy(): void
         {
-            // Last-Modified is the time of the newest post on the home page: there must be one.
+            // Last-Modified is the time of the newest post on the profile page: there must be one.
             $this->createStatus($this->user(), 'Routing test ' . bin2hex(random_bytes(6)));
-            $get  = $this->site()->request('GET', '');
-            $head = $this->site()->request('HEAD', '');
+            $get  = $this->site()->request('GET', 'profile/testuser');
+            $head = $this->site()->request('HEAD', 'profile/testuser');
 
             $this->assertSame(200, $head->status);
             $this->assertSame('', $head->body);
@@ -113,7 +142,8 @@ namespace Tests\Characterisation {
 
         public function testOptionsReachesLegacy(): void
         {
-            $r = $this->site()->request('OPTIONS', '');
+            $this->user();
+            $r = $this->site()->request('OPTIONS', 'profile/testuser');
 
             $this->assertSame(204, $r->status);
             $this->assertSame('GET, POST, HEAD, OPTIONS, PUT, DELETE', $r->header('Access-Control-Allow-Methods'));

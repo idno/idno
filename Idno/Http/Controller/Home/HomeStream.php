@@ -29,6 +29,22 @@ interface HomeStream
     public function singleUserOwner(): ?User;
 
     /**
+     * Whether the site is configured as a single-user site (a mention of its root is then the owner's).
+     */
+    public function isSingleUser(): bool;
+
+    /**
+     * The first administrator the site has, null when it has none. Unlike `singleUserOwner()` it does not insist on exactly one and does
+     * not look at the site's kind: it is what a webmention to the root of a single-user site is passed on to.
+     */
+    public function firstAdministrator(): ?User;
+
+    /**
+     * Where a visitor to a site with no user is sent: the onboarding's address, the site's own address followed by `begin/`.
+     */
+    public function beginUrl(): string;
+
+    /**
      * The content types a request asks the home page to list.
      *
      * With a friendly path (`/content/note/article`: its part after the root, `all` for every type) the types it names, and the names

@@ -337,14 +337,16 @@ Idno/
                                BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
                                PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener, PageRenderer, PageDrawer,
                                DrawnPage: what a controller that draws a site page carries, the lifecycle run around it and
-                               how it draws, see "Legacy pages and routes"); Controller/Home/ (HomeStream, the
-                               interface of what the home page lists, see "Querying entities in new code")
+                               how it draws, see "Legacy pages and routes"); Controller/ (the controllers of site pages:
+                               HomepageController, with Home/HomePages, the home page's one implementation, and HomeStream, the
+                               interface of what it lists, see "Querying entities in new code")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
   Legacy/                      Shims between the kernel and the legacy application (see below), among them
                                MessengerEventQueue (the site's queue), LegacyEventTrigger / LegacyUserContext and
-                               LegacyHeaderReconciler (with HeaderQueue and PhpHeaders: the headers of a site page)
+                               LegacyHeaderReconciler (with HeaderQueue and PhpHeaders: the headers of a site page) and
+                               PageShell (the base of the deprecated shells of the pages controllers serve)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
   Core/                        Legacy singletons & services (Idno, Config, Session, PageHandler, Webmention, ...)
@@ -615,7 +617,9 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    requests only, and only when the kernel booted the legacy application) begins the page as `Page::init()` did, refuses
    an API request on an account page and a visitor of a private site, and enters it (see "Legacy pages and routes"). The controller
    answers with a Response it draws through `Idno\Http\Page\PageRenderer` (the page in its shell, with the headers of its template
-   type and the ones its draw sent, the 404, 410, 403 and 500 pages, a forward), never `drawPage()`, which echoes and exits.
+   type and the ones its draw sent, the 404, 410, 403 and 500 pages, a forward), never `drawPage()`, which echoes and exits. The home page is the first
+   real site page: `Idno\Http\Controller\HomepageController` serves `/` and `/content/<types>` (GET, HEAD, OPTIONS), with `Idno\Pages\Homepage`
+   a deprecated shell behind it (see "Legacy pages and routes: shells").
 5. `LegacyController` returns an `Idno\Legacy\LegacyResponse`: a streamed response that
    sends no status line and no headers of its own. Symfony's response listeners still
    modify the object (they set a charset, and `X-Robots-Tag: noindex` in debug mode), but
@@ -869,6 +873,30 @@ catch-all described above. Do not add new ones; add a controller instead, except
 route" says an endpoint must stay a legacy page (a logged-in user, a permission check or a
 state-changing browser request): the admin page `/admin/legacytables` is one, for that reason.
 
+**Shells.** A page whose logic moved to a service that a controller calls is kept for one major version as a deprecated SHELL: a class under `Idno\Pages\`
+that extends `Idno\Legacy\PageShell`, is marked `@deprecated`, and has no logic of its own. Each ported page has ONE implementation, in the service the controller
+calls; a shell declares only `getContent()`, `postContent()`, `putContent()`, `deleteContent()` and `webmentionContent()` (whichever it really implemented) and its
+`SHELL` constant (its own class), and each handler is one `return $this->delegate(...)` (or `$this->delegateWebmention(...)`) of that service. So a third-party
+page that extends a shell, a plugin's `hijackRoute()` or `addRoute()` of its route and the core pages that build one (`Feed`, `Search\Tags` build a `Homepage`) still
+serve the page, through the same service, and nothing has to be kept in sync. The list of shells is `Tests/Unit/Http/PageShellsTest::SHELLS` (it scans `Idno/Pages/`
+for classes that extend `PageShell`, and holds each to the rule); today it is `Idno\Pages\Homepage`. Shells are removed in 3.0.
+- `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
+  request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
+  holds: its `arguments`, the inputs it was given with `setInput()`, its owner, entity, permalink flag and status, and `SitePage(name: static::class)` (so the body class
+  and the page the events name are the subclass's). A `ControllerPage` over the context is the current page while `$serve` runs, and the shell again after (what
+  the page learned, its owner and status, is copied back). The `Response` is written as a legacy page writes one: the headers the page asked for are put on it, the
+  header rule (`LegacyHeaderReconciler::reconcile()`) keeps the session's caching lines, `http_response_code()`, each header with `header()` (through `PhpHeaders`),
+  and the body is echoed; a response that has a `Location` (the redirect of an empty site) ends the page as `forward()` did. What `$serve` throws is the legacy
+  exit: a `PageRedirect` is `$this->forward()`, `AccessDeniedHttpException` `deniedContent()`, `NotFoundHttpException` `noContent()` and `GoneHttpException`
+  `goneContent()`, run with the shell as the current page.
+- Constructing or serving a SUBCLASS of a shell (not the shell itself) logs one line a process, through the site's logger at warning level: `Deprecated: <class>
+  extends <shell>, which is a deprecated shell ...`, naming `docs/developers/plugins/upgrading.md`. The bundled StaticPages plugin's home page
+  (`IdnoPlugins\StaticPages\Pages\Homepage`) extends the home page's shell and hijacks the root, so a site with a static home page logs it too: the router keeps
+  serving it (`LegacyRouteOverride`: the plugin's page is not one the controller replaces), through the shell, and `StaticPagesHomepageTest` pins it.
+- Tests: `Tests/Kernel/PageShellTest` (in subprocesses on a private site: what the shell hands the service and what it writes, the four exits, the deprecation
+  line once a process), `Tests/Characterisation/HomepageShellTest` (a hijacked subclass and one on its own route over HTTP, the headers, a malformed Host, the
+  shell's page byte for byte the controller's), `Tests\Fixtures\ThirdPartyHomepage` (`IDNO_TEST_CLAIM_ROUTES=homepage-hijack|homepage-route`).
+
 A page that a controller serves (a site page: a controller method or class carrying `#[Idno\Http\Page\SitePage]`, whose `replaces` lists the page
 class core still registers for the path, if any) and the legacy router share the site's addresses:
 
@@ -1045,8 +1073,9 @@ test fixtures is routed to a controller through them yet:
   2. The `PageContext` is built and attached to the request, and `begin()` runs (`Page::init()`: the `defaultType` of the attribute set as
      input `_t` when the request names none, the template type from `_t` (`TypeChain::requested()`, requestable and existing types only), the
      current page made a `ControllerPage` whose XHR flag is still off, `$_SERVER['HTTP_REFERER']` made non-empty, `Idno::embedded()`, `page/ready`; PHP's own
-     `X-Powered-By` is removed while headers are not sent, because the response adds the page's beside it). Then, for an XHR request (any method but
-     OPTIONS, as the router's `<method>_xhr` handlers were), what the legacy router sent: `Content-Type: application/json` as a default only (the
+     `X-Powered-By` is removed while headers are not sent, because the response adds the page's beside it). Then, for an XHR request that is not a GET, a HEAD or an OPTIONS (the router's
+     `<method>_xhr` handlers sent them; an XHR GET and the HEAD that answers like it get the headers of the same request that is not XHR, which is a stated
+     difference from the legacy router, pinned in `CachingHeadersTest`, `PortedPagesTest` and `SitePageLifecycleTest`), what the legacy router sent: `Content-Type: application/json` as a default only (the
      page's own type wins, as the shell's replaced it), `Last-Modified` now, and, as the page's caching (`setCaching()`, so the page owns those three
      names from here), `Expires: Mon, 26 Jul 1997 05:00:00 GMT`, TWO `Cache-Control` lines (`no-store, no-cache, must-revalidate` and `post-check=0,
      pre-check=0`) and `Pragma: no-cache`, in place of the session's lines (`LegacyHeaderReconciler` sends them).
@@ -1189,7 +1218,7 @@ test fixtures is routed to a controller through them yet:
   `LegacyResponse`; `reconcile(Response, PageContext, bool $knownType)` is the same rule for a caller that has a response in hand). A legacy page's caching headers
   are PHP's: the session's cache limiter queues `Expires: Thu, 19 Nov 1981 08:52:00 GMT`, `Cache-Control: no-store, no-cache, must-revalidate` and `Pragma: no-cache`
   at `session_start()` for every request, a visitor's too, a page adds `Last-Modified` with `header()` (the newest listed post's `updated` on a stream) and sends no
-  `ETag`; the legacy router sends its own lines for an XHR request and `setNoCache()` two `Cache-Control` lines and `Pragma`. A Symfony `Response` always has a
+  `ETag`; the legacy router sends its own lines for an XHR request of a legacy page (a page a controller serves answers an XHR GET and HEAD with the lines of the same request that is not XHR) and `setNoCache()` two `Cache-Control` lines and `Pragma`. A Symfony `Response` always has a
   computed `Cache-Control` (sorted, `no-cache, private`, or `private, must-revalidate` once `Last-Modified` or `Expires` is set; `ResponseHeaderBag` recomputes it
   whenever one of those is set) and a `Date`, and `Response::sendHeaders()` sends every header but `Content-Type` with `header($line, false)`, after what PHP holds:
   without a rule a page sends two `Cache-Control` lines. The rule: (1) `Cache-Control`, `Pragma` and `Expires` are never the response's (taken off it, however it came by
@@ -1639,21 +1668,28 @@ test fixtures is routed to a controller through them yet:
     session, not the AccessContext, and ignores ignore-access); null where `getObject()` gives false;
   - `save()` / `delete()` only write to the store (`saveObject()` / `deleteRecord()`): events,
     permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
-- What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`; the legacy home page,
-  `Idno\Pages\Homepage`, fetches it with `Idno::container()->get()` and so do the feeds (`Pages\Feed`) and the tag search (`Pages\Search\Tags`), which build a
-  `Homepage`). It holds what `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the
-  template variables are what they were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the
-  warning logged when there is not exactly one), `types($friendly, $query, $requested)` (the friendly path's types, `all` for every one; without a path and
-  without a query the configured home page types; without a path and with a query the request's `types` as given; empty is every registered class; the
-  friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`), `page($types, $query, $offset)` (published posts
-  only, by the viewer's read groups: `Entity::countFromX()` then `getFromX()` with `items_per_page`; `items` is what the finder returned, false included),
-  `creatableTypes()` (the logged-in member's content types, each with `editUrl` set; false for a visitor), `titles()`, `lastModified($timestamp)` and
-  `profilePageWebmention()` (what a webmention to the home page of a single-user site does: the profile page's own `webmentionContent()`). `$query` is
-  `string|array|null` because a request can carry `q[]`, which the stores read as a query that matches nothing. What stays in the legacy class: the redirect of an
-  empty site, the page's owner, `Last-Modified`, the template variables and the draw, and a webmention's single-user check. A new code path takes
-  `HomeStream` by constructor injection; it is a legacy-backed service (it needs the legacy application) until the listing moves to `EntityRepository`.
-  `Tests/Kernel/LegacyHomeStreamTest` compares it with the home page's own code, written out in the test, for every viewer (visitor, member, administrator), friendly
-  path, query, requested types and offset on a seeded site with private posts and a draft.
+- What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`). `Idno\Http\Controller\Home\HomePages`
+  (a public service on `HomeStream`, `PageRenderer` and the logger) is the home page: `home($page)` and `content($page, $types)` return its `Response`, and
+  `receiveWebmention()` takes a webmention of the site's root. `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
+  extends it, and the feeds (`Pages\Feed`) and the tag search (`Pages\Search\Tags`), which build a `Homepage`): one implementation. The stream holds what the legacy
+  `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the template variables are what they
+  were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the warning logged when there is not
+  exactly one), `isSingleUser()`, `firstAdministrator()` (`User::getOne(['admin' => true])`: what a webmention of the root is passed on to, which does not insist on
+  exactly one), `beginUrl()` (where an empty site's visitor is sent: the site's address and `begin/`), `types($friendly, $query, $requested)` (the friendly path's
+  types, `all` for every one; without a path and without a query the configured home page types; without a path and with a query the request's `types` as given;
+  empty is every registered class; the friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`),
+  `page($types, $query, $offset)` (published posts only, by the viewer's read groups: `Entity::countFromX()` then `getFromX()` with `items_per_page`; `items` is
+  what the finder returned, false included), `creatableTypes()` (the logged-in member's content types, each with `editUrl` set; false for a visitor), `titles()`,
+  `lastModified($timestamp)` (the page's `Last-Modified`, from its first item's `updated`, asked for with `PageContext::addHeader()`) and `profilePageWebmention()`
+  (what a webmention to the home page of a single-user site does: the profile page's own `webmentionContent()`). `$query` is `string|array|null` because a
+  request can carry `q[]`, which the stores read as a query that matches nothing. `HomePages::serve()` is the flow `Homepage::getContent()` had: an empty site
+  is redirected to `begin/` (`PageRenderer::redirect()`), the single-user owner is set as the page's owner when it has none, then the types, the page, the
+  creatable types and the titles are asked in that order, `Last-Modified` is the first item's, the body `pages/home` is drawn with `items`, `contentTypes`,
+  `offset`, `count`, `subject` and `content`, and the shell with `title`, `description`, `content` and `body`. It reads `q`, `offset` and `types` through
+  `PageContext::input()`. A new code path takes `HomeStream` by constructor injection; it is a legacy-backed service (it needs the legacy application) until the
+  listing moves to `EntityRepository`. `Tests/Unit/Http/Controller/HomePagesTest` pins the flow on doubles; `Tests/Kernel/LegacyHomeStreamTest` compares the stream with
+  the home page's own code, written out in the test, for every viewer (visitor, member, administrator), friendly path, query, requested types and offset on a seeded
+  site with private posts and a draft, and runs it on an empty site, a single-user site and a single-user site with no administrator.
 - The legacy services (`db`, `config`, `template`, `session`, `events`, `queue`, ...) are
   public container services built at runtime, when first fetched, by
   `Idno\Legacy\LegacyServiceFactory` (one method per `Idno::site()` accessor). `Idno::init()`

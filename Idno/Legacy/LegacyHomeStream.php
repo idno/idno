@@ -42,6 +42,23 @@ final class LegacyHomeStream implements HomeStream
         return null;
     }
 
+    public function isSingleUser(): bool
+    {
+        return (bool) Idno::site()->config()->single_user;
+    }
+
+    public function firstAdministrator(): ?User
+    {
+        $user = User::getOne(['admin' => true]);
+
+        return $user instanceof User ? $user : null;
+    }
+
+    public function beginUrl(): string
+    {
+        return Idno::site()->config()->getURL() . 'begin/';
+    }
+
     public function types(?string $friendly, string|array|null $query, string|array|null $requested): array
     {
         $types = $requested;

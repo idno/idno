@@ -133,11 +133,19 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $html = !str_contains($query, '_t=') || str_contains($query, '_t=default');
         $label = $method . ' ' . $area . ' ?' . $query . ' ' . json_encode(array_keys($headers));
 
-        $this->assertSame(
-            $this->observed($legacy, $area, 'draw-legacy', $html, $head),
-            $this->observed($new, $area, 'draw-new', $html, $head),
-            $label
-        );
+        $observedLegacy = $this->observed($legacy, $area, 'draw-legacy', $html, $head);
+        $observedNew = $this->observed($new, $area, 'draw-new', $html, $head);
+        if (isset($headers['X-Requested-With']) && in_array($method, ['GET', 'HEAD'], true)) {
+            // On purpose: the legacy router sent an XHR GET (and the HEAD that answers like it) its own caching lines (a 1997 `Expires`, two
+            // `Cache-Control` lines, `Pragma`, `Last-Modified` now). A controller's page sends the lines of the same request that is not XHR,
+            // which are what the legacy page sends that request (everything else is compared as it is).
+            $plain = $this->observed($this->get('draw-legacy', $area, $query, array_diff_key($headers, ['X-Requested-With' => true]), $method), $area, 'draw-legacy', $html, $head);
+            foreach (['expires', 'cache-control', 'pragma', 'last-modified'] as $name) {
+                $this->assertSame($plain['headers'][$name] ?? null, $observedNew['headers'][$name] ?? null, $label . ' ' . $name . ' is the request\'s that is not XHR');
+                unset($observedLegacy['headers'][$name], $observedNew['headers'][$name]);
+            }
+        }
+        $this->assertSame($observedLegacy, $observedNew, $label);
         if (!$head && $new->header('Location') === null) {
             $this->assertSame((string) strlen($new->body), $new->header('Content-Length'), 'the length of what the controller drew: ' . $label);
         }
@@ -217,7 +225,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         }
         $this->assertTheSamePage('case=cached', [], method: 'HEAD');
         $this->assertTheSamePage('case=no-cache', ['Cookie' => $this->member], method: 'HEAD');
-        // an XHR request gets the router's lines, and a page that asks for no caching changes only what it asks for
+        // an XHR request gets the lines of the request that is not XHR, and a page that asks for no caching changes only what it asks for
         $this->assertTheSamePage('case=cached', ['X-Requested-With' => 'XMLHttpRequest']);
         $this->assertTheSamePage('case=no-cache', ['X-Requested-With' => 'XMLHttpRequest']);
     }
@@ -235,9 +243,9 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
             $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $new->lines('Expires'));
             $this->assertTheSamePage('case=no-cache', $headers);
         }
-        // an XHR request: the router's `Expires`, the page's `Cache-Control` over its own
+        // an XHR request: the same lines (the router's own are not sent to a controller's page)
         $xhr = $this->get('draw-new', 'plain', 'case=no-cache', ['X-Requested-With' => 'XMLHttpRequest']);
-        $this->assertSame(['Mon, 26 Jul 1997 05:00:00 GMT'], $xhr->lines('Expires'));
+        $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $xhr->lines('Expires'));
         $this->assertSame(['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], $xhr->lines('Cache-Control'));
     }
 

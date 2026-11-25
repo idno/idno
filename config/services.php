@@ -86,7 +86,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
         'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
-        'Legacy' => ['BarePage.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'RepositoryDataConcierge.php'],
+        'Legacy' => ['BarePage.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;
@@ -381,6 +381,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // What the home page lists, over the legacy finders; public: the legacy home page asks for it with Idno::container()->get()
     $services->set(\Idno\Legacy\LegacyHomeStream::class);
     $services->alias(\Idno\Http\Controller\Home\HomeStream::class, \Idno\Legacy\LegacyHomeStream::class)->public();
+    // The home page itself; public: the deprecated legacy page (Idno\Pages\Homepage) draws it through the service, as the controller does
+    $services->set(\Idno\Http\Controller\Home\HomePages::class)->public();
     $services->set(\Idno\Legacy\LegacyForbiddenPage::class)->args([service('kernel')]);
     $services->alias(\Idno\Security\ForbiddenPage::class, \Idno\Legacy\LegacyForbiddenPage::class);
     $services->set(\Idno\Security\CurrentUserAuthenticator::class)->args([service(\Idno\Security\CurrentUserSource::class)]);

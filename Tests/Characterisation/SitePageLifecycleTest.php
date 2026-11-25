@@ -141,23 +141,43 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame([false, true, true], array_column($events, 'xhr'));
     }
 
-    public function testAnXhrRequestGetsTheHeadersTheLegacyRouterSentForIt(): void
+    public function testAnXhrGetOrHeadGetsTheHeadersOfARequestThatIsNotXhr(): void
     {
-        $legacy = $this->site()->request('GET', '/robots.txt', ['X-Requested-With' => 'XMLHttpRequest']);
-        $response = $this->site()->request('GET', self::STATE, ['X-Requested-With' => 'XMLHttpRequest']);
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        $legacy = $this->site()->request('GET', '/robots.txt', $xhr);
         $plain = $this->site()->request('GET', self::STATE);
 
-        $this->assertSame('Mon, 26 Jul 1997 05:00:00 GMT', $response->header('Expires'));
-        $this->assertSame($legacy->header('Expires'), $response->header('Expires'));
-        $this->assertSame('no-cache', $response->header('Pragma'));
-        $this->assertNotNull($response->header('Last-Modified'));
-        $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $response->lines('Cache-Control'));
-        $this->assertSame($legacy->lines('Cache-Control'), $response->lines('Cache-Control'));
-        $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'), 'the page\'s own type');
-        // Not for another request, and not for OPTIONS (a legacy page has no options_xhr).
-        $this->assertNotSame('Mon, 26 Jul 1997 05:00:00 GMT', $plain->header('Expires'));
-        $options = $this->site()->request('OPTIONS', self::STATE, ['X-Requested-With' => 'XMLHttpRequest']);
+        // The legacy router gave an XHR request its own `Expires`, `Cache-Control`, `Pragma` and `Last-Modified` (now): a controller's page
+        // sends the session's lines, as it does for the same request that is not XHR.
+        $this->assertSame('Mon, 26 Jul 1997 05:00:00 GMT', $legacy->header('Expires'));
+        foreach (['GET', 'HEAD'] as $method) {
+            $response = $this->site()->request($method, self::STATE, $xhr);
+
+            $this->assertSame(200, $response->status, $method);
+            foreach (['Expires', 'Cache-Control', 'Pragma', 'Last-Modified'] as $name) {
+                $this->assertSame($plain->lines($name), $response->lines($name), $method . ' ' . $name);
+            }
+            $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $response->lines('Expires'), $method);
+            $this->assertSame(['no-store, no-cache, must-revalidate'], $response->lines('Cache-Control'), $method);
+            $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'), 'the page\'s own type');
+        }
+        // (and nothing more for OPTIONS, which a legacy page never answered in the router's way)
+        $options = $this->site()->request('OPTIONS', self::STATE, $xhr);
         $this->assertNotSame('Mon, 26 Jul 1997 05:00:00 GMT', $options->header('Expires'));
+    }
+
+    public function testAnXhrPostStillGetsTheHeadersTheLegacyRouterSentForIt(): void
+    {
+        [$cookie, $token] = $this->sessionAndToken();
+        $legacy = $this->site()->request('GET', '/robots.txt', ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $response = $this->site()->request('POST', '/_test/site-page/post', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], $token);
+
+        $this->assertSame(200, $response->status);
+        $this->assertSame($legacy->lines('Expires'), $response->lines('Expires'));
+        $this->assertSame($legacy->lines('Pragma'), $response->lines('Pragma'));
+        $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $response->lines('Cache-Control'));
+        $this->assertNotNull($response->header('Last-Modified'));
     }
 
     public function testAHeadRequestFiresHeadWithItsClassAndNoGet(): void

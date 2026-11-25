@@ -346,6 +346,98 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         $this->assertSame(['title' => 'The Home', 'description' => 'About the home.'], $result['configured']);
     }
 
+    public function testAnEmptySiteHasNoHomePageAndTheStreamAnswersForIt(): void
+    {
+        $result = $this->runInSite(<<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $log = tempnam(sys_get_temp_dir(), 'idno-log-');
+        ini_set('error_log', $log);
+        $types = $stream->types(null, null, null);
+        $page = $stream->page($types['types'], null, 0);
+        $result = [
+            'users' => $stream->siteHasUsers(),
+            'single' => $stream->isSingleUser(),
+            'owner' => $stream->singleUserOwner(),
+            'administrator' => $stream->firstAdministrator(),
+            'items' => $page['items'],
+            'count' => $page['count'],
+            'creatable' => $stream->creatableTypes(),
+            'begin' => $stream->beginUrl() === $site->config()->getURL() . 'begin/',
+            'titles' => array_keys($stream->titles()),
+            'logged' => file_get_contents($log),
+        ];
+        unlink($log);
+
+        return $result;
+        PHP);
+
+        $this->assertFalse($result['users']);
+        $this->assertTrue($result['single'], 'a site is a single-user one unless it is set otherwise');
+        $this->assertNull($result['owner']);
+        $this->assertNull($result['administrator']);
+        $this->assertSame([], $result['items']);
+        $this->assertSame(0, $result['count']);
+        $this->assertFalse($result['creatable']);
+        $this->assertTrue($result['begin'], 'the onboarding is the site\'s address and begin/');
+        $this->assertSame(['title', 'description'], $result['titles']);
+        $this->assertStringContainsString('Expected exactly 1 admin user for single-user site; got 0', $result['logged']);
+    }
+
+    public function testASingleUserSiteListsItsOneAdministratorsPostsToAVisitor(): void
+    {
+        $result = $this->runInSite(self::SEED . <<<'PHP'
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $site->config()->single_user = true;
+        $viewAs(null);
+        $visitor = $stream->page($stream->types(null, null, null)['types'], null, 0);
+        $viewAs('ada');
+        $member = $stream->creatableTypes();
+
+        return [
+            'single' => $stream->isSingleUser(),
+            'owner' => $stream->singleUserOwner()?->handle,
+            'administrator' => $stream->firstAdministrator()?->handle,
+            'count' => $visitor['count'],
+            'bodies' => array_map(static fn ($item) => $item->body ?? $item->title ?? null, $visitor['items']),
+            'member' => is_array($member),
+        ];
+        PHP);
+
+        $this->assertTrue($result['single']);
+        $this->assertSame('ada', $result['owner']);
+        $this->assertSame('ada', $result['administrator']);
+        $this->assertSame(8, $result['count'], 'the public posts: six notes, an article and a bookmark: not the private notes or the draft');
+        $this->assertNotContains('A private garden note only Ada can read.', $result['bodies']);
+        $this->assertNotContains('A garden draft, not yet published.', $result['bodies']);
+        $this->assertTrue($result['member']);
+    }
+
+    public function testASingleUserSiteWithNoAdministratorHasNoOwner(): void
+    {
+        $result = $this->runInSite(<<<'PHP'
+        $user = new \Idno\Entities\User();
+        $user->handle = 'bob';
+        $user->email = 'bob@example.com';
+        $user->setPassword('correct-horse-battery-9');
+        $user->setAdmin(false);
+        $user->save(true);
+        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
+        $log = tempnam(sys_get_temp_dir(), 'idno-log-');
+        ini_set('error_log', $log);
+        \Idno\Core\Idno::site()->config()->single_user = true;
+        $result = ['users' => $stream->siteHasUsers(), 'owner' => $stream->singleUserOwner(), 'administrator' => $stream->firstAdministrator(), 'logged' => file_get_contents($log)];
+        unlink($log);
+
+        return $result;
+        PHP);
+
+        $this->assertTrue($result['users']);
+        $this->assertNull($result['owner']);
+        $this->assertNull($result['administrator']);
+        $this->assertStringContainsString('Expected exactly 1 admin user for single-user site; got 0', $result['logged']);
+    }
+
     public function testTheLastModifiedIsTheRfc2616Date(): void
     {
         $result = $this->runInSite('return \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class)->lastModified(1_700_000_000);');

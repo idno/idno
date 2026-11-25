@@ -58,7 +58,7 @@ final class FrontControllerTest extends TestCase
         $this->kernel->boot();
         $router = $this->kernel->getContainer()->get('router');
 
-        $paths = ['/', '//', '/this.has.dots/and%20space', '/foo/', '/foo%0Abar', '/%FF', '/feed.xml', '/index.php/foo', '/a%2Fb'];
+        $paths = ['/', '//', '/this.has.dots/and%20space', '/foo/', '/foo%0Abar', '/%FF', '/feed.xml', '/view/x', '/index.php/foo', '/a%2Fb'];
         foreach (['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'PROPFIND'] as $method) {
             foreach ($paths as $path) {
                 // As PHP's web server SAPIs build it (Request::create() rejects some of these URIs).
@@ -70,9 +70,37 @@ final class FrontControllerTest extends TestCase
                     'HTTP_HOST' => 'localhost',
                 ]);
                 $match = $router->matchRequest($request);
+                // the home page is a controller's: its root, for the methods the page serves (the legacy router has the others)
+                if (in_array($path, ['/', '//'], true) && in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+                    continue;
+                }
                 $this->assertSame('idno_legacy', $match['_route'], "$method $path");
                 $this->assertSame(\Idno\Legacy\LegacyController::class, $match['_controller'], "$method $path");
             }
+        }
+    }
+
+    public function testThePortedHomeRoutes(): void
+    {
+        $this->kernel = new Kernel('test', true, bootLegacy: false);
+        $this->kernel->boot();
+        $router = $this->kernel->getContainer()->get('router');
+
+        foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+            foreach (['/', '//'] as $path) {
+                $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+                $this->assertSame('idno_home', $router->matchRequest($request)['_route'], "$method $path");
+            }
+            foreach (['/content/all', '//content/note/article', '/content/all/'] as $path) {
+                $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+                $match = $router->matchRequest($request);
+                $this->assertSame('idno_content', $match['_route'], "$method $path");
+            }
+        }
+        // what the pattern of the legacy page left out: no type, a digit, a deeper dot
+        foreach (['/content/', '/content', '/content/a1', '/content/a.b'] as $path) {
+            $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+            $this->assertSame('idno_legacy', $router->matchRequest($request)['_route'], $path);
         }
     }
 

@@ -34,6 +34,8 @@ final class TestEventHooks
         //   subclass  the shell, then a plugin's hijackRoute() of the same pattern for a subclass of the shell
         //   plugin    a plugin's addRoute() for a path no shell was ever registered for
         //   mdclaim   a plugin's hijackRoute() of the permalink route of the Markdown fixture, for a Markdown permalink of its own
+        //   homepage-hijack  a plugin's hijackRoute() of the root for a subclass of the home page's shell (ThirdPartyHomepage)
+        //   homepage-route   a plugin's addRoute() of a path of its own for the same subclass
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
             $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
@@ -51,6 +53,8 @@ final class TestEventHooks
                     'subclass' => $routes->hijackRoute('/_test/claimable/?', SubclassedPage::class),
                     'plugin' => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
                     'mdclaim' => $routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class),
+                    'homepage-hijack' => $routes->hijackRoute('/', ThirdPartyHomepage::class),
+                    'homepage-route' => $routes->addRoute('/third-party-home/?', ThirdPartyHomepage::class),
                     default => null,
                 };
             });

@@ -63,14 +63,15 @@ final class LegacyPageLifecycle implements PageLifecycle
     }
 
     /**
-     * What the legacy router sent for an XHR request to a page that has an `<method>_xhr` handler (every method but OPTIONS), after
-     * the page was built and before anything else: the JSON content type (a default: the page's shell replaces it), the 1997
-     * `Expires`, `Last-Modified` now, a no-store `Cache-Control` of two lines, and `Pragma`. The caching lines replace the
-     * session's (`LegacyHeaderReconciler` sends them in place of PHP's), as `header()` replaced them.
+     * What the legacy router sent for an XHR request to a page that has an `<method>_xhr` handler, after the page was built and before anything
+     * else: the JSON content type (a default: the page's shell replaces it), the 1997 `Expires`, `Last-Modified` now, a no-store
+     * `Cache-Control` of two lines, and `Pragma`. The caching lines replace the session's (`LegacyHeaderReconciler` sends them), as `header()`
+     * replaced them. A GET (and the HEAD that answers like it) of a page a controller serves has none of them: it gets the headers the
+     * same request that is not XHR gets. OPTIONS never had them.
      */
     private function sendRouterXhrHeaders(PageContext $context): void
     {
-        if (!$context->isXhr() || $context->request()->getMethod() === 'OPTIONS') {
+        if (!$context->isXhr() || in_array($context->request()->getMethod(), ['GET', 'HEAD', 'OPTIONS'], true)) {
             return;
         }
         $context->addDefaultHeader('Content-Type', 'application/json');
