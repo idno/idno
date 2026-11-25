@@ -31,26 +31,26 @@ final class UnmarkedShellController
  * page that was a Markdown permalink answers its `.md` form only if the controller says it is one. For the representative paths of every
  * site page's route (its fixed path, a sample for each parameter) this asks the real table (the booted application: core and the plugins the
  * site enables) which pages the legacy router would serve, as `LegacyRouteOverride` does, and fails for one the controller does not list in
- * `replaces`, which is not a kept shell.
+ * `replaces`, which is not a kept shell. The paths are samples that match the route (a route no sample matches is a violation too), and the table
+ * is the booted site's: core and the plugins the rig enables (Styles and StandardSiteSync are not among them).
  */
 final class SitePageClaimsTest extends TestCase
 {
     /**
-     * @return list<string> the paths of a route, spelled as the legacy router is asked (the controller's `{lead}` and `{slash}` empty)
+     * A path the route matches, as the legacy router is asked about it (the controller's `{lead}` and `{slash}` empty): its fixed path, and for each
+     * parameter the first sample its requirement accepts. Null when none does (a sample that matches nothing proves nothing).
      */
-    private static function pathsOf(Route $route): array
+    private static function sampleOf(Route $route): ?string
     {
-        $path = strtr($route->getPath(), ['{lead}' => '', '{slash}' => '']);
-        $path = (string) preg_replace_callback('/\{([A-Za-z_]+)\}/', static function (array $match) use ($route): string {
-            $requirement = (string) $route->getRequirement($match[1]);
+        foreach (['abc', '1', 'abc-1', 'a1b2', str_repeat('a', 24), str_repeat('a', 32), 'x.y'] as $value) {
+            $path = strtr($route->getPath(), ['{lead}' => '', '{slash}' => '']);
+            $path = (string) preg_replace('/\{[A-Za-z_]+\}/', $value, $path);
+            if (preg_match($route->compile()->getRegex(), $path) === 1) {
+                return $path;
+            }
+        }
 
-            return match (true) {
-                $requirement === '[0-9]+' || $requirement === '\d+' => '1',
-                default => 'abc',
-            };
-        }, $path);
-
-        return [$path, $path . '/'];
+        return null;
     }
 
     /**
@@ -71,7 +71,12 @@ final class SitePageClaimsTest extends TestCase
                     $found[] = $name . ': replaces ' . $class . ', a Markdown permalink, and does not say it is one (markdownPermalink)';
                 }
             }
-            foreach (self::pathsOf($route) as $path) {
+            $sample = self::sampleOf($route);
+            if ($sample === null) {
+                $found[] = $name . ': no sample path matches the route, so what the legacy router would do with it was not asked';
+                continue;
+            }
+            foreach ([$sample, $sample . '/'] as $path) {
                 $request = new Request([], [], [], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $path]);
                 foreach (PageHandler::claimsOf($table, $request) as $claim) {
                     if (!in_array(strtolower($claim['class']), $replaced, true)) {
@@ -124,10 +129,23 @@ final class SitePageClaimsTest extends TestCase
         $this->assertStringContainsString(ClaimingPage::class, implode("\n", self::violations(self::fixtureRoutes(), $table)));
     }
 
+    public function testASampleIsGeneratedFromTheRequirementAndFailsWhenNoneMatches(): void
+    {
+        $routes = new RouteCollection();
+        $hex = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => SitePageFixtureController::class . '::claimable', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[a-f0-9]{24}']);
+        $never = new Route('/{lead}_test/claimable/{id}{slash}', ['_controller' => SitePageFixtureController::class . '::claimable', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?', 'id' => '[A-Z]{3}']);
+        $routes->add('hex', $hex);
+        $routes->add('never', $never);
+
+        $this->assertSame('/_test/claimable/' . str_repeat('a', 24), (new \ReflectionMethod(self::class, 'sampleOf'))->invoke(null, $hex));
+        $found = self::violations($routes, new PageHandler());
+        $this->assertSame(['never: no sample path matches the route, so what the legacy router would do with it was not asked'], array_values(array_filter($found, static fn (string $line): bool => str_starts_with($line, 'never'))));
+    }
+
     public function testAControllerThatReplacesAMarkdownPermalinkMustSayItIsOne(): void
     {
         $routes = new RouteCollection();
-        $routes->add('unmarked', new Route('/{lead}_test/claimable{slash}', ['_controller' => UnmarkedShellController::class . '::page', 'lead' => '', 'slash' => '']));
+        $routes->add('unmarked', new Route('/{lead}_test/claimable{slash}', ['_controller' => UnmarkedShellController::class . '::page', 'lead' => '', 'slash' => ''], ['lead' => '/?', 'slash' => '/?']));
 
         $this->assertSame(['unmarked: replaces ' . ReplacedPage::class . ', a Markdown permalink, and does not say it is one (markdownPermalink)'], self::violations($routes, new PageHandler()));
     }

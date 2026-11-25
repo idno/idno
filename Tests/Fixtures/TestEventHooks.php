@@ -41,6 +41,10 @@ final class TestEventHooks
                 if (in_array($claim, ['replaced', '1', 'identical', 'subclass'], true)) {
                     $routes->addRoute('/_test/claimable/?', ReplacedPage::class);
                 }
+                if (in_array($claim, ['1', 'identical', 'subclass'], true)) {
+                    // a plugin's page for a path no controller serves: what a claimed path answers, in each spelling, is what this answers
+                    $routes->addRoute('/_test/legacyonly/?', ClaimingPage::class);
+                }
                 match ($claim) {
                     '1' => $routes->hijackRoute('/_test/claimable/?', ClaimingPage::class),
                     'identical' => $routes->addRoute('/_test/claimable/?', ClaimingPage::class),

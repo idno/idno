@@ -284,6 +284,21 @@ final class LegacyRouteOverrideTest extends TestCase
         $this->assertLeftAlone($marked, 'the fixture\'s controller is a Markdown permalink');
     }
 
+    public function testTheFrontControllersNameDoesNotHideAClaim(): void
+    {
+        $this->routes->addRoute('/?', ClaimingPage::class);
+        $this->routes->addRoute('/_test/claimable/?', ClaimingPage::class);
+
+        // the home page by the front controller's name (Symfony's path info is `/`), and a claimed path behind it, on a server that gives the legacy router only REQUEST_URI
+        foreach (['/index.php', '/index.php/', '/index.php/_test/claimable', '/index.php//_test/claimable', '/ind%65x.php/_test/claimable'] as $uri) {
+            $event = $this->matched($uri, 'GET', ['SCRIPT_FILENAME' => '/srv/index.php']);
+            $request = $event->getRequest();
+            $request->attributes->set('_route_params', ['lead' => '', 'slash' => '']);
+            $this->listener()->onRequest($event);
+            $this->assertSame(LegacyController::class, $request->attributes->get('_controller'), $uri);
+        }
+    }
+
     public function testNothingIsAskedOfTheRouterForARequestThatIsNotASitePages(): void
     {
         $this->routes->addRoute('/_test/claimable/?', ClaimingPage::class);

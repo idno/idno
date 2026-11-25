@@ -178,7 +178,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   database in `tearDown()`. The site is SYNCHRONOUS. It gives `site()`, `baseUrl()`, `console()`, `runInSite()`,
   `registerUser()`/`publishStatus()` (over HTTP), `sessionCookie()`, `formToken()`, `serverLog()`, and a subclass
   adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches) and to its PHP settings by overriding `siteIni()` (a test that counts session files
-  makes `session.save_path` its own `sessionDirectory()`: the system's shared one is written by every process of the machine; `IDNO_TEST_SERVER_NO_PATH_INFO=1` and
+  makes `session.save_path` its own `sessionDirectory()`: the system's shared one is written by every process of the machine, and on MySQL and MariaDB the sessions are the rows of `idno_sessions` in the site's own database, which `siteConnection()` reads; `StatelessAuthenticationTest` proves its property on each); `IDNO_TEST_SERVER_NO_PATH_INFO=1` and
   `IDNO_TEST_SUBDIRECTORY=<name>` in the environment make the server behave as Apache or nginx do for the legacy router's path, and serve a site under `/<name>/`). `startExtraServer(array $environment, array $ini = []): string`
   starts a second `php -S` (a free port, stopped in `tearDown()`) on the same database and upload directory, with other
   environment variables or PHP settings (the production environment, opcache), and returns its base URL.
@@ -885,10 +885,16 @@ class core still registers for the path, if any) and the legacy router share the
   serves it through `Page::post()` and the other handlers, with its own form token check; a path with no shell answers the legacy 404 as before. A
   controller that serves a state-changing method lists it in `#[SitePage(methods: [...])]` and in its route.
 - The legacy router's choice wins. `Idno\Legacy\LegacyRouteOverride` (`kernel.request`, priority 31, just after `RouterListener` at 32) runs for a
-  main request whose matched route is a site page's, with the legacy application booted. Symfony's router matches the DECODED path, while the legacy router
-  is given the raw `REQUEST_URI` (Apache, nginx) or, where the server sets it, a decoded `PATH_INFO` with dot segments and doubled slashes removed (PHP's
-  built-in server): so the override asks the legacy router about EVERY spelling it could be given (`PageHandler::spellingsOf()`: the path Toro routes
-  (`toroPath()`), the request's own `REQUEST_URI`, each as it is, percent-decoded once and with runs of slashes made one) by its OWN lookup
+  main request whose matched route is a site page's, with the legacy application booted. The rule: the path SYMFONY MATCHED is always asked about,
+  in addition to what the legacy router itself would be given. Symfony matches `rawurldecode($request->getPathInfo())`: the `REQUEST_URI` path (an absolute-form
+  target and a fragment are taken off first, `prepareRequestUri()` writing the result back into the server bag) without the BASE URL (the script's name,
+  `/index.php` or `/blog/index.php`, compared case-sensitively and encoded or not), decoded once, never collapsed or dot-segment-free. The legacy router (Toro) routes
+  `PATH_INFO` if the server sets it, else `ORIG_PATH_INFO` unless it is `/index.php`, else the raw `REQUEST_URI` (`toroPath()`), against patterns that `addRoute()`
+  prefixed with the site's subdirectory (`IDNO_SUBDIRECTORY`, from `PHP_SELF`). The built-in server sets `PATH_INFO` decoded, dot segments and doubled slashes
+  removed; Apache's rewrite and Caddy split `/index.php/x` into the script and a `PATH_INFO`; nginx's shipped configuration sets none, so Toro is given the raw
+  `/index.php/x`. So `PageHandler::spellingsOf()` asks, each raw, decoded once (only what is raw: a `PATH_INFO` is not decoded again) and with slash runs made one: the
+  matched path info with the subdirectory in front of it (never the base URL), the request's `REQUEST_URI` path, and `toroPath()` (derivation in its docblock and the
+  override's). Whatever variant reaches the controller is a variant the lookup sees, whichever server and base URL. The lookup is the router's OWN
   (`handlerFor()` through `chosenFor()` and `claimsOf()`: the exact key, then the patterns in registration order, pinned against Toro by
   `Tests/Unit/Markdown/RouteLookupTest`; `routeMarkdownSuffix()` shares the path with `toroPath()` through `pathFrom()`), never a second implementation of route
   matching. When ANY spelling gives a class the controller's `#[SitePage]` does not list in `replaces` (compared without a leading backslash, ignoring case; a handler
@@ -920,7 +926,8 @@ class core still registers for the path, if any) and the legacy router share the
   finds the shell: where there is none, the legacy router answers 404 for it). `Tests/Kernel/SitePageClaimsTest` enforces it over the real route collection and
   the booted site's real table (core and the plugins the site enables): for each site page route it asks, for its fixed path and a sample for each parameter, what the
   legacy router would serve, and fails for a class the controller does not list in `replaces`, and for a page that replaces a `MarkdownPermalink` without saying it is
-  one; a conflicting table and controller prove it can fail.
+  one; the sample it asks about is checked against the route (a route no sample matches is a violation, a sample that matches nothing proves nothing); a conflicting table and
+  controller prove it can fail. It sees the plugins the rig enables only (Styles and StandardSiteSync are not among them).
 - Cost: the listener does nothing for any request that is not a site page's (a check of the request and one attribute lookup, cached per controller), and
   builds nothing when the legacy application is not booted (the dispatcher is a service closure: `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`;
   `LegacyFallbackListener` takes the legacy controller as a service closure too, so in a kernel with no legacy application the dispatcher is never built, pinned by
@@ -931,10 +938,12 @@ class core still registers for the path, if any) and the legacy router share the
   which serves what it registered. A site in `/blog` registers its patterns under it (`addRoute()` adds `IDNO_SUBDIRECTORY`, which the legacy bootstrap derives from
   `PHP_SELF`; `hijackRoute()` adds no prefix, so in a subdirectory it never matches), Symfony's base URL is `/blog`, and the router is asked about the path with it
   (`toroPath()` and `REQUEST_URI` carry it). `?_t=` types are the page's, whoever serves it (`?_t[]=x` asks for no type).
+- A `markdownPermalink` page sends `Vary: Accept` on every answer (`PageRequestListener::onResponse()`: the HTML and the Markdown form, a refusal, a HEAD, OPTIONS), as the
+  legacy permalink pages did.
 - Pinned by `Tests/Kernel/PageRoutesTest` (convention, spellings, methods, base URL) and `Tests/Unit/Http/PageRouteConventionTest`, `Tests/Kernel/PageHandlerChoiceTest` (the
   choice and the spellings: hijack, identical and later patterns, the exact key, encoded paths, the `.md` form, the subdirectory in a subprocess, `toroPath()`),
   `Tests/Kernel/LegacyRouteOverrideTest` (in process, with the router's table), `Tests/Kernel/SitePageClaimsTest` and, over HTTP on a site of its own with the
-  fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`, `plugin`, `mdclaim`, registered on `plugins/loaded`, the first
+  fixtures of `Tests/Fixtures/TestEventHooks` (`IDNO_TEST_CLAIM_ROUTES`: `replaced`, `1`, `identical`, `subclass`, `plugin`, `mdclaim`; the claimed modes also register `/_test/legacyonly/?`, a claimed path with no controller, whose answer in each spelling is what a claimed path answered before a controller served it, registered on `plugins/loaded`, the first
   event after every plugin's `registerPages()`; `IDNO_TEST_SERVER_NO_PATH_INFO=1` makes the server give the legacy router only the raw path, as Apache and nginx do;
   `IDNO_TEST_SUBDIRECTORY=blog` serves the front controller as `/blog/index.php`), `Tests/Characterisation/RouteOverrideTest`.
 

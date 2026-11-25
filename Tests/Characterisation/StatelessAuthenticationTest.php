@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
+use Idno\Config\BootConfig;
+use Idno\Core\Idno;
+use Idno\Storage\ConnectionParameters;
 use Tests\Support\LogsIn;
 use Tests\Support\PrivateSiteTestCase;
 
@@ -290,13 +293,33 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         $this->registerUser('root');
         $this->addUser('ada');
         $key = $this->apiKeyOf('ada');
-        $directory = $this->sessionDirectory();
-        $sessions = static fn (): array => glob($directory . '/sess_*') ?: [];
-        $this->assertNotSame([], $sessions(), 'the site writes its session files here (registering the users made some)');
-        $before = $sessions();
+        // where the site keeps its sessions depends on the database: PHP files on SQLite (the test's own directory, see siteIni()), the rows of
+        // `idno_sessions` on MySQL and MariaDB (a private database): either way, the session this request STARTED must not be left behind
+        $sessions = $this->sessionIds();
+        $this->assertNotSame([], $sessions, 'the site writes its sessions here (registering the users made some)');
 
         $this->site()->request('GET', '_test/whoami', self::signedHeadersFor('ada', $key, '/_test/whoami'));
 
-        $this->assertSame($before, $sessions(), 'no session file is left behind by an API client, and none of the others is touched');
+        $this->assertSame($sessions, $this->sessionIds(), 'no session is left behind by an API client, and none of the others is removed');
+    }
+
+    /**
+     * The ids of the site's sessions, sorted: the names of the session files of its own directory, or the `session_id` of each row of its
+     * `idno_sessions` table (the site's handler there is PdoSessionHandler, whose lock is a database one: RepositoryDataConcierge::handleSession()).
+     *
+     * @return list<string>
+     */
+    private function sessionIds(): array
+    {
+        if (ConnectionParameters::driverFamily(Idno::container()->get(BootConfig::class)->all()) === 'sqlite') {
+            $files = array_map('basename', glob($this->sessionDirectory() . '/sess_*') ?: []);
+            sort($files);
+
+            return $files;
+        }
+        $ids = array_map('strval', $this->siteConnection()->fetchFirstColumn('select session_id from idno_sessions'));
+        sort($ids);
+
+        return $ids;
     }
 }

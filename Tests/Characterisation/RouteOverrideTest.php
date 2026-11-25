@@ -507,6 +507,74 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $this->assertSame([SubclassedPage::class], $this->raw($base, 'HEAD', '/_test/markdown/abc.md')['pages']);
     }
 
+    /**
+     * Spellings that reach the front controller by its own name, which Symfony's router strips (its base URL) before it matches and which
+     * a server may or may not tell the legacy router about (the built-in server sets PATH_INFO, Apache's rewrite does; nginx's shipped
+     * configuration leaves only the raw REQUEST_URI). Each is a claimed path with a path no controller serves in its place: what the
+     * legacy router answers for the second is what it answered for the first before any controller served it.
+     *
+     * @return list<array{0: string, 1: string}> the target for the claimed path, the same spelling for the path nobody else serves
+     */
+    private static function frontControllerSpellings(string $prefix, string $origin): array
+    {
+        $pairs = [];
+        foreach ([['_test/claimable', '_test/legacyonly'], ['_test/%63laimable', '_test/%6cegacyonly'], ['_test/claimable/', '_test/legacyonly/']] as [$claimed, $other]) {
+            foreach (['/index.php/%s', '/index.php//%s', '/ind%%65x.php/%s', '/INDEX.PHP/%s'] as $shape) {
+                $pairs[] = [$prefix . sprintf($shape, $claimed), $prefix . sprintf($shape, $other)];
+            }
+            $pairs[] = [$origin . $prefix . '/' . $claimed, $origin . $prefix . '/' . $other];       // absolute-form request target
+        }
+
+        return $pairs;
+    }
+
+    public function testTheFrontControllersOwnNameNeverBypassesAPluginsClaim(): void
+    {
+        foreach ([['1', '', ''], ['identical', 'blog', '/blog']] as [$mode, $subdirectory, $prefix]) {
+            foreach ([false, true] as $noPathInfo) {
+                $base = $this->server($mode, $noPathInfo, $subdirectory);
+                foreach (self::frontControllerSpellings($prefix, rtrim($base, '/')) as [$claimedTarget, $otherTarget]) {
+                    foreach (['GET', 'HEAD'] as $method) {
+                        $label = ($subdirectory ?: 'root') . ($noPathInfo ? ' (REQUEST_URI only) ' : ' (PATH_INFO) ') . $method . ' ' . $claimedTarget;
+                        $claimed = $this->raw($base, $method, $claimedTarget);
+                        $legacy = $this->raw($base, $method, $otherTarget);
+                        $this->assertNotSame('controller', $claimed['body'], $label . ': a claimed path is never the controller\'s');
+                        $this->assertNotContains(ControllerPage::class, $claimed['pages'], $label);
+                        $this->assertSame($legacy['status'], $claimed['status'], $label . ': the status the legacy router gives the same spelling of a path no controller serves');
+                        $this->assertSame($legacy['body'] === 'claimed', $claimed['body'] === 'claimed', $label . ': the plugin\'s page where the legacy router serves it, its 404 where it does not');
+                        $this->assertSame($legacy['pages'] === [ClaimingPage::class], $claimed['pages'] === [ClaimingPage::class], $label);
+                    }
+                }
+            }
+        }
+    }
+
+    public function testAnUnclaimedPathReachedByTheFrontControllersNameIsTheControllers(): void
+    {
+        foreach ([false, true] as $noPathInfo) {
+            $base = $this->server('replaced', $noPathInfo);
+            foreach (['/index.php/_test/claimable', '/index.php/_test/claimable/', '/ind%65x.php/_test/claimable', '/index.php//_test/claimable'] as $target) {
+                $response = $this->raw($base, 'GET', $target);
+                $this->assertSame('controller', $response['body'], $target . ($noPathInfo ? ' (REQUEST_URI only)' : ' (PATH_INFO)'));
+            }
+        }
+    }
+
+    public function testAMarkdownPermalinkVariesOnAcceptInEveryAnswer(): void
+    {
+        $base = $this->server('');
+
+        foreach (['abc', 'abc.md', 'denied', 'denied.md', 'gone', 'gone.md', 'missing', 'missing.md'] as $name) {
+            foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+                $response = $this->raw($base, $method, '/_test/markdown/' . $name);
+                $this->assertContains('Accept', array_map('trim', explode(',', implode(',', $response['headers']['vary'] ?? []))), $name . ' ' . $method . ' (' . $response['status'] . ')');
+            }
+        }
+        $this->assertSame([403, 410, 404], [$this->raw($base, 'GET', '/_test/markdown/denied')['status'], $this->raw($base, 'GET', '/_test/markdown/gone.md')['status'], $this->raw($base, 'GET', '/_test/markdown/missing')['status']]);
+        // a page that is no permalink says nothing of the kind
+        $this->assertNotContains('Accept', array_map('trim', explode(',', implode(',', $this->raw($base, 'GET', '/_test/unclaimed')['headers']['vary'] ?? []))));
+    }
+
     public function testATripleLeadingSlashIsNoAddressOfThePage(): void
     {
         $base = $this->server('');

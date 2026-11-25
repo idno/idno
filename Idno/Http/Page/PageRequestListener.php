@@ -169,6 +169,10 @@ final class PageRequestListener
         }
         $context = PageContext::of($request);
         $response = $event->getResponse();
+        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): every answer of it says so, a refusal and a HEAD too
+        if ($context->page()->markdownPermalink) {
+            $response->setVary('Accept', false);
+        }
         foreach (($this->lifecycle)()->standardHeaders() as $name => $value) {
             $response->headers->set($name, $value);
         }

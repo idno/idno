@@ -338,6 +338,21 @@ final class PageRequestListenerTest extends TestCase
         $this->assertSame(['<https://example.com/c>; rel="c"', '<https://example.com/a>; rel="a"', '<https://example.com/b>; rel="b"'], $response->headers->all('link'));
     }
 
+    public function testAMarkdownPermalinkVariesOnAcceptInEveryAnswerAndAnotherPageDoesNot(): void
+    {
+        foreach ([[new ListenerMarkdownController(), true], [new ListenerPageController(), false]] as [$controller, $varies]) {
+            $listener = $this->listener();
+            $request = Request::create('/');
+            $listener->onController($this->controllerEvent($request, $controller, 'page'));
+
+            foreach ([new Response('ok'), new Response('refused', 403, ['Vary' => 'Cookie'])] as $response) {
+                $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $response));
+                $this->assertSame($varies, in_array('Accept', $response->getVary(), true), $controller::class . ' ' . $response->getStatusCode());
+            }
+            $this->assertSame($varies ? ['Cookie', 'Accept'] : ['Cookie'], $response->getVary(), 'what the response varied on stays');
+        }
+    }
+
     public function testADefaultHeaderIsGivenOnlyToAResponseThatHasNone(): void
     {
         $listener = $this->listener();

@@ -20,10 +20,17 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * shadow every legacy page registered for the same path, a plugin's too. A plugin that took the path with `addRoute()` of an
  * identical pattern, with `hijackRoute()`, or with a subclass of the page the controller replaces, must still be served as it is
  * today. This listener runs right after the router (`RouterListener`, priority 32) and, for a request whose route is a site
- * page's, asks the legacy router which page it would serve the path with: `PageHandler::chosenFor()`, the router's own lookup
- * (the exact key, then the patterns in the order they were registered) on the path the router reads (`PageHandler::claimsOf()`: every spelling of the
- * server's path, with the site's subdirectory). When that page is not one the controller's `#[SitePage]` `replaces`, the legacy
- * page keeps the path: the request is handed to the legacy controller, with none of the route's parameters.
+ * page's, asks the legacy router which page it would serve the path with: `PageHandler::claimsOf()`, the router's own lookup
+ * (`handlerFor()`: the exact key, then the patterns in the order they were registered). When any page it finds is not one the
+ * controller's `#[SitePage]` `replaces`, the legacy page keeps the path: the request is handed to the legacy controller, with none of
+ * the route's parameters.
+ *
+ * Which paths are asked is derived from what the two routers actually do (`PageHandler::spellingsOf()` has the whole derivation): the
+ * rule is that the path Symfony matched (its path info: the `REQUEST_URI` path without the base URL, the script's name, decoded once, with
+ * the site's subdirectory put back in front as the legacy table has it) is ALWAYS asked, in addition to what the legacy router itself is
+ * given (the server's `PATH_INFO`, else the raw `REQUEST_URI`, which carries the front controller's name where the server does not split it:
+ * nginx's shipped configuration), raw, decoded once and with slash runs collapsed. A variant of the address that reaches the controller is
+ * therefore a variant the lookup sees, whichever server and whatever the base URL.
  *
  * (`LegacyDispatcher::routes()` also writes the subdirectory's alias of the home page into the router's table: it did when the request
  * was dispatched, and does it here a moment earlier, once, whoever asks first.)

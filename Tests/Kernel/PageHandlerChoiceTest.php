@@ -111,7 +111,15 @@ final class PageHandlerChoiceTest extends TestCase
         $output = shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=22527 ' . escapeshellarg(__DIR__ . '/page_handler_choice.php') . ' 2>&1');
         $this->assertNotNull($output);
 
-        $this->assertSame(['prefixed' => ReplacedPage::class, 'prefixedDoubled' => ReplacedPage::class, 'bare' => null], json_decode($output, true), $output);
+        $this->assertSame([
+            'frontController' => [ReplacedPage::class],
+            'frontControllerHome' => [ClaimingPage::class],
+            'frontControllerHomeSlash' => [ClaimingPage::class],
+            'encodedBase' => [ReplacedPage::class],
+            'prefixed' => ReplacedPage::class,
+            'prefixedDoubled' => ReplacedPage::class,
+            'bare' => null,
+        ], json_decode($output, true), $output);
     }
 
 
@@ -138,11 +146,48 @@ final class PageHandlerChoiceTest extends TestCase
         // a server that sets PATH_INFO decoded (the built-in one does) while REQUEST_URI stays raw
         $both = $this->request(['REQUEST_URI' => '/_test/claim%61ble?x=1', 'PATH_INFO' => '/_test/claimable', 'REQUEST_METHOD' => 'GET']);
         $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $both)));
-        // a server that sets PATH_INFO raw, which decodes to a spelling that matches
-        $raw = $this->request(['REQUEST_URI' => '/x', 'PATH_INFO' => '/%2F_test/claimable', 'REQUEST_METHOD' => 'GET']);
-        $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $raw)));
         $this->assertSame([], PageHandler::claimsOf($routes, $this->request(['REQUEST_URI' => '/_test/other', 'REQUEST_METHOD' => 'GET'])));
         $this->assertSame([], PageHandler::claimsOf($routes, $this->request(['REQUEST_URI' => '/_test/claimable/more', 'REQUEST_METHOD' => 'GET'])));
+    }
+
+
+    /**
+     * @param array<string, string> $server
+     */
+    private function front(string $uri, array $server = []): Request
+    {
+        return new Request([], [], [], [], [], $server + ['REQUEST_URI' => $uri, 'REQUEST_METHOD' => 'GET', 'SCRIPT_NAME' => '/index.php', 'PHP_SELF' => '/index.php', 'SCRIPT_FILENAME' => '/srv/index.php', 'HTTP_HOST' => 'localhost']);
+    }
+
+    public function testThePathSymfonyMatchedIsAlwaysAsked(): void
+    {
+        $routes = new PageHandler();
+        $routes->addRoute('/_test/claimable/?', ClaimingPage::class);
+        $routes->addRoute('/?', ReplacedPage::class);
+
+        // the front controller's name is the router's base URL, taken off before it matches; the legacy router, given only REQUEST_URI, is given it
+        foreach (['/index.php/_test/claimable', '/index.php//_test/claimable', '/index.php/_test/claim%61ble/', '/ind%65x.php/_test/claimable'] as $uri) {
+            $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $this->front($uri))), $uri);
+        }
+        // (a base URL of another case is no base URL: Symfony matches the whole path, which is nobody's)
+        $this->assertSame([], PageHandler::claimsOf($routes, $this->front('/INDEX.PHP/_test/claimable')));
+        // the home page by the front controller's name
+        foreach (['/index.php', '/index.php/'] as $uri) {
+            $this->assertSame([ReplacedPage::class], self::classes(PageHandler::claimsOf($routes, $this->front($uri))), $uri);
+        }
+        // an absolute-form request target and a fragment are taken off before either router reads the path
+        $this->assertSame([ClaimingPage::class], self::classes(PageHandler::claimsOf($routes, $this->front('http://localhost/_test/claim%61ble'))));
+    }
+
+    public function testAnAlreadyDecodedPathInfoIsNotDecodedAgain(): void
+    {
+        $routes = new PageHandler();
+        $routes->addRoute('/_test/xa/?', ClaimingPage::class);
+
+        // the built-in server sets PATH_INFO decoded: `%2561` in the address is `%61` there, and is not `a`
+        $request = $this->front('/_test/x%2561', ['PATH_INFO' => '/_test/x%61']);
+        $this->assertSame([], PageHandler::claimsOf($routes, $request));
+        $this->assertNotContains('/_test/xa', PageHandler::spellingsOf($request));
     }
 
     public function testASlashRunIsAlsoAskedCollapsed(): void

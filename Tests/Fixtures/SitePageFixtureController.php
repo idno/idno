@@ -307,6 +307,13 @@ final class SitePageFixtureController
     {
         $context = PageContext::of($request);
         $name = (string) $request->attributes->get('name');
+        // what a permalink answers for a post the viewer may not read, or that is gone or never was
+        match ($name) {
+            'denied' => throw new AccessDeniedHttpException('Private'),
+            'gone' => throw new GoneHttpException(),
+            'missing' => throw new NotFoundHttpException(),
+            default => null,
+        };
 
         return $this->renderer->page($context, ['title' => 'A permalink', 'description' => 'A permalink drawn for a test.', 'body' => '<p>The name is <b>' . htmlspecialchars($name) . '</b>.</p>']);
     }

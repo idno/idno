@@ -423,6 +423,17 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
+     * A connection to the test site's own database (a private MySQL or MariaDB database, or the SQLite file): for a test that reads the
+     * tables the site writes.
+     */
+    protected function siteConnection(): Connection
+    {
+        $this->assertNotNull($this->connection);
+
+        return $this->connection;
+    }
+
+    /**
      * PHP settings (`-d name=value`) of the test site's own web server, read when it starts: a test class overrides this for a
      * site that needs one (startExtraServer() takes its own).
      *

@@ -176,7 +176,9 @@ namespace Idno\Core {
         /**
          * The path the legacy router routes for a request, read from the request's server bag as Toro::serve() reads the
          * superglobals: the path as the server gave it (percent-encoded, with the site's subdirectory and any doubled slash),
-         * which is what the registered patterns are matched against.
+         * which is what the registered patterns are matched against. (Once Symfony's `Request::getPathInfo()` has been called, the server bag's
+         * `REQUEST_URI` is the path-only form: an absolute-form target and a fragment are taken off, which Toro, reading the superglobal, may
+         * still see; `spellingsOf()` calls it first, so every spelling is of the normalised address.)
          */
         public static function toroPath(\Symfony\Component\HttpFoundation\Request $request): string
         {
@@ -206,27 +208,46 @@ namespace Idno\Core {
         }
 
         /**
-         * Every spelling of the request's path that the legacy router could be given, or that a controller's route may have matched it
-         * under: the path Toro routes (PATH_INFO, which a server may set decoded, else REQUEST_URI), the request's own REQUEST_URI, each
-         * as it is, percent-decoded once (Symfony's router matches the decoded path) and with runs of slashes made one. The three
-         * servers Idno runs on differ here (PHP's built-in server sets PATH_INFO decoded, Apache and nginx usually leave only the raw
-         * REQUEST_URI), and a request is the legacy router's whichever spelling it is given.
+         * Every spelling of the request's path that decides who serves it: the paths the legacy router can be asked about, and the one
+         * Symfony's router matched. Two routers read one request:
+         *
+         *  - The legacy router (Toro, `PageHandler::serve()`) routes `PATH_INFO` if the server sets it, else `ORIG_PATH_INFO` unless it is
+         *    `/index.php`, else `REQUEST_URI` up to its first `?` (`toroPath()`): as the server gave it, percent-encoded or not, with the
+         *    front controller's name and the site's subdirectory in it, against patterns that `addRoute()` prefixed with the subdirectory.
+         *    The built-in server sets `PATH_INFO` decoded and without dot segments or doubled slashes; Apache's rewrite and Caddy split
+         *    `/index.php/x` into the script and a `PATH_INFO`; nginx's shipped configuration sets none, so the raw `REQUEST_URI` is routed.
+         *  - Symfony's router matches `rawurldecode($request->getPathInfo())`: the `REQUEST_URI` path (an absolute-form target and a fragment
+         *    already taken off by `Request::prepareRequestUri()`, which writes the result back into the server bag) without the BASE URL
+         *    (`prepareBaseUrl()`: the script's name `/index.php` or `/blog/index.php`, compared case-sensitively and encoded or not, or just
+         *    the script's directory), decoded once, and never with slash runs collapsed or dot segments removed.
+         *
+         * The rule: whatever path Symfony matched, if the legacy router has a page for THAT path the plugin that registered it wins (the
+         * path info with the site's subdirectory in front of it, `/blog` or nothing, which is how the legacy table expects it: never the
+         * base URL, the script's name), IN ADDITION to what the legacy router itself would be given (`toroPath()`, which is the
+         * server's own and is not decoded again: the built-in server's `PATH_INFO` is decoded already) and the request's `REQUEST_URI` (what
+         * Toro reads where there is no `PATH_INFO`). Each raw spelling is asked as it is, percent-decoded once and with runs of
+         * slashes made one (a pattern's `^/?` allows a single leading slash).
          *
          * @return list<string>
          */
         public static function spellingsOf(\Symfony\Component\HttpFoundation\Request $request): array
         {
-            $bases = [static::toroPath($request)];
+            // (the site's subdirectory is what `addRoute()` puts in front of every pattern; the base URL is not it: it is the script's name, which
+            // `getBasePath()` shortens to the directory only for the exact name, so `/ind%65x.php` stays in it)
+            $raw = [(defined('IDNO_SUBDIRECTORY') ? '/' . IDNO_SUBDIRECTORY : '') . $request->getPathInfo()];
             $uri = $request->server->get('REQUEST_URI');
             if (is_string($uri) && $uri !== '') {
-                $bases[] = (strpos($uri, '?') > 0) ? strstr($uri, '?', true) : $uri;
+                $raw[] = (strpos($uri, '?') > 0) ? strstr($uri, '?', true) : $uri;
             }
             $spellings = [];
-            foreach ($bases as $base) {
-                foreach ([$base, rawurldecode($base)] as $path) {
-                    $spellings[] = $path;
-                    $spellings[] = preg_replace('~/{2,}~', '/', $path) ?? $path;
-                }
+            foreach ($raw as $path) {
+                $spellings[] = $path;
+                $spellings[] = rawurldecode($path);
+            }
+            // (the path Toro routes is the server's: PATH_INFO, which a server sets decoded, else the raw REQUEST_URI already above)
+            $spellings[] = static::toroPath($request);
+            foreach ($spellings as $path) {
+                $spellings[] = preg_replace('~/{2,}~', '/', $path) ?? $path;
             }
 
             return array_values(array_unique($spellings));
