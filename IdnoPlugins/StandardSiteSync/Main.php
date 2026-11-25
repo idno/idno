@@ -287,7 +287,7 @@ class Main extends Plugin
      * episode too (see EpisodeRecord), and, for a member who has asked for it, each of them
      * as a Bluesky post (see PostRecord); anything else as a standard.site document.
      * Nothing that goes wrong is passed on: it is logged, without what the server
-     * answered and without any token.
+     * answered and without any token, and noted for the member's settings page.
      *
      * @param  \Idno\Common\Entity $entity       A public, published post
      * @param  bool                $skipExisting If true, leave a post alone that already has its record
@@ -337,7 +337,7 @@ class Main extends Plugin
                     $entity->standardsitesync_uri = null;
                     $changed = true;
                 }
-                self::saveATProtoSessionForUser($user, $client->getSession());
+                self::saveAfterSuccess($user, $client);
                 if ($changed) {
                     self::saveQuietly($entity);
                 }
@@ -348,13 +348,13 @@ class Main extends Plugin
 
             if ($skipExisting && $client->documentExists($entity)) {
                 \Idno\Core\Idno::site()->logging()->debug('StandardSiteSync: Skipping already-synced entity ' . $entityId);
-                self::saveATProtoSessionForUser($user, $client->getSession());
+                self::saveAfterSuccess($user, $client);
 
                 return false;
             }
 
             $result = $client->putDocument($entity);
-            self::saveATProtoSessionForUser($user, $client->getSession());
+            self::saveAfterSuccess($user, $client);
 
             // Store the AT-URI on the entity so we can emit a <link> tag.
             $changed = false;
@@ -404,7 +404,7 @@ class Main extends Plugin
                     $changed = true;
                 }
             }
-            self::saveATProtoSessionForUser($user, $client->getSession());
+            self::saveAfterSuccess($user, $client);
             if ($changed && $save) {
                 self::saveQuietly($entity);
             }
@@ -438,15 +438,78 @@ class Main extends Plugin
      */
     private static function logFailure(string $what, \Exception $e, User $user, ?ATProtoClient $client): void
     {
-        if ($client) {
-            try {
-                // Keep what the client learned (a refreshed token, a new nonce)
-                self::saveATProtoSessionForUser($user, $client->getSession());
-            } catch (\Exception $ignored) {
-                // Nothing more can be done here
-            }
-        }
         \Idno\Core\Idno::site()->logging()->error('StandardSiteSync: ' . $what . ': ' . $e->getMessage());
+
+        try {
+            // Tell the member on their settings page, and keep what the client learned
+            // (a refreshed token, a new nonce)
+            $user->standardsitesync_failure = self::describeFailure($e) + ['at' => time()];
+            if ($client) {
+                self::saveATProtoSessionForUser(
+                    $user,
+                    $client->getSession()
+                );
+            } else {
+                $user->save();
+            }
+        } catch (\Exception $ignored) {
+            // Nothing more can be done here
+        }
+    }
+
+    /**
+     * What a failure means for the member: that their connection is no longer accepted
+     * and they must connect again ("expired"), or that one attempt failed ("failed").
+     * The detail is the HTTP status and the name of the error, never the server's answer.
+     *
+     * @param  \Exception $e
+     * @return array 'kind' ("expired" or "failed") and 'detail'
+     */
+    public static function describeFailure(\Exception $e): array
+    {
+        $detail = '';
+        $expired = in_array($e->getMessage(), ['No refresh token available', 'Not authenticated with AT Protocol PDS'], true);
+
+        if ($e instanceof XrpcException) {
+            $detail = trim($e->getStatus() . ' ' . $e->getErrorName());
+            $expired = strpos($e->getMessage(), 'Token refresh failed') === 0
+                || $e->getStatus() === 401
+                || in_array(strtolower($e->getErrorName()), ['invalid_grant', 'invalid_token', 'invalidtoken', 'expiredtoken', 'authmissing'], true);
+        }
+
+        return ['kind' => $expired ? 'expired' : 'failed', 'detail' => $detail];
+    }
+
+    /**
+     * The last failure to write to a member's PDS, if nothing has been written since.
+     *
+     * @return array|null 'kind' ("expired" or "failed"), 'detail' and 'at' (when, seconds since the UNIX epoch)
+     */
+    public static function getSyncFailure(User $user): ?array
+    {
+        $failure = $user->standardsitesync_failure;
+        if (!is_array($failure) || !in_array($failure['kind'] ?? null, ['expired', 'failed'], true)) {
+            return null;
+        }
+
+        return [
+            'kind'   => $failure['kind'],
+            'detail' => is_string($failure['detail'] ?? null) ? $failure['detail'] : '',
+            'at'     => (int) ($failure['at'] ?? 0),
+        ];
+    }
+
+    /**
+     * Keep the session after something was written (or deleted) on the PDS; an earlier
+     * failure is over.
+     */
+    private static function saveAfterSuccess(User $user, ATProtoClient $client): void
+    {
+        $user->standardsitesync_failure = null;
+        self::saveATProtoSessionForUser(
+            $user,
+            $client->getSession()
+        );
     }
 
     /**

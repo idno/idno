@@ -28,10 +28,21 @@
 
         <!-- Connected state -->
         <div class="well">
+            <?php if (($vars['failure']['kind'] ?? null) === 'expired') { ?>
+            <h3 class="text-danger"><?php echo \Idno\Core\Idno::site()->language()->_('Your connection has expired'); ?></h3>
+            <p role="alert"><?php echo \Idno\Core\Idno::site()->language()->_('This site can no longer save your posts to your account, so nothing you publish is being synced. Disconnect below, then connect again. Afterwards, &ldquo;Sync all my posts&rdquo; will send what was missed.'); ?></p>
+            <?php } else { ?>
             <h3><?php echo \Idno\Core\Idno::site()->language()->_('You\'re connected!'); ?></h3>
             <p>
                 <?php echo \Idno\Core\Idno::site()->language()->_('New posts you publish will automatically be synced. You don\'t need to do anything else.'); ?>
             </p>
+                <?php if (!empty($vars['failure'])) { ?>
+                <p role="alert" class="text-danger"><?php echo \Idno\Core\Idno::site()->language()->_('The last attempt to save a post to your account failed, on %s. It will be tried again the next time that post is saved. If this keeps happening, disconnect and connect again.', [htmlspecialchars(date('j F Y, H:i', $vars['failure']['at']))]); ?></p>
+                <?php } ?>
+            <?php } ?>
+            <?php if (!empty($vars['failure']['detail'])) { ?>
+            <p class="help-block"><?php echo \Idno\Core\Idno::site()->language()->_('What the server answered: %s', [htmlspecialchars($vars['failure']['detail'])]); ?></p>
+            <?php } ?>
 
             <p style="margin-top: 1em;">
                 <a href="#" onclick="var el = document.getElementById('standardsitesync-details'); el.style.display = el.style.display === 'none' ? 'block' : 'none'; this.textContent = el.style.display === 'none' ? '<?php echo \Idno\Core\Idno::site()->language()->_('Show technical details'); ?>' : '<?php echo \Idno\Core\Idno::site()->language()->_('Hide technical details'); ?>'; return false;"><?php echo \Idno\Core\Idno::site()->language()->_('Show technical details'); ?></a>

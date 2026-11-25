@@ -64,6 +64,7 @@ class OAuthCallback extends Page
 
             // Save the session on the current user
             $user = \Idno\Core\Idno::site()->session()->currentUser();
+            $user->standardsitesync_failure = null;
             Main::saveATProtoSessionForUser($user, $session);
 
             \Idno\Core\Idno::site()->session()->addMessage(
