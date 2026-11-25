@@ -6,7 +6,8 @@ if (!empty($vars['object']->tags)) {
 }
 ?>
 <div class="idno-entry-content">
-<p class="p-name e-content entry-content"><?= nl2br($this->parseURLs($this->parseHashtags($this->parseUsers(htmlentities(html_entity_decode($vars['object']->body), ENT_QUOTES, 'UTF-8') . $tags, $vars['object']->inreplyto)), $rel)) ?></p>
+<p class="p-name e-content entry-content"><?= nl2br($this->parseURLs($this->parseHashtags($this->parseUsers(htmlentities(html_entity_decode($vars['object']->body), ENT_QUOTES, 'UTF-8'), $vars['object']->inreplyto)), $rel)) ?></p>
+<?= $tags ?>
 </div>
 <?php
 

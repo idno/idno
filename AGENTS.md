@@ -200,6 +200,40 @@ Each content plugin has an `Entry.php` entity class that defines
 - The `ActivityBuilder::CONTEXT_WITH_QUOTES` constant is the canonical `@context`
   for all outgoing activities
 
+## Twenty26 theme and plugin templates
+
+`Themes/Twenty26/` sets the template type to `modern`. A plugin's templates for it live in
+`IdnoPlugins/<Plugin>/templates/modern/`. A template that is missing there is not an error:
+the one in `templates/default/` is drawn instead, with Bootstrap and Font Awesome markup
+the theme has no styles for and scripts that need jQuery, which Twenty26 does not load. So
+a plugin that draws a post, a form or a page needs a `modern` template for each, and a
+test that extends `Tests\ModernTemplatesTestCase`
+(`IdnoPlugins/<Plugin>/Tests/ModernTemplatesTest.php`): it lists the templates the plugin
+must have and checks that what they draw is Twenty26 markup.
+
+- Styles and scripts are built: sources in `Themes/Twenty26/src/`, output in
+  `Themes/Twenty26/dist/` (tracked). After changing a source, run `npm ci` and
+  `npm run build` in `Themes/Twenty26/` and commit `dist/`. Tailwind reads class names
+  from the theme's templates and from `IdnoPlugins/*/templates/modern/`.
+- Posts are built from shared parts in `src/css/components/content-types.css`; use them
+  rather than styles of the plugin's own or inline styles:
+  `idno-entry-title`, then `idno-media-frame` > `idno-media-player` (a player; the Video
+  plugin's `idno-video-frame` / `idno-video-player` are styled the same), then
+  `idno-entry-body e-content`, then the tag row (`forms/output/tags`). `idno-details` >
+  `idno-details-row` is a list of facts with icons (events), `idno-entry-kicker` a small
+  line with an icon (the host of a bookmark, the address of a check-in), `idno-photo-grid`
+  the pictures of a photo post, `idno-map` a Leaflet map.
+- A compose form is `entity/edit/header`, a `<form>` holding one `div.idno-editor` with an
+  `h4.idno-editor-heading`, fields in `div.idno-form-field` with a `label.idno-label`, and
+  the buttons in `div.idno-editor-actions`, then `entity/edit/footer`.
+  `forms/input/richtext` takes `label` and `placeholder`.
+- Icons come from `shell/icon` (`$this->__(['icon' => 'play', 'class' => '...'])`). Always
+  pass `class`: template variables stay set between draws, so an icon drawn without one
+  takes the class of the icon drawn before it.
+- An audio file is an `<audio controls>` element inside `x-data="audioPlayer"`
+  (`src/js/modules/audio.js`), which swaps the native controls for the theme's; without
+  JavaScript the native ones remain.
+
 ## IndieWeb Standards
 
 | Standard | Implementation |

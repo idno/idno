@@ -60,6 +60,13 @@
         'share-2' => '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
         'webhook' => '<path d="M18 16.98h1a2 2 0 0 0 2-1.61l.57-5.07A2 2 0 0 0 19.58 8h-1.15"/><path d="M14 2.2C13.15 2 12.37 2 12 2c-.37 0-1.15 0-2 .2"/><path d="M5.44 8H4.29a2 2 0 0 0-1.99 2.3l.57 5.07A2 2 0 0 0 4.85 17h1"/><path d="M8.62 2.84C7.14 3.56 5.74 4.63 5 6.5"/><path d="M15.38 2.84C16.86 3.56 18.26 4.63 19 6.5"/><circle cx="12" cy="12" r="2"/><path d="M12 14v4"/><path d="M7.34 17.2a4 4 0 0 0 3.33 2.72"/><path d="M13.33 19.92a4 4 0 0 0 3.33-2.72"/>',
         'refresh-cw' => '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/>',
+
+        // Players and post details
+        'play' => '<polygon points="6 3 20 12 6 21 6 3"/>',
+        'pause' => '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+        'music' => '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+        'clock' => '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+        'link' => '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
     ];
 
     // Get the SVG content for the icon, with fallback
