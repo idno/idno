@@ -19,9 +19,9 @@ if ($address === '' && !empty($vars['url']) && is_string($vars['url'])) {
             <h4>
                 <?php
                 if (empty($object->_id)) {
-                    echo $lang->_('New Video');
+                    echo $lang->_('New video');
                 } else {
-                    echo $lang->_('Edit Video');
+                    echo $lang->_('Edit video');
                 }
                 ?>
             </h4>

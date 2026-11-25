@@ -17,9 +17,9 @@ if ($address === '' && !empty($vars['url']) && is_string($vars['url'])) {
         <h4 class="idno-editor-heading">
             <?php
             if (empty($object->_id)) {
-                echo $lang->_('New Video');
+                echo $lang->_('New video');
             } else {
-                echo $lang->_('Edit Video');
+                echo $lang->_('Edit video');
                 if ($object->getPublishStatus() === 'draft') {
                     echo ' <span class="idno-badge-draft">' . $lang->_('Draft') . '</span>';
                 }
@@ -79,7 +79,7 @@ if ($address === '' && !empty($vars['url']) && is_string($vars['url'])) {
                 <?= $lang->_('Publish') ?>
             </button>
             <button type="submit" class="idno-btn idno-btn-ghost" name="publish_status" value="draft">
-                <?= $lang->_('Save as Draft') ?>
+                <?= $lang->_('Save as draft') ?>
             </button>
             <a href="<?= !empty($object->_id) ? htmlspecialchars($object->getDisplayURL()) : \Idno\Core\Idno::site()->config()->getDisplayURL() ?>" class="idno-btn idno-btn-ghost">
                 <?= $lang->_('Cancel') ?>

@@ -51,14 +51,6 @@ msgid "Watch the video"
 msgstr ""
 
 #: ./templates/default/entity/Video/edit.tpl.php
-msgid "New Video"
-msgstr ""
-
-#: ./templates/default/entity/Video/edit.tpl.php
-msgid "Edit Video"
-msgstr ""
-
-#: ./templates/default/entity/Video/edit.tpl.php
 msgid "Video address"
 msgstr ""
 
