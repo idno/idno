@@ -54,6 +54,16 @@ final class HomePagesTest extends TestCase
         return new PageContext(Request::create($uri), new SitePage('Idno\Pages\Homepage'));
     }
 
+    /**
+     * A request as PHP's web server hands it over: the address as sent (`Request::create()` reads `//tag/x` as a host and decodes nothing it should keep).
+     */
+    private function sent(string $uri): PageContext
+    {
+        parse_str((string) parse_url($uri, PHP_URL_QUERY), $query);
+
+        return new PageContext(new Request($query, [], [], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $uri, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => '/srv/index.php', 'PHP_SELF' => '/index.php', 'HTTP_HOST' => 'localhost']), new SitePage('Idno\Pages\Homepage'));
+    }
+
     private static function item(int $updated): \stdClass
     {
         $item = new \stdClass();
@@ -263,6 +273,147 @@ final class HomePagesTest extends TestCase
         $this->assertSame(['types', 'all', 'x', 'IdnoPlugins\Text\Entry'], $this->stream->calls[0]);
     }
 
+    public function testTheFeedDrawsTheStreamAndNeverAsksForAReplacement(): void
+    {
+        $this->events->answer = new Response('the replacement');
+        $this->stream->items = [self::item(1_700_000_000)];
+
+        $response = $this->pages->feed($context = $this->context('/feed.xml'));
+
+        $this->assertSame([], $this->events->calls, 'the feed is not the site\'s root: no plugin replaces it');
+        $this->assertStringStartsWith('page:', (string) $response->getContent());
+        $this->assertSame(['types', null, null, null], $this->stream->calls[0], 'the home page\'s own types, no friendly path');
+        $this->assertSame(['Last-Modified' => ['RFC2616(1700000000)']], $context->headers());
+        $this->assertSame('pages/home', $this->drawer->templates[0][0]);
+    }
+
+    public function testTheFeedAsksForItsStreamLikeTheHomePage(): void
+    {
+        $this->pages->feed($this->context('/rss.xml?q=word&offset=40&types=Requested'));
+
+        $this->assertSame([['types', null, 'word', 'Requested'], ['page', [], 'word', 40]], array_slice($this->stream->calls, 0, 2));
+    }
+
+    public function testTheFeedOfAnEmptySiteRedirectsToBegin(): void
+    {
+        $this->stream->hasUsers = false;
+
+        $response = $this->pages->feed($this->context('/feed'));
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('https://example.com/begin/', $response->headers->get('Location'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}> the query string, the location's query
+     */
+    public static function searches(): array
+    {
+        return [
+            'a word' => ['q=gardens', 'gardens'],
+            'two words' => ['q=a%20b', 'a+b'],
+            'no query' => ['', ''],
+            'a plus and an ampersand' => ['q=a%2Bb%26c', 'a%2Bb%26c'],
+            'not text' => ['q%5B%5D=x', ''],
+        ];
+    }
+
+    /**
+     * @dataProvider searches
+     */
+    public function testSearchRedirectsWithTheQueryEncoded(string $queryString, string $expected): void
+    {
+        $response = $this->pages->search($this->context('/search?' . $queryString));
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('https://example.com/?q=' . $expected, $response->headers->get('Location'));
+        $this->assertSame([], $this->stream->calls, 'the stream is not asked for anything');
+        $this->assertSame([], $this->drawer->pages, 'nothing is drawn');
+    }
+
+    public function testSearchTakesTheQueryFromAPostedForm(): void
+    {
+        $page = new PageContext(Request::create('/search', 'POST', ['q' => 'posted']), new SitePage('Idno\Pages\Homepage'));
+
+        $this->assertSame('https://example.com/?q=posted', $this->pages->search($page)->headers->get('Location'));
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}> the path as sent, the subject the page lists
+     */
+    public static function tagPaths(): array
+    {
+        return [
+            'plain' => ['/tag/books', '#books'],
+            'a doubled leading slash' => ['//tag/books', '#books'],
+            'a plus is a space' => ['/tag/a+b', '#a b'],
+            'an encoded plus is a plus' => ['/tag/a%2Bb', '#a+b'],
+            'encoded letters' => ['/tag/caf%C3%A9', '#café'],
+            'encoded letters in lower case hex' => ['/tag/caf%c3%a9', '#café'],
+            'bytes that are not UTF-8' => ['/tag/%FF', "#\xFF"],
+            'a deeper path is the tag' => ['/tag/a/b', '#a/b'],
+            'a percent sign that is not an escape' => ['/tag/100%', '#100%'],
+            'a query string is not the tag' => ['/tag/books?q=x&_t=json', '#books'],
+        ];
+    }
+
+    /**
+     * @dataProvider tagPaths
+     */
+    public function testTagReadsTheRawPathAndDecodesItLikeUrldecode(string $path, string $subject): void
+    {
+        $this->stream->resolved = ['types' => ['T'], 'friendly' => ['all']];
+
+        $this->pages->tag($context = $this->sent($path));
+
+        $this->assertSame([['types', 'all', $subject, null], ['page', ['T'], $subject, 0]], array_slice($this->stream->calls, 0, 2));
+        $this->assertSame($subject, $this->drawer->templates[0][1]['subject']);
+        $this->assertSame(['all'], $this->drawer->templates[0][1]['content']);
+    }
+
+    public function testTagIgnoresATrailingSlash(): void
+    {
+        foreach (['/tag/books/', '//tag/books/'] as $path) {
+            $this->stream->calls = [];
+            $this->pages->tag($this->sent($path));
+
+            $this->assertSame('#books', $this->stream->calls[0][2], $path);
+        }
+        $this->stream->calls = [];
+        $this->pages->tag($this->sent('/tag/books//'));
+        $this->assertSame('#books/', $this->stream->calls[0][2], 'one slash only');
+    }
+
+    public function testTagWinsOverQ(): void
+    {
+        $this->pages->tag($this->sent('/tag/books?q=x'));
+
+        $this->assertSame('#books', $this->stream->calls[0][2]);
+        $this->assertSame('#books', $this->stream->calls[1][2]);
+    }
+
+    public function testATagThatIsOnlySlashesIsNoTag(): void
+    {
+        $response = $this->pages->tag($this->sent('/tag//'));
+
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame([], $this->stream->calls);
+    }
+
+    public function testTheTagPagesTypesAreEveryTypeWhateverTheRequestAsks(): void
+    {
+        $this->pages->tag($this->sent('/tag/books?types=IdnoPlugins%5CText%5CEntry'));
+
+        $this->assertSame(['types', 'all', '#books', 'IdnoPlugins\Text\Entry'], $this->stream->calls[0], 'the stream decides what the friendly path overrides');
+    }
+
+    public function testAnEmptySiteHasNoTagPage(): void
+    {
+        $this->stream->hasUsers = false;
+
+        $this->assertSame('https://example.com/begin/', $this->pages->tag($this->sent('/tag/books'))->headers->get('Location'));
+    }
+
     public function testARootWebmentionOnASingleUserSiteGoesToTheProfile(): void
     {
         $owner = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
@@ -364,6 +515,11 @@ final class HomeStreamDouble implements HomeStream
     public function beginUrl(): string
     {
         return 'https://example.com/begin/';
+    }
+
+    public function siteAddress(): string
+    {
+        return 'https://example.com/';
     }
 
     public function types(?string $friendly, string|array|null $query, string|array|null $requested): array

@@ -59,6 +59,8 @@ final class FrontControllerTest extends TestCase
         $router = $this->kernel->getContainer()->get('router');
 
         $paths = ['/', '//', '/this.has.dots/and%20space', '/foo/', '/foo%0Abar', '/%FF', '/feed.xml', '/view/x', '/index.php/foo', '/a%2Fb'];
+        // the feed is a controller's, for the methods the page serves (the legacy router has the others)
+        $served = ['/', '//', '/feed.xml'];
         foreach (['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'PROPFIND'] as $method) {
             foreach ($paths as $path) {
                 // As PHP's web server SAPIs build it (Request::create() rejects some of these URIs).
@@ -71,7 +73,7 @@ final class FrontControllerTest extends TestCase
                 ]);
                 $match = $router->matchRequest($request);
                 // the home page is a controller's: its root, for the methods the page serves (the legacy router has the others)
-                if (in_array($path, ['/', '//'], true) && in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+                if (in_array($path, $served, true) && in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
                     continue;
                 }
                 $this->assertSame('idno_legacy', $match['_route'], "$method $path");
@@ -101,6 +103,34 @@ final class FrontControllerTest extends TestCase
         foreach (['/content/', '/content', '/content/a1', '/content/a.b'] as $path) {
             $request = new Request(server: ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
             $this->assertSame('idno_legacy', $router->matchRequest($request)['_route'], $path);
+        }
+    }
+
+    public function testThePortedFeedSearchAndTagRoutes(): void
+    {
+        $this->kernel = new Kernel('test', true, bootLegacy: false);
+        $this->kernel->boot();
+        $router = $this->kernel->getContainer()->get('router');
+
+        $routes = [
+            'idno_feed_xml' => ['/feed.xml', '//feed.xml', '/feed.xml/', '//feed.xml/'],
+            'idno_feed' => ['/feed', '//feed/'],
+            'idno_rss_xml' => ['/rss.xml', '/rss.xml/', '//rss.xml'],
+            'idno_search' => ['/search', '//search?q=a', '/search/'],
+            'idno_tag' => ['/tag/books', '//tag/books', '/tag/books/', '/tag/caf%C3%A9', '/tag/%FF', '/tag/a/b'],
+        ];
+        foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+            foreach ($routes as $name => $paths) {
+                foreach ($paths as $path) {
+                    $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+                    $this->assertSame($name, $router->matchRequest($request)['_route'], "$method $path");
+                }
+            }
+        }
+        // what is not theirs: no tag, a space in the tag, any other method, a third slash, a longer name
+        foreach ([['GET', '/tag/'], ['GET', '/tag'], ['GET', '/tag/a%20b'], ['POST', '/feed.xml'], ['PUT', '/search'], ['DELETE', '/tag/x'], ['PATCH', '/rss.xml'], ['GET', '///feed.xml'], ['GET', '/feeds'], ['GET', '/search/users'], ['GET', '/search/mentions.json']] as [$method, $path]) {
+            $request = new Request(server: ['REQUEST_METHOD' => $method, 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+            $this->assertSame('idno_legacy', $router->matchRequest($request)['_route'], "$method $path");
         }
     }
 

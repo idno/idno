@@ -19,6 +19,12 @@ final class PageRouteConvention
         'idno_test_site_page_undeclared' => true,
     ];
 
+    /** Routes whose last parameter takes the rest of the path, a trailing slash included, so they have no `{slash}`, each with why */
+    private const NO_TRAILING_SLASH = [
+        // the tag is what follows `/tag/`: a trailing slash is the tag page's to take off the tag (one slash, as it always did)
+        'idno_tag' => true,
+    ];
+
     /**
      * @return list<string> what a route of a site page has that the convention does not allow
      */
@@ -38,10 +44,14 @@ final class PageRouteConvention
             if (!str_starts_with($path, '/{lead}') && $path !== '/{slash}') {
                 $found[] = $name . ': the path starts with {lead} (or is {slash} for the root)';
             }
-            if (!str_ends_with($path, '{slash}')) {
+            $noSlash = isset(self::NO_TRAILING_SLASH[$name]);
+            if (!$noSlash && !str_ends_with($path, '{slash}')) {
                 $found[] = $name . ': the path ends with {slash}';
             }
             foreach (['lead', 'slash'] as $parameter) {
+                if ($noSlash && $parameter === 'slash') {
+                    continue;
+                }
                 if (($route->getRequirement($parameter) ?? null) !== '/?') {
                     $found[] = $name . ': the requirement of {' . $parameter . '} is /?';
                 }

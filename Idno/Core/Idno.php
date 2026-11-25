@@ -133,9 +133,6 @@ namespace Idno\Core {
              * Homepage
             */
             $this->routes()->addRoute('/?', '\Idno\Pages\Homepage');
-            $this->routes()->addRoute('/feed\.xml', '\Idno\Pages\Feed');
-            $this->routes()->addRoute('/feed/?', '\Idno\Pages\Feed');
-            $this->routes()->addRoute('/rss\.xml', '\Idno\Pages\Feed');
             $this->routes()->addRoute('/content/([A-Za-z\-\/]+)+', '\Idno\Pages\Homepage');
 
             /**
@@ -195,9 +192,7 @@ namespace Idno\Core {
             /**
              * Search
             */
-            $this->routes()->addRoute('/search/?', '\Idno\Pages\Search\Forward');
             $this->routes()->addRoute('/search/mentions\.json', '\Idno\Pages\Search\Mentions');
-            $this->routes()->addRoute('/tag/([^\s]+)\/?', '\Idno\Pages\Search\Tags');
             $this->routes()->addRoute('/search/users/?', '\Idno\Pages\Search\User');
 
             /**

@@ -84,23 +84,30 @@ namespace Tests\Characterisation {
                 ['GET', '/feed.xml?_t=json', [], 200, 'application/json', null, $json, true, $std, true],
                 // An Accept header does not choose the type of the feed: it is RSS still.
                 ['GET', '/feed.xml', ['Accept' => 'application/json'], 200, 'application/rss+xml', null, $rss, true, $std, false],
-                ['POST', '/feed.xml', [], 302, 'text/html', '/', '', false, $std, false],
+                // The class that served the feed is deleted, so only GET, HEAD and OPTIONS of its address are the controller's; any other method
+                // is an address the legacy router has no page for: its 404 page (a POST used to be the invalid-token redirect home).
+                ['POST', '/feed.xml', [], 404, 'text/html', null, $notFound, false, $std, true],
+                // A request with a malformed Host is served by the legacy router, which no longer has the feed: its 404 page.
+                ['GET', '/feed.xml', ['Host' => 'bad host!'], 404, 'text/html', null, $notFound, false, $std, true],
                 // search
                 ['GET', '/search?q=a%20b', [], 302, 'text/html', '/', '', false, $std, false],
                 ['GET', '/search/', [], 302, 'text/html', '/', '', false, $std, false],
                 ['GET', '//search?q=a', [], 302, 'text/html', '/', '', false, $std, false],
-                ['POST', '/search', [], 302, 'text/html', '/', '', false, $std, false],
+                // (as for the feed: a POST was the invalid-token redirect home)
+                ['POST', '/search', [], 404, 'text/html', null, $notFound, false, $std, true],
                 // tags
                 ['GET', '/tag/books', [], 200, 'text/html', null, '<title class="p-name">#books | ', true, $std, true],
-                ['GET', '/tag/books/', [], 200, 'text/html', null, $html, false, $std, true],
+                // A trailing slash is not part of the tag: the page lists the posts tagged `books` (it listed none for `books/`, so it had no Last-Modified).
+                ['GET', '/tag/books/', [], 200, 'text/html', null, '<title class="p-name">#books | ', true, $std, true],
+                ['GET', '/tag/books', ['Host' => 'bad host!'], 404, 'text/html', null, $notFound, false, $std, true],
                 ['GET', '//tag/books', [], 200, 'text/html', null, '<title class="p-name">#books | ', true, $std, true],
                 ['GET', '/tag/caf%C3%A9', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/caf%c3%a9', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/a+b', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/a%2Bb', [], 200, 'text/html', null, $html, false, $std, true],
                 ['GET', '/tag/%FF', [], 200, 'text/html', null, $html, false, $std, true],
-                // The query `x` matches the fixture post ("fixture note"), so the page lists a post and carries its Last-Modified.
-                ['GET', '/tag/books?q=x', [], 200, 'text/html', null, $html, true, $std, true],
+                // The tag wins over a `q` in the query string: the page lists the posts tagged `books` (the fixture post), as it does without `q`.
+                ['GET', '/tag/books?q=x', [], 200, 'text/html', null, '<title class="p-name">#books | ', true, $std, true],
                 // `/tag/` has no tag: it is the 404 page.
                 ['GET', '/tag/', [], 404, 'text/html', null, $notFound, false, $std, true],
                 // the small endpoints
@@ -219,8 +226,8 @@ namespace Tests\Characterisation {
 
         public function testAPostWithoutATokenIsRefusedWithAMessageOnTheNextPage(): void
         {
-            // For the home page, the feed, search and webfinger the refusal is a redirect home and a session message.
-            foreach (['/', '/feed.xml', '/search', '/.well-known/webfinger'] as $path) {
+            // For the home page and webfinger the refusal is a redirect home and a session message. (The feed and search are no page for a POST.)
+            foreach (['/', '/.well-known/webfinger'] as $path) {
                 $first = $this->site()->request('GET', '/');
                 $cookie = explode(';', (string) $first->header('Set-Cookie'))[0];
 
@@ -230,6 +237,25 @@ namespace Tests\Characterisation {
 
                 $this->assertStringContainsString('Invalid token.', $this->site()->request('GET', '/', ['Cookie' => $cookie])->body, $path);
             }
+        }
+
+        public function testAnyOtherMethodOfAFeedSearchOrTagAddressIsTheLegacy404Page(): void
+        {
+            foreach (['/feed.xml', '/feed', '/rss.xml', '/search?q=a', '/tag/books'] as $path) {
+                foreach (['POST', 'PUT', 'PATCH', 'DELETE'] as $method) {
+                    $response = $this->site()->request($method, $path);
+
+                    $this->assertSame(404, $response->status, $method . ' ' . $path);
+                    $this->assertNull($response->header('Location'), $method . ' ' . $path);
+                    $this->assertStringContainsString('This page can&#039;t be found.', $response->body, $method . ' ' . $path);
+                }
+            }
+        }
+
+        public function testATagWithAnEncodedSpaceIsNoTagPage(): void
+        {
+            // The legacy pattern took no white space, and a space is what `%20` decodes to in the path the router sees.
+            $this->assertSame(404, $this->site()->request('GET', '/tag/a%20b')->status);
         }
 
         public function testTheHeadRequestOfTheHomePageSendsTheHeadersAndNoBody(): void
@@ -290,15 +316,16 @@ namespace Tests\Characterisation {
             return [
                 'plain' => ['/tag/books', '#books'],
                 'doubled slash' => ['//tag/books', '#books'],
-                // A trailing slash is part of the tag.
-                'trailing slash' => ['/tag/books/', '#books/'],
+                // One trailing slash is not part of the tag.
+                'trailing slash' => ['/tag/books/', '#books'],
+                'two trailing slashes' => ['/tag/books//', '#books/'],
                 'encoded' => ['/tag/caf%C3%A9', '#café'],
                 'encoded, lower case hex' => ['/tag/caf%c3%a9', '#café'],
-                // A plus sign and an encoded plus sign are both a space: the path is decoded twice, once by the web server and once by the page.
+                // The path is decoded once: a plus sign is a space and an encoded plus sign is a plus.
                 'plus' => ['/tag/a+b', '#a b'],
-                'encoded plus' => ['/tag/a%2Bb', '#a b'],
-                // A `q` in the query string replaces the tag as the subject.
-                'query overrides' => ['/tag/books?q=x', 'x'],
+                'encoded plus' => ['/tag/a%2Bb', '#a+b'],
+                // A `q` in the query string does not replace the tag as the subject.
+                'query does not override' => ['/tag/books?q=x', '#books'],
             ];
         }
 

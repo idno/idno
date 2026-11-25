@@ -353,8 +353,8 @@ Idno/
                                PageContextResolver, PageRedirect, PageLifecycle, PageRequestListener, PageRenderer, PageDrawer,
                                DrawnPage: what a controller that draws a site page carries, the lifecycle run around it and
                                how it draws, see "Legacy pages and routes"); Controller/ (the controllers of site pages:
-                               HomepageController, with Home/HomePages, the home page's one implementation, and HomeStream, the
-                               interface of what it lists, see "Querying entities in new code")
+                               HomepageController, with Home/HomePages, the one implementation of the home page, the feeds, the search
+                               and the tag pages, and HomeStream, the interface of what it lists, see "Querying entities in new code")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand
   Config/                      BootConfig, LegacyConfigLoader, SiteSettings (modern style, Symfony-wired)
@@ -634,7 +634,7 @@ server); `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in
    answers with a Response it draws through `Idno\Http\Page\PageRenderer` (the page in its shell, with the headers of its template
    type and the ones its draw sent, the 404, 410, 403 and 500 pages, a forward), never `drawPage()`, which echoes and exits. The home page is the first
    real site page: `Idno\Http\Controller\HomepageController` serves `/` and `/content/<types>` (GET, HEAD, OPTIONS), with `Idno\Pages\Homepage`
-   a deprecated shell behind it (see "Legacy pages and routes: shells").
+   a deprecated shell behind it (see "Legacy pages and routes: shells"), and the feeds, the search and the tag pages (below).
 5. `LegacyController` returns an `Idno\Legacy\LegacyResponse`: a streamed response that
    sends no status line and no headers of its own. Symfony's response listeners still
    modify the object (they set a charset, and `X-Robots-Tag: noindex` in debug mode), but
@@ -892,7 +892,7 @@ state-changing browser request): the admin page `/admin/legacytables` is one, fo
 that extends `Idno\Legacy\PageShell`, is marked `@deprecated`, and has no logic of its own. Each ported page has ONE implementation, in the service the controller
 calls; a shell declares only `getContent()`, `postContent()`, `putContent()`, `deleteContent()` and `webmentionContent()` (whichever it really implemented) and its
 `SHELL` constant (its own class), and each handler is one `return $this->delegate(...)` (or `$this->delegateWebmention(...)`) of that service. So a third-party
-page that extends a shell, a plugin's `hijackRoute()` or `addRoute()` of its route and the core pages that build one (`Feed`, `Search\Tags` build a `Homepage`) still
+page that extends a shell and a plugin's `hijackRoute()` or `addRoute()` of its route still
 serve the page, through the same service, and nothing has to be kept in sync. The list of shells is `Tests/Unit/Http/PageShellsTest::SHELLS` (it scans `Idno/Pages/`
 for classes that extend `PageShell`, and holds each to the rule); today it is `Idno\Pages\Homepage`. Shells are removed in 3.0.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
@@ -915,6 +915,24 @@ for classes that extend `PageShell`, and holds each to the rule); today it is `I
   line once a process), `Tests/Characterisation/HomepageShellTest` (a hijacked subclass and one on its own route over HTTP, the headers, a malformed Host, the
   shell's page byte for byte the controller's), `Tests\Fixtures\ThirdPartyHomepage` (`IDNO_TEST_CLAIM_ROUTES=homepage-hijack|homepage-route`).
 
+**Feeds, search and tags.** The home page's stream under other addresses is `HomepageController` too, with no class of its own to keep: `Idno\Pages\Feed`, `Idno\Pages\Search\Forward` and
+`Idno\Pages\Search\Tags` are DELETED (not shells: nothing ever extended them), and so are their `addRoute()`s in `Idno::registerPages()`. Each action is one call of
+`HomePages` and its `#[SitePage(name: 'Idno\Pages\Homepage')]` gives the home page's body class and page events, so a feed or a tag page fires `page/ready`, `page/head` and `page/get` ONCE,
+with `page_class` `Idno\Pages\Homepage` (the feed page used to fire them for its own class and then again for the home page it built, and the tag page fired a trailing `page/ready`, and
+the feed's `Link` headers were sent twice: all fixed; `PageContractTest`). `replaces` is empty (no shell is shadowed). The routes follow the convention (GET, HEAD, OPTIONS; `{lead}` and
+`{slash}`; `Tests/Unit/Http/PageRouteConvention` knows that `idno_tag` has no `{slash}`, its tag taking the rest of the path):
+- `feed()`: `idno_feed_xml` (`/feed.xml`), `idno_feed` (`/feed`), `idno_rss_xml` (`/rss.xml`), `#[SitePage(defaultType: 'rss')]`: the stream drawn in the `rss` type unless the request names
+  another (`?_t=json`; an `Accept` header does not choose, as before). It is not the root, so `homepage/replace` is not asked.
+- `search()`: `idno_search` (`/search`): a 302 to `<url>?q=<urlencode(q)>` (`HomeStream::siteAddress()` is the configured `url`); a `q` that is not text (`q[]=x`) is an empty query (it was a
+  500 page, `urlencode()` of an array).
+- `tag()`: `idno_tag` (`/tag/<tag>`, requirement `[^\s]+` as the legacy pattern, `utf8: false`: a tag may be any bytes except white space, which a path cannot carry). The tag is read from the
+  path AS SENT (`Request::getPathInfo()` is not decoded), one trailing slash is removed and the rest is `urldecode()`d ONCE, so `+` is a space and `%2B` a plus (`/tag/a%2Bb` is `#a+b`; it was
+  `#a b`, decoded twice); the stream's query is `#<tag>` and wins over a `q` in the query string (it was the request's `q`), for every content type (`all`). A path of only slashes is the 404 page.
+`/tag/` and `/search/mentions.json` are not these routes. POST, PUT, PATCH and DELETE of these paths, and a request with a malformed `Host`, are the legacy router's: no page, its 404 page (a POST was
+the invalid-token redirect home). A webmention to one of these addresses is `target_not_found` (it was `source_not_supported` or `target_not_supported`): the endpoint asks the legacy router for the target's
+page and there is none (`WebmentionToADeletedPageTest`). A plugin that `addRoute()`s a page for one of these paths now serves it (`RouteOverrideTest::testAPluginsPageOnAFeedSearchOrTagPathTakes...`, mode
+`feeds` of `IDNO_TEST_CLAIM_ROUTES`); a plugin that EXTENDS one of the deleted classes stops the site booting until it is disabled (`docs/install/upgrade.md`).
+
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home()` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
 ['page' => $page, 'renderer' => $renderer])` (an `Idno\Queue\EventTrigger` taken as a service closure, like the logger, so the service is built in a kernel with no
@@ -930,7 +948,7 @@ legacy application). `page` is the `Idno\Http\Page\PageContext` of the request a
 - A listener MUST respect the viewer's access to what it puts in place of the stream: the replacement is served to every visitor, so it checks `canRead()` (or the
   equivalent) for the viewer, and answers a refusal, a redirect or nothing (`null`: the stream) rather than the content, as StaticPages does.
 - Only the site's ROOT is replaceable: `home()` triggers the event only when the request's path is the root (`/`, whatever its query), so the pages that draw the
-  stream under an address of their own (`Pages\Feed`, a plugin's subclass of the shell on its own route) are never replaced; `content()` (`/content/<types>`) never
+  stream under an address of their own (the feeds, a plugin's subclass of the shell on its own route) are never replaced; `content()` (`/content/<types>`) never
   triggers it, which is how the stream stays reachable. The event fires after the page's own events (`page/ready`, `page/head`, `page/get`) and before the stream
   is asked anything.
 - A listener that throws fails the page as a page that throws does (the 500 page, the exception reported); `home()` does not catch it, and a broken listener
@@ -1722,7 +1740,7 @@ test fixtures is routed to a controller through them yet:
 - What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`). `Idno\Http\Controller\Home\HomePages`
   (a public service on `HomeStream`, `PageRenderer`, and the logger and the event trigger, which it takes as service closures and fetches only when it logs, so the service is built in a kernel with no legacy application: `PageListenersWithoutLegacyTest`) is the home page: `home($page)` (which first offers the root to the event `homepage/replace`: see "Replacing the home page") and `content($page, $types)` return its `Response`, and
   `receiveWebmention()` takes a webmention of the site's root. `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
-  extends it, and the feeds (`Pages\Feed`) and the tag search (`Pages\Search\Tags`), which build a `Homepage`): one implementation. The stream holds what the legacy
+  extends it): one implementation, which is also the feeds', the search's and the tags'. The stream holds what the legacy
   `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the template variables are what they
   were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the warning logged when there is not
   exactly one), `isSingleUser()`, `firstAdministrator()` (`User::getOne(['admin' => true])`: what a webmention of the root is passed on to, which does not insist on
@@ -1731,9 +1749,9 @@ test fixtures is routed to a controller through them yet:
   empty is every registered class; the friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`),
   `page($types, $query, $offset)` (published posts only, by the viewer's read groups: `Entity::countFromX()` then `getFromX()` with `items_per_page`; `items` is
   what the finder returned, false included), `creatableTypes()` (the logged-in member's content types, each with `editUrl` set; false for a visitor), `titles()`,
-  `lastModified($timestamp)` (the page's `Last-Modified`, from its first item's `updated`, asked for with `PageContext::addHeader()`) and `profilePageWebmention()`
+  `siteAddress()` (the configured `url` as written: where the search page sends a query), `lastModified($timestamp)` (the page's `Last-Modified`, from its first item's `updated`, asked for with `PageContext::addHeader()`) and `profilePageWebmention()`
   (what a webmention to the home page of a single-user site does: the profile page's own `webmentionContent()`). `$query` is `string|array|null` because a
-  request can carry `q[]`, which the stores read as a query that matches nothing. `HomePages::serve()` is the flow `Homepage::getContent()` had: an empty site
+  request can carry `q[]`, which the stores read as a query that matches nothing. `HomePages::serve()` (the one flow of the home page, the feed and the tag page) is the flow `Homepage::getContent()` had: an empty site
   is redirected to `begin/` (`PageRenderer::redirect()`), the single-user owner is set as the page's owner when it has none, then the types, the page, the
   creatable types and the titles are asked in that order, `Last-Modified` is the first item's, the body `pages/home` is drawn with `items`, `contentTypes`,
   `offset`, `count`, `subject` and `content`, and the shell with `title`, `description`, `content` and `body`. It reads `q`, `offset` and `types` through

@@ -445,6 +445,14 @@ final class LegacyHomeStreamTest extends PrivateSiteTestCase
         $this->assertSame(\gmdate('D, d M Y H:i:s', 1_700_000_000) . ' GMT', $result);
     }
 
+    public function testTheSiteAddressIsTheConfiguredUrlAsWritten(): void
+    {
+        $result = $this->runInSite('return [\Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class)->siteAddress(), \Idno\Core\Idno::site()->config()->url];');
+
+        $this->assertSame($result[1], $result[0]);
+        $this->assertNotSame('', $result[0]);
+    }
+
     public function testAProfileWebmentionReachesTheProfilePage(): void
     {
         $result = $this->runInSite(self::SEED . <<<'PHP'

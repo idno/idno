@@ -265,6 +265,26 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $this->assertSame('controller', $this->raw($base, 'GET', '/_test/claimable')['body'], 'the path the plugin did not take');
     }
 
+    public function testAPluginsPageOnAFeedSearchOrTagPathTakesItNowThatCoreHasNoLegacyPageThere(): void
+    {
+        $base = $this->server('feeds');
+
+        // The pages core registered for these paths are deleted: nothing of core's is registered beside a plugin's pattern, so the legacy router
+        // chooses the plugin's, and the controller (which shadows no class) steps aside, in every spelling the legacy pattern matched.
+        foreach (['/feed.xml', '/feed.xml/', '//feed.xml', '/search', '/search/', '/tag/books', '/tag/books/', '/tag/%FF'] as $target) {
+            $response = $this->raw($base, 'GET', $target);
+            $this->assertSame('claimed', $response['body'], $target);
+            $this->assertSame([ClaimingPage::class], $response['pages'], $target);
+        }
+        // the paths the plugin did not take stay the controller's
+        foreach (['/rss.xml', '/feed'] as $target) {
+            $response = $this->raw($base, 'GET', $target);
+            $this->assertNotSame('claimed', $response['body'], $target);
+            $this->assertContains(ControllerPage::class, $response['pages'], $target . ': the controller begun the page');
+            $this->assertNotContains(ClaimingPage::class, $response['pages'], $target);
+        }
+    }
+
     public function testTemplateTypesAreTheirOwnPagesAnswerWhoeverServes(): void
     {
         foreach ([['replaced', 'controller'], ['1', 'claimed']] as [$mode, $body]) {

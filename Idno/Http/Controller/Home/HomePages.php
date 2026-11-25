@@ -13,9 +13,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * The home page: the stream of the site's posts in its shell, at the root and under `/content/` (the friendly paths that name content
- * types). The one implementation of it: `HomepageController` answers the requests the router gives it, and the deprecated
- * `Idno\Pages\Homepage` (and so a plugin's page that extends it, the feeds and the tag search that build one) draws it through the same
- * methods.
+ * types), and the pages that are the same stream under another address: the feeds (`/feed.xml`, `/feed`, `/rss.xml`, the stream in the
+ * `rss` type), the tag pages (`/tag/<tag>`, the posts that carry a hashtag, in every content type) and the search page (a redirect to
+ * the stream's own search). The one implementation of all of them: `HomepageController` answers the requests the router gives it, and
+ * the deprecated `Idno\Pages\Homepage` (and so a plugin's page that extends it) draws it through the same methods.
  */
 final class HomePages
 {
@@ -65,9 +66,49 @@ final class HomePages
         return $this->serve($page, $types);
     }
 
-    private function serve(PageContext $page, ?string $friendly): Response
+    /**
+     * The home page's stream as the feed: the same stream, drawn in the template type the request names, the `rss` type when it names
+     * none (the controller's `defaultType`). It is not the site's root, so no plugin replaces it.
+     */
+    public function feed(PageContext $page): Response
+    {
+        return $this->serve($page, null);
+    }
+
+    /**
+     * A visitor's search, sent to the stream's own: `<site address>?q=<the query>`. A query that is not text (`q[]=x`) is an empty one.
+     */
+    public function search(PageContext $page): Response
     {
         $query = $page->input('q');
+
+        return $this->renderer->redirect($page, $this->stream->siteAddress() . '?q=' . urlencode(is_string($query) ? $query : ''));
+    }
+
+    /**
+     * The posts that carry a hashtag, of every content type: the tag is what follows `/tag/` in the address as it was sent, decoded
+     * once (a plus sign is a space, an encoded one a plus), less one trailing slash, and it is the stream's query as `#<tag>`, whatever
+     * `q` the request carries. An address with no tag is no page.
+     */
+    public function tag(PageContext $page): Response
+    {
+        $tag = preg_match('~^/{1,2}tag/(.*)$~s', $page->request()->getPathInfo(), $found) === 1 ? $found[1] : '';
+        if (str_ends_with($tag, '/')) {
+            $tag = substr($tag, 0, -1);
+        }
+        $tag = urldecode($tag);
+        if ($tag === '') {
+            return $this->renderer->notFound($page);
+        }
+        // the page's own input, as the tag page had it, so the stream's empty state says what it was searched for
+        $page->setInput('q', '#' . $tag);
+
+        return $this->serve($page, 'all', '#' . $tag);
+    }
+
+    private function serve(PageContext $page, ?string $friendly, ?string $search = null): Response
+    {
+        $query = $search ?? $page->input('q');
         $offset = (int) $page->input('offset');
 
         // An empty site has no home page

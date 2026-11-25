@@ -101,26 +101,29 @@ final class PageContractTest extends PrivateSiteTestCase
         }
     }
 
-    public function testTheFeedAndTagPagesSeeTheHomePageClass(): void
+    public function testTheFeedAndTagPagesFireTheHomePagesEventsOnce(): void
     {
-        // The feed page builds a home page to draw its items: after its own three events the home page's three follow, the head and get
-        // of the second on the rss type (and a second Link header block, so the headers of the feed are sent twice).
+        // The feed and the tag page are the home page's stream under another address: it is one page, so its three events fire once, as the
+        // home page's, in the feed's own template type (the feed page used to fire a set of its own and then the home page's it built:
+        // `page/ready`, `page/head` and `page/get` twice, and the tag page a trailing `page/ready`).
         [, $feed] = $this->recorded('GET', '/feed.xml');
         $this->assertSame(
-            [['page/ready', 'Idno\Pages\Feed', 'idno_pages_feed', 'default'], ['page/head', 'Idno\Pages\Feed', 'idno_pages_feed', 'default'], ['page/get', 'Idno\Pages\Feed', 'idno_pages_feed', 'default'],
-                ['page/ready', 'Idno\Pages\Homepage', 'idno_pages_homepage', 'default'], ['page/head', 'Idno\Pages\Homepage', 'idno_pages_homepage', 'rss'], ['page/get', 'Idno\Pages\Homepage', 'idno_pages_homepage', 'rss']],
+            [['page/ready', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'rss'], ['page/head', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'rss'], ['page/get', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'rss']],
             array_map(static fn (array $e): array => [$e['event'], $e['current'], $e['body_class'], $e['type']], $feed)
         );
-        $this->assertSame('Idno\Pages\Homepage', $feed[5]['page_class']);
+        $this->assertSame('Idno\Pages\Homepage', $feed[2]['page_class']);
 
-        // The tag page's own three events, then a home page it builds (page/ready only: it is never asked to get).
         [, $tag] = $this->recorded('GET', '/tag/x');
         $this->assertSame(
-            [['page/ready', 'Idno\Pages\Search\Tags', 'idno_pages_search_tags'], ['page/head', 'Idno\Pages\Search\Tags', 'idno_pages_search_tags'], ['page/get', 'Idno\Pages\Search\Tags', 'idno_pages_search_tags'],
-                ['page/ready', 'Idno\Pages\Homepage', 'idno_pages_homepage']],
-            array_map(static fn (array $e): array => [$e['event'], $e['current'], $e['body_class']], $tag)
+            [['page/ready', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'default'], ['page/head', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'default'], ['page/get', 'Idno\Legacy\ControllerPage', 'idno_pages_homepage', 'default']],
+            array_map(static fn (array $e): array => [$e['event'], $e['current'], $e['body_class'], $e['type']], $tag)
         );
-        $this->assertSame('Idno\Pages\Search\Tags', $tag[2]['page_class']);
+        $this->assertSame('Idno\Pages\Homepage', $tag[2]['page_class']);
+
+        foreach (['/rss.xml', '/feed'] as $path) {
+            [, $events] = $this->recorded('GET', $path);
+            $this->assertSame(['page/ready', 'page/head', 'page/get'], array_column($events, 'event'), $path);
+        }
     }
 
     public function testTheSmallPagesFireTheEventsWithTheirOwnClass(): void
@@ -162,7 +165,7 @@ final class PageContractTest extends PrivateSiteTestCase
     {
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
 
-        foreach (['/' => 'Idno\Pages\Homepage', '/feed.xml' => 'Idno\Pages\Feed'] as $path => $class) {
+        foreach (['/', '/feed.xml', '/tag/x'] as $path) {
             file_put_contents($this->recordFile, '');
             $response = $client->request('GET', $path);
 
@@ -170,7 +173,7 @@ final class PageContractTest extends PrivateSiteTestCase
             $this->assertNull($response->header('X-Idno-Test-Page-Head'), $path);
             $events = array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile)))));
             $this->assertSame(['page/ready'], array_column($events, 'event'), $path);
-            $this->assertSame($path === '/' ? 'Idno\Legacy\ControllerPage' : $class, $events[0]['current'], $path);
+            $this->assertSame('Idno\Legacy\ControllerPage', $events[0]['current'], $path);
         }
     }
 
@@ -208,11 +211,11 @@ final class PageContractTest extends PrivateSiteTestCase
         $endpoints = ['authorization_endpoint @/indieauth/auth', 'token_endpoint @/indieauth/token', 'micropub @/micropub/endpoint'];
         $listeners = static fn (string $self): array => ['http://webmention.org/ @/webmention/', 'webmention @/webmention/', 'hub https://withknown.superfeedr.com/', 'self @/' . $self];
 
-        // The default hub: the webmention, hub and self links follow the endpoints, and the feed sends its second block (its inner home page) after its own.
-        foreach (['', 'robots.txt', 'tag/x', 'content/all', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
+        // The default hub: the webmention, hub and self links follow the endpoints, once on every page (the feed used to send them twice: its own
+        // page and the home page it built each fired `page/head`).
+        foreach (['', 'robots.txt', 'tag/x', 'content/all', 'feed.xml', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
             $this->assertSame([...$endpoints, ...$listeners($path)], $this->links($path), '/' . $path);
         }
-        $this->assertSame([...$endpoints, ...$listeners('feed.xml'), ...$listeners('feed.xml')], $this->links('feed.xml'));
     }
 
     public function testEachPageSendsOnlyTheLinksOfItsEndpointsWhenTheHubIsEmpty(): void

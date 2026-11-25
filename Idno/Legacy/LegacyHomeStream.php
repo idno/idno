@@ -59,6 +59,11 @@ final class LegacyHomeStream implements HomeStream
         return Idno::site()->config()->getURL() . 'begin/';
     }
 
+    public function siteAddress(): string
+    {
+        return (string) Idno::site()->config()->url;
+    }
+
     public function types(?string $friendly, string|array|null $query, string|array|null $requested): array
     {
         $types = $requested;

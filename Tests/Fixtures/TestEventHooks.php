@@ -36,6 +36,7 @@ final class TestEventHooks
         //   mdclaim   a plugin's hijackRoute() of the permalink route of the Markdown fixture, for a Markdown permalink of its own
         //   homepage-hijack  a plugin's hijackRoute() of the root for a subclass of the home page's shell (ThirdPartyHomepage)
         //   homepage-route   a plugin's addRoute() of a path of its own for the same subclass
+        //   feeds     a plugin's addRoute() of the feed, search and tag paths whose core pages are deleted, for ClaimingPage
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
             $dispatcher->addListener('plugins/loaded', static function () use ($claim): void {
@@ -55,6 +56,7 @@ final class TestEventHooks
                     'mdclaim' => $routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class),
                     'homepage-hijack' => $routes->hijackRoute('/', ThirdPartyHomepage::class),
                     'homepage-route' => $routes->addRoute('/third-party-home/?', ThirdPartyHomepage::class),
+                    'feeds' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), ['/feed\.xml', '/search/?', '/tag/([^\s]+)\/?']),
                     default => null,
                 };
             });

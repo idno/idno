@@ -120,7 +120,8 @@ namespace Tests\Characterisation {
                 // pages that do not
                 ['OPTIONS', '/', [], 204, $s, null],
                 ['GET', '/search?q=a', [], 302, $s, null],
-                ['POST', '/search', [], 302, $s, null],
+                // (a POST of the search address is no page now: the legacy router's 404 page, with the session's lines)
+                ['POST', '/search', [], 404, $s, null],
                 ['GET', '/robots.txt', [], 200, $s, null],
                 ['GET', '/chrome/manifest.json', [], 200, $s, null],
                 ['GET', '/service-worker.min.js', [], 200, $s, null],
@@ -175,16 +176,17 @@ namespace Tests\Characterisation {
         {
             // The router answers an XHR GET of a legacy page with its own headers: a 1997 `Expires`, two `Cache-Control` lines and `Last-Modified`
             // (now, or the page's own when it sets one). The pages a controller serves (the home page and its streams) send the headers of the
-            // same request that is not XHR: the session's. The others become so when they are served by controllers.
+            // same request that is not XHR: the session's (the feeds, the tag pages and the search among them). The others become so when they are served
+            // by controllers.
             $x = 'xhr';
             $this->checkRows([
                 ['GET', '/', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/?_t=json', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/?_t=rss', self::XHR, 200, 'session', 'newest'],
                 ['GET', '/content/all', self::XHR, 200, 'session', 'newest'],
-                ['GET', '/feed.xml', self::XHR, 200, $x, 'newest'],
-                ['GET', '/tag/books', self::XHR, 200, $x, 'newest'],
-                ['GET', '/search?q=a', self::XHR, 302, $x, 'any'],
+                ['GET', '/feed.xml', self::XHR, 200, 'session', 'newest'],
+                ['GET', '/tag/books', self::XHR, 200, 'session', 'newest'],
+                ['GET', '/search?q=a', self::XHR, 302, 'session', null],
                 ['GET', '/robots.txt', self::XHR, 200, $x, 'any'],
                 ['GET', '/chrome/manifest.json', self::XHR, 200, $x, 'any'],
                 ['GET', '/service-worker.min.js', self::XHR, 200, $x, 'any'],

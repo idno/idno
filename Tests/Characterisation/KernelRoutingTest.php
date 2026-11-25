@@ -168,6 +168,7 @@ namespace Tests\Characterisation {
                 'foo/'                      => 404,
                 'foo%0Abar'                 => 404,
                 '%FF'                       => 404,
+                // (the feed is the home page controller's now: its trailing-slash spelling is its own, and the answer is the same)
                 'feed.xml/'                 => 200,
             ];
             foreach ($expected as $path => $status) {

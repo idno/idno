@@ -45,6 +45,11 @@ interface HomeStream
     public function beginUrl(): string;
 
     /**
+     * The site's address as it is configured (`url`, written as the configuration has it): what the search page sends a visitor's query to.
+     */
+    public function siteAddress(): string;
+
+    /**
      * The content types a request asks the home page to list.
      *
      * With a friendly path (`/content/note/article`: its part after the root, `all` for every type) the types it names, and the names

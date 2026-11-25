@@ -284,9 +284,7 @@ namespace Tests\Pages {
             $year = date('Y');
             $expected = [
                 '/'                              => 'Idno\Pages\Homepage',
-                '/feed.xml'                      => 'Idno\Pages\Feed',
                 '/robots.txt'                    => 'Idno\Pages\Txt\Robots',
-                '/tag/café'                      => 'Idno\Pages\Search\Tags',
                 '/profile/testuser'              => 'Idno\Pages\User\View',
                 '/admin/'                        => 'Idno\Pages\Admin\Home',
                 '/session/login'                 => 'Idno\Pages\Session\Login',
@@ -306,6 +304,19 @@ namespace Tests\Pages {
 
             foreach (["/$year/..", "/$year/a/b", "/$year/café.php", "/$year/café-notes/nosuchthing"] as $path) {
                 $this->assertFalse(Idno::site()->routes()->getRoute($path), "$path should have no page.");
+            }
+
+            // The feeds and the tag pages are the home page controller's now: the legacy router has no page for them, and the
+            // symfony router sends them to it, the tag with its non-ASCII letters as written.
+            foreach (['/feed.xml', '/feed', '/rss.xml', '/search', '/tag/café', '/tag/caf%C3%A9'] as $path) {
+                $this->assertFalse(Idno::site()->routes()->getRoute($path), "$path should have no legacy page.");
+            }
+            $router = Idno::container()->get('router');
+            foreach (['/feed.xml' => 'idno_feed_xml', '/tag/café' => 'idno_tag', '/tag/caf%C3%A9' => 'idno_tag', '/search' => 'idno_search'] as $path => $route) {
+                $request = new \Symfony\Component\HttpFoundation\Request([], [], [], [], [], ['REQUEST_METHOD' => 'GET', 'REQUEST_URI' => $path, 'SCRIPT_NAME' => '/index.php', 'SCRIPT_FILENAME' => dirname(__DIR__, 2) . '/index.php', 'HTTP_HOST' => 'localhost']);
+                $match = $router->matchRequest($request);
+                $this->assertSame($route, $match['_route'], $path);
+                $this->assertSame(\Idno\Http\Controller\HomepageController::class, explode('::', (string) $match['_controller'])[0], $path);
             }
         }
 
