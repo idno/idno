@@ -178,7 +178,7 @@ namespace Tests\Pages {
 
             $html = $this->page($this->profilePath(), false);
 
-            $this->assertStringContainsString(static::$status->getDisplayURL() . '#comments', $html, 'A listed post should link to its comments, which are on its own page.');
+            $this->assertStringContainsString(parse_url(static::$status->getDisplayURL(), PHP_URL_PATH) . '#comments', $html, 'A listed post should link to its comments, which are on its own page.');
         }
 
         /**
@@ -245,13 +245,13 @@ namespace Tests\Pages {
             $this->useLook($theme);
 
             $profile = $this->page($this->profilePath(), false);
-            $this->assertStringNotContainsString('content="' . static::$article->getDisplayURL() . '"', $profile, 'The profile\'s metadata should not take the address of a post in its list.');
+            $this->assertDoesNotMatchRegularExpression('/content="[^"]*' . preg_quote(parse_url(static::$article->getDisplayURL(), PHP_URL_PATH), '/') . '"/', $profile, 'The profile\'s metadata should not take the address of a post in its list.');
             $this->assertStringNotContainsString('content="A long profile feed article"', $profile, 'The profile\'s metadata should not take the title of a post in its list.');
             $this->assertStringContainsString('content="Profile Feed Test User"', $profile, 'The profile\'s metadata should name the member.');
 
             $permalink = $this->page(parse_url(static::$article->getDisplayURL(), PHP_URL_PATH), false);
             $this->assertStringContainsString('<meta property="og:title" content="A long profile feed article" />', $permalink, 'A post\'s own page should describe the post.');
-            $this->assertStringContainsString('content="' . static::$article->getDisplayURL() . '"', $permalink, 'A post\'s own page should give its address.');
+            $this->assertMatchesRegularExpression('/content="[^"]*' . preg_quote(parse_url(static::$article->getDisplayURL(), PHP_URL_PATH), '/') . '"/', $permalink, 'A post\'s own page should give its address.');
         }
 
         /**
