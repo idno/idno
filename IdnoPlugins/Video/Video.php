@@ -71,6 +71,23 @@ namespace IdnoPlugins\Video {
         }
 
         /**
+         * The address of this site's own copy of hls.js, which plays Bluesky's video streams
+         * (HLS) in the browsers that cannot play them by themselves. Composer installs it
+         * (npm-asset/hls.js); it is never loaded from another site.
+         *
+         * @return string An empty string when the library is not installed
+         */
+        static function hlsLibraryUrl(): string
+        {
+            $file = 'vendor/npm-asset/hls.js/dist/hls.light.min.js';
+            if (!is_file(\Idno\Core\Idno::site()->config()->getPath() . '/' . $file)) {
+                return '';
+            }
+
+            return \Idno\Core\Idno::site()->config()->getDisplayURL() . $file;
+        }
+
+        /**
          * The names of the services a member can post a video from, as the site is set up.
          *
          * @return string[]

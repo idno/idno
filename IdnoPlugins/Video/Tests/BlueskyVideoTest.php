@@ -339,6 +339,39 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * Bluesky serves HLS, which Chrome and Firefox on a desktop do not play by themselves.
+         * The player names the copy of hls.js that this site serves, for the script beside it
+         * to load in such a browser. Nothing is loaded from anywhere else.
+         *
+         * @dataProvider lookProvider
+         */
+        public function testPlayerNamesThisSitesOwnHlsLibrary($look)
+        {
+            $video = new Video();
+            $this->assertTrue($video->setVideoAddress('https://bsky.app/profile/bsky.app/post/' . self::RKEY));
+            $video->title = 'A film';
+
+            $html = $this->draw($video, $look);
+            $doc = $this->dom($html);
+            $player = $doc->getElementsByTagName('video')[0];
+
+            $library = Idno::site()->config()->getPath() . '/vendor/npm-asset/hls.js/dist/hls.light.min.js';
+            $this->assertFileExists($library, 'composer install should have fetched hls.js.');
+            $this->assertSame(
+                Idno::site()->config()->getDisplayURL() . 'vendor/npm-asset/hls.js/dist/hls.light.min.js',
+                $player->getAttribute('data-hls')
+            );
+
+            $scripts = $doc->getElementsByTagName('script');
+            $this->assertCount(1, $scripts);
+            $this->assertFalse($scripts[0]->hasAttribute('src'), 'The script beside the player is part of the page.');
+            $code = $scripts[0]->textContent;
+            $this->assertStringContainsString('data-hls', $code, 'The script should load the library the player names.');
+            $this->assertDoesNotMatchRegularExpression('~https?:|//[a-z]~i', $code, 'The script must hold no address: it reads them from the element.');
+            $this->assertStringNotContainsString('A film', $code, 'The script must hold nothing from the post.');
+        }
+
+        /**
          * @dataProvider lookProvider
          */
         public function testTamperedBlueskyRecordHasNoPlayer($look)
