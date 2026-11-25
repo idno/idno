@@ -24,6 +24,8 @@
             </a>
         </li>
         <?php } ?>
+        <?php /* Items that plugins add (each an <li>); the key of the current item is in $vars['nav_current'] */ ?>
+        <?= $this->__(['nav_current' => $nav_current])->draw('shell/nav/items') ?>
         <li>
             <button type="button" <?= \Themes\Twenty26\Navigation::attributes('search', $nav_current) ?> x-data x-on:click="$dispatch('open-search')">
                 <svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>

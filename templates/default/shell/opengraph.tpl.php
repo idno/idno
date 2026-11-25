@@ -19,7 +19,8 @@ if (!empty($vars['object']) && $currentPage->isPermalinkFor($vars['object'])) {
         'og:image'     => $currentPage->getIcon()
     );
 
-    if (!empty($vars['description'])) { $opengraph['og:description'] = $vars['description'];
+    // Every value of $opengraph is printed as it is below, so it is escaped here
+    if (!empty($vars['description'])) { $opengraph['og:description'] = htmlspecialchars(strip_tags((string) $vars['description']), ENT_COMPAT, 'UTF-8');
     }
 
     if ($currentPage->isPermalink()) {
