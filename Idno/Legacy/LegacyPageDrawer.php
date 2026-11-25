@@ -71,10 +71,16 @@ final class LegacyPageDrawer implements PageDrawer
         // PHP keeps a list of the headers `header()` sets under a web server (not the CLI), and refuses them once the output has begun
         $lists = !in_array(PHP_SAPI, ['cli', 'phpdbg'], true) && !headers_sent();
         // Templates read the process's status (the Markdown shell does), as they did when a legacy page had set it; the answer's own
-        // status is the response's, so the process's is put back (a process that has none yet answers 200: the CLI's is false).
+        // status is the response's, so the process's is put back. Once the output has begun the status cannot be set (PHP warns).
+        $settable = !headers_sent();
         $previous = http_response_code();
-        http_response_code($status);
+        if ($settable) {
+            http_response_code($status);
+        }
         $before = headers_list();
+        $drawn = null;
+        $set = false;
+        $changes = null;
         try {
             // The type's headers are sent as `drawPage()` sent them, before the shell is drawn, so that what the draw does to them (a plugin's
             // `header_remove()`, a header added beside one, a replacement) is PHP's own and is read back from its list
@@ -83,27 +89,45 @@ final class LegacyPageDrawer implements PageDrawer
                     header($name . ': ' . $value, ShellHeaders::replaces($name));
                 }
             } : null);
-            $after = headers_list();
             // A status the draw set (`http_response_code()` in a template or a shell) is the answer's
             $set = http_response_code();
         } finally {
-            http_response_code(is_int($previous) ? $previous : 200);
+            if ($settable) {
+                self::restoreStatus($previous);
+            }
+            if ($lists) {
+                // What was sent, the type's and the draw's alike (also by a draw that failed: the error page that answers is not its page),
+                // is the response's to send, once and with the replace or append each had: the lines that are new in PHP's list, taken out
+                // of it (what PHP held of those names put back, and a cookie never taken)
+                $changes = AddedHeaders::between($before, headers_list());
+                foreach ($changes['remove'] as $name) {
+                    header_remove($name);
+                }
+                foreach ($changes['keep'] as $line) {
+                    header($line, false);
+                }
+            }
         }
 
-        if (!$lists) {
+        if ($changes === null) {
             return new DrawnPage($drawn['body'], $drawn['headers']);
         }
 
-        // What was sent, the type's and the draw's alike, is the response's to send, once and with the replace or append each had: the lines
-        // that are new in PHP's list, taken out of it (what PHP held of those names put back, and a cookie never taken)
-        $changes = AddedHeaders::between($before, $after);
-        foreach ($changes['remove'] as $name) {
-            header_remove($name);
-        }
-        foreach ($changes['keep'] as $line) {
-            header($line, false);
-        }
-
         return new DrawnPage($drawn['body'], $changes['added'], is_int($set) && $set !== $status ? $set : null);
+    }
+
+    /**
+     * Puts the process's status back. A process that had none (the CLI's is false) has none again: PHP has no call that unsets it, and a
+     * status line of no code does.
+     */
+    private static function restoreStatus(int|bool $previous): void
+    {
+        if (is_int($previous)) {
+            http_response_code($previous);
+        } elseif (in_array(PHP_SAPI, ['cli', 'phpdbg'], true)) {
+            header('HTTP/1.1 0');
+        } else {
+            http_response_code(200);
+        }
     }
 }

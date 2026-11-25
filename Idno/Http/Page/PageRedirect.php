@@ -30,12 +30,20 @@ final class PageRedirect extends \RuntimeException
     public function toResponse(): Response
     {
         if ($this->body !== null) {
-            return new Response($this->body, $this->status, $this->body === '' ? [] : ['Content-Type' => 'application/json']);
+            return new Response($this->body, $this->status, $this->contentType() === null ? [] : ['Content-Type' => $this->contentType()]);
         }
         $response = new Response('', self::statusWithLocation($this->status));
         $response->headers->set('Location', $this->location);
 
         return $response;
+    }
+
+    /**
+     * The type of the JSON an API request is given instead of a redirect; null for a redirect and for an empty answer.
+     */
+    public function contentType(): ?string
+    {
+        return $this->body === null || $this->body === '' ? null : 'application/json';
     }
 
     /**

@@ -127,4 +127,13 @@ final class SitePageDrawingHeadersTest extends PrivateSiteTestCase
         $this->assertSame(substr_count((string) $legacy->header('Set-Cookie'), 'SameSite'), substr_count((string) $response->header('Set-Cookie'), 'SameSite'));
         $this->assertSame(1, substr_count((string) $response->header('Set-Cookie'), 'SameSite'));
     }
+
+    public function testADrawThatFailsLeavesNoneOfItsHeadersForTheErrorPage(): void
+    {
+        // The headers the type sent before the draw, and one a plugin sent before it failed, are not the error page's: PHP must not hold them
+        $response = $this->site()->request('GET', '_test/site-page/draw-new?case=draw&draw_headers=throw');
+
+        $this->assertSame(500, $response->status);
+        $this->assertNull($response->header('X-Fixture-Leftover'), 'a header of the failed draw is sent with the error page: ' . json_encode($response->headers));
+    }
 }

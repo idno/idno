@@ -124,10 +124,13 @@ final class PageRequestListener
         if ($redirect !== null) {
             if ($redirect->body !== null) {
                 $response->setContent($redirect->body . (string) $response->getContent());
+                if ($redirect->contentType() !== null) {
+                    $response->headers->set('Content-Type', $redirect->contentType());
+                }
             } else {
                 $response->headers->set('Location', $redirect->location);
                 if ($response->getStatusCode() === 200) {
-                    $response->setStatusCode($redirect->status);
+                    $response->setStatusCode(PageRedirect::statusWithLocation($redirect->status));
                 }
             }
         }

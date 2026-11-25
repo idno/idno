@@ -6,7 +6,8 @@
 //   remove   remove one of the type's own headers (`Access-Control-Allow-Origin`);
 //   append   add a second value to one of the type's own headers, beside it (`Access-Control-Allow-Origin`);
 //   status   set the status with http_response_code();
-//   location send a `Location` header.
+//   location send a `Location` header;
+//   throw    send a header and fail, for a 200 only (the error page drawn after it is not failed).
 switch ($_GET['draw_headers'] ?? '') {
     case 'remove':
         header_remove('Access-Control-Allow-Origin');
@@ -19,6 +20,12 @@ switch ($_GET['draw_headers'] ?? '') {
         break;
     case 'location':
         header('Location: https://fixture.example/moved');
+        break;
+    case 'throw':
+        if (http_response_code() === 200) {
+            header('X-Fixture-Leftover: sent before the failure');
+            throw new \RuntimeException('The draw failed.');
+        }
         break;
     default:
         header('Access-Control-Allow-Origin: https://fixture.example');

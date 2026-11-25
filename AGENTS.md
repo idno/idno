@@ -1000,7 +1000,8 @@ test fixtures is routed to a controller through them yet:
   - `NotFoundHttpException` (what `ControllerPage::noContent()` throws): `PageRenderer::notFound()`; `GoneHttpException` (`goneContent()`): `gone()`;
     `AccessDeniedHttpException` (`deniedContent($title)`, its message the title, and the walled garden's refusal): `denied()`; each logs nothing.
   - a `PageRedirect` (`forward()`): `PageRenderer::redirectFor()`, nothing logged. `PageRequestListener::onException()` (priority 10) answers it first and also forgets a
-    forward the page made and went on from; this is only the same answer, should that listener ever not have.
+    forward the page made and went on from; this is only the same answer, should that listener ever not have. A forward the page made and went on from is carried by the
+    page's own response by the same rules (`PageRedirect::statusWithLocation()` and `PageRedirect::contentType()`, the JSON type, the one deliberate addition: a legacy page sent none).
   - any other `\Exception`: `PageLifecycle::reportException()` FIRST (what `Page::exception()` reported: one critical line `<message> [<file>:<line>]` from the site's
     logger, the `error.exception` statistic, `Logging::oopsAlert()` under the same conditions), then `PageRenderer::error()`: status 500, `pages/500`, which shows the
     exception's message only when `ExceptionMessage::forVisitor()` says so (friendly, or `debug`), and for `json` and `jsonp` the shells' `exception` object. So a 500 is logged
@@ -1027,7 +1028,7 @@ test fixtures is routed to a controller through them yet:
   (`setResponse()`), and the context is given the status it ends with, because templates read the page's status (`http_status()`); the body and the headers
   come from `PageDrawer::drawPage()`, which sets the variables on the SITE's template object (so `leaked_user()`, a JSON page's printed variables and a
   template that reads what an earlier draw left behave as on a legacy page), puts `http_response_code($status)` in place for the draw (the Markdown shell reads
-  it) and back afterwards (200 where the process had none: the CLI's is false), and calls `DefaultTemplate::renderPage($status, $shell)`: `drawPage()`'s work (the
+  it) and back afterwards (a process that had none, the CLI's, has none again: `header('HTTP/1.1 0')`, PHP having no call that unsets it; and once the output has begun nothing is set, because PHP warns), and calls `DefaultTemplate::renderPage($status, $shell)`: `drawPage()`'s work (the
   shell chosen, with the `/admin` and `/account` overrides; the session's messages taken and flushed, so they are shown once; the session closed; the headers of the
   template type worked out BEFORE the draw, as `sendShellHeaders()` did; the private settings-shell flag reset afterwards) with the headers returned as `[name, value]`
   pairs instead of sent and the shell returned instead of echoed. The headers the DRAW sent itself with `header()` (a plugin's extension of `shell/headers`, a
@@ -1037,7 +1038,7 @@ test fixtures is routed to a controller through them yet:
   header of its name (it did when PHP's line is gone), was added beside it, or, with none held, replaces unless `ShellHeaders::replaces()` says the name is added (`Link`); the
   new lines are removed from PHP's list (what PHP held of those names put back) and carried on the `DrawnPage`, each with its replace flag as a third element: so a
   third-party shell's own `Content-Type` wins over the type's declared one, a plugin's `Access-Control-Allow-Origin` replaces core's, one added beside it is sent after it, a
-  `header_remove()` of one of the type's headers takes it off, and nothing is sent twice. A status the draw set with `http_response_code()` is the response's
+  `header_remove()` of one of the type's headers takes it off, and nothing is sent twice. The read-back is in a `finally`: a draw that fails leaves none of the headers it (or the type) sent in PHP's list, so the error page that answers is not given them. A status the draw set with `http_response_code()` is the response's
   (`DrawnPage::$status`) and a `Location` it sent is answered as PHP answers one (302 unless the status is a 201 or a 3xx: `PageRedirect::statusWithLocation()`). Under the CLI
   (no list) the type's declared headers are the response's, unchanged (`SitePageDrawingHeadersTest`, a site with `IDNO_TEST_DRAW_HEADERS=1` and the templates of
   `Tests/Fixtures/DrawHeaders`). A cookie is never taken (PHP adds the session's), and where PHP keeps no list (the CLI) there is nothing to take: that is observed over HTTP, a

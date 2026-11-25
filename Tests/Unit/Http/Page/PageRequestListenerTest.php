@@ -421,6 +421,26 @@ final class PageRequestListenerTest extends TestCase
         $this->assertFalse($api->headers->has('Location'));
     }
 
+    public function testAContinuedForwardIsBuiltByTheRuleOfTheRedirectBuilder(): void
+    {
+        $listener = $this->listener();
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerPageController(), 'page'));
+
+        // a status that PHP does not leave on a Location is a 302, as PageRedirect::toResponse() makes it
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/later', null, 200));
+        $plain = new Response('page');
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $plain));
+        $this->assertSame(302, $plain->getStatusCode());
+
+        // the JSON of an API request is JSON
+        PageContext::of($request)->setRedirect(new PageRedirect('https://example.com/later', '{"a":1}'));
+        $api = new Response('page', 200, ['Content-Type' => 'text/html']);
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $api));
+        $this->assertSame('{"a":1}page', $api->getContent());
+        $this->assertSame('application/json', $api->headers->get('Content-Type'));
+    }
+
     public function testTheWorkAfterTheResponseRunsOnTerminateAndAFailureIsReported(): void
     {
         $listener = $this->listener();
