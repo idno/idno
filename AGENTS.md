@@ -270,6 +270,11 @@ post is saved, changed or deleted, through the queue.
   until the site keeps video files itself.
 - A refusal by a PDS is an `XrpcException`: its message is the HTTP status and the name of the
   error, never the server's answer or a token. Keep it that way; the message is logged.
+- A failed write is also noted on the member (`standardsitesync_failure`: `kind`, `detail`,
+  `at`), and their settings page says so until the next write that works: `expired` when the
+  connection is no longer accepted (a token refresh that fails, a 401) and they must connect
+  again, `failed` otherwise (`Main::describeFailure()`). The detail is the status and the
+  name of the error only.
 - The OAuth scope is `atproto transition:generic`, which lets the site write any record and
   upload blobs. Asking for other scopes means every connected member must connect again.
 - Tests replace `ATProtoClient::$transport` and `BlueskyLookup::$fetch`; no test talks to a

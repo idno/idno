@@ -31,6 +31,7 @@ class UserSettings extends Page
                 'did'          => $session['did'] ?? '',
                 'pds'          => $session['pds'] ?? '',
                 'bluesky'      => \IdnoPlugins\StandardSiteSync\Main::postsToBluesky($user),
+                'failure'      => $connected ? \IdnoPlugins\StandardSiteSync\Main::getSyncFailure($user) : null,
             ]
         )->draw('standardsitesync/account/settings');
 

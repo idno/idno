@@ -18,8 +18,19 @@
 <?php } elseif (!empty($vars['connected'])) { ?>
 
 <div class="idno-admin-card">
+    <?php if (($vars['failure']['kind'] ?? null) === 'expired') { ?>
+    <h2 class="idno-admin-card-title" style="color:var(--color-danger,#dc2626);"><?= \Idno\Core\Idno::site()->language()->_('Your connection has expired') ?></h2>
+    <p role="alert"><?= \Idno\Core\Idno::site()->language()->_('This site can no longer save your posts to your account, so nothing you publish is being synced. Disconnect below, then connect again. Afterwards, &ldquo;Sync all my posts&rdquo; will send what was missed.') ?></p>
+    <?php } else { ?>
     <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('You\'re connected!') ?></h2>
     <p><?= \Idno\Core\Idno::site()->language()->_('New posts you publish will automatically be synced. You don\'t need to do anything else.') ?></p>
+        <?php if (!empty($vars['failure'])) { ?>
+        <p role="alert" style="color:var(--color-danger,#dc2626);"><?= \Idno\Core\Idno::site()->language()->_('The last attempt to save a post to your account failed, on %s. It will be tried again the next time that post is saved. If this keeps happening, disconnect and connect again.', [htmlspecialchars(date('j F Y, H:i', $vars['failure']['at']))]) ?></p>
+        <?php } ?>
+    <?php } ?>
+    <?php if (!empty($vars['failure']['detail'])) { ?>
+    <p class="idno-form-help"><?= \Idno\Core\Idno::site()->language()->_('What the server answered: %s', [htmlspecialchars($vars['failure']['detail'])]) ?></p>
+    <?php } ?>
 
     <details style="margin-top:1rem;">
         <summary style="cursor:pointer;font-size:0.875rem;color:var(--color-muted,#6b7280);"><?= \Idno\Core\Idno::site()->language()->_('Show technical details') ?></summary>

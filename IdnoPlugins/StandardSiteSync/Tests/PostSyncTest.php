@@ -102,6 +102,7 @@ class PostSyncTest extends \Tests\IdnoTestCase
             $user->{'standardsitesync_series_' . $field} = null;
         }
         $user->standardsitesync_bluesky = null;
+        $user->standardsitesync_failure = null;
         $user->save(true);
         foreach ($this->toDelete as $entity) {
             $entity->delete();
@@ -1075,6 +1076,123 @@ class PostSyncTest extends \Tests\IdnoTestCase
         // And it is tried again the next time the post is saved
         Idno::site()->config()->standardsitesync_enabled = true;
         $this->assertSame('sync', Main::actionFor($stored));
+    }
+
+    // What the member is told
+
+    public function testAFailureIsNotedForTheMemberUntilSomethingIsWritten()
+    {
+        $this->connect();
+        $this->assertNull(Main::getSyncFailure($this->user()));
+
+        $this->answers['com.atproto.repo.putRecord'] = function () {
+            return [503, ['error' => 'UpstreamFailure', 'message' => 'details that are not repeated ' . self::TOKEN]];
+        };
+        $status = $this->status('Noted');
+        $this->assertFalse(Main::syncEntity($status));
+
+        $failure = Main::getSyncFailure(\Idno\Entities\User::getByID($this->user()->getID()));
+        $this->assertSame('failed', $failure['kind']);
+        $this->assertSame('503 UpstreamFailure', $failure['detail']);
+        $this->assertEqualsWithDelta(time(), $failure['at'], 5);
+
+        // The next write that works clears it
+        $this->answers = [];
+        $this->assertTrue(Main::syncEntity($status));
+        $this->assertNull(Main::getSyncFailure(\Idno\Entities\User::getByID($this->user()->getID())));
+    }
+
+    public function testAConnectionThatHasExpiredIsToldApart()
+    {
+        // The access token has run out, and the authorization server no longer takes the refresh token
+        $user = $this->user();
+        $user->standardsitesync_session = [
+            'expires_at'    => time() - 3600,
+            'refresh_token' => 'secret-refresh-token-value',
+            'auth_server'   => ['token_endpoint' => 'https://auth.example/oauth/token'],
+        ] + $this->sessionData();
+        $user->save(true);
+        $this->answers['token'] = function () {
+            return [400, ['error' => 'invalid_grant', 'error_description' => 'Session expired for secret-refresh-token-value']];
+        };
+
+        $status = $this->status('Not synced');
+        $this->assertFalse(Main::syncEntity($status));
+
+        $this->assertSame('https://auth.example/oauth/token', $this->requests[0]['url']);
+        $this->assertSame([], $this->requestsTo('com.atproto.repo.putRecord'));
+        $stored = \Idno\Entities\User::getByID($user->getID());
+        $failure = Main::getSyncFailure($stored);
+        $this->assertSame(['kind' => 'expired', 'detail' => '400 invalid_grant'], array_diff_key($failure, ['at' => 1]));
+        $this->assertStringNotContainsString('secret', json_encode($stored->standardsitesync_failure));
+        // The member is still shown as connected, so that they can disconnect and connect again
+        $this->assertTrue(Main::isUserConnected($stored));
+    }
+
+    public function testWhichFailuresMeanConnectingAgain()
+    {
+        $kind = function (\Exception $e) {
+            return Main::describeFailure($e)['kind'];
+        };
+
+        $this->assertSame('expired', $kind(new XrpcException('Token refresh failed', 400, 'invalid_grant')));
+        $this->assertSame('expired', $kind(new XrpcException('Token refresh failed', 500)));
+        $this->assertSame('expired', $kind(new XrpcException('XRPC error', 401, 'InvalidToken')));
+        $this->assertSame('expired', $kind(new XrpcException('XRPC error', 400, 'ExpiredToken')));
+        $this->assertSame('expired', $kind(new \Idno\Exceptions\TechnicalException('No refresh token available')));
+        $this->assertSame('failed', $kind(new XrpcException('XRPC error', 500, 'InternalServerError')));
+        $this->assertSame('failed', $kind(new XrpcException('XRPC error', 400, 'InvalidRequest')));
+        $this->assertSame('failed', $kind(new \Idno\Exceptions\TechnicalException('HTTP POST failed: timeout')));
+        $this->assertSame('', Main::describeFailure(new \RuntimeException('x'))['detail']);
+
+        $user = $this->user();
+        $user->standardsitesync_failure = 'not what this plugin stores';
+        $this->assertNull(Main::getSyncFailure($user));
+    }
+
+    public function testTheSettingsPageSaysWhenTheConnectionNeedsAttention()
+    {
+        $t = Idno::site()->template();
+        $type = $t->getTemplateType();
+        $page = Idno::site()->currentPage();
+        Idno::site()->setCurrentPage(new \Idno\Pages\Homepage());
+        $uri = $_SERVER['REQUEST_URI'] ?? null;
+        $_SERVER['REQUEST_URI'] = '/account/settings/standardsitesync/';
+        \Idno\Core\Bonita\Main::additionalPath(Idno::site()->config()->path . '/IdnoPlugins/StandardSiteSync');
+        $vars = ['title' => 'x', 'connected' => true, 'sync_enabled' => true, 'did' => self::DID, 'pds' => self::PDS, 'bluesky' => false];
+
+        try {
+            foreach (['default', 'modern'] as $look) {
+                $t->setTemplateType($look);
+
+                $fine = $t->__($vars + ['failure' => null])->draw('standardsitesync/account/settings');
+                $this->assertStringContainsString('You\'re connected!', $fine, $look);
+                $this->assertStringNotContainsString('role="alert"', $fine, $look);
+
+                $expired = $t->__($vars + ['failure' => ['kind' => 'expired', 'detail' => '400 invalid_grant', 'at' => 1795564800]])
+                    ->draw('standardsitesync/account/settings');
+                $this->assertStringContainsString('Your connection has expired', $expired, $look);
+                $this->assertStringContainsString('connect again', $expired, $look);
+                $this->assertStringContainsString('400 invalid_grant', $expired, $look);
+                $this->assertStringNotContainsString('You\'re connected!', $expired, $look);
+                $this->assertStringContainsString('disconnect/', $expired, $look);
+
+                $failed = $t->__($vars + ['failure' => ['kind' => 'failed', 'detail' => '503 <b>x</b>', 'at' => 1795564800]])
+                    ->draw('standardsitesync/account/settings');
+                $this->assertStringContainsString('You\'re connected!', $failed, $look);
+                $this->assertStringContainsString('The last attempt to save a post to your account failed, on ' . date('j F Y, H:i', 1795564800), $failed, $look);
+                $this->assertStringContainsString('503 &lt;b&gt;x&lt;/b&gt;', $failed, $look);
+                $this->assertStringNotContainsString('<b>x</b>', $failed, $look);
+            }
+        } finally {
+            $t->setTemplateType($type);
+            Idno::site()->setCurrentPage($page ?: new \Idno\Pages\Homepage());
+            if ($uri === null) {
+                unset($_SERVER['REQUEST_URI']);
+            } else {
+                $_SERVER['REQUEST_URI'] = $uri;
+            }
+        }
     }
 
     public function testOtherContentIsStillWrittenAsADocument()

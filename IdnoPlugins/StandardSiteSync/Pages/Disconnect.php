@@ -16,6 +16,7 @@ class Disconnect extends Page
         $this->gatekeeper();
 
         $user = \Idno\Core\Idno::site()->session()->currentUser();
+        $user->standardsitesync_failure = null;
         Main::saveATProtoSessionForUser($user, []);
 
         \Idno\Core\Idno::site()->session()->addMessage('Disconnected from AT Protocol PDS.');
