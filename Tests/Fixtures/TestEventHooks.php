@@ -39,6 +39,12 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/' . $directory . 'draw-legacy/?', $page);
             }
         });
+        // With IDNO_TEST_FIXTURE_SHELL=1 the shell of FixtureShellController's page, registered as core registers a shell it keeps
+        if (getenv('IDNO_TEST_FIXTURE_SHELL') === '1') {
+            $dispatcher->addListener('plugins/loaded', static function (): void {
+                Idno::site()->routes()->addRoute('/_test/fixture-shell/?', FixtureShell::class);
+            });
+        }
         // With IDNO_TEST_CLAIM_ROUTES the pages of the routing tests (RouteOverrideTest), registered on `plugins/loaded`, the first event the boot
         // fires after every plugin's registerPages() (a plugin registers its pages when it is built), as a plugin's page is:
         //   replaced  the shell ReplacedPage on the path a controller serves, which the controller shadows

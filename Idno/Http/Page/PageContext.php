@@ -61,6 +61,8 @@ final class PageContext
 
     private bool $markdownSuffix = false;
 
+    private ?int $lastChange = null;
+
     private ?PageRedirect $redirect = null;
 
     /** @var list<\Closure> */
@@ -248,6 +250,31 @@ final class PageContext
             $this->replacing[strtolower($name)] = $replace;
         }
         $this->headers[$key] = $replace ? [$value] : [...($this->headers[$key] ?? []), $value];
+    }
+
+    /**
+     * The page asks to be answered with a 304 when the client's copy is current: the page last changed at `$lastChange` (a timestamp). The
+     * answer is decided last, on the response the page made (`ConditionalRequest::apply()`).
+     */
+    public function answerConditionally(int $lastChange): void
+    {
+        $this->lastChange = $lastChange;
+    }
+
+    /**
+     * When the page last changed, if it asked to answer a conditional request.
+     */
+    public function conditionalTimestamp(): ?int
+    {
+        return $this->lastChange;
+    }
+
+    /**
+     * The `Last-Modified` the page sends: the date of a timestamp.
+     */
+    public function setLastModified(int $timestamp): void
+    {
+        $this->addHeader('Last-Modified', HttpDate::format($timestamp));
     }
 
     /**

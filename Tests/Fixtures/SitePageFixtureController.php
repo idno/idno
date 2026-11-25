@@ -163,6 +163,21 @@ final class SitePageFixtureController
                 $response->headers->set('Expires', 'Wed, 01 Jan 2031 00:00:00 GMT');
 
                 return $response;
+            case 'conditional':
+            case 'conditional-stream':
+                // a page that answers a conditional request (the same as LegacyDrawPage's `conditional`, with a streamed body for the second)
+                $context->answerConditionally(1700000000);
+                $context->setLastModified(1700000000);
+                if ($case === 'conditional-stream') {
+                    return new \Symfony\Component\HttpFoundation\StreamedResponse(static function (): void {
+                        $marker = getenv('IDNO_TEST_STREAM_MARKER');
+                        if (is_string($marker) && $marker !== '') {
+                            file_put_contents($marker, 'sent');
+                        }
+                        echo 'streamed';
+                    });
+                }
+                break;
             case 'context-caching':
                 // caching asked for the supported way
                 $context->setCaching(['Cache-Control' => 'public, max-age=45']);

@@ -6,6 +6,7 @@ namespace Idno\Legacy;
 
 use Idno\Common\Page;
 use Idno\Core\Idno;
+use Idno\Http\Page\ConditionalRequest;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
@@ -165,6 +166,8 @@ abstract class PageShell extends Page
     {
         // the headers the page asked for, as the controller's listener puts them on its response
         $context->applyTo($response);
+        // a page that asked answers a current copy with a 304 and no body, decided last as the listener does (the headers the page asked for are on the response)
+        $response = ConditionalRequest::apply($context, $context->request(), $response);
 
         $php = new PhpHeaders();
         (new LegacyHeaderReconciler(Idno::container()->get('kernel'), $php))->reconcile($response, $context, false);

@@ -203,6 +203,12 @@ final class PageRequestListener
             }
             $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
         }
+        // Last of all, so that the 304 carries every header the page made: a page that asked for it answers a current copy with no body
+        // (a new response, so a stream or a file is never sent)
+        $answer = ConditionalRequest::apply($context, $request, $response);
+        if ($answer !== $response) {
+            $event->setResponse($answer);
+        }
     }
 
     /**

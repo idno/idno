@@ -87,6 +87,19 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             ->autoconfigure();
     }
 
+    // The fixture page a controller and a shell both serve through one service (FixtureShellPages: the same answer from both paths).
+    if ($builder->hasDefinition(\Idno\Http\Page\PageRenderer::class)) {
+        $container->services()
+            ->set(\Tests\Fixtures\FixtureShellPages::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
+        $container->services()
+            ->set(\Tests\Fixtures\FixtureShellController::class)
+            ->autowire()
+            ->autoconfigure();
+    }
+
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the
     // production budget), so that the end-to-end test sees an upgrade take several steps. Only in the
     // test environment; no request can set it.

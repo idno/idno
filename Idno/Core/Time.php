@@ -23,7 +23,7 @@ namespace Idno\Core {
                 $timestamp = time();
             }
 
-            return gmdate('D, d M Y H:i:s T', (int)$timestamp);
+            return \Idno\Http\Page\HttpDate::format((int)$timestamp);
         }
 
         /**

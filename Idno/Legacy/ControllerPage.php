@@ -7,8 +7,8 @@ namespace Idno\Legacy;
 use Idno\Common\Entity;
 use Idno\Common\Page;
 use Idno\Core\Idno;
-use Idno\Core\Time;
 use Idno\Entities\User;
+use Idno\Http\Page\HttpDate;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\PageRenderer;
@@ -254,18 +254,23 @@ final class ControllerPage extends Page
         $this->context->setCaching(['Cache-Control' => ['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], 'Pragma' => 'no-cache']);
     }
 
+    /**
+     * Sends the date the page last changed as its `Last-Modified` (an HTTP-date, `HttpDate::format()`).
+     */
     public function setLastModifiedHeader(int $timestamp)
     {
-        $this->context->addHeader('Last-Modified', Time::timestampToRFC2616($timestamp));
+        $this->context->addHeader('Last-Modified', HttpDate::format($timestamp));
     }
 
     /**
-     * Does nothing: a legacy page answered a conditional request here with a 304 and exited, and a controller's page does not exit. A site
-     * page does not answer a conditional request with a 304 (the `Last-Modified` the page asks for is added to its response after the
-     * controller returns).
+     * Asks to answer a conditional request: the page last changed at `$timestamp`. A legacy page sent the 304 here and exited, and a controller's
+     * page does not exit, so this returns and the code after it runs on; the answer is decided last, on the response the page made
+     * (`ConditionalRequest::apply()`): a GET or HEAD whose `If-Modified-Since` is not before `$timestamp`, and that has no `If-None-Match`, is
+     * answered 304 with no body. (A legacy page compared the other way round: it answered 304 to a date NOT AFTER the change.)
      */
     public function lastModifiedGatekeeper($timestamp)
     {
+        $this->context->answerConditionally((int) $timestamp);
     }
 
     /**
