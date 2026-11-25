@@ -53,9 +53,22 @@ namespace Idno\Common {
 
         public function registerEventHooks()
         {
+            // Every entity that is built runs this, and every one that is hydrated is built: one listener
+            // for each class on each dispatcher is all the lookup needs (a second one for the same class
+            // asks the same questions and finds the same answer), and a closure for each object would keep
+            // every entity a long-running process ever loaded alive, and be asked for each URL looked up.
+            static $registered = null;
+            $registered ??= new \WeakMap();
+            $events = \Idno\Core\Idno::site()->events();
+            if (isset($registered[$events][static::class])) {
+                return;
+            }
+            $known = $registered[$events] ?? [];
+            $known[static::class] = true;
+            $registered[$events] = $known;
 
             // Attempt to find content by URL
-            \Idno\Core\Idno::site()->events()->addListener('object/getbyurl', function (\Idno\Core\Event $event) {
+            $events->addListener('object/getbyurl', static function (\Idno\Core\Event $event) {
 
                 $url = $event->data()['url'];
                 $object = $event->response();

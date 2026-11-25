@@ -64,8 +64,17 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
-  whole suite runs in one process: on SQLite it peaks at about 305 MB, and did before the form templates were ported (327 MB measured on the
-  commit before them, with the same steps: the kernels the tests build, 50 MB held by `ImportTest`, and about 1 MB per hundred tests after that)) for `composer test`;
+  whole suite runs in one process: on SQLite it peaks at about 250 MB (6,341 tests; the largest classes each leave 20 MB or
+  less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
+  built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
+  (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` (listed in `phpunit.xml`, so not in the unit
+  tier) records, for each test class, the memory in use before its first test and, after a garbage collection, after its last
+  (what the class left behind), and FAILS the run (a message on standard error naming the five classes that left the most
+  behind, exit status 1) when the peak passes `MemoryGuard::LIMIT_MB` (380; `IDNO_TEST_MEMORY_LIMIT_MB=<n>` changes it, 0 turns
+  the failure off). To rank a whole run: `IDNO_TEST_MEMORY_REPORT=/tmp/memory.json composer test` writes every class's figures
+  (`peak` and, per class, `tests`, `start`, `kept` in bytes). When the guard fires, look for a test case property, a static, a
+  listener, a kernel or a `Process` that outlives its test (release it in `tearDown()`), not for a higher limit; a class that
+  keeps more than a few megabytes is worth a look. `Tests/Unit/Support/MemoryGuardTest` pins the verdict and the exit status.
   `phpunit.unit.xml` (bootstrap: `Tests/_bootstrap_unit.php`, one suite `Unit` covering `Tests/Unit/`)
   for `composer test:unit`
 - Test tiers. **Unit** (`Tests/Unit/`, `composer test:unit`): runs with nothing but PHP and Composer's
@@ -1938,7 +1947,10 @@ test fixtures is routed to a controller through them yet:
 
 ### Key design patterns
 
-- **Entity system**: All content inherits from `Idno\Common\Entity` (→ `BaseObject`).
+- **Entity system**: All content inherits from `Idno\Common\Entity` (→ `BaseObject`). Building an entity (and every hydration builds one) runs
+  `registerEventHooks()`, which registers the `object/getbyurl` lookup ONCE for each class on each event dispatcher (`Tests/Common/EntityListenersTest`):
+  a listener for each object kept every entity a process loaded alive and was run for every address looked up (a queue worker, an export or an
+  import grew by hundreds of kilobytes a post). A hook added to a constructor path must do the same.
   Entities are stored as JSON text, one row each, in `idno_<collection>`
   (MySQL, MariaDB, SQLite; see "Database"). Key
   methods: `save()`, `delete()`, `getByUUID()`, `getActivityStreamsObjectType()`,
