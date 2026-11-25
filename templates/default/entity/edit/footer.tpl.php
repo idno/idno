@@ -1,3 +1,4 @@
+<?php echo $this->draw('entity/edit/delete') ?>
 <?php echo $this->draw('js/mentions') ?>
 <script>
     /* Handle submit button */

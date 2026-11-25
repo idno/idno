@@ -157,6 +157,9 @@ class Main extends Plugin
             if ($object instanceof ActivityPubFollower) return;
             if ($object instanceof \Idno\Entities\AsynchronousQueuedEvent) return;
 
+            // A draft was never sent to anyone, so there is nothing to take back
+            if (!self::shouldFederateDeletion($object)) return;
+
             $type = $object->getActivityStreamsObjectType();
             if (empty($type) || $type === 'entity') return;
 
@@ -191,6 +194,21 @@ class Main extends Plugin
 
             Delivery::deliver($user, $data['activity'], $data['inbox']);
         });
+    }
+
+    /**
+     * Should followers be told that this post was deleted? Not when it was never published:
+     * a post whose publish status is set and is not "published" (a draft, for example) has
+     * not been delivered to anyone. A post with no publish status counts as published.
+     *
+     * @param \Idno\Common\Entity $object
+     * @return bool
+     */
+    public static function shouldFederateDeletion(\Idno\Common\Entity $object): bool
+    {
+        $status = $object->getPublishStatus();
+
+        return empty($status) || $status === 'published';
     }
 
     function getAdminIcon()
