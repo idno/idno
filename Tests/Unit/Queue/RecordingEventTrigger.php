@@ -18,7 +18,7 @@ final class RecordingEventTrigger implements EventTrigger
     {
     }
 
-    public function trigger(string $event, array $data): mixed
+    public function trigger(string $event, array $data, ?\Closure $keepResponse = null): mixed
     {
         $this->triggered[] = [$event, $data];
         $this->log?->append('trigger ' . $event);

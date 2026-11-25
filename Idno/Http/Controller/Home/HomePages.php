@@ -39,17 +39,23 @@ final class HomePages
     /**
      * The home page of a request that names no content type in its path.
      *
-     * A plugin may replace the site's root (not the pages that draw the stream under an address of their own, such as the feed): the event `homepage/replace` is triggered first, with `page` (the `PageContext`) and `renderer` (the
-     * `PageRenderer`), and a listener that sets a `Symfony\Component\HttpFoundation\Response` as the event's response (`$event->setResponse()`)
-     * gives the home page. Anything else a listener answers (the event's default `true`, `false`, a string, an array, any object that is no
-     * `Response`) is ignored and the stream is drawn. A listener that throws fails the page as a page that throws does (the 500 page, the
-     * exception reported); this does not catch it. The streams under `/content/` are never replaced: they are how the stream stays
-     * reachable when the home page is something else.
+     * A plugin may replace it, when the caller says it is serving the site's root (`$root`: the controller's home action; the pages that
+     * draw the stream under an address of their own, and a subclass of the deprecated shell wherever it is registered, never ask): the event
+     * `homepage/replace` is triggered first, with `page` (the `PageContext`) and `renderer` (the `PageRenderer`), and a listener that sets a
+     * `Symfony\Component\HttpFoundation\Response` as the event's response (`$event->setResponse()`) gives the home page. The first Response
+     * set is kept: a later listener cannot replace or erase it. Anything else a listener answers (the event's default `true`, `false`, a
+     * string, an array, any object that is no `Response`) is ignored and the stream is drawn. A listener that throws fails the page as a page
+     * that throws does (the 500 page, the exception reported); this does not catch it. The streams under `/content/` are never replaced: they
+     * are how the stream stays reachable when the home page is something else.
      */
-    public function home(PageContext $page): Response
+    public function home(PageContext $page, bool $root = false): Response
     {
-        if (trim($page->request()->getPathInfo(), '/') === '') {
-            $replacement = ($this->events)()->trigger('homepage/replace', ['page' => $page, 'renderer' => $this->renderer]);
+        if ($root) {
+            $replacement = ($this->events)()->trigger(
+                'homepage/replace',
+                ['page' => $page, 'renderer' => $this->renderer],
+                static fn (mixed $answer): bool => $answer instanceof Response
+            );
             if ($replacement instanceof Response) {
                 return $replacement;
             }

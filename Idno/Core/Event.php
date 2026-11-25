@@ -16,6 +16,7 @@ namespace Idno\Core {
         protected $dispatcher = null;
         protected $response = true;
         protected $forward = '';
+        protected ?\Closure $keepResponse = null;
 
         function __construct($data = array())
         {
@@ -51,7 +52,23 @@ namespace Idno\Core {
          */
         function setResponse($value)
         {
+            // an event triggered with a rule for the response it keeps (`keepResponseWhen()`): the first answer the rule accepts stays
+            if ($this->keepResponse !== null && ($this->keepResponse)($this->response)) {
+                return $this->response;
+            }
+
             return $this->response = $value;
+        }
+
+        /**
+         * Sets the rule for the response this event keeps: while the response set so far is one the rule accepts, `setResponse()`
+         * leaves it alone, so the first listener to give an acceptable answer wins and a later one cannot replace or erase it.
+         *
+         * @param \Closure(mixed): bool $keep Given the response so far
+         */
+        function keepResponseWhen(\Closure $keep): void
+        {
+            $this->keepResponse = $keep;
         }
 
         /**

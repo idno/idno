@@ -680,6 +680,8 @@ error pages, as a legacy page's was, by `Idno\Http\Page\PageExceptionListener` (
 
 ### Adding a route (the new way)
 
+To replace the site's home page (the root) from a plugin, do not add a route or `hijackRoute()` the root: listen to the event `homepage/replace` (see "Replacing the home page: the event `homepage/replace`" under "Legacy pages and routes").
+
 New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
 limit: **a controller that changes state for a logged-in browser must ask for both a user and the form token**:
 `#[IsGranted('ROLE_USER')]` (any member) or `#[IsGranted('ROLE_ADMIN')]` (an administrator authenticated by the
@@ -934,37 +936,53 @@ page and there is none (`WebmentionToADeletedPageTest`). A plugin that `addRoute
 `feeds` of `IDNO_TEST_CLAIM_ROUTES`); a plugin that EXTENDS one of the deleted classes stops the site booting until it is disabled (`docs/install/upgrade.md`).
 
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
-`hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home()` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
-['page' => $page, 'renderer' => $renderer])` (an `Idno\Queue\EventTrigger` taken as a service closure, like the logger, so the service is built in a kernel with no
+`hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
+['page' => $page, 'renderer' => $renderer], $keepResponse)` (an `Idno\Queue\EventTrigger` taken as a service closure, like the logger, so the service is built in a kernel with no
 legacy application). `page` is the `Idno\Http\Page\PageContext` of the request and `renderer` the `Idno\Http\Page\PageRenderer`. The contract:
 - A listener sets a `Symfony\Component\HttpFoundation\Response` as the event's response (`$event->setResponse($response)`) and that response IS the home page: the
   lifecycle (events, walled garden, headers, caching, `Last-Modified` from `PageContext::addHeader()`) is the controller's, as for any home page. Anything else a
-  listener leaves or sets (the event's default `true`, `false`, `null`, a string, an array, an object that is no `Response`) is ignored and the stream is drawn. The
-  event has one response, as every event has: the last listener to set one wins.
+  listener leaves or sets (the event's default `true`, `false`, `null`, a string, an array, an object that is no `Response`) is ignored and the stream is drawn.
+- THE FIRST `Response` WINS. `HomePages` triggers the event with a rule for the response it keeps (`$keepResponse`: `EventTrigger::trigger()`'s third argument,
+  `EventDispatcher::triggerEvent()`'s fourth, `Event::keepResponseWhen()`): once the event's response is a `Response`, a later listener's `setResponse()` changes
+  nothing, so a later listener can neither replace it with its own page nor erase it by setting its default (`false`). A non-`Response` answer is replaced by a later
+  one. An event triggered without the rule is as every event is: the last listener to set anything wins. A listener that sets `$event->forward()` makes `triggerEvent()`
+  send `Location` and `exit` (every event does); a listener must not.
 - A listener draws through the renderer it is given (`$renderer->page($page, ['title' => ..., 'body' => $renderer->template('name', [...]), 'description' => ...])`,
   `$renderer->redirect($page, $location)`, `denied()`, `notFound()`, `gone()`), never with `echo`, `exit`, `header()` or `drawPage()`: nothing is sent or ended by it,
   so the lifecycle's header rule and `kernel.terminate` still apply. It sets what the page is about on the context (`setOwner()`, `setPermalink()`,
   `addHeader('Last-Modified', ...)`) before it draws.
-- A listener MUST respect the viewer's access to what it puts in place of the stream: the replacement is served to every visitor, so it checks `canRead()` (or the
-  equivalent) for the viewer, and answers a refusal, a redirect or nothing (`null`: the stream) rather than the content, as StaticPages does.
-- Only the site's ROOT is replaceable: `home()` triggers the event only when the request's path is the root (`/`, whatever its query), so the pages that draw the
-  stream under an address of their own (the feeds, a plugin's subclass of the shell on its own route) are never replaced; `content()` (`/content/<types>`) never
-  triggers it, which is how the stream stays reachable. The event fires after the page's own events (`page/ready`, `page/head`, `page/get`) and before the stream
-  is asked anything.
-- A listener that throws fails the page as a page that throws does (the 500 page, the exception reported); `home()` does not catch it, and a broken listener
+- ACCESS. Two rules, and a listener answers only the second. (1) The site's own rule runs BEFORE the event: the controller's lifecycle refuses a visitor of a private
+  site (`walled_garden`) with the 403 page unless the home route is public (`addPublicRoute('Idno\Pages\Homepage')`: the question asked is about the home page's route, the
+  page a plugin puts there is not asked about), so a replacement is never reached by a visitor the site refused. (2) The listener must respect the VIEWER's access to what
+  it puts in place of the stream, because the replacement is served to everyone the first rule lets in: it checks `canRead()` (or the equivalent) for the viewer, and for
+  a viewer who may not read it it returns nothing (no `Response`: the ordinary home page is served), not a refusal and not a redirect to `/` (which asks for the same page
+  again: an infinite redirect for a visitor). So on a private site whose home route a plugin made public, a static page with public access is shown and one that is not
+  public is not.
+- ROOT ONLY, decided by the caller. The one place that serves the site's root as the home page, `HomepageController::home()`, passes `root: true`; `content()`
+  (`/content/<types>`), `feed()`, `search()` and `tag()` never ask, which is how the stream stays reachable. A subclass of the deprecated `Idno\Pages\Homepage` shell that a
+  plugin registered for the root (`hijackRoute('/')`) is NOT replaced (the shell's handlers never offer the root): a plugin that took the root with its own page keeps it
+  and a static home page does not override it. The decision does not depend on the path, so a site under a subdirectory and a request for `/index.php` are the
+  root as the controller's route has matched them (`StaticPagesHomepageMatrixTest::testTheRootIsReplacedUnderASubdirectoryAndAtTheFrontController`).
+  The event fires after the page's own events (`page/ready`, `page/head`, `page/get`) and before the stream is asked anything, and is counted by the site's statistics
+  (`event.homepage/replace`) on each request for the root, whether or not a listener answers.
+- A listener that throws fails the page as a page that throws does (the 500 page, the exception reported once); `home()` does not catch it, and a broken listener
   therefore cannot do worse to the home page than a broken page can. A listener that answers nonsense is ignored (above).
 - Replaced: `IdnoPlugins\StaticPages\Pages\Homepage` (a subclass of the shell that hijacked `` and `/`, and registered `/content/default/?` for the core page so the
   stream stayed reachable) is deleted. `IdnoPlugins\StaticPages\HomepageReplacement::respond(PageContext, PageRenderer): ?Response`, built by the plugin's
-  `homepage/replace` listener (`Main::registerEventHooks()`, always registered: it asks for the setting at each request), does what that page did: null when no home
-  page is set; the page by id, else by slug; a page that is gone, is no `StaticPage` or cannot be read by the viewer is unset (`Main::clearHomepage()`, which only
-  an administrator's session can do) and the answer is a redirect to `/`; a page with a `forward_url` redirects a visitor (not an administrator) there; otherwise the
-  page's owner, `setPermalink()` and `Last-Modified` are set on the context and the page is drawn in the shell with the title, the body `staticpages/page` and the
-  short description. What differs from the subclass: the body class and the event data's `page_class` name `Idno\Pages\Homepage` (the page is the home page's, not a
-  class of the plugin), the order of the lines of different names in the header block (the controller's order, as for every ported page), and `OPTIONS /` and a
-  forward carry `Content-Type` where the legacy lines read `Content-type` (header names are case-insensitive). Pinned by `Tests/Kernel/StaticPagesHomepageReplacementTest`
-  (the five answers, and that the plugin listens), `Tests/Unit/Http/Controller/HomePagesTest` (the event's data and what is done with the answer, the root-only rule,
-  `content()`, a throwing listener) and `Tests/Characterisation/StaticPagesHomepageTest` (over HTTP: the page, the stream under `/content/`, `/feed.xml` and the tag
-  pages still the stream, the Markdown form, forward, a page that is gone, no deprecation line, the root's route is core's).
+  `homepage/replace` listener (`Main::registerEventHooks()`, always registered: it asks for the setting at each request), answers: null when no home page is set; the
+  page by id, else by slug; a page that is gone or is no `StaticPage` is unset (`Main::clearHomepage()`, which only an administrator's session can do) and null is
+  returned, so the stream is served at once with no redirect; a page the viewer may not read (`Entity::canRead()`: its access, a draft that is not the viewer's, a group
+  the viewer is not in) is null and nothing is unset; a page with a `forward_url` redirects a visitor (not an administrator) there; otherwise the page's owner,
+  `setPermalink()` and `Last-Modified` are set on the context and the page is drawn in the shell with the title, the body `staticpages/page` and the short description.
+  What differs from the subclass: the body class and the event data's `page_class` name `Idno\Pages\Homepage` (the page is the home page's, not a class of the plugin),
+  the order of the lines of different names in the header block (the controller's order, as for every ported page), `OPTIONS /` and a forward carry `Content-Type` where the
+  legacy lines read `Content-type` (header names are case-insensitive), and a home page the viewer may not read is the stream, where the subclass redirected to `/` (an infinite
+  redirect for a visitor). Pinned by `Tests/Kernel/StaticPagesHomepageReplacementTest` (the answers, and that the plugin listens), `Tests/Unit/Http/Controller/HomePagesTest` (the event's
+  data, the rule for the response it keeps, the root flag, a throwing listener), `Tests/Core/EventKeepResponseTest`, `Tests/Characterisation/StaticPagesHomepageTest` and
+  `Tests/Characterisation/StaticPagesHomepageMatrixTest` (over HTTP: each kind of chosen page (public, members only, owner only, group, draft, deleted, missing, with a
+  forward address) for a visitor, a member, the page's owner and an administrator, on an open site, a walled garden and a walled garden with a public home route, in the
+  default, json, rss and markdown types and HEAD and OPTIONS, no deprecation line; fixture listeners that throw, set a non-`Response`, and compete (`IDNO_TEST_HOMEPAGE_LISTENERS`
+  in `Tests\Fixtures\TestEventHooks`); a subdirectory install, `/index.php`, a third-party page that took the root).
 
 A page that a controller serves (a site page: a controller method or class carrying `#[Idno\Http\Page\SitePage]`, whose `replaces` lists the page
 class core still registers for the path, if any) and the legacy router share the site's addresses:
@@ -1738,7 +1756,7 @@ test fixtures is routed to a controller through them yet:
   - `save()` / `delete()` only write to the store (`saveObject()` / `deleteRecord()`): events,
     permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
 - What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`). `Idno\Http\Controller\Home\HomePages`
-  (a public service on `HomeStream`, `PageRenderer`, and the logger and the event trigger, which it takes as service closures and fetches only when it logs, so the service is built in a kernel with no legacy application: `PageListenersWithoutLegacyTest`) is the home page: `home($page)` (which first offers the root to the event `homepage/replace`: see "Replacing the home page") and `content($page, $types)` return its `Response`, and
+  (a public service on `HomeStream`, `PageRenderer`, and the logger and the event trigger, which it takes as service closures and fetches only when it logs, so the service is built in a kernel with no legacy application: `PageListenersWithoutLegacyTest`) is the home page: `home($page, root: true)` (which first offers the root to the event `homepage/replace`: see "Replacing the home page", under "Legacy pages and routes") and `content($page, $types)` return its `Response`, and
   `receiveWebmention()` takes a webmention of the site's root. `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
   extends it): one implementation, which is also the feeds', the search's and the tags'. The stream holds what the legacy
   `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the template variables are what they

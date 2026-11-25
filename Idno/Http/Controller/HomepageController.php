@@ -31,7 +31,8 @@ final class HomepageController
     #[SitePage(name: 'Idno\Pages\Homepage', replaces: ['Idno\Pages\Homepage'])]
     public function home(PageContext $page): Response
     {
-        return $this->pages->home($page);
+        // the one action that serves the site's root as the home page: the one a plugin may replace
+        return $this->pages->home($page, root: true);
     }
 
     /**

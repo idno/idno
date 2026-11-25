@@ -76,7 +76,7 @@ final class HomePagesTest extends TestCase
     {
         $page = $this->context();
 
-        $this->pages->home($page);
+        $this->pages->home($page, true);
 
         $this->assertCount(1, $this->events->calls);
         [$name, $data] = $this->events->calls[0];
@@ -91,7 +91,7 @@ final class HomePagesTest extends TestCase
     {
         $this->events->answer = new Response('the replacement', 200, ['X-Replaced' => '1']);
 
-        $response = $this->pages->home($this->context());
+        $response = $this->pages->home($this->context(), true);
 
         $this->assertSame($this->events->answer, $response);
         $this->assertSame([], $this->stream->calls, 'the stream is not asked for anything');
@@ -114,7 +114,7 @@ final class HomePagesTest extends TestCase
         $this->events->answer = $answer;
         $this->stream->items = [self::item(1_700_000_000)];
 
-        $response = $this->pages->home($this->context());
+        $response = $this->pages->home($this->context(), true);
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringStartsWith('page:', (string) $response->getContent(), 'the stream is drawn');
@@ -127,36 +127,37 @@ final class HomePagesTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('a plugin broke');
-        $this->pages->home($this->context());
+        $this->pages->home($this->context(), true);
     }
 
     /**
-     * @return array<string, array{0: string, 1: bool}>
+     * What is replaced is the home page the controller serves for the site's root, and only when the caller says so: a page that draws the
+     * home page's stream for another address, or a subclass of the shell on whatever path it is registered for, never is, whatever the path.
      */
-    public static function addresses(): array
-    {
-        return [
-            'the root' => ['/', true],
-            'the root with a query' => ['/?_t=json&q=x', true],
-            'a feed that draws the stream' => ['/feed.xml', false],
-            'a tag search that draws it' => ['/tag/books', false],
-            'a page of a plugin that extends the home page' => ['/third-party-home/', false],
-        ];
-    }
-
-    /**
-     * What is replaced is the site's root: a page that draws the home page's stream under an address of its own (the feed) is not the home page.
-     *
-     * @dataProvider addresses
-     */
-    public function testOnlyTheRootIsReplaced(string $address, bool $replaced): void
+    public function testOnlyACallerThatServesTheRootAsksForAReplacement(): void
     {
         $this->events->answer = new Response('the replacement');
 
-        $response = $this->pages->home($this->context($address));
+        foreach (['/', '/feed.xml', '/third-party-home/'] as $address) {
+            $this->events->calls = [];
+            $response = $this->pages->home($this->context($address));
 
-        $this->assertSame($replaced, $response === $this->events->answer, $address);
-        $this->assertCount($replaced ? 1 : 0, $this->events->calls, $address);
+            $this->assertNotSame($this->events->answer, $response, $address);
+            $this->assertSame([], $this->events->calls, $address);
+        }
+        $this->assertSame($this->events->answer, $this->pages->home($this->context('/anything'), true), 'the caller\'s word, not the path, decides');
+    }
+
+    public function testTheFirstResponseIsKeptAndALaterAnswerCannotReplaceOrEraseIt(): void
+    {
+        $this->pages->home($this->context(), true);
+
+        $keep = $this->events->guards[0];
+        $this->assertInstanceOf(\Closure::class, $keep, 'the event is asked to keep a response once one is set');
+        $this->assertTrue($keep(new Response('first')));
+        foreach ([true, false, null, 'text', 0, [new Response('in a list')], new \stdClass()] as $notAResponse) {
+            $this->assertFalse($keep($notAResponse), 'what is no response is replaced');
+        }
     }
 
     public function testContentNeverAsksForAReplacement(): void
@@ -634,9 +635,13 @@ final class HomeEvents implements \Idno\Queue\EventTrigger
 
     public ?\Throwable $throw = null;
 
-    public function trigger(string $event, array $data): mixed
+    /** @var list<?\Closure> */
+    public array $guards = [];
+
+    public function trigger(string $event, array $data, ?\Closure $keepResponse = null): mixed
     {
         $this->calls[] = [$event, $data];
+        $this->guards[] = $keepResponse;
         if ($this->throw !== null) {
             throw $this->throw;
         }

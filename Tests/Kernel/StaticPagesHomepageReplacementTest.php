@@ -21,11 +21,12 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
         parent::setUp();
         $this->addUser('ada', 'correct-horse-battery-9', null, true);
         $this->addUser('bob', 'correct-horse-battery-9');
+        $this->addUser('carol', 'correct-horse-battery-9');
         $this->ids = $this->runInSite(
-            '$admin = \Idno\Entities\User::getByHandle("ada");'
-            . '$mk = function ($title, $access, $extra = []) use ($admin) { $p = new \IdnoPlugins\StaticPages\StaticPage(); $p->setOwner($admin); $p->setTitle($title); $p->body = "<p>Body of $title</p>"; $p->setAccess($access); foreach ($extra as $k => $v) { $p->$k = $v; } $p->save(true); return $p->getID(); };'
+            '$admin = \Idno\Entities\User::getByHandle("ada"); $carol = \Idno\Entities\User::getByHandle("carol");'
+            . '$mk = function ($title, $access, $extra = [], $owner = null) use ($admin, $carol) { $p = new \IdnoPlugins\StaticPages\StaticPage(); $p->setOwner($owner ?? $admin); $p->setTitle($title); $p->body = "<p>Body of $title</p>"; $p->setAccess($access); foreach ($extra as $k => $v) { $p->$k = $v; } $p->save(true); return $p->getID(); };'
             . '$note = new \IdnoPlugins\Status\Status(); $note->body = "a note"; $note->setOwner($admin); $note->setAccess("PUBLIC"); $note->save(true);'
-            . 'return ["public" => $mk("Public page", "PUBLIC", ["slug" => "public-page"]), "forward" => $mk("Forwarding page", "PUBLIC", ["forward_url" => "http://example.test/away"]), "private" => $mk("Private page", $admin->getUUID()), "note" => $note->getID()];'
+            . 'return ["public" => $mk("Public page", "PUBLIC", ["slug" => "public-page"]), "forward" => $mk("Forwarding page", "PUBLIC", ["forward_url" => "http://example.test/away"]), "private" => $mk("Private page", $carol->getUUID(), [], $carol), "site" => $mk("Members page", "SITE"), "draft" => $mk("Draft page", "PUBLIC", ["publish_status" => "draft"], $carol), "note" => $note->getID()];'
         );
     }
 
@@ -103,33 +104,74 @@ final class StaticPagesHomepageReplacementTest extends PrivateSiteTestCase
      */
     public static function unusable(): array
     {
-        return ['no such page' => ['no-such-page'], 'a page that is no static page' => ['note'], 'a page the viewer cannot read' => ['private']];
+        return ['no such page' => ['no-such-page'], 'a page that is no static page' => ['note']];
+    }
+
+    /**
+     * A home page that is gone, or is no static page, is unset by an administrator (the setting is theirs) and nothing replaces the home
+     * page: the ordinary one is served, with no redirect to the root (which would ask for the same page again).
+     *
+     * @dataProvider unusable
+     */
+    public function testAHomePageThatCannotBeUsedIsUnsetByAnAdministratorAndTheStreamIsServed(string $case): void
+    {
+        $chosen = $this->ids[$case] ?? $case;
+
+        $answer = $this->ask($chosen, 'ada');
+
+        $this->assertNull($answer['response']);
+        $this->assertFalse($answer['homepage'], 'the setting is cleared');
     }
 
     /**
      * @dataProvider unusable
      */
-    public function testAHomePageThatCannotBeUsedIsClearedByAnAdministratorAndTheRootIsAskedAgain(string $case): void
+    public function testAVisitorOrAMemberFindingAnUnusablePageLeavesTheSettingAndTheStreamIsServed(string $case): void
     {
         $chosen = $this->ids[$case] ?? $case;
-        // a member cannot read the private page: the administrator can, so it is the member who finds it unusable and an administrator who clears it
-        $asAdministrator = $case === 'private' ? 'bob' : 'ada';
 
-        $answer = $this->ask($chosen, $asAdministrator);
+        foreach ([null, 'bob'] as $who) {
+            $answer = $this->ask($chosen, $who);
 
-        $this->assertSame(302, $answer['response']['status']);
-        $this->assertSame('/', $answer['response']['location']);
-        // (clearing is an administrator's: for a member the setting stays, as the plugin's page left it)
-        $this->assertSame($asAdministrator === 'ada' ? false : $chosen, $answer['homepage']);
+            $this->assertNull($answer['response'], (string) $who);
+            $this->assertSame($chosen, $answer['homepage'], 'a setting only an administrator can change stays');
+        }
     }
 
-    public function testAVisitorFindingAnUnusablePageLeavesTheSettingAndIsSentToTheRoot(): void
+    /**
+     * What the viewer may not read is not the home page: not for a visitor, not for a member, and the setting stays for them. The page's
+     * own checks: the entity's `canRead()`, which includes who may see it unpublished.
+     *
+     * @return array<string, array{0: string, 1: list<?string>, 2: list<string>}> the page, who may not read it, who may
+     */
+    public static function restricted(): array
     {
-        $answer = $this->ask('no-such-page', null);
+        return [
+            'owner only' => ['private', [null, 'bob'], ['ada', 'carol']],
+            'members only' => ['site', [null], ['bob', 'ada', 'carol']],
+            'a draft' => ['draft', [null, 'bob'], ['ada', 'carol']],
+        ];
+    }
 
-        $this->assertSame(302, $answer['response']['status']);
-        $this->assertSame('/', $answer['response']['location']);
-        $this->assertSame('no-such-page', $answer['homepage']);
+    /**
+     * @dataProvider restricted
+     *
+     * @param list<?string> $cannot
+     * @param list<string>  $can
+     */
+    public function testWhatTheViewerCannotReadIsNoHomePage(string $case, array $cannot, array $can): void
+    {
+        foreach ($cannot as $who) {
+            $answer = $this->ask($this->ids[$case], $who);
+
+            $this->assertNull($answer['response'], $case . ' for ' . ($who ?? 'a visitor'));
+            $this->assertSame($this->ids[$case], $answer['homepage'], 'nothing is unset for a viewer who is only refused');
+        }
+        foreach ($can as $who) {
+            $answer = $this->ask($this->ids[$case], $who);
+
+            $this->assertSame(200, $answer['response']['status'] ?? null, $case . ' for ' . $who);
+        }
     }
 
     public function testThePluginListensToTheEvent(): void

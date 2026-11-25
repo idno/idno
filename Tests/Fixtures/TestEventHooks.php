@@ -61,6 +61,50 @@ final class TestEventHooks
                 };
             });
         }
+        // With IDNO_TEST_HOMEPAGE_LISTENERS (a comma-separated list) listeners of the home page's replacement event (`homepage/replace`), with the
+        // priorities that put them before (10) and after (-10, -20) the StaticPages plugin's own (0), and a public route for the home page:
+        //   first        sets the Response `FIRST-LISTENER-PAGE`
+        //   late         sets the Response `LATE-LISTENER-PAGE`
+        //   erase        sets `false` (what a listener that gives its default does)
+        //   nonresponse  sets the string `NOT-A-RESPONSE` and then an array
+        //   throw        throws a RuntimeException `the homepage listener broke`
+        //   public       a plugin's addPublicRoute() of the home page, which a private site then lets a visitor reach
+        $homepage = getenv('IDNO_TEST_HOMEPAGE_LISTENERS');
+        if (is_string($homepage) && $homepage !== '') {
+            $modes = explode(',', $homepage);
+            $dispatcher->addListener('plugins/loaded', static function () use ($modes): void {
+                $events = Idno::site()->events();
+                if (in_array('public', $modes, true)) {
+                    Idno::site()->routes()->addPublicRoute('Idno\Pages\Homepage');
+                }
+                if (in_array('first', $modes, true)) {
+                    $events->addListener('homepage/replace', static function (\Idno\Core\Event $event): void {
+                        $event->setResponse(new \Symfony\Component\HttpFoundation\Response('FIRST-LISTENER-PAGE'));
+                    }, 10);
+                }
+                if (in_array('nonresponse', $modes, true)) {
+                    $events->addListener('homepage/replace', static function (\Idno\Core\Event $event): void {
+                        $event->setResponse('NOT-A-RESPONSE');
+                        $event->setResponse(['NOT-A-RESPONSE']);
+                    }, 10);
+                }
+                if (in_array('throw', $modes, true)) {
+                    $events->addListener('homepage/replace', static function (): void {
+                        throw new \RuntimeException('the homepage listener broke');
+                    }, 10);
+                }
+                if (in_array('late', $modes, true)) {
+                    $events->addListener('homepage/replace', static function (\Idno\Core\Event $event): void {
+                        $event->setResponse(new \Symfony\Component\HttpFoundation\Response('LATE-LISTENER-PAGE'));
+                    }, -10);
+                }
+                if (in_array('erase', $modes, true)) {
+                    $events->addListener('homepage/replace', static function (\Idno\Core\Event $event): void {
+                        $event->setResponse(false);
+                    }, -20);
+                }
+            });
+        }
         // With IDNO_TEST_DRAW_HEADERS=1 a directory of templates that send headers while a page is drawn: an extension of `shell/headers`
         // and a third-party `json` shell (SitePageDrawingHeadersTest). Inert otherwise.
         if (getenv('IDNO_TEST_DRAW_HEADERS') === '1') {

@@ -152,22 +152,20 @@ final class StaticPagesHomepageTest extends PrivateSiteTestCase
         $this->assertStringContainsString('Forwarding body', $admin->body);
     }
 
-    public function testAHomePageThatIsGoneIsUnsetWhenAnAdministratorAsksAndTheStreamReturns(): void
+    public function testAHomePageThatIsGoneIsUnsetWhenAnAdministratorAsksAndTheStreamIsServedAtOnce(): void
     {
         $this->setAsHomepage();
         $this->runInSite('\IdnoPlugins\StaticPages\StaticPage::getByID(' . $this->literal($this->pageId) . ')->delete(); return 1;');
 
-        // a visitor is sent to the root again and the setting stays (it is the administrator's to change)
+        // a visitor gets the ordinary home page (the old page redirected to `/`, which asked for the same page again) and the setting stays: it is the administrator's to change
         $visitor = $this->site()->request('GET', '/');
-        $this->assertSame(302, $visitor->status);
-        $this->assertSame('/', $visitor->header('Location'));
+        $this->assertSame(200, $visitor->status);
+        $this->assertStringContainsString('a note in the stream', $visitor->body);
 
         $admin = $this->site()->request('GET', '/', ['Cookie' => $this->loginCookie('ada', 'correct-horse-battery-9')]);
-        $this->assertSame(302, $admin->status);
-        $this->assertSame('/', $admin->header('Location'));
+        $this->assertSame(200, $admin->status);
+        $this->assertStringContainsString('a note in the stream', $admin->body);
 
-        $after = $this->site()->request('GET', '/');
-        $this->assertSame(200, $after->status);
-        $this->assertStringContainsString('a note in the stream', $after->body);
+        $this->assertSame('', (string) $this->runInSite('return \Idno\Core\Idno::site()->plugins()->get("StaticPages")->getCurrentHomepageId() ?: "";'), 'the administrator unset it');
     }
 }

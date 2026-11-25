@@ -12,7 +12,9 @@ namespace Idno\Queue;
 interface EventTrigger
 {
     /**
-     * @param array<mixed> $data
+     * @param array<mixed>        $data
+     * @param \Closure(mixed): bool|null $keepResponse a rule for the response the event keeps: while the response so far is one it accepts, a
+     *                                                 later listener's answer changes nothing (the first acceptable answer wins)
      */
-    public function trigger(string $event, array $data): mixed;
+    public function trigger(string $event, array $data, ?\Closure $keepResponse = null): mixed;
 }

@@ -12,8 +12,8 @@ namespace IdnoPlugins\StaticPages {
     /**
      * The StaticPages plugin's answer to the home page's replacement event (`homepage/replace`, see `Idno\Http\Controller\Home\HomePages::home()`):
      * when a static page is the site's home page, the page is the home page, drawn as the page's own address (`/pages/<slug>`) draws it, in the
-     * shell, as a permalink of its owner. A home page that is gone, is no static page or cannot be read is unset (by an administrator: the
-     * setting is theirs to change) and the root is asked for again; a page that forwards sends a visitor to its address (an administrator
+     * shell, as a permalink of its owner. A home page that is gone or is no static page is unset (by an administrator: the
+     * setting is theirs to change) and nothing replaces the home page; a page the viewer may not read (its access, a draft that is not theirs) is no home page for that viewer, who is served the ordinary one; a page that forwards sends a visitor to its address (an administrator
      * sees the page). The response is drawn through the renderer the event gives (nothing is echoed or ended), and what it answers is the
      * viewer's: the page's access is checked here, for the viewer, before anything of it is drawn.
      */
@@ -39,11 +39,18 @@ namespace IdnoPlugins\StaticPages {
                 $object = Entity::getBySlug($id);
             }
 
-            // If the object doesn't exist or is invalid, unset the homepage and ask for the root again
-            if (empty($object) || !($object instanceof StaticPage) || !$object->canRead()) {
+            // If the object doesn't exist or is invalid, unset the homepage (an administrator's to change; for anyone else it stays) and
+            // let the ordinary home page be served
+            if (empty($object) || !($object instanceof StaticPage)) {
                 $this->plugin->clearHomepage();
 
-                return $renderer->redirect($page, '/');
+                return null;
+            }
+
+            // The viewer's own access to the page, as its own address checks it (its access, and who may see it unpublished): what the
+            // viewer may not read is not the home page for them, and is not named to them by a refusal or a redirect either
+            if (!$object->canRead()) {
+                return null;
             }
 
             // Forward if necessary

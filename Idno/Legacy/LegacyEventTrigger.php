@@ -17,8 +17,8 @@ final class LegacyEventTrigger implements EventTrigger
     {
     }
 
-    public function trigger(string $event, array $data): mixed
+    public function trigger(string $event, array $data, ?\Closure $keepResponse = null): mixed
     {
-        return $this->events->triggerEvent($event, $data);
+        return $this->events->triggerEvent($event, $data, true, $keepResponse);
     }
 }

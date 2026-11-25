@@ -58,9 +58,11 @@ namespace Idno\Core {
          * @param  string $eventName The name of the event to trigger
          * @param  array  $data      Data to pass to the event
          * @param  mixed  $default   Default response (if not forwarding)
+         * @param  \Closure|null $keepResponse A rule for the response the event keeps (`Event::keepResponseWhen()`): the first answer it
+         *                                     accepts stays, whatever a later listener sets
          * @return mixed
          */
-        function triggerEvent(string $eventName, $data = array(), $default = true)
+        function triggerEvent(string $eventName, $data = array(), $default = true, ?\Closure $keepResponse = null)
         {
             $stats = \Idno\Core\Idno::site()->statistics();
             if (!empty($stats)) {
@@ -69,6 +71,9 @@ namespace Idno\Core {
 
             $event = new Event($data);
             $event->setResponse($default);
+            if ($keepResponse !== null) {
+                $event->keepResponseWhen($keepResponse);
+            }
             $event = $this->dispatcher->dispatch($event, $eventName);
             if (!$event->forward()) {
                 return $event->response();
