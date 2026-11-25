@@ -9,6 +9,7 @@ import './modules/autosave.js';
 import './modules/interactions.js';
 import './modules/media.js';
 import './modules/mentions.js';
+import '../../../../js/moremenu.js';
 import './modules/audio.js';
 
 window.Alpine = Alpine;

@@ -13,7 +13,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
         $owner_url = \Idno\Core\UrlValidator::httpUrl($annotation['owner_url']);
         $owner_image = \Idno\Core\UrlValidator::httpUrl($annotation['owner_image']);
         ?>
-            <div class="idno-annotation row u-comment h-cite">
+            <div class="idno-annotation row u-comment h-cite" id="<?php echo htmlspecialchars(\Idno\Common\Entity::annotationAnchor($locallink), ENT_QUOTES) ?>">
                 <div class="idno-annotation-image col-md-1 hidden-sm">
                     <p>
                         <?php echo $this->__(['annotation' => $annotation])->draw('entity/annotations/image'); ?>
@@ -34,6 +34,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
                 </div>
             <?php
                 $this->annotation_permalink = $locallink;
+                echo $this->__(['annotation' => $annotation, 'annotation_permalink' => $locallink])->draw('entity/annotations/menu');
 
             if ($vars['object']->canEditAnnotation($annotation)) {
                 echo $this->draw('content/annotation/edit');

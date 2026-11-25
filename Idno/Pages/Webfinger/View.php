@@ -19,7 +19,11 @@ namespace Idno\Pages\Webfinger {
             if (!empty($acct)) {
                 if (substr($acct, 0, 5) == 'acct:' && strlen($acct) > 8) {
                     $handle = str_replace('@' . \Idno\Core\Idno::site()->config()->host, '', substr($acct, 5));
-                    if ($user = \Idno\Entities\User::getByHandle($handle)) {
+                    $user = \Idno\Entities\User::getByHandle($handle);
+                    if ($user && $user->isBanned()) {
+                        $user = false; // A banned member is not found
+                    }
+                    if ($user) {
                         $links = \Idno\Core\Idno::site()->events()->triggerEvent('webfinger', array('object' => $user));
                     }
                 }

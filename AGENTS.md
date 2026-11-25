@@ -146,6 +146,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | **Webhooks** | Outgoing webhooks on content events |
 | **StandardSiteSync** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
+| **Moderation** | Reporting by members and a moderation queue for administrators (see below) |
 
 ## ActivityPub Plugin
 
@@ -261,6 +262,111 @@ post is saved, changed or deleted, through the queue.
   PDS. Records are checked against copies of the published Lexicon files
   (`Tests/fixtures/lexicons`, with their source and commit) by `Tests/LexiconValidator.php`.
   `IdnoPlugins/StandardSiteSync/Tests/` checks all of this.
+## Moderation
+
+Members report posts, comments and people; administrators work through the reports in a
+queue and can dismiss a report, take content down, or ban a member. The banned state, the
+takedown lock and the "More" menu are in core; everything else is the bundled plugin
+`IdnoPlugins/Moderation/`.
+
+### In core
+
+- **The "More" menu** (`templates/default/shell/moremenu.tpl.php`, `css/moremenu.css`,
+  `js/moremenu.js`, used by both looks): drawn on every post (`content/menu`), comment
+  (`entity/annotations/menu`) and profile (`entity/User/menu`), for everyone, signed in or
+  not, with "Copy link" in it. Plugins add items by extending `content/menu/items`
+  (`object`), `entity/annotations/menu/items` (`object`, `annotation`,
+  `annotation_permalink`) and `entity/User/menu/items` (`user`); an item is a link or
+  button with class `idno-more-item`. Twenty26 has its own `content/menu` and
+  `entity/annotations/menu`, which also hold "Edit" and "Delete". Without JavaScript the
+  menu is a `<details>` element. `Tests/Pages/MoreMenuTest.php` checks it.
+- **A comment's link is an anchor on its post**: `<post>#annotation-<id>`
+  (`Entity::annotationAnchor()`); each comment in both looks has that `id`.
+- **Bans**: `User::ban($reason, $by_uuid, $hide_profile)`, `unban()`, `isBanned()`,
+  `getBan()`, `canBeBannedBy()`, `isHiddenByBan()`. `Session` refuses a banned member in
+  `logUserOn()`, `refreshSessionUser()` and `refreshCurrentSessionuser()`, beside the
+  check for a blocked email address, which ends browser sessions on the next request and
+  stops the signed API and IndieAuth access tokens (both go through
+  `refreshSessionUser()`). A new way to authenticate must go through one of those three
+  methods. Nobody can ban themselves; the last administrator who is not banned cannot be
+  banned; banning an administrator removes the right, and lifting the ban does not give
+  it back. The ban fields are never serialised (`User::jsonSerialize()`) and are printed
+  on administrators' pages only. `Tests/Entities/UserBanTest.php` and
+  `Tests/API/BannedCredentialsTest.php` check this.
+- **Takedowns**: `Entity::moderate($status)`, `unmoderate()`, `isModerated()`,
+  `getModerationStatus()`, with `Entity::MODERATION_REMOVED` (`removed`: a post the
+  moderators took down) and `Entity::MODERATION_HIDDEN` (`hidden`: hidden because its
+  author was banned with everything they posted). The state is its own field
+  (`moderation_status`), copied into the publish status by `Entity::save()`, so the
+  existing rule for unpublished entities hides the post from everyone but its author and
+  administrators, and no form can publish it again. `canEdit()` is false for anyone but
+  an administrator who is not its author while an entity is moderated: its author can see
+  it (with the notice drawn by `entity/moderated`) but cannot edit or delete it.
+  `Entity::delete()` itself refuses a moderated entity unless such an administrator asks
+  (or the database is set to ignore access), because not every route that deletes checks
+  `canEdit()` first. Don't key anything on the
+  publish status alone: content forms set it before `canEdit()` runs.
+  `Entity::restoreAnnotation()` puts a removed comment back under its address, with no
+  events and no notifications. `Tests/Common/TakedownTest.php` checks this.
+- A member banned with `$hide_profile` has no profile page for anyone but administrators
+  (`Idno\Pages\User\View`), and webfinger does not find a banned member.
+
+### The plugin
+
+| File | Purpose |
+|---|---|
+| `Moderation.php` | The rules: filing a report, who handles a case, acting on a case, takedown and restore, bans |
+| `Reasons.php` | The reasons a reporter can give; `URGENT` ones sort first and mark the mail to administrators |
+| `Mailer.php` | Every mail the plugin sends, put together in one place |
+| `Entities/Record.php` | Base of `ModerationCase`, `Report` and `LogEntry`: readable by administrators only |
+| `Pages/Report.php` | The report form, `/moderation/report` |
+| `Pages/Admin/*` | The queue, a case, actions on a case, a member's record, settings (`/admin/moderation/...`) |
+| `moderation.css`, `moderation.js` | Styles for both looks; the report dialog and the confirmation dialog |
+
+The plugin's pages are one set of templates for both looks, in `templates/default`, with
+markup of their own (classes beginning `mod-`) styled by `moderation.css`: no Bootstrap,
+no Font Awesome, no jQuery, so Twenty26 draws them as they are. Only the admin menu item
+has a `modern` template. `Tests/ModernTemplatesTest.php` checks that what Twenty26 draws
+has no marks of the default look; keep it that way rather than adding a second set.
+
+Rules to keep:
+
+- **The reported member never learns who reported them, and a reporter never learns which
+  administrator acted or what was done.** Neither identity, and nothing a reporter wrote,
+  goes into a page, a feed, any template type, an entity address or a mail that those
+  people can get. `Mailer::compose()` is the only place mails are written.
+  `Tests/MailTest.php` and `Tests/RecordPrivacyTest.php` check this.
+- **Moderation records are for administrators only.** `Record::save()` gives a record an
+  access value that no access group matches and an owner that is no member (so deleting a
+  member's account does not delete the record of a report); `canRead()` and `canEdit()`
+  are true for administrators only; `jsonSerialize()` is empty. The plugin's own lookups
+  go through `Moderation::unrestricted()`, and what they return is shown only after
+  `adminGatekeeper()`.
+- **Every admin page calls `adminGatekeeper()`**, so an API-signed request (never an
+  administrator) is refused, and the report page refuses any API request with 403: a
+  credential for publishing must not file reports. Every POST goes through `Page::post()`
+  and so needs a form token. `Tests/AdminAccessTest.php` checks every address for every
+  template type.
+- **What a reporter types** is made plain text (`Moderation::cleanDescription()`: no
+  tags, no control characters, 1000 characters), escaped wherever it is printed, and
+  never logged. A member can file ten reports an hour, one per open case (reporting again
+  adds to it, five times at most, counts once with the reason given last, and does not
+  change the case's revision), never about themself or their own things.
+- **One case per reported thing while it is open**; a report on something whose case is
+  resolved opens a new case. A case keeps a copy of what was reported.
+- **Two administrators at once**: an action names the `revision` of the case it saw, and
+  `Moderation::act()` re-reads the case and refuses if it changed. The entity layer has no
+  transactions, so this narrows the window; the actions themselves are safe to repeat.
+- **An administrator does not see or act on a case about themself** unless they are the
+  only administrator (`Moderation::canHandle()`).
+- **Other servers**: the plugin triggers `moderation/takedown` and `moderation/restore`
+  with the post; the ActivityPub plugin answers with a `Delete` and a `Create` to
+  followers. A banned member's actor, outbox, collections and inbox answer 410, no follow
+  is accepted for them, and `Delivery::deliverToFollowers()` sends nothing in their name
+  (so `Moderation::act()` removes a post before it bans its author).
+  `IdnoPlugins/ActivityPub/Tests/ModerationTest.php` checks this.
+- Settings: `moderation_contact_email` (the address for appeals; the site's `from_email`
+  when empty) and `moderation_notify_admins`.
 
 ## Twenty26 theme and plugin templates
 
@@ -292,6 +398,12 @@ must have and checks that what they draw is Twenty26 markup.
 - Icons come from `shell/icon` (`$this->__(['icon' => 'play', 'class' => '...'])`). Always
   pass `class`: template variables stay set between draws, so an icon drawn without one
   takes the class of the icon drawn before it.
+- Twenty26 loads no jQuery, so it overrides the default look's templates that print jQuery
+  code with ones that don't: `entity/edit/footer` (the Delete control only), `assets/fitvids`
+  (nothing; embedded players are sized in `content-types.css`), and the Media plugin's
+  `media/shell/head` and `media/shell/footer`. `Tests/Core/Twenty26ScriptsTest.php` checks
+  the first two. Write a plugin's `modern` scripts in plain JavaScript or as an Alpine
+  component in `src/js/modules/`.
 - An audio file is an `<audio controls>` element inside `x-data="audioPlayer"`
   (`src/js/modules/audio.js`), which swaps the native controls for the theme's; without
   JavaScript the native ones remain.

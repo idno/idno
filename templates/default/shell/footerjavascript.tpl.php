@@ -17,6 +17,10 @@ if (\Idno\Core\Idno::site()->session()->isLoggedIn()) {
 
 }
 
+?>
+<script src="<?php echo \Idno\Core\Idno::site()->config()->getStaticURL() ?>js/moremenu.js"></script>
+<?php
+
 $lang = \Idno\Core\Idno::site()->language()->getLanguage();
 
 $l10n = substr($lang, 0, 2);
