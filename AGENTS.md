@@ -551,8 +551,29 @@ like the modern look of the site and work in mail clients, which are not browser
   whatever its theme; a theme or plugin that wants another look supplies its own
   `templates/email/shell.tpl.php`, which the template cascade finds first. The shell is
   the site's name as text, the body in a card, and a footer that says why the reader got
-  the mail and names the site and its address. Its colours and corners are those of
-  `Themes/Twenty26/src/css/tokens.css`, written out: change them in both places.
+  the mail and names the site and its address.
+- **Colours and the dark look**: every colour of a mail is in `Email::PALETTE`, by role
+  (`bg`, `card`, `strong`, `text`, `muted`, `footer`, `link`, `button`, `box`, `rule`,
+  `preheader`), each with a light and a dark value. The light ones are the modern look's
+  tokens; that look has no dark variant, so the dark ones are designed here, from its dark
+  administration bar. An element gets its light colour inline (`Email::colour(,
+  )`) and the class `idno-mail-<role>`; the shell prints `Email::darkCss()`, the
+  dark colour of every role under `@media (prefers-color-scheme: dark)` and again for
+  Outlook's own dark mode (`[data-ogsc]` for text, `[data-ogsb]` for backgrounds). So a
+  new colour is a new role or an existing one, never a hex value in a template:
+  `assertDarkLookIsComplete()` refuses a mail with a colour that has no role.
+- **Mail clients that turn colours over themselves** (the Gmail apps, Outlook) ignore the
+  dark block and invert the light colours, all of them or only light backgrounds and dark
+  text. The palette is chosen to stay readable then: a label and its background are set
+  together on the same element (the button, on its cell and on its link); the header and
+  the footer name the page's background themselves instead of leaving their text on a
+  transparent cell; the button has a border that keeps its shape when the card around it
+  has turned dark; and the link blue is darker than the look's own (`#1e40af`, not
+  `#2563eb`, which turned over is too dim on a card turned black).
+  `Tests/Core/MailDarkModeTest.php` works out all four views (light, dark, all turned
+  over, partly turned over) from the palette and asks 4.5:1 of every text on its background
+  (`Email::READ_ON`) and 3:1 of the button's edge. It is an approximation of those
+  clients, not a rendering in them.
 - **Mail clients**: layout is tables, each with `role="presentation"`; every style that
   matters is inline (the `<style>` element only adds the phone and dark variants, and some
   clients drop it); one column, 600px at most. No image, no web font, no stylesheet, no

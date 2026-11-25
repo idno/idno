@@ -190,6 +190,23 @@ namespace Tests\Core {
             $this->assertStringContainsString('<title>Preheader &lt;b&gt;</title>', $html);
         }
 
+        public function testAMailWithAColourThatHasNoDarkOneIsRefused()
+        {
+            $email = new Email();
+            $email->setBodyFromTemplate('admin/emailtest');
+            $html = $this->mailParts($email)['html'];
+            $this->assertDarkLookIsComplete($html, 'The test mail');
+
+            foreach (['<p style="color: #123456;">', '<td bgcolor="#fafafa">', '<p class="idno-mail-text" style="color: #000000;">', '<td style="border-top: 1px solid #cccccc;">', '<p style="color: red;">'] as $lightOnly) {
+                try {
+                    $this->assertDarkLookIsComplete(str_replace('<h1 ', $lightOnly . '<h1 ', $html), 'A mail with ' . $lightOnly);
+                } catch (\PHPUnit\Framework\ExpectationFailedException $refused) {
+                    continue;
+                }
+                $this->fail('A colour that is light only was let through: ' . $lightOnly);
+            }
+        }
+
         public function testEachPartEscapesAndAVariableOfOnePartIsNotReadByTheNext()
         {
             $t = clone Idno::site()->template();

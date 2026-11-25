@@ -50,6 +50,63 @@ namespace Tests {
         }
 
         /**
+         * The dark look of a mail is as complete as its light one: every colour in the HTML
+         * is a colour of Email::PALETTE, on an element that has the class of that role, and
+         * the style block gives the role its dark colour, for mail clients that honour
+         * prefers-color-scheme and for Outlook's own dark mode. A part with a colour of its
+         * own, light only, fails here.
+         */
+        protected function assertDarkLookIsComplete(string $html, string $name): void
+        {
+            $this->assertStringContainsString('<meta name="color-scheme" content="light dark">', $html, $name . ' says it has a dark look');
+            $this->assertStringContainsString('<meta name="supported-color-schemes" content="light dark">', $html);
+            $this->assertSame(1, preg_match('/<style>(.*?)<\/style>/s', $html, $style), $name . ' has a style block');
+            $this->assertSame(1, preg_match('/@media \(prefers-color-scheme: dark\) \{(.*?)\n    \}/s', $style[1], $dark), $name . ' has a dark block');
+
+            preg_match_all('/<[a-z][a-z0-9]*\b[^>]*>/i', $this->withoutComments((string) preg_replace('/<style>.*?<\/style>/s', '', $html)), $tags);
+            $coloured = 0;
+            foreach ($tags[0] as $tag) {
+                $found = [];
+                if (preg_match('/\sbgcolor="([^"]*)"/', $tag, $attribute)) {
+                    $found[] = ['background-color', strtolower($attribute[1])];
+                }
+                if (preg_match('/\sstyle="([^"]*)"/', $tag, $attribute)) {
+                    foreach (explode(';', $attribute[1]) as $declaration) {
+                        if (strpos($declaration, ':') === false) {
+                            continue;
+                        }
+                        list($property, $value) = array_map('trim', explode(':', $declaration, 2));
+                        if ($property === 'color' || $property === 'background-color' || $property === 'background' || strpos($property, 'border') === 0 && $property !== 'border-radius' && $property !== 'border-collapse') {
+                            $this->assertDoesNotMatchRegularExpression('/rgb|hsl|\b(white|black|gr[ae]y|red|blue|transparent|inherit)\b/i', $value, $name . ': a colour is written as six hex digits: ' . $declaration);
+                            if (preg_match('/#[0-9a-fA-F]{3,8}\b/', $value, $hex)) {
+                                $this->assertSame(7, strlen($hex[0]), $name . ': a colour is written as six hex digits: ' . $declaration);
+                                $found[] = [$property === 'color' ? 'color' : ($property === 'background-color' || $property === 'background' ? 'background-color' : 'border-color'), strtolower($hex[0])];
+                            }
+                        }
+                    }
+                }
+                if (!$found) {
+                    continue;
+                }
+                preg_match_all('/idno-mail-([a-z]+)/', preg_match('/\sclass="([^"]*)"/', $tag, $class) ? $class[1] : '', $roles);
+                foreach ($found as list($property, $colour)) {
+                    $coloured++;
+                    $role = null;
+                    foreach ($roles[1] as $candidate) {
+                        if ((Email::PALETTE[$candidate][$property][0] ?? null) === $colour) {
+                            $role = $candidate;
+                        }
+                    }
+                    $this->assertNotNull($role, $name . ': ' . $property . ' ' . $colour . ' has no dark colour: the element needs the class of a role of Email::PALETTE with that light colour. ' . $tag);
+                    $darkColour = Email::PALETTE[$role][$property][1];
+                    $this->assertMatchesRegularExpression('/\.idno-mail-' . $role . ' \{[^}]*(?<![a-z-])' . $property . ': ' . $darkColour . ' !important;/', $dark[1], $name . ': the dark block gives ' . $role . ' its ' . $property);
+                    $this->assertStringContainsString('[' . ($property === 'color' ? 'data-ogsc' : 'data-ogsb') . '] .idno-mail-' . $role . ' { ' . $property . ': ' . $darkColour . ' !important; }', $style[1], $name . ': and so does the rule for Outlook\'s dark mode');
+                }
+            }
+            $this->assertGreaterThan(8, $coloured, $name . ' has colours of its own, inline, for the light look');
+        }
+
+        /**
          * A mail has a subject, an HTML body in the shell and a text body, and is fit for a
          * mail client.
          *
@@ -81,9 +138,11 @@ namespace Tests {
             $this->assertStringContainsString('<meta name="supported-color-schemes" content="light dark">', $html);
             $this->assertStringContainsString('prefers-color-scheme: dark', $html, $name . ' has a dark variant');
             $this->assertStringContainsString('<title>' . htmlspecialchars($mail['subject']) . '</title>', $html, $name . ': the title is the subject');
-            $this->assertMatchesRegularExpression('/<div style="display: none;[^"]*mso-hide: all;">[^<]{10,}/', $html, $name . ' has a preheader, hidden in the mail itself');
+            $this->assertMatchesRegularExpression('/<div class="idno-mail-preheader" style="display: none;[^"]*mso-hide: all;">[^<]{10,}/', $html, $name . ' has a preheader, hidden in the mail itself');
             $this->assertStringContainsString('You got this email because', $html, $name . ' says why the reader got it');
             $this->assertStringContainsString('You got this email because', (string) preg_replace('/\s+/', ' ', $text));
+
+            $this->assertDarkLookIsComplete($html, $name);
 
             // Layout tables only, each marked as one; no file to fetch, no script
             preg_match_all('/<table\b[^>]*>/', $html, $tables);

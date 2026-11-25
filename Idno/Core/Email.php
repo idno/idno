@@ -231,6 +231,86 @@ namespace Idno\Core {
         /// The template type parts are drawn with while setBodyFromTemplate() is at work
         protected static $partType = null;
 
+        /**
+         * The colours of a mail, by what they are for, in the light look and in the dark one.
+         * The light ones are the modern look's (Themes/Twenty26/src/css/tokens.css); that
+         * look has no dark variant of its own, so the dark ones are made here, from its dark
+         * surface (the administration bar, #111111) and the same greys turned over.
+         *
+         * A mail client shows one of four things: the light colours; the dark ones (it
+         * honours prefers-color-scheme); the light ones with every colour turned over; or the
+         * light ones with only light backgrounds and dark text turned over. All four must be
+         * readable, so: no colour is pure black or pure white on its own (a label and its
+         * background are always set together, on the same element), every text sits on a
+         * background this palette names, and the button has a border that is still there when
+         * its background meets a card that has turned dark.
+         *
+         * An element is given its colours inline (colour()) and the class of its role
+         * (idno-mail-<role>), and the shell writes the dark colours of every role into its
+         * style block (darkCss()). Tests\MailAssertions refuses a mail with a colour that
+         * has no role. Each role lists the CSS properties it sets.
+         */
+        const PALETTE = [
+            'bg'        => ['background-color' => ['#f3f4f6', '#121214']],
+            'card'      => ['background-color' => ['#ffffff', '#1d1d20'], 'border-color' => ['#e5e7eb', '#3a3a40']],
+            'strong'    => ['color' => ['#111111', '#f4f4f5']],
+            'text'      => ['color' => ['#374151', '#d4d4d8']],
+            'muted'     => ['color' => ['#6b7280', '#a1a1aa']],
+            'footer'    => ['color' => ['#4b5563', '#a1a1aa']],
+            // Darker than the look's own link blue (#2563eb), which turned over is too dim on a card turned black
+            'link'      => ['color' => ['#1e40af', '#93b4fd']],
+            'button'    => ['background-color' => ['#111111', '#f4f4f5'], 'border-color' => ['#6b7280', '#f4f4f5'], 'color' => ['#ffffff', '#111111']],
+            'box'       => ['background-color' => ['#f9fafb', '#27272b'], 'border-color' => ['#d1d5db', '#4b4b52'], 'color' => ['#374151', '#e4e4e7']],
+            'rule'      => ['border-color' => ['#e5e7eb', '#3a3a40']],
+            'preheader' => ['color' => ['#f3f4f6', '#121214']],
+        ];
+
+        /**
+         * Which text is read on which background, by role: what must have enough contrast, in
+         * both looks (Tests/Core/MailDarkModeTest.php)
+         */
+        const READ_ON = [
+            'strong' => ['bg', 'card'], 'text' => ['card'], 'muted' => ['card'], 'footer' => ['bg'],
+            'link' => ['card'], 'button' => ['button'], 'box' => ['box'],
+        ];
+
+        /**
+         * A light colour of the palette, for an inline style
+         *
+         * @param  string $role
+         * @param  string $property 'color', 'background-color' or 'border-color'
+         * @return string
+         */
+        static function colour($role, $property = 'color')
+        {
+            return self::PALETTE[$role][$property][0];
+        }
+
+        /**
+         * The style rules that give every role its dark colours: for mail clients that honour
+         * prefers-color-scheme, and for Outlook.com and the Outlook apps, which rewrite a
+         * mail's colours themselves and mark the elements they changed (data-ogsc for text,
+         * data-ogsb for backgrounds), so that there too the mail has the colours chosen here.
+         *
+         * @return string
+         */
+        static function darkCss()
+        {
+            $media = '';
+            $outlook = '';
+            foreach (self::PALETTE as $role => $properties) {
+                $rules = '';
+                foreach ($properties as $property => $colours) {
+                    $rules .= ' ' . $property . ': ' . $colours[1] . ' !important;';
+                    $hook = $property === 'color' ? 'data-ogsc' : 'data-ogsb';
+                    $outlook .= '    [' . $hook . '] .idno-mail-' . $role . ' { ' . $property . ': ' . $colours[1] . " !important; }\n";
+                }
+                $media .= '        .idno-mail-' . $role . ' {' . $rules . " }\n";
+            }
+
+            return "    @media (prefers-color-scheme: dark) {\n" . $media . "    }\n" . $outlook;
+        }
+
         /// The typefaces of a mail: the ones the modern look uses, as far as mail clients have them
         const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 

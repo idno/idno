@@ -12,7 +12,7 @@
         : nl2br(htmlspecialchars(trim((string) $vars['text'])));
 
 if (!empty($vars['muted'])) { ?>
-<p class="idno-mail-muted" style="margin: 0 0 16px 0; font-family: <?php echo Email::FONT ?>; font-size: 14px; line-height: 21px; color: #6b7280;"><?php echo $html ?></p>
+<p class="idno-mail-muted" style="margin: 0 0 16px 0; font-family: <?php echo Email::FONT ?>; font-size: 14px; line-height: 21px; color: <?php echo Email::colour('muted') ?>;"><?php echo $html ?></p>
 <?php } else { ?>
-<p class="idno-mail-text" style="margin: 0 0 16px 0; font-family: <?php echo Email::FONT ?>; font-size: 16px; line-height: 24px; color: #374151;"><?php echo $html ?></p>
+<p class="idno-mail-text" style="margin: 0 0 16px 0; font-family: <?php echo Email::FONT ?>; font-size: 16px; line-height: 24px; color: <?php echo Email::colour('text') ?>;"><?php echo $html ?></p>
 <?php }
