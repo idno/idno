@@ -124,6 +124,8 @@ namespace Idno\Core {
             }
 
             session_name(Idno::site()->config()->sessionname);
+            // The lines that keep every page out of shared caches are the session's `nocache` limiter's; a host's php.ini must not change them
+            session_cache_limiter('nocache');
             session_start();
             $carried = $_COOKIE[session_name()] ?? null;
             $this->sessionStartedHere = !is_string($carried) || $carried !== session_id();

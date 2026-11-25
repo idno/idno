@@ -20,7 +20,7 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
         $before = http_response_code();
-        $drawn = (new \Idno\Legacy\LegacyPageDrawer())->drawPage(['title' => 'T', 'body' => 'B'], 404);
+        $drawn = (new \Idno\Legacy\LegacyPageDrawer(new \Idno\Legacy\PhpHeaders()))->drawPage(['title' => 'T', 'body' => 'B'], 404);
 
         return ['before' => $before, 'after' => http_response_code(), 'drawn' => $drawn->body !== '', 'headers' => $drawn->headers !== []];
         PHP);
@@ -40,11 +40,42 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
         \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
         echo 'output before the page';
-        $drawn = (new \Idno\Legacy\LegacyPageDrawer())->drawPage(['title' => 'T', 'body' => 'B'], 404);
+        $drawn = (new \Idno\Legacy\LegacyPageDrawer(new \Idno\Legacy\PhpHeaders()))->drawPage(['title' => 'T', 'body' => 'B'], 404);
 
         return ['drawn' => $drawn->body !== ''];
         PHP);
 
         $this->assertTrue($result['drawn']);
+    }
+
+    public function testEveryCallGoesThroughTheHeaderQueueAndTheCleanupAsksAgain(): void
+    {
+        // A double for PHP's list: it is there when the draw begins and gone when it ends (the draw flushed output)
+        $result = $this->runInSite(<<<'PHP'
+        $uri = '/status/x';
+        $_SERVER['REQUEST_URI'] = $uri;
+        \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Onboarding\Begin());
+        $queue = new class implements \Idno\Legacy\HeaderQueue {
+            public array $calls = [];
+            private int $asked = 0;
+            public function listed(): bool { return ++$this->asked === 1; }
+            public function queued(): array { $this->calls[] = 'queued'; return ['Expires: x']; }
+            public function remove(string $name): void { $this->calls[] = 'remove ' . $name; }
+            public function send(string $line, bool $replace): void { $this->calls[] = 'send ' . $line; }
+            public function status(): int|false { $this->calls[] = 'status'; return false; }
+            public function setStatus(int $code): void { $this->calls[] = 'setStatus ' . $code; }
+            public function unsetStatus(): void { $this->calls[] = 'unsetStatus'; }
+            public function defaultContentType(): ?string { return null; }
+        };
+        (new \Idno\Legacy\LegacyPageDrawer($queue))->drawPage(['title' => 'T', 'body' => 'B'], 404);
+
+        return $queue->calls;
+        PHP);
+
+        $this->assertContains('setStatus 404', $result, 'the status goes through it');
+        $this->assertContains('unsetStatus', $result, 'and is put back through it');
+        $this->assertNotEmpty(array_filter($result, static fn (string $call): bool => str_starts_with($call, 'send ')), 'the type\'s headers are sent through it');
+        $this->assertSame([], array_filter($result, static fn (string $call): bool => str_starts_with($call, 'remove ')), 'once the list is gone nothing is read back or removed');
     }
 }

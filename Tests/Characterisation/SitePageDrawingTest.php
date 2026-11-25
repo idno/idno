@@ -285,6 +285,81 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertSame(['noindex'], $this->site()->request('GET', '_test/ping')->lines('X-Robots-Tag'));
     }
 
+    public function testAPageThatSaysNoindexKeepsItInDebugAndProdModeAndAPageThatDoesNotNeverGetsOne(): void
+    {
+        // In debug mode Symfony adds `X-Robots-Tag: noindex` to every response; only what it added is taken off a site page's
+        foreach (['debug' => $this->site(), 'prod' => new HttpSiteClient($this->startExtraServer(['APP_DEBUG' => '0']))] as $mode => $client) {
+            foreach ($this->callers() as $headers) {
+                $label = $mode . ' ' . json_encode(array_keys($headers));
+                $this->assertSame(['noindex'], $client->request('GET', self::AREAS['plain'] . 'draw-new?case=robots', $headers)->lines('X-Robots-Tag'), 'its own response: ' . $label);
+                $this->assertSame(['noindex'], $client->request('GET', self::AREAS['plain'] . 'draw-new?case=robots-context', $headers)->lines('X-Robots-Tag'), 'its context: ' . $label);
+                $this->assertSame([], $client->request('GET', self::AREAS['plain'] . 'draw-new?case=draw', $headers)->lines('X-Robots-Tag'), 'nothing said: ' . $label);
+            }
+        }
+    }
+
+    public function testCachingSetAnyOtherWayIsTheCachingTheLegacyPageWouldHaveSent(): void
+    {
+        // A page asks for caching with `setCaching()` (or `setNoCache()`). Caching set on the response itself, as a header of the context
+        // is honoured the same way, name by name, as the page asking for it: sent as given, in place of
+        // the session's lines of that name, never beside them and never silently dropped.
+        foreach ($this->callers() as $headers) {
+            $response = $this->get('draw-new', 'plain', 'case=response-caching', $headers);
+            $this->assertSame(['max-age=30, public'], $response->lines('Cache-Control'), 'as the response writes it (directives sorted)');
+            $this->assertSame(['Wed, 01 Jan 2031 00:00:00 GMT'], $response->lines('Expires'));
+            $this->assertSame(['no-cache'], $response->lines('Pragma'), 'a name the page did not ask for is the session\'s');
+
+            $context = $this->get('draw-new', 'plain', 'case=context-caching', $headers);
+            $this->assertSame(['max-age=45, public'], $context->lines('Cache-Control'));
+            $this->assertSame(['Thu, 19 Nov 1981 08:52:00 GMT'], $context->lines('Expires'));
+
+        }
+
+        // `#[Cache]` is not applied to a site page, and a developer is told so: refused in debug mode, ignored (the session's lines) otherwise
+        $debug = $this->site()->request('GET', '_test/site-page/cache-attribute?case=draw');
+        $this->assertSame(500, $debug->status);
+        $this->assertStringContainsString('setCaching()', $debug->body);
+        $prod = (new HttpSiteClient($this->startExtraServer(['APP_DEBUG' => '0'])))->request('GET', '_test/site-page/cache-attribute?case=draw');
+        $this->assertSame(200, $prod->status);
+        $this->assertSame(['no-store, no-cache, must-revalidate'], $prod->lines('Cache-Control'), 'one line, the session\'s');
+    }
+
+    public function testAnOptionsRequestIsAnsweredAsALegacyPageAnswersIt(): void
+    {
+        $legacy = $this->get('draw-legacy', 'plain', 'case=draw', [], 'OPTIONS');
+        $new = $this->get('draw-new', 'plain', 'case=draw', [], 'OPTIONS');
+
+        $this->assertSame(204, $legacy->status);
+        $this->assertSame(['text/html; charset=UTF-8'], $legacy->lines('Content-Type'), 'PHP\'s own default type');
+        $this->assertSame($legacy->status, $new->status);
+        $this->assertSame($legacy->lines('Content-Type'), $new->lines('Content-Type'));
+        $this->assertSame($legacy->lines('Access-Control-Allow-Methods'), $new->lines('Access-Control-Allow-Methods'));
+        $this->assertSame($legacy->lines('Cache-Control'), $new->lines('Cache-Control'));
+        // and the process goes on answering as it did: an empty answer does not take PHP's default type from the pages that follow
+        $this->assertNotSame([], $this->get('draw-legacy', 'plain', 'case=draw', [])->lines('Content-Type'));
+    }
+
+    public function testAGonePageASignedApiRequestAndAnXhrHeadAreTheLegacyPages(): void
+    {
+        $key = $this->apiKeyOf('ada');
+        foreach (['draw', 'gone', 'notfound', 'cached'] as $case) {
+            $path = static fn (string $page): string => self::AREAS['plain'] . $page . '?case=' . $case;
+            $legacy = $this->site()->request('GET', $path('draw-legacy'), self::signedHeadersFor('ada', $key, '/' . $path('draw-legacy')));
+            $new = $this->site()->request('GET', $path('draw-new'), self::signedHeadersFor('ada', $key, '/' . $path('draw-new')));
+
+            // a signed request is stateless, and the session's lines are still PHP's: what a legacy page sent is what is sent
+            $this->assertSame($legacy->lines('Cache-Control'), $new->lines('Cache-Control'), $case);
+            $this->assertSame($legacy->lines('Expires'), $new->lines('Expires'), $case);
+            $this->assertSame($legacy->lines('Pragma'), $new->lines('Pragma'), $case);
+            $this->assertSame($legacy->lines('Last-Modified'), $new->lines('Last-Modified'), $case);
+            $this->assertSame($legacy->status, $new->status, $case);
+        }
+        $this->assertTheSamePage('case=gone', [], method: 'HEAD');
+        $this->assertTheSamePage('case=gone', ['Cookie' => $this->member]);
+        $this->assertTheSamePage('case=draw', ['X-Requested-With' => 'XMLHttpRequest'], method: 'HEAD');
+        $this->assertTheSamePage('case=cached', ['X-Requested-With' => 'XMLHttpRequest'], method: 'HEAD');
+    }
+
     public function testTheSettingsShellsAreDrawnForTheDirectoriesThatHaveOne(): void
     {
         foreach (['admin', 'account'] as $area) {

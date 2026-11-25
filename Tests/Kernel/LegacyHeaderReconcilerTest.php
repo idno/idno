@@ -53,6 +53,24 @@ final class RecordingHeaderQueue implements HeaderQueue
         $this->held = array_values(array_filter($this->held, static fn (string $line): bool => strcasecmp(strstr($line, ':', true) ?: '', $name) !== 0));
     }
 
+    public function status(): int|false
+    {
+        return 200;
+    }
+
+    public function setStatus(int $code): void
+    {
+    }
+
+    public function unsetStatus(): void
+    {
+    }
+
+    public function defaultContentType(): ?string
+    {
+        return 'text/html; charset=UTF-8';
+    }
+
     public function send(string $line, bool $replace): void
     {
         $this->calls[] = ($replace ? 'replace ' : 'add ') . $line;
@@ -120,15 +138,13 @@ final class LegacyHeaderReconcilerTest extends TestCase
     public function testWithoutTakingOverCachingTheResponseDropsItsCacheControlPragmaAndExpires(): void
     {
         $queue = new RecordingHeaderQueue(self::SESSION);
-        $response = new Response('x', 200, ['Pragma' => 'no-cache', 'Expires' => 'Thu, 01 Jan 1970 00:00:00 GMT']);
+        $response = new Response('x');
         $response->headers->set('Last-Modified', 'Tue, 14 Nov 2023 22:13:20 GMT');
         $this->assertTrue($response->headers->has('Cache-Control'), 'the response computes one of its own (and adds `private`)');
 
         (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $this->context(), false);
 
         $this->assertFalse($response->headers->has('Cache-Control'));
-        $this->assertFalse($response->headers->has('Pragma'));
-        $this->assertFalse($response->headers->has('Expires'));
         $this->assertSame('Tue, 14 Nov 2023 22:13:20 GMT', $response->headers->get('Last-Modified'));
         $this->assertSame(self::SESSION, $queue->held, 'PHP\'s lines are sent as PHP queued them');
         $this->assertNotContains('remove Cache-Control', $queue->calls);
@@ -283,25 +299,129 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $this->assertFalse($page->headers->has('Cache-Control'));
     }
 
-    public function testNoXRobotsTagIsSentWithASitePage(): void
+    public function testOnlyTheRobotsTagSymfonyAddedIsTakenOff(): void
     {
-        // Symfony adds `noindex` to every response in debug mode, at the end; a page of the site never had it, and a header the page set stays
         $reconciler = new LegacyHeaderReconciler($this->kernel(), new RecordingHeaderQueue());
         $request = Request::create('/');
-        $context = $this->context($request);
+        $this->context($request);
 
-        $added = new Response('x', 200, ['X-Robots-Tag' => 'noindex']);
+        // nothing said before Symfony's listener ran, and `noindex` after: Symfony's
+        $added = new Response('x');
+        $reconciler->noteRobotsTag($this->event($request, $added));
+        $added->headers->set('X-Robots-Tag', 'noindex');
         $reconciler->removeRobotsTag($this->event($request, $added));
         $this->assertFalse($added->headers->has('X-Robots-Tag'));
 
-        $context->addHeader('X-Robots-Tag', 'noarchive');
-        $own = new Response('x', 200, ['X-Robots-Tag' => 'noarchive']);
+        // the page said it (on its response, or as a header of its context: the response has it then too)
+        $own = new Response('x', 200, ['X-Robots-Tag' => 'noindex']);
+        $reconciler->noteRobotsTag($this->event($request, $own));
         $reconciler->removeRobotsTag($this->event($request, $own));
-        $this->assertSame('noarchive', $own->headers->get('X-Robots-Tag'));
+        $this->assertSame('noindex', $own->headers->get('X-Robots-Tag'));
 
-        $other = new Response('x', 200, ['X-Robots-Tag' => 'noindex']);
-        $reconciler->removeRobotsTag($this->event(Request::create('/other'), $other));
-        $this->assertSame('noindex', $other->headers->get('X-Robots-Tag'), 'the response of anything else is as it was');
+        // anything else's response is as it was
+        $other = Request::create('/other');
+        $response = new Response('x');
+        $reconciler->noteRobotsTag($this->event($other, $response));
+        $response->headers->set('X-Robots-Tag', 'noindex');
+        $reconciler->removeRobotsTag($this->event($other, $response));
+        $this->assertSame('noindex', $response->headers->get('X-Robots-Tag'));
+    }
+
+    public function testCachingSetAnyOtherWayIsHonouredPerName(): void
+    {
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $context = $this->context();
+        $response = new Response('x', 200, ['Cache-Control' => 'public, max-age=30', 'Expires' => 'Wed, 01 Jan 2031 00:00:00 GMT']);
+
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $context, false);
+
+        $this->assertSame([
+            'Set-Cookie: sid=1; path=/',
+            'Pragma: no-cache',
+            'Cache-Control: max-age=30, public',
+            'Expires: Wed, 01 Jan 2031 00:00:00 GMT',
+        ], array_map(static fn (string $line): string => str_starts_with($line, 'Cache-Control') ? 'Cache-Control: max-age=30, public' : $line, $queue->held), 'the names it set are the page\'s; Pragma is the session\'s');
+        $this->assertFalse($response->headers->has('Cache-Control'));
+        $this->assertFalse($response->headers->has('Expires'));
+    }
+
+    public function testTheCacheControlAResponseComputesItselfIsNoAsk(): void
+    {
+        foreach (['no-cache, private', 'must-revalidate, private'] as $computed) {
+            $queue = new RecordingHeaderQueue(self::SESSION);
+            $response = new Response('x');
+            $response->headers->set('Cache-Control', $computed);
+
+            (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $this->context(), false);
+
+            $this->assertSame(self::SESSION, $queue->held, $computed);
+        }
+    }
+
+    public function testWhatThePageAskedForWinsOverTheResponse(): void
+    {
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $context = $this->context();
+        $context->setCaching(['Cache-Control' => 'no-store']);
+        $response = new Response('x', 200, ['Cache-Control' => 'public, max-age=30']);
+
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $context, false);
+
+        $this->assertContains('Cache-Control: no-store', $queue->held);
+        $this->assertNotContains('Cache-Control: public, max-age=30', $queue->held);
+    }
+
+    public function testARefusalsOwnNoStoreIsNotThePagesAsk(): void
+    {
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $request = Request::create('/');
+        $context = $this->context($request);
+        $request->attributes->set(\Idno\Security\DeniedResponder::ATTRIBUTE, true);
+        $response = new Response('x', 403, ['Cache-Control' => 'no-store']);
+
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $context, false);
+
+        $this->assertSame(self::SESSION, $queue->held, 'the session\'s lines, as a legacy page\'s 403 was sent');
+        $this->assertFalse($response->headers->has('Cache-Control'));
+    }
+
+    public function testACacheAttributeThatRunsAfterTheFirstPassIsHonouredByTheSecond(): void
+    {
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $reconciler = new LegacyHeaderReconciler($this->kernel(), $queue);
+        $request = Request::create('/');
+        $this->context($request);
+        $response = new Response('x');
+
+        $reconciler->onResponse($this->event($request, $response));
+        $this->assertSame(self::SESSION, $queue->held);
+
+        // Symfony's `#[Cache]` listener (-10) sets its header on the response
+        $response->headers->set('Cache-Control', 'max-age=60, public');
+        $reconciler->onLateResponse($this->event($request, $response));
+
+        $this->assertSame(
+            ['Set-Cookie: sid=1; path=/', 'Expires: Thu, 19 Nov 1981 08:52:00 GMT', 'Pragma: no-cache', 'Cache-Control: max-age=60, public'],
+            $queue->held,
+            'one Cache-Control line, the attribute\'s'
+        );
+        $this->assertFalse($response->headers->has('Cache-Control'));
+    }
+
+    public function testAnEmptyAnswerIsGivenPhpsDefaultContentType(): void
+    {
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        $response = new Response('', 204);
+
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile($response, $this->context(), false);
+
+        $this->assertContains('Content-Type: text/html; charset=UTF-8', $queue->held);
+
+        // not one that has a body, or a type of its own
+        $queue = new RecordingHeaderQueue(self::SESSION);
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile(new Response('x'), $this->context(), false);
+        (new LegacyHeaderReconciler($this->kernel(), $queue))->reconcile(new Response('', 204, ['Content-Type' => 'text/plain']), $this->context(), false);
+        $this->assertSame(self::SESSION, $queue->held);
     }
 
     public function testNothingWithoutTheLegacyApplication(): void
@@ -314,6 +434,8 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $response->headers->set('X-Robots-Tag', 'noindex');
 
         $reconciler->onResponse($this->event($request, $response));
+        $reconciler->onLateResponse($this->event($request, $response));
+        $reconciler->noteRobotsTag($this->event($request, $response));
         $reconciler->removeRobotsTag($this->event($request, $response));
 
         $this->assertTrue($response->headers->has('Cache-Control'));
@@ -333,5 +455,7 @@ final class LegacyHeaderReconcilerTest extends TestCase
         $this->assertSame(8, $priority(LegacyHeaderReconciler::class, 'onResponse'), 'before Symfony\'s ResponseListener, which prepares the response');
         $this->assertGreaterThan(8, $priority(PageRequestListener::class, 'onResponse'), 'after the page\'s own headers are on the response');
         $this->assertLessThan(-255, $priority(LegacyHeaderReconciler::class, 'removeRobotsTag'), 'after the listener that adds the tag');
+        $this->assertGreaterThan(-255, $priority(LegacyHeaderReconciler::class, 'noteRobotsTag'), 'before the listener that adds the tag');
+        $this->assertLessThan(-10, $priority(LegacyHeaderReconciler::class, 'onLateResponse'), 'after Symfony\'s cache attribute listener');
     }
 }

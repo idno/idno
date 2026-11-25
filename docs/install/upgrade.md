@@ -378,6 +378,8 @@ not copied again; a file that did not copy correctly is not left there.
 
 ## Other changes in 2.0
 
+Idno sets PHP's session cache limiter to `nocache` itself, before it starts the session, so every page is sent with `Expires` in the past, `Cache-Control: no-store, no-cache, must-revalidate` and `Pragma: no-cache` whatever your php.ini says. A site that relied on a custom `session.cache_limiter` (`public`, `private` or none) no longer gets it.
+
 Upgrades normally need no cache clearing, because the compiled cache is keyed by the code it was built from (and by the installation's directory). Deleting everything under `var/cache/` is always safe, and is the fix if the site reports a container error after a deploy.
 
 !!! warning "Opcache with `opcache.validate_timestamps=0`"

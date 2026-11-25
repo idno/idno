@@ -35,8 +35,12 @@ final class DeniedResponder implements AuthenticationEntryPointInterface, Access
         return $this->respond($request);
     }
 
+    /** The request's attribute that says a refusal was answered: its `Cache-Control` is not a page's ask for caching */
+    public const ATTRIBUTE = '_idno_denied';
+
     private function respond(Request $request): Response
     {
+        $request->attributes->set(self::ATTRIBUTE, true);
         if (self::wantsJson($request)) {
             $response = new JsonResponse(['error' => 'forbidden'], 403);
         } else {

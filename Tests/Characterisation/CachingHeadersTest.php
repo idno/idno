@@ -135,6 +135,41 @@ namespace Tests\Characterisation {
             ]);
         }
 
+        public function testAGonePostIsTheSessionsLinesToo(): void
+        {
+            $status = $this->createStatus($this->user(), 'a note that will be gone');
+            $path = parse_url($status->getURL(), PHP_URL_PATH);
+            $status->delete();
+
+            $this->checkRows([
+                ['GET', (string) $path, [], 410, 'session', null],
+                ['HEAD', (string) $path, [], 410, 'session', null],
+            ]);
+        }
+
+        public function testAnXhrHeadHasTheRoutersLinesToo(): void
+        {
+            // (the router answers an XHR HEAD with its own headers as it does a GET, and the page sends the same ones it does for a GET)
+            $this->checkRows([
+                ['HEAD', '/', self::XHR, 200, 'xhr', 'newest'],
+                ['HEAD', '/robots.txt', self::XHR, 200, 'xhr', 'any'],
+            ]);
+        }
+
+        public function testASignedApiRequestHasTheSessionsLines(): void
+        {
+            // A signed request is stateless and gets no session of its own, but PHP's session machinery still starts, so the same lines
+            $user = $this->user();
+            foreach (['/', '/?_t=json', '/robots.txt'] as $path) {
+                $response = $this->site()->request('GET', $path, $this->signedHeaders($user, $path));
+
+                $this->assertSame(200, $response->status, $path);
+                $this->assertSame(self::PROFILES['session']['Expires'], $response->lines('Expires'), $path);
+                $this->assertSame(self::PROFILES['session']['Cache-Control'], $response->lines('Cache-Control'), $path);
+                $this->assertSame(self::PROFILES['session']['Pragma'], $response->lines('Pragma'), $path);
+            }
+        }
+
         public function testAnXhrGetOfThePortedPages(): void
         {
             // Today the router answers an XHR GET of a page with its own headers: a 1997 `Expires`, two `Cache-Control` lines and `Last-Modified`

@@ -129,4 +129,18 @@ final class SitePageDrawingHeadersTest extends PrivateSiteTestCase
         $this->assertSame(500, $response->status);
         $this->assertNull($response->header('X-Fixture-Leftover'), 'a header of the failed draw is sent with the error page: ' . json_encode($response->headers));
     }
+
+    public function testAFailedDrawKeepsTheCachingThePageAskedFor(): void
+    {
+        // the page asked for no caching, then its draw failed: the error page is sent with the lines the page asked for, as a legacy page's was
+        $legacy = $this->headersOf('draw-legacy', 'case=no-cache&draw_headers=throw', 500);
+        $new = $this->headersOf('draw-new', 'case=no-cache&draw_headers=throw', 500);
+
+        // (the one difference is deliberate: a legacy page's failed draw left the header it had sent; a controller's does not)
+        unset($legacy['x-fixture-leftover']);
+        $this->assertSame($legacy, $new);
+        $response = $this->site()->request('GET', '_test/site-page/draw-new?case=no-cache&draw_headers=throw');
+        $this->assertSame(['no-store, no-cache, must-revalidate, max-age=0', 'post-check=0, pre-check=0'], $response->lines('Cache-Control'));
+        $this->assertSame([], $response->lines('X-Fixture-Leftover'));
+    }
 }

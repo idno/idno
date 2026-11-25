@@ -32,4 +32,25 @@ interface HeaderQueue
      * Queues a line: `$replace` replaces the lines of its name, otherwise it is added after them (`header($line, $replace)`).
      */
     public function send(string $line, bool $replace): void;
+
+    /**
+     * The process's response status, false where it has none (the command line before one is set).
+     */
+    public function status(): int|false;
+
+    /**
+     * Sets the process's response status: nothing once the output has begun (PHP warns).
+     */
+    public function setStatus(int $code): void;
+
+    /**
+     * Puts the process back to having no status: PHP has no call that unsets one, and in the command line a status line of no code does;
+     * under a web server it is a 200. Nothing once the output has begun.
+     */
+    public function unsetStatus(): void;
+
+    /**
+     * The `Content-Type` PHP sends a response that names none (`default_mimetype` and `default_charset`), null when it sends none.
+     */
+    public function defaultContentType(): ?string;
 }

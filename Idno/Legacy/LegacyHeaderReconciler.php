@@ -6,6 +6,7 @@ namespace Idno\Legacy;
 
 use Idno\Http\Page\PageContext;
 use Idno\Kernel;
+use Idno\Security\DeniedResponder;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,16 +30,30 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * - `Last-Modified`: the response's, when it has one (PHP's queued line is removed); else PHP's.
  * - `Content-Type`: the response's; a response with none and a type that declares none (a third party's) takes PHP's queued line,
  *   because a response with none gets `text/html` when it is prepared and sends it replacing PHP's.
+ * - caching set any other way (a header of the page's context, a `Cache-Control`, `Pragma` or `Expires` a controller set on its response, a
+ *   `#[Cache]` attribute) is honoured as the page asking for it, name by name, unless the page asked for that name itself: its value is
+ *   sent as given, in place of PHP's lines of that name. A `Cache-Control` equal to the one a response computes by itself
+ *   (`no-cache, private`, or `must-revalidate, private` once it has `Last-Modified`) is no ask. The rule runs a second time after
+ *   Symfony's cache attribute listener (priority -10), which adds its header after the first.
+ * - an empty answer (a 204, as OPTIONS is) is given the `Content-Type` PHP would have sent it: a response that is prepared drops its own
+ *   and tells PHP to send none, where a legacy page's answer had PHP's default.
  * - everything else (`Link` from `page/head`, `Vary`, `X-*`), `Date` and `Set-Cookie`: untouched, the response's lines beside PHP's.
  *
  * The listener is registered after the page's own headers are on the response (`PageRequestListener::onResponse()`) and before
  * Symfony's `ResponseListener`, which prepares it. `X-Robots-Tag: noindex`, which Symfony adds to every response in debug mode (and the
- * legacy router never sent), is taken off a site page's response when the page did not set it itself, by a listener that runs after the one
- * that adds it.
+ * legacy router never sent), is taken off a site page's response only when it was not there before Symfony's listener ran: a page that
+ * says `noindex` itself keeps it, in every environment.
  */
 final class LegacyHeaderReconciler
 {
     private const CACHING = ['Cache-Control', 'Pragma', 'Expires'];
+
+    /** What a response computes for its own `Cache-Control` when nothing set one: not a page's ask */
+    private const COMPUTED_CACHE_CONTROL = ['no-cache, private', 'must-revalidate, private', 'private, must-revalidate'];
+
+    private const ROBOTS_BEFORE = '_idno_robots_tag_before';
+
+    private const DEFAULT_MIMETYPE = '_idno_default_mimetype';
 
     public function __construct(
         #[Autowire(service: 'kernel')]
@@ -61,19 +76,44 @@ final class LegacyHeaderReconciler
     }
 
     /**
+     * After Symfony's cache attribute listener (-10): what it, or anything before, set on the response is honoured as the page's ask.
+     */
+    #[AsEventListener(event: KernelEvents::RESPONSE, priority: -20)]
+    public function onLateResponse(ResponseEvent $event): void
+    {
+        $context = $this->contextOf($event);
+        if ($context === null) {
+            return;
+        }
+        $this->reconcile($event->getResponse(), $context, true);
+        // an empty answer was prepared with PHP's default type switched off for the process: back as it was
+        $default = $event->getRequest()->attributes->get(self::DEFAULT_MIMETYPE);
+        if (is_string($default)) {
+            ini_set('default_mimetype', $default);
+            $event->getRequest()->attributes->remove(self::DEFAULT_MIMETYPE);
+        }
+    }
+
+    /**
+     * Just before Symfony's `DisallowRobotsIndexingListener` (-255): whether the response already says anything of indexing.
+     */
+    #[AsEventListener(event: KernelEvents::RESPONSE, priority: -250)]
+    public function noteRobotsTag(ResponseEvent $event): void
+    {
+        if ($event->isMainRequest()) {
+            $event->getRequest()->attributes->set(self::ROBOTS_BEFORE, $event->getResponse()->headers->has('X-Robots-Tag'));
+        }
+    }
+
+    /**
      * Symfony's `DisallowRobotsIndexingListener` (priority -255) adds `X-Robots-Tag: noindex` to a response that has none, in debug mode.
      */
     #[AsEventListener(event: KernelEvents::RESPONSE, priority: -300)]
     public function removeRobotsTag(ResponseEvent $event): void
     {
         $context = $this->contextOf($event);
-        if ($context === null) {
+        if ($context === null || $event->getRequest()->attributes->get(self::ROBOTS_BEFORE) !== false) {
             return;
-        }
-        foreach (array_keys($context->headers()) as $name) {
-            if (strcasecmp($name, 'X-Robots-Tag') === 0) {
-                return;
-            }
         }
         $response = $event->getResponse();
         if ($response->headers->get('X-Robots-Tag') === 'noindex') {
@@ -89,6 +129,10 @@ final class LegacyHeaderReconciler
     {
         $queue = $this->php->listed();
         $queued = $queue ? $this->php->queued() : [];
+        if ($context->request()->attributes->get(DeniedResponder::ATTRIBUTE) !== true) {
+            // (a refusal's own `no-store` is the responder's and not the page's: a site page's 403 is sent with the session's lines, as a legacy page's was)
+            $this->honour($response, $context);
+        }
         $asked = $context->cachingLines();
 
         // Never the response's own: it computes a Cache-Control (and adds `private`), and Symfony sends it beside PHP's
@@ -115,7 +159,31 @@ final class LegacyHeaderReconciler
             if ($line !== null) {
                 $response->headers->set('Content-Type', $line);
                 $this->php->remove('Content-Type');
+            } elseif ($response->isEmpty() && ($default = $this->php->defaultContentType()) !== null) {
+                // Preparing an empty response drops its type and switches PHP's default off, for the process: so the default is sent
+                // by name here, and the setting is put back after the response is prepared (onLateResponse())
+                $this->php->send('Content-Type: ' . $default, true);
+                $context->request()->attributes->set(self::DEFAULT_MIMETYPE, (string) ini_get('default_mimetype'));
             }
+        }
+    }
+
+    /**
+     * Caching set on the response (or as a header of the context) is the page asking for it, for each name the page did not ask for with
+     * `setCaching()`: the value is the page's, sent as given. A `Cache-Control` the response computed by itself is no ask.
+     */
+    private function honour(Response $response, PageContext $context): void
+    {
+        $asked = $context->caching();
+        foreach (self::CACHING as $name) {
+            if (!$response->headers->has($name) || array_key_exists($name, $asked)) {
+                continue;
+            }
+            $lines = array_values($response->headers->all($name));
+            if ($name === 'Cache-Control' && count($lines) === 1 && in_array($lines[0], self::COMPUTED_CACHE_CONTROL, true)) {
+                continue;
+            }
+            $context->setCaching([$name => $lines]);
         }
     }
 

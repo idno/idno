@@ -21,6 +21,10 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
  */
 final class LegacyPageLifecycle implements PageLifecycle
 {
+    public function __construct(private readonly HeaderQueue $php = new PhpHeaders())
+    {
+    }
+
     public function begin(PageContext $context): void
     {
         $site = Idno::site();
@@ -28,9 +32,7 @@ final class LegacyPageLifecycle implements PageLifecycle
 
         // PHP's own X-Powered-By (expose_php) is replaced by the page's, as header() replaced it: the response adds the page's
         // value beside, never over, a header PHP already holds.
-        if (!headers_sent()) {
-            header_remove('X-Powered-By');
-        }
+        $this->php->remove('X-Powered-By');
 
         $defaultType = $context->page()->defaultType;
         if ($defaultType !== null && empty($context->input('_t'))) {

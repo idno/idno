@@ -98,6 +98,14 @@ final class SitePageFixtureController
         return $this->drawCase($request);
     }
 
+    /** A page with Symfony's `#[Cache]` attribute, which adds its own `Cache-Control` after the page's listeners. */
+    #[Route('/{lead}_test/site-page/cache-attribute{slash}', name: 'idno_test_site_page_cache_attribute', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[\Symfony\Component\HttpKernel\Attribute\Cache(maxage: 60, public: true)]
+    public function cacheAttribute(Request $request): Response
+    {
+        return $this->drawCase($request);
+    }
+
     #[Route('/{lead}admin/_test-site-page/draw-new{slash}', name: 'idno_test_site_page_draw_admin', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
     #[SitePage(name: 'Tests\Fixtures\SitePageFixture', settingsPage: true)]
     public function drawAdmin(Request $request): Response
@@ -128,6 +136,27 @@ final class SitePageFixtureController
                 break;
             case 'cached':
                 $context->addHeader('Last-Modified', \Idno\Core\Time::timestampToRFC2616(1700000000));
+                break;
+            case 'robots':
+                // a page that does not want to be indexed says so on its own response
+                $response = $renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $renderer->template('pages/home/blurb', ['offset' => 0])]);
+                $response->headers->set('X-Robots-Tag', 'noindex');
+
+                return $response;
+            case 'response-caching':
+                // caching set on the response itself, not through the page
+                $response = $renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $renderer->template('pages/home/blurb', ['offset' => 0])]);
+                $response->headers->set('Cache-Control', 'public, max-age=30');
+                $response->headers->set('Expires', 'Wed, 01 Jan 2031 00:00:00 GMT');
+
+                return $response;
+            case 'context-caching':
+                // caching set as a header of the page's context
+                $context->addHeader('Cache-Control', 'public, max-age=45');
+                break;
+            case 'robots-context':
+                // and through the page's context
+                $context->addHeader('X-Robots-Tag', 'noindex');
                 break;
             case 'no-cache':
                 Idno::site()->currentPage()->setNoCache();

@@ -979,7 +979,7 @@ test fixtures is routed to a controller through them yet:
      handler's defaults and only PATCH was a 404).
   A refusal of an API request (step 3) is Symfony Security's `AccessDeniedException`, so the firewall's `DeniedResponder` answers it: status 403 with
   the site's 403 page for a caller of the web page type, `{"error":"forbidden"}` for one answered in JSON (`_t=json`, `Accept`, and a signed API request,
-  as the legacy JSON shell was), `Cache-Control: no-store`, and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
+  as the legacy JSON shell was), the session's caching lines (the responder's own `no-store` is taken off a site page's response, which is what a legacy page's 403 sent), and nothing is logged as an error. No `page/head`, no `page/get`. Differences from a legacy
   refusal: a JSON refusal has no `messages`, and the 403 is drawn in the page itself (a legacy API refusal built a second page, which said `page/ready`
   again). The walled garden's refusal (step 5) is the PAGE's: an `AccessDeniedHttpException`, which `PageExceptionListener` draws as `deniedContent()` did
   (the 403 page in the shell and the template type of the request, from `_t` only: `publicGatekeeper()` ran before `Accept` was read), through the renderer, with
@@ -1104,15 +1104,22 @@ test fixtures is routed to a controller through them yet:
   in-process test) the response carries what the page asked for, one line a name; (3) `Last-Modified` is the response's when it has one (PHP's queued line is
   removed), else PHP's stands; (4) a response with no `Content-Type` and a type that declares none (a third party's) takes the `Content-Type` PHP queued, because a response
   with none is given `text/html` when it is prepared and sends it replacing PHP's; (5) everything else (`Link` from `page/head` and the plugins, `Vary`, `X-*`), `Date`
-  and `Set-Cookie` is left alone, the response's lines beside PHP's, so `Link` values add up; (6) a second listener (priority -300, after Symfony's
-  `DisallowRobotsIndexingListener`, -255) takes `X-Robots-Tag: noindex` off a site page's response unless the page set it, because in debug mode Symfony adds it to
-  every response and a legacy page never sent it; the responses of every other controller (`/_upgrade/step`, `/_test/*`) keep it and keep every header they have. A
+  and `Set-Cookie` is left alone, the response's lines beside PHP's, so `Link` values add up; (6) caching set any other way (a header of the context, a `Cache-Control`, `Pragma` or `Expires` a controller set on its own response) is honoured as the page
+  asking for it, name by name, unless the page asked for that name with `setCaching()`: its value replaces PHP's lines of the name (the response writes `Cache-Control`
+  directives sorted, and the value it computes by itself is no ask). The rule runs again at priority -20, after Symfony's own listeners; `#[Cache]` is NOT applied to a
+  site page (refused with a `LogicException` in debug mode, ignored otherwise: ask with `setCaching()`); a refusal's own `no-store` (`DeniedResponder`) is not an ask;
+  (7) an empty answer (an OPTIONS 204) is sent the `Content-Type` PHP's `default_mimetype` gives it, as a legacy page's was (a prepared empty response drops its type and
+  switches the default off for the process: put back after); (8) `X-Robots-Tag: noindex`, which Symfony's `DisallowRobotsIndexingListener` (-255) adds in debug mode, is
+  taken off a site page's response (priority -300) only if it was not on the response before that listener ran (`noteRobotsTag()`, -250), so a page that says `noindex`
+  keeps it in every environment, and a legacy page never had the one Symfony adds; the responses of every other controller (`/_upgrade/step`, `/_test/*`) keep it and keep every header they have. A
   header a draw sends itself with `header()` for one of the three caching names stays in PHP's list (`AddedHeaders` never takes them): it is PHP's to send. The seam over
   PHP's functions is `Idno\Legacy\HeaderQueue` (`listed()`, `queued()`, `remove()`, `send()`; `PhpHeaders`), so the rule is tested against a recording double
   (`Tests/Kernel/LegacyHeaderReconcilerTest`) and over HTTP in `Tests/Characterisation/CachingHeadersTest` (the real pages, line by line, for a visitor and a member, written
   from what the site sent before any page was ported), `SitePageDrawingTest` (`cached`, `no-cache`, the `Link` lines, no `X-Robots-Tag`), `SitePageLifecycleTest` (XHR) and
   `Tests/Kernel/PageListenersWithoutLegacyTest` (no legacy application: nothing changes). Two differences from a legacy page remain, neither of them a caching header: the order of lines of DIFFERENT names (PHP's lines first, then the response's), and
-  `Date`, which the response always carries and which therefore comes after PHP's lines, where the server wrote its own first.
+  `Date`, which the response always carries and which therefore comes after PHP's lines, where the server wrote its own first. (OPTIONS had a third, its `Content-Type`:
+  it is the same now.) Every call to PHP's header functions on the controller path (`LegacyPageDrawer`, `LegacyPageLifecycle`, the reconciler) goes through `HeaderQueue`
+  (`HeaderSeamTest` scans for a direct call); the drawer asks `listed()` again before it reads PHP's list back, because a draw may have flushed output.
 
 ### Kernel and services
 
@@ -1875,7 +1882,8 @@ callback, and often `exit`: Symfony's session listener would close the session a
   login redirect), and a plain-text 403 when the legacy application is not booted, the page fails to draw or the template type is
   neither a web page nor JSON (`?_t=rss`: no feed shell with the wrong content type; `?_t[]=x` is read from `query->all()` and is
   no type). The page is drawn with `DefaultTemplate::drawPageWithoutSideEffects()`: the session's messages are neither shown nor
-  used up and no header (the cross-origin one) is sent. Always `Cache-Control: no-store`. Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
+  used up and no header (the cross-origin one) is sent. `Cache-Control: no-store` for every controller that is not a site page; on a site page the refusal's `no-store` is not the page's
+  ask for caching (`DeniedResponder::ATTRIBUTE` marks the request) and the response goes out with the session's lines, as a legacy page's 403 did (see "The headers of a site page"). Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
   `Tests/Fixtures/WhoAmIController`).
 - **The queue worker.** It handles many messages in one process and has no request: `LegacyUserContext::runAs()` and
   `ensureNobodyLoggedOn()` (and so `WorkerHygiene`) call `Session::resetStatelessAuthentication()` before and after each message, so
@@ -4364,7 +4372,10 @@ the CLI installer no longer writes one.
   pins every spelling of those entities (named, decimal, hex, leading zeros, either case of `x`) while named letters such as `&auml;` still decode so that
   `#Äpfel` links. Don't `html_entity_decode()` text that is going to be printed as HTML.
 - The session cookie is HttpOnly, Secure over https and `SameSite=Lax` (`Idno\Core\Session::init()`: the general
-  defence for the handlers that skip the form token; the expiring cookie of a logoff carries the same attributes). No
+  defence for the handlers that skip the form token; the expiring cookie of a logoff carries the same attributes). `init()` also sets the session's cache
+  limiter to `nocache` before the session starts (`session_cache_limiter('nocache')`), so the lines that keep every page out of shared caches (`Expires` in 1981,
+  `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`) are the site's own and a host whose php.ini says `public`, `private` or nothing still sends them
+  (`Tests/Characterisation/SessionCacheLimiterTest`); a site that relied on its own `session.cache_limiter` no longer gets it. The limiter does not depend on the session handler. No
   `P3P` header is sent, and `Session::validate()` is gone. `session_hash_function` is read and ignored. A session is
   never empty: `init()` writes `$_SESSION['secure']` (whether the session began over https), because the database
   session handler (Symfony's PdoSessionHandler, MySQL and MariaDB) destroys an empty session when it writes, so a
