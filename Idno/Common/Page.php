@@ -422,8 +422,13 @@ namespace Idno\Common {
                 http_response_code(413);
                 $return = false;
                 if (!\Idno\Core\Idno::site()->session()->isAPIRequest() && !empty($_SERVER['HTTP_REFERER'])) {
-                    // Back to the form it came from
-                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER']));
+                    // Back to the form it came from: its path on this site only, whatever
+                    // host the referrer names (the site may be reached under several)
+                    $back = '/' . ltrim((string) parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_PATH), '/');
+                    if ($query = (string) parse_url((string) $_SERVER['HTTP_REFERER'], PHP_URL_QUERY)) {
+                        $back .= '?' . $query;
+                    }
+                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($back));
                 }
 
             } else if (\Idno\Core\Idno::site()->session()->isAPIRequest() || \Idno\Core\Idno::site()->actions()->validateToken($this->currentUrl(), false) || \Idno\Core\Idno::site()->actions()->validateToken('', false)) {
