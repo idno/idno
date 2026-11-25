@@ -297,6 +297,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
     {
         $this->choose(self::$ids['public']);
         $base = $this->startExtraServer(['IDNO_TEST_HOMEPAGE_LISTENERS' => 'throw']);
+        $logged = $this->logOffset($base);
 
         $r = $this->request($base, 'visitor', 'GET');
 
@@ -304,7 +305,7 @@ final class StaticPagesHomepageMatrixTest extends PrivateSiteTestCase
         $this->assertStringContainsString('<!DOCTYPE html>', $r['body'], 'the site\'s own page');
         $this->assertStringNotContainsString('Marker public page', $r['body']);
         $this->assertStringNotContainsString(self::STREAM, $r['body']);
-        $log = (string) file_get_contents($this->extraServerLog($base));
+        $log = $this->logSince($logged, $base);
         $this->assertSame(1, substr_count($log, 'the homepage listener broke'), $log);
         // (the streams under /content/ never ask: the home page is only the root's)
         $this->assertSame(200, $this->request($base, 'visitor', 'GET', '/content/all')['status']);

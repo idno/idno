@@ -156,6 +156,14 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
+     * The site's own upload directory (IDNO_UPLOADPATH).
+     */
+    protected function uploadDirectory(): string
+    {
+        return $this->uploadPath;
+    }
+
+    /**
      * The directory of the site's cache pool (IDNO_CACHEPATH): emptied after every test of a shared site.
      */
     protected function cachePoolDirectory(): string
@@ -486,6 +494,27 @@ abstract class PrivateSiteTestCase extends TestCase
     protected function serverLogContents(): string
     {
         return is_file($this->serverLog) ? (string) file_get_contents($this->serverLog) : '';
+    }
+
+    /**
+     * How long a server's log is now: the main server's, or the extra server's that startExtraServer() returned the address of. A test of a
+     * shared site takes it before its request and reads only what the request wrote with logSince(): the log holds every test of the class.
+     */
+    protected function logOffset(?string $extraServerUrl = null): int
+    {
+        $log = $extraServerUrl === null ? $this->serverLog : $this->extraServerLog($extraServerUrl);
+
+        return is_file($log) ? (int) filesize($log) : 0;
+    }
+
+    /**
+     * What a server's log gained since logOffset() said how long it was.
+     */
+    protected function logSince(int $offset, ?string $extraServerUrl = null): string
+    {
+        $log = $extraServerUrl === null ? $this->serverLog : $this->extraServerLog($extraServerUrl);
+
+        return is_file($log) ? (string) substr((string) file_get_contents($log), $offset) : '';
     }
 
     /**

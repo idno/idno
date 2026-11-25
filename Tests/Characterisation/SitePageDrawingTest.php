@@ -336,7 +336,8 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         // asking for caching. Debug mode refuses a value that is not one the framework sets by itself (so that a developer notices);
         // otherwise they are ignored, the session's lines go out, and one warning is logged.
         $session = ['no-store, no-cache, must-revalidate'];
-        $prodUrl = $this->startExtraServer(['APP_DEBUG' => '0']);
+        // a server of its own (the label): the warning is once for each process of a server, so another test's requests to it would count
+        $prodUrl = $this->startExtraServer(['APP_DEBUG' => '0', 'IDNO_TEST_SERVER_LABEL' => 'caching-warning']);
         $prod = new HttpSiteClient($prodUrl);
         foreach ($this->callers() as $headers) {
             $label = json_encode(array_keys($headers));

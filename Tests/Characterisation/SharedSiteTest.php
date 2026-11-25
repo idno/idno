@@ -9,7 +9,8 @@ use Tests\Support\PrivateSiteTestCase;
 /**
  * A class of tests that only read shares one private site: it is started by the first test, kept for the class,
  * compared with what it was after every test (a test that changed it fails, and the next test gets a site of its
- * own again), served with one environment, and removed after the class.
+ * own again), served with one environment, and removed after the class. The guard's reach is proven for an entity row, a setting, an uploaded
+ * file, a record of the reader collection and a write through an extra server.
  */
 final class SharedSiteTest extends PrivateSiteTestCase
 {
@@ -54,7 +55,7 @@ final class SharedSiteTest extends PrivateSiteTestCase
     public function testAFileInTheCachePoolIsWritten(): void
     {
         $directory = $this->cachePoolDirectory();
-        mkdir($directory, 0700, true);
+        is_dir($directory) || mkdir($directory, 0700, true);
         file_put_contents($directory . '/probe', 'x');
         $this->assertFileExists($directory . '/probe');
     }
@@ -73,6 +74,25 @@ final class SharedSiteTest extends PrivateSiteTestCase
         $this->assertNotSame(0, $exit, $output);
         $this->assertStringContainsString('changed the shared site', $output);
         $this->assertMatchesRegularExpression('/Tests: 2, Assertions: \d+, Failures: 1/', $output, 'only the first test failed: the second found the site as it was seeded');
+    }
+
+    public function testEveryKindOfChangeFailsTheTestThatMadeItAndOnlyThatTest(): void
+    {
+        [$exit, $output] = $this->runFixture('SharedSiteEveryChangeFixture');
+        $this->assertNotSame(0, $exit, $output);
+        $this->assertMatchesRegularExpression('/Tests: 5, Assertions: \d+, Failures: 4/', $output, 'each change failed its own test, and the test that changed nothing passed');
+        foreach (['testASettingIsSaved', 'testAFileIsUploaded', 'testAPostIsWrittenThroughAnExtraServer', 'testARecordOfTheReaderAndSiteCollectionsIsWritten'] as $test) {
+            $this->assertMatchesRegularExpression('/\d+\) [^\n]*::' . $test . '\n[^\n]*changed the shared site/', $output, $test . ' is named with the guard\'s message');
+        }
+        $this->assertStringNotContainsString('::testNothingIsChanged', $output);
+    }
+
+    public function testAnExtraServerIsKeptForTheClassByWhatItWasStartedWith(): void
+    {
+        $first = $this->startExtraServer(['IDNO_TEST_SERVER_LABEL' => 'one']);
+        $this->assertSame($first, $this->startExtraServer(['IDNO_TEST_SERVER_LABEL' => 'one']));
+        $this->assertNotSame($first, $this->startExtraServer(['IDNO_TEST_SERVER_LABEL' => 'two']));
+        $this->assertSame(200, (new HttpSiteClient($first))->request('GET', '_test/server')->status);
     }
 
     public function testADifferentEnvironmentFails(): void

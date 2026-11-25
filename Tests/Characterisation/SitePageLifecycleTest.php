@@ -284,12 +284,13 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $path = '/_test/site-page/account';
         $headers = self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path);
 
+        $logged = $this->logOffset();
         [$response, $events] = $this->recorded('GET', $path, $headers);
 
         $this->assertSame(403, $response->status);
         $this->assertNull($response->header('X-Idno-Test-Page-Head'));
         $this->assertSame(['page/ready'], array_column($events, 'event'), 'no page/head');
-        $this->assertStringContainsString('API request to an account page refused: ' . self::PAGE_CLASS, $this->serverLogContents());
+        $this->assertStringContainsString('API request to an account page refused: ' . self::PAGE_CLASS, $this->logSince($logged));
 
         [$browser, $events] = $this->recorded('GET', $path, ['Cookie' => $this->loginCookie('ada', 'correct-horse-battery-9')]);
         $this->assertSame(200, $browser->status, 'a browser session is let in');
@@ -301,7 +302,9 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
     public function testAWalledGardenRefusalIsTheDrawn403AndIsNotLoggedAsAnError(): void
     {
-        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+        $url = $this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']);
+        $client = new HttpSiteClient($url);
+        $logged = $this->logOffset($url);
 
         $html = $client->request('GET', self::STATE);
         $this->assertSame(403, $html->status);
@@ -320,7 +323,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame(403, $accept->status);
         $this->assertStringContainsString('text/html', (string) $accept->header('Content-Type'), 'an Accept header does not choose the type of a walled garden\'s refusal');
 
-        $log = $this->serverLogContents();
+        $log = $this->logSince($logged, $url);
         $this->assertStringNotContainsString('request.ERROR', $log);
         $this->assertStringNotContainsString('request.CRITICAL', $log);
     }
@@ -332,6 +335,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
         // A signed request is answered in JSON whatever it asked for, in the JSON shell with the message the legacy refusal added, as every
         // refusal of a site page is drawn (SitePageDrawingTest::testEveryRefusalOfASitePageIsDrawnAsALegacyPagesDeniedContent).
+        $logged = $this->logOffset();
         foreach ([$headers, $headers + ['Accept' => 'application/json']] as $sent) {
             $response = $this->site()->request('GET', $path, $sent);
 
@@ -341,7 +345,7 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
             $this->assertStringContainsString('no-store', (string) $response->header('Cache-Control'));
         }
 
-        $this->assertStringNotContainsString('request.ERROR', $this->serverLogContents());
+        $this->assertStringNotContainsString('request.ERROR', $this->logSince($logged));
     }
 
     public function testASignedOptionsRequestOnAnAccountPageIsRefusedAsALegacyOneWas(): void
@@ -382,10 +386,11 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $path = '/_test/site-page/post';
         [$cookie, $token] = $this->sessionAndToken();
 
+        $logged = $this->logOffset();
         [$refused, $events] = $this->recorded('POST', $path, ['Cookie' => $cookie]);
         $this->assertSame(302, $refused->status, 'a POST without its token is sent away, as Page::post() did');
         $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'), 'no page/post');
-        $this->assertStringContainsString('Invalid token', $this->serverLogContents());
+        $this->assertStringContainsString('Invalid token', $this->logSince($logged));
 
         file_put_contents(self::$recordFile, '');
         $accepted = $this->site()->request('POST', $path, ['Cookie' => $cookie], $token);

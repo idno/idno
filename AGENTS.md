@@ -200,7 +200,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `tearDownAfterClass()`. After every test the fingerprint (`siteFingerprint()`: the rows of `idno_entities`, `idno_reader`, `idno_site`, the settings and
   the names and sizes of the uploaded files; never sessions or the queue) is compared with the one taken after seeding: a test that changed the site fails
   ("changed the shared site") and the next test gets a rebuilt site; the site's cache pool is emptied; every test must ask for the same environment
-  (`Tests/Characterisation/SharedSiteTest`). A test that changes the site (a user, a post, a setting, a plugin) stays in a class of its own that is not shared,
+  (`Tests/Characterisation/SharedSiteTest` pins the guard for an entity row, a setting, an uploaded file, a reader record and a write through an extra server, the environment check and the kept extra servers). A test that changes the site (a user, a post, a setting, a plugin) stays in a class of its own that is not shared,
   or puts the change back exactly; `RenderedSiteTestCase::seedSite()` returns what it seeded the first time on a shared site.
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
   `Tests\Queue\AsyncSiteTestCase`, a `PrivateSiteTestCase` that sets `IDNO_EVENT_QUEUE=AsynchronousQueue` (through
@@ -4006,7 +4006,7 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
     page has no Markdown form. Its `body` is NEVER printed, for anyone: these pages hold stored secrets, and although the
     converter removes forms and their fields, the `classic` templates this type falls back to print some in their TEXT (the
     IndiePub account page printed each access token: found by
-    `MarkdownOutputTest::testTheSettingsPagesAsMarkdownHoldNoSecret`, which stores an SMTP user name and password, API keys,
+    `MarkdownOutputChangedSiteTest::testTheSettingsPagesAsMarkdownHoldNoSecret`, which stores an SMTP user name and password, API keys,
     access tokens, Bridgy keys, a webhook address and a stylesheet and asks for the email, tools, IndiePub, Bridgy, webhooks,
     styles, settings and admin pages as the administrator, a member and a visitor). The registration and password pages are
     under `/account/` and answer the same line. Keep a page that shows a secret under `/admin/` or `/account/`;
