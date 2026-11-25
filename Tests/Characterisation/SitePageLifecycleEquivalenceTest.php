@@ -226,14 +226,15 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         $this->assertSame(array_slice($legacy['events'], 0, 2), $fixture['events']);
     }
 
-    public function testAPutWithoutItsTokenIsAServerErrorForBoth(): void
+    public function testAPutWithoutItsTokenIsAServerErrorForALegacyPageAndARefusalForAControllersPage(): void
     {
         [$headers] = $this->sessionAndToken();
         $legacy = $this->observe($this->site(), 'PUT', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers);
         $fixture = $this->observe($this->site(), 'PUT', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers);
 
+        // On purpose: a missing token is a refusal (403, nothing reported), where Page::put() threw and was the reported 500 page.
         $this->assertSame(500, $legacy['status']);
-        $this->assertSame(500, $fixture['status']);
+        $this->assertSame(403, $fixture['status']);
         $this->assertSame(['page/ready', 'page/head', 'page/put'], array_column($legacy['events'], 'event'));
         $this->assertSame(['page/ready', 'page/head'], array_column($fixture['events'], 'event'));
     }
@@ -258,7 +259,7 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         [$headers] = $this->sessionAndToken();
         $path = '/_test/site-page/patch';
 
-        $this->assertSame(500, $this->site()->request('PATCH', $path, $headers)->status, 'a PATCH with no token is refused as a PUT is');
+        $this->assertSame(403, $this->site()->request('PATCH', $path, $headers)->status, 'a PATCH with no token is refused as a PUT is');
         $signed = $this->site()->request('PATCH', $path, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), $path));
         $this->assertSame(200, $signed->status, 'a signed API request needs no token');
         $this->assertSame('PATCH', $signed->json()['method']);

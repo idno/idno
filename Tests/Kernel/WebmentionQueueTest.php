@@ -64,6 +64,20 @@ final class WebmentionQueueTest extends IdnoTestCase
         $this->assertSame([['source' => 'http://example.com/post', 'text' => '<a href="http://target.example/a">a</a>']], self::$seen);
     }
 
+    /**
+     * What a content type asks before it announces a change: public and published (an empty status counts as published).
+     */
+    public function testOnlyAPublicPublishedEntityAnnouncesItsMentions(): void
+    {
+        $cases = [['PUBLIC', 'published', true], ['PUBLIC', '', true], ['PUBLIC', 'draft', false], ['PUBLIC', 'scheduled', false], ['SITE', 'published', false], ['SITE', 'draft', false]];
+        foreach ($cases as [$access, $status, $expected]) {
+            $entity = new \IdnoPlugins\Status\Status();
+            $entity->setAccess($access);
+            $entity->setPublishStatus($status);
+            $this->assertSame($expected, $entity->announcesMentions(), $access . ' ' . $status);
+        }
+    }
+
     public function testNothingIsQueuedWhileAnImportRuns(): void
     {
         Idno::container()->get(ImportMode::class)->during(function (): void {

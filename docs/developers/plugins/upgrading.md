@@ -168,7 +168,7 @@ The bundled StaticPages plugin works this way: `IdnoPlugins\StaticPages\Pages\Ho
 
 ## Sending webmentions from a content type
 
-A content type that announces a post to the pages its text links to calls `\Idno\Core\Webmention::queueMentions($post->getURL(), $text)` after it saves, where `$text` is the post's text with its addresses made into links (`\Idno\Core\Idno::site()->template()->parseURLs(...)`). It queues the event `webmention/sendall`, so with the asynchronous queue the save returns without waiting for the other sites, and with the default queue the event runs at once. Calling `Webmention::pingMentions()` directly still works, but sends inside the request.
+A content type that announces a post to the pages its text links to calls `\Idno\Core\Webmention::queueMentions($post->getURL(), $text)` after it saves, where `$text` is the post's text with its addresses made into links (`\Idno\Core\Idno::site()->template()->parseURLs(...)`). It queues the event `webmention/sendall`, so with the asynchronous queue the save returns without waiting for the other sites, and with the default queue the event runs at once. Calling `Webmention::pingMentions()` directly still works, but sends inside the request. Before announcing a change other than a save (a delete), ask `$post->announcesMentions()`: true only for a public post that is published, never for a draft.
 
 ## What the tests pin
 

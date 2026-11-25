@@ -272,6 +272,36 @@ final class WebInstallerTest extends TestCase
         self::assertSame([], $this->filesInRoot());
     }
 
+    /**
+     * Anyone can reach the installer of an uninstalled site: a failure to connect is one fixed sentence, which says
+     * neither whether the host answered nor why, and the reason is logged for the server's owner.
+     */
+    public function testAConnectionFailureIsOneFixedSentenceAndItsReasonIsLogged(): void
+    {
+        if (!extension_loaded('pdo_mysql')) {
+            self::markTestSkipped('pdo_mysql is needed.');
+        }
+        $logger = new class extends \Psr\Log\AbstractLogger {
+            /** @var list<string> */
+            public array $lines = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->lines[] = (string) $message;
+            }
+        };
+        $fields = ['step' => 'database', 'title' => 'Ada', 'domain' => 'example.com', 'database' => 'mysql', 'mysql_name' => 'idno', 'mysql_user' => 'u', 'mysql_pass' => 'secret-pass', 'mysql_host' => '127.0.0.1:9', 'token' => WebInstaller::fieldFor(self::COOKIE)];
+        $request = Request::create('https://example.com/', 'POST', $fields, [WebInstaller::COOKIE => self::COOKIE]);
+        $html = (string) (new WebInstaller(new InstallPaths($this->root), '', $logger))->handle($request)->getContent();
+
+        self::assertStringContainsString(\Idno\Install\InstallPage::e(WebInstaller::CONNECTION_FAILED), $html);
+        self::assertStringNotContainsString('could not reach', $html);
+        self::assertCount(1, $logger->lines);
+        self::assertStringContainsString('could not reach the database server', $logger->lines[0]);
+        self::assertStringNotContainsString('secret-pass', $logger->lines[0]);
+        self::assertSame([], $this->filesInRoot());
+    }
+
     public function testMysqlNeedsItsNameAndServer(): void
     {
         if (!extension_loaded('pdo_mysql')) {

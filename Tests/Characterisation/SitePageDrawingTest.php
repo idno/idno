@@ -889,6 +889,27 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
         $this->assertStringNotContainsString('critical', implode("\n", $this->loggedSince($before)), 'no failure of the page is reported');
     }
 
+    /**
+     * An exception that wraps a refusal of Symfony Security is answered as the refusal (a 403), and is not a failure of the page,
+     * but it is not silent either: one warning names the wrapping exception's class (never its message or anything of the request),
+     * so that code which wraps a refusal by mistake can be found.
+     */
+    public function testAWrappedRefusalIsARefusalAndIsLoggedOnceAsAWarning(): void
+    {
+        $before = $this->serverLogContents();
+
+        $response = $this->get('draw-new', 'plain', 'case=throw-wrapped-denied', ['Cookie' => $this->member]);
+
+        $this->assertSame(403, $response->status);
+        $logged = $this->loggedSince($before);
+        $warnings = array_values(array_filter($logged, static fn (string $line): bool => str_contains($line, 'wraps a refusal')));
+        $this->assertCount(1, $warnings, implode("\n", $logged));
+        $this->assertStringContainsString('warning', $warnings[0]);
+        $this->assertStringContainsString('RuntimeException', $warnings[0]);
+        $this->assertStringNotContainsString('not logged', implode("\n", $logged), 'the message is not logged');
+        $this->assertStringNotContainsString('critical', implode("\n", $logged), 'not reported as a failure');
+    }
+
     public function testAnErrorAndAServerErrorAreMailedToTheAdministratorAsAnExceptionIs(): void
     {
         $client = new HttpSiteClient($this->startExtraServer(['IDNO_OOPS_NOTIFY' => 'ops@example.net', 'IDNO_FROM_EMAIL' => 'site@example.net']));

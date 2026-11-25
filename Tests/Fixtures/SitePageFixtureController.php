@@ -220,6 +220,9 @@ final class SitePageFixtureController
                     Idno::site()->currentPage()->deniedContent($title);
                 }
                 throw new AccessDeniedHttpException($title);
+            case 'throw-wrapped-denied':
+                // code that wraps a refusal of Symfony Security in an exception of its own
+                throw new \RuntimeException('A wrapping exception with a message that is not logged', 0, new \Symfony\Component\Security\Core\Exception\AccessDeniedException());
             case 'throw-redirect':
                 // what legacy code calls: the current page forwards, which throws the redirect
                 Idno::site()->currentPage()->forward((string) $context->input('to', ''));

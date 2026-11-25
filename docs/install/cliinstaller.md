@@ -55,7 +55,7 @@ The command creates files as the user who runs it and changes no permissions, an
 ## The other commands
 
 * `php bin/console idno:admin:create` creates the first administrator of a site that has none (after `idno:upgrade`). Options: `--handle`, `--email`, `--name`, `--site-title`, `--password-file`, `--password-stdin`. It refuses once the site has an administrator.
-* `php bin/console idno:setup:link` prints a link, which works once, to the "Create your account" step in a browser, for a site that has no administrator: after a hand-written configuration, or when the browser that ran the web installer is no longer at hand.
+* `php bin/console idno:setup:link` prints a link, which works once, to the "Create your account" step in a browser, for a site that has no administrator: after a hand-written configuration, or when the browser that ran the web installer is no longer at hand. Run it as the web server's user: it writes the file `configuration/setup-pending`, which the site removes once the administrator exists. If the web server cannot remove it (the folder `configuration` is not writable for it), every request checks the database once more for an administrator, and the site's log says so: remove the file yourself (`rm configuration/setup-pending`).
 * `php bin/console idno:upgrade` creates or upgrades the tables.
 
 On a site that is not installed, every other command says `Idno is not installed yet: run php bin/console idno:install`.

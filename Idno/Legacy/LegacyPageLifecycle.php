@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Idno\Legacy;
 
 use Idno\Core\Idno;
-use Idno\Exceptions\SecurityException;
 use Idno\Core\Logging;
 use Idno\Core\TokenProvider;
 use Idno\Core\Version;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageLifecycle;
 use Idno\Templating\TypeChain;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 /**
@@ -140,7 +140,9 @@ final class LegacyPageLifecycle implements PageLifecycle
             return;
         }
         if ($method !== 'POST') {
-            throw new SecurityException($site->language()->_('The page you were on timed out.'));
+            // A refusal, drawn as the site's 403 page and never reported as a failure (Page::put() threw, which mailed the
+            // administrator for every stranger's request).
+            throw new AccessDeniedHttpException($site->language()->_('The page you were on timed out.'));
         }
         $site->logging()->error($site->language()->_('Invalid token.'));
         $site->session()->addErrorMessage($site->language()->_('Invalid token.'));

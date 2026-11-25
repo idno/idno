@@ -642,6 +642,22 @@ namespace Idno\Common {
         }
 
         /**
+         * Whether a change to this entity (its deletion, say) is announced to the sites its text links
+         * to: it is public and published. A draft was never published, so those sites never heard of its
+         * address, and a webmention would tell them an address the site has not made public. A post
+         * turned back into a draft is not published either: its address already answers as missing to
+         * everyone but its owner, and nothing records that it was once published.
+         *
+         * @return bool
+         */
+        public function announcesMentions()
+        {
+            $status = $this->getPublishStatus();
+
+            return $this->getAccess() == 'PUBLIC' && (empty($status) || $status == 'published');
+        }
+
+        /**
          * Is this entity unpublished (a draft, for example) and so hidden from a given user?
          * An entity whose publish status is set and is not "published" can only be seen by its
          * owner and by site admins, whatever its access setting. An entity with no publish

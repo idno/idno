@@ -32,7 +32,7 @@ Open your site's address. A site that has not been set up shows the installer at
 Things to know:
 
 * **Nothing is written until step 3 is complete**, and a configuration file that exists is never replaced. Reloading a page, going back, or submitting twice does no harm.
-* **Whoever opens an unconfigured site first can install it.** Install your site as soon as you have uploaded it.
+* **Whoever opens an unconfigured site first can install it.** Install your site as soon as you have uploaded it. When Idno cannot connect to a MySQL or MariaDB database, the page says only that (anyone can reach it); the reason, such as a refused password or a server that did not answer, is in the web server's error log.
 * **Only the browser that completed step 3 can do step 4.** It is remembered for thirty days, also after you close it. Everyone else sees "This site is being set up". If you cannot use that browser any more, run `php bin/console idno:setup:link` on the server and open the link it prints (it works once), or create the account there: `php bin/console idno:admin:create`.
 * **Once the site has an administrator, none of this exists any more.** The installer's addresses are ordinary missing pages, and nobody becomes an administrator by registering.
 * **The SQLite database is always `data/idno.sqlite`, and uploads always go to `Uploads/`**, when you install in the browser: the installer of a site that is not set up can be reached by anyone, so it takes no path. To put them elsewhere, install from the command line or by hand.

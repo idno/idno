@@ -165,7 +165,7 @@ final class DatabaseChoice
         try {
             $connection->getServerVersion();
         } catch (\Throwable $e) {
-            throw new ConfigurationException(self::connectionProblem($e), 0, $e);
+            throw new DatabaseConnectionFailed(self::connectionProblem($e), 0, $e);
         } finally {
             $connection->close();
         }

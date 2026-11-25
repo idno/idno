@@ -96,11 +96,19 @@ final class SetupToken
         }
     }
 
-    public function clear(): void
+    /**
+     * Removes the marker.
+     *
+     * @return bool Whether it is gone afterwards
+     */
+    public function clear(): bool
     {
         if (is_file($this->paths->marker())) {
             @unlink($this->paths->marker());
+            clearstatcache(true, $this->paths->marker());
         }
+
+        return !is_file($this->paths->marker());
     }
 
     /**

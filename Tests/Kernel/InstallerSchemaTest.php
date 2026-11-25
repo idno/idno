@@ -135,6 +135,51 @@ final class InstallerSchemaTest extends TestCase
         }
     }
 
+    /**
+     * The web installer is open to anyone who reaches an uninstalled site, so it must not tell a visitor whether a host
+     * answers, whether a user exists or whether a database is there: every failure to connect is one fixed sentence on the
+     * page, and the reason goes to the server's log.
+     */
+    public function testTheWebInstallerSaysTheSameWhateverTheConnectionFailureIs(): void
+    {
+        $root = sys_get_temp_dir() . '/idno-install-probe-' . bin2hex(random_bytes(6));
+        foreach (['configuration', 'data', 'Uploads', 'warmup/webserver-configs'] as $directory) {
+            mkdir($root . '/' . $directory, 0755, true);
+        }
+        copy(dirname(__DIR__, 2) . '/warmup/webserver-configs/config.ini.template', $root . '/warmup/webserver-configs/config.ini.template');
+        $cookie = str_repeat('ab', 32);
+        $logger = new class extends \Psr\Log\AbstractLogger {
+            /** @var list<array{level: mixed, message: string}> */
+            public array $records = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message];
+            }
+        };
+        $installer = new \Idno\Install\WebInstaller(new InstallPaths($root), '', $logger);
+        $config = Idno::site()->config();
+        $pages = [];
+        try {
+            foreach ([
+                'a wrong password' => ['mysql_name' => (string) $this->connection?->getDatabase(), 'mysql_user' => (string) $config->dbuser, 'mysql_pass' => 'not-the-password-' . bin2hex(random_bytes(4)), 'mysql_host' => self::host()],
+                'an unknown database' => ['mysql_name' => 'no_such_database_' . bin2hex(random_bytes(4)), 'mysql_user' => (string) $config->dbuser, 'mysql_pass' => (string) $config->dbpass, 'mysql_host' => self::host()],
+                'a host that does not answer' => ['mysql_name' => 'idno', 'mysql_user' => 'u', 'mysql_pass' => 'p', 'mysql_host' => '127.0.0.1:9'],
+            ] as $case => $fields) {
+                $request = \Symfony\Component\HttpFoundation\Request::create('https://example.com/', 'POST', $fields + ['step' => 'database', 'title' => 'Ada', 'domain' => 'example.com', 'database' => 'mysql', 'token' => \Idno\Install\WebInstaller::fieldFor($cookie)], [\Idno\Install\WebInstaller::COOKIE => $cookie]);
+                $html = (string) $installer->handle($request)->getContent();
+                $this->assertSame(1, preg_match('/<div class="errors" role="alert"><p>[^<]*<\/p><ul>(.*?)<\/ul>/', $html, $match), $case . ': ' . substr($html, 0, 300));
+                $pages[$case] = $match[1];
+                $this->assertFileDoesNotExist($root . '/configuration/config.ini', $case);
+            }
+        } finally {
+            exec('rm -rf ' . escapeshellarg($root));
+        }
+
+        $this->assertCount(1, array_unique($pages), 'one sentence for every failure: ' . json_encode($pages));
+        $this->assertCount(3, array_filter($logger->records, static fn (array $r): bool => str_contains($r['message'], 'could not connect')), 'each reason is logged');
+    }
+
     public function testTheNameAndTheServerAreNeeded(): void
     {
         foreach ([['name' => '', 'host' => 'localhost'], ['name' => 'idno', 'host' => '']] as $input) {

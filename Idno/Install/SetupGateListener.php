@@ -6,6 +6,7 @@ namespace Idno\Install;
 
 use Idno\Config\BootConfig;
 use Idno\Kernel;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -41,8 +42,12 @@ final class SetupGateListener
     public const PATH = '/_setup/';
     public const WELCOME = '/admin/welcome/';
 
+    /** Whether this process has said that the marker cannot be removed. */
+    private static bool $saidStuck = false;
+
     /**
      * @param \Closure(): FirstAdministrator $administrator
+     * @param \Closure(): LoggerInterface    $logger        The site's logger, fetched only when the marker cannot be removed
      */
     public function __construct(
         #[Autowire(service: 'kernel')]
@@ -51,6 +56,8 @@ final class SetupGateListener
         private readonly BootConfig $config,
         #[AutowireServiceClosure(FirstAdministrator::class)]
         private readonly \Closure $administrator,
+        #[AutowireServiceClosure(LoggerInterface::class)]
+        private readonly \Closure $logger,
     )
     {
     }
@@ -63,7 +70,12 @@ final class SetupGateListener
         }
         $administrator = ($this->administrator)();
         if ($administrator->administratorExists()) {
-            $this->setup->clear();
+            // A marker the web server cannot remove (written by `idno:setup:link` run as another user, in a folder the web
+            // server cannot write) makes every request ask the database again: said once in a process, with the fix.
+            if (!$this->setup->clear() && !self::$saidStuck) {
+                self::$saidStuck = true;
+                ($this->logger)()->warning('The site has an administrator, but the web server cannot remove the file configuration/setup-pending, so every request checks for one. Remove the file (rm configuration/setup-pending, from Idno\'s folder).');
+            }
 
             return;
         }

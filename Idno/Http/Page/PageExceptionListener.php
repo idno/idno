@@ -6,6 +6,7 @@ namespace Idno\Http\Page;
 
 use Idno\Kernel;
 use Idno\Security\DeniedResponder;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
@@ -44,8 +45,9 @@ use Symfony\Component\Security\Core\Exception\AuthenticationException;
 final class PageExceptionListener
 {
     /**
-     * @param \Closure(): PageRenderer  $renderer
-     * @param \Closure(): PageLifecycle $lifecycle
+     * @param \Closure(): PageRenderer    $renderer
+     * @param \Closure(): PageLifecycle   $lifecycle
+     * @param \Closure(): LoggerInterface $logger    The site's logger, fetched only when there is something to log (it needs the legacy application)
      */
     public function __construct(
         #[Autowire(service: 'kernel')]
@@ -54,6 +56,8 @@ final class PageExceptionListener
         private readonly \Closure $renderer,
         #[AutowireServiceClosure(PageLifecycle::class)]
         private readonly \Closure $lifecycle,
+        #[AutowireServiceClosure(LoggerInterface::class)]
+        private readonly \Closure $logger,
     )
     {
     }
@@ -67,8 +71,14 @@ final class PageExceptionListener
         }
         $e = $event->getThrowable();
         // A Security exception anywhere in the chain is a refusal, whatever wrapped it: the firewall's listener reads the chain the same way.
+        // One that is wrapped is logged once, as a warning naming the wrapping class (never its message): code that wraps a refusal by
+        // mistake, or a real fault whose cause happens to be one, is then not silent.
         for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
             if ($cause instanceof AccessDeniedException || $cause instanceof AuthenticationException) {
+                if ($cause !== $e) {
+                    ($this->logger)()->warning('A site page\'s exception wraps a refusal, which is answered as the refusal: ' . $e::class);
+                }
+
                 return;
             }
         }

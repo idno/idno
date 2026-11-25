@@ -383,15 +383,26 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
         $this->assertSame([null, null, self::PAGE_CLASS], array_column($this->events(), 'page_class'));
     }
 
-    public function testAPutNeedsTheFormTokenToo(): void
+    /**
+     * A PUT (or any method but GET and POST) without the form token is an ordinary refusal: the site's 403 page, never reported as
+     * a failure (no critical line, so no alert mail to the administrator), so a stranger cannot make the site mail its owner. A legacy
+     * PUT threw, and was the reported 500 page. A POST without its token is not reported either: it is sent away, as before.
+     */
+    public function testAPutNeedsTheFormTokenTooAndItsRefusalIsNotReported(): void
     {
         $path = '/_test/site-page/post';
         [$cookie] = $this->sessionAndToken();
+        $before = strlen($this->serverLogContents());
 
         [$response, $events] = $this->recorded('PUT', $path, ['Cookie' => $cookie]);
-
-        $this->assertSame(500, $response->status, 'a legacy PUT without a token threw');
+        $this->assertSame(403, $response->status, 'refused');
         $this->assertSame(['page/ready', 'page/head'], array_column($events, 'event'));
+        $this->assertStringContainsString('timed out', $response->body, 'the refusal says why, as the legacy exception did');
+
+        $this->assertSame(302, $this->site()->request('POST', $path, ['Cookie' => $cookie])->status);
+        $added = substr($this->serverLogContents(), $before);
+        $this->assertStringNotContainsString('critical', $added, 'neither refusal is reported as a failure of the page');
+        $this->assertStringNotContainsString('CRITICAL', $added);
     }
 
     public function testASignedApiRequestNeedsNoFormToken(): void

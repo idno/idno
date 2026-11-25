@@ -145,6 +145,53 @@ final class ContentTypeWebmentionsQueuedTest extends AsyncSiteTestCase
     }
 
     /**
+     * The types whose delete tells the sites a post linked to (Photo and Media send nothing on delete).
+     *
+     * @return array<string, array{string}>
+     */
+    public static function typesThatAnnounceADelete(): array
+    {
+        return array_intersect_key(self::contentTypes(), array_flip(['status', 'reply', 'article', 'bookmark', 'event', 'rsvp', 'checkin']));
+    }
+
+    private function deleteAsAlice(string $id): void
+    {
+        $this->assertTrue($this->runInSite('$u = \Idno\Entities\User::getByHandle("alice"); \Idno\Core\Idno::site()->session()->logUserOn($u); return \Idno\Common\Entity::getByID(' . $this->literal($id) . ')->delete();'));
+    }
+
+    /**
+     * Deleting a public DRAFT announces nothing: it was never published, so the sites it links to never heard of its
+     * address, and a webmention would tell them an address the site never made public. Deleting a published public post
+     * still queues its retraction. (A post published and later turned back into a draft is not published when it is
+     * deleted, and sends nothing either: its address already answers as a missing page to everyone but its owner.)
+     *
+     * @dataProvider typesThatAnnounceADelete
+     */
+    public function testDeletingADraftAnnouncesNothingAndDeletingAPublishedPostQueuesItsRetraction(string $type): void
+    {
+        $cookie = $this->registerUser('alice');
+        $name = $this->newSink('wm');
+        $target = $this->baseUrl() . '_test/page/' . $name;
+
+        if (self::specs()[$type]['draft']) {
+            $this->assertSame(302, $this->postNew($type, $cookie, $target, ['publish_status' => 'draft'])->status, $type);
+            $this->assertSame([], $this->webmentionEvents(), $type . ': the draft queued nothing');
+            $this->deleteAsAlice($this->newestIdOf($type));
+            $this->assertSame([], $this->webmentionEvents(), $type . ': deleting the draft queued nothing');
+        }
+
+        $this->assertSame(302, $this->postNew($type, $cookie, $target)->status, $type);
+        $this->work();
+        $this->assertCount(1, $this->sink($name), $type . ': the published post was announced');
+        $this->deleteAsAlice($this->newestIdOf($type));
+        $events = $this->webmentionEvents();
+        $this->assertCount(1, $events, $type . ': deleting the published post queued its retraction');
+        $this->work();
+        $this->assertCount(1, $this->sink($name), $type . ': the worker told the linked site');
+        $this->assertSame([], $this->failedEvents(), $type);
+    }
+
+    /**
      * The target that answers slowly is not waited for by the save; the others are still sent by the worker.
      */
     public function testALinkToASlowSiteDoesNotHoldUpTheSave(): void

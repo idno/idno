@@ -154,7 +154,7 @@ namespace IdnoPlugins\Status {
 
         function deleteData()
         {
-            if ($this->getAccess() == 'PUBLIC') {
+            if ($this->announcesMentions()) {
                 \Idno\Core\Webmention::queueMentions($this->getURL(), \Idno\Core\Idno::site()->template()->parseURLs($this->getDescription()));
             }
         }

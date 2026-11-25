@@ -605,8 +605,13 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      settings EXCEPT that `LOCAL_INFILE` is off and connecting gives up after `CONNECT_SECONDS` (5): the
      server is whatever a visitor of an uninstalled site typed, and a hostile one could otherwise ask
      the driver for any file the web server can read. Never give an installer
-     `ConnectionFactory::forConfig()` for a candidate database. A failure is one of
-     `connectionProblem()`'s fixed sentences, never the driver's text; SQLite: creates the directory and an empty file last and opens it with
+     `ConnectionFactory::forConfig()` for a candidate database. A failure is a
+     `DatabaseConnectionFailed` carrying one of `connectionProblem()`'s fixed sentences, never the driver's text: the
+     command line shows that sentence, and the web installer, which anyone may reach, shows ONE sentence for every
+     failure to connect (`WebInstaller::CONNECTION_FAILED`: nothing on the page tells an unreachable host from a refused
+     password or a missing database, so the installer is no probe of the server's network) and logs the reason on
+     `upgrade` (`InstallerSchemaTest::testTheWebInstallerSaysTheSameWhateverTheConnectionFailureIs`; the time an
+     unreachable host takes, up to `CONNECT_SECONDS`, still differs); SQLite: creates the directory and an empty file last and opens it with
      `SqliteConnectionSetup`); `DatabaseChoice::inspect()` (a `SchemaState` on the candidate settings:
      a database the upgrade would refuse is refused here with the upgrade's own `PublicMessage`; one
      that already holds an Idno site is never overwritten (the upgrade takes over) and is ADOPTED only
@@ -648,7 +653,9 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
   statement, once the marker is gone). It accepts the `idno_setup` cookie or, with the same value, the
   installer's `idno_install` cookie (the browser has only that one when the installer's last response
   never reached it: a double click on the button), and then gives it the setup cookie. If the site has an administrator already (an existing database
-  was chosen) it removes the marker and lets the request through; a browser whose cookie matches gets
+  was chosen) it removes the marker and lets the request through (a marker it cannot remove, written by `idno:setup:link` run as
+  another user in a folder the web server cannot write, costs that lookup on every request: `SetupToken::clear()` says so and the
+  listener logs one warning a process naming `rm configuration/setup-pending`; `Tests/Unit/Install/SetupGateListenerTest`); a browser whose cookie matches gets
   "Create your account" at `/_setup/` (any other page is redirected there), and its POST (name,
   username, email, a password of at least `AdministratorDetails::PASSWORD_LENGTH` (10) characters typed
   twice, the form's own token `SetupToken::fieldFor()`) creates the administrator through
@@ -1397,8 +1404,10 @@ the tag pages and the small public endpoints are served through them (and the fi
      <the context's>]`; for HEAD `page/head` with the `page_class` and `arguments` and NO `page/get`, as a legacy HEAD (the controller still runs,
      for its headers; Symfony strips the body). For a declared POST, PUT, DELETE or PATCH: `page/head` with the page, then the session's form
      token is checked (a signed API request needs none) and only then `page/<method>` fires: a POST without it logs `Invalid token.`, adds the
-     session message and forwards (a `PageRedirect`; an XHR page is refused instead), the others throw `SecurityException` ("The page you were on
-     timed out."); a legacy page fired `page/post` before it checked, which a listener may no longer see for a request that fails.
+     session message and forwards (a `PageRedirect`; an XHR page is refused instead), the others throw `AccessDeniedHttpException` ("The page you were on
+     timed out."), an ordinary refusal: the site's 403 page, never reported (no critical line, no `oopsAlert()` mail), so a stranger's PUT
+     cannot make the site mail its administrator (`Page::put()` threw `SecurityException`, the reported 500 page); a legacy page fired
+     `page/post` before it checked, which a listener may no longer see for a request that fails.
      Stated differences from a legacy page, each pinned in `SitePageLifecycleEquivalenceTest`: an XHR POST, PUT or DELETE with a bad form token is
      refused with a 403 (a legacy page's `forward()` did nothing for an XHR request, so it went on and answered 200 with no body); PATCH can be
      declared on a controller's page and then gets the token check and `page/patch` (a legacy page had no PATCH: the router answered 404); and a method
@@ -1453,7 +1462,10 @@ the tag pages and the small public endpoints are served through them (and the fi
     (`PageRequestListener::onController()`: a plugin's `page/head` listener) is carried as a `PageError` too. Not covered: an `\Error` thrown by an argument resolver or by
     another Symfony listener (it ends at `FatalErrorPage`).
   - a Security exception anywhere in the chain of `previous` exceptions (`AccessDeniedException`, `AuthenticationException`) is the refusal it is, left to the firewall, as the firewall's own listener reads the chain. So an exception that merely WRAPS a Security exception (a Twig `RuntimeError` around an
-    `AccessDeniedException`) is answered as the refusal, a 403, and is neither logged nor mailed nor drawn as the 500 page, exactly as for any Symfony controller.
+    `AccessDeniedException`) is answered as the refusal, a 403, and is neither reported nor mailed nor drawn as the 500 page, exactly as for any Symfony controller;
+    but it is logged once, as a warning that names the wrapping exception's class (never its message or anything of the request), so that a real fault whose
+    chain holds a refusal is not silent (the listener takes the site's logger as a service closure; `PageExceptionListenerTest`,
+    `SitePageDrawingTest::testAWrappedRefusalIsARefusalAndIsLoggedOnceAsAWarning`).
   - when drawing the answer throws (a template, a plugin's extension of the shell), the answer is a plain-text response of the same status (the status's own words, `Cache-Control:
     no-store`; for the 500 nothing of the exception), and the drawing failure is reported once; no second error page is drawn, so nothing loops.
   `framework.handle_all_throwables` stays FALSE (see "Kernel and services"): turning it on would also change what an `\Error` in any `kernel.request` listener of any request becomes,
@@ -3151,14 +3163,17 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   while an import runs (`Idno::importInProgress()`), when the request carries `nomention` or the constant
   `IDNO_NOMENTION` is defined; `pingMentions()` asks about the site and the import again when the event runs. When each
   type calls it is unchanged: every save of a PUBLIC post that is published (not a draft; Media and RSVP have no draft)
-  for all types but Checkin, which sends only for a new post; a delete of a post whose access is PUBLIC (a draft
-  included, which tells its links about an address that was never public). `pingMentions()` sends to each link on its own: a link that throws is logged
+  for all types but Checkin, which sends only for a new post; a delete (Status and Reply, Like, Text, Checkin, Event
+  and RSVP; Photo and Media send nothing on delete) of a post that `Entity::announcesMentions()` says is announced: PUBLIC
+  and published (an empty status counts as published). A draft's delete sends nothing: its address was never public.
+  Nothing records that a post was once published, so one turned back into a draft sends nothing either when deleted
+  (its address already answers as missing to everyone but its owner). `pingMentions()` sends to each link on its own: a link that throws is logged
   (`Webmention to <address> failed: <exception class>`) and the next is tried, so one bad link never fails the event
   (a failed event is not run again by itself, so links already sent are not sent twice; `Webservice::safeSend()`
   already turns an unreachable or slow host into a failed result, never an exception). Pinned by
   `Tests/Queue/ContentTypeWebmentionsQueuedTest` (every type on an asynchronous site: nothing sent by the save, one
   event queued with the post's address, the worker sends once as the member; edits, private posts and drafts, `nomention`,
-  a delete, a slow link, an unreachable link and the failure transport), `ContentTypeWebmentionsSynchronousTest` (the
+  a delete, a draft's delete for each type that announces one, a slow link, an unreachable link and the failure transport), `ContentTypeWebmentionsSynchronousTest` (the
   same types sent during the request) and `Tests/Kernel/WebmentionQueueTest` (the helper's data and checks, a link
   that throws).
 - Events run in the worker's process (the console), so their listeners must be registered there: the

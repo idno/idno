@@ -159,8 +159,20 @@ final class PageExceptionListenerTest extends TestCase
 
     private int $lifecycleFetched = 0;
 
+    /** @var \Psr\Log\AbstractLogger&object{lines: list<string>} */
+    private \Psr\Log\AbstractLogger $logger;
+
     protected function setUp(): void
     {
+        $this->logger = new class extends \Psr\Log\AbstractLogger {
+            /** @var list<string> */
+            public array $lines = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->lines[] = $level . ': ' . $message;
+            }
+        };
         $this->calls = new \ArrayObject();
         $this->drawer = new ExceptionTestDrawer($this->calls);
         $this->lifecycle = new ExceptionTestLifecycle($this->calls);
@@ -200,6 +212,9 @@ final class PageExceptionListenerTest extends TestCase
                 ++$this->lifecycleFetched;
 
                 return $this->lifecycle;
+            },
+            function (): \Psr\Log\LoggerInterface {
+                return $this->logger;
             }
         );
     }
@@ -462,6 +477,15 @@ final class PageExceptionListenerTest extends TestCase
         }
         $this->assertSame([], $this->lifecycle->reported);
         $this->assertSame(0, $this->rendererFetched);
+        // Each is logged once, as a warning that names the wrapping class and nothing of its message.
+        $this->assertSame(['warning: A site page\'s exception wraps a refusal, which is answered as the refusal: RuntimeException', 'warning: A site page\'s exception wraps a refusal, which is answered as the refusal: LogicException'], $this->logger->lines);
+    }
+
+    public function testAnUnwrappedSecurityExceptionIsNotLogged(): void
+    {
+        $this->listener()->onException($this->event(new AccessDeniedException()));
+
+        $this->assertSame([], $this->logger->lines);
     }
 
     public function testAnErrorWhileDrawingTheErrorPageIsPlainTextToo(): void

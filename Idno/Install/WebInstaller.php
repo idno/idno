@@ -31,6 +31,13 @@ final class WebInstaller
     public const COOKIE = 'idno_install';
 
     /**
+     * What the page says for every failure to connect to a MySQL or MariaDB database: the installer of
+     * an uninstalled site is open to anyone, who must not learn from it whether a host on the server's
+     * network answers, whether a user exists or whether a database is there. The reason is logged.
+     */
+    public const CONNECTION_FAILED = 'Idno could not connect to that database with these settings. Check the database\'s name, the user, the password and the server name, and try again. If they are right, the reason is in the web server\'s error log.';
+
+    /**
      * @param string $cacheDir The kernel's cache directory (to say when it is a temporary one)
      */
     public function __construct(
@@ -246,6 +253,10 @@ final class WebInstaller
             if ($finding->holdsASite()) {
                 $code->clear();
             }
+        } catch (DatabaseConnectionFailed $e) {
+            $this->logger->warning('The installer could not connect to the chosen database: ' . $e->getMessage() . ($e->getPrevious() !== null ? ' (' . $e->getPrevious()::class . ' ' . $e->getPrevious()->getCode() . ')' : ''));
+
+            return ['database' => self::CONNECTION_FAILED];
         } catch (ConfigurationException $e) {
             $cleanUp();
 
