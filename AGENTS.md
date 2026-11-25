@@ -240,6 +240,12 @@ must have and checks that what they draw is Twenty26 markup.
 - Icons come from `shell/icon` (`$this->__(['icon' => 'play', 'class' => '...'])`). Always
   pass `class`: template variables stay set between draws, so an icon drawn without one
   takes the class of the icon drawn before it.
+- Twenty26 loads no jQuery, so it overrides the default look's templates that print jQuery
+  code with ones that don't: `entity/edit/footer` (the Delete control only), `assets/fitvids`
+  (nothing; embedded players are sized in `content-types.css`), and the Media plugin's
+  `media/shell/head` and `media/shell/footer`. `Tests/Core/Twenty26ScriptsTest.php` checks
+  the first two. Write a plugin's `modern` scripts in plain JavaScript or as an Alpine
+  component in `src/js/modules/`.
 - An audio file is an `<audio controls>` element inside `x-data="audioPlayer"`
   (`src/js/modules/audio.js`), which swaps the native controls for the theme's; without
   JavaScript the native ones remain.
