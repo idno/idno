@@ -7,6 +7,7 @@ namespace Idno\Http\Controller\Home;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRenderer;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -17,10 +18,15 @@ use Symfony\Component\HttpFoundation\Response;
  */
 final class HomePages
 {
+    /**
+     * @param \Closure(): LoggerInterface $logger the site's logger, fetched when something is logged: it needs the legacy application, which a
+     *                                          kernel that did not boot it does not have
+     */
     public function __construct(
         private readonly HomeStream $stream,
         private readonly PageRenderer $renderer,
-        private readonly LoggerInterface $logger,
+        #[AutowireServiceClosure(LoggerInterface::class)]
+        private readonly \Closure $logger,
     )
     {
     }
@@ -98,16 +104,16 @@ final class HomePages
      */
     public function receiveWebmention(string $source, string $target, array $sourceResponse, array $sourceMf2): bool
     {
-        $this->logger->info("received homepage mention from $source");
+        ($this->logger)()->info("received homepage mention from $source");
 
         if ($this->stream->isSingleUser()) {
             $user = $this->stream->firstAdministrator();
             if ($user !== null) {
                 return $this->stream->profilePageWebmention($user, $source, $target, $sourceResponse, $sourceMf2);
             }
-            $this->logger->debug('query for an admin-user failed to find one');
+            ($this->logger)()->debug('query for an admin-user failed to find one');
         } else {
-            $this->logger->debug('disregarding mention to multi-user site');
+            ($this->logger)()->debug('disregarding mention to multi-user site');
         }
 
         return false;

@@ -55,6 +55,7 @@ namespace Tests\Characterisation {
             $this->user();
             $r = $this->site()->request('GET', 'profile/testuser');
 
+            $this->assertSame('text/html;charset=UTF-8', $r->header('Content-Type'));
             $this->assertSame('no-store, no-cache, must-revalidate', $r->header('Cache-Control'));
             $this->assertNull($r->header('X-Robots-Tag'));
         }

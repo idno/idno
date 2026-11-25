@@ -895,10 +895,14 @@ for classes that extend `PageShell`, and holds each to the rule); today it is `I
   and the page the events name are the subclass's). A `ControllerPage` over the context is the current page while `$serve` runs, and the shell again after (what
   the page learned, its owner and status, is copied back). The `Response` is written as a legacy page writes one: the headers the page asked for are put on it, the
   header rule (`LegacyHeaderReconciler::reconcile()`) keeps the session's caching lines, `http_response_code()`, each header with `header()` (through `PhpHeaders`),
-  and the body is echoed; a response that has a `Location` (the redirect of an empty site) ends the page as `forward()` did. What `$serve` throws is the legacy
+  and the body is echoed; the headers the page asked for are put on the response by `PageContext::applyTo()`, the one rule the controller's response listener
+  (`PageRequestListener`) follows too. EVERY response the shell writes then ENDS THE REQUEST (`exit`), as `drawPage()` (which echoed and exited) and `forward()` did,
+  whatever its status: code a subclass puts after `parent::getContent()` (a second page, say), Toro's `after_handler` and `after_request` hooks and `kernel.terminate`
+  never run after a page served through a shell, as they never ran after the legacy page (`HomepageShellTest::testAPageEndsWhereTheLegacyPageEnded`, with a subclass
+  that draws after the parent; `PageShellTest::testEveryResponseTheShellWritesEndsThePage`). What `$serve` throws is the legacy
   exit: a `PageRedirect` is `$this->forward()`, `AccessDeniedHttpException` `deniedContent()`, `NotFoundHttpException` `noContent()` and `GoneHttpException`
   `goneContent()`, run with the shell as the current page.
-- Constructing or serving a SUBCLASS of a shell (not the shell itself) logs one line a process, through the site's logger at warning level: `Deprecated: <class>
+- Constructing or serving a SUBCLASS of a shell (not the shell itself) logs one line for each shell in a process (the flag is keyed by the shell, so a subclass of one shell does not hide a subclass of another), through the site's logger at warning level: `Deprecated: <class>
   extends <shell>, which is a deprecated shell ...`, naming `docs/developers/plugins/upgrading.md`. The bundled StaticPages plugin's home page
   (`IdnoPlugins\StaticPages\Pages\Homepage`) extends the home page's shell and hijacks the root, so a site with a static home page logs it too: the router keeps
   serving it (`LegacyRouteOverride`: the plugin's page is not one the controller replaces), through the shell, and `StaticPagesHomepageTest` pins it.
@@ -1678,7 +1682,7 @@ test fixtures is routed to a controller through them yet:
   - `save()` / `delete()` only write to the store (`saveObject()` / `deleteRecord()`): events,
     permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
 - What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`). `Idno\Http\Controller\Home\HomePages`
-  (a public service on `HomeStream`, `PageRenderer` and the logger) is the home page: `home($page)` and `content($page, $types)` return its `Response`, and
+  (a public service on `HomeStream`, `PageRenderer` and the logger, which it takes as a service closure and fetches only when it logs, so the service is built in a kernel with no legacy application: `PageListenersWithoutLegacyTest`) is the home page: `home($page)` and `content($page, $types)` return its `Response`, and
   `receiveWebmention()` takes a webmention of the site's root. `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
   extends it, and the feeds (`Pages\Feed`) and the tag search (`Pages\Search\Tags`), which build a `Homepage`): one implementation. The stream holds what the legacy
   `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the template variables are what they

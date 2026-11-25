@@ -100,6 +100,20 @@ final class HomepageShellTest extends PrivateSiteTestCase
         $this->assertStringContainsString('<body class="idno_pages_homepage', $this->raw($base, 'GET', '/content/all')['body']);
     }
 
+    public function testAPageEndsWhereTheLegacyPageEnded(): void
+    {
+        $base = $this->startExtraServer(['IDNO_TEST_CLAIM_ROUTES' => 'homepage-hijack']);
+
+        $home = $this->raw($base, 'GET', '/');
+
+        $this->assertSame(200, $home['status'], $home['body']);
+        // the subclass draws after `parent::getContent()` and draws a second page: the legacy page exited when it drew, so neither happens
+        $this->assertStringNotContainsString(\Tests\Fixtures\ThirdPartyHomepage::AFTER_PARENT, $home['body']);
+        $this->assertSame(1, substr_count($home['body'], '<!DOCTYPE html>'));
+        // (the length the page sent is the page's: nothing was added after it)
+        $this->assertSame([(string) strlen($home['body'])], $home['headers']['content-length'] ?? []);
+    }
+
     public function testASubclassOnItsOwnRouteServesTheHomePage(): void
     {
         $base = $this->startExtraServer(['IDNO_TEST_CLAIM_ROUTES' => 'homepage-route']);

@@ -137,4 +137,16 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $this->assertSame($handler, self::errorHandler(), 'no PHP error handler was installed');
         $kernel->shutdown();
     }
+
+    public function testTheHomePageServiceIsBuiltWithoutTheLegacyApplication(): void
+    {
+        $kernel = $this->kernel();
+
+        // (it takes the site's logger, which needs the legacy application, only when it logs)
+        $pages = $kernel->getContainer()->get(\Idno\Http\Controller\Home\HomePages::class);
+
+        $this->assertInstanceOf(\Idno\Http\Controller\Home\HomePages::class, $pages);
+        $this->assertFalse($kernel->legacyBooted());
+        $kernel->shutdown();
+    }
 }

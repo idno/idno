@@ -176,20 +176,8 @@ final class PageRequestListener
         foreach (($this->lifecycle)()->standardHeaders() as $name => $value) {
             $response->headers->set($name, $value);
         }
-        foreach ($context->defaultHeaders() as $name => $value) {
-            if (!$response->headers->has($name)) {
-                $response->headers->set($name, $value);
-            }
-        }
-        foreach ($context->headers() as $name => $values) {
-            $response->headers->set($name, $values, $context->replacesHeader($name));
-        }
         // (the caching the page asked for is not set here: it is sent line by line, in place of PHP's, by Idno\Legacy\LegacyHeaderReconciler)
-        if ($response->getStatusCode() === 200) {
-            foreach ($context->headersOnSuccess() as [$name, $value]) {
-                $response->headers->set($name, $value, false);
-            }
-        }
+        $context->applyTo($response);
         // A forward the page made and went on from (`forward($location, false)`): the header is sent with whatever the page answers
         $redirect = $context->redirect();
         if ($redirect !== null) {

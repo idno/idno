@@ -42,7 +42,7 @@ final class HomePagesTest extends TestCase
                 return $text;
             }
         };
-        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), $this->logger);
+        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), fn () => $this->logger);
     }
 
     private function context(string $uri = '/'): PageContext

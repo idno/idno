@@ -53,32 +53,43 @@ final class PageShellTest extends PrivateSiteTestCase
      */
     private function runUntilExit(string $code): string
     {
+        return $this->runUntilExitWithState($code, 'return null;')['output'];
+    }
+
+    /**
+     * As runUntilExit(), with the state of the process once the request has ended: `$state` is PHP code, run in a shutdown function, whose
+     * returned value is the second element.
+     *
+     * @return array{output: string, state: mixed}
+     */
+    private function runUntilExitWithState(string $code, string $state): array
+    {
         $result = $this->runInSite(
             'ob_start();'
-            . 'register_shutdown_function(static function () { fwrite(STDOUT, "\n#RESULT#" . json_encode(ob_get_clean())); });'
+            . 'register_shutdown_function(static function () { $state = (static function () {' . $state . '})(); fwrite(STDOUT, "\n#RESULT#" . json_encode(["output" => ob_get_clean(), "state" => $state])); });'
             . self::SHELL . $code
         );
-        $this->assertIsString($result);
+        $this->assertIsArray($result);
 
         return $result;
     }
 
     public function testTheShellServesWhatTheServiceReturnsAndGivesItWhatItHolds(): void
     {
-        $seen = $this->runInSite(
-            self::SHELL
-            . '$request = \Symfony\Component\HttpFoundation\Request::create("/content/note?q=a");'
+        $seen = $this->runUntilExitWithState(
+            '$request = \Symfony\Component\HttpFoundation\Request::create("/content/note?q=a");'
             . '\Idno\Core\Idno::container()->get("request_stack")->push($request);'
             . '$page = $shell(static function (\Idno\Http\Page\PageContext $context): \Symfony\Component\HttpFoundation\Response {'
             . '  $current = \Idno\Core\Idno::site()->currentPage();'
             . '  return new \Symfony\Component\HttpFoundation\Response(json_encode(["arguments" => $context->arguments(), "set" => $context->input("fixture"), "q" => $context->input("q"), "page" => get_class($current), "pageName" => $current->pageClassName(), "permalink" => $context->isPermalink()]), 201);'
             . '});'
-            . '$page->arguments = ["note"]; $page->setInput("fixture", "set"); $page->setPermalink();'
-            . 'ob_start(); $page->getContent(); $body = ob_get_clean();'
-            . 'return [json_decode($body, true), http_response_code(), get_class(\Idno\Core\Idno::site()->currentPage()) === get_class($page)];'
+            . '$GLOBALS["shellPage"] = $page; $page->arguments = ["note"]; $page->setInput("fixture", "set"); $page->setPermalink();'
+            . '$page->getContent(); echo "not reached";',
+            'return [http_response_code(), get_class(\Idno\Core\Idno::site()->currentPage()) === get_class($GLOBALS["shellPage"])];'
         );
 
-        [$body, $status, $restored] = $seen;
+        $body = json_decode($seen['output'], true);
+        [$status, $restored] = $seen['state'];
         $this->assertSame(['note'], $body['arguments']);
         $this->assertSame('set', $body['set']);
         $this->assertSame('a', $body['q']);
@@ -87,6 +98,23 @@ final class PageShellTest extends PrivateSiteTestCase
         $this->assertTrue($body['permalink']);
         $this->assertSame(201, $status, 'the status is the response\'s');
         $this->assertTrue($restored, 'the shell is the current page again once it has served');
+    }
+
+    /**
+     * A page that is written ends the request, whatever its status, as `drawPage()` ended it (`exit` after the echo): what follows in the
+     * handler never runs.
+     */
+    public function testEveryResponseTheShellWritesEndsThePage(): void
+    {
+        foreach ([200, 201, 404, 500] as $status) {
+            $out = $this->runUntilExit(
+                '\Idno\Core\Idno::container()->get("request_stack")->push(\Symfony\Component\HttpFoundation\Request::create("/"));'
+                . '$page = $shell(static fn (\Idno\Http\Page\PageContext $context) => new \Symfony\Component\HttpFoundation\Response("the page", ' . $status . '));'
+                . '$page->getContent(); echo "not reached";'
+            );
+
+            $this->assertSame('the page', $out, (string) $status);
+        }
     }
 
     /**
@@ -146,5 +174,19 @@ final class PageShellTest extends PrivateSiteTestCase
         );
 
         $this->assertSame([0, 1, 1], $lines);
+    }
+
+    public function testEachShellLogsItsOwnDeprecationOncePerProcess(): void
+    {
+        $lines = $this->runInSite(
+            '$log = sys_get_temp_dir() . "/idno-shell-log-" . bin2hex(random_bytes(4));'
+            . 'ini_set("error_log", $log);'
+            . 'eval("class OneShellPage extends \\Idno\\Legacy\\PageShell { protected const SHELL = \'ShellOne\'; } class TwoShellPage extends \\Idno\\Legacy\\PageShell { protected const SHELL = \'ShellTwo\'; }");'
+            . 'new \OneShellPage(); new \OneShellPage(); new \TwoShellPage(); new \TwoShellPage();'
+            . '$all = is_file($log) ? (string) file_get_contents($log) : ""; @unlink($log);'
+            . 'return [substr_count($all, "extends ShellOne,"), substr_count($all, "extends ShellTwo,")];'
+        );
+
+        $this->assertSame([1, 1], $lines, 'one line for each shell, not one for all of them');
     }
 }

@@ -137,6 +137,28 @@ final class PageContextTest extends TestCase
         $this->assertSame(['<c>'], $context->headers()['Link']);
     }
 
+    public function testApplyToPutsTheHeadersTheContextHoldsOnAResponse(): void
+    {
+        $context = $this->context(Request::create('/x'));
+        $context->addDefaultHeader('Content-Type', 'text/plain');
+        $context->addDefaultHeader('X-Default', 'kept');
+        $context->addHeader('X-Asked', 'one');
+        $context->addHeader('Link', '<a>', false);
+        $context->addHeaderOnSuccess('Link', '<ok>');
+
+        $response = new \Symfony\Component\HttpFoundation\Response('', 200, ['Content-Type' => 'text/html', 'X-Asked' => 'old']);
+        $context->applyTo($response);
+
+        $this->assertSame('text/html', $response->headers->get('Content-Type'), 'a default never replaces what the response has');
+        $this->assertSame('kept', $response->headers->get('X-Default'));
+        $this->assertSame('one', $response->headers->get('X-Asked'));
+        $this->assertSame(['<a>', '<ok>'], $response->headers->all('link'));
+
+        $failed = new \Symfony\Component\HttpFoundation\Response('', 404);
+        $context->applyTo($failed);
+        $this->assertSame(['<a>'], $failed->headers->all('link'), 'what belongs to a success is on a success only');
+    }
+
     public function testAHeaderFirstAddedWithoutReplacingDoesNotReplaceAnotherPartsHeader(): void
     {
         $context = $this->context(Request::create('/x'));

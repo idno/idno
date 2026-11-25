@@ -21,13 +21,15 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * The base of a page that a controller serves now and that stays a legacy class for the code that still names it: a plugin's page that
  * extends it, a route that plugin registered for it, the pages that build one. A shell has no logic of its own: each of its handlers
  * hands the request to the service the controller calls (`delegate()`), so a page has one implementation. A shell is deprecated, and is
- * removed in 3.0; constructing or serving a subclass of one logs a deprecation line, once for the process.
+ * removed in 3.0; constructing or serving a subclass of one logs a deprecation line, once for each shell in the process.
  *
  * `delegate()` runs the service on the request being served as a controller would: a `PageContext` built from the request and from what the
  * shell holds (its arguments, the inputs it was given with `setInput()`, its owner, entity and permalink flag), with a `ControllerPage`
  * over it as the current page while the service runs, so what the service and the templates it draws ask the current page is answered from
  * the context. The `Response` the service returns is written as a legacy page writes one: the status with `http_response_code()` and each
- * header with `header()`, with the rule that keeps the session's caching lines (`LegacyHeaderReconciler`), and the body is echoed. What the
+ * header with `header()`, with the rule that keeps the session's caching lines (`LegacyHeaderReconciler`), and the body is echoed, after which the request ends, as the legacy
+ * page ended it where it drew (`exit`): nothing a subclass does after `parent::getContent()`, no router hook after the handler and no
+ * `kernel.terminate` runs for a page served through a shell, as none did for the page it replaced. What the
  * service throws is what a legacy page did: a refusal, a missing page, a gone page and a forward are the page's own `deniedContent()`,
  * `noContent()`, `goneContent()` and `forward()`.
  */
@@ -36,7 +38,8 @@ abstract class PageShell extends Page
     /** The class of the shell itself, which each shell declares: a class that is not it is a subclass */
     protected const SHELL = '';
 
-    private static bool $deprecationLogged = false;
+    /** @var array<string, true> the shells whose deprecation has been logged in this process */
+    private static array $deprecationLogged = [];
 
     public function __construct()
     {
@@ -93,8 +96,10 @@ abstract class PageShell extends Page
             return;
         }
 
-        if ($response !== null && $this->write($response, $context)) {
-            // a page that forwards ends there, as `forward()` does
+        if ($response !== null) {
+            $this->write($response, $context);
+            // a page ends where it is written, as `drawPage()` (and `forward()`) ended it: what follows in the handler of a subclass, the router's
+            // hooks after the handler and the kernel's termination never ran after a page, and still do not
             exit;
         }
     }
@@ -116,10 +121,10 @@ abstract class PageShell extends Page
      */
     private function noteSubclass(): void
     {
-        if (self::$deprecationLogged || static::class === static::SHELL) {
+        if (isset(self::$deprecationLogged[static::SHELL]) || static::class === static::SHELL) {
             return;
         }
-        self::$deprecationLogged = true;
+        self::$deprecationLogged[static::SHELL] = true;
         Idno::site()->logging()->warning(
             'Deprecated: ' . static::class . ' extends ' . static::SHELL . ', which is a deprecated shell of a page a controller serves now and is removed in 3.0. '
             . 'Extend \Idno\Common\Page instead (see docs/developers/plugins/upgrading.md).'
@@ -155,24 +160,11 @@ abstract class PageShell extends Page
     /**
      * Writes the response as a legacy page did.
      *
-     * @return bool whether the response is a forward, which ends the page
      */
-    private function write(Response $response, PageContext $context): bool
+    private function write(Response $response, PageContext $context): void
     {
         // the headers the page asked for, as the controller's listener puts them on its response
-        foreach ($context->defaultHeaders() as $name => $value) {
-            if (!$response->headers->has($name)) {
-                $response->headers->set($name, $value);
-            }
-        }
-        foreach ($context->headers() as $name => $values) {
-            $response->headers->set($name, $values, $context->replacesHeader($name));
-        }
-        if ($response->getStatusCode() === 200) {
-            foreach ($context->headersOnSuccess() as [$name, $value]) {
-                $response->headers->set($name, $value, false);
-            }
-        }
+        $context->applyTo($response);
 
         $php = new PhpHeaders();
         (new LegacyHeaderReconciler(Idno::container()->get('kernel'), $php))->reconcile($response, $context, false);
@@ -189,7 +181,5 @@ abstract class PageShell extends Page
             }
         }
         echo $response->getContent();
-
-        return $response->headers->has('Location');
     }
 }

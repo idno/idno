@@ -7,6 +7,7 @@ namespace Idno\Http\Page;
 use Idno\Common\Entity;
 use Idno\Entities\User;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * What the page a controller serves knows about its request: the input, the entity and owner it is about, the assets,
@@ -246,6 +247,28 @@ final class PageContext
     public function defaultHeaders(): array
     {
         return $this->defaultHeaders;
+    }
+
+    /**
+     * Puts on a response what the page asked for as headers: its defaults where the response has none of that name, the headers it added
+     * (each replacing or added to, as it asked), and on a 200 the ones that belong to a success. The one rule the controller's response
+     * listener and a deprecated shell's write both follow.
+     */
+    public function applyTo(Response $response): void
+    {
+        foreach ($this->defaultHeaders as $name => $value) {
+            if (!$response->headers->has($name)) {
+                $response->headers->set($name, $value);
+            }
+        }
+        foreach ($this->headers as $name => $values) {
+            $response->headers->set($name, $values, $this->replacesHeader($name));
+        }
+        if ($response->getStatusCode() === 200) {
+            foreach ($this->headersOnSuccess as [$name, $value]) {
+                $response->headers->set($name, $value, false);
+            }
+        }
     }
 
     /**
