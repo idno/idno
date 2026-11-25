@@ -106,8 +106,16 @@ class ModerationTest extends \Tests\BrowserTestCase
         $follower->save(true);
         static::$cleanup[] = $follower;
         $accept = ['Accept: application/activity+json'];
-        $host = Idno::site()->config()->host;
-        $webfinger = '/.well-known/webfinger?resource=' . rawurlencode('acct:' . $handle . '@' . $host);
+        // The web server may know the site by another host name than this process: ask it
+        $webfinger = '';
+        foreach (array_unique([Idno::site()->config()->host, 'localhost', '127.0.0.1', '0.0.0.0']) as $host) {
+            $candidate = '/.well-known/webfinger?resource=' . rawurlencode('acct:' . $handle . '@' . $host);
+            if ($this->get($candidate)['status'] == 200) {
+                $webfinger = $candidate;
+                break;
+            }
+        }
+        $this->assertNotSame('', $webfinger, 'Control: webfinger answers before the ban.');
 
         foreach (['', '/outbox', '/followers', '/following', '/inbox'] as $path) {
             $this->assertEquals(200, $this->get('/actor/' . $handle . $path, null, $accept)['status'], "Control: /actor/$handle$path is served before the ban.");

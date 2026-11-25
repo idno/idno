@@ -80,7 +80,9 @@ namespace Tests\Pages {
         private function assertMenuCopies($page, $url, $message)
         {
             $this->assertStringContainsString('data-idno-more-menu', $page, 'The page should have a "More" menu.');
-            $this->assertMatchesRegularExpression('#<a[^>]+data-idno-copy-link[^>]+href="' . preg_quote(htmlspecialchars($url), '#') . '"#', $page, $message);
+            // The web server may know the site by another host name than this process: compare from the path on
+            $path = (string) parse_url($url, PHP_URL_PATH) . (parse_url($url, PHP_URL_FRAGMENT) ? '#' . parse_url($url, PHP_URL_FRAGMENT) : '');
+            $this->assertMatchesRegularExpression('#<a[^>]+data-idno-copy-link[^>]+href="https?://[^/"]+' . preg_quote(htmlspecialchars($path), '#') . '"#', $page, $message);
         }
     }
 

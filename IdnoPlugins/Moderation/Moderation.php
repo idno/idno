@@ -166,9 +166,20 @@ namespace IdnoPlugins\Moderation {
                 if (!is_string($comment) || !preg_match('/^[A-Za-z0-9-]+$/', $comment)) {
                     return null;
                 }
-                $local = $entity->getURL() . '/annotations/' . $comment;
-                $annotation = $entity->getAnnotation($local);
-                if (empty($annotation) || !is_array($annotation)) {
+                // Find the comment by the last part of its address: the first part depends
+                // on the host name the site was known by when the comment was made
+                $local = '';
+                $annotation = null;
+                foreach ($entity->getAllAnnotations() as $list) {
+                    foreach ((is_array($list) ? $list : []) as $address => $candidate) {
+                        if (substr((string) $address, -strlen('/annotations/' . $comment)) === '/annotations/' . $comment) {
+                            $local = (string) $address;
+                            $annotation = $candidate;
+                            break 2;
+                        }
+                    }
+                }
+                if ($local === '' || !is_array($annotation)) {
                     return null;
                 }
                 $author = null;

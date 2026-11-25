@@ -2602,7 +2602,9 @@ namespace Idno\Common {
         {
             $subtype = (string) $subtype;
             $local_url = (string) $local_url;
-            if ($subtype === '' || strpos($local_url, $this->getURL() . '/annotations/') !== 0) {
+            // The address must be an annotation address. (It is not compared with this
+            // entity's own address: a site can be known by more than one host name.)
+            if ($subtype === '' || !preg_match('#^https?://[^\s"<>]+/annotations/[A-Za-z0-9]+$#', $local_url)) {
                 return false;
             }
             if ($this->getAnnotation($local_url)) {

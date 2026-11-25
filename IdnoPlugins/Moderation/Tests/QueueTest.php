@@ -106,7 +106,7 @@ namespace IdnoPlugins\Moderation\Tests {
 
             $page = $this->get('/admin/moderation/', static::$admin)['body'];
 
-            $this->assertEquals(1, substr_count($page, 'href="' . htmlspecialchars($case->getAdminURL()) . '"'));
+            $this->assertEquals(1, substr_count($page, 'admin/moderation/case/' . $case->getID() . '"'));
             $this->assertStringContainsString('2 reports', $page);
         }
 

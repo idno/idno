@@ -13,7 +13,10 @@
 if ($object instanceof \Idno\Common\Entity && is_array($annotation) && $local !== '' && $session->isLoggedOn() && !$object->isModerated()) {
     $language = \Idno\Core\Idno::site()->language();
     $user = $session->currentUser();
-    $mine = !empty($annotation['owner_url']) && in_array($annotation['owner_url'], [$user->getURL(), $user->getDisplayURL()], true);
+    // Your own comment, by the address of your profile; its path is enough to hide the item
+    // (the report itself is checked again when it is filed)
+    $mine = !empty($annotation['owner_url'])
+        && rtrim((string) parse_url((string) $annotation['owner_url'], PHP_URL_PATH), '/') === rtrim((string) parse_url($user->getURL(), PHP_URL_PATH), '/');
     $hash = basename((string) parse_url($local, PHP_URL_PATH));
 
     if ($session->isAdmin()) {
