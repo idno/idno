@@ -1003,6 +1003,37 @@ namespace Idno\Common {
         }
 
         /**
+         * Is this page the permalink of this very entity?
+         *
+         * A page can be a permalink of something that is not the entity being drawn: the profile
+         * is the permalink of a member, and draws that member's posts as a list. A template that
+         * draws one entity (its comment block, the markup only its own page has) must ask this,
+         * not isPermalink(). A permalink page with no entity associated (an annotation's page,
+         * for example) counts as the permalink of whatever is drawn on it.
+         *
+         * @param  Entity|null $entity The entity being drawn
+         * @return bool
+         */
+        function isPermalinkFor($entity)
+        {
+            if (!$this->isPermalinkPage) {
+                return false;
+            }
+            if (empty($this->entity)) {
+                return true;
+            }
+            if (!($entity instanceof Entity)) {
+                return false;
+            }
+            if ($this->entity === $entity) {
+                return true;
+            }
+            $uuid = $entity->getUUID();
+
+            return !empty($uuid) && $uuid === $this->entity->getUUID();
+        }
+
+        /**
          * Force connection over SSL.
          * If a page is requested over HTTP, this function will issue a 307 redirect to force
          * the connection over TLS. 307 is used to preserve POST data on a web services call.

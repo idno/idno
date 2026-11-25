@@ -61,7 +61,7 @@ if (!empty($item)) {
         <br class="clearall"/>
         <?php
 
-        if (\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+        if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
 
             if (!empty($likes) || !empty($replies) || !empty($shares) || !empty($rsvps)) {
 

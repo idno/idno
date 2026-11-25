@@ -37,7 +37,7 @@ if (!empty($owner)) {
                 <?php echo $this->draw('content/end/links') ?>
                 <?php
 
-                if (\Idno\Core\Idno::site()->currentPage()->isPermalink() && \Idno\Core\Idno::site()->config()->indieweb_citation) {
+                if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object']) && \Idno\Core\Idno::site()->config()->indieweb_citation) {
 
                     ?>
                         <span class="citation"><?php echo $vars['object']->getCitation() ?></span>
@@ -108,7 +108,7 @@ if (!empty($owner)) {
         <br class="clearall"/>
         <?php
 
-        if (\Idno\Core\Idno::site()->currentPage()->isPermalink()) {
+        if (\Idno\Core\Idno::site()->currentPage()->isPermalinkFor($vars['object'])) {
 
             if (!empty($likes) || !empty($replies) || !empty($shares) || !empty($rsvps) || !empty($mentions)) {
 

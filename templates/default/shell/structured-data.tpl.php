@@ -41,7 +41,7 @@ if ($currentPage->isPermalink()) {
 
         }
     }
-    if (!empty($vars['object'])) {
+    if (!empty($vars['object']) && $currentPage->isPermalinkFor($vars['object'])) {
 
         $object = $vars['object'];
         if (is_callable([$object, 'jsonLDSerialise'])) {
