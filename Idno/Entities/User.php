@@ -547,11 +547,12 @@ namespace Idno\Entities {
          * banned. Banning an administrator takes the administrator right away; lifting the
          * ban does not give it back.
          *
-         * @param  string $reason  Why, for the administrators. Never shown to anyone else.
-         * @param  string $by_uuid The UUID of the administrator who is banning
+         * @param  string $reason       Why, for the administrators. Never shown to anyone else.
+         * @param  string $by_uuid      The UUID of the administrator who is banning
+         * @param  bool   $hide_profile Whether the member's profile is hidden too (see isHiddenByBan())
          * @return bool False (and nothing changed) if this member must not be banned
          */
-        function ban($reason, $by_uuid)
+        function ban($reason, $by_uuid, $hide_profile = false)
         {
             if ((string) $by_uuid === (string) $this->getUUID()) {
                 return false;
@@ -563,6 +564,7 @@ namespace Idno\Entities {
             $this->banned = time();
             $this->ban_reason = trim(strip_tags((string) $reason));
             $this->banned_by = (string) $by_uuid;
+            $this->ban_hides_profile = (bool) $hide_profile;
             $this->setAdmin(false);
 
             return true;
@@ -576,6 +578,18 @@ namespace Idno\Entities {
             $this->banned = false;
             $this->ban_reason = '';
             $this->banned_by = '';
+            $this->ban_hides_profile = false;
+        }
+
+        /**
+         * Is this member banned in a way that hides their profile from everyone but the
+         * administrators? The profile page then answers as if there were no such member.
+         *
+         * @return bool
+         */
+        function isHiddenByBan()
+        {
+            return $this->isBanned() && !empty($this->ban_hides_profile);
         }
 
         /**
@@ -1207,7 +1221,7 @@ namespace Idno\Entities {
 
             unset($data['updated']);
             unset($data['published']);
-            unset($data['banned'], $data['ban_reason'], $data['banned_by']);
+            unset($data['banned'], $data['ban_reason'], $data['banned_by'], $data['ban_hides_profile']);
 
             $data['image'] = array('url' => $this->getIcon());
             if (!empty($this->profile['url'])) {

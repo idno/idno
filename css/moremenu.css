@@ -107,3 +107,10 @@
     color: #991b1b;
     font-size: 0.875rem;
 }
+
+/* Where the menu sits on profiles and comments */
+.idno-profile-header { position: relative; }
+.idno-profile-menu { margin-left: auto; align-self: flex-start; }
+.idno-annotation { position: relative; }
+.idno-annotation-menu { margin-left: auto; }
+.idno-annotation:target { box-shadow: 0 0 0 2px var(--color-link, #2563eb); border-radius: 0.5rem; }

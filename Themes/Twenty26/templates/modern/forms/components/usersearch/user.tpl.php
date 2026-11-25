@@ -70,6 +70,8 @@ if ($user instanceof \Idno\Entities\User) {
                         );
                     }
                 }
+                // Actions that plugins add for this member
+                echo $this->__(['user' => $user])->draw('forms/components/usersearch/user/actions');
                 // Block/unblock
                 if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                     echo \Idno\Core\Idno::site()->actions()->createLink(

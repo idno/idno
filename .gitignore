@@ -69,6 +69,7 @@ IdnoPlugins/
 !IdnoPlugins/Text
 !IdnoPlugins/Webhooks
 !IdnoPlugins/ActivityPub
+!IdnoPlugins/Moderation
 !IdnoPlugins/StandardSiteSync
 
 ConsolePlugins/*
