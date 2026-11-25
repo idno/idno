@@ -126,6 +126,34 @@ final class WebInstallerTest extends TestCase
         self::assertStringNotContainsString('<h1>Your site</h1>', $html);
     }
 
+    /**
+     * The first page asks the web server for a shipped file in the upload folder: when the server hands it over, uploaded
+     * files would be served without their posts' access rules, and the installation stops there and says how to refuse it.
+     */
+    public function testUploadedFilesTheServerServesStopTheFirstStep(): void
+    {
+        $page = (string) $this->request('GET')->getContent();
+        self::assertStringContainsString("fetch('./Uploads/readme.txt'", $page);
+        self::assertStringContainsString('idno-uploads-probe', $page);
+        self::assertStringContainsString('<li id="check-uploads" hidden>', $page);
+
+        $html = (string) $this->request('POST', ['step' => 'check', 'rewrite' => 'ok', 'uploads' => 'served'])->getContent();
+        self::assertStringContainsString('<li id="check-uploads">', $html);
+        self::assertStringContainsString('location ^~ /Uploads/ { deny all; }', $html);
+        self::assertStringNotContainsString('<h1>Your site</h1>', $html);
+
+        self::assertStringContainsString('<h1>Your site</h1>', (string) $this->request('POST', ['step' => 'check', 'rewrite' => 'ok', 'uploads' => 'refused'])->getContent());
+        self::assertSame([], $this->filesInRoot());
+    }
+
+    public function testTheLastStepGivesTheUploadFolderItsOwnRefusalAndKeepsOneThatIsThere(): void
+    {
+        file_put_contents($this->root . '/Uploads/.htaccess', "# the operator's own\n");
+        $this->save();
+
+        self::assertSame("# the operator's own\n", file_get_contents($this->root . '/Uploads/.htaccess'));
+    }
+
     public function testADomainThatIsNotOneIsExplainedBesideItsField(): void
     {
         foreach (['https://example.com', 'example.com/blog', '', "x\ny"] as $domain) {
@@ -149,7 +177,7 @@ final class WebInstallerTest extends TestCase
         self::assertSame($this->root . '/data/idno.sqlite', $config['dbname']);
         self::assertSame('https://example.com/', $config['url']);
         self::assertSame($this->root . '/Uploads/', $config['uploadpath']);
-        self::assertSame(['configuration/config.ini', 'configuration/setup-pending', 'data/idno.sqlite'], array_values(array_filter($this->filesInRoot(), static fn (string $f): bool => !str_contains($f, '.sqlite-'))));
+        self::assertSame(['Uploads/.htaccess', 'configuration/config.ini', 'configuration/setup-pending', 'data/idno.sqlite'], array_values(array_filter($this->filesInRoot(), static fn (string $f): bool => !str_contains($f, '.sqlite-'))));
 
         $setup = new SetupToken(new InstallPaths($this->root));
         self::assertSame('Ada\'s notes', $setup->title());

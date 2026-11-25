@@ -586,7 +586,10 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      404; `Tests/Unit/Install/RewriteCheckTargetTest` pins one existing target in every configuration
      and `DeniedPathsTest::testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript` the answer) and
      posts the result with the form (`rewrite` = `fail` stops the step); without JavaScript it is not
-     checked.
+     checked. The same script asks for `Uploads/readme.txt` (`UploadFolder::PROBE`): an answer that holds
+     the file's marker (`UploadFolder::PROBE_MARKER`; a missing file is answered by Idno's own page, which
+     does not) means the web server hands out uploaded files without the file page's access rules, and
+     `uploads` = `served` stops the step with the rule to add for each server.
   2. "Your site": a name and a DOMAIN (`SiteAddress`: read from the Host header, shown, corrected by
      the person; a host name or IP with an optional port and nothing else). The address written is
      `https://<domain>/` (`http://` only for a local name). This is how an installer-made site gets its
@@ -669,7 +672,9 @@ backslash, naming the setting and never the value (values are written inside sin
 property test is in `InstallerDatabaseTest`), and `build()` fills the template in ONE pass; a setting
 with no value (`url`, `dbport`) has its line left out; the value written for SQLite is exactly `sqlite`
 (`Sqlite3` in a configuration means MySQL); no installer loads SQL (the upgrade creates the tables) or
-changes a file's mode or the `.htaccess`. An SQLite site set up from the command line has files owned
+changes a file's mode or the root `.htaccess`. Both write the upload folder's own `.htaccess`
+(`Require all denied`, `UploadFolder::protect()`, never over one that is there): the web installer always
+(`Uploads/`), `idno:install` when the folder is inside the project (and it says the web server must refuse it). An SQLite site set up from the command line has files owned
 by that user: `idno:install` and the import command print `DatabaseChoice::sqliteOwnershipNotes()`.
 `ext-pdo_mysql` and `ext-pdo_sqlite` are Composer `suggest`s.
 
@@ -4748,7 +4753,9 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
   `Tests/` have), plus a SAPI guard at the top of each command-line script: under any SAPI
   but `cli`/`phpdbg`, `http_response_code(404)` and `exit` before loading anything (see
   `bin/console`). Scripts for PHP's built-in web server (routers) allow `cli-server` only.
-  `Tests/Kernel/SapiGuardTest` and `Tests/Characterisation/DeniedPathsTest` pin these.
+  `Tests/Kernel/SapiGuardTest` and `Tests/Characterisation/DeniedPathsTest` pin these. A rule
+  for a directory matches it in any letter case (`[F,NC]` on Apache, `~*` on nginx, `(?i)` on Caddy,
+  `#...#i` in the routers): on a file system that ignores case `uploads/` is `Uploads/`.
 - New code logs by type-hinting `Psr\Log\LoggerInterface` in its constructor. Autowiring gives
   the site's logger (`Idno\Core\Logging`), which honours the configured log level and the line
   format. Never inject or fetch `monolog.logger.idno` (or any `monolog.logger.*` service)
@@ -4938,6 +4945,14 @@ no installer writes one.
 - Command-line scripts, `var/`, `config/`, `bin/`, `frontend/`, `Tests/`, `docs/` and `warmup/CLI/` (which no longer
   ships; the rule stays for a site upgraded by overwriting files) are
   denied over HTTP, and the scripts refuse to run under a web SAPI (see "New code conventions")
+- The site's configuration (`configuration/`) and the upload directory under the project (`Uploads/`, where the web
+  installer always puts uploads and `idno:install` does by default) are denied over HTTP by every shipped configuration
+  (the root `.htaccess`, both `.dist` files, `nginx.conf`, the Caddyfile, both routers), in any letter case, and
+  `Uploads/.htaccess` refuses everything itself. A stored file reached by its path would skip `Pages\File\View` and so
+  the post's `canRead()`, the `restricted` mark and the export archive. `Tests/Unit/Install/UploadsDeniedTest` reads
+  every shipped configuration and runs its deny rules against upload paths in mixed case;
+  `DeniedPathsTest::testStoredFilesUnderTheUploadsDirectoryAreRefused` asks the rig for a stored `.file` and `.data`.
+  An upload path elsewhere in the document root needs a rule of its own (`docs/install/instructions.md`).
 - Private sites (`walled_garden`) and pages that controllers serve: `PageRequestListener` applies `LegacyPageLifecycle::mayView()` (a public site, a logged-on visitor, or `#[SitePage(publicOnPrivateSite: true)]`, which
   the legacy `addRoute(..., true)` and `addPublicRoute()` of the page's class also set) after OPTIONS and before the page is entered; a refusal is the site's 403 page in the request's template type, fires no
   `page/head` or `page/get` and is logged as nothing. Public on a private site: the home page only where a plugin made its route public, the manifest, the service worker and WebFinger. Refused to a visitor: the

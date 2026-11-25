@@ -21,7 +21,7 @@ You do not need to create a database unless you want to use MySQL or MariaDB: th
 
 Open your site's address. A site that has not been set up shows the installer at every address.
 
-**Step 1: Checking your server.** Idno checks the PHP version and extensions, that the web server can write to the folders `configuration`, `data` and `Uploads`, that page addresses reach Idno (URL rewriting), that the site is at the top of its domain, and that the page was loaded over HTTPS. Anything that needs fixing is explained, with the control-panel step or the command that fixes it; "Check again" repeats the checks. HTTPS is required, except when you are trying Idno on your own computer (`localhost`, `127.0.0.1`, or a name ending in `.localhost` or `.test`).
+**Step 1: Checking your server.** Idno checks the PHP version and extensions, that the web server can write to the folders `configuration`, `data` and `Uploads`, that page addresses reach Idno (URL rewriting), that the web server does not hand out the files in `Uploads` (see "Where uploaded files go"), that the site is at the top of its domain, and that the page was loaded over HTTPS. Anything that needs fixing is explained, with the control-panel step or the command that fixes it; "Check again" repeats the checks. HTTPS is required, except when you are trying Idno on your own computer (`localhost`, `127.0.0.1`, or a name ending in `.localhost` or `.test`).
 
 **Step 2: Your site.** The site's name (you can change it later) and its domain. The domain is read from the address you opened; check it, because it is written to the configuration as the site's address (`url`), which background tasks and the links in the site's mail are built from.
 
@@ -102,6 +102,15 @@ Note that `database = "Sqlite3"`, which older instructions gave, does not mean S
 ### Where uploaded files go
 
 Uploaded files are stored in the folder `uploadpath` names, which the web server must be able to write to, or in Amazon S3: set `uploadpath` to `s3://<bucket>/<prefix>/` (with `aws_region`, and `aws_key` and `aws_secret` unless the server has credentials of its own); no plugin is needed. A third-party plugin's own `filesystem` class named in the configuration still works, but the setting is deprecated.
+
+**The web server must never serve the upload folder itself.** Idno hands out each file through its own file page, which applies the access rules of the post the file belongs to; a file fetched straight from the folder skips them (a picture of a private post, the administrators-only site archive). The folder `Uploads/` that the installer uses is inside Idno's folder, so it is inside the document root:
+
+* **Apache**: the bundled `.htaccess` refuses `Uploads/` (`RewriteRule ^(...|configuration|Uploads|...)(/|$) - [F,NC]`), and `Uploads/.htaccess` (`Require all denied`) refuses everything in it as well. Both need `.htaccess` files to be allowed (`AllowOverride All`).
+* **nginx**: use `warmup/webserver-configs/nginx.conf`, or add `location ^~ /Uploads/ { deny all; }` and `uploads` to the case-insensitive (`~*`) location that refuses the private folders, before the static-file and `.php` locations.
+* **Caddy**: use `docker/caddy/Caddyfile`, whose `@denied` matcher names `uploads` (case-insensitively).
+* **An upload folder of your own inside the document root** needs the same rule with its name, or move it outside the document root.
+
+The web installer checks this on its first page by asking for `Uploads/readme.txt`, and will not go on while the server hands it out. To check a running site, open `https://your.domain/Uploads/readme.txt`: you must get `403 Forbidden` (or `404`), never the file's text.
 
 ## After installing
 

@@ -54,7 +54,9 @@ uploads fail until an `uploadpath` is set.
 **uploadpath**<br>
 The full path used by Idno to upload files. This path must be writeable by the web server. A path of the form
 `s3://<bucket>/<prefix>/` stores files in Amazon S3 (set `aws_region`, and `aws_key` and `aws_secret` unless the server
-has credentials of its own); no plugin is needed.
+has credentials of its own); no plugin is needed. The web server must never serve this folder itself: keep it outside
+the document root, or refuse it in the server's configuration (see
+[Where uploaded files go](instructions.md#where-uploaded-files-go)).
 
 **cachepath**<br>
 Where Idno keeps its cache (today, what it remembers of the HTTPS-only hosts it has talked to). Optional: without it

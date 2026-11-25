@@ -84,6 +84,7 @@ configbackup.ini
 
 # Allow these previously excluded files
 !/Uploads/readme.txt
+!/Uploads/.htaccess
 
 
 # Elastic Beanstalk Files

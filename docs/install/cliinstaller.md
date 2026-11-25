@@ -26,7 +26,7 @@ Every answer can be an option, so that nothing is asked:
 | `--sqlite-path` | For SQLite: the database file (default `data/idno.sqlite`). Its name must end in `.sqlite`. |
 | `--db-name`, `--db-user`, `--db-host` | For MySQL or MariaDB. The host may be `host:port`; the default is `localhost`. |
 | `--db-password-file` | A file whose first line is the database password. |
-| `--upload-path` | The folder for uploaded files (default `Uploads`). It must exist. |
+| `--upload-path` | The folder for uploaded files (default `Uploads`). It must exist. A folder inside Idno's folder gets a `.htaccess` that refuses everything, and the web server must refuse it too (see [Where uploaded files go](instructions.md#where-uploaded-files-go)). |
 | `--admin-name`, `--admin-handle`, `--admin-email` | The administrator. |
 | `--admin-password-file`, `--admin-password-stdin` | The administrator's password: the first line of a file, or of standard input. |
 | `--use-existing` | Use the Idno site the database already holds. Without it, a database that holds a site is refused; with it, nothing is replaced, and a site from an older version is upgraded. |

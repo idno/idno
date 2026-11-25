@@ -5,8 +5,9 @@
     #RewriteBase /
 
     RewriteRule ^\.git(|hub)/ - [F]
-    # Never serve the cache, kernel configuration, command-line scripts, tests, docs or the data directory
-    RewriteRule ^(var|config|bin|Tests|docs|data|frontend|warmup/CLI)(/|$) - [F,NC]
+    # Never serve the cache, kernel configuration, command-line scripts, tests, docs, the data directory, the site's
+    # configuration or the uploaded files (whose access rules the file page applies), in any letter case
+    RewriteRule ^(var|config|bin|Tests|docs|data|frontend|configuration|Uploads|warmup/CLI)(/|$) - [F,NC]
     RewriteRule ^(idno|known)\.php$ - [F,NC]
 
     RewriteCond %{HTTP:Authorization} ^(.+)$
@@ -25,7 +26,6 @@
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteRule ^(.*)$ %{ENV:BASE}/index.php?/$1 [L,QSA]
-    RewriteRule ^Uploads.* - [F]
 </IfModule>
 <Files  ~ "\.dist$">
   Require all denied

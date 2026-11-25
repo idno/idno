@@ -17,11 +17,12 @@ final class InstallPage
     /**
      * @param list<CheckResult> $checks
      * @param string            $rewrite What the browser found when it asked for a page address: 'ok', 'fail' or '' (not checked)
+     * @param string            $uploads What the browser found when it asked for a file in the upload folder: 'refused', 'served' or '' (not checked)
      */
-    public static function checks(array $checks, string $token, string $nonce, string $rewrite = '', string $notice = ''): string
+    public static function checks(array $checks, string $token, string $nonce, string $rewrite = '', string $notice = '', string $uploads = ''): string
     {
-        $failed = ServerChecks::blocking($checks) || $rewrite === 'fail';
-        $problems = count(array_filter($checks, static fn (CheckResult $c): bool => $c->state === CheckResult::FAIL)) + ($rewrite === 'fail' ? 1 : 0);
+        $failed = ServerChecks::blocking($checks) || $rewrite === 'fail' || $uploads === 'served';
+        $problems = count(array_filter($checks, static fn (CheckResult $c): bool => $c->state === CheckResult::FAIL)) + ($rewrite === 'fail' ? 1 : 0) + ($uploads === 'served' ? 1 : 0);
         $body = self::steps(1) . '<h1>Checking your server</h1>';
         if ($notice !== '') {
             $body .= '<p class="notice" role="alert">' . self::e($notice) . '</p>';
@@ -36,8 +37,13 @@ final class InstallPage
         $body .= '<li id="check-rewrite"' . ($rewrite === 'fail' ? '' : ' hidden') . '><span class="name">Page addresses</span> <span class="state fail">Needs fixing</span>'
             . '<div class="fix"><p>The web server is not passing page addresses to Idno, so only this page would work.</p>'
             . '<p>On Apache this usually means .htaccess files are switched off: ask your host to allow them (the setting is called AllowOverride All), and check that the file .htaccess was uploaded with the rest of Idno (it is hidden in some file managers). On nginx or Caddy, use the sample configuration in the folder warmup/webserver-configs.</p></div></li>';
+        $body .= '<li id="check-uploads"' . ($uploads === 'served' ? '' : ' hidden') . '><span class="name">Uploaded files kept private</span> <span class="state fail">Needs fixing</span>'
+            . '<div class="fix"><p>The web server hands out the files in the folder Uploads to anyone who asks for them by their address, so a picture attached to a private post, or a site archive, could be read without signing in.</p>'
+            . '<p>On Apache, check that the files .htaccess and Uploads/.htaccess were uploaded with the rest of Idno and that .htaccess files are allowed (AllowOverride All). On nginx, add this inside the server block, before the other locations:</p>'
+            . '<pre>' . self::e('location ^~ /Uploads/ { deny all; }') . '</pre>'
+            . '<p>On Caddy, use the sample configuration in docker/caddy/Caddyfile. Then check again.</p></div></li>';
         $body .= '</ul>';
-        $body .= '<form method="post" action="./" id="check-form">' . self::hidden(['step' => 'check', 'token' => $token, 'rewrite' => $rewrite])
+        $body .= '<form method="post" action="./" id="check-form">' . self::hidden(['step' => 'check', 'token' => $token, 'rewrite' => $rewrite, 'uploads' => $uploads])
             . '<div class="actions">'
             . ($failed
                 ? '<a class="button" href="./">Check again</a>'
@@ -48,21 +54,38 @@ final class InstallPage
   'use strict';
   var field = document.querySelector('input[name="rewrite"]');
   var item = document.getElementById('check-rewrite');
+  var uploadsField = document.querySelector('input[name="uploads"]');
+  var uploadsItem = document.getElementById('check-uploads');
   if (!field || !window.fetch) { return; }
+  function stop(shown) {
+    if (shown.hidden) {
+      shown.hidden = false;
+      var button = document.querySelector('#check-form button');
+      if (button) { button.disabled = true; }
+    }
+  }
   fetch('./js/canary.js', {cache: 'no-store', credentials: 'omit'}).then(function (answer) {
     return answer.ok;
   }, function () {
     return false;
   }).then(function (ok) {
     field.value = ok ? 'ok' : 'fail';
-    if (!ok && item.hidden) {
-      item.hidden = false;
-      var button = document.querySelector('#check-form button');
-      if (button) { button.disabled = true; }
-    }
+    if (!ok) { stop(item); }
+  });
+  // A file of the upload folder must never be handed out: only an answer that holds the file's own marker counts as
+  // served (a missing file is answered by Idno's own page).
+  fetch('./%PROBE%', {cache: 'no-store', credentials: 'omit'}).then(function (answer) {
+    return answer.ok ? answer.text() : '';
+  }, function () {
+    return '';
+  }).then(function (text) {
+    var served = text.indexOf('%MARKER%') !== -1;
+    uploadsField.value = served ? 'served' : 'refused';
+    if (served) { stop(uploadsItem); }
   });
 })();
 JS;
+        $script = strtr($script, ['%PROBE%' => UploadFolder::PROBE, '%MARKER%' => UploadFolder::PROBE_MARKER]);
 
         return self::document('Checking your server', $body, $nonce, $script);
     }

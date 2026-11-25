@@ -14,6 +14,7 @@ use Idno\Install\DatabaseFinding;
 use Idno\Install\InstallPaths;
 use Idno\Install\ServerChecks;
 use Idno\Install\SiteAddress;
+use Idno\Install\UploadFolder;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\QuestionHelper;
@@ -206,6 +207,10 @@ final class InstallCommand extends Command
 
         $output->writeln('');
         $output->writeln('Wrote ' . $this->paths->configFile() . '.');
+        if (UploadFolder::isUnderRoot($upload, $this->paths->root())) {
+            UploadFolder::protect($upload);
+            $output->writeln('The upload folder is inside Idno\'s folder: the web server must refuse it (the shipped configurations do; see docs/install/instructions.md).');
+        }
         if (!SiteAddress::isLocal((string) parse_url($url, PHP_URL_HOST)) && str_starts_with($url, 'http://')) {
             $output->writeln('Note: the address is http, not https. Passwords typed on the site can be read on the network; use this only on a private network.');
         }

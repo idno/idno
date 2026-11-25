@@ -65,9 +65,10 @@ final class WebInstaller
             $html = InstallPage::checks($checks, $token, $nonce, '', 'That form was opened too long ago, or in another browser. Please start again from here.');
         } else {
             $rewrite = in_array($form->text('rewrite'), ['ok', 'fail'], true) ? $form->text('rewrite') : '';
+            $uploads = in_array($form->text('uploads'), ['refused', 'served'], true) ? $form->text('uploads') : '';
             $step = $form->text('step');
-            if (ServerChecks::blocking($checks) || ($step === 'check' && $rewrite === 'fail') || !in_array($step, ['check', 'site', 'database'], true)) {
-                $html = InstallPage::checks($checks, $token, $nonce, $rewrite);
+            if (ServerChecks::blocking($checks) || ($step === 'check' && ($rewrite === 'fail' || $uploads === 'served')) || !in_array($step, ['check', 'site', 'database'], true)) {
+                $html = InstallPage::checks($checks, $token, $nonce, $rewrite, '', $uploads);
             } elseif ($step === 'check') {
                 $html = InstallPage::site(['title' => '', 'domain' => SiteAddress::fromHostHeader((string) $request->headers->get('Host', ''))], [], $token, $nonce);
             } elseif ($step === 'site' || $form->text('back') !== '') {
@@ -239,6 +240,11 @@ final class WebInstaller
             $this->logger->warning('The installer could not read the chosen database: ' . $e::class . ': ' . substr((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $e->getMessage()), 0, 500));
 
             return ['database' => 'Idno could not read that database. Check its settings and try again.'];
+        }
+
+        // The upload folder refuses everything itself on Apache, beside the rules of every shipped configuration.
+        if (!UploadFolder::protect($this->paths->uploadDir())) {
+            $this->logger->warning('The installer could not write Uploads/.htaccess: the web server\'s own configuration must refuse the folder Uploads.');
         }
 
         // The setup token is the random value this browser already holds (its installer cookie): if

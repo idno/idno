@@ -325,6 +325,8 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertSame('https://example.com/', $config['url']);
         self::assertSame($this->root . '/data/idno.sqlite', $config['dbname']);
         self::assertFileDoesNotExist($this->root . '/configuration/setup-pending');
+        self::assertSame("Require all denied\n", file_get_contents($this->root . '/Uploads/.htaccess'), 'the upload folder inside the project refuses everything itself');
+        self::assertStringContainsString('the web server must refuse it', $out);
         $written = file_get_contents($this->root . '/configuration/config.ini');
 
         [$exit, , $err] = $this->console(['idno:install', '--no-interaction', '--url=https://other.example/']);

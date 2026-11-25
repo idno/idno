@@ -53,6 +53,49 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * The upload directory under the project (`Uploads/`, where every web installation keeps its files) is never served:
+         * a stored file and its metadata, reached by their path, would skip the file page and the post's access rules. The
+         * files are written here as the file store lays them out, and asked for in several letter cases (one directory, on a
+         * file system that ignores case).
+         */
+        public function testStoredFilesUnderTheUploadsDirectoryAreRefused(): void
+        {
+            $root = dirname(__DIR__, 2);
+            $id = bin2hex(random_bytes(16));
+            $directory = $root . '/Uploads/denied-paths-test/' . $id[0] . '/' . $id[1] . '/' . $id[2] . '/' . $id[3];
+            $this->assertTrue(is_dir($directory) || mkdir($directory, 0755, true));
+            file_put_contents($directory . '/' . $id . '.file', 'the bytes of a private picture');
+            file_put_contents($directory . '/' . $id . '.data', '{"filename":"private.jpg","attached_entity":"x"}');
+            try {
+                $relative = 'denied-paths-test/' . $id[0] . '/' . $id[1] . '/' . $id[2] . '/' . $id[3] . '/' . $id;
+                $paths = [
+                    'Uploads/' . $relative . '.file',
+                    'Uploads/' . $relative . '.data',
+                    'uploads/' . $relative . '.file',
+                    'UPLOADS/' . $relative . '.data',
+                    'Uploads/readme.txt',
+                    'uploads/readme.txt',
+                    'Uploads/.htaccess',
+                    'Uploads/',
+                ];
+                foreach ($paths as $path) {
+                    $r = $this->site()->request('GET', $path);
+
+                    $this->assertSame(403, $r->status, $path);
+                    $this->assertStringNotContainsString('private picture', $r->body, $path);
+                    $this->assertStringNotContainsString('attached_entity', $r->body, $path);
+                    $this->assertStringNotContainsString('uploads directory', $r->body, $path);
+                }
+            } finally {
+                @unlink($directory . '/' . $id . '.file');
+                @unlink($directory . '/' . $id . '.data');
+                for ($dir = $directory; $dir !== $root . '/Uploads'; $dir = dirname($dir)) {
+                    @rmdir($dir);
+                }
+            }
+        }
+
+        /**
          * The installer's check that URL rewriting works asks for `js/canary.js`; the rules answer it with the look's script.
          */
         public function testTheInstallersRewriteCheckIsAnsweredWithTheLooksScript(): void
