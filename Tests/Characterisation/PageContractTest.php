@@ -144,13 +144,82 @@ final class PageContractTest extends PrivateSiteTestCase
 
     public function testWalledGardenAnswersForEachPage(): void
     {
-        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+        $url = $this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']);
+        $client = new HttpSiteClient($url);
+        $host = (string) parse_url($url, PHP_URL_HOST);
 
         foreach (['/', '/feed.xml', '/tag/x', '/robots.txt', '/search/mentions.json'] as $path) {
             $this->assertSame(403, $client->request('GET', $path)->status, $path);
         }
-        foreach (['/.well-known/webfinger?resource=acct:ada@127.0.0.1', '/chrome/manifest.json', '/service-worker.min.js'] as $path) {
+        foreach (['/.well-known/webfinger?resource=acct:ada@' . $host, '/chrome/manifest.json', '/service-worker.min.js'] as $path) {
             $this->assertSame(200, $client->request('GET', $path)->status, $path);
+        }
+    }
+
+    public function testARefusedWalledGardenRequestFiresNoPageHead(): void
+    {
+        $client = new HttpSiteClient($this->startExtraServer(['IDNO_WALLED_GARDEN' => '1']));
+
+        foreach (['/' => 'Idno\Pages\Homepage', '/feed.xml' => 'Idno\Pages\Feed'] as $path => $class) {
+            file_put_contents($this->recordFile, '');
+            $response = $client->request('GET', $path);
+
+            $this->assertSame(403, $response->status, $path);
+            $this->assertNull($response->header('X-Idno-Test-Page-Head'), $path);
+            $events = array_map(static fn (string $line): array => json_decode($line, true, 512, JSON_THROW_ON_ERROR), array_values(array_filter(explode("\n", (string) file_get_contents($this->recordFile)))));
+            $this->assertSame(['page/ready'], array_column($events, 'event'), $path);
+            $this->assertSame($class, $events[0]['current'], $path);
+        }
+    }
+
+    /**
+     * The `Link` headers of a page as they were sent, each as `<rel> <address>` with the site's own address as `@/`.
+     *
+     * @return list<string>
+     */
+    private function links(string $path): array
+    {
+        $lines = [];
+        $ch = curl_init($this->baseUrl() . ltrim($path, '/'));
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADERFUNCTION => static function ($ch, string $line) use (&$lines): int {
+                $lines[] = trim($line);
+
+                return strlen($line);
+            },
+        ]);
+        curl_exec($ch);
+        curl_close($ch);
+        $links = [];
+        foreach ($lines as $line) {
+            if (stripos($line, 'link:') === 0) {
+                $links[] = (string) preg_replace('/^Link: <([^>]*)>; rel="([^"]*)"$/', '$2 $1', str_replace($this->baseUrl(), '@/', $line));
+            }
+        }
+
+        return $links;
+    }
+
+    public function testEachPageSendsTheLinksOfItsEndpointsAndTheHubsListenersWhenTheHubIsSet(): void
+    {
+        $endpoints = ['authorization_endpoint @/indieauth/auth', 'token_endpoint @/indieauth/token', 'micropub @/micropub/endpoint'];
+        $listeners = static fn (string $self): array => ['http://webmention.org/ @/webmention/', 'webmention @/webmention/', 'hub https://withknown.superfeedr.com/', 'self @/' . $self];
+
+        // The default hub: the webmention, hub and self links follow the endpoints, and the feed sends its second block (its inner home page) after its own.
+        foreach (['', 'robots.txt', 'tag/x', 'content/all', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
+            $this->assertSame([...$endpoints, ...$listeners($path)], $this->links($path), '/' . $path);
+        }
+        $this->assertSame([...$endpoints, ...$listeners('feed.xml'), ...$listeners('feed.xml')], $this->links('feed.xml'));
+    }
+
+    public function testEachPageSendsOnlyTheLinksOfItsEndpointsWhenTheHubIsEmpty(): void
+    {
+        $this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->hub = ""; $config->save(); return true;');
+        $endpoints = ['authorization_endpoint @/indieauth/auth', 'token_endpoint @/indieauth/token', 'micropub @/micropub/endpoint'];
+
+        foreach (['', 'feed.xml', 'robots.txt', 'tag/x', 'content/all', 'search/mentions.json', 'chrome/manifest.json'] as $path) {
+            $this->assertSame($endpoints, $this->links($path), '/' . $path);
         }
     }
 }

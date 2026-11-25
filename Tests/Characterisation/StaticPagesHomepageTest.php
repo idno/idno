@@ -82,4 +82,29 @@ final class StaticPagesHomepageTest extends PrivateSiteTestCase
         $this->assertStringContainsString('a note in the stream', $home->body);
         $this->assertStringNotContainsString('Static fixture body', $home->body);
     }
+
+    public function testARootWebmentionOnASiteWithAStaticHomePageReachesTheStreamsWebmentionHandler(): void
+    {
+        $this->setAsHomepage();
+
+        // A webmention whose source is a public address cannot be accepted over HTTP in a test (the source is fetched, and a loopback source is refused),
+        // so what is pinned is the route: the page the router finds for the site's root is the static home page's class, and the method that
+        // handles a mention of it is the stream's home page's own (which hands a root mention on a single-user site to the administrator's profile page).
+        $result = $this->runInSite(
+            '$page = \Idno\Core\Idno::site()->routes()->getRoute(\Idno\Core\Idno::site()->config()->getURL());'
+            . 'return [get_class($page), (new \ReflectionMethod($page, \'webmentionContent\'))->getDeclaringClass()->getName()];'
+        );
+
+        $this->assertSame(['IdnoPlugins\StaticPages\Pages\Homepage', 'Idno\Pages\Homepage'], $result);
+    }
+
+    public function testARootWebmentionWithASourceThatIsNotPublicIsRefusedWithTheSelfMentionMessage(): void
+    {
+        $this->setAsHomepage();
+
+        $response = $this->site()->request('POST', '/webmention/', [], ['source' => $this->baseUrl() . '_test/page/mention', 'target' => $this->baseUrl()]);
+
+        $this->assertSame(400, $response->status);
+        $this->assertSame('{"error":"target_not_supported","error_text":"A page can\'t webmention itself."}', $response->body);
+    }
 }
