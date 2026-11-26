@@ -24,6 +24,8 @@ final class FileWalledAnswersTest extends FileSiteCase
      * they were, and each case is held to the recording but for what changed.
      */
     private const CHANGED = [
+        'attached-site-visitor' => self::WHY_HIDDEN,
+        'attached-owner-visitor' => self::WHY_HIDDEN,
         'html-visitor' => self::WHY_DOWNLOAD,
         'restricted-admin' => self::WHY_DOWNLOAD,
         'recorded-admin' => self::WHY_DOWNLOAD,
@@ -31,6 +33,8 @@ final class FileWalledAnswersTest extends FileSiteCase
 
     /** @var array<string, array<string, mixed>> what changed in each of them */
     private const KINDS = [
+        'attached-site-visitor' => ['hidden' => true],
+        'attached-owner-visitor' => ['hidden' => true],
         'html-visitor' => ['name' => 'x.bin'],
         'restricted-admin' => ['name' => 'x.bin'],
         'recorded-admin' => ['name' => 'x.bin'],

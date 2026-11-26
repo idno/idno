@@ -18,6 +18,9 @@ final class FlysystemFile extends \Idno\Files\File
 {
     public string $internal_filename = '';
 
+    /** When the stored bytes were last written, as a timestamp; null when the filesystem cannot say */
+    public ?int $lastModified = null;
+
     /**
      * @param \Closure(): \Psr\Log\LoggerInterface $logger
      */
@@ -34,6 +37,7 @@ final class FlysystemFile extends \Idno\Files\File
         $this->file['_id']       = $stored->id;
         $this->file['length']    = $stored->size;
         $this->internal_filename = $internalFilename;
+        $this->lastModified      = $stored->lastModified;
     }
 
     /**

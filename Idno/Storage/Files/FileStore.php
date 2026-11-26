@@ -97,7 +97,14 @@ final class FileStore
             throw new FileStoreException('The file could not be read.', 0, $e);
         }
 
-        return new StoredFile($id, $this->readMetadata($path), $size);
+        // A file's bytes never change under its id, so its own modification time dates it; a filesystem that cannot say leaves it unknown
+        try {
+            $modified = $this->filesystem->lastModified($path);
+        } catch (FilesystemException) {
+            $modified = null;
+        }
+
+        return new StoredFile($id, $this->readMetadata($path), $size, $modified);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Idno\Legacy;
 use Idno\Core\Idno;
 use Idno\Http\Controller\File\FileCaching;
 use Idno\Http\Controller\File\FileLookup;
+use Idno\Http\Controller\File\FileOutcome;
 use Idno\Http\Controller\File\ServedFile;
 use Idno\Http\Controller\File\StoredFiles;
 
@@ -19,7 +20,7 @@ use Idno\Http\Controller\File\StoredFiles;
  * earlier release has no mark: the one the settings record is an archive, and restricted all the same (the setting is the request's own, loaded from the
  * database, not an entity).
  *
- * A file attached to an entity is for those who may read it: the entity is loaded whether or not the viewer can see it (a lookup that respected access would
+ * A file attached to an entity is for those who may read it (to anyone else it does not exist: the outcome is the one of a missing file): the entity is loaded whether or not the viewer can see it (a lookup that respected access would
  * not find it, and the check would be skipped), and its `canRead()` decides. A file attached to a post that is not public or not published is restricted:
  * no shared cache keeps it.
  */
@@ -30,7 +31,7 @@ final class LegacyStoredFiles implements StoredFiles
         // (an id of '0' is no id, as the legacy page took it)
         $object = in_array($id, ['', '0'], true) ? false : \Idno\Entities\File::getByID($id);
         if (empty($object)) {
-            return new FileLookup('missing');
+            return new FileLookup(FileOutcome::Missing);
         }
 
         $adminOnly = is_array($object->file) && (array_key_exists('restricted', $object->file) || array_key_exists('site_export', $object->file));
@@ -39,7 +40,7 @@ final class LegacyStoredFiles implements StoredFiles
             $adminOnly = is_string($recorded) && $recorded !== '' && strcasecmp($recorded, (string) ($object->file['_id'] ?? '')) === 0;
         }
         if ($adminOnly && !Idno::site()->session()->isAdmin()) {
-            return new FileLookup('administrators-only');
+            return new FileLookup(FileOutcome::AdministratorsOnly);
         }
 
         $restricted = $adminOnly;
@@ -55,25 +56,27 @@ final class LegacyStoredFiles implements StoredFiles
             }
             if ($parentEntity) {
                 if (!$parentEntity->canRead()) {
-                    return new FileLookup('not-readable');
+                    // (the file of a post the viewer may not read is a file that is not there: nothing tells them it exists)
+                    return new FileLookup(FileOutcome::Missing);
                 }
                 $publishStatus = $parentEntity->getPublishStatus();
                 $restricted = $adminOnly || ($parentEntity->access !== 'PUBLIC') || (!empty($publishStatus) && $publishStatus != 'published');
             }
         }
 
-        // The time the file last changed: the object's `updated`, else its `created`, else now
+        // The time the file last changed: the object's `updated`, else its `created`, else the time its stored bytes were written (a file never changes
+        // under its id), else unknown
         if (!empty($object->updated)) {
             $changed = (int) $object->updated;
         } elseif (!empty($object->created)) {
             $changed = (int) $object->created;
         } else {
-            $changed = time();
+            $changed = $object instanceof \Idno\Legacy\FlysystemFile ? $object->lastModified : null;
         }
         $mimeType = !empty($object->file['mime_type']) ? $object->file['mime_type'] : 'application/octet-stream';
         $mimeType = (string) preg_replace('/[\r\n]+.*/s', '', (string) $mimeType);
 
-        return new FileLookup('served', new ServedFile(
+        return new FileLookup(FileOutcome::Served, new ServedFile(
             (int) $object->getSize(),
             $mimeType,
             $changed,

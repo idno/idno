@@ -13,14 +13,14 @@ final class ServedFile
     /**
      * @param int                 $size        The size in bytes
      * @param string              $mimeType    The stored type, with any line break cut
-     * @param int                 $lastChange  When it last changed, as a timestamp
+     * @param int|null            $lastChange  When it last changed, as a timestamp; null when that is unknown (the page then sends no date and answers no conditional request)
      * @param \Closure(): mixed   $open        A stream of its bytes, or false when it cannot be read
      * @param (\Closure(): mixed)|null $passThrough Writes the whole file to the output (ending the output buffers first), or null when the file cannot
      */
     public function __construct(
         public readonly int $size,
         public readonly string $mimeType,
-        public readonly int $lastChange,
+        public readonly ?int $lastChange,
         public readonly FileCaching $caching,
         private readonly \Closure $open,
         private readonly ?\Closure $passThrough,

@@ -6,6 +6,7 @@ namespace Tests\Unit\Http\Controller\File;
 
 use Idno\Http\Controller\File\FileCaching;
 use Idno\Http\Controller\File\FileLookup;
+use Idno\Http\Controller\File\FileOutcome;
 use Idno\Http\Controller\File\FilePages;
 use Idno\Http\Controller\File\ServedFile;
 use Idno\Http\Controller\File\StoredFiles;
@@ -113,7 +114,7 @@ final class FilePagesTest extends TestCase
 
     private function serve(ServedFile $file, string $rest = '', string $method = 'GET', array $headers = []): Response
     {
-        $this->files->lookup = new FileLookup('served', $file);
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $file);
 
         return $this->pages->serve($this->context($method, $headers), 'abc', $rest);
     }
@@ -130,7 +131,7 @@ final class FilePagesTest extends TestCase
 
     public function testAFileThatIsNotThereIsTheMissingPage(): void
     {
-        $this->files->lookup = new FileLookup('missing');
+        $this->files->lookup = new FileLookup(FileOutcome::Missing);
 
         $response = $this->pages->serve($this->context(), 'abc', '');
 
@@ -141,7 +142,7 @@ final class FilePagesTest extends TestCase
 
     public function testAnAdministratorsOnlyFileIsRefusedToAnyoneElseAndNoCacheMayKeepTheRefusal(): void
     {
-        $this->files->lookup = new FileLookup('administrators-only');
+        $this->files->lookup = new FileLookup(FileOutcome::AdministratorsOnly);
         $page = $this->context();
 
         $response = $this->pages->serve($page, 'abc', '');
@@ -153,24 +154,95 @@ final class FilePagesTest extends TestCase
         $this->assertSame([], $page->headers(), 'nothing that describes the file is sent');
     }
 
-    public function testAFileTheAttachedEntityRefusesTheViewerIsRefusedWithTheSessionsCaching(): void
+    public function testAFileTheViewerMayNotHaveBecauseOfItsPostIsAMissingFile(): void
     {
-        $this->files->lookup = new FileLookup('not-readable');
+        // (the adapter says a file attached to a post the viewer may not read is missing: the page answers it as it answers any missing file)
+        $this->files->lookup = new FileLookup(FileOutcome::Missing);
         $page = $this->context();
 
         $response = $this->pages->serve($page, 'abc', '');
 
-        $this->assertSame(403, $response->getStatusCode());
-        $this->assertSame('', $response->getContent());
+        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame(['pages/404'], array_column($this->drawer->templates, 0));
         $this->assertFalse($page->ownsCaching());
         $this->assertSame([], $page->headers());
-        $this->assertFalse($this->files->released);
+    }
+
+    public function testAFileWhoseAgeIsUnknownHasNoDateAndAnswersNoConditionalRequest(): void
+    {
+        $file = new ServedFile(65, 'image/png', null, FileCaching::Public, fn () => $this->served()->open(), null);
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $file);
+        $page = $this->context('GET', ['If-Modified-Since' => HttpDate::format(self::NOW + 86400)]);
+
+        $response = $this->pages->serve($page, 'abc', '');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertArrayNotHasKey('Last-Modified', $page->headers());
+        $this->assertNull($response->headers->get('Last-Modified'));
+    }
+
+    public function testAShownFileIsSentAsItsCanonicalTypeInASandbox(): void
+    {
+        foreach (['IMAGE/PNG; x=y' => 'image/png', '  Audio/MPEG' => 'audio/mpeg', 'video/mp4' => 'video/mp4'] as $stored => $sent) {
+            $page = $this->context();
+            $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served($stored));
+
+            $response = $this->pages->serve($page, 'abc', '');
+
+            $this->assertSame($sent, $response->headers->get('Content-Type'), $stored);
+            $this->assertSame(['sandbox'], $page->headers()['Content-Security-Policy'], $stored);
+            $this->assertNull($response->headers->get('Content-Disposition'));
+        }
+    }
+
+    public function testAPdfIsShownWithNoSandboxAndADownloadIsInOne(): void
+    {
+        $page = $this->context();
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served('application/pdf'));
+        $this->pages->serve($page, 'abc', '');
+        $this->assertArrayNotHasKey('Content-Security-Policy', $page->headers());
+
+        $page = $this->context();
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served('text/html'));
+        $response = $this->pages->serve($page, 'abc', '/x.html');
+        $this->assertSame(['sandbox'], $page->headers()['Content-Security-Policy']);
+        $this->assertSame('attachment; filename="x.html"', $response->headers->get('Content-Disposition'));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function hostileTypes(): array
+    {
+        return [
+            'a NUL byte' => ["text/html\0"],
+            'a NUL inside' => ["image/p\0ng"],
+            'a line break' => ["text/html\r\nX-Evil: 1"],
+            'a control character' => ["text/html\x07"],
+            'a quote' => ['text/html; x="a"'],
+            'no subtype' => ['text'],
+            'a space in a token' => ['te xt/html'],
+            'an angle bracket' => ['text/<html>'],
+            'nothing' => [''],
+        ];
+    }
+
+    /**
+     * @dataProvider hostileTypes
+     */
+    public function testAStoredTypeThatIsNotAMediaTypeNeverReachesAHeader(string $stored): void
+    {
+        $response = $this->serve($this->served($stored), '/x');
+
+        $this->assertSame('application/octet-stream', $response->headers->get('Content-Type'), json_encode($stored));
+        $this->assertSame('attachment; filename="x"', $response->headers->get('Content-Disposition'));
+        $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
     }
 
     public function testAWholeFileIsStreamedWithItsLengthTypeAndTheHeadersOfAPublicFile(): void
     {
         $page = $this->context();
-        $this->files->lookup = new FileLookup('served', $this->served());
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served());
 
         $response = $this->pages->serve($page, 'abc', '/photo.png');
 
@@ -199,7 +271,7 @@ final class FilePagesTest extends TestCase
     public function testAPublicFilesExpiresIsAnHttpDate(): void
     {
         $page = $this->context();
-        $this->files->lookup = new FileLookup('served', $this->served());
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served());
 
         $this->pages->serve($page, 'abc', '');
 
@@ -213,7 +285,7 @@ final class FilePagesTest extends TestCase
     public function testAFileOnlyItsReadersMayHaveIsKeptByNoSharedCache(): void
     {
         $page = $this->context();
-        $this->files->lookup = new FileLookup('served', $this->served(caching: FileCaching::Restricted));
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served(caching: FileCaching::Restricted));
 
         $this->pages->serve($page, 'abc', '');
 
@@ -223,7 +295,7 @@ final class FilePagesTest extends TestCase
     public function testAnAdministratorsFileIsKeptByNoCacheAtAll(): void
     {
         $page = $this->context();
-        $this->files->lookup = new FileLookup('served', $this->served('application/zip', FileCaching::AdministratorsOnly));
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served('application/zip', FileCaching::AdministratorsOnly));
 
         $this->pages->serve($page, 'abc', '');
 
@@ -400,7 +472,7 @@ final class FilePagesTest extends TestCase
             foreach ($headers as $name => $value) {
                 $request->headers->set($name, $value);
             }
-            $this->files->lookup = new FileLookup('served', $unreadable);
+            $this->files->lookup = new FileLookup(FileOutcome::Served, $unreadable);
 
             $response = $this->pages->serve(new PageContext($request, new SitePage('Idno\Pages\File\View')), 'abc', '');
             $response->prepare($request);
@@ -419,7 +491,7 @@ final class FilePagesTest extends TestCase
 
     public function testARangeWithASatisfiedConditionIsNotModified(): void
     {
-        $this->files->lookup = new FileLookup('served', $this->served());
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served());
         $since = HttpDate::format(self::CHANGED);
 
         foreach ([[], ['Range' => 'bytes=0-9']] as $range) {
@@ -436,7 +508,7 @@ final class FilePagesTest extends TestCase
 
     public function testACopyThatIsOlderThanTheFileIsSentTheFileAndSoIsOneBesideAnIfNoneMatch(): void
     {
-        $this->files->lookup = new FileLookup('served', $this->served());
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served());
 
         $older = $this->pages->serve($this->context('GET', ['If-Modified-Since' => HttpDate::format(self::CHANGED - 1)]), 'abc', '');
         $this->assertSame(200, $older->getStatusCode());
@@ -445,27 +517,33 @@ final class FilePagesTest extends TestCase
         $this->assertSame(200, $beside->getStatusCode(), 'If-Modified-Since is ignored beside an If-None-Match');
     }
 
-    public function testAnAdministratorsOnlyFileIsNeverAnsweredNotModified(): void
+    public function testAnAdministratorsFileIsRevalidatedLikeAnyOther(): void
     {
-        $this->files->lookup = new FileLookup('served', $this->served('application/zip', FileCaching::AdministratorsOnly));
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served('application/zip', FileCaching::AdministratorsOnly));
+        $page = $this->context('GET', ['If-Modified-Since' => HttpDate::format(self::CHANGED)]);
 
-        $response = $this->pages->serve($this->context('GET', ['If-Modified-Since' => HttpDate::format(self::CHANGED + 86400)]), 'abc', '');
-
-        $this->assertSame(200, $response->getStatusCode());
+        $this->expectException(PageNotModified::class);
+        try {
+            $this->pages->serve($page, 'abc', '');
+        } finally {
+            $this->assertSame(['Cache-Control' => 'private, no-store', 'Pragma' => 'no-cache'], $page->caching(), 'its 304 carries its caching lines');
+        }
     }
 
-    public function testTheConditionIsJudgedBeforeTheSessionIsLetGoOfAndBeforeAnythingIsAsked(): void
+    public function testAFilesDateAndCachingLinesAreOnTheContextWhenItsCopyIsJudgedCurrent(): void
     {
-        $this->files->lookup = new FileLookup('served', $this->served());
+        $this->files->lookup = new FileLookup(FileOutcome::Served, $this->served());
         $page = $this->context('GET', ['If-Modified-Since' => HttpDate::format(self::CHANGED)]);
 
         try {
             $this->pages->serve($page, 'abc', '');
+            $this->fail('the copy is current');
         } catch (PageNotModified) {
         }
 
-        $this->assertFalse($page->ownsCaching(), 'a 304 carries the session\'s caching lines');
-        $this->assertSame([], $page->headers());
+        $this->assertSame([HttpDate::format(self::CHANGED)], $page->headers()['Last-Modified']);
+        $this->assertSame('public', $page->caching()['Cache-Control']);
+        $this->assertSame(0, $this->files->opened);
     }
 }
 
@@ -481,7 +559,7 @@ final class FileStoreDouble implements StoredFiles
 
     public function __construct()
     {
-        $this->lookup = new FileLookup('missing');
+        $this->lookup = new FileLookup(FileOutcome::Missing);
     }
 
     public function lookUp(string $id): FileLookup

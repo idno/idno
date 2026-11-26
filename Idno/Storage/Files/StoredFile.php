@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Idno\Storage\Files;
 
 /**
- * A stored file's identity, metadata and size. The bytes are read from the store as a stream.
+ * A stored file's identity, metadata, size and the time its bytes were last written (null when the filesystem cannot say). The bytes are read from the store as a stream.
  */
 final class StoredFile
 {
@@ -16,6 +16,7 @@ final class StoredFile
         public readonly string $id,
         public readonly array $metadata,
         public readonly int $size,
+        public readonly ?int $lastModified = null,
     )
     {
     }

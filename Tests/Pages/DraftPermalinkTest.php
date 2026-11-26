@@ -111,7 +111,8 @@ namespace Tests\Pages {
 
             foreach (['draft', 'private'] as $kind) {
                 $result = Webservice::get($urls[$kind]);
-                $this->assertEquals(403, $result['response'], "An anonymous request for the attachment of a $kind post should be denied.");
+                // (a file of a post the visitor may not read is a file that is not there)
+                $this->assertEquals(404, $result['response'], "An anonymous request for the attachment of a $kind post should be denied.");
                 $this->assertStringNotContainsString($marker, (string) $result['content'], "An anonymous request for the attachment of a $kind post should not reveal it.");
             }
 

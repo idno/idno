@@ -283,4 +283,65 @@ final class FileStoreTest extends TestCase
         $this->assertLessThan(4 * 1024 * 1024, $after - $before);
         $this->assertSame(16 * 1024 * 1024, $store->find($id)->size);
     }
+
+    public function testAStoredFileCarriesItsOwnModificationTimeOnALocalDirectory(): void
+    {
+        $this->tmp = sys_get_temp_dir() . '/idno-filestore-mtime-' . bin2hex(random_bytes(6));
+        mkdir($this->tmp);
+        $store = new FileStore(new Filesystem(new LocalFilesystemAdapter($this->tmp)), 'example.com');
+        $id    = $store->store($this->stream('hello'), ['filename' => 'a.txt']);
+        $at    = 1_700_000_000;
+        $this->assertTrue(touch($this->tmp . '/' . $store->path($id), $at));
+
+        $this->assertSame($at, $store->find($id)->lastModified);
+    }
+
+    public function testTheModificationTimeOfAnInMemoryFileIsWhatTheAdapterSays(): void
+    {
+        $store = new FileStore($this->memory(), 'example.com');
+        $id    = $store->store($this->stream('hello'), []);
+
+        $found = $store->find($id);
+        $this->assertIsInt($found->lastModified);
+        $this->assertEqualsWithDelta(time(), $found->lastModified, 30);
+    }
+
+    public function testAnAdapterThatCannotSayLeavesTheModificationTimeUnknownAndThrowsNothing(): void
+    {
+        $inner = $this->memory();
+        $filesystem = new class($inner) extends Filesystem {
+            public function __construct(private readonly Filesystem $inner)
+            {
+                parent::__construct(new InMemoryFilesystemAdapter());
+            }
+
+            public function fileExists(string $location): bool
+            {
+                return $this->inner->fileExists($location);
+            }
+
+            public function fileSize(string $path): int
+            {
+                return $this->inner->fileSize($path);
+            }
+
+            public function read(string $location): string
+            {
+                return $this->inner->read($location);
+            }
+
+            public function lastModified(string $path): int
+            {
+                throw \League\Flysystem\UnableToRetrieveMetadata::lastModified($path);
+            }
+        };
+        $store = new FileStore($inner, 'example.com');
+        $id    = $store->store($this->stream('hello'), []);
+
+        $found = (new FileStore($filesystem, 'example.com'))->find($id);
+
+        $this->assertNotNull($found);
+        $this->assertNull($found->lastModified);
+        $this->assertSame(5, $found->size);
+    }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
+use Idno\Http\Page\HttpDate;
+
 /**
  * The site the stored files' recordings are made on: `PermalinkSiteCase`'s (Ada, Bob and Carol, and Bob's note in each state a viewer's rights differ
  * by) and, beside it, files with fixed ids: a public image, a PDF, an HTML file (which is sent as a download), a file attached to each of Bob's notes
@@ -18,6 +20,9 @@ abstract class FileSiteCase extends PermalinkSiteCase
     /** The size of every file the site holds. */
     protected const SIZE = 300;
 
+    /** When every seeded file was last written (2026-03-20 12:00:00 UTC), which is its `Last-Modified` */
+    protected const WRITTEN = 1773921600;
+
     /** Why a download is not named as it was: the legacy page took the id a second time for the name */
     protected const WHY_DOWNLOAD = 'a download is named after the last segment of its address, where the legacy page named every one after the file\'s id';
 
@@ -30,8 +35,11 @@ abstract class FileSiteCase extends PermalinkSiteCase
     /** Why an XHR request differs: the headers of the same request that is not XHR */
     protected const WHY_XHR = 'an XHR GET gets the headers of the same request that is not XHR';
 
-    /** Why a conditional request differs: the comparison was the wrong way round */
-    protected const WHY_CONDITIONAL = 'a copy is current when its date is not before the file\'s last change: the legacy comparison was the wrong way round';
+    /** Why a conditional request differs: a file is dated by its own modification time and a 304 carries its caching lines */
+    protected const WHY_CONDITIONAL = 'a file is dated by its own modification time (the legacy page dated it with the time of the request and compared the wrong way round): a copy is current when its date is not before that, and the 304 carries the file\'s caching lines and date';
+
+    /** Why a file of a post the viewer may not read differs: it is a missing file */
+    protected const WHY_HIDDEN = 'a file attached to a post the viewer may not read answers exactly what a file that is not there answers (it was a 403)';
 
     /** @var array<string, string> the id of each seeded file by name: the files of a site, by class and address */
     private static array $files = [];
@@ -51,6 +59,8 @@ abstract class FileSiteCase extends PermalinkSiteCase
         $this->seedPermalinkContent();
         $code = <<<'PHP'
         $site = \Idno\Core\Idno::site();
+        // (the administrator's API key is made here: a signed request of hers is asked for in a test)
+        \Idno\Entities\User::getByHandle('ada')->getAPIkey();
         // (a script has no request to name the site's host, which is the directory a file is stored under: the web server serves the files of its own host)
         $site->config()->host = (string) parse_url($site->config()->getURL(), PHP_URL_HOST);
         $store = \Idno\Core\Idno::container()->get(\Idno\Storage\Files\FileStore::class);
@@ -79,6 +89,10 @@ abstract class FileSiteCase extends PermalinkSiteCase
             rewind($stream);
             $store->storeAs($id, $stream, $metadata + ['length' => strlen($bytes)]);
             $ids[$name] = $id;
+        }
+        // (every file is dated by its own modification time: a fixed one, so that its Last-Modified is the same in every run)
+        foreach ($ids as $id) {
+            touch(rtrim((string) $site->config()->uploadpath, '/') . '/' . ltrim($store->path($id), '/'), 1773921600);
         }
         $site->config()->export_file_id = strtoupper($ids['recorded']);
         $site->config()->save();
@@ -109,8 +123,9 @@ abstract class FileSiteCase extends PermalinkSiteCase
     }
 
     /**
-     * The answer with a `Last-Modified` that is the time of the request (within ten seconds of its `Date`) replaced by a marker, so that it can be
-     * recorded; a `Last-Modified` that is anything else is kept as it was sent.
+     * The answer with its `Last-Modified` replaced by a marker, so that it can be compared with a recording: the legacy page sent the time of the request
+     * (a stored file had no change time it could see) and the page that replaced it sends the file's own modification time (`WRITTEN`); the marker stands for
+     * both. A `Last-Modified` that is neither is kept as it was sent.
      */
     protected static function withTheRequestTimeMarked(SiteResponse $r): SiteResponse
     {
@@ -118,7 +133,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
         $mark = static function (string $value) use ($date): string {
             $at = strtotime($value);
 
-            return $date !== false && $at !== false && abs($at - $date) <= 10 ? '<the time of the request>' : $value;
+            return $at === self::WRITTEN || ($date !== false && $at !== false && abs($at - $date) <= 10) ? '<the time of the request>' : $value;
         };
         $headers = [];
         foreach ($r->headers as $name => $value) {
@@ -130,6 +145,27 @@ abstract class FileSiteCase extends PermalinkSiteCase
         }
 
         return new SiteResponse($r->status, $headers, $r->body, $lines);
+    }
+
+    /**
+     * The answer as it is recorded: its `Last-Modified` marked (see withTheRequestTimeMarked()), and the `Content-Security-Policy: sandbox` that every answer
+     * that sends a file (200, 206 or 416) but a PDF carries asserted and taken off, so that the recordings, which are the legacy page's, hold what they held.
+     */
+    protected static function forTheRecording(SiteResponse $r): SiteResponse
+    {
+        $r = self::withTheRequestTimeMarked($r);
+        $sendsAFile = in_array($r->status, [200, 206, 416], true) && $r->header('X-Content-Type-Options') === 'nosniff';
+        if ($sendsAFile && $r->header('Content-Type') !== 'application/pdf') {
+            \PHPUnit\Framework\Assert::assertSame('sandbox', $r->header('Content-Security-Policy'), 'a file is sent in a sandbox');
+        }
+        $strip = static fn (string $line): bool => !str_starts_with(strtolower($line), 'content-security-policy:');
+
+        return new SiteResponse(
+            $r->status,
+            array_filter($r->headers, static fn ($name): bool => strcasecmp((string) $name, 'content-security-policy') !== 0, ARRAY_FILTER_USE_KEY),
+            $r->body,
+            array_values(array_filter($r->lines, $strip))
+        );
     }
 
     /**
@@ -170,7 +206,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
      */
     protected function recordFile(string $case, string $method, string $path, array $headers = [], string $viewer = 'visitor'): SiteResponse
     {
-        $answer = $this->record($case, $method, $path, $headers, $viewer, null, self::withTheRequestTimeMarked(...));
+        $answer = $this->record($case, $method, $path, $headers, $viewer, null, self::forTheRecording(...));
         $this->holdTheChangedAnswer($case, $answer, $method, $path, $headers, $viewer);
 
         return $answer;
@@ -186,7 +222,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
         $response = null;
         foreach (range(1, static::passes()) as $_) {
             $response = $this->rawRequest($method, $path, $headers);
-            $this->assertRecordedAnswer(static::GROUP, $case, self::withTheRequestTimeMarked($response));
+            $this->assertRecordedAnswer(static::GROUP, $case, self::forTheRecording($response));
         }
 
         return $response;
@@ -203,13 +239,27 @@ abstract class FileSiteCase extends PermalinkSiteCase
         if (isset($kind['xhr'])) {
             // the headers of the same request that is not XHR, and the body the legacy page gave
             $plain = $this->site()->request($method, $path, $this->asViewer($viewer, array_diff_key($headers, ['X-Requested-With' => true])));
-            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::withTheRequestTimeMarked($answer)), $this->baseUrl()), 2);
-            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::withTheRequestTimeMarked($plain)), $this->baseUrl()), 2);
+            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::forTheRecording($answer)), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::forTheRecording($plain)), $this->baseUrl()), 2);
             $this->assertSame($plainHeaders, $answeredHeaders, $case . ': the headers of the same request that is not XHR');
             $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
             $recordedBody = explode("\n\n", $recorded, 2)[1];
             $this->assertSame($recordedBody, $answeredBody, $case . ': the body is what it was');
             $this->assertCount(1, $answer->lines('cache-control'), $case . ': one Cache-Control line');
+
+            return;
+        }
+        if (isset($kind['hidden'])) {
+            // a file of a post the viewer may not read answers exactly what a file that is not there answers, for the same request
+            $this->assertSame(1, preg_match('/[0-9a-f]{32}/', $path, $id), $case);
+            $zeros = str_repeat('0', 32);
+            $missing = $this->site()->request($method, str_replace($id[0], $zeros, $path), $this->asViewer($viewer, $headers));
+            $this->assertSame(404, $answer->status, $case);
+            $this->assertSame(
+                self::normalise(self::forTheRecording($missing), $this->baseUrl()),
+                str_replace($id[0], $zeros, self::normalise(self::forTheRecording($answer), $this->baseUrl())),
+                $case . ': exactly the answer of a missing file'
+            );
 
             return;
         }
@@ -229,13 +279,14 @@ abstract class FileSiteCase extends PermalinkSiteCase
     /**
      * Holds the answer of a case that differs from its recording ON PURPOSE to what changed and nothing else, by the case's kind (a class's `KINDS`, case =>
      * one of `name` (the download's name), `refused` (a 416 says it has no body), `page` (the 404 page of the legacy router), `status` (the status that
-     * the corrected comparison gives, with the `bytes` it holds (`true` is the whole file) and the `download` name it is given), `xhr` (the headers of the same request that is not XHR)).
+     * the corrected comparison gives, with the `bytes` it holds (`true` is the whole file), the `download` name it is given and, for a 304, the `caching`
+     * profile its lines are), `like` (the recording of another case), `hidden` (the answer of a missing file), `xhr` (the headers of the same request that is not XHR)).
      *
      * @param array<string, mixed> $kind
      */
     protected function assertTheAnswerThatChanged(string $case, SiteResponse $answer, array $kind, string $nonXhrPath = ''): void
     {
-        $marked = self::withTheRequestTimeMarked($answer);
+        $marked = self::forTheRecording($answer);
         $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
         if (isset($kind['name']) || isset($kind['refused'])) {
             if (isset($kind['name'])) {
@@ -256,13 +307,31 @@ abstract class FileSiteCase extends PermalinkSiteCase
             }
             $this->assertNull($answer->header('Content-Disposition'), $case);
         }
+        if (isset($kind['like'])) {
+            $sibling = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['like'] . '.txt');
+            $this->assertSame($sibling, self::normalise($marked, $this->baseUrl()), $case . ': the recording of ' . $kind['like']);
+        }
+        if (isset($kind['similar'])) {
+            // the recording of another case, but for the address and the name the download is given
+            $strip = static fn (string $text): string => (string) preg_replace('/^(link: [^\n]*rel="self"|content-disposition: [^\n]*)\n/m', '', $text);
+            $sibling = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['similar'] . '.txt');
+            $this->assertSame($strip($sibling), $strip(self::normalise($marked, $this->baseUrl())), $case . ': like ' . $kind['similar']);
+        }
         if (isset($kind['status'])) {
             $this->assertSame($kind['status'], $answer->status, $case);
             if ($kind['status'] === 304) {
                 $this->assertSame('', $answer->body, $case . ': no body');
-                $this->assertNull($answer->header('Last-Modified'), $case . ': a 304 says nothing of the file');
+                $this->assertSame(HttpDate::format(self::WRITTEN), $answer->header('Last-Modified'), $case . ': a 304 carries the file\'s date');
                 $this->assertNull($answer->header('Content-Length'), $case);
                 $this->assertNull($answer->header('Content-Range'), $case);
+                $caching = $kind['caching'];
+                $this->assertSame(match ($caching) {
+                    'public' => 'public', 'restricted' => 'private, no-cache', default => 'private, no-store',
+                }, $answer->header('Cache-Control'), $case . ': the caching lines of its profile');
+                $this->assertSame(match ($caching) {
+                    'public' => 'public', 'restricted' => 'no-cache', default => 'no-cache',
+                }, $answer->header('Pragma'), $case);
+                $this->assertSame(1, count($answer->lines('cache-control')), $case);
             }
             if (isset($kind['bytes'])) {
                 $this->assertSame($kind['bytes'] === true ? self::bytes() : $kind['bytes'], $answer->body, $case);

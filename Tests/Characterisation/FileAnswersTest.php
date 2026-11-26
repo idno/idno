@@ -47,9 +47,6 @@ final class FileAnswersTest extends FileSiteCase
         'html-name-with-a-space' => self::WHY_DOWNLOAD,
         'html-upper-case-id' => self::WHY_DOWNLOAD,
         'zip-no-name' => self::WHY_DOWNLOAD,
-        'ims-restricted-before-admin' => self::WHY_DOWNLOAD,
-        'ims-restricted-after-admin' => self::WHY_DOWNLOAD,
-        'ims-recorded-after-admin' => self::WHY_DOWNLOAD,
         'range-unsatisfiable' => self::WHY_REFUSED,
         'range-starts-at-the-size' => self::WHY_REFUSED,
         'range-inverted' => self::WHY_REFUSED,
@@ -65,20 +62,33 @@ final class FileAnswersTest extends FileSiteCase
         'image-doubled-slash-after-file' => self::WHY_NOT_SERVED,
         'html-name-dots' => 'an encoded slash in a name is a slash to the route (the legacy router, given the path with its dot segments resolved by the rig\'s server, answered the 404 page): the download is named after the last segment',
         'html-name-hostile' => 'the route takes any character in a name, a line break too, which the legacy pattern did not match (the 404 page): the download\'s name replaces every character that is not a letter, a digit or one of ._-',
-        'xhr-restricted-visitor' => self::WHY_XHR,
-        'xhr-restricted-admin' => self::WHY_XHR,
-        'xhr-missing' => self::WHY_XHR,
+        'attached-site-visitor' => self::WHY_HIDDEN,
+        'attached-owner-visitor' => self::WHY_HIDDEN,
+        'attached-owner-member' => self::WHY_HIDDEN,
+        'attached-draft-visitor' => self::WHY_HIDDEN,
+        'attached-draft-member' => self::WHY_HIDDEN,
+        'range-attached-owner-visitor' => self::WHY_HIDDEN,
+        'range-attached-owner-unsatisfiable-visitor' => self::WHY_HIDDEN,
+        'head-attached-owner-visitor' => self::WHY_HIDDEN,
+        'head-attached-draft-visitor' => self::WHY_HIDDEN,
+        'ims-attached-owner-after-visitor' => self::WHY_HIDDEN,
         'ims-image-before' => self::WHY_CONDITIONAL,
         'ims-image-after' => self::WHY_CONDITIONAL,
         'ims-image-before-head' => self::WHY_CONDITIONAL,
         'ims-image-after-head' => self::WHY_CONDITIONAL,
         'ims-image-before-range' => self::WHY_CONDITIONAL,
         'ims-image-after-range' => self::WHY_CONDITIONAL,
-        'ims-image-garbage' => self::WHY_CONDITIONAL . '; a date that is not an HTTP date is ignored',
         'ims-html-before' => self::WHY_CONDITIONAL,
         'ims-html-after' => self::WHY_CONDITIONAL,
         'ims-attached-owner-before-owner' => self::WHY_CONDITIONAL,
         'ims-attached-owner-after-owner' => self::WHY_CONDITIONAL,
+        'ims-restricted-before-admin' => self::WHY_CONDITIONAL,
+        'ims-restricted-after-admin' => self::WHY_CONDITIONAL,
+        'ims-recorded-after-admin' => self::WHY_CONDITIONAL,
+        'ims-image-garbage' => self::WHY_CONDITIONAL . '; a date that is not an HTTP date is ignored',
+        'xhr-restricted-visitor' => self::WHY_XHR,
+        'xhr-restricted-admin' => self::WHY_XHR,
+        'xhr-missing' => self::WHY_XHR,
     ];
 
     /**
@@ -105,9 +115,6 @@ final class FileAnswersTest extends FileSiteCase
         'html-name-with-a-space' => ['name' => 'some_name.html'],
         'html-upper-case-id' => ['name' => 'download'],
         'zip-no-name' => ['name' => 'download'],
-        'ims-restricted-before-admin' => ['name' => 'download'],
-        'ims-restricted-after-admin' => ['name' => 'download'],
-        'ims-recorded-after-admin' => ['name' => 'download'],
         'range-unsatisfiable' => ['refused' => true],
         'range-starts-at-the-size' => ['refused' => true],
         'range-inverted' => ['refused' => true],
@@ -121,22 +128,35 @@ final class FileAnswersTest extends FileSiteCase
         'post-visitor' => ['page' => 404],
         'delete-visitor' => ['page' => 404],
         'image-doubled-slash-after-file' => ['page' => 404],
-        'html-name-dots' => ['status' => 200, 'bytes' => true, 'download' => 'x.html'],
-        'html-name-hostile' => ['status' => 200, 'bytes' => true, 'download' => '__x______X-A_b.html'],
+        'html-name-dots' => ['similar' => 'html-no-name', 'status' => 200, 'bytes' => true, 'download' => 'x.html'],
+        'html-name-hostile' => ['similar' => 'html-no-name', 'status' => 200, 'bytes' => true, 'download' => '__x______X-A_b.html'],
+        'attached-site-visitor' => ['hidden' => true],
+        'attached-owner-visitor' => ['hidden' => true],
+        'attached-owner-member' => ['hidden' => true],
+        'attached-draft-visitor' => ['hidden' => true],
+        'attached-draft-member' => ['hidden' => true],
+        'range-attached-owner-visitor' => ['hidden' => true],
+        'range-attached-owner-unsatisfiable-visitor' => ['hidden' => true],
+        'head-attached-owner-visitor' => ['hidden' => true],
+        'head-attached-draft-visitor' => ['hidden' => true],
+        'ims-attached-owner-after-visitor' => ['hidden' => true],
+        'ims-image-before' => ['status' => 304, 'caching' => 'public'],
+        'ims-image-after' => ['status' => 304, 'caching' => 'public'],
+        'ims-image-before-head' => ['status' => 304, 'caching' => 'public'],
+        'ims-image-after-head' => ['status' => 304, 'caching' => 'public'],
+        'ims-image-before-range' => ['status' => 304, 'caching' => 'public'],
+        'ims-image-after-range' => ['status' => 304, 'caching' => 'public'],
+        'ims-html-before' => ['status' => 304, 'caching' => 'public'],
+        'ims-html-after' => ['status' => 304, 'caching' => 'public'],
+        'ims-attached-owner-before-owner' => ['status' => 304, 'caching' => 'restricted'],
+        'ims-attached-owner-after-owner' => ['status' => 304, 'caching' => 'restricted'],
+        'ims-restricted-before-admin' => ['status' => 304, 'caching' => 'administrators'],
+        'ims-restricted-after-admin' => ['status' => 304, 'caching' => 'administrators'],
+        'ims-recorded-after-admin' => ['status' => 304, 'caching' => 'administrators'],
+        'ims-image-garbage' => ['like' => 'image-no-name'],
         'xhr-restricted-visitor' => ['xhr' => true],
         'xhr-restricted-admin' => ['xhr' => true],
         'xhr-missing' => ['xhr' => true],
-        'ims-image-before' => ['status' => 200, 'bytes' => true],
-        'ims-image-after' => ['status' => 304],
-        'ims-image-before-head' => ['status' => 200],
-        'ims-image-after-head' => ['status' => 304],
-        'ims-image-before-range' => ['status' => 206, 'bytes' => 'ABCDEFGHIJ'],
-        'ims-image-after-range' => ['status' => 304],
-        'ims-image-garbage' => ['status' => 200, 'bytes' => true],
-        'ims-html-before' => ['status' => 200, 'bytes' => true, 'download' => 'download'],
-        'ims-html-after' => ['status' => 304],
-        'ims-attached-owner-before-owner' => ['status' => 200, 'bytes' => true],
-        'ims-attached-owner-after-owner' => ['status' => 304],
     ];
 
     /**
@@ -348,8 +368,7 @@ final class FileAnswersTest extends FileSiteCase
     }
 
     /**
-     * A conditional request. A file is as old as the moment it is asked for (its `Last-Modified` is the time of the request), so the dates are one day
-     * before and one day after the moment of the request.
+     * A conditional request: the dates are one day before and one day after the moment of the request, which are both after the file was written.
      */
     public function testAConditionalRequest(): void
     {
@@ -438,8 +457,93 @@ final class FileAnswersTest extends FileSiteCase
         }
         // beside an If-None-Match the date is ignored
         $this->assertSame(200, $this->site()->request('GET', $this->fileAddress('image'), ['If-Modified-Since' => $future, 'If-None-Match' => '"x"'])->status);
-        // an archive of the site is always sent
-        $this->assertSame(200, $this->site()->request('GET', $this->fileAddress('restricted'), $this->asViewer('admin', ['If-Modified-Since' => $future]))->status);
+    }
+
+    /** A file is dated by its own modification time, and a revalidation with the date it was sent with is a 304 that carries its caching lines. */
+    public function testARevalidationIsAnswered304WithTheFilesCachingLinesForEveryProfile(): void
+    {
+        $cases = [
+            ['image', 'visitor', ['Cache-Control' => 'public', 'Pragma' => 'public']],
+            ['attached-owner', 'owner', ['Cache-Control' => 'private, no-cache', 'Pragma' => 'no-cache']],
+            ['restricted', 'admin', ['Cache-Control' => 'private, no-store', 'Pragma' => 'no-cache']],
+        ];
+        foreach ($cases as [$file, $viewer, $lines]) {
+            $first = $this->site()->request('GET', $this->fileAddress($file), $this->asViewer($viewer));
+            $this->assertSame(200, $first->status, $file);
+            $date = $first->header('Last-Modified');
+            $this->assertSame(HttpDate::format(self::WRITTEN), $date, $file . ': the file\'s own modification time, not the time of the request');
+
+            $again = $this->site()->request('GET', $this->fileAddress($file), $this->asViewer($viewer, ['If-Modified-Since' => (string) $date]));
+            $this->assertSame(304, $again->status, $file);
+            $this->assertSame('', $again->body);
+            $this->assertSame($date, $again->header('Last-Modified'), $file);
+            foreach ($lines as $name => $value) {
+                $this->assertSame([$value], $again->lines($name), $file . ' ' . $name);
+            }
+            $this->assertNull($again->header('Content-Length'));
+
+            // a copy from before the file was written is sent the file, a range of it a range
+            $older = ['If-Modified-Since' => HttpDate::format(self::WRITTEN - 1)];
+            $this->assertSame(200, $this->site()->request('GET', $this->fileAddress($file), $this->asViewer($viewer, $older))->status, $file);
+            $this->assertSame(206, $this->site()->request('GET', $this->fileAddress($file), $this->asViewer($viewer, $older + ['Range' => 'bytes=0-9']))->status, $file);
+            // and a satisfied one with a range is still a 304
+            $this->assertSame(304, $this->site()->request('GET', $this->fileAddress($file), $this->asViewer($viewer, ['If-Modified-Since' => (string) $date, 'Range' => 'bytes=0-9']))->status, $file);
+        }
+    }
+
+    /** A file of a post the viewer may not read is a file that is not there, for every request and requester, a conditional one and an XHR one too. */
+    public function testAHiddenFileIsAMissingFileForEveryRequest(): void
+    {
+        $missing = '/file/' . str_repeat('0', 32);
+        $date = HttpDate::format(self::WRITTEN);
+        $requests = [
+            ['GET', []], ['HEAD', []], ['GET', ['Range' => 'bytes=0-9']], ['GET', ['Range' => 'bytes=999999-']],
+            ['GET', ['If-Modified-Since' => $date]], ['HEAD', ['If-Modified-Since' => $date]], ['GET', ['X-Requested-With' => 'XMLHttpRequest']],
+            ['GET', ['X-Requested-With' => 'XMLHttpRequest', 'If-Modified-Since' => $date]],
+        ];
+        foreach (['visitor', 'member'] as $viewer) {
+            foreach (['attached-owner', 'attached-draft', 'attached-site'] as $file) {
+                if ($file === 'attached-site' && $viewer === 'member') {
+                    continue;
+                }
+                foreach ($requests as [$method, $headers]) {
+                    $id = $this->seedFiles()[$file];
+                    $hidden = $this->site()->request($method, '/file/' . $id, $this->asViewer($viewer, $headers));
+                    $absent = $this->site()->request($method, $missing, $this->asViewer($viewer, $headers));
+                    $this->assertSame(404, $hidden->status, "$viewer $file $method " . json_encode($headers));
+                    $this->assertSame(
+                        self::normalise(self::forTheRecording($absent), $this->baseUrl()),
+                        str_replace($id, str_repeat('0', 32), self::normalise(self::forTheRecording($hidden), $this->baseUrl())),
+                        "$viewer $file $method " . json_encode($headers)
+                    );
+                }
+            }
+        }
+    }
+
+    /** An administrator's SIGNED request is an API request, and an API request is never an administrator: an archive is refused. */
+    public function testASignedRequestOfAnAdministratorIsRefusedAnArchive(): void
+    {
+        $address = $this->fileAddress('restricted');
+        $answer = $this->site()->request('GET', $address, self::signedHeadersFor('ada', $this->storedKeyOf('ada'), $address));
+
+        $this->assertSame(403, $answer->status);
+        $this->assertSame('', $answer->body);
+        $this->assertSame(['private, no-store'], $answer->lines('cache-control'));
+    }
+
+    /** A file is shown as its own canonical type in a sandbox, except a PDF, which the browser's viewer shows; a download is in a sandbox too. */
+    public function testEveryFileIsSentInASandboxButAPdf(): void
+    {
+        $this->assertSame('sandbox', $this->site()->request('GET', $this->fileAddress('image'))->header('Content-Security-Policy'));
+        $this->assertSame('image/png', $this->site()->request('GET', $this->fileAddress('image'))->header('Content-Type'));
+        $this->assertSame('sandbox', $this->site()->request('GET', $this->fileAddress('html'))->header('Content-Security-Policy'));
+        $this->assertSame('sandbox', $this->site()->request('GET', $this->fileAddress('image'), ['Range' => 'bytes=0-9'])->header('Content-Security-Policy'));
+        $this->assertSame('sandbox', $this->site()->request('GET', $this->fileAddress('image'), ['Range' => 'bytes=999999-'])->header('Content-Security-Policy'));
+        $pdf = $this->site()->request('GET', $this->fileAddress('pdf'));
+        $this->assertSame('application/pdf', $pdf->header('Content-Type'));
+        $this->assertNull($pdf->header('Content-Security-Policy'));
+        $this->assertSame('nosniff', $pdf->header('X-Content-Type-Options'));
     }
 
     /**

@@ -15,11 +15,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * The page of a stored file (`/file/<id>` and `/file/<id>/<name>`): the file's bytes, or the part of them a `Range` asks for, streamed to the client
  * a piece at a time so that a file of any size is never held in memory. `FileController` answers the requests the router gives it.
  *
- * Who may have the file is the site's rule (`StoredFiles`, applied before anything of the file is read): a file that does not exist is the missing page; an
- * administrators-only file (an archive of the site) is a 403 with no body that no cache may keep, to anyone else; a file attached to a post its viewer may
- * not read is a 403 with no body. A file the viewer may have is answered with the session let go of first, the conditional request judged (a copy that is
- * current is a 304, before any range, except for an administrators-only file), one of the three sets of caching lines, and its `Last-Modified`, `Content-Type`
- * (a text type with the `charset` PHP gave it), `X-Content-Type-Options: nosniff` and `Accept-Ranges`. A type a browser could run (HTML, SVG, scripts) and
+ * Who may have the file is the site's rule (`StoredFiles`, applied before anything of the file is read): a file that does not exist, or that is attached to a post the viewer may not read, is the missing page (the same answer, so that an address does not tell which files exist); an
+ * administrators-only file (an archive of the site) is a 403 with no body that no cache may keep, to anyone else. A file the viewer may have is answered with the session let go of first, the conditional request judged when the file's age is known (a copy
+ * that is current is a 304 that carries the file's caching lines and date, before any range), one of the three sets of caching lines, and its `Last-Modified` (the stored file's own modification time: none when that is unknown), `Content-Type`
+ * (a shown file's canonical type; a download's stored type if it is well formed, else `application/octet-stream`), `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox` (not for a PDF, which a sandbox stops the browser showing) and `Accept-Ranges`. A type a browser could run (HTML, SVG, scripts) and
  * every type that is not a picture, a PDF, audio or video is a download, named after the last segment of the address. A satisfiable `Range` is a 206 with
  * exactly the bytes its `Content-Length` and `Content-Range` name; one that no byte of the file satisfies is a 416 whose `Content-Range` names the size
  * of the file, with no body; a header that is not one range of bytes is ignored. A HEAD sends the headers and reads nothing.
@@ -58,38 +57,42 @@ final class FilePages
     public function serve(PageContext $page, string $id, string $rest): Response
     {
         $lookup = $this->files->lookUp($id);
-        if ($lookup->outcome === 'missing' || ($lookup->outcome === 'served' && $lookup->file === null)) {
+        if ($lookup->outcome === FileOutcome::Missing || ($lookup->outcome === FileOutcome::Served && $lookup->file === null)) {
             return $this->renderer->notFound($page);
         }
-        if ($lookup->outcome === 'administrators-only') {
+        if ($lookup->outcome === FileOutcome::AdministratorsOnly) {
             $page->setStatus(403);
             // not even the refusal may be kept by a cache
             $page->setCaching(['Cache-Control' => 'private, no-store']);
 
             return new Response('', 403);
         }
-        if ($lookup->outcome !== 'served') {
-            $page->setStatus(403);
-
-            return new Response('', 403);
-        }
         $file = $lookup->file;
 
-        // The session is let go of before the bytes are sent; a copy the client has is judged before anything of the file is asked for, and never for an
-        // archive of the site, which is always sent
+        // The session is let go of before the bytes are sent. The file's caching lines and its date are asked for first, so that a 304 carries them as a
+        // 200 would; a copy the client has is then judged before anything else of the file is asked for (when the file's age is known: a file never changes
+        // under its id, so its own modification time dates it and a revalidation is answered "not modified")
         $this->files->releaseSession();
-        if ($file->caching !== FileCaching::AdministratorsOnly) {
+        $page->setCaching($file->caching->caching($this->now === null ? time() : ($this->now)()));
+        if ($file->lastChange !== null) {
+            $page->setLastModified($file->lastChange);
             $page->answerConditionally($file->lastChange);
         }
-        $page->setCaching($file->caching->caching($this->now === null ? time() : ($this->now)()));
-        $page->setLastModified($file->lastChange);
 
-        $type = self::contentType($file->mimeType);
-        $headers = ['Content-Type' => $type, 'X-Content-Type-Options' => 'nosniff'];
-        if (!in_array(strtolower(trim(explode(';', $file->mimeType)[0])), self::SHOWN, true)) {
+        // A picture, a PDF, audio or video is shown, as its own canonical type; anything else is a download, as its stored type when that is a well-formed one
+        // and as an opaque one when it is not (a stored type that is not a type can never reach a header)
+        $base = strtolower(trim(explode(';', $file->mimeType)[0]));
+        $shown = in_array($base, self::SHOWN, true);
+        $headers = ['Content-Type' => $shown ? $base : self::contentType($file->mimeType), 'X-Content-Type-Options' => 'nosniff'];
+        if (!$shown) {
             $headers['Content-Disposition'] = 'attachment; filename="' . self::downloadName($rest) . '"';
         }
         $headers['Accept-Ranges'] = 'bytes';
+        // Nothing a file holds may run as part of the site: no script, no form, a page of its own origin; a PDF is shown by the browser's viewer, which a
+        // sandbox stops
+        if ($base !== 'application/pdf') {
+            $page->addHeader('Content-Security-Policy', 'sandbox');
+        }
 
         $header = $page->request()->headers->get('Range');
         $range = $header !== null ? ByteRange::parse($header, $file->size) : null;
@@ -144,11 +147,16 @@ final class FilePages
     }
 
     /**
-     * The `Content-Type` header: the stored type, and for a text type that names no charset the one PHP sent a legacy page's (`text/plain;charset=UTF-8`,
-     * with no space), so that the header is what it was.
+     * The `Content-Type` of a download: the stored type when it is a well-formed media type (a type, a subtype and plain parameters: no control character,
+     * quote or space inside a token), else `application/octet-stream`; for a text type that names no charset, the one PHP sent a legacy page's
+     * (`text/plain;charset=UTF-8`, with no space), so that the header is what it was.
      */
     private static function contentType(string $mimeType): string
     {
+        $mimeType = trim($mimeType, " \t");
+        if (preg_match('~\A[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+(?:[ \t]*;[ \t]*[a-z0-9_-]+=[a-z0-9_.-]+)*\z~i', $mimeType) !== 1) {
+            return 'application/octet-stream';
+        }
         if (stripos($mimeType, 'text/') === 0 && stripos($mimeType, 'charset') === false) {
             return $mimeType . ';charset=UTF-8';
         }

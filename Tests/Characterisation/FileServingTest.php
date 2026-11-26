@@ -101,7 +101,7 @@ namespace Tests\Characterisation {
             $this->assertSame(404, $r->status);
         }
 
-        public function testAFileAttachedToAPrivateEntityIs403ForAVisitor(): void
+        public function testAFileAttachedToAPrivateEntityIsAMissingFileForAVisitor(): void
         {
             $id      = $this->storeFixtureFile();
             $private = $this->createStatus($this->user(), 'one two three four five six seven eight nine ten private-file-' . uniqid(), $this->user()->getUUID());
@@ -109,8 +109,9 @@ namespace Tests\Characterisation {
 
             $r = $this->site()->request('GET', 'file/' . $id . '/name.txt');
 
-            $this->assertSame(403, $r->status);
-            $this->assertSame('', $r->body);
+            // (a file of a post the visitor may not read is a file that is not there)
+            $this->assertSame(404, $r->status);
+            $this->assertSame(404, $this->site()->request('GET', 'file/' . str_repeat('0', 32) . '/name.txt')->status);
         }
     }
 

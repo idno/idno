@@ -65,6 +65,7 @@ final class LegacyStoredFilesTest extends PrivateSiteTestCase
         'attached-members' => ['00000000000040008000000000000f09', ['mime_type' => 'image/png', 'attached_entity' => $members->getUUID()]],
         'attached-private' => ['00000000000040008000000000000f0a', ['mime_type' => 'image/png', 'attached_entity' => $private->getUUID()]],
         'attached-draft' => ['00000000000040008000000000000f0b', ['mime_type' => 'image/png', 'attached_entity' => $draft->getUUID()]],
+        'touched' => ['00000000000040008000000000000f0d', ['mime_type' => 'image/png']],
         'attached-gone' => ['00000000000040008000000000000f0c', ['mime_type' => 'image/png', 'attached_entity' => $goneUuid]],
     ];
     $ids = [];
@@ -75,6 +76,7 @@ final class LegacyStoredFilesTest extends PrivateSiteTestCase
         $store->storeAs($id, $stream, $metadata);
         $ids[$name] = $id;
     }
+    touch(rtrim((string) $site->config()->uploadpath, '/') . '/' . ltrim($store->path($ids['touched']), '/'), 1700000000);
     $site->config()->export_file_id = strtoupper($ids['recorded']);
     $site->config()->save();
     // (saving the settings loads them again, and a script has no request to name the host)
@@ -149,11 +151,12 @@ final class LegacyStoredFilesTest extends PrivateSiteTestCase
         }
     }
 
-    public function testAFileHasNoChangeTimeOfItsOwnSoItsLastChangeIsTheMomentOfTheRequest(): void
+    public function testAFileIsDatedByTheTimeItsBytesWereWritten(): void
     {
         $a = $this->answer('visitor', 'public');
 
-        $this->assertEqualsWithDelta($this->answers['now'], $a['changed'], 30);
+        $this->assertEqualsWithDelta($this->answers['now'], $a['changed'], 30, 'written when the script made it');
+        $this->assertSame(1_700_000_000, $this->answer('visitor', 'touched')['changed'], 'the time the file system says');
     }
 
     public function testTheStoredTypeLosesWhatFollowsALineBreakAndDefaultsToOctetStream(): void
@@ -184,14 +187,14 @@ final class LegacyStoredFilesTest extends PrivateSiteTestCase
         }
     }
 
-    public function testAFileAttachedToAPostOnlyItsReadersMayReadIsServedToThemAsARestrictedFile(): void
+    public function testAFileAttachedToAPostOnlyItsReadersMayReadIsServedToThemAsARestrictedFileAndIsMissingToTheRest(): void
     {
-        $this->assertSame(['outcome' => 'not-readable'], $this->answer('visitor', 'attached-members'));
+        $this->assertSame(['outcome' => 'missing'], $this->answer('visitor', 'attached-members'));
         $this->assertSame('restricted', $this->answer('member', 'attached-members')['caching']);
 
         foreach (['visitor', 'member'] as $viewer) {
-            $this->assertSame(['outcome' => 'not-readable'], $this->answer($viewer, 'attached-private'), $viewer . ' private');
-            $this->assertSame(['outcome' => 'not-readable'], $this->answer($viewer, 'attached-draft'), $viewer . ' draft');
+            $this->assertSame(['outcome' => 'missing'], $this->answer($viewer, 'attached-private'), $viewer . ' private');
+            $this->assertSame(['outcome' => 'missing'], $this->answer($viewer, 'attached-draft'), $viewer . ' draft');
         }
         foreach (['owner', 'admin'] as $viewer) {
             $this->assertSame('restricted', $this->answer($viewer, 'attached-private')['caching'], $viewer . ' private');
