@@ -1126,6 +1126,19 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   site). The annotation templates of both looks (`templates/default/entity/annotations/`,
   `Themes/Twenty26/templates/modern/entity/annotations/`) check and escape them again.
   `Tests/Common/AnnotationOutputTest.php` checks this.
+- Whose annotation it is: an annotation made on the site (a member's comment or like) is
+  stored under, and known by, an address of this site (`<post>/annotations/<32 random hex>`,
+  `Entity::isLocalAnnotation()`), and no webmention changes or removes it. A webmention's
+  annotation is known by the address its page gives for itself (`u-url`) only when that is an
+  http or https address on another host than this site's (`Entity::isAddressOnThisSite()`:
+  the host alone, any scheme, port or path) and not the address of another page's annotation;
+  otherwise by the `source` the endpoint fetched, which is also stored as `webmention_source`.
+  An owner address on this site is kept only for a source on this site. A page updates and
+  removes (410) only the annotations stored with it as `webmention_source`, or, for ones
+  stored before November 2026, the one known by the same address. Don't call
+  `removeAnnotation()` with an address from another site: use
+  `removeWebmentionAnnotations($source)`. `Tests/Pages/Webmentions/AnnotationIdentityTest.php`
+  checks this.
 - "Is this a permalink": `Page::isPermalink()` says only that the page is the permalink of
   something. The profile is the permalink of a member (`User\View` sets the member as the page's
   entity) and draws that member's posts as a list, so a template that draws one entity asks

@@ -2518,7 +2518,7 @@ namespace Idno\Common {
         function addWebmentions($source, $target, $source_response, $source_mf2)
         {
             if ($source_response['response'] == 410) {
-                $this->removeAnnotation($source);
+                $this->removeWebmentionAnnotations($source);
                 $this->save(true);
 
                 return true;
@@ -2557,28 +2557,48 @@ namespace Idno\Common {
                     if (empty($mentions['title'])) {
                         $mentions['title'] = '';
                     }
-                    $this->removeAnnotation($source);
+                    // A member of another site cannot be shown as a member of this one
+                    // (addresses are judged as they will be stored)
+                    $clean = function ($url) {
+                        return \Idno\Core\UrlValidator::httpUrl(strip_tags((string) filter_var(is_string($url) ? $url : '', FILTER_SANITIZE_URL)));
+                    };
+                    $mentions['owner']['url'] = $clean($mentions['owner']['url']);
+                    if (!self::isAddressOnThisSite($source) && self::isAddressOnThisSite($mentions['owner']['url'])) {
+                        $mentions['owner']['url'] = $clean($source);
+                    }
 
+                    $kept = [];
                     foreach ($mentions['mentions'] as $mention) {
-                        if (!empty($mention['url'])) {
-                            $permalink = $mention['url'][0]; //implode('', $mention['url']);
-                        } else {
-                            $permalink = $source;
-                        }
+                        // The annotation is known by the address the page gives for itself,
+                        // which is what a reader should be linked to...
+                        $permalink = !empty($mention['url']) ? (string) $mention['url'][0] : $source;
 
                         // Special exemption for bridgy
-                        if ((strpos($source, 'https://brid-gy.appspot.com/') !== false) && in_array($mention['type'], array('like', 'share', 'rsvp'))) {
+                        if ((strpos($source, 'https://brid-gy.appspot.com/') !== false) && in_array($mention['type'], array('like', 'share', 'rsvp')) && !empty($mention['url'])) {
                             $permalink = \Idno\Core\Idno::site()->template()->getURLWithVar('known_from', $source, implode('', $mention['url']));
                         }
-                        // An address that can't be kept is replaced by the page that sent the
-                        // webmention, so that the same page sending again replaces its annotation
-                        if (\Idno\Core\UrlValidator::httpUrl($permalink) === '') {
-                            $permalink = $source;
+                        // ... unless that is no address that can be kept, an address on this
+                        // site (those belong to what was made here) or the address of another
+                        // page's annotation. Then it is known by the page that sent the
+                        // webmention, which the endpoint has fetched.
+                        $permalink = $clean($permalink);
+                        if ($permalink === ''
+                            || self::isAddressOnThisSite($permalink)
+                            || $this->isAnnotationAddressOfAnotherSource($permalink, $source)
+                        ) {
+                            $permalink = $clean($source);
                         }
-                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $mention['created'], $mention['title'], $mention['fields'])) {
+
+                        $fields = (array) $mention['fields'];
+                        $fields['webmention_source'] = $source;
+                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $mention['created'], $mention['title'], $fields)) {
                             $return = false;
+                        } else {
+                            $kept[] = $mention['type'] . ' ' . $permalink;
                         }
                     }
+                    // What this page sent before and does not say any more
+                    $this->removeWebmentionAnnotations($source, $kept);
                     $this->save(true);
 
                     if ($return && $this->isReply()) {
@@ -2592,6 +2612,151 @@ namespace Idno\Common {
             }
 
             return $return;
+        }
+
+        /**
+         * Is this an address on this site? Decided by the host name alone, whatever the
+         * scheme, the port and the path, against the address the site is configured with.
+         *
+         * @param  string $url
+         * @return bool
+         */
+        static function isAddressOnThisSite($url)
+        {
+            $host = self::hostOfAddress($url);
+            if ($host === '') {
+                return false;
+            }
+            $config = \Idno\Core\Idno::site()->config();
+            $own = [self::hostOfAddress((string) $config->getURL()), self::hostOfAddress((string) $config->getDisplayURL())];
+            if (!empty($config->host) && is_string($config->host)) {
+                $own[] = self::hostOfAddress('http://' . $config->host . '/');
+            }
+
+            return in_array($host, array_filter($own), true);
+        }
+
+        /**
+         * The host name of an http or https address, in lower case; empty for anything else
+         */
+        private static function hostOfAddress($url)
+        {
+            $parts = is_string($url) ? parse_url(trim($url)) : false;
+            if (empty($parts['host']) || !in_array(strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)) {
+                return '';
+            }
+
+            return rtrim(strtolower($parts['host']), '.');
+        }
+
+        /**
+         * Was this annotation made on this site (a member's comment or like, an imported
+         * comment), rather than received as a webmention? One made here is known by an
+         * annotation address of this site (<post>/annotations/<id>, the address it is also
+         * stored under), which a webmention is never given, and has no webmention_source.
+         * A webmention never changes or removes such an annotation.
+         *
+         * @param  string $local_url  The address the annotation is stored under
+         * @param  array  $annotation The stored annotation
+         * @return bool
+         */
+        static function isLocalAnnotation($local_url, $annotation)
+        {
+            if (!is_array($annotation) || !empty($annotation['webmention_source'])) {
+                return false;
+            }
+            $permalink = (string) ($annotation['permalink'] ?? '');
+
+            return $permalink === '' || $permalink === (string) $local_url || self::isLocalAnnotationAddress($permalink);
+        }
+
+        /**
+         * Is this the address of an annotation on this site, <post>/annotations/<id>?
+         *
+         * @param  string $url
+         * @return bool
+         */
+        static function isLocalAnnotationAddress($url)
+        {
+            return self::isAddressOnThisSite($url)
+                && preg_match('#/annotations/[^/]*/?$#', (string) parse_url((string) $url, PHP_URL_PATH)) === 1;
+        }
+
+        /**
+         * Does this stored annotation belong to the page at $source, so that a webmention
+         * from that page may change or remove it? Never one made on this site. One stored
+         * with the page that sent it (webmention_source) belongs to that page only; one
+         * stored before that was recorded belongs to the page it is known by.
+         *
+         * @param  string $local_url  The address the annotation is stored under
+         * @param  array  $annotation The stored annotation
+         * @param  string $source     The page that sent the webmention
+         * @return bool
+         */
+        static function isAnnotationFromSource($local_url, $annotation, $source)
+        {
+            if (!is_array($annotation) || (string) $source === '' || self::isLocalAnnotation($local_url, $annotation)) {
+                return false;
+            }
+            if (!empty($annotation['webmention_source'])) {
+                return $annotation['webmention_source'] === $source;
+            }
+
+            return (string) ($annotation['permalink'] ?? '') === (string) $source;
+        }
+
+        /**
+         * Is an annotation that another page sent already known by this address?
+         */
+        private function isAnnotationAddressOfAnotherSource($permalink, $source)
+        {
+            foreach ($this->getAllAnnotations() as $annotations) {
+                foreach ((array) $annotations as $annotation) {
+                    if (is_array($annotation) && ($annotation['permalink'] ?? '') === $permalink
+                        && !empty($annotation['webmention_source']) && $annotation['webmention_source'] !== $source
+                    ) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        /**
+         * Remove the annotations that the page at $source sent as webmentions, and nothing
+         * else: never an annotation made on this site, and never another page's. The caller
+         * saves the entity.
+         *
+         * @param  string   $source The page that sent the webmention
+         * @param  string[] $keep   Annotations to leave, each as "<subtype> <address it is known by>"
+         * @return int How many were removed
+         */
+        function removeWebmentionAnnotations($source, array $keep = [])
+        {
+            $annotations = $this->annotations;
+            if (empty($annotations) || !is_array($annotations)) {
+                return 0;
+            }
+            $removed = 0;
+            foreach ($annotations as $subtype => $array) {
+                if (!is_array($array)) {
+                    continue;
+                }
+                foreach ($array as $local_url => $annotation) {
+                    if (self::isAnnotationFromSource($local_url, $annotation, $source)
+                        && !in_array($subtype . ' ' . ($annotation['permalink'] ?? ''), $keep, true)
+                    ) {
+                        unset($annotations[$subtype][$local_url]);
+                        $removed++;
+                    }
+                }
+            }
+            if ($removed) {
+                $this->annotations = $annotations;
+            }
+
+            return $removed;
         }
 
         /**
@@ -2834,20 +2999,51 @@ namespace Idno\Common {
             $title = strip_tags($title);
 
             if (empty($subtype)) return false;
+
+            // The page that sent this annotation as a webmention, if one did
+            $source = '';
+            if (is_array($extra_fields) && isset($extra_fields['webmention_source'])) {
+                $source = is_string($extra_fields['webmention_source']) ? \Idno\Core\UrlValidator::httpUrl($extra_fields['webmention_source']) : '';
+                if ($source === '') {
+                    unset($extra_fields['webmention_source']);
+                } else {
+                    $extra_fields['webmention_source'] = $source;
+                }
+            }
+            // Annotation addresses of this site are given out here, to annotations made here
+            if (!empty($annotation_url) && self::isLocalAnnotationAddress($annotation_url)) {
+                return false;
+            }
+            $given_url = !empty($annotation_url);
             if (empty($annotation_url)) {
-                $annotation_url = $this->getURL() . '/annotations/' . md5(time() . $content); // Invent a URL for this annotation
+                // Made here: it is known by the address it is stored under
+                $local_url = $this->newAnnotationAddress();
+                $annotation_url = $local_url;
             }
             $post_existed = false;
-            if ($existing_annotations = $this->getAnnotations($subtype)) {
-                foreach ($existing_annotations as $existing_local_url => $existing_annotation) {
-                    if ($existing_annotation['permalink'] == $annotation_url) {
+            // An annotation that came from elsewhere replaces the one it replaced before:
+            // the one the same page sent, or, for one stored before the page was recorded,
+            // the one known by the same address. Never one that was made on this site.
+            if ($given_url && !empty($this->annotations[$subtype]) && is_array($this->annotations[$subtype])) {
+                foreach ($this->annotations[$subtype] as $existing_local_url => $existing_annotation) {
+                    if (!is_array($existing_annotation) || self::isLocalAnnotation($existing_local_url, $existing_annotation)) {
+                        continue;
+                    }
+                    if (!empty($existing_annotation['webmention_source'])) {
+                        $same = ($source !== '' && $existing_annotation['webmention_source'] === $source);
+                    } else {
+                        $existing_permalink = (string) ($existing_annotation['permalink'] ?? '');
+                        $same = ($existing_permalink === $annotation_url || ($source !== '' && $existing_permalink === $source));
+                    }
+                    if ($same) {
                         $local_url = $existing_local_url;
                         $post_existed = true;
+                        break;
                     }
                 }
             }
             if (empty($local_url)) {
-                $local_url = $this->getURL() . '/annotations/' . md5(time() . $content); // Invent a URL for this annotation if we don't have one already
+                $local_url = $this->newAnnotationAddress();
             }
             if (empty($time)) {
                 $time = time();
@@ -2882,6 +3078,22 @@ namespace Idno\Common {
             \Idno\Core\Idno::site()->events()->triggerEvent('annotation/add/' . $subtype, array('annotation' => $annotation, 'object' => $this));
 
             return true;
+        }
+
+        /**
+         * An address of this entity for a new annotation to be stored under, which no
+         * annotation of it has. (It used to be made from the second and the text, so two
+         * likes in one second had the same address and the second replaced the first.)
+         *
+         * @return string
+         */
+        protected function newAnnotationAddress()
+        {
+            do {
+                $address = $this->getURL() . '/annotations/' . bin2hex(random_bytes(16));
+            } while ($this->getAnnotation($address));
+
+            return $address;
         }
 
         /**
