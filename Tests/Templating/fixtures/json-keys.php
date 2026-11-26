@@ -67,7 +67,6 @@ return [
     'admin /status/edit/' => ['content_type', 'formFields', 'messages', 'object', 'posseLinks', 'services', 'tags', 'title', 'url'],
     'admin /status/edit/00000000-0000-4000-8000-000000000011' => ['content_type', 'formFields', 'messages', 'object', 'posseLinks', 'services', 'tags', 'title', 'url'],
     'admin /status/edit?body=hello' => ['content_type', 'formFields', 'messages', 'object', 'posseLinks', 'services', 'tags', 'title', 'url'],
-    'admin /stream/' => ['#status 200 text/html'],
     'member /' => ['content', 'contentTypes', 'count', 'description', 'items', 'items_per_page', 'messages', 'object', 'offset', 'subject', 'title', 'user'],
     'member /2026/a-draft-note-not-yet-published' => ['#status 410'],
     'member /2026/a-private-note-only-ada-can-read' => ['#status 410'],

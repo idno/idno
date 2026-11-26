@@ -79,7 +79,7 @@ A page shell (`shell`, `account-shell`, `admin-shell`) has four blocks: `head`, 
 
 ## Pages that controllers now serve
 
-Some core pages are Symfony controllers, not `Idno\Common\Page` classes run by the legacy router: the home page, the feeds, the search, the tag pages and the small public endpoints. A controller draws a page through a service and `Idno\Http\Page\PageRenderer`; the page's events, body class, headers and access rules are the page's as they were. A legacy `Page` class of your own still works. This is every class that was deleted, and what serves its address now:
+Some core pages are Symfony controllers, not `Idno\Common\Page` classes run by the legacy router: the home page, the feeds, the search, the tag pages, the member's drafts and following pages and the small public endpoints. A controller draws a page through a service and `Idno\Http\Page\PageRenderer`; the page's events, body class, headers and access rules are the page's as they were. A legacy `Page` class of your own still works. This is every class that was deleted, and what serves its address now:
 
 | Class | Address | Now |
 |---|---|---|
@@ -103,6 +103,9 @@ Some core pages are Symfony controllers, not `Idno\Common\Page` classes run by t
 | `Idno\Pages\File\View` | `/file/<id>` and `/file/<id>/<name>` | `FileController::serve()`, `Idno\Http\Controller\File\FilePages::serve()`; the helpers it had are `Idno\Http\Controller\File\ByteRange::parse()` (was `View::parseRange()`) and `Idno\Http\Controller\File\FileStream` (`seekTo()`, `streamRange()`, `streamAll()` and `endOutputBuffers()`, were the same methods of `View`) |
 | `Idno\Pages\Webmentions\Endpoint` | `/webmention/` | `WebmentionController`, `Idno\Http\Webmention\WebmentionEndpoint` (the fetch it made, `Endpoint::fetchSource()`, is `Idno\Legacy\LegacyWebmentionSources::fetch()`) |
 | `Idno\Pages\Pubsubhubbub\Callback` | `/pubsub/callback/<subscriber>/<subscription>` | `WebSubController`, `Idno\Http\Controller\WebSub\WebSubCallbacks`; the page's name in its events and body class is `Idno\Pages\WebSub\Callback` |
+| `Idno\Pages\Drafts` | `/drafts/` | `MemberPagesController::drafts()`, `Idno\Http\Controller\Member\MemberPages::drafts()` (the signed-in member's own drafts, 25 a page; a member is asked for by `#[IsGranted('ROLE_USER')]`, so a visitor gets the page's own 403) |
+| `Idno\Pages\Following\Home` | `/following/` | `MemberPagesController::following()`, `MemberPages::following()` (the member's subscriptions; `Following\Add`, `Confirm` and `Refresh` are unchanged legacy pages) |
+| `Idno\Pages\Stream\Home` | `/stream/` | none: the address is gone and is the site's 404 page (it listed feed items, which cannot be made on a supported PHP, and nothing linked it; its `stream/home` template is deleted) |
 
 A plugin that extends one of the deleted classes stops the site booting (the autoloader throws while the plugin registers its pages): disable it before you upgrade. What differs for your plugin, in one list:
 

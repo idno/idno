@@ -223,7 +223,7 @@ namespace Idno\Core {
             /**
              * The member's drafts
             */
-            $this->routes()->addRoute('/drafts/?', '\Idno\Pages\Drafts');
+            $this->routes()->addRoute('/drafts/?', \Idno\Legacy\ControllerRoute::class);
 
             /**
              * Add some services

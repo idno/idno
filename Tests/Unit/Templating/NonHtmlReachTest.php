@@ -191,7 +191,6 @@ final class NonHtmlReachTest extends TestCase
         'templates/default/pages/410.html.twig',
         'templates/default/pages/500.html.twig',
         'templates/default/pages/webmention.html.twig',
-        'templates/default/stream/home.html.twig',
     ];
 
     public function testAPageBodyANonHtmlTypeCanReachIsAClassicFileOrAListedTwigFile(): void

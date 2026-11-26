@@ -405,6 +405,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Legacy\LegacyProfiles::class);
     $services->alias(\Idno\Http\Controller\Profile\Profiles::class, \Idno\Legacy\LegacyProfiles::class)->public();
     $services->set(\Idno\Http\Controller\Profile\ProfilePages::class)->public();
+    // The member's drafts and following pages, over the legacy finders and session
+    $services->set(\Idno\Legacy\LegacyMemberLists::class);
+    $services->alias(\Idno\Http\Controller\Member\MemberLists::class, \Idno\Legacy\LegacyMemberLists::class);
     // The stored files, over the legacy file store and session: the file page's service takes the interface
     $services->set(\Idno\Legacy\LegacyStoredFiles::class);
     $services->alias(\Idno\Http\Controller\File\StoredFiles::class, \Idno\Legacy\LegacyStoredFiles::class);

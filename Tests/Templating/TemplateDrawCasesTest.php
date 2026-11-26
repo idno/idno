@@ -32,7 +32,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
      */
     private const EMPTY_OUTPUT = [
         'feed item without owner' => 'a feed item is drawn only for an entity that has an owner',
-        'empty stream' => 'a stream of no items has nothing to list',
         'subscription without a feed' => 'a subscription whose feed cannot be found draws nothing',
         'link preview, a card with nothing to show' => 'a preview that is only an address has no title, description or image: no card',
         'link preview, a card with a script address' => 'an address that is not http or https draws no card',
@@ -162,7 +161,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['admin', 'indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1'],
         ['admin', 'following/'],
         ['admin', 'following/add/'],
-        ['admin', 'stream/'],
         ['admin', 'file/picker/'],
         ['admin', 'share/?share_url=https%3A%2F%2Fexample.org%2Fshared&share_title=Shared'],
         ['admin', 'search/users/?q=ada'],
@@ -511,7 +509,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
 
     /**
      * Entities in feeds and the drafts page, which no visit of the golden pages reaches with every branch: a feed item, a followed
-     * feed and its subscription, a stream, the drafts page with and without drafts and with its paging.
+     * feed and its subscription, the drafts page with and without drafts and with its paging.
      */
     private function drawEntityCases(): void
     {
@@ -547,8 +545,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $lonely = clone $held;
         $out['feed item'] = $draw('entity/FeedItem', ['object' => $item]);
         $out['feed item without owner'] = $draw('entity/FeedItem', ['object' => clone $feedItem]);
-        $out['stream'] = $draw('stream/home', ['items' => [$item, $item]]);
-        $out['empty stream'] = $draw('stream/home', ['items' => []]);
         $out['subscription'] = $draw('entity/Subscription', ['object' => $subscription]);
         $out['subscription without a feed'] = $draw('entity/Subscription', ['object' => $lonely]);
         $out['following'] = $draw('following/home', ['subscriptions' => [$subscription, $lonely]]);

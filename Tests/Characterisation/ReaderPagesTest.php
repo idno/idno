@@ -23,8 +23,34 @@ final class ReaderPagesTest extends PermalinkSiteCase
 
     protected const GROUP = 'member';
 
-    /** The cases the pages that replace the legacy ones answer differently ON PURPOSE (case => why). */
-    private const CHANGED = [];
+    private const STREAM_WHY = 'the stream address is the legacy router\'s missing page: the page that listed feed items is gone (it answered an empty page)';
+
+    private const METHOD_WHY = 'a method the page does not take is the legacy router\'s 404 page, as for every page that moved to a controller (the legacy page answered the invalid-token redirect)';
+
+    private const HOST_WHY = 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page drew the answer for the request)';
+
+    private const XHR_WHY = 'an XHR GET gets the headers of the same request that is not XHR';
+
+    /**
+     * The cases the pages that replaced the legacy ones answer differently ON PURPOSE, with why: the recordings are the legacy pages' and are kept as they
+     * were, and the test of each asserts the answer of the page that serves it now.
+     */
+    private const CHANGED = [
+        'stream-visitor' => self::STREAM_WHY,
+        'stream-member' => self::STREAM_WHY,
+        'stream-admin' => self::STREAM_WHY,
+        'stream-member-json' => self::STREAM_WHY,
+        'stream-head' => self::STREAM_WHY,
+        'drafts-owner-xhr' => self::XHR_WHY,
+        'drafts-visitor-xhr' => self::XHR_WHY,
+        'following-owner-xhr' => self::XHR_WHY,
+        'following-visitor-xhr' => self::XHR_WHY,
+        'drafts-post-visitor' => self::METHOD_WHY,
+        'drafts-post-owner-with-token' => self::METHOD_WHY,
+        'following-post-visitor' => self::METHOD_WHY,
+        'drafts-malformed-host' => self::HOST_WHY,
+        'following-malformed-host' => self::HOST_WHY,
+    ];
 
     public static function tearDownAfterClass(): void
     {
@@ -223,6 +249,62 @@ final class ReaderPagesTest extends PermalinkSiteCase
         $this->record('stream-member-json', 'GET', '/stream/?_t=json', [], 'member');
         $this->record('stream-head', 'HEAD', '/stream/');
         $this->addToAssertionCount(1);
+    }
+
+    /**
+     * An XHR GET gets the headers of the same request that is not XHR: the legacy router's own lines for it (a JSON type, a date in 1997, two
+     * `Cache-Control` lines and the time of the request as `Last-Modified`) are no longer sent. Its status and body are what they were.
+     */
+    public function testAnXhrRequestGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        $cases = [
+            'drafts-owner-xhr' => ['/drafts/', 'owner'],
+            'drafts-visitor-xhr' => ['/drafts/', 'visitor'],
+            'following-owner-xhr' => ['/following/', 'owner'],
+            'following-visitor-xhr' => ['/following/', 'visitor'],
+        ];
+        foreach ($cases as $case => [$path, $viewer]) {
+            $answer = $this->site()->request('GET', $path, $this->asViewer($viewer, $xhr));
+            $plain = $this->site()->request('GET', $path, $this->asViewer($viewer));
+            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($answer), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($plain), $this->baseUrl()), 2);
+            $this->assertSame($plainHeaders, $answeredHeaders, $case . ': the headers of the same request that is not XHR');
+            $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt');
+            [, $recordedBody] = explode("\n\n", $recorded, 2);
+            $this->assertSame($recordedBody, $answeredBody, $case . ': the body is what it was');
+            $this->assertCount(1, $answer->lines('cache-control'), $case . ': one Cache-Control line');
+        }
+    }
+
+    /** A method the page does not take, and a request with a malformed Host, reach the legacy router, which has no page for the address: its 404 page. */
+    public function testOtherMethodsAndAMalformedHostAreTheRoutersNotFoundPage(): void
+    {
+        $answers = [
+            'drafts-post-visitor' => $this->site()->request('POST', '/drafts/', [], ['a' => 'b']),
+            'drafts-post-owner-with-token' => $this->site()->request('POST', '/drafts/', $this->asViewer('owner'), ['a' => 'b', '__bTk' => $this->tokenOf('owner')]),
+            'following-post-visitor' => $this->site()->request('POST', '/following/', [], ['a' => 'b']),
+            'drafts-malformed-host' => $this->site()->request('GET', '/drafts/', ['Host' => 'bad host!']),
+            'following-malformed-host' => $this->site()->request('GET', '/following/', ['Host' => 'bad host!']),
+        ];
+        foreach ($answers as $case => $answer) {
+            $this->assertSame(404, $answer->status, $case);
+            $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $case);
+            $this->assertNull($answer->header('Location'), $case);
+        }
+    }
+
+    public function testTheStreamAddressIsTheNotFoundPage(): void
+    {
+        foreach ([['stream-visitor', 'visitor', '/stream/'], ['stream-member', 'member', '/stream/'], ['stream-admin', 'admin', '/stream/']] as [$case, $viewer, $path]) {
+            $answer = $this->site()->request('GET', $path, $this->asViewer($viewer));
+            $this->assertSame(404, $answer->status, $case);
+            $this->assertStringContainsString("This page can't be found.", html_entity_decode($answer->body, ENT_QUOTES), $case);
+            $this->assertStringNotContainsString('<h1>Stream</h1>', $answer->body, $case);
+        }
+        $json = $this->site()->request('GET', '/stream/?_t=json', $this->asViewer('member'));
+        $this->assertSame(404, $json->status);
+        $this->assertSame(404, $this->site()->request('HEAD', '/stream/')->status);
     }
 
     public function testEveryCaseThatDiffersOnPurposeIsARecordedCase(): void

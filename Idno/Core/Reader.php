@@ -14,11 +14,10 @@ namespace Idno\Core {
         // Register pages
         function registerPages()
         {
-            site()->routes()->addRoute('/following/?', '\Idno\Pages\Following\Home');
+            site()->routes()->addRoute('/following/?', \Idno\Legacy\ControllerRoute::class);
             site()->routes()->addRoute('/following/add/?', '\Idno\Pages\Following\Add');
             site()->routes()->addRoute('/following/confirm/?', '\Idno\Pages\Following\Confirm');
             site()->routes()->addRoute('/following/refresh/?', '\Idno\Pages\Following\Refresh', true);
-            site()->routes()->addRoute('/stream/?', '\Idno\Pages\Stream\Home');
         }
 
         /**

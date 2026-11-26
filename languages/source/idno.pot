@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-26 10:24+0000\n"
+"POT-Creation-Date: 2026-11-26 22:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -13,7 +13,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ./Idno/Common/Entity.php:823
+#: ./Idno/Common/Entity.php:909
 msgid "There was a problem syndicating."
 msgstr ""
 
@@ -76,7 +76,7 @@ msgstr ""
 
 #: ./Idno/Core/PageHandler.php:411
 #: ./Idno/Legacy/LegacyPageLifecycle.php:97
-#: ./Idno/Legacy/PageShell.php:88
+#: ./Idno/Legacy/PageShell.php:97
 msgid "Account pages are not available to API requests."
 msgstr ""
 
@@ -144,7 +144,7 @@ msgstr ""
 msgid "Token was generated using an a cryptographically weak algorithm, this probably means your version of OpenSSL is broken or very old."
 msgstr ""
 
-#: ./Idno/Core/Webservice.php:774
+#: ./Idno/Core/Webservice.php:798
 msgid "Your version of PHP doesn't support CURLFile."
 msgstr ""
 
@@ -677,11 +677,6 @@ msgstr ""
 msgid "Your site is ready"
 msgstr ""
 
-#: ./Idno/Pages/Drafts.php:35
-#: ./templates/default/shell/nav.html.twig:32
-msgid "Drafts"
-msgstr ""
-
 #: ./Idno/Pages/Entity/Attachment/Delete.php:21
 msgid "We couldn't find the post."
 msgstr ""
@@ -722,11 +717,6 @@ msgstr ""
 msgid "You're following %s!"
 msgstr ""
 
-#: ./Idno/Pages/Following/Home.php:18
-#: ./templates/default/following/home.html.twig:3
-msgid "Following"
-msgstr ""
-
 #: ./Idno/Pages/Search/User.php:24
 msgid "Invalid sort type %s"
 msgstr ""
@@ -736,7 +726,6 @@ msgid "Invalid sort order %s"
 msgstr ""
 
 #: ./Idno/Pages/Session/CurrentUser.php:39
-#: ./Idno/Pages/User/View.php:72
 msgid "The %s profile for %s"
 msgstr ""
 
@@ -758,10 +747,6 @@ msgstr ""
 
 #: ./Idno/Pages/User/Edit.php:33
 msgid "Edit profile: %s"
-msgstr ""
-
-#: ./Idno/Pages/Webmentions/Endpoint.php:20
-msgid "Webmention endpoint"
 msgstr ""
 
 #: ./Idno/Stats/Timer.php:41
@@ -2563,6 +2548,10 @@ msgstr ""
 msgid "Here's the latest content."
 msgstr ""
 
+#: ./templates/default/following/home.html.twig:3
+msgid "Following"
+msgstr ""
+
 #: ./templates/default/following/home.html.twig:11
 msgid "Follow another site"
 msgstr ""
@@ -2653,6 +2642,10 @@ msgstr ""
 #: ./templates/default/shell/search.html.twig:19
 #: ./templates/default/shell/search.html.twig:22
 msgid "Search"
+msgstr ""
+
+#: ./templates/default/shell/nav.html.twig:32
+msgid "Drafts"
 msgstr ""
 
 #: ./templates/default/shell/nav.html.twig:48

@@ -29,7 +29,6 @@ return [
         '/following/add/?',
         '/following/confirm/?',
         '/following/refresh/?',
-        '/stream/?',
         '/?',
         '/feed\\.xml',
         '/feed/?',
@@ -105,6 +104,7 @@ return [
         '/pubsub/callback/([A-Za-z0-9\\-]+)/([A-Za-z0-9\\-]+)/?',
     ],
     'omitted' => [
+        '/stream/?' => 'removed outright: the page listed the items of the feeds a member followed, none of which can be made on a supported PHP (the feed parser called DOMDocument::loadHTML() statically, an error on PHP 8), nothing linked the address, and with no item it drew nothing; it has no registration, so a plugin\'s broader pattern, or the 404 page, answers it',
         '/bookmarklet\\.js' => 'removed outright when its page moved: the address answered an HTML fragment under a .js name and nothing linked it; it has no registration, so a plugin\'s broader pattern, or the 404 page, answers it',
         '/content/default/?' => 'registered by the StaticPages plugin, not core: removed when a static page became the home page through the homepage/replace event',
         '/begin/?' => 'removed with the onboarding pages when the installer was rebuilt inside the kernel (Idno\\Install): the first administrator is made by the installation\'s last step (`/_setup/`) or `idno:admin:create`, so nothing registers the address and a plugin\'s broader pattern, or the 404 page, answers it',

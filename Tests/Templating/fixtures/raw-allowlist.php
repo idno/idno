@@ -69,9 +69,6 @@ return [
     'templates/default/shell/structured-data.html.twig' => [
         ['expression' => 'jsonld|json_encode(constant(\'JSON_PRETTY_PRINT\') b-or constant(\'JSON_UNESCAPED_SLASHES\') b-or constant(\'JSON_HEX_TAG\'))', 'reason' => 'JSON for a JSON-LD script (a data block that nothing runs): JSON_HEX_TAG turns every `<` and `>` of a value into an escape, so no value can end the script or open a comment; it keeps the document\'s own layout (pretty printed, slashes as written)'],
     ],
-    'templates/default/stream/home.html.twig' => [
-        ['expression' => 'item.draw()', 'reason' => 'a feed item\'s own drawing (`entity/FeedItem`), which escapes what the remote feed supplied'],
-    ],
     'IdnoPlugins/StaticPages/templates/default/staticpages/page.html.twig' => [
         ['expression' => 'object.draw()', 'reason' => 'HTML a static page has already drawn through its own template (`Entity::draw()`, `entity/StaticPage`), which escapes the title and the forward address; the page only places it'],
     ],

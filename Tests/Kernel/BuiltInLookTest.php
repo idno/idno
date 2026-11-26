@@ -496,7 +496,6 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         $this->assertStringNotContainsString('A draft note, not yet published.', $visitor->body);
         $this->assertSame(200, $member->status);
         $this->assertStringContainsString('A draft note, not yet published.', $member->body);
-        $this->assertTrue(class_exists(\Idno\Pages\Drafts::class));
         $this->assertFalse(class_exists('Themes\\Twenty26\\Pages\\Drafts'));
     }
 
