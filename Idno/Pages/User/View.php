@@ -98,13 +98,17 @@ namespace Idno\Pages\User {
             if (!empty($this->arguments[0])) {
                 $object = \Idno\Common\Entity::getByID($this->arguments[0]);
             }
-            if (empty($object)) {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
                 $this->forward(); // TODO: 404
+            }
+            if (!$object->canEdit()) {
+                $this->deniedContent();
             }
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
         }
 
         /**

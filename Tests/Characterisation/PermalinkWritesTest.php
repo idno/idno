@@ -33,31 +33,11 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         }
     }
 
-    /** The form token of a viewer's session (what the token endpoint answers to a request that says it is an XHR one). */
-    private function tokenOf(string $viewer): string
-    {
-        return $this->tokenWith($this->asViewer($viewer));
-    }
-
-    /** @param array<string, string> $headers the request's, with the session's cookie */
-    private function tokenWith(array $headers): string
-    {
-        $answer = $this->site()->request('GET', '/service/security/csrftoken/', $headers + ['X-Requested-With' => 'XMLHttpRequest']);
-        $this->assertSame(200, $answer->status);
-        $token = trim($answer->body);
-        $decoded = json_decode($token, true);
-        if (is_array($decoded)) {
-            $token = (string) ($decoded['token'] ?? $decoded['csrf'] ?? reset($decoded));
-        }
-        $this->assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $token);
-
-        return $token;
-    }
-
-    /** The scrub of a response that repeats the token the request carried (a `rel="self"` link holds the address as asked). */
+    /** The scrub of a response that repeats the token the request carried (a `rel="self"` link holds the address as asked, and so does the log-in link of a refusal). */
     private static function withoutToken(string $token): \Closure
     {
-        $swap = static fn (string $text): string => str_replace($token, '{form-token}', $text);
+        // the refusal's log-in link carries the address as asked (with the token), written in base64: it is replaced whole
+        $swap = static fn (string $text): string => (string) preg_replace('/fwd=[A-Za-z0-9+\/=_%-]+/', 'fwd={address}', str_replace($token, '{form-token}', $text));
 
         return static fn (SiteResponse $r): SiteResponse => new SiteResponse($r->status, array_map($swap, $r->headers), $swap($r->body), array_map($swap, $r->lines));
     }
@@ -138,17 +118,22 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         $this->record('delete-visitor', 'DELETE', $disposable, $referer, 'visitor', null, self::withoutTrace(...));
         $this->record('delete-no-token-still-there', 'GET', $disposable);
 
-        // the page does not ask who the member is: another member's DELETE with the token of their own session deletes the post
-        $this->record('delete-token-other-member', 'DELETE', $disposable . '?__bTk=' . $this->tokenOf('member'), $referer, 'member', null, self::withoutToken($this->tokenOf('member')));
-        $this->record('delete-token-other-member-then', 'GET', $disposable);
+        // another member's DELETE with the token of their own session is refused and the post stays: these two answers, and the two of the visitor's
+        // below, were recorded from a page that deleted it (it never asked who the requester was) and were captured again when that was fixed
+        $other = $this->record('delete-token-other-member', 'DELETE', $disposable . '?__bTk=' . $this->tokenOf('member'), $referer, 'member', null, self::withoutToken($this->tokenOf('member')));
+        $this->assertSame(403, $other->status, 'another member is refused');
+        $then = $this->record('delete-token-other-member-then', 'GET', $disposable);
+        $this->assertSame(200, $then->status, 'the post is still there');
 
-        // and so does a visitor's, with the token of the session they were given
+        // and so is a visitor's, with the token of the session they were given
         $disposable = $this->disposableNote();
         $cookie = self::sessionCookie($this->site()->request('GET', '/'));
         $visitorToken = $this->tokenWith(['Cookie' => $cookie]);
         $this->record('post-token-visitor', 'POST', $note, ['Cookie' => $cookie], 'visitor', ['__bTk' => $visitorToken, 'body' => $text]);
-        $this->record('delete-token-visitor', 'DELETE', $disposable . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::withoutToken($visitorToken));
-        $this->record('delete-token-visitor-then', 'GET', $disposable);
+        $refused = $this->record('delete-token-visitor', 'DELETE', $disposable . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::withoutToken($visitorToken));
+        $this->assertSame(403, $refused->status, 'a visitor is refused');
+        $then = $this->record('delete-token-visitor-then', 'GET', $disposable);
+        $this->assertSame(200, $then->status, 'the post is still there');
 
         $disposable = $this->disposableNote();
         $this->record('delete-token-owner-still-there', 'GET', $disposable);

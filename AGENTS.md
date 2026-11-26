@@ -5042,6 +5042,7 @@ no installer writes one.
 ## Security
 
 - Entity access control via `canEdit()` / `canRead()` / access groups
+- A page that deletes or changes an entity checks `canEdit()` itself, after `gatekeeper()` (the answer is the page's 403), and answers a post the requester may not read as a missing one: a valid form token or a signed request proves only who is asking. `Entity::delete()` checks nothing (system code, the queue worker and tests delete with no user), so a request handler never relies on it. The permalink's DELETE (`Idno\Pages\Entity\View`, `Idno\Pages\User\View` and the StaticPages `View`) does this and sends the browser back only to a same-site address (`Login::sanitizeRedirectUrl()` of the `Referer`); `Tests/Characterisation/PermalinkDeleteAccessTest` pins it.
 - Unpublished entities: an entity whose publish status is set and is not `published`
   (a draft, for example) is visible only to its owner and to site admins, whatever its
   access setting. `Entity::isHiddenByPublishStatus()` holds the rule; `canRead()` applies

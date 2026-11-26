@@ -159,6 +159,27 @@ abstract class PermalinkSiteCase extends RenderedSiteTestCase
         return self::$cookies[$this->baseUrl() . '|' . $handle] ??= $this->loginCookie($handle, self::PASSWORD);
     }
 
+    /** The form token of a viewer's session (what the token endpoint answers to a request that says it is an XHR one). */
+    protected function tokenOf(string $viewer): string
+    {
+        return $this->tokenWith($this->asViewer($viewer));
+    }
+
+    /** @param array<string, string> $headers the request's, with the session's cookie */
+    protected function tokenWith(array $headers): string
+    {
+        $answer = $this->site()->request('GET', '/service/security/csrftoken/', $headers + ['X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertSame(200, $answer->status);
+        $token = trim($answer->body);
+        $decoded = json_decode($token, true);
+        if (is_array($decoded)) {
+            $token = (string) ($decoded['token'] ?? $decoded['csrf'] ?? reset($decoded));
+        }
+        $this->assertMatchesRegularExpression('/\A[0-9a-f]{64}\z/', $token);
+
+        return $token;
+    }
+
     /** The headers of a request by a viewer. @return array<string, string> */
     protected function asViewer(string $viewer, array $headers = []): array
     {
