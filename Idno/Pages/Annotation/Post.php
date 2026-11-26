@@ -55,7 +55,7 @@ namespace Idno\Pages\Annotation {
                 }
 
                 if (!$has_liked) {
-                    if ($object->addAnnotation($type, $user->getTitle(), $user->getURL(), $user->getIcon(), $body)) {
+                    if ($object->addAnnotation($type, $user->getTitle(), $user->getURL(), $user->getIcon(), $body, null, null, '', [], true, true)) {
                         $object->save();
                     }
                 }

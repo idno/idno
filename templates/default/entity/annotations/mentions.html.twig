@@ -19,6 +19,6 @@
                     on <a href="{{ permalink }}" rel="nofollow">{{ permalink|url_host }}</a>
                 </span>
             </div>
-            {% if object.canEditAnnotation(annotation) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
+            {% if object.canEditAnnotation(locallink) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
         </div>
 {% endfor %}{% endif %}

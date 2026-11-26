@@ -491,7 +491,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             }
 
             $ok = $entity->addAnnotation(
-                $type, $username, $userurl, $userphoto, $content, null, null, '', $fields
+                $type, $username, $userurl, $userphoto, $content, null, null, '', $fields, true, true
             );
             if (!$ok) {
                 $this->error(

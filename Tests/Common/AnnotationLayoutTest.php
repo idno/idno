@@ -142,4 +142,41 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $this->assertFalse($post->isAnnotationAuthor(''));
         $this->assertFalse($post->isAnnotationAuthor('https://remote.example/nothing'));
     }
+
+    public function testTheMarkDecidesWhereItIsPresentAndTheOldInferenceWhereItIsNot(): void
+    {
+        $mine = $this->swapUser($this->admin());
+        $mine = \Idno\Core\Idno::site()->session()->currentUser();
+        $post = $this->post();
+        $base = $this->base() . '2026/a-note/annotations/';
+        $make = fn (string $key, array $more): array => ['permalink' => $key, 'owner_name' => 'X', 'owner_url' => $mine->getURL(), 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''] + $more;
+        $post->annotations = ['reply' => [
+            $base . 'marked' => $make($base . 'marked', ['made_here' => true]),
+            $base . 'unmarked-forged' => $make($base . 'unmarked-forged', ['made_here' => false]),
+            $base . 'old' => $make($base . 'old', []),
+            $base . 'old-remote' => $make('https://remote.example/x', []),
+        ]];
+
+        $this->assertSame($base . 'marked', $post->authoredAnnotationKey($base . 'marked'));
+        $this->assertNull($post->authoredAnnotationKey($base . 'unmarked-forged'), 'marked as not made here: the address is no proof');
+        $this->assertSame($base . 'old', $post->authoredAnnotationKey($base . 'old'), 'stored before the mark: the old inference');
+        $this->assertNull($post->authoredAnnotationKey($base . 'old-remote'));
+        $this->assertTrue($post->removeAnnotationByKey($base . 'marked'));
+        $this->assertArrayNotHasKey($base . 'marked', $post->annotations['reply']);
+        $this->assertCount(3, $post->annotations['reply'], 'exactly that key');
+        $this->assertFalse($post->removeAnnotationByKey($base . 'none'));
+    }
+
+    public function testAnAnnotationMadeHereIsMarkedAndAWebmentionsFieldsCannotMarkIt(): void
+    {
+        $this->swapUser($this->admin());
+        $post = $this->post();
+        $this->assertTrue($post->addAnnotation('reply', 'A', 'https://example.org/a', '', 'Made here', null, 1, '', ['made_here' => true], false, true));
+        $this->assertTrue($post->addAnnotation('reply', 'B', 'https://example.org/b', '', 'Received', 'https://remote.example/b', 2, '', ['made_here' => true], false, false));
+        $flags = array_column(array_values($post->annotations['reply']), 'made_here', 'content');
+
+        $post->delete();
+
+        $this->assertSame(['Made here' => true, 'Received' => false], $flags);
+    }
 }

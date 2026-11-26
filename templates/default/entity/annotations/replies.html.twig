@@ -33,6 +33,6 @@
             </div>
             {% endif %}
         </div>
-        {% if object.canEditAnnotation(annotation) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
+        {% if object.canEditAnnotation(locallink) %}{{ idno_include('content/annotation/edit', {annotation_permalink: locallink}) }}{% endif %}
     </div>
 {% endfor %}{% endif %}

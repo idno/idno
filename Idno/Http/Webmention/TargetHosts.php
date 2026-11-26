@@ -39,6 +39,25 @@ final class TargetHosts
     }
 
     /**
+     * Whether the address is on this site's host, in any spelling: whatever its scheme, port, path or form (a dot segment, an upper-case or punycode name, a
+     * trailing dot). It is the rule for an address someone else wrote down and the site must not take for one of its own: an address `locate()` refuses
+     * for its shape is still on the host. An address with no host, or a site with no address, is on no host.
+     */
+    public function isOnSiteHost(string $address): bool
+    {
+        if ($this->siteHost === null) {
+            return false;
+        }
+        $parts = parse_url(trim($address));
+        if (!is_array($parts) || empty($parts['host'])) {
+            // (an address `parse_url()` cannot read is read by a browser as it likes: when it names the host anywhere, it is on it)
+            return is_array($parts) ? false : stripos($address, $this->siteHost) !== false;
+        }
+
+        return self::normalise($parts['host']) === $this->siteHost;
+    }
+
+    /**
      * The address, when it is this site's: its scheme, host (as compared: lower case, punycode), explicit port, path and query, and the directory the site is
      * served from.
      *

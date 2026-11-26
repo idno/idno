@@ -11,7 +11,8 @@ stored: {
             "owner_image": "",
             "content": "A reply from another site.",
             "time": "{time}",
-            "title": "https://remote.example/reply-to-the-post"
+            "title": "https://remote.example/reply-to-the-post",
+            "made_here": false
         }
     }
 }

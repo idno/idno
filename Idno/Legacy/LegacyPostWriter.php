@@ -74,7 +74,7 @@ final class LegacyPostWriter implements PostWriter
         }
         $added = 0;
         foreach ($comments as $comment) {
-            if ($entity->addAnnotation('reply', $comment->author, $comment->url, '', $comment->content, null, $comment->time, null, [], false)) {
+            if ($entity->addAnnotation('reply', $comment->author, $comment->url, '', $comment->content, null, $comment->time, null, [], false, true)) {
                 $added++;
             }
         }

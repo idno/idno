@@ -35,7 +35,7 @@ if (!empty($vars['annotations']) && is_array($vars['annotations'])) {
             <?php
                 $this->annotation_permalink = $locallink;
 
-            if ($vars['object']->canEditAnnotation($annotation)) {
+            if ($vars['object']->canEditAnnotation($locallink)) {
                 echo $this->draw('content/annotation/edit');
             }
             ?>

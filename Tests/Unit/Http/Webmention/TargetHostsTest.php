@@ -128,4 +128,17 @@ final class TargetHostsTest extends TestCase
         }
         $this->assertNull((new TargetHosts('https://example.com/'))->locate('https://bücher.example/x'));
     }
+
+    public function testAnAddressOnTheSitesHostIsOnItInAnySpelling(): void
+    {
+        $hosts = new TargetHosts('https://example.com/');
+
+        foreach (['https://example.com/x', 'http://EXAMPLE.com/x', 'http://example.com./x', 'http://example.com:8080/x', 'https://example.com/a/../x', 'https://example.com/x y', '//example.com/x'] as $address) {
+            $this->assertTrue($hosts->isOnSiteHost($address), $address);
+        }
+        foreach (['https://remote.example/x', 'https://www.example.com/x', 'https://example.com.evil.example/x', 'https://sub.example.com/', '', '/relative', 'not an address'] as $address) {
+            $this->assertFalse($hosts->isOnSiteHost($address), $address);
+        }
+        $this->assertFalse((new TargetHosts(''))->isOnSiteHost('https://example.com/x'), 'a site with no address has no host');
+    }
 }
