@@ -188,8 +188,11 @@ class ActivityBuilder
             ],
         ];
 
-        // Location data (for checkins)
-        if ($idnoType === 'place' || !empty($entity->lat)) {
+        // Location data (for checkins). A check-in whose place is to be kept vague is drawn
+        // with an inexact position for visitors who are not signed in, which other servers
+        // never are, so it gets no position and no place name at all.
+        $vague = method_exists($entity, 'isAnonymous') && $entity->isAnonymous();
+        if (!$vague && ($idnoType === 'place' || !empty($entity->lat))) {
             if (!empty($entity->lat) && !empty($entity->long)) {
                 $location = [
                     'type' => 'Place',

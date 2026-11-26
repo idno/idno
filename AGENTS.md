@@ -4946,6 +4946,9 @@ Each content plugin has an `Entry.php` entity class that defines
    moment they are built and carry that time; the follow `Accept` carries none. The object has
    `updated` only when it is later than `created`. A test never compares two separately
    generated times (`ActivityTimesTest`, `QueuedDeliveryTest`).
+   A check-in whose place is to be kept vague (`Checkin::isAnonymous()`) carries NO `location` in any object other servers get (the post's address, the outbox, a
+   delivery): the HTML page shows a visitor an inexact position and other servers are never signed in, so `buildObject()` sends none
+   (`IdnoPlugins/ActivityPub/Tests/CheckinLocationTest`).
 2. **A post fetched by another server**: a GET of a post's address (its permalink, `/YYYY/slug`, and `/view/<id>`, which is the post's uuid and so the `id` other servers
    know it by) with an ActivityPub `Accept` is answered with the post: `ActivityBuilder::buildDocument()`, which is `buildObject()` (the object a `Create`, an `Update` and
    the outbox carry: one builder) under the context deliveries carry (`CONTEXT_WITH_QUOTES`), `Content-Type: application/activity+json`, `Access-Control-Allow-Origin: *`

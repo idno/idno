@@ -716,6 +716,8 @@ What a site sends to other servers may change when the change is an improvement 
 
 * **A post's address, asked for as ActivityPub, answers with the post.** A server that fetches a post by its address or its `id` (`/view/<id>`), to show a reply to it or a quote of it, is sent the post as an ActivityPub object, the one that was delivered to followers (with its interaction policy, its quote terms and, for an article, its name). It was sent the post's author. Only a public, published post is given; a draft, a post for the members or only for its author, and any page that is neither a post nor a member (the home page) answer 406 with `{"error": ...}` to a request that asks for ActivityPub, and a post the visitor may not read, a deleted post and a missing one answer 403, 410 and 404 as the page does. A member's profile address answers with the actor document, as `/actor/<handle>` does, which now has the same contents at both addresses. An answer to an ActivityPub request carries `Access-Control-Allow-Origin: *`.
 
+* **A check-in that is anonymous sends no place to other servers.** The post fetched by address, the outbox and the delivery to followers used to carry the check-in's exact position and place name, which the site's own page hides from a visitor for a day. They now carry no `location` for a check-in marked anonymous.
+
 ### What behaves differently
 
 On a MySQL, MariaDB or SQLite site, `db()` and the entity finders behave differently from the old
