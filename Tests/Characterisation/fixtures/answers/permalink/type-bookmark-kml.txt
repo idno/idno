@@ -1,0 +1,22 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/vnd.google-earth.kml+xml
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/interesting?_t=kml>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document/>
+</kml>

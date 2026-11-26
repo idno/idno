@@ -1,0 +1,33 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/interesting?format=markdown>; rel="self"
+link: <{site}/2026/interesting>; rel="canonical"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "An interesting page"
+author: "Ada Admin"
+pubDate: "Wed, 04 Mar 2026 12:00:00 +0000"
+description: "https://example.org/interesting Worth reading, hello."
+link: "{site}/2026/interesting"
+guid: "{site}/view/00000000-0000-4000-8000-000000000014"
+---
+
+Bookmarked: [An interesting page](https://example.org/interesting)
+
+Worth reading, hello.

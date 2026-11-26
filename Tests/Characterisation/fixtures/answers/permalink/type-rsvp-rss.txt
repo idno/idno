@@ -1,0 +1,45 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/rss+xml
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/i-will-be-there?_t=rss>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Yes: I will be there.</title>
+    <itunes:author>Yes: I will be there.</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/2026/i-will-be-there</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://hub.example/" rel="hub"/>
+    <atom:link href="{site}/2026/i-will-be-there?_t=rss" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+    <item>
+      <title>Yes: I will be there.</title>
+      <link>{site}/2026/i-will-be-there</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000017</guid>
+      <pubDate>Sat, 07 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Ada Admin</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content"><data class="p-rsvp" value="yes"><strong>Yes:</strong> I will be there.</data></p>
+]]></description>
+    </item>
+  </channel>
+</rss>

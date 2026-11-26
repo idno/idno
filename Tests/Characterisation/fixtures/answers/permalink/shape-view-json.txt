@@ -1,0 +1,61 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/view/00000000000040008000000000000047?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000000040008000000000000047",
+        "uuid": "{site}\/view\/00000000000040008000000000000047",
+        "content": "A note to open by its id in a view address.",
+        "formattedContent": "\n<p>A note to open by its id in a view address.<\/p>\n",
+        "displayName": "A note to open by its id ...",
+        "objectType": "note",
+        "published": "2026-03-15T13:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/a-note-to-open-by-its-id-in-a-view",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
+    "title": "A note to open by its id ...",
+    "description": "A note to open by its id in a view address.",
+    "messages": []
+}

@@ -1,0 +1,20 @@
+status 403
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "Fixture Site"
+link: "{site}/2026/hello-world-a-note-about-gardens-with-a-link-to"
+---
+
+[Click here to log in.]({site}/session/login/?fwd=LzIwMjYvaGVsbG8td29ybGQtYS1ub3RlLWFib3V0LWdhcmRlbnMtd2l0aC1hLWxpbmstdG8_X3Q9bWFya2Rvd24,)

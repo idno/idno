@@ -1,0 +1,31 @@
+status 410
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/bob-has-a-draft-he-has-not-published.md>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "This content isn't here."
+link: "{site}/2026/bob-has-a-draft-he-has-not-published"
+---
+
+# Sorry, this content isn't here anymore.
+
+You may be wondering where it went, but we can't tell you. It's a secret.
+
+Maybe you'd like to head back to the [Fixture Site homepage]({site}/) instead.
+
+![Robot with a gone sign]({site}/gfx/robots/aleph_410.png)

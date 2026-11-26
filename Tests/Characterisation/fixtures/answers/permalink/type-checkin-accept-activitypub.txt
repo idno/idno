@@ -1,0 +1,48 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/activity+json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/checked-into-the-library>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "@context": [
+        "https://www.w3.org/ns/activitystreams",
+        "https://w3id.org/security/v1"
+    ],
+    "id": "{site}/actor/ada",
+    "type": "Person",
+    "url": "{site}/profile/ada",
+    "preferredUsername": "ada",
+    "name": "Ada Admin",
+    "summary": "Ada writes about computers, gardens and the open web.",
+    "manuallyApprovesFollowers": false,
+    "inbox": "{site}/actor/ada/inbox",
+    "outbox": "{site}/actor/ada/outbox",
+    "followers": "{site}/actor/ada/followers",
+    "following": "{site}/actor/ada/following",
+    "publicKey": {
+        "id": "{site}/actor/ada#main-key",
+        "owner": "{site}/actor/ada",
+        "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtLhK44/m0gPPxlxNdjtN\nuooz4JUdU91wFWZgJMw0LG0Gf0rHWs2Re0C72NF32q8iDozHk1I2RAH3c78i3NwC\nzIuaCbOSS7/P+/dBw/P7tzhQAU4AfY/sOK5zaE9QxYlcXvvl4LpEq+Ro+ZTHrvvB\nYRgYRUr8OrvSRdSmyUgd3PEA+b0O+GdLZCmJ5dugs3cxaD3UIN3hK3WsElOZEQ94\n1yzFuiJLCmv/gCs+jB0fYqQFhcz+AmB/mo3EX9N5X6shGhw9JwSeqIZ97lFBYB1u\nksSBMakqQcNU3S3GXj3GsIlN4AKZlHshEMHj/dbbxGSbgcl4nKZ7UUKwXzkmrJs9\neQIDAQAB\n-----END PUBLIC KEY-----\n"
+    },
+    "endpoints": {
+        "sharedInbox": "{site}/inbox"
+    },
+    "icon": {
+        "type": "Image",
+        "url": "{site}/gfx/users/default-04.png",
+        "mediaType": "image/png"
+    }
+}

@@ -120,6 +120,22 @@ final class TestEventHooks
                 };
             });
         }
+        // With IDNO_TEST_PERMALINK_ROUTES the pages a plugin registers for the post permalink's class, on `plugins/loaded` (the permalink recordings):
+        //   third-party  a plugin's addRoute() of a pattern of its own for the permalink page itself
+        //   subclass     a plugin's addRoute() of a pattern of its own for a subclass of the permalink page (ThirdPartyPermalinkPage)
+        //   hijack       a plugin's hijackRoute() of the permalink's own route for ClaimingPage
+        $permalinkRoutes = getenv('IDNO_TEST_PERMALINK_ROUTES');
+        if (is_string($permalinkRoutes) && $permalinkRoutes !== '') {
+            $dispatcher->addListener('plugins/loaded', static function () use ($permalinkRoutes): void {
+                $routes = Idno::site()->routes();
+                match ($permalinkRoutes) {
+                    'third-party' => $routes->addRoute('/widget/:id/.*', '\Idno\Pages\Entity\View'),
+                    'subclass' => $routes->addRoute('/widgetsub/:id/?', ThirdPartyPermalinkPage::class),
+                    'hijack' => $routes->hijackRoute(\Idno\Common\Entity::getPermalinkRoute() . '/?', ClaimingPage::class),
+                    default => null,
+                };
+            });
+        }
         // With IDNO_TEST_HOMEPAGE_LISTENERS (a comma-separated list) listeners of the home page's replacement event (`homepage/replace`), with the
         // priorities that put them before (10) and after (-10, -20) the StaticPages plugin's own (0), and a public route for the home page:
         //   first        sets the Response `FIRST-LISTENER-PAGE`

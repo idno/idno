@@ -1,0 +1,36 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/a-longer-article-about-templates?_t=markdown>; rel="self"
+link: <{site}/2026/a-longer-article-about-templates>; rel="canonical"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "A longer article about templates"
+author: "Ada Admin"
+pubDate: "Mon, 02 Mar 2026 12:00:00 +0000"
+description: "Templates draw pages. Hello again. A second paragraph."
+link: "{site}/2026/a-longer-article-about-templates"
+guid: "{site}/view/00000000-0000-4000-8000-000000000012"
+category:
+  - "templates"
+  - "idno"
+---
+
+Templates draw pages. **Hello** again.
+
+A second paragraph.

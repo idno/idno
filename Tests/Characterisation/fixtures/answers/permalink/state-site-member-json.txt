@@ -1,0 +1,61 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/bob-writes-a-note-for-the-members-of-the-site?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000000040008000000000000042",
+        "uuid": "{site}\/view\/00000000000040008000000000000042",
+        "content": "Bob writes a note for the members of the site.",
+        "formattedContent": "\n<p>Bob writes a note for the members of the site.<\/p>\n",
+        "displayName": "Bob writes a note for the members ...",
+        "objectType": "note",
+        "published": "2026-03-14T13:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/bob-writes-a-note-for-the-members-of-the-site",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+            "content": "",
+            "formattedContent": "",
+            "displayName": "Bob Member",
+            "objectType": "person",
+            "url": "{site}\/profile\/bob",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-01.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000000040008000000000000003",
+        "uuid": "https:\/\/fixture.example\/view\/00000000000040008000000000000003",
+        "content": "",
+        "formattedContent": "",
+        "displayName": "Carol Member",
+        "objectType": "person",
+        "url": "{site}\/profile\/carol",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-02.png"
+        }
+    },
+    "title": "Bob writes a note for the members ...",
+    "description": "Bob writes a note for the members of the site.",
+    "messages": []
+}
