@@ -937,6 +937,20 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   an entity whose publish status is set and not `published` (`Main::shouldFederateDeletion()`),
   as such a post was never delivered. `Tests/Pages/DeleteFromEditPageTest.php` and
   `IdnoPlugins/ActivityPub/Tests/DeleteDraftFederationTest.php` check this.
+- A page that deletes or changes an entity checks `canEdit()` itself: `Entity::delete()` asks
+  nothing of the requester (only the takedown lock), because system code, the queue worker and
+  tests delete with no user, and `save()` asks `canEdit()` last, after an entity's
+  `saveDataFromInput()` may already have stored or replaced files. So a request handler calls
+  `gatekeeper()` and then the entity's `canEdit()` before it deletes or changes anything, and
+  answers a refusal with `deniedContent()` (the 403 page), as `Idno\Pages\Entity\Delete` does;
+  something the requester may not read is answered as something missing is. A form token or an
+  API signature says who is asking, not that they may. The pages that answer at a thing's own
+  address do this for `DELETE` and `POST` (`Idno\Pages\Entity\View`, the StaticPages `View`,
+  and `DELETE` on `Idno\Pages\User\View`), and send the browser on only to an address of this
+  site (`Login::sanitizeRedirectUrl()`). An entity whose `saveDataFromInput()` removes something
+  before saving asks `canEdit()` first (`Media`, which replaces its file).
+  `Tests/Pages/PermalinkWriteAccessTest.php` and
+  `IdnoPlugins/Media/Tests/MediaReplaceAccessTest.php` check this over HTTP.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
   located `.tpl.php` path onto a private static stack and the scoping closure pops it in the
