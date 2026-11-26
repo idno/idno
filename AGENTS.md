@@ -155,12 +155,16 @@ Each content plugin has an `Entry.php` entity class that defines
 |---|---|
 | **ActivityPub** | Fediverse federation (see below) |
 | **IndiePub** | IndieAuth + Micropub server |
-| **Bridgy** | POSSE syndication via Bridgy |
 | **Webhooks** | Outgoing webhooks on content events |
 | **Atmosphere** | AT Protocol: writes posts to the member's PDS (see below) |
 | **Styles** | Custom CSS admin interface |
 | **Portfolios** | Members collect their own posts into named lists shown from their profile (see below) |
 | **Moderation** | Reporting by members and a moderation queue for administrators (see below) |
+
+The Bridgy plugin was removed in November 2026: it only knew Twitter and Facebook, which
+Bridgy itself no longer supports, and its callback pages changed a member's settings on a plain
+GET. A site that still lists it as enabled loads without it. Replies and likes that the Bridgy
+service sends for a member who signed up there themselves still arrive as ordinary webmentions.
 
 ## ActivityPub Plugin
 
@@ -832,7 +836,7 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
 | **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
-| **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
+| **POSSE** | `Idno\Core\Syndication` — syndicate to external services |
 
 ## Code Style
 

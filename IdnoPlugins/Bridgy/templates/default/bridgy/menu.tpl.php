@@ -1,1 +1,0 @@
-<li <?php if ($_SERVER['REQUEST_URI'] == '/account/bridgy/') echo 'class="active"'; ?>><a href="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>account/bridgy/"><?php echo \Idno\Core\Idno::site()->language()->_('Interactions'); ?></a></li>
