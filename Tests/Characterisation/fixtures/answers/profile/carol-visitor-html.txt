@@ -54,7 +54,6 @@ x-powered-by: https://idno.co
     {
     "@context": "http://schema.org",
     "@type": "Person",
-    "email": "carol@example.com",
     "image": "{site}/gfx/users/default-02.png",
     "url": "{site}/profile/carol"
 }    

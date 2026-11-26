@@ -1249,12 +1249,15 @@ namespace Idno\Entities {
             return $data;
         }
 
+        /**
+         * The member as schema.org structured data, which every page of the member and of their posts publishes: it never holds the account's email address,
+         * which is private (an address the member lists on their profile is a link there).
+         */
         public function jsonLDSerialise(array $params = array())
         {
             $json = [
                 '@context' => 'http://schema.org',
                 '@type' => 'Person',
-                'email' => $this->email,
                 'image' => $this->getIcon(),
                 'url' => $this->getURL(),
             ];

@@ -5468,6 +5468,7 @@ no installer writes one.
   `setPassword()` or `checkPassword()` gets all of this unchanged; one that calls `password_hash()`/`password_verify()` on `$user->password`
   itself still verifies (bcrypt), but does not upgrade. `RemoteUser::checkPassword()` is false as before. Tests: `Tests/Unit/Security/`,
   `Tests/Kernel/PasswordCompatibilityTest`.
+- A member's account email address is private: no serialiser of a member (`User::jsonSerialize()`, `jsonLDSerialise()`, the structured data every profile and permalink draws, the feeds, the ActivityPub actor) includes it, for any viewer; only the account's own settings page and the administrator's Users page show it. An address a member wants public is a `mailto:` link in their profile links (`profile.url`), shown as the h-card's `u-email`. `Tests/Characterisation/AccountEmailPrivateTest`, `AccountEmailInAnnotationTest` and `IdnoPlugins/ActivityPub/Tests/ActorEmailTest` check this.
 - Logging in (`Idno\Pages\Session\Login`). ONE failure message for an unknown login name and a wrong password: "Oops! That
   username or password isn't right. Please try again." (JSON login too); the legacy events still fire as before (`login/failure`,
   `login/failure/nouser`). For a login name nobody has, `Passwords::spendVerification()` does one bcrypt against a fixed cost-12
