@@ -17,7 +17,9 @@ namespace Idno\Pages\Account {
         function getContent()
         {
             $this->reverseGatekeeper();
-            $this->refuseWithoutAnAdministrator();
+            if ($this->refuseWithoutAnAdministrator()) {
+                return;
+            }
             $code       = $this->getInput('code');
             $email      = $this->getInput('email');
 
@@ -25,10 +27,14 @@ namespace Idno\Pages\Account {
                 if (!\Idno\Core\Idno::site()->config()->canAddUsers()) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("This site is closed to new users."));
                     $this->forward(\Idno\Core\Idno::site()->config()->getURL());
+
+                    return;
                 }
                 if (!\Idno\Entities\Invitation::validate($email, $code)) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Your invitation doesn't seem to be valid, or has expired."));
                     $this->forward(\Idno\Core\Idno::site()->config()->getURL());
+
+                    return;
                 }
             }
 
@@ -45,11 +51,15 @@ namespace Idno\Pages\Account {
          * which only the person who installed the site can reach. On a site with no account at all
          * nobody can register: the visitor is sent to the home page, which says the site is being set up.
          */
-        private function refuseWithoutAnAdministrator()
+        private function refuseWithoutAnAdministrator(): bool
         {
             if (!\Idno\Entities\User::get()) {
                 $this->forward(\Idno\Core\Idno::site()->config()->getURL());
+
+                return true; // the caller returns: a request that cannot be redirected must not register
             }
+
+            return false;
         }
 
         function postContent()
@@ -60,7 +70,9 @@ namespace Idno\Pages\Account {
             $password2  = trim($this->getInput('password2'));
             $email      = trim($this->getInput('email'));
             $code       = $this->getInput('code');
-            $this->refuseWithoutAnAdministrator();
+            if ($this->refuseWithoutAnAdministrator()) {
+                return;
+            }
 
             /*if (!\Idno\Common\Page::isSSL() && !\Idno\Core\Idno::site()->config()->disable_cleartext_warning) {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"));
@@ -70,6 +82,8 @@ namespace Idno\Pages\Account {
                 if (!($invitation = \Idno\Entities\Invitation::validate($email, $code))) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Your invitation doesn't seem to be valid, or has expired."));
                     $this->forward(\Idno\Core\Idno::site()->config()->getURL());
+
+                    return;
                 } else {
                     // Removing this from here - invitation will be deleted once user is created
                     //$invitation->delete(); // Remove the invitation; it's no longer needed

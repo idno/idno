@@ -23,7 +23,7 @@ namespace Idno\Core {
                 // A controller answers once, with a Response: the work runs when the kernel terminates, after it has been sent.
                 $page->context()->afterResponse(\Closure::fromCallable($work));
                 $page->forward($location);
-                // (a page that cannot forward, an XHR POST, has nothing to send: the work still runs, behind an empty answer)
+                // (a page that cannot forward, an XHR POST, is ended by the forward with an empty answer: the work still runs behind it)
                 throw new \Idno\Http\Page\PageRedirect($location, '', 200);
             }
             session_write_close();

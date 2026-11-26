@@ -21,6 +21,8 @@ namespace IdnoPlugins\StaticPages\Pages {
             }
             if (empty($object)) {
                 $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/staticpages/?test=1');
+
+                return;
             }
             if ($staticpages = \Idno\Core\Idno::site()->plugins()->get('StaticPages')) {
 
