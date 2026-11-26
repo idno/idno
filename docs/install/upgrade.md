@@ -24,3 +24,29 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 !!! warning "MongoDB Users"
     * Previous releases of Idno (<0.9.5) used a now deprecated mongo driver. If you are running your site on Mongo, you will first need to make sure that you have installed the new [PHP MongoDB driver](https://secure.php.net/manual/en/set.mongodb.php).
     * Additionally, the 0.9.9 release changed the default database engine, so you'll need to specify ```database = 'MongoDB'``` in your config.ini
+
+## Names that changed
+
+### WebSub (formerly PubSubHubbub)
+
+The protocol that tells a hub when a site has published something was renamed WebSub when the W3C made it a
+standard, and Idno now calls it that everywhere. Nothing needs doing on a site: the hub setting (`hub`) is the same
+setting, the address hubs call back (`/pubsub/callback/<subscriber>/<subscription>`) is the same address, so
+subscriptions made before the upgrade go on working, and the fields stored on members (`pubsub_pending`,
+`pubsub_self`, `pubsub_hub`) keep their names.
+
+For plugins and themes, the earlier names still work but are deprecated, and will be removed in a later release:
+
+| Earlier name | Name now |
+|---|---|
+| class `Idno\Core\PubSubHubbub` | `Idno\Core\WebSub` |
+| class `Idno\Pages\Pubsubhubbub\Callback` | `Idno\Pages\WebSub\Callback` |
+| event `pubsubhubbub/ping` | `websub/ping` (`Idno\Core\WebSub::PING_EVENT`) |
+
+* The earlier class names are aliases of the new classes, so `instanceof`, static calls and `new` behave the same
+  under either name.
+* The two event names are one event. A listener added for either name is called when either is triggered, and a
+  listener added for both is called once. Events that were waiting in the queue under the earlier name when the
+  site was upgraded are still delivered.
+* No template was named after the protocol, so there is nothing for a theme to rename. The labels of the hub
+  setting changed ("WebSub hub"), so a translation of the earlier labels needs the new ones.

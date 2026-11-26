@@ -35,7 +35,7 @@ try {
     $admin = new Idno\Core\Admin();
     $webfinger = new Idno\Core\Webfinger();
     $webmention = new Idno\Core\Webmention();
-    $pubsubhubbub = new Idno\Core\PubSubHubbub();
+    $websub = new Idno\Core\WebSub();
 } catch (\Exception $e) {
     error_log($e->getMessage());
 }

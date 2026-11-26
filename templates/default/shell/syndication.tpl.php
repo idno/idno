@@ -17,6 +17,6 @@
 <link href="<?php echo \Idno\Core\Idno::site()->config()->getURL() ?>webmention/" rel="webmention"/>
 
 <?php if (!empty(\Idno\Core\Idno::site()->config()->hub)) { ?>
-    <!-- Pubsubhubbub -->
+    <!-- WebSub hub -->
     <link href="<?php echo \Idno\Core\Idno::site()->config()->hub ?>" rel="hub"/>
 <?php }

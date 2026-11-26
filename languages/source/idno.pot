@@ -1327,11 +1327,11 @@ msgid "Technical Settings"
 msgstr ""
 
 #: ./templates/default/admin/home.tpl.php:247
-msgid "PubSubHubbub hub"
+msgid "WebSub hub"
 msgstr ""
 
 #: ./templates/default/admin/home.tpl.php:250
-msgid "PubSubHubbub hub address"
+msgid "WebSub hub address"
 msgstr ""
 
 #: ./templates/default/admin/home.tpl.php:254
@@ -1339,7 +1339,7 @@ msgid "You can probably leave this as is."
 msgstr ""
 
 #: ./templates/default/admin/home.tpl.php:255
-msgid "Learn more about PuSH"
+msgid "Learn more about WebSub"
 msgstr ""
 
 #: ./templates/default/admin/home.tpl.php:265

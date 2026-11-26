@@ -3,7 +3,7 @@
 namespace Tests\Core {
 
     use Idno\Core\Idno;
-    use Idno\Core\PubSubHubbub;
+    use Idno\Core\WebSub;
     use Idno\Core\Webmention;
 
     /**
@@ -71,12 +71,12 @@ namespace Tests\Core {
 
             Idno::site()->config()->walled_garden = true;
 
-            $this->assertFalse(PubSubHubbub::publish($post));
+            $this->assertFalse(WebSub::publish($post));
             $this->assertSame([], static::$server->requests(), 'A private site does not tell a hub that something was posted.');
 
             Idno::site()->config()->walled_garden = false;
 
-            PubSubHubbub::publish($post);
+            WebSub::publish($post);
             $this->swapUser($old);
             $this->assertSame(['POST http://203.0.113.10/hub'], static::$server->requests(), 'Control: a public site pings its hub.');
         }
