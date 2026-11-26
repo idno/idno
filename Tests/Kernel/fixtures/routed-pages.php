@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 return [
     'idno_permalink' => ['action' => 'Idno\Http\Controller\PermalinkController::view', 'class' => 'Idno\Pages\Entity\View'],
+    'idno_profile' => ['action' => 'Idno\Http\Controller\ProfileController::view', 'class' => 'Idno\Pages\User\View'],
     'idno_permalink_other_layout' => ['action' => 'Idno\Http\Controller\PermalinkController::otherLayout', 'class' => 'Idno\Legacy\Placeholder\PermalinkOtherLayout'],
     'idno_annotations' => ['action' => 'Idno\Http\Controller\AnnotationController::show', 'class' => 'Idno\Legacy\Placeholder\AnnotationView'],
     'idno_annotation_delete' => ['action' => 'Idno\Http\Controller\AnnotationController::delete', 'class' => 'Idno\Legacy\Placeholder\AnnotationDelete'],

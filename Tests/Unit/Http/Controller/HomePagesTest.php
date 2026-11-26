@@ -13,9 +13,11 @@ use Idno\Http\Page\PageDrawer;
 use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
 use Idno\Http\Webmention\ReceivedWebmention;
+use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Templating\TemplateTranslation;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -35,6 +37,8 @@ final class HomePagesTest extends TestCase
 
     private HomeEvents $events;
 
+    private ProfileReceiverDouble $profileReceiver;
+
     protected function setUp(): void
     {
         $this->stream = new HomeStreamDouble();
@@ -47,7 +51,26 @@ final class HomePagesTest extends TestCase
                 return $text;
             }
         };
-        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), fn () => $this->logger, fn () => $this->events);
+        $this->profileReceiver = new ProfileReceiverDouble();
+        $receivers = new ServiceLocator(['Idno\Pages\User\View' => fn () => $this->profileReceiver]);
+        $this->pages = new HomePages($this->stream, new PageRenderer($this->drawer, $translation), fn () => $this->logger, fn () => $this->events, $receivers);
+    }
+
+    /** An account whose handle is `ada` (an entity built with no database). */
+    private function account(): User
+    {
+        $user = new class extends User {
+            public function __construct()
+            {
+            }
+
+            public function getHandle()
+            {
+                return 'ada';
+            }
+        };
+
+        return $user;
     }
 
     private function context(string $uri = '/'): PageContext
@@ -445,27 +468,28 @@ final class HomePagesTest extends TestCase
     public function testAMentionToARouteThatDoesNotReceiveIsRefusedWithoutAsking(): void
     {
         $this->stream->single = true;
-        $this->stream->administrator = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
-        $this->stream->profileAccepts = true;
+        $this->stream->administrator = $this->account();
+        $this->profileReceiver->accepts = true;
 
         $this->assertFalse($this->pages->receiveWebmention('idno_tag', ['books'], $this->mention()));
 
-        $this->assertSame([], $this->stream->profile);
+        $this->assertSame([], $this->profileReceiver->received);
         $this->assertSame([], $this->logger->lines);
     }
 
-    public function testARootWebmentionOnASingleUserSiteGoesToTheProfile(): void
+    public function testARootWebmentionOnASingleUserSiteGoesToTheProfilesReceiver(): void
     {
-        $owner = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
+        $owner = $this->account();
         $this->stream->single = true;
         $this->stream->administrator = $owner;
-        $this->stream->profileAccepts = true;
+        $this->profileReceiver->accepts = true;
+        $mention = $this->mention(response: ['response' => 200], mf2: ['items' => []]);
 
-        $accepted = $this->pages->receiveWebmention('idno_home', [], $this->mention(response: ['response' => 200], mf2: ['items' => []]));
+        $accepted = $this->pages->receiveWebmention('idno_home', [], $mention);
 
         $this->assertTrue($accepted);
-        $this->assertSame([['profile', $owner, 'https://a.example/post', 'https://example.com/', ['response' => 200], ['items' => []]]], $this->stream->profile);
-        $this->assertSame([['info', 'received homepage mention from https://a.example/post']], $this->logger->lines);
+        $this->assertSame([['idno_profile', ['ada'], $mention]], $this->profileReceiver->received, 'the profile route, with the owner\'s handle, and the mention as it came');
+        $this->assertSame([['info', 'received homepage mention from https://a.example/post'], ['debug', 'pass on webmention to solo user: ada']], $this->logger->lines);
     }
 
     public function testTheSourceOfAMentionIsLoggedWithoutControlCharactersAndCut(): void
@@ -488,7 +512,7 @@ final class HomePagesTest extends TestCase
 
         $this->assertFalse($this->pages->receiveWebmention('idno_home', [], $this->mention()));
 
-        $this->assertSame([], $this->stream->profile);
+        $this->assertSame([], $this->profileReceiver->received);
         $this->assertSame([['info', 'received homepage mention from https://a.example/post'], ['debug', 'disregarding mention to multi-user site']], $this->logger->lines);
     }
 
@@ -499,15 +523,15 @@ final class HomePagesTest extends TestCase
 
         $this->assertFalse($this->pages->receiveWebmention('idno_home', [], $this->mention()));
 
-        $this->assertSame([], $this->stream->profile);
+        $this->assertSame([], $this->profileReceiver->received);
         $this->assertSame([['info', 'received homepage mention from https://a.example/post'], ['debug', 'query for an admin-user failed to find one']], $this->logger->lines);
     }
 
     public function testAProfilePageThatRefusesTheMentionRefusesIt(): void
     {
         $this->stream->single = true;
-        $this->stream->administrator = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
-        $this->stream->profileAccepts = false;
+        $this->stream->administrator = $this->account();
+        $this->profileReceiver->accepts = false;
 
         $this->assertFalse($this->pages->receiveWebmention('idno_content', ['note'], $this->mention('s', 't')));
     }
@@ -538,13 +562,8 @@ final class HomeStreamDouble implements HomeStream
 
     public ?User $administrator = null;
 
-    public bool $profileAccepts = false;
-
     /** @var list<array<int, mixed>> */
     public array $calls = [];
-
-    /** @var list<array<int, mixed>> */
-    public array $profile = [];
 
     public function siteHasUsers(): bool
     {
@@ -598,13 +617,6 @@ final class HomeStreamDouble implements HomeStream
     public function lastModified(int $timestamp): string
     {
         return 'RFC2616(' . $timestamp . ')';
-    }
-
-    public function profilePageWebmention(User $user, string $source, string $target, array $sourceResponse, array $sourceMf2): bool
-    {
-        $this->profile[] = ['profile', $user, $source, $target, $sourceResponse, $sourceMf2];
-
-        return $this->profileAccepts;
     }
 }
 
@@ -695,5 +707,26 @@ final class HomeEvents implements \Idno\Queue\EventTrigger
         }
 
         return $this->answer;
+    }
+}
+
+/** The profile page's receiver: records what it is handed and answers what the test sets. */
+final class ProfileReceiverDouble implements ReceivesWebmentions
+{
+    public bool $accepts = false;
+
+    /** @var list<array{0: string, 1: list<string>, 2: ReceivedWebmention}> */
+    public array $received = [];
+
+    public function receivesFor(string $route): bool
+    {
+        return $route === 'idno_profile';
+    }
+
+    public function receiveWebmention(string $route, array $arguments, ReceivedWebmention $mention): bool
+    {
+        $this->received[] = [$route, $arguments, $mention];
+
+        return $this->accepts;
     }
 }

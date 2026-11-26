@@ -19,7 +19,10 @@ final class ProfileWalledAnswersTest extends ProfileSiteCase
 
     protected const GROUP = 'profile-walled';
 
-    private const CHANGED = [];
+    private const CHANGED = [
+        'xhr-visitor' => 'an XHR GET gets the headers of the same request that is not XHR',
+        'xhr-member' => 'an XHR GET gets the headers of the same request that is not XHR',
+    ];
 
     /**
      * case => [the address, the viewer, the form].
@@ -90,5 +93,19 @@ final class ProfileWalledAnswersTest extends ProfileSiteCase
         $this->record('xhr-visitor', 'GET', '/profile/ada', ['X-Requested-With' => 'XMLHttpRequest'], 'visitor', null, self::withoutLastModified(...));
         $this->record('xhr-member', 'GET', '/profile/ada', ['X-Requested-With' => 'XMLHttpRequest'], 'member');
         $this->addToAssertionCount(1);
+    }
+
+    /** An XHR GET of a profile gets the headers of the same request that is not XHR (the refusal of a visitor too), and the body it had. */
+    public function testAnXhrRequestGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        foreach (['visitor' => 'xhr-visitor', 'member' => 'xhr-member'] as $viewer => $case) {
+            $answer = $this->site()->request('GET', '/profile/ada', $this->asViewer($viewer, ['X-Requested-With' => 'XMLHttpRequest']));
+            $plain = $this->site()->request('GET', '/profile/ada', $this->asViewer($viewer));
+            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($answer), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($plain), $this->baseUrl()), 2);
+            $this->assertSame($plainHeaders, $answeredHeaders, $viewer . ': the headers of the same request that is not XHR');
+            [, $recordedBody] = explode("\n\n", (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt'), 2);
+            $this->assertSame($recordedBody, $answeredBody, $viewer . ': the body is what it was');
+        }
     }
 }

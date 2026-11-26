@@ -109,19 +109,26 @@ final class PermalinkDeleteAccessTest extends PermalinkSiteCase
         }
     }
 
+    /**
+     * The profile address is no delete handler (the page looked its handle up as an entity's id, and so deleted whatever held that id): a DELETE of it
+     * deletes nothing and is answered as a page with no handler for the method answers, with a valid token (a 302 to the home page). An account's `/view/<id>`
+     * address is the permalink's, which refuses it to everyone but an administrator's session.
+     */
     public function testAMemberDoesNotDeleteAnotherMembersProfile(): void
     {
         $paths = $this->seedPermalinkContent();
         $bob = (string) $paths['ids']['bob'];
-        foreach (['/profile/' . $bob, '/view/' . $bob] as $path) {
+        foreach (['/profile/' . $bob => 302, '/view/' . $bob => 403] as $path => $status) {
             $answer = $this->site()->request('DELETE', $path . '?__bTk=' . $this->tokenOf('member'), $this->asViewer('member', ['Referer' => $this->baseUrl()]));
-            $this->assertSame(403, $answer->status, $path);
+            $this->assertSame($status, $answer->status, $path);
             $this->assertTrue($this->stored($bob), $path . ': the account is still there');
         }
         $cookie = self::sessionCookie($this->site()->request('GET', '/'));
-        $answer = $this->site()->request('DELETE', '/profile/' . $bob . '?__bTk=' . $this->tokenWith(['Cookie' => $cookie]), ['Cookie' => $cookie]);
-        $this->assertSame(403, $answer->status);
-        $this->assertTrue($this->stored($bob), 'a visitor did not delete the account');
+        foreach (['/profile/' . $bob => 302, '/view/' . $bob => 403] as $path => $status) {
+            $answer = $this->site()->request('DELETE', $path . '?__bTk=' . $this->tokenWith(['Cookie' => $cookie]), ['Cookie' => $cookie]);
+            $this->assertSame($status, $answer->status, 'a visitor, ' . $path);
+            $this->assertTrue($this->stored($bob), 'a visitor did not delete the account by ' . $path);
+        }
     }
 
     public function testTheRedirectAfterADeleteStaysOnTheSite(): void
@@ -163,19 +170,27 @@ final class PermalinkDeleteAccessTest extends PermalinkSiteCase
         $carol = (string) $paths['ids']['carol'];
         $own = '/profile/' . $carol . '?__bTk=' . $this->tokenOf('member');
         $answer = $this->site()->request('DELETE', $own, $this->asViewer('member'));
-        $this->assertSame(403, $answer->status, 'a member does not delete their own account');
-        $this->assertTrue($this->stored($carol));
+        $this->assertSame(302, $answer->status, 'the profile address is no delete handler');
+        $this->assertTrue($this->stored($carol), 'a member does not delete their own account');
         $signed = '/profile/' . $carol . '?x=1';
         $answer = $this->site()->request('DELETE', $signed, self::signedHeadersFor('carol', $this->carolsKey(), $signed));
-        $this->assertSame(403, $answer->status, 'a signed request does not delete the account of its member');
-        $this->assertTrue($this->stored($carol));
+        $this->assertSame(501, $answer->status, 'the profile address is no delete handler, to a signed request either');
+        $this->assertTrue($this->stored($carol), 'a signed request does not delete the account of its member');
         $answer = $this->site()->request('DELETE', '/view/' . $carol . '?__bTk=' . $this->tokenOf('member'), $this->asViewer('member'));
         $this->assertSame(403, $answer->status, 'nor by its /view address');
+        $this->assertTrue($this->stored($carol));
+        $signedView = '/view/' . $carol . '?x=1';
+        $answer = $this->site()->request('DELETE', $signedView, self::signedHeadersFor('carol', $this->carolsKey(), $signedView));
+        $this->assertSame(403, $answer->status, 'nor a signed request by it');
         $this->assertTrue($this->stored($carol));
 
         $answer = $this->site()->request('DELETE', '/profile/' . $carol . '?__bTk=' . $this->tokenOf('admin'), $this->asViewer('admin', ['Referer' => $this->baseUrl()]));
         $this->assertSame(302, $answer->status);
-        $this->assertFalse($this->stored($carol), 'an administrator deletes an account, as the Users page lets them');
+        $this->assertTrue($this->stored($carol), 'an administrator does not delete an account by the profile address either');
+
+        $answer = $this->site()->request('DELETE', '/view/' . $carol . '?__bTk=' . $this->tokenOf('admin'), $this->asViewer('admin', ['Referer' => $this->baseUrl()]));
+        $this->assertSame(302, $answer->status);
+        $this->assertFalse($this->stored($carol), 'an administrator deletes an account by its /view address, as the Users page lets them');
     }
 
     public function testTheDeletedMessageEscapesTheTitle(): void

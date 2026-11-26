@@ -401,6 +401,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Legacy\LegacyPermalinks::class);
     $services->alias(\Idno\Http\Controller\Permalink\Permalinks::class, \Idno\Legacy\LegacyPermalinks::class)->public();
     $services->set(\Idno\Http\Controller\Permalink\PermalinkPages::class)->public();
+    // A member's profile, over the legacy finders; public: the deprecated legacy page (Idno\Pages\User\View) serves its POST and webmentions through the service, as the controller serves its GET
+    $services->set(\Idno\Legacy\LegacyProfiles::class);
+    $services->alias(\Idno\Http\Controller\Profile\Profiles::class, \Idno\Legacy\LegacyProfiles::class)->public();
+    $services->set(\Idno\Http\Controller\Profile\ProfilePages::class)->public();
     // The annotation pages and the shortlink, over the same finders; the controllers take the services
     $services->set(\Idno\Legacy\LegacyAnnotations::class);
     $services->alias(\Idno\Http\Controller\Permalink\Annotations::class, \Idno\Legacy\LegacyAnnotations::class);

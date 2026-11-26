@@ -160,6 +160,17 @@ final class WebmentionTargetsTest extends TestCase
         $this->assertInstanceOf(\Idno\Http\Controller\Permalink\ShortlinkPages::class, Idno::container()->get(WebmentionReceiverProbe::class)->receiverOf('Idno\Pages\Entity\Shortlink'));
     }
 
+    public function testAProfileIsATarget(): void
+    {
+        foreach (['profile/ada' => ['ada'], 'profile/ada/' => ['ada'], 'profile/ada/notes' => ['ada', 'notes'], 'profile/ada/articles/notes' => ['ada', 'articles/notes'], 'profile/ada/all' => ['ada', 'all']] as $path => $arguments) {
+            $this->assertSame(['page' => 'Idno\Pages\User\View', 'route' => 'idno_profile', 'arguments' => $arguments, 'legacy' => false], $this->answer($this->targets()->resolve($this->base() . $path)), $path);
+        }
+        // an address that names no page of the profile's patterns
+        $this->assertNull($this->targets()->resolve($this->base() . 'profile/'));
+        $this->assertNull($this->targets()->resolve($this->base() . 'profile/ada/123'));
+        $this->assertInstanceOf(\Idno\Http\Controller\Profile\ProfilePages::class, Idno::container()->get(WebmentionReceiverProbe::class)->receiverOf('Idno\Pages\User\View'));
+    }
+
     public function testAnAnnotationListTakesNoMention(): void
     {
         // the pages of a post's annotations had no webmentionContent(): an address of one is no target, in any layout and for the delete

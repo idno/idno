@@ -28,7 +28,13 @@ final class ProfileAnswersTest extends ProfileSiteCase
      * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as they
      * were, and the test of each asserts the answer of the page that serves it now.
      */
-    private const CHANGED = [];
+    private const CHANGED = [
+        'ada-xhr' => 'an XHR GET gets the headers of the same request that is not XHR',
+        'ada-xhr-head' => 'an XHR HEAD gets the headers of the same request that is not XHR',
+        'ada-xhr-missing' => 'an XHR GET of a profile that is not there gets the headers of the same request that is not XHR',
+        'ada-xhr-json' => 'an XHR GET in the JSON type gets the headers of the same request that is not XHR',
+        'ada-xhr-owner' => 'an XHR GET by the account\'s own member gets the headers of the same request that is not XHR',
+    ];
 
     /**
      * Each profile for each viewer in the forms that differ most: case => [the handle, the viewer, the form].
@@ -330,6 +336,42 @@ final class ProfileAnswersTest extends ProfileSiteCase
         $answer = $this->record('ims-ada-none-match', 'GET', '/profile/ada', $long + ['If-None-Match' => '"abc"']);
         $this->assertSame(200, $answer->status);
         $this->addToAssertionCount(1);
+    }
+
+    /**
+     * An XHR GET or HEAD of a profile gets the headers of the same request that is not XHR: the legacy router's own lines for it (a JSON type, a date in
+     * 1997, two `Cache-Control` lines and the time of the request as `Last-Modified`) are no longer sent. Its status and body are what they were: the
+     * legacy page's recording (the forms an XHR response does not carry are not in it). The recordings of the cases are the legacy page's and are kept.
+     */
+    public function testAnXhrRequestGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        $cases = [
+            'ada-xhr' => ['GET', '/profile/ada', 'visitor'],
+            'ada-xhr-head' => ['HEAD', '/profile/ada', 'visitor'],
+            'ada-xhr-missing' => ['GET', '/profile/nobody-has-this-handle', 'visitor'],
+            'ada-xhr-json' => ['GET', '/profile/ada?_t=json', 'visitor'],
+            'ada-xhr-owner' => ['GET', '/profile/bob', 'owner'],
+        ];
+        foreach ($cases as $case => [$method, $path, $viewer]) {
+            $answer = $this->site()->request($method, $path, $this->asViewer($viewer, $xhr));
+            $plain = $this->site()->request($method, $path, $this->asViewer($viewer));
+            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($answer), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($plain), $this->baseUrl()), 2);
+            $this->assertSame($plainHeaders, $answeredHeaders, $case . ': the headers of the same request that is not XHR');
+            $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt');
+            [, $recordedBody] = explode("\n\n", $recorded, 2);
+            $this->assertSame($recordedBody, $answeredBody, $case . ': the body is what it was');
+            $this->assertCount(1, $answer->lines('cache-control'), $case . ': one Cache-Control line');
+        }
+    }
+
+    public function testEveryCaseThatDiffersOnPurposeIsARecordedCase(): void
+    {
+        foreach (self::CHANGED as $case => $why) {
+            $this->assertNotSame('', $why, $case);
+            $this->assertFileExists(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt', $case);
+        }
     }
 
     /**

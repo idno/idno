@@ -209,6 +209,41 @@ final class LegacyRoutedPagesTest extends TestCase
         $this->assertSame(['hello-world'], $routed['arguments'], 'the slug alone is captured');
         $this->assertNull(PageHandler::routedFor($table, 'GET', '/other/' . 'hello-world/x/y/z'));
     }
+
+    /**
+     * The profile is routed to its controller for the addresses core registers it under (its friendly content paths and the actor's address too), the edit
+     * form's POST stays with the legacy router, and where the ActivityPub plugin registers the actor's identical key (which replaces core's handler in
+     * place) the actor's address is the plugin's page and no controller's.
+     */
+    public function testTheProfileIsRoutedAndThePluginsActorAddressIsNot(): void
+    {
+        $core = new PageHandler();
+        $core->addRoute('/profile/([^\\/]+)/?', \Idno\Pages\User\View::class);
+        $core->addRoute('/profile/([^\\/]+)/edit/?', \Idno\Pages\User\Edit::class);
+        $core->addRoute('/profile/([^\\/]+)/([A-Za-z\\-\\/]+)+', \Idno\Pages\User\View::class);
+        $core->addRoute('/actor/([^\\/]+)/?', \Idno\Pages\User\View::class);
+
+        foreach (['/profile/ada' => ['ada'], '/profile/ada/' => ['ada'], '/profile/ada/notes' => ['ada', 'notes'], '/profile/ada/articles/notes' => ['ada', 'articles/notes'], '/actor/ada' => ['ada']] as $path => $arguments) {
+            $routed = PageHandler::routedFor($core, 'GET', $path);
+            $this->assertSame(\Idno\Pages\User\View::class, $routed['class'] ?? null, $path);
+            $this->assertSame($arguments, $routed['arguments'], $path);
+            $request = $this->served($core, $path);
+            $this->assertSame(\Idno\Http\Controller\ProfileController::class . '::view', $request->attributes->get('_controller'), $path . ' is the profile controller\'s');
+            $this->assertSame('idno_profile', $request->attributes->get('_route'), $path);
+        }
+        // the edit form's POST is the legacy router's (the controller takes GET, HEAD and OPTIONS), and so is the edit page
+        $post = $this->served($core, '/profile/ada', 'POST');
+        $this->assertSame(LegacyController::class, $post->attributes->get('_controller'));
+        $this->assertSame(LegacyController::class, $this->served($core, '/profile/ada/edit')->attributes->get('_controller'), 'the edit page is another class');
+
+        // the plugin's registration of the actor's key replaces core's handler in place: the plugin's page serves it, and the profile's own addresses are unchanged
+        $plugin = new PageHandler();
+        $plugin->addRoute('/profile/([^\\/]+)/?', \Idno\Pages\User\View::class);
+        $plugin->addRoute('/actor/([^\\/]+)/?', \Idno\Pages\User\View::class);
+        $plugin->addRoute('/actor/([^\\/]+)/?', ClaimingPage::class);
+        $this->assertSame(LegacyController::class, $this->served($plugin, '/actor/ada')->attributes->get('_controller'), 'a plugin\'s page at the actor\'s address is not the profile\'s');
+        $this->assertSame(\Idno\Http\Controller\ProfileController::class . '::view', $this->served($plugin, '/profile/ada')->attributes->get('_controller'));
+    }
 }
 
 /** Stops the router at its first hook, saying how many entries its table has */

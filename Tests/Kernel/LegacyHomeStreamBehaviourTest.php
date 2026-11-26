@@ -503,46 +503,4 @@ final class LegacyHomeStreamBehaviourTest extends PrivateSiteTestCase
         $this->assertSame($result[1], $result[0]);
         $this->assertNotSame('', $result[0]);
     }
-
-    public function testAProfileWebmentionReachesTheProfilePage(): void
-    {
-        $result = $this->runInSite(self::SEED . <<<'PHP'
-        $stream = \Idno\Core\Idno::container()->get(\Idno\Http\Controller\Home\HomeStream::class);
-        $source = 'http://foo.bar/mention';
-        $target = $site->config()->getDisplayURL();
-        $html = '<div class="h-entry"><a class="p-author h-card" href="http://foo.bar">Foo Bar</a><span class="p-name e-content">test mention of ' . $target . '</span></div>';
-        $mf2 = (new \Mf2\Parser($html, $source))->parse();
-        $log = tempnam(sys_get_temp_dir(), 'idno-log-');
-        ini_set('error_log', $log);
-        $site->logging()->setLogLevel(\Idno\Core\Logging::LEVEL_DEBUG);
-
-        // A script's routes are registered under its own directory (the legacy router reads SCRIPT_NAME), so a profile's address is made under it
-        $profile = new class extends \Idno\Entities\User {
-            public string $address = '';
-
-            public function getURL()
-            {
-                return $this->address;
-            }
-        };
-        $profile->handle = 'ada';
-        $profile->address = 'http://127.0.0.1' . dirname($_SERVER['SCRIPT_NAME']) . '/profile/ada';
-        $accepted = $stream->profilePageWebmention($profile, $source, $target, ['response' => 200, 'content' => $html], $mf2);
-        $deleted = $stream->profilePageWebmention($profile, $source, $target, ['response' => 410, 'content' => ''], $mf2);
-        $nowhere = clone $profile;
-        $nowhere->handle = 'nowhere';
-        $nowhere->address = 'https://elsewhere.example/no/such/route/at/all';
-        $missing = $stream->profilePageWebmention($nowhere, $source, $target, ['response' => 200, 'content' => $html], $mf2);
-        $logged = file_get_contents($log);
-        unlink($log);
-
-        return ['accepted' => $accepted, 'deleted' => $deleted, 'missing' => $missing, 'logged' => $logged];
-        PHP);
-
-        $this->assertTrue($result['accepted'], 'the profile page took the mention');
-        $this->assertTrue($result['deleted'], 'and accepts a non-200 one, doing nothing');
-        $this->assertFalse($result['missing'], 'no page for the address: false');
-        $this->assertStringContainsString('received user mention from http://foo.bar/mention', $result['logged'], 'the profile page\'s own lines');
-        $this->assertStringContainsString('failed to find a Page to serve route https://elsewhere.example/no/such/route/at/all', $result['logged']);
-    }
 }

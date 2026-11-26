@@ -21,7 +21,21 @@ final class ProfileWritesTest extends ProfileSiteCase
 
     protected const GROUP = 'profile-writes';
 
-    private const CHANGED = [];
+    private const CHANGED = [
+        'delete-token-owner-handle-xhr' => 'a DELETE of the profile address is no handler of the page: a script\'s request, which cannot be forwarded, is answered 501 (it was 200, from the forward that deleted nothing)',
+        'delete-token-visitor-handle' => 'a DELETE of the profile address is no handler of the page: with a valid token it is answered 501 and forwarded, whoever sends it (a visitor was refused 403 by a gatekeeper that no longer runs)',
+        'delete-token-visitor-id' => 'the same, for an address that holds an account\'s id (nothing is looked up as an entity\'s id any more)',
+        'delete-token-member-id-other' => 'the same: another member\'s account is deleted by no one at this address, and the answer no longer refuses it',
+        'delete-token-owner-id-own' => 'the same: nor is a member\'s own',
+        'delete-token-admin-id-account' => 'the page no longer looks the address up as an entity\'s id: an administrator\'s DELETE of an account\'s id deletes nothing (an account is deleted at /view/<id> or from the Users page) and goes to the home page, not to the Referer',
+        'delete-token-admin-id-account-then' => 'the account is still there',
+        'delete-token-admin-id-post' => 'the same for a post\'s id: nothing is deleted, and the answer goes to the home page',
+        'delete-signed-owner-handle' => 'a signed DELETE of the profile address is answered 501 with the JSON of the page (it was 200: the forward that deleted nothing)',
+        'delete-signed-owner-id' => 'the same, for an address that holds an account\'s id (it was refused 403)',
+        'post-signed-owner' => 'the JSON that tells a signed request where to go is sent as application/json (the legacy page sent it as text/html)',
+        'post-signed-other-member' => 'the same',
+        'post-signed-owner-then' => 'the profile lists the post that the legacy DELETE of its id deleted earlier in the scenario',
+    ];
 
     /** The boundary of the multipart bodies the edit form sends. */
     private const BOUNDARY = '----idno-profile-edit-boundary';
@@ -89,6 +103,28 @@ final class ProfileWritesTest extends ProfileSiteCase
         return self::scrubbed([$this->tokenOf('owner'), $this->tokenOf('admin'), $this->tokenOf('member')]);
     }
 
+    /**
+     * The answer to a DELETE of the profile address that carried a valid token: a page with no handler for the method answers 501 and forwards, which is
+     * the home page (the request's Referer is not asked), and nothing is deleted.
+     */
+    private function assertForwardedHome(SiteResponse $answer, string $who): void
+    {
+        $this->assertSame(302, $answer->status, $who);
+        $this->assertSame($this->baseUrl(), $answer->lines('location')[0] ?? null, $who);
+    }
+
+    /**
+     * The answer to a signed request that is told where to go is the recording of the legacy page's answer, but for its type: the JSON `{"location": ...}`
+     * is sent as `application/json`, where the legacy page sent it as `text/html; charset=UTF-8`.
+     */
+    private function assertTheRecordingButForItsJsonType(string $case, SiteResponse $answer): void
+    {
+        $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt');
+        $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        $this->assertNotSame($recorded, $expected, $case . ': the recording holds the legacy type');
+        $this->assertSame($expected, self::normalise(self::scrubbed([])($answer), $this->baseUrl()), $case);
+    }
+
     /** The name of an account, as the site stores it. */
     private function nameOf(string $handle): string
     {
@@ -102,6 +138,14 @@ final class ProfileWritesTest extends ProfileSiteCase
     private function stored(string $id): bool
     {
         return $this->runInSite('return \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class)->findById(\'entities\', ' . $this->literal($id) . ') !== null;') === true;
+    }
+
+    public function testEveryCaseThatDiffersOnPurposeIsARecordedCase(): void
+    {
+        foreach (self::CHANGED as $case => $why) {
+            $this->assertNotSame('', $why, $case);
+            $this->assertFileExists(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt', $case);
+        }
     }
 
     /** The scenario changes the site, so each recording of a capture that is verified is made on a site of its own: this is the first. */
@@ -208,9 +252,11 @@ final class ProfileWritesTest extends ProfileSiteCase
         $this->record('delete-no-token-owner', 'DELETE', $profile, $referer, 'owner', null, $this->scrubAll());
         $this->record('delete-no-token-visitor', 'DELETE', $profile, $referer, 'visitor', null, $this->scrubAll());
         $this->record('delete-token-owner-handle', 'DELETE', $profile . '?__bTk=' . $this->tokenOf('owner'), $referer, 'owner', null, $this->scrubAll());
-        $this->record('delete-token-owner-handle-xhr', 'DELETE', $profile . '?__bTk=' . $this->tokenOf('owner'), $referer + $xhr, 'owner', null, $this->scrubAll());
+        $answer = $this->record('delete-token-owner-handle-xhr', 'DELETE', $profile . '?__bTk=' . $this->tokenOf('owner'), $referer + $xhr, 'owner', null, $this->scrubAll());
+        $this->assertSame(501, $answer->status, 'a script\'s DELETE of the profile address: no handler');
         $this->record('delete-token-member-handle', 'DELETE', $profile . '?__bTk=' . $this->tokenOf('member'), $referer, 'member', null, $this->scrubAll());
-        $this->record('delete-token-visitor-handle', 'DELETE', $profile . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::scrubbed([$visitorToken]));
+        $answer = $this->record('delete-token-visitor-handle', 'DELETE', $profile . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::scrubbed([$visitorToken]));
+        $this->assertForwardedHome($answer, 'a visitor');
         $this->record('delete-token-admin-handle', 'DELETE', $profile . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
         $this->record('delete-token-admin-handle-json', 'DELETE', $profile . '?_t=json&__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
         $this->record('delete-token-admin-missing', 'DELETE', '/profile/nobody-has-this-handle?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
@@ -218,27 +264,59 @@ final class ProfileWritesTest extends ProfileSiteCase
         $this->record('delete-after-then', 'GET', $profile . '?_t=json', [], 'visitor', null, $then);
         // an account's id is no handle: the page looked the address up as an entity's id (CHANGED: it deletes nothing)
         $ids = $paths['ids'];
-        $this->record('delete-token-member-id-other', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $this->tokenOf('member'), $referer, 'member', null, $this->scrubAll());
-        $this->record('delete-token-owner-id-own', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $this->tokenOf('owner'), $referer, 'owner', null, $this->scrubAll());
-        $this->record('delete-token-visitor-id', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::scrubbed([$visitorToken]));
-        $this->record('delete-token-admin-id-post', 'DELETE', '/profile/' . $ids['bob-public'] . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
+        $this->assertForwardedHome($this->record('delete-token-member-id-other', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $this->tokenOf('member'), $referer, 'member', null, $this->scrubAll()), 'another member');
+        $this->assertForwardedHome($this->record('delete-token-owner-id-own', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $this->tokenOf('owner'), $referer, 'owner', null, $this->scrubAll()), 'the member');
+        $this->assertForwardedHome($this->record('delete-token-visitor-id', 'DELETE', '/profile/' . $ids['bob'] . '?__bTk=' . $visitorToken, $referer + ['Cookie' => $cookie], 'visitor', null, self::scrubbed([$visitorToken])), 'a visitor');
+        $this->assertForwardedHome($this->record('delete-token-admin-id-post', 'DELETE', '/profile/' . $ids['bob-public'] . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll()), 'an administrator');
+        $this->assertTrue($this->stored((string) $ids['bob-public']), 'the post is still there');
         $this->assertTrue($this->stored((string) $ids['bob']), 'nobody deleted the account');
 
         // a signed API request needs no token and carries no cookie: the stored key of the member signs the request's address (path and query)
         $signed = self::signedHeadersFor('bob', $this->bobsKey(), $profile);
-        $this->record('post-signed-owner', 'POST', $profile, $signed, 'visitor', ['name' => 'Bob Signed'], self::scrubbed([]));
-        $this->record('post-signed-owner-then', 'GET', $profile . '?_t=json', [], 'visitor', null, $then);
+        $this->assertTheRecordingButForItsJsonType('post-signed-owner', $this->record('post-signed-owner', 'POST', $profile, $signed, 'visitor', ['name' => 'Bob Signed'], self::scrubbed([])));
+        $then = $this->record('post-signed-owner-then', 'GET', $profile . '?_t=json', [], 'visitor', null, self::scrubbed([]));
+        $this->assertStringContainsString('Bob publishes a note anyone can read.', $then->body, 'the profile lists the post nobody deleted');
+        $this->assertStringContainsString('Bob Signed', $then->body, 'the signed edit was made');
         $carol = $this->storedKeyOf('carol');
-        $this->record('post-signed-other-member', 'POST', $profile, self::signedHeadersFor('carol', $carol, $profile), 'visitor', ['name' => 'Carol Signed'], self::scrubbed([]));
+        $this->assertTheRecordingButForItsJsonType('post-signed-other-member', $this->record('post-signed-other-member', 'POST', $profile, self::signedHeadersFor('carol', $carol, $profile), 'visitor', ['name' => 'Carol Signed'], self::scrubbed([])));
         $this->record('post-signed-missing', 'POST', '/profile/nobody-has-this-handle', self::signedHeadersFor('bob', $this->bobsKey(), '/profile/nobody-has-this-handle'), 'visitor', ['name' => 'x'], self::scrubbed([]));
-        $this->record('delete-signed-owner-handle', 'DELETE', $profile . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $profile . '?x=1') + $referer, 'visitor', null, self::scrubbed([]));
-        $this->record('delete-signed-owner-id', 'DELETE', '/profile/' . $ids['bob'] . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), '/profile/' . $ids['bob'] . '?x=1') + $referer, 'visitor', null, self::scrubbed([]));
+        $answer = $this->record('delete-signed-owner-handle', 'DELETE', $profile . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $profile . '?x=1') + $referer, 'visitor', null, self::scrubbed([]));
+        $this->assertSame(501, $answer->status, 'a signed DELETE of the profile address: no handler');
+        $answer = $this->record('delete-signed-owner-id', 'DELETE', '/profile/' . $ids['bob'] . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), '/profile/' . $ids['bob'] . '?x=1') + $referer, 'visitor', null, self::scrubbed([]));
+        $this->assertSame(501, $answer->status);
         $this->assertTrue($this->stored((string) $ids['bob']), 'a signed request did not delete the account');
 
         // LAST: an administrator's DELETE of the address that holds an account's id deletes the account (the page looked the id up as an entity's)
         $scrub = $this->scrubAll();
-        $this->record('delete-token-admin-id-account', 'DELETE', '/profile/' . $ids['carol'] . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $scrub);
-        $this->record('delete-token-admin-id-account-then', 'GET', '/profile/carol?_t=json', [], 'visitor', null, $then);
+        $this->assertForwardedHome($this->record('delete-token-admin-id-account', 'DELETE', '/profile/' . $ids['carol'] . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $scrub), 'an administrator');
+        $this->assertSame(200, $this->record('delete-token-admin-id-account-then', 'GET', '/profile/carol?_t=json', [], 'visitor', null, self::scrubbed([]))->status, 'the account is still there');
+        $this->assertTrue($this->stored((string) $ids['carol']), 'an administrator did not delete the account by the profile address');
+    }
+
+    /**
+     * A DELETE of the profile's address is no handler of the page: it is answered as one to any other address of the page is, and deletes nothing. The
+     * legacy page looked the HANDLE up as an entity's id, so it deleted the account or the post whose id the address held, never the profile of a handle:
+     * an administrator's DELETE of `/profile/<an account's id>` deleted the account. An account is deleted from the Users page (`/delete/<id>`) or from
+     * its `/view/<id>` address, by an administrator's session only.
+     */
+    public function testADeleteOfAProfileIsAnUndeclaredHandler(): void
+    {
+        $ids = $this->seedProfiles()['ids'];
+        $referer = ['Referer' => $this->baseUrl()];
+        foreach (['admin', 'owner', 'member'] as $viewer) {
+            foreach (['an account' => (string) $ids['carol'], 'another account' => (string) $ids['bob'], 'a post' => (string) $ids['bob-public']] as $what => $id) {
+                $token = $this->tokenOf($viewer);
+                $missing = $this->site()->request('DELETE', '/profile/nobody-has-this-handle?__bTk=' . $token, $this->asViewer($viewer, $referer));
+                $answer = $this->site()->request('DELETE', '/profile/' . $id . '?__bTk=' . $token, $this->asViewer($viewer, $referer));
+                $this->assertSame($missing->status, $answer->status, $viewer . ', ' . $what);
+                $this->assertSame($missing->lines('location'), $answer->lines('location'), $viewer . ', ' . $what);
+                $this->assertTrue($this->stored($id), $viewer . ' deleted ' . $what . ' by the profile address');
+            }
+        }
+        // the address of the account by its id is the permalink's: the administrator's session deletes there, as the Users page lets them
+        $answer = $this->site()->request('DELETE', '/view/' . $ids['carol'] . '?__bTk=' . $this->tokenOf('admin'), $this->asViewer('admin', $referer));
+        $this->assertSame(302, $answer->status);
+        $this->assertFalse($this->stored((string) $ids['carol']), 'by the /view address, which is the permalink\'s');
     }
 
     /** A profile picture the owner uploads is stored as the account's icon. */

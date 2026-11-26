@@ -10,8 +10,10 @@ use Idno\Http\Page\PageRenderer;
 use Idno\Http\Webmention\ReceivedWebmention;
 use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Queue\EventTrigger;
+use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
+use Symfony\Component\DependencyInjection\Attribute\AutowireLocator;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -29,6 +31,7 @@ final class HomePages implements ReceivesWebmentions
      * @param \Closure(): LoggerInterface $logger the site's logger, fetched when something is logged: it needs the legacy application, which a
      *                                          kernel that did not boot it does not have
      * @param \Closure(): EventTrigger $events the site's events, fetched when the home page asks for a replacement (the same reason)
+     * @param ContainerInterface $receivers the services that take the webmentions of a page, by the page's name: the profile's takes a single-user site's
      */
     public function __construct(
         private readonly HomeStream $stream,
@@ -37,6 +40,8 @@ final class HomePages implements ReceivesWebmentions
         private readonly \Closure $logger,
         #[AutowireServiceClosure(EventTrigger::class)]
         private readonly \Closure $events,
+        #[AutowireLocator('idno.webmention_receiver')]
+        private readonly ContainerInterface $receivers,
     )
     {
     }
@@ -208,7 +213,10 @@ final class HomePages implements ReceivesWebmentions
         if ($this->stream->isSingleUser()) {
             $user = $this->stream->firstAdministrator();
             if ($user !== null) {
-                return $this->stream->profilePageWebmention($user, $mention->source, $mention->target, $mention->sourceResponse, $mention->sourceMf2);
+                $handle = (string) $user->getHandle();
+                ($this->logger)()->debug('pass on webmention to solo user: ' . substr((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $handle), 0, 200));
+
+                return $this->receivers->get('Idno\Pages\User\View')->receiveWebmention('idno_profile', [$handle], $mention);
             }
             ($this->logger)()->debug('query for an admin-user failed to find one');
         } else {

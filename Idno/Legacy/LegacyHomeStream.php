@@ -6,7 +6,6 @@ namespace Idno\Legacy;
 
 use Idno\Common\ContentType;
 use Idno\Common\Entity;
-use Idno\Common\Page;
 use Idno\Core\Idno;
 use Idno\Core\Time;
 use Idno\Entities\User;
@@ -137,17 +136,5 @@ final class LegacyHomeStream implements HomeStream
     public function lastModified(int $timestamp): string
     {
         return Time::timestampToRFC2616($timestamp);
-    }
-
-    public function profilePageWebmention(User $user, string $source, string $target, array $sourceResponse, array $sourceMf2): bool
-    {
-        Idno::site()->logging()->debug("pass on webmention to solo user: {$user->getHandle()}");
-        $page = Idno::site()->routes()->getRoute($user->getURL());
-        if ($page instanceof Page) {
-            return (bool) $page->webmentionContent($source, $target, $sourceResponse, $sourceMf2);
-        }
-        Idno::site()->logging()->debug('failed to find a Page to serve route ' . $user->getURL());
-
-        return false;
     }
 }

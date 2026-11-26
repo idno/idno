@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 final class PageShellsTest extends TestCase
 {
     /** The shells, by class; a page that becomes one is added here, and a page that is removed is taken out */
-    private const SHELLS = ['Idno\Pages\Entity\View', 'Idno\Pages\Homepage'];
+    private const SHELLS = ['Idno\Pages\Entity\View', 'Idno\Pages\Homepage', 'Idno\Pages\User\View'];
 
     /** The only methods a shell declares (besides its constant): the handlers a legacy page was served by */
     private const HANDLERS = ['getContent', 'postContent', 'putContent', 'deleteContent', 'webmentionContent'];

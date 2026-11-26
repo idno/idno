@@ -91,13 +91,4 @@ interface HomeStream
      * A timestamp as the `Last-Modified` header writes it (RFC 2616).
      */
     public function lastModified(int $timestamp): string;
-
-    /**
-     * What a webmention to the home page of a single-user site does: it is passed to the page of the user's profile. True when that page
-     * took it, false when it did not or there is no page for the profile's address.
-     *
-     * @param array<mixed> $sourceResponse the fetched source (`response`, `content`)
-     * @param array<mixed> $sourceMf2      its parsed microformats
-     */
-    public function profilePageWebmention(User $user, string $source, string $target, array $sourceResponse, array $sourceMf2): bool;
 }
