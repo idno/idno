@@ -57,12 +57,10 @@ final class WebmentionTargetsTest extends TestCase
         return str_starts_with($base, 'https://') ? 'http://' . substr($base, 8) : 'https://' . substr($base, 7);
     }
 
-    /** The permalink address of a post as the site's structure makes it. */
+    /** The permalink address of a post as the site makes it. */
     private function permalink(): string
     {
-        $path = strtr(Idno::site()->config()->getPermalinkStructure(), [':year' => '2026', ':month' => '11', ':day' => '25', ':slug' => 'a-note', ':id' => 'abc123']);
-
-        return $this->base() . ltrim($path, '/');
+        return $this->base() . '2026/a-note';
     }
 
     /**

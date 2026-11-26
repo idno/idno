@@ -261,6 +261,7 @@ final class SitePageClaimsTest extends TestCase
         \Idno\Legacy\Placeholder\AnnotationView::class => ['/view/([A-Za-z0-9\\-]+)/annotations/([A-Za-z0-9\\-]+)?', '{permalink}/annotations/([A-Za-z0-9\\-]+)?'],
         \Idno\Legacy\Placeholder\AnnotationDelete::class => ['{permalink}/annotations/([A-Za-z0-9\\-]+)/delete/?', '{permalink}/annotation/delete/?'],
         \Idno\Pages\Entity\View::class => ['/view/([A-Za-z0-9\\-]+)/?', '{permalink}/?'],
+        \Idno\Legacy\Placeholder\PermalinkOtherLayout::class => ['/[0-9]{4}/[0-9]{2}/([^/.]+)/?', '/[0-9]{4}/[0-9]{2}/[0-9]{2}/([^/.]+)/?'],
         \Idno\Pages\User\View::class => ['/profile/([^\\/]+)/?', '/profile/([^\\/]+)/([A-Za-z\\-\\/]+)+'],
     ];
 

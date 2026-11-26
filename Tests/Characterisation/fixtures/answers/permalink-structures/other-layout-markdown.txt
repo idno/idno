@@ -1,4 +1,4 @@
-status 200
+status 404
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
 content-length: <the length of the body>
@@ -7,75 +7,65 @@ expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
 link: <{site}/micropub/endpoint>; rel="micropub"
-link: <{site}/webmention/>; rel="http://webmention.org/"
-link: <{site}/webmention/>; rel="webmention"
-link: <https://hub.example/>; rel="hub"
-link: <{site}/2026/03/hello-world-a-note-about-gardens-with-a-link-to/annotations/>; rel="self"
 pragma: no-cache
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="h-feed">
 <head>
 <meta charset="utf-8">
-<title>Annotations on: Hello world: a note about gardens, with ...</title>
+<title class="p-name">This page can&#039;t be found.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
-<meta name="description" content="Hello world: a note about gardens, with a link to https://example.org/garden in it.">
+<meta name="description" content="">
 <meta name="generator" content="Idno https://idno.co">
 <meta http-equiv="Content-Language" content="en">
-<meta http-equiv="Status" content="200"/>
+<meta http-equiv="Status" content="404"/>
 <!--Le fav and touch icons-->
 <link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
 <link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
 <link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
 <link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
-<link rel="shortcut icon" type="image/png" href="{site}/gfx/users/default-04.png">
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/logos/logo_k.png">
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon-precomposed" href="{site}/gfx/users/default-04.png">
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/logos/logo_k.png">
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon" href="{site}/gfx/users/default-04.png">
+<link rel="apple-touch-icon" href="{site}/gfx/logos/logo_k.png">
 <!-- <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 -->
 <!-- Android -->
 <link rel="manifest" href="{site}/chrome/manifest.json">
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Annotations on: Hello world: a note about gardens, with ..." />
+<meta property="og:title" content="This page can&#039;t be found." />
 <meta property="og:site_name" content="Fixture Site" />
-<meta property="og:image" content="{site}/gfx/users/default-04.png" />
-<meta property="og:description" content="Hello world: a note about gardens, with a link to https://example.org/garden in it." />
+<meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
 <!-- JSON+LD Structured Data -->
 <script type="application/ld+json">
     {
     "@context": "http://schema.org",
     "@type": "WebSite",
-    "url": "{site}/2026/03/hello-world-a-note-about-gardens-with-a-link-to/annotations/",
-    "name": "Annotations on: Hello world: a note about gardens, with ...",
-    "description": "Hello world: a note about gardens, with a link to https://example.org/garden in it.",
+    "url": "{site}/2026/03/a-longer-article-about-templates.md",
+    "name": "This page can't be found.",
+    "description": "",
     "publisher": "Fixture Site",
     "potentialAction": {
         "@type": "SearchAction",
         "target": "{site}/content/all/?q={search_term}",
         "query-input": "required name=search_term"
-    },
-    "author": {
-        "@type": "Person",
-        "name": "Ada Admin"
     }
 }    
 </script>
 <!-- Dublin Core -->
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
-<meta name="DC.title" content="Annotations on: Hello world: a note about gardens, with ...">
-<meta name="DC.description" content="Hello world: a note about gardens, with a link to https://example.org/garden in it."><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<meta name="DC.title" content="This page can&#039;t be found.">
+<meta name="DC.description" content=""><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
 <!-- To silo is human, to syndicate divine -->
-<link rel="alternate" type="application/rss+xml" title="Annotations on: Hello world: a note about gardens, with ..."
-      href="{site}/2026/03/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=rss"/>
-<link rel="feed" type="application/rss+xml" title="Annotations on: Hello world: a note about gardens, with ..."
-      href="{site}/2026/03/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=rss"/>
+<link rel="alternate" type="application/rss+xml" title="This page can&#039;t be found."
+      href="{site}/2026/03/a-longer-article-about-templates.md?_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="This page can&#039;t be found."
+      href="{site}/2026/03/a-longer-article-about-templates.md?_t=rss"/>
 <link rel="alternate feed" type="application/rss+xml"
       title="Fixture Site: all content"
       href="{site}/content/all?_t=rss"/>
@@ -101,7 +91,7 @@ x-powered-by: https://idno.co
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body class="idno_pages_annotation_view page-2026 page-2026-03 page-2026-03-hello-world-a-note-about-gardens-with-a-link-to page-2026-03-hello-world-a-note-about-gardens-with-a-link-to-annotations logged-out">
+<body class="idno_pages_homepage page-2026 page-2026-03 page-2026-03-a-longer-article-about-templates.md logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
 <a href="{site}/" class="idno-nav-logo">
@@ -131,59 +121,21 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
-<div class="idno-content">
-<div class="idno-annotation h-cite" id="annotation-e84afaab83ecb301b3d97ce4174d2773">
-<a href="https://example.org/carol" class="u-url">
-<img class="idno-annotation-avatar u-photo"
-                 src="https://example.org/carol.png"
-                 alt="Carol" />
-</a>
-<div class="idno-annotation-content">
-<div>
-<a href="https://example.org/carol" class="p-name u-url p-author h-card" rel="nofollow" style="font-weight:600;color:var(--color-text-strong)">
-Carol
-</a>
-<span class="idno-entry-meta">
-<a href="https://example.org/carol/reply" rel="nofollow" class="u-url">
-<time class="dt-published" datetime="2026-03-01T13:00:00+00:00">
-Mar 1, 2026
-</time>
-</a>
-</span>
+<div class="container result-404">
+<div class="row" style="margin-bottom: 2em; margin-top: 6em">
+<div class="col-md-offset-1 col-md-5">
+<h1 class="p-name" style="margin-bottom: 2em;">
+Oops! We couldn&#039;t find it.
+</h1>
+<p>Whatever you were looking for, it&#039;s not here. It might have been moved, deleted, or it doesn&#039;t exist. Or the robots ate it. That&#039;s always a possibility too.</p>
+<p>Maybe you'll find something interesting if you head back to the
+<a href="{site}/">Fixture Site homepage</a>.
+</p>
 </div>
-<div class="e-content" style="margin-top:0.25rem">
-<p>Carol replies: hello to you too.</p>
-</div>
-<div class="idno-annotation-source">
-via
-<a href="https://example.org/carol/reply" class="u-url" rel="nofollow">
-example.org
-</a>
+<div class="col-md-5">
+<img src="{site}/gfx/robots/aleph_404.png" alt="Robot with a missing sign">
 </div>
 </div>
-</div>
-</div><div class="idno-content">
-<div class="idno-annotation">
-<img class="idno-annotation-avatar"
-                 src="https://example.org/dave.png"
-                 alt="Dave" />
-<div class="idno-annotation-content">
-<span>
-<a href="https://example.org/dave" rel="nofollow">
-Dave
-</a>
-liked this post
-</span>
-<br>
-<span class="idno-entry-meta">
-<a href="https://example.org/dave/like" rel="nofollow">Mar 1, 2026</a>
-on
-<a href="https://example.org/dave/like" rel="nofollow">example.org</a>
-</span>
-</div>
-</div>
-</div><div class="idno-content">
-</div><div class="idno-content">
 </div>
 </div>
 </main>

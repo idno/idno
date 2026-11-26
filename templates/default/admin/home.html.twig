@@ -45,21 +45,6 @@
                 <p class="idno-form-help">{{ t('Show profile info on homepage.') }}</p>
             </div>
 
-            <div class="idno-form-group">
-                <label class="idno-label">{{ t('Permalink Structure') }}</label>
-                {% for value, label in {
-                    '/:year/:slug': '/:year/:slug (default)',
-                    '/:year/:month/:slug': '/:year/:month/:slug',
-                    '/:year/:month/:day/:slug': '/:year/:month/:day/:slug',
-                } %}
-                    <div class="idno-checkbox-group">
-                        <input type="radio" name="permalink_structure" value="{{ value }}"
-                            {{ (setting('permalink_structure') ?: '/:year/:slug') == value ? 'checked' : '' }}>
-                        <label>{{ label }}</label>
-                    </div>
-                {% endfor %}
-            </div>
-
             {{ idno_include('admin/home/settings/details') }}
         </div>
 

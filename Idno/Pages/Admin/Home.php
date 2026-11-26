@@ -44,7 +44,6 @@ namespace Idno\Pages\Admin {
             $wayback_machine = $this->getInput('wayback_machine') === 'true';
             $items_per_page = (int)$this->getInput('items_per_page');
             $single_user = $this->getInput('single_user') === 'true';
-            $permalink_structure = $this->getInput('permalink_structure');
 
             if (!empty($title)) {
                 \Idno\Core\Idno::site()->config()->title = $title;
@@ -75,7 +74,6 @@ namespace Idno\Pages\Admin {
             \Idno\Core\Idno::site()->config()->share_backup_url = $share_backup_url;
             \Idno\Core\Idno::site()->config()->wayback_machine = $wayback_machine;
             \Idno\Core\Idno::site()->config()->single_user = $single_user;
-            \Idno\Core\Idno::site()->config()->permalink_structure = $permalink_structure;
 
             \Idno\Core\Idno::site()->events()->triggerEvent('admin/home/save');
 

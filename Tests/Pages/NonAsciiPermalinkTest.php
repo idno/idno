@@ -248,31 +248,16 @@ namespace Tests\Pages {
          */
         public function testPermalinkRoutePattern()
         {
-            $config = Idno::site()->config();
-            $saved = $config->permalink_structure;
+            $pattern = '#^/?' . Entity::getPermalinkRoute() . '/?$#';
 
-            try {
-                $config->permalink_structure = '/:year/:slug';
-                $pattern = '#^/?' . Entity::getPermalinkRoute() . '/?$#';
+            foreach (['/2024/plain-words', '/2024/caf%C3%A9-notes', '/2024/caf%c3%a9-notes', '/2024/café-notes', '/2024/日本語-タイトル', '/2024/100%-sure', '/2024/under_score/'] as $path) {
+                $this->assertSame(1, preg_match($pattern, $path, $matches), "$path should be a permalink.");
+                $this->assertEquals(trim(substr($path, 6), '/'), $matches[1], 'The slug should be the last segment.');
+            }
 
-                foreach (['/2024/plain-words', '/2024/caf%C3%A9-notes', '/2024/caf%c3%a9-notes', '/2024/café-notes', '/2024/日本語-タイトル', '/2024/100%-sure', '/2024/under_score/'] as $path) {
-                    $this->assertSame(1, preg_match($pattern, $path, $matches), "$path should be a permalink.");
-                    $this->assertEquals(trim(substr($path, 6), '/'), $matches[1], 'The slug should be the last segment.');
-                }
-
-                foreach (['/2024/', '/2024/..', '/2024/.', '/2024/a/b', '/2024/a/../b', '/2024/file.txt', '/2024/.htaccess', '/24/slug', '/20245/slug', '/year/slug', "/2024/a\nb/c"] as $path) {
-                    $this->assertSame(0, preg_match($pattern, $path), "$path should not be a permalink.");
-                }
-
-                // With a one-segment structure, files and dotted addresses are still not slugs
-                $config->permalink_structure = '/:slug';
-                $pattern = '#^/?' . Entity::getPermalinkRoute() . '/?$#';
-                $this->assertSame(1, preg_match($pattern, '/café-notes'));
-                foreach (['/robots.txt', '/feed.xml', '/rss.xml', '/bookmarklet.js', '/service-worker.min.js', '/.well-known/webfinger', '/..', '/a/b'] as $path) {
-                    $this->assertSame(0, preg_match($pattern, $path), "$path should not be a permalink.");
-                }
-            } finally {
-                $config->permalink_structure = $saved;
+            // files and dotted addresses are not slugs, and neither is a path of another layout
+            foreach (['/2024/', '/2024/..', '/2024/.', '/2024/a/b', '/2024/a/../b', '/2024/file.txt', '/2024/.htaccess', '/24/slug', '/20245/slug', '/year/slug', "/2024/a\nb/c", '/2024/03/slug', '/2024/03/02/slug', '/café-notes', '/robots.txt', '/feed.xml', '/rss.xml', '/bookmarklet.js', '/service-worker.min.js', '/.well-known/webfinger', '/..', '/a/b'] as $path) {
+                $this->assertSame(0, preg_match($pattern, $path), "$path should not be a permalink.");
             }
         }
 

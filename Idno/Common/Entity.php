@@ -2301,35 +2301,17 @@ namespace Idno\Common {
         }
 
         /**
-         * Get the routing regular expression for entities based
-         * on the configured permalink structure. By convention
-         * the route must contain one matching group that matches
-         * either the post ID or the post slug.
+         * Get the routing regular expression for a post's own address: one layout, `/YYYY/<slug>`. The route
+         * holds one matching group, the post's slug. (Before a post's address had one layout a site could choose
+         * another; an address in either other layout the site offered is sent to the post's own by
+         * `\Idno\Legacy\Placeholder\PermalinkOtherLayout`.)
          * @return string
          */
         static function getPermalinkRoute()
         {
-            $parts = explode('/', \Idno\Core\Idno::site()->config()->getPermalinkStructure());
-            $result = implode('/', array_map(function ($part) {
-                switch ($part) {
-                    case ':id':
-                        return '([A-Za-z0-9]+)';
-                    case ':slug':
-                        // Any one path segment: the path may arrive percent-encoded or decoded
-                        // (see getBySlug()). No dot, so that file names are never slugs.
-                        return '([^/.]+)';
-                    case ':year':
-                        return '[0-9]{4}';
-                    case ':month':
-                        return '[0-9]{2}';
-                    case ':day':
-                        return '[0-9]{2}';
-                    default:
-                        return $part;
-                }
-            }, $parts));
-
-            return $result;
+            // Any one path segment: the path may arrive percent-encoded or decoded
+            // (see getBySlug()). No dot, so that file names are never slugs.
+            return '/[0-9]{4}/([^/.]+)';
         }
 
         /**
@@ -2352,31 +2334,9 @@ namespace Idno\Common {
                 return $this->canonical;
             }
 
-            // build the permalink based on the configured structure
-            $parts = explode('/', \Idno\Core\Idno::site()->config()->getPermalinkStructure());
-
-            if (
-                (!in_array(':slug', $parts) || $this->getSlug()) &&
-                (!in_array(':id', $parts) || $this->getID())
-            ) {
-                $path = implode('/', array_map(function ($part) {
-                    switch ($part) {
-                        case ':id':
-                            return $this->getID();
-                        case ':slug':
-                            return $this->getSlug();
-                        case ':year':
-                            return date('Y', $this->created);
-                        case ':month':
-                            return date('m', $this->created);
-                        case ':day':
-                            return date('d', $this->created);
-                        default:
-                            return $part;
-                    }
-                }, $parts));
-
-                return \Idno\Core\Idno::site()->config()->getDisplayURL() . ltrim($path, '/');
+            // a post's address has one layout: /YYYY/<slug>
+            if ($this->getSlug()) {
+                return \Idno\Core\Idno::site()->config()->getDisplayURL() . date('Y', $this->created) . '/' . $this->getSlug();
             }
 
             $new = false;

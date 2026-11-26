@@ -115,6 +115,37 @@ final class PermalinkPagesTest extends TestCase
         $this->assertSame([], $this->drawer->pages);
     }
 
+    public function testAnAddressOfAnotherLayoutIsSentPermanentlyToThePostsOwnAddress(): void
+    {
+        $this->site->entity = $this->entity();
+        $this->site->display = 'https://example.com/2026/a-note';
+
+        $response = $this->pages->otherLayout($this->context('a-note'));
+
+        $this->assertSame(301, $response->getStatusCode());
+        $this->assertSame('https://example.com/2026/a-note', $response->headers->get('Location'), 'the target is built from the post, never from the request');
+        $this->assertSame([], $this->drawer->pages);
+    }
+
+    public function testAnAddressOfAnotherLayoutOfAMissingPostAndOfOneTheViewerMayNotReadAreTheSameAnswer(): void
+    {
+        $missing = $this->pages->otherLayout($this->context('no-such-post'));
+        $this->site->entity = $this->entity();
+        $this->site->readable = false;
+        $private = $this->pages->otherLayout($this->context('a-note'));
+
+        $this->assertSame(410, $missing->getStatusCode());
+        $this->assertSame(410, $private->getStatusCode(), 'nothing tells a post the viewer may not read from one that is not there');
+        $this->assertNull($private->headers->get('Location'));
+        $this->assertSame(['pages/410', 'pages/410'], array_column($this->drawer->templates, 0));
+    }
+
+    public function testAnAddressOfAnotherLayoutWithNoArgumentIsGoneAndAsksNothing(): void
+    {
+        $this->assertSame(410, $this->pages->otherLayout($this->context(''))->getStatusCode());
+        $this->assertSame([], $this->site->calls);
+    }
+
     public function testTheMarkdownTypeIsSelectedBeforeTheChecks(): void
     {
         $this->pages->view($this->context());

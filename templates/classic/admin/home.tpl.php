@@ -94,31 +94,6 @@
 
             </div>
 
-            <!-------->
-
-            <div class="row">
-                <div class="col-md-2">
-                    <p><label class="control-label" for="permalink_structure"><strong><?php echo \Idno\Core\Idno::site()->language()->_('Permalink Structure'); ?></strong></label></p>
-                </div>
-                <div class="col-md-4">
-                    <?php foreach (array(
-                        '/:year/:slug' => '/:year/:slug <strong>(default)</strong>',
-                        '/:year/:month/:slug' => '/:year/:month/:slug',
-                        '/:year/:month/:day/:slug' => '/:year/:month/:day/:slug',
-                    ) as $value => $label) { ?>
-                        <div class="radio">
-                            <label>
-                                <input type="radio" name="permalink_structure" value="<?php echo $value?>"
-                                                                                          <?php echo \Idno\Core\Idno::site()->config()->getPermalinkStructure() == $value ? 'checked' : ''?> />
-                                                                                          <?php echo $label?>
-                            </label>
-                        </div>
-                    <?php } ?>
-                </div>
-                <div class="col-md-6"><p class="config-desc"><?php echo \Idno\Core\Idno::site()->language()->_('How permalinks for individual posts are constructed.'); ?></p>
-                </div>
-            </div>
-
             <?php echo $this->draw('admin/home/settings/details')?>
 
             <!----------->

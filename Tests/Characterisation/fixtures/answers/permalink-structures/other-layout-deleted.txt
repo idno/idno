@@ -1,4 +1,4 @@
-status 404
+status 410
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
 content-length: <the length of the body>
@@ -7,21 +7,25 @@ expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
 link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/03/02/bob-wrote-a-note-and-then-deleted-it>; rel="self"
 pragma: no-cache
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 <!DOCTYPE html>
-<html lang="en" class="h-feed">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title class="p-name">This page can&#039;t be found.</title>
+<title>This content isn&#039;t here.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
 <meta name="description" content="">
 <meta name="generator" content="Idno https://idno.co">
 <meta http-equiv="Content-Language" content="en">
-<meta http-equiv="Status" content="404"/>
+<meta http-equiv="Status" content="410"/>
 <!--Le fav and touch icons-->
 <link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
 <link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
@@ -38,7 +42,7 @@ x-powered-by: https://idno.co
 <!-- Android -->
 <link rel="manifest" href="{site}/chrome/manifest.json">
 <meta property="og:type" content="website" />
-<meta property="og:title" content="This page can&#039;t be found." />
+<meta property="og:title" content="This content isn&#039;t here." />
 <meta property="og:site_name" content="Fixture Site" />
 <meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
 <!-- JSON+LD Structured Data -->
@@ -46,8 +50,8 @@ x-powered-by: https://idno.co
     {
     "@context": "http://schema.org",
     "@type": "WebSite",
-    "url": "{site}/2026/a-longer-article-about-templates",
-    "name": "This page can't be found.",
+    "url": "{site}/2026/03/02/bob-wrote-a-note-and-then-deleted-it",
+    "name": "This content isn't here.",
     "description": "",
     "publisher": "Fixture Site",
     "potentialAction": {
@@ -59,13 +63,13 @@ x-powered-by: https://idno.co
 </script>
 <!-- Dublin Core -->
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
-<meta name="DC.title" content="This page can&#039;t be found.">
+<meta name="DC.title" content="This content isn&#039;t here.">
 <meta name="DC.description" content=""><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
 <!-- To silo is human, to syndicate divine -->
-<link rel="alternate" type="application/rss+xml" title="This page can&#039;t be found."
-      href="{site}/2026/a-longer-article-about-templates?_t=rss"/>
-<link rel="feed" type="application/rss+xml" title="This page can&#039;t be found."
-      href="{site}/2026/a-longer-article-about-templates?_t=rss"/>
+<link rel="alternate" type="application/rss+xml" title="This content isn&#039;t here."
+      href="{site}/2026/03/02/bob-wrote-a-note-and-then-deleted-it?_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="This content isn&#039;t here."
+      href="{site}/2026/03/02/bob-wrote-a-note-and-then-deleted-it?_t=rss"/>
 <link rel="alternate feed" type="application/rss+xml"
       title="Fixture Site: all content"
       href="{site}/content/all?_t=rss"/>
@@ -91,7 +95,7 @@ x-powered-by: https://idno.co
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body class="idno_pages_homepage page-2026 page-2026-a-longer-article-about-templates logged-out">
+<body class="idno_legacy_placeholder_permalinkotherlayout page-2026 page-2026-03 page-2026-03-02 page-2026-03-02-bob-wrote-a-note-and-then-deleted-it logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
 <a href="{site}/" class="idno-nav-logo">
@@ -121,19 +125,21 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
-<div class="container result-404">
+<div class="container result-410">
 <div class="row" style="margin-bottom: 2em; margin-top: 6em">
 <div class="col-md-offset-1 col-md-5">
 <h1 class="p-name" style="margin-bottom: 2em;">
-Oops! We couldn&#039;t find it.
+Sorry, this content isn&#039;t here anymore.
 </h1>
-<p>Whatever you were looking for, it&#039;s not here. It might have been moved, deleted, or it doesn&#039;t exist. Or the robots ate it. That&#039;s always a possibility too.</p>
-<p>Maybe you'll find something interesting if you head back to the
-<a href="{site}/">Fixture Site homepage</a>.
+<p>You may be wondering where it went, but we can&#039;t tell you. It&#039;s a secret.</p>
+<p>
+Maybe you'd like to head back to the
+<a href="{site}/">Fixture Site homepage</a>
+instead.
 </p>
 </div>
 <div class="col-md-5">
-<img src="{site}/gfx/robots/aleph_404.png" alt="Robot with a missing sign">
+<img src="{site}/gfx/robots/aleph_410.png" alt="Robot with a gone sign">
 </div>
 </div>
 </div>

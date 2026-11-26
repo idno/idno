@@ -1,19 +1,17 @@
-status 200
+status 410
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
 content-length: <the length of the body>
 content-type: text/html;charset=UTF-8
 expires: <past>
-last-modified: Fri, 20 Mar 2026 12:00:00 GMT
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
 link: <{site}/micropub/endpoint>; rel="micropub"
 link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
-link: <{site}/view/00000000-0000-4000-8000-000000000012>; rel="self"
+link: <{site}/2026/03/no-such-post>; rel="self"
 pragma: no-cache
-vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
@@ -21,65 +19,57 @@ x-powered-by: https://idno.co
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>A longer article about templates</title>
+<title>This content isn&#039;t here.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
-<meta name="description" content="Templates draw pages. Hello again.A second paragraph.">
+<meta name="description" content="">
 <meta name="generator" content="Idno https://idno.co">
 <meta http-equiv="Content-Language" content="en">
-<meta http-equiv="Status" content="200"/>
+<meta http-equiv="Status" content="410"/>
 <!--Le fav and touch icons-->
 <link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
 <link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
 <link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
 <link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
-<link rel="shortcut icon" type="image/png" href="{site}/gfx/users/default-04.png">
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/logos/logo_k.png">
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon-precomposed" href="{site}/gfx/users/default-04.png">
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/logos/logo_k.png">
 <!-- Make this an "app" when saved to an ios device's home screen -->
-<link rel="apple-touch-icon" href="{site}/gfx/users/default-04.png">
+<link rel="apple-touch-icon" href="{site}/gfx/logos/logo_k.png">
 <!-- <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 -->
 <!-- Android -->
 <link rel="manifest" href="{site}/chrome/manifest.json">
-<meta property="og:type" content="article" />
-<meta property="og:title" content="A longer article about templates" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="This content isn&#039;t here." />
 <meta property="og:site_name" content="Fixture Site" />
-<meta property="og:image" content="{site}/gfx/users/default-04.png" />
-<meta property="og:description" content="Templates draw pages. Hello again.A second paragraph." />
-<meta property="og:url" content="{site}/2026/03/a-longer-article-about-templates" />
+<meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
 <!-- JSON+LD Structured Data -->
 <script type="application/ld+json">
     {
     "@context": "http://schema.org",
-    "@type": "BlogPosting",
-    "dateCreated": "2026-03-02T12:00:00+00:00",
-    "datePublished": "2026-03-02T12:00:00+00:00",
-    "author": {
-        "@type": "Person",
-        "name": "Ada Admin"
-    },
-    "headline": "A longer article about templates",
-    "description": "Templates draw pages. Hello again.A second paragraph.",
-    "text": "\u003Cp\u003ETemplates draw pages. \u003Cstrong\u003EHello\u003C/strong\u003E again.\u003C/p\u003E\u003Cp\u003EA second paragraph.\u003C/p\u003E",
-    "url": "{site}/2026/03/a-longer-article-about-templates",
-    "image": "{site}/gfx/users/default-04.png"
+    "@type": "WebSite",
+    "url": "{site}/2026/03/no-such-post",
+    "name": "This content isn't here.",
+    "description": "",
+    "publisher": "Fixture Site",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "{site}/content/all/?q={search_term}",
+        "query-input": "required name=search_term"
+    }
 }    
 </script>
 <!-- Dublin Core -->
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
-<meta name="DC.title" content="A longer article about templates">
-<meta name="DC.description" content="Templates draw pages. Hello again.A second paragraph.">
-<meta name="DC.creator" content="Ada Admin">
-<meta name="DC.date" content="2026-03-02T12:00:00+00:00">
-<meta name="DC.identifier" content="{site}/2026/03/a-longer-article-about-templates"><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<meta name="DC.title" content="This content isn&#039;t here.">
+<meta name="DC.description" content=""><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
 <!-- To silo is human, to syndicate divine -->
-<link rel="alternate" type="application/rss+xml" title="A longer article about templates"
-      href="{site}/view/00000000-0000-4000-8000-000000000012?_t=rss"/>
-<link rel="feed" type="application/rss+xml" title="A longer article about templates"
-      href="{site}/view/00000000-0000-4000-8000-000000000012?_t=rss"/>
+<link rel="alternate" type="application/rss+xml" title="This content isn&#039;t here."
+      href="{site}/2026/03/no-such-post?_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="This content isn&#039;t here."
+      href="{site}/2026/03/no-such-post?_t=rss"/>
 <link rel="alternate feed" type="application/rss+xml"
       title="Fixture Site: all content"
       href="{site}/content/all?_t=rss"/>
@@ -105,7 +95,7 @@ x-powered-by: https://idno.co
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body class="idno_pages_entity_view page-view page-view-00000000-0000-4000-8000-000000000012 logged-out">
+<body class="idno_legacy_placeholder_permalinkotherlayout page-2026 page-2026-03 page-2026-03-no-such-post logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
 <a href="{site}/" class="idno-nav-logo">
@@ -135,52 +125,24 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
-<article class="idno-entry h-entry idno-posts"
-            >
-<div class="idno-entry-header p-author h-card">
-<a href="{site}/profile/ada" class="u-url">
-<img class="idno-entry-avatar u-photo" src="{site}/gfx/users/default-04.png"
-                         alt="Ada Admin" />
-</a>
-<div>
-<a href="{site}/profile/ada" class="idno-entry-author p-name u-url">
-Ada Admin
-</a>
+<div class="container result-410">
+<div class="row" style="margin-bottom: 2em; margin-top: 6em">
+<div class="col-md-offset-1 col-md-5">
+<h1 class="p-name" style="margin-bottom: 2em;">
+Sorry, this content isn&#039;t here anymore.
+</h1>
+<p>You may be wondering where it went, but we can&#039;t tell you. It&#039;s a secret.</p>
+<p>
+Maybe you'd like to head back to the
+<a href="{site}/">Fixture Site homepage</a>
+instead.
+</p>
+</div>
+<div class="col-md-5">
+<img src="{site}/gfx/robots/aleph_410.png" alt="Robot with a gone sign">
 </div>
 </div>
-<div class="idno-entry-body">
-<h2 class="idno-entry-title p-name"><a
-                href="{site}/2026/03/a-longer-article-about-templates">A longer article about templates</a>
-</h2>
-<h3 class="idno-entry-subtitle p-summary"><a
-                href="{site}/2026/03/a-longer-article-about-templates"></a>
-</h3>
-<div class="idno-entry-body e-content entry-content">
-<p>Templates draw pages.
-<strong>Hello</strong>
-again.</p><p>A second paragraph.</p>
-<i class="fa fa-tag"></i><a href="{site}/tag/%23templates+%23idno" class="p-category" rel="tag">#templates #idno</a>
 </div>
-</div>
-<footer class="idno-entry-footer">
-<div class="idno-entry-footer-bar">
-<a class="u-url idno-entry-permalink" href="{site}/2026/03/a-longer-article-about-templates" rel="permalink"><time class="dt-published"
-                      datetime="2026-03-02T12:00:00+00:00">02 March 2026</time></a>
-<span class="idno-entry-footer-right">
-<span class="idno-entry-action">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-<a href="{site}/2026/03/a-longer-article-about-templates#comments">0</a>
-</span>
-<span class="idno-entry-action">
-<a href="{site}/2026/03/a-longer-article-about-templates#comments">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-0
-</a>
-</span>
-</span>
-</div>
-</footer>
-</article>
 </div>
 </main>
 <div class="idno-spacer" aria-hidden="true"></div>

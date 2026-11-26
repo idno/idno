@@ -192,32 +192,22 @@ final class LegacyRoutedPagesTest extends TestCase
         self::fail('the router did not reach its first hook');
     }
 
-    public function testThePermalinkIsRoutedUnderEachStructure(): void
+    public function testThePermalinkIsRouted(): void
     {
-        $config = Idno::site()->config();
-        $saved = $config->permalink_structure;
-        $created = 1700000000;
-        try {
-            foreach (['/:year/:slug' => 'Y', '/:year/:month/:slug' => 'Y/m', '/:year/:month/:day/:slug' => 'Y/m/d'] as $structure => $dates) {
-                $config->permalink_structure = $structure;
-                $table = new PageHandler();
-                $table->addRoute(Entity::getPermalinkRoute(), \Idno\Pages\Entity\View::class);
+        $table = new PageHandler();
+        $table->addRoute(Entity::getPermalinkRoute(), \Idno\Pages\Entity\View::class);
 
-                // the address Entity::getURL() builds for an entity with this slug and creation time
-                $entity = new \Idno\Entities\GenericDataItem();
-                $entity->created = $created;
-                $entity->slug = 'hello-world';
-                $path = (string) parse_url($entity->getURL(), PHP_URL_PATH);
-                $this->assertSame('/' . date($dates, $created) . '/hello-world', $path, $structure . ': the address the entity builds');
-                $routed = PageHandler::routedFor($table, 'GET', $path);
+        // the address Entity::getURL() builds for an entity with this slug and creation time
+        $entity = new \Idno\Entities\GenericDataItem();
+        $entity->created = 1700000000;
+        $entity->slug = 'hello-world';
+        $path = (string) parse_url($entity->getURL(), PHP_URL_PATH);
+        $this->assertSame('/' . date('Y', 1700000000) . '/hello-world', $path, 'the address the entity builds');
+        $routed = PageHandler::routedFor($table, 'GET', $path);
 
-                $this->assertSame(\Idno\Pages\Entity\View::class, $routed['class'] ?? null, $structure);
-                $this->assertSame(['hello-world'], $routed['arguments'], $structure . ': the slug alone is captured');
-                $this->assertNull(PageHandler::routedFor($table, 'GET', '/other/' . 'hello-world/x/y/z'), $structure);
-            }
-        } finally {
-            $config->permalink_structure = $saved;
-        }
+        $this->assertSame(\Idno\Pages\Entity\View::class, $routed['class'] ?? null);
+        $this->assertSame(['hello-world'], $routed['arguments'], 'the slug alone is captured');
+        $this->assertNull(PageHandler::routedFor($table, 'GET', '/other/' . 'hello-world/x/y/z'));
     }
 }
 

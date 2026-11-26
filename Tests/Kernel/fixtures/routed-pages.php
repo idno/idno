@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 return [
     'idno_permalink' => ['action' => 'Idno\Http\Controller\PermalinkController::view', 'class' => 'Idno\Pages\Entity\View'],
+    'idno_permalink_other_layout' => ['action' => 'Idno\Http\Controller\PermalinkController::otherLayout', 'class' => 'Idno\Legacy\Placeholder\PermalinkOtherLayout'],
     'idno_test_routed' => ['action' => 'Tests\Fixtures\RoutedFixtureController::show', 'class' => 'Tests\Fixtures\RoutedPlaceholder'],
     'idno_test_routed_shell' => ['action' => 'Tests\Fixtures\RoutedFixtureController::showShell', 'class' => 'Tests\Fixtures\RoutedFixtureShell'],
 ];

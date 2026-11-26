@@ -7,11 +7,12 @@ namespace Tests\Characterisation;
 use Tests\Support\RecordedAnswers;
 
 /**
- * What the post permalink answers under each permalink structure the site can be set to (`/:year/:slug`, `/:year/:month/:slug`,
- * `/:year/:month/:day/:slug`), recorded from the legacy page over HTTP on a site of the test's own (it changes the setting): the article at the address
- * the site gives it, the address of another structure (the route is built from the setting at each request, so another structure's address matches no
- * route), the Markdown form, the `/view/<id>` address and the annotation list under the permalink (its address ends in a slash); and, with the `hub` setting empty, the page's `Link`
- * lines. The answers are `Tests/Characterisation/fixtures/answers/permalink-structures/`.
+ * What the post permalink answers at the one layout a post's address has, `/YYYY/<slug>`: the article at its address, the Markdown form, the `/view/<id>`
+ * address and the annotation list under the permalink (its address ends in a slash); with the `hub` setting empty, the page's `Link` lines; and the
+ * addresses of the other two layouts a site could choose before (`/YYYY/MM/<slug>`, `/YYYY/MM/DD/<slug>`), which are now sent permanently to the post's own
+ * address, a missing post and a post the viewer may not read being the same answer there. The answers for the layout are recorded from the legacy page
+ * (`Tests/Characterisation/fixtures/answers/permalink-structures/year-slug-*`, unchanged); the others, which the legacy page SERVED under a setting that no longer
+ * exists, were captured again on purpose when the setting was removed (`other-layout-*`), and the recordings of the page under those settings are gone.
  */
 final class PermalinkStructuresTest extends PermalinkSiteCase
 {
@@ -21,17 +22,6 @@ final class PermalinkStructuresTest extends PermalinkSiteCase
 
     /** The slug of the seeded article, which was made on 2 March 2026. */
     private const SLUG = 'a-longer-article-about-templates';
-
-    /**
-     * Each structure: [the setting, the article's address under it, an address of another structure, the cases of its answers].
-     *
-     * @var array<string, array{string, string, string, array<string, string>}>
-     */
-    private const STRUCTURES = [
-        'year-slug' => ['/:year/:slug', '/2026/' . self::SLUG, '/2026/03/' . self::SLUG, ['article' => 'year-slug-article', 'other' => 'year-slug-other-structure', 'markdown' => 'year-slug-article-md', 'view' => 'year-slug-view-id', 'annotations' => 'year-slug-annotations']],
-        'year-month-slug' => ['/:year/:month/:slug', '/2026/03/' . self::SLUG, '/2026/' . self::SLUG, ['article' => 'year-month-slug-article', 'other' => 'year-month-slug-other-structure', 'markdown' => 'year-month-slug-article-md', 'view' => 'year-month-slug-view-id', 'annotations' => 'year-month-slug-annotations']],
-        'year-month-day-slug' => ['/:year/:month/:day/:slug', '/2026/03/02/' . self::SLUG, '/2026/03/' . self::SLUG, ['article' => 'year-month-day-slug-article', 'other' => 'year-month-day-slug-other-structure', 'markdown' => 'year-month-day-slug-article-md', 'view' => 'year-month-day-slug-view-id', 'annotations' => 'year-month-day-slug-annotations']],
-    ];
 
     public static function tearDownAfterClass(): void
     {
@@ -47,21 +37,49 @@ final class PermalinkStructuresTest extends PermalinkSiteCase
         $this->assertTrue($this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->permalink_structure = ' . $this->literal($structure) . '; $config->hub = ' . $this->literal($hub) . '; $config->save(); return true;'));
     }
 
-    public function testEachPermalinkStructure(): void
+    public function testThePermalinkLayout(): void
     {
         $paths = $this->seedPermalinkContent();
-        foreach (self::STRUCTURES as [$setting, $article, $other, $cases]) {
-            $this->configure($setting, 'https://hub.example/');
-            // the address the site gives the article is the one the structure says
+        $article = '/2026/' . self::SLUG;
+        $this->configure('/:year/:slug', 'https://hub.example/');
+        // the address the site gives the article is the one layout's
+        $given = $this->runInSite('return substr(\Idno\Common\Entity::getByID(' . $this->literal((string) $paths['ids']['article']) . ')->getURL(), strlen(\Idno\Core\Idno::site()->config()->getURL()));');
+        $this->assertSame($article, '/' . $given);
+        $this->record('year-slug-article', 'GET', $article);
+        $this->record('year-slug-article-md', 'GET', $article . '.md');
+        $this->record('year-slug-view-id', 'GET', '/view/' . $paths['ids']['article']);
+        $statusAddress = $this->runInSite('return substr(\Idno\Common\Entity::getByID(' . $this->literal((string) $paths['ids']['status']) . ')->getURL(), strlen(\Idno\Core\Idno::site()->config()->getURL()));');
+        $this->record('year-slug-annotations', 'GET', '/' . $statusAddress . '/annotations/');
+    }
+
+    public function testALayoutStoredByASiteThatCouldChooseOneIsIgnored(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        foreach (['/:year/:month/:slug', '/:year/:month/:day/:slug', '/:slug'] as $stored) {
+            $this->configure($stored, 'https://hub.example/');
             $given = $this->runInSite('return substr(\Idno\Common\Entity::getByID(' . $this->literal((string) $paths['ids']['article']) . ')->getURL(), strlen(\Idno\Core\Idno::site()->config()->getURL()));');
-            $this->assertSame($article, '/' . $given, $setting);
-            $this->record($cases['article'], 'GET', $article);
-            $this->record($cases['other'], 'GET', $other);
-            $this->record($cases['markdown'], 'GET', $article . '.md');
-            $this->record($cases['view'], 'GET', '/view/' . $paths['ids']['article']);
-            $statusAddress = $this->runInSite('return substr(\Idno\Common\Entity::getByID(' . $this->literal((string) $paths['ids']['status']) . ')->getURL(), strlen(\Idno\Core\Idno::site()->config()->getURL()));');
-            $this->record($cases['annotations'], 'GET', '/' . $statusAddress . '/annotations/');
+            $this->assertSame('2026/' . self::SLUG, $given, $stored);
+            $this->assertSame(200, $this->site()->request('GET', '/2026/' . self::SLUG)->status, $stored);
         }
+        $this->configure('/:year/:slug', 'https://hub.example/');
+    }
+
+    public function testTheOtherLayoutsASiteCouldChooseAreSentToThePostsAddress(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $this->configure('/:year/:slug', 'https://hub.example/');
+        $this->record('other-layout-year-month-slug', 'GET', '/2026/03/' . self::SLUG);
+        $this->record('other-layout-year-month-day-slug', 'GET', '/2026/03/02/' . self::SLUG);
+        $this->record('other-layout-head', 'HEAD', '/2026/03/' . self::SLUG);
+        $this->record('other-layout-markdown', 'GET', '/2026/03/' . self::SLUG . '.md');
+        // a post that is not there, one the owner keeps to himself (a visitor asks) and one that was deleted: the one answer
+        $this->record('other-layout-missing', 'GET', '/2026/03/no-such-post');
+        $private = substr((string) $paths['bob-owner'], strrpos((string) $paths['bob-owner'], '/') + 1);
+        $this->record('other-layout-private', 'GET', '/2026/03/' . $private);
+        $deleted = substr((string) $paths['deleted'], strrpos((string) $paths['deleted'], '/') + 1);
+        $this->record('other-layout-deleted', 'GET', '/2026/03/02/' . $deleted);
+        $this->record('other-layout-annotations', 'GET', '/2026/03/' . self::SLUG . '/annotations/');
+        $this->record('other-layout-post', 'POST', '/2026/03/' . self::SLUG);
     }
 
     public function testTheAnnotationListNeedsItsTrailingSlash(): void

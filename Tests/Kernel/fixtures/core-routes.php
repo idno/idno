@@ -15,7 +15,9 @@ declare(strict_types=1);
  *
  * `SitePageClaimsTest` holds the booted application's table to it: each key must still be there, in this order, on the same side of the marker
  * (a kept legacy page, a shell and a placeholder all count as the key being there). A route removed on purpose is deleted from `routes` and listed
- * in `omitted` with its reason, in the same change.
+ * in `omitted` with its reason, in the same change. A key core registered AFTER that commit is not listed (the snapshot is the table as it was; the check
+ * ignores keys it does not hold): the two keys that send a post's address in another layout to its own (`Idno\Legacy\Placeholder\PermalinkOtherLayout`) are held
+ * by `SitePageClaimsTest::ROUTED_KEYS` instead. `{permalink}` is the one fixed layout, `/[0-9]{4}/([^/.]+)`.
  */
 
 return [

@@ -39,7 +39,6 @@ namespace Idno\Core {
             'form_token_expiry'      => 3600,
             'show_privacy'           => true,
             'bypass_fulltext_search' => false,
-            'permalink_structure'    => '/:year/:slug',
             'single_user'            => true,
             'pedantic_mode'          => false, // When true, PHP errors (including notices) will throw exceptions.
         );
@@ -776,18 +775,15 @@ namespace Idno\Core {
         }
 
         /**
-         * Get the configured permalink structure for posts in the
-         * format /:tag1/:tag2
+         * The layout of a post's address, `/:year/:slug`. It is fixed: a site no longer chooses one, and a
+         * `permalink_structure` setting stored by a site that did is ignored.
          *
          * @return string
+         * @deprecated A post's address has one layout; use \Idno\Common\Entity::getURL() and getPermalinkRoute().
          */
         function getPermalinkStructure()
         {
-            if (empty($this->permalink_structure)) {
-                return '/:year/:slug';
-            }
-
-            return $this->permalink_structure;
+            return '/:year/:slug';
         }
 
     }

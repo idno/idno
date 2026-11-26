@@ -76,6 +76,22 @@ final class PermalinkPages implements ReceivesWebmentions
     }
 
     /**
+     * A post's address in a layout the site no longer has (`/YYYY/MM/<slug>` and `/YYYY/MM/DD/<slug>`, which a site could choose before a post's address had
+     * one layout), sent permanently to the address the post has: a link made then keeps working. The target is built from the post, never from the request.
+     * A post that is not there and one the viewer may not read are the same answer (the site's missing-post page, 410), so the address says nothing about
+     * which posts exist.
+     */
+    public function otherLayout(PageContext $page): Response
+    {
+        $entity = $this->entityOf($page);
+        if ($entity === null || !$this->permalinks->canRead($entity)) {
+            return $this->renderer->gone($page);
+        }
+
+        return $this->renderer->redirect($page, $this->permalinks->displayUrl($entity), 301);
+    }
+
+    /**
      * What a POST to the post's address does: a signed-in member who may edit it saves what the request holds into it and is sent to it; a visitor and a
      * member who may not edit it are refused; one that may not read it is answered as the site's missing post is (sent home). Nothing is stored before
      * those checks are passed.

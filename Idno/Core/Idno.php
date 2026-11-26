@@ -146,6 +146,9 @@ namespace Idno\Core {
             $this->routes()->addRoute('/view/:id/?', '\Idno\Pages\Entity\View');
             $this->routes()->addRoute('/s/:id/?', '\Idno\Pages\Entity\Shortlink');
             $this->routes()->addRoute($permalink_route . '/?', '\Idno\Pages\Entity\View');
+            // the other layouts a site could choose for a post's address, before it had one: sent to the post's own address
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
             $this->routes()->addRoute('/edit/:id/?', '\Idno\Pages\Entity\Edit');
             $this->routes()->addRoute('/delete/:id/?', '\Idno\Pages\Entity\Delete');
             $this->routes()->addRoute('/withdraw/:id/?', '\Idno\Pages\Entity\Withdraw');
