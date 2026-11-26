@@ -129,19 +129,78 @@ namespace Idno\Core {
          */
         public static function handlerFor($routes, string $path)
         {
+            return static::matchFor($routes, $path)['handler'] ?? null;
+        }
+
+        /**
+         * Toro's lookup for a path with what it keeps of the match: the exact key first (`pattern` the key, `matches` empty), then the first
+         * pattern, in order, that matches (`matches` as `preg_match()` gives them: the whole match first, an unmatched trailing group absent, an
+         * unmatched middle one empty). The ONE implementation of the lookup: `handlerFor()` and `routedFor()` read it.
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return array{handler: mixed, pattern: string|int, matches: array}|null
+         */
+        private static function matchFor($routes, string $path): ?array
+        {
             if (isset($routes[$path])) {
-                return $routes[$path];
+                return ['handler' => $routes[$path], 'pattern' => $path, 'matches' => []];
             }
             // (Toro replaces its own three tokens in a pattern once more)
             $tokens = [':string' => '([a-zA-Z]+)', ':number' => '([0-9]+)', ':alpha' => '([a-zA-Z0-9-_]+)'];
             foreach ($routes as $pattern => $handler) {
-                $pattern = strtr((string) $pattern, $tokens);
-                if (preg_match('#^/?' . $pattern . '/?$#', $path)) {
-                    return $handler;
+                if (preg_match('#^/?' . strtr((string) $pattern, $tokens) . '/?$#', $path, $matches)) {
+                    return ['handler' => $handler, 'pattern' => $pattern, 'matches' => $matches];
                 }
             }
 
             return null;
+        }
+
+        /**
+         * What the legacy router will do with a request: its choice for the path (`matchFor()`), the arguments it calls the page with (the captured
+         * groups less the whole match, positional; none for an exact key), and, for a GET or HEAD (`$method` is the REAL method, as Toro reads
+         * `REQUEST_METHOD`), the `.md` rule: the path as given matched a `MarkdownPermalink` page (`markdown` true, routed as given), or matched
+         * nothing and the path without the suffix routes to one (that route, `markdown` true, `path` the path without the suffix). Pure over its arguments.
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return array{class: string, pattern: string|int, arguments: list<string>, markdown: bool, path: string}|null null when nothing matches
+         */
+        public static function routedFor($routes, string $method, string $path): ?array
+        {
+            $reads = in_array(strtoupper($method), ['GET', 'HEAD'], true);
+            $stripped = $reads ? \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path) : null;
+            $hasMarkdown = static function ($handler): bool {
+                return is_string($handler) && is_a($handler, \Idno\Common\MarkdownPermalink::class, true);
+            };
+
+            $match = static::matchFor($routes, $path);
+            $markdown = false;
+            if ($match !== null) {
+                $markdown = $stripped !== null && $hasMarkdown($match['handler']);
+            } elseif ($stripped !== null) {
+                $match = static::matchFor($routes, $stripped);
+                if ($match === null || !$hasMarkdown($match['handler'])) {
+                    return null;
+                }
+                $markdown = true;
+                $path = $stripped;
+            }
+            if ($match === null) {
+                return null;
+            }
+
+            $handler = $match['handler'];
+            if ($handler === null || $handler === '') {
+                return null;
+            }
+
+            return [
+                'class' => is_string($handler) ? ltrim($handler, '\\') : '(not a class name)',
+                'pattern' => $match['pattern'],
+                'arguments' => array_values(array_slice($match['matches'], 1)),
+                'markdown' => $markdown,
+                'path' => $path,
+            ];
         }
 
         /**
@@ -280,25 +339,13 @@ namespace Idno\Core {
                 return;
             }
 
-            $stripped = \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path);
-            if ($stripped === null) {
-                return;
-            }
-            $hasMarkdown = static function ($handler): bool {
-                return is_string($handler) && is_a($handler, \Idno\Common\MarkdownPermalink::class, true);
-            };
-            $given = static::handlerFor($routes, $path);
-            if ($given !== null) {
-                // The path is an address already. When it is a permalink page's (a route that takes anything after the
-                // entity's id, `/entry/:id/.*`), the suffix asks that page for Markdown; the path is routed as it is
-                self::$markdown_suffix = $hasMarkdown($given);
-
-                return;
-            }
-            if ($hasMarkdown(static::handlerFor($routes, $stripped))) {
-                // Toro reads PATH_INFO first
-                $_SERVER['PATH_INFO'] = $stripped;
+            $routed = static::routedFor($routes, (string) ($_SERVER['REQUEST_METHOD'] ?? ''), $path);
+            if ($routed !== null && $routed['markdown']) {
                 self::$markdown_suffix = true;
+                if ($routed['path'] !== $path) {
+                    // Toro reads PATH_INFO first
+                    $_SERVER['PATH_INFO'] = $routed['path'];
+                }
             }
         }
 
