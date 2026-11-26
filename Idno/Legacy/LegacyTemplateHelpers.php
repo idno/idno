@@ -239,6 +239,13 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         return $page ? ($page->getOwner() ?: null) : null;
     }
 
+    public function pageEntity(): ?object
+    {
+        $page = Idno::site()->currentPage();
+
+        return ($page && $page->isPermalink()) ? ($page->getEntity() ?: null) : null;
+    }
+
     public function httpStatus(): int
     {
         $page = Idno::site()->currentPage();

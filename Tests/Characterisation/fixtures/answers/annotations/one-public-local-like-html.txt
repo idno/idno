@@ -12,6 +12,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/bob-publishes-a-note-anyone-can-read/annotations/f5ddaf0ca7929578b408c909429f68f2>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
@@ -64,7 +65,6 @@ x-powered-by: https://idno.co
 <meta name="DC.creator" content="Bob Member">
 <meta name="DC.date" content="2026-03-14T12:00:00+00:00">
 <meta name="DC.identifier" content="{site}/2026/bob-publishes-a-note-anyone-can-read"><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/bob" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Bob publishes a note anyone can read."
       href="{site}/2026/bob-publishes-a-note-anyone-can-read/annotations/f5ddaf0ca7929578b408c909429f68f2?_t=rss"/>

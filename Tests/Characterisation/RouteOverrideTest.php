@@ -592,8 +592,8 @@ final class RouteOverrideTest extends PrivateSiteTestCase
             }
         }
         $this->assertSame([403, 410, 404], [$this->raw($base, 'GET', '/_test/markdown/denied')['status'], $this->raw($base, 'GET', '/_test/markdown/gone.md')['status'], $this->raw($base, 'GET', '/_test/markdown/missing')['status']]);
-        // a page that is no permalink says nothing of the kind
-        $this->assertNotContains('Accept', array_map('trim', explode(',', implode(',', $this->raw($base, 'GET', '/_test/unclaimed')['headers']['vary'] ?? []))));
+        // a page that is no permalink says it too when its type is chosen from the Accept header, as every page does
+        $this->assertContains('Accept', array_map('trim', explode(',', implode(',', $this->raw($base, 'GET', '/_test/unclaimed')['headers']['vary'] ?? []))));
     }
 
     /**

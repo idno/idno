@@ -141,6 +141,32 @@ final class PostDocumentTest extends PermalinkSiteCase
         $this->assertSame($viaView->body, $viaAddress->body);
     }
 
+    private function alternateLinks(string $html): array
+    {
+        preg_match_all('~<link rel="alternate" type="application/activity\+json" href="([^"]*)"~', $html, $m);
+
+        return $m[1];
+    }
+
+    public function testThePageOfAPostNamesThePostAsItsActivityPubAddress(): void
+    {
+        foreach (['status', 'article', 'bob-public'] as $key) {
+            $path = $this->target($key);
+            $uuid = $this->expected($path)['id'];
+            $links = $this->alternateLinks($this->fetch($path, 'text/html')->body);
+            $this->assertSame([$uuid], $links, $key . ': the alternate link is the id the post is fetched by');
+        }
+    }
+
+    public function testTheProfileNamesTheActorAndAPageWithNoActivityPubFormNamesNothing(): void
+    {
+        $this->assertSame([$this->baseUrl() . 'actor/ada'], $this->alternateLinks($this->fetch('/profile/ada', 'text/html')->body));
+        $this->assertSame([], $this->alternateLinks($this->fetch('/', 'text/html')->body), 'the home page');
+        // a post only its author may read has none, though the page is there for its author
+        $this->assertSame([], $this->alternateLinks($this->fetch($this->target('bob-owner'), 'text/html', 'owner')->body), 'a private post');
+        $this->assertSame([], $this->alternateLinks($this->fetch($this->target('bob-draft'), 'text/html', 'owner')->body), 'a draft');
+    }
+
     public function testABrowserIsStillGivenThePage(): void
     {
         $path = $this->target('status');
@@ -198,6 +224,8 @@ final class PostDocumentTest extends PermalinkSiteCase
         // Bob's draft, read by Bob; Bob's post for the members, read by Carol: the page is there for them and no other server may have it
         $draft = $this->fetch($this->target('bob-draft'), self::MASTODON, 'owner');
         $this->assertSame(406, $draft->status);
+        $this->assertSame('application/json', trim(explode(';', (string) $draft->header('Content-Type'))[0]));
+        $this->assertStringContainsStringIgnoringCase('accept', (string) $draft->header('Vary'));
         $this->assertSame(['error'], array_keys($draft->json()));
         $members = $this->fetch($this->target('bob-site'), self::MASTODON, 'member');
         $this->assertSame(406, $members->status);
@@ -220,6 +248,9 @@ final class PostDocumentTest extends PermalinkSiteCase
     {
         $answer = $this->fetch('/', self::MASTODON);
         $this->assertSame(406, $answer->status);
+        $this->assertSame('application/json', trim(explode(';', (string) $answer->header('Content-Type'))[0]), 'an error is not an ActivityPub object');
+        $this->assertNull($answer->header('Access-Control-Allow-Origin'));
+        $this->assertStringContainsStringIgnoringCase('accept', (string) $answer->header('Vary'));
         $this->assertNotEmpty($answer->json()['error']);
         $this->assertStringNotContainsString('Person', $answer->body);
     }

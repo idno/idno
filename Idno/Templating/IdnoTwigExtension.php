@@ -99,6 +99,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('leaked_user', $this->leakedUser(...), ['needs_context' => true]),
             new TwigFunction('page_assets', $this->pageAssets(...)),
             new TwigFunction('page_owner', $this->pageOwner(...)),
+            new TwigFunction('page_entity', $this->pageEntity(...)),
             new TwigFunction('http_status', $this->httpStatus(...)),
             new TwigFunction('login_url_for', $this->loginUrlFor(...)),
             new TwigFunction('url_with_var', $this->urlWithVar(...)),
@@ -398,6 +399,11 @@ final class IdnoTwigExtension extends AbstractExtension
     public function pageOwner(): ?object
     {
         return $this->helpers->pageOwner();
+    }
+
+    public function pageEntity(): ?object
+    {
+        return $this->helpers->pageEntity();
     }
 
     public function httpStatus(): int

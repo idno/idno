@@ -175,7 +175,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
             // (the ActivityPub shell answers a page that is no post or member with the 406 that says it has no ActivityPub form)
             $this->assertSame($type === 'activitypub' ? 406 : 200, $response->status, $type);
             $this->assertNotSame('', trim($response->body), $type . ' has a body');
-            $declared = ShellHeaders::for($type)[0] ?? null;
+            $declared = ShellHeaders::for($type, $type === 'activitypub' ? 406 : 200)[0] ?? null;
             $this->assertNotNull($declared, $type . ' declares a Content-Type');
             $this->assertStringStartsWith(strtolower(explode(';', $declared[1])[0]), strtolower((string) $response->header('Content-Type')), $type);
             if (in_array($type, ['json', 'jsonfeed', 'activitypub'], true)) {

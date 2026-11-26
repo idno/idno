@@ -13,6 +13,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://withknown.superfeedr.com/>; rel="hub"
 link: <{site}/_test/site-page/draw-legacy?case=conditional>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

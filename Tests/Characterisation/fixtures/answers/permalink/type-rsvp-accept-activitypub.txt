@@ -1,4 +1,5 @@
 status 200
+access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
 content-length: <the length of the body>
 content-type: application/activity+json
@@ -19,30 +20,52 @@ x-powered-by: https://idno.co
 {
     "@context": [
         "https://www.w3.org/ns/activitystreams",
-        "https://w3id.org/security/v1"
+        "https://w3id.org/security/v1",
+        {
+            "gts": "https://gotosocial.org/ns#",
+            "interactionPolicy": {
+                "@id": "gts:interactionPolicy",
+                "@type": "@id"
+            },
+            "canQuote": {
+                "@id": "gts:canQuote",
+                "@type": "@id"
+            },
+            "automaticApproval": {
+                "@id": "gts:automaticApproval",
+                "@type": "@id"
+            },
+            "QuoteAuthorization": "https://w3id.org/fep/044f#QuoteAuthorization",
+            "QuoteRequest": "https://w3id.org/fep/044f#QuoteRequest",
+            "interactingObject": {
+                "@id": "gts:interactingObject",
+                "@type": "@id"
+            },
+            "interactionTarget": {
+                "@id": "gts:interactionTarget",
+                "@type": "@id"
+            }
+        }
     ],
-    "id": "{site}/actor/ada",
-    "type": "Person",
-    "url": "{site}/profile/ada",
-    "preferredUsername": "ada",
-    "name": "Ada Admin",
-    "summary": "Ada writes about computers, gardens and the open web.",
-    "manuallyApprovesFollowers": false,
-    "inbox": "{site}/actor/ada/inbox",
-    "outbox": "{site}/actor/ada/outbox",
-    "followers": "{site}/actor/ada/followers",
-    "following": "{site}/actor/ada/following",
-    "publicKey": {
-        "id": "{site}/actor/ada#main-key",
-        "owner": "{site}/actor/ada",
-        "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtLhK44/m0gPPxlxNdjtN\nuooz4JUdU91wFWZgJMw0LG0Gf0rHWs2Re0C72NF32q8iDozHk1I2RAH3c78i3NwC\nzIuaCbOSS7/P+/dBw/P7tzhQAU4AfY/sOK5zaE9QxYlcXvvl4LpEq+Ro+ZTHrvvB\nYRgYRUr8OrvSRdSmyUgd3PEA+b0O+GdLZCmJ5dugs3cxaD3UIN3hK3WsElOZEQ94\n1yzFuiJLCmv/gCs+jB0fYqQFhcz+AmB/mo3EX9N5X6shGhw9JwSeqIZ97lFBYB1u\nksSBMakqQcNU3S3GXj3GsIlN4AKZlHshEMHj/dbbxGSbgcl4nKZ7UUKwXzkmrJs9\neQIDAQAB\n-----END PUBLIC KEY-----\n"
-    },
-    "endpoints": {
-        "sharedInbox": "{site}/inbox"
-    },
-    "icon": {
-        "type": "Image",
-        "url": "{site}/gfx/users/default-04.png",
-        "mediaType": "image/png"
+    "id": "{site}/view/00000000-0000-4000-8000-000000000017",
+    "type": "Note",
+    "url": "{site}/2026/i-will-be-there",
+    "attributedTo": "{site}/actor/ada",
+    "published": "2026-03-07T12:00:00+00:00",
+    "to": [
+        "https://www.w3.org/ns/activitystreams#Public"
+    ],
+    "cc": [
+        "{site}/actor/ada/followers"
+    ],
+    "content": "I will be there.",
+    "updated": "2026-03-20T12:00:00+00:00",
+    "inReplyTo": "https://example.org/event/1",
+    "interactionPolicy": {
+        "canQuote": {
+            "automaticApproval": [
+                "https://www.w3.org/ns/activitystreams#Public"
+            ]
+        }
     }
 }

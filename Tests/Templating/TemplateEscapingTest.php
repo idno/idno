@@ -492,11 +492,11 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * The ActivityPub link in the head of a post's page is the actor's address when the last icon the page looked up was drawn as a
-     * default avatar (the lookup leaves its user on the page's template, and the head uses it as the page's user), and the post's own
-     * address when every picture was a real one (nothing was left). Both branches, with the owner's picture set and not set.
+     * The ActivityPub link in the head of a post's page is the post's own address (its ActivityPub id), whether or not the owner has a picture: it is
+     * decided from the entity the page is the permalink of, not from what a lookup of the owner's icon left on the page's template (a default avatar's
+     * user, which once made it the owner's actor).
      */
-    public function testTheActivityPubLinkOfAPostsHeadFollowsWhetherTheOwnerHasAPicture(): void
+    public function testTheActivityPubLinkOfAPostsHeadIsThePostWhetherOrNotTheOwnerHasAPicture(): void
     {
         $paths = $this->seedSite();
         $link = static function (string $body): string {
@@ -507,7 +507,8 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
 
         $withoutPicture = $this->site()->request('GET', ltrim($paths['status'], '/'));
         $this->assertSame(200, $withoutPicture->status);
-        $this->assertSame(rtrim($this->baseUrl(), '/') . '/actor/ada', $link($withoutPicture->body), 'the owner has no picture: a default avatar is drawn, and its user is the page\'s');
+        $this->assertStringStartsWith(rtrim($this->baseUrl(), '/') . '/view/', $link($withoutPicture->body), 'the owner has no picture: a default avatar is drawn, and the link is still the post\'s');
+        $this->assertStringNotContainsString('/actor/ada', $link($withoutPicture->body));
 
         $this->runInSite(<<<'PHP'
         $ada = \Idno\Entities\User::getByHandle('ada');
@@ -518,7 +519,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         PHP);
         $withPicture = $this->site()->request('GET', ltrim($paths['status'], '/'));
         $this->assertSame(200, $withPicture->status);
-        $this->assertStringStartsWith(rtrim($this->baseUrl(), '/') . '/view/', $link($withPicture->body), 'a real picture leaves no user behind: the link is the post\'s own address');
+        $this->assertStringStartsWith(rtrim($this->baseUrl(), '/') . '/view/', $link($withPicture->body), 'the owner has a picture: the link is the post\'s');
         $this->assertStringNotContainsString('/actor/ada', $link($withPicture->body));
     }
 

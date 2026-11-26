@@ -1061,6 +1061,15 @@ namespace Idno\Common {
          */
         function sendVaryAccept()
         {
+            if (headers_sent()) {
+                return;
+            }
+            // (once: a page that asks for the type and says so itself sends one line)
+            foreach (headers_list() as $line) {
+                if (preg_match('/^vary:(.*)$/i', $line, $m) === 1 && in_array('accept', array_map('trim', explode(',', strtolower($m[1]))), true)) {
+                    return;
+                }
+            }
             header('Vary: Accept', false);
         }
 

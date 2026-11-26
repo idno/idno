@@ -385,6 +385,12 @@ final class ControllerPage extends Page
 
     public function sendVaryAccept()
     {
+        // (once: a page that asks for the type and says so itself sends one line)
+        foreach ($this->context->headers() as $name => $values) {
+            if (strcasecmp($name, 'Vary') === 0 && in_array('Accept', $values, true)) {
+                return;
+            }
+        }
         $this->context->addHeader('Vary', 'Accept', false);
     }
 

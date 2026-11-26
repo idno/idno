@@ -207,6 +207,7 @@ final class LegacyTemplateHelpersTest extends TestCase
         $this->assertFalse($helpers->isXhr());
         $this->assertSame([], $helpers->pageAssets('css-no-such-class'));
         $this->assertNull($helpers->pageOwner());
+        $this->assertNull($helpers->pageEntity());
         $this->assertSame(200, $helpers->httpStatus());
         $this->assertSame(Idno::site()->config()->getDisplayURL() . 'session/login/?fwd=' . \Idno\Core\Webservice::encodeValue('/a b'), $helpers->loginUrlFor('/a b'));
         $this->assertStringContainsString('page-some', $helpers->bodyClasses());

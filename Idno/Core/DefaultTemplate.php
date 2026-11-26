@@ -183,10 +183,38 @@ namespace Idno\Core {
             // End session BEFORE we output any data
             session_write_close();
 
+            $status = $this->pageStatus();
             $this->sendShellHeaders();
 
-            return parent::drawPage($echo, $shell);
+            if (!$echo) {
+                return parent::drawPage(false, $shell);
+            }
 
+            $content = parent::drawPage(false, $shell);
+            // The type's headers are those of the status the page ends with: a draw that set another status (an error the type has a form for) is
+            // answered with that status's headers
+            $ended = http_response_code();
+            if (is_int($ended) && $ended !== $status && !headers_sent()) {
+                $declared = $this->shellHeaders($ended);
+                $before   = $this->shellHeaders($status);
+                if ($declared !== $before) {
+                    $names = array_map(static fn (array $header): string => strtolower($header[0]), $declared);
+                    foreach ($before as [$name]) {
+                        if (!in_array(strtolower($name), $names, true)) {
+                            header_remove($name);
+                        }
+                    }
+                    $this->sendHeaders($declared);
+                }
+            }
+            header('Content-Length: ' . strlen($content));
+
+            // Break long output to avoid an Apache performance bug
+            foreach (str_split($content, 1024) as $chunk) {
+                echo $chunk;
+            }
+
+            exit;
         }
 
         /**
@@ -504,6 +532,8 @@ namespace Idno\Core {
         function autodetectTemplateType()
         {
             if ($page = site()->currentPage()) {
+                // What is drawn depends on the Accept header (a page, JSON, an ActivityPub object): a cache must keep the answers apart
+                $page->sendVaryAccept();
                 $template = $page->getInput('_t');
                 if (!is_string($template)) {
                     $template = '';

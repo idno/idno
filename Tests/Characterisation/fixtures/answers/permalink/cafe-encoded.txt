@@ -74,7 +74,7 @@ x-powered-by: https://idno.co
 <meta name="DC.creator" content="Ada Admin">
 <meta name="DC.date" content="2026-03-15T12:00:00+00:00">
 <meta name="DC.identifier" content="{site}/2026/caf%C3%A9-notes"><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<link rel="alternate" type="application/activity+json" href="{site}/view/00000000000040008000000000000046" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Café notes"
       href="{site}/2026/caf%C3%A9-notes?_t=rss"/>

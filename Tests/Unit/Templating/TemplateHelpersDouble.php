@@ -178,6 +178,11 @@ final class TemplateHelpersDouble implements TemplateHelpers
         return null;
     }
 
+    public function pageEntity(): ?object
+    {
+        return null;
+    }
+
     public function httpStatus(): int
     {
         return 200;

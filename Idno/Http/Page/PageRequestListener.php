@@ -193,7 +193,30 @@ final class PageRequestListener
             $response->headers->set($name, $value);
         }
         // (the caching the page asked for is not set here: it is sent line by line, in place of PHP's, by Idno\Legacy\LegacyHeaderReconciler)
+        // (what the page said of `Vary` came before what a draw or a controller added, as the lines of a legacy page are in the order they were sent)
+        $own = array_key_exists('Vary', $context->headers()) ? $response->headers->all('Vary') : [];
+        if ($own !== []) {
+            $response->headers->remove('Vary');
+        }
         $context->applyTo($response);
+        foreach ($own as $line) {
+            $response->headers->set('Vary', $line, false);
+        }
+        // (one `Vary: Accept`, whichever of the page's own and the permalink rule above said it)
+        $kept = [];
+        $said = false;
+        foreach ($response->headers->all('Vary') as $line) {
+            if (strcasecmp(trim($line), 'Accept') === 0) {
+                if ($said) {
+                    continue;
+                }
+                $said = true;
+            }
+            $kept[] = $line;
+        }
+        if (count($kept) !== count($response->headers->all('Vary'))) {
+            $response->headers->set('Vary', $kept);
+        }
         // A forward the page made and went on from (`forward($location, false)`): the header is sent with whatever the page answers
         $redirect = $context->redirect();
         if ($redirect !== null) {

@@ -155,6 +155,8 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         $answer = $this->record('delete-signed-owner', 'POST', $signed, self::signedHeadersFor('bob', $this->bobsKey(), $signed), 'visitor', []);
         $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/delete-signed-owner.txt');
         $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        // (and its type is chosen from the request's Accept header, which every such page says: the recording was made before pages said so)
+        $expected = str_replace("pragma: no-cache\n", "pragma: no-cache\nvary: Accept\n", $expected);
         $this->assertNotSame($recorded, $expected, 'the recording holds the legacy type');
         $this->assertSame($expected, self::normalise($answer, $this->baseUrl()));
         $this->record('delete-signed-owner-then', 'GET', $list . '?_t=rss', [], 'owner');

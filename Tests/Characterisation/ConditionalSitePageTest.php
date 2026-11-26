@@ -144,9 +144,9 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         $path = '/_test/fixture-shell/?case=conditional';
 
         $current = $this->answer($path, self::LAST_CHANGE + 86400);
-        // (the recording is of a page that is no permalink: the shell's page is one, and says it varies by `Accept` as its controller does)
+        // (a page whose type is chosen from the `Accept` header says so, the shell's page as its controller's)
         $this->assertStringContainsString('Accept', (string) $current->header('Vary'));
-        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl()), ['vary']));
+        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl())));
         $this->assertSame('', $current->body);
 
         $older = $this->answer($path, self::LAST_CHANGE - 86400);

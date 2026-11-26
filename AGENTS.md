@@ -4959,11 +4959,17 @@ Each content plugin has an `Entry.php` entity class that defines
    are the 403, 410 and 404 the page answers (`{"error": ...}`, `application/json`, by `ShellHeaders::for('activitypub', $status)`), and a visitor of a private site is
    refused before the page is served, as HTML. A post that is not given to other servers (`ActivityBuilder::isFederated()`: public, published or with no status, of a
    content type, by a member) is a 406 `{"error": ...}` even for a viewer who may read it (a draft read by its owner, a post for the members), and so is any page that is no
-   post or member (the home page, a static page): the status is set by the shell (`http_response_code()`, a template sends no header), so a 406 keeps the type's
-   `application/activity+json`. A member's profile is `ActivityBuilder::buildActor()`, which the actor's own address (`Pages/Actor.php`) prints too. The HTML permalink's
-   `<link rel="alternate" type="application/activity+json">` names the owner's actor (`templates/default/shell/activitypub.html.twig` reads a template variable). Pinned by
+   post or member (the home page, a static page). The shell sets the status with `http_response_code()` (a template sends no header) and `LegacyPageDrawer::drawPage()`
+   asks for the type's headers again at the status the draw ended with, so a 406 is `application/json` with no CORS header, as a 403 is. A member's profile is
+   `ActivityBuilder::buildActor()`, which the actor's own address (`Pages/Actor.php`) prints too. The HTML page's
+   `<link rel="alternate" type="application/activity+json">` (`templates/default/shell/activitypub.html.twig`, from the Twig function `page_entity()`: the entity the page is the
+   permalink of) names the post's id for a public published post, the actor for a profile, and nothing for any other page. `Vary: Accept` is on every answer whose type is chosen from the request's
+   `Accept` (`DefaultTemplate::autodetectTemplateType()` calls the page's `sendVaryAccept()`: a legacy page's `header()`, once, and a site page's context header, once). Pinned by
    `IdnoPlugins/ActivityPub/Tests/PostDocumentTest` (every content type, both Accept spellings, the view address, a browser, HEAD, each state of a post, a third-party subclass
-   of the permalink page) and the permalink recordings (`PermalinkAnswersTest`'s `*-accept-activitypub` cases are `CHANGED`).
+   of the permalink page, the alternate link) and the permalink recordings (the `*-accept-activitypub` cases).
+   STILL TO COME with the port of the rest of the `dev` branch's ActivityPub work: the banned-owner checks (`isFederated()` and the profile's 410: the moderation plugin) and
+   the private-site check (`Main::federates()`: a private site tells no other server what its members post, `dev` commit `c1048f68a`, with its `PrivateSiteTest`). Until then a
+   private site's visitors are refused by the page before any of this is asked, and a signed-in member of a private site is given the object where `dev` answers 406.
 3. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
 4. **Quote posts (FEP-044f)**: All outgoing notes include

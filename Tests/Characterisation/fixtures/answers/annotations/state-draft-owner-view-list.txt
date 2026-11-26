@@ -12,6 +12,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/view/00000000000040008000000000000044/annotations/>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
@@ -70,7 +71,6 @@ x-powered-by: https://idno.co
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
 <meta name="DC.title" content="Annotations on: Bob has a draft he has not ...">
 <meta name="DC.description" content="Bob has a draft he has not published."><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/bob" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Annotations on: Bob has a draft he has not ..."
       href="{site}/view/00000000000040008000000000000044/annotations/?_t=rss"/>

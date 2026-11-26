@@ -29,8 +29,6 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
      * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as they
      * were, and the test of each asserts the answer of the page that serves it now.
      */
-    private const ACTIVITYPUB_WHY = "a post's address asked for as ActivityPub answers with the post, the object its followers are sent (the recording is the actor document of the post's author, which a template variable chose)";
-
     private const CHANGED = [
         'ims-article-before' => 'a copy dated before the post\'s change is not current: the legacy comparison was the wrong way round (it answered 304)',
         'ims-article-after' => 'a copy dated after the post\'s change is current: the legacy comparison answered the page',
@@ -42,17 +40,6 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         'ims-site-member' => 'a member who may read a post and holds a copy dated after its change is told it is current (the legacy comparison sent the page)',
         'note-xhr' => 'an XHR GET gets the headers of the same request that is not XHR',
         'note-xhr-head' => 'an XHR HEAD gets the headers of the same request that is not XHR',
-        'type-status-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-reply-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-article-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-photo-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-media-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-bookmark-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-checkin-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-event-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'type-rsvp-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'owned-status-owner-accept-activitypub' => self::ACTIVITYPUB_WHY,
-        'owned-status-admin-accept-activitypub' => self::ACTIVITYPUB_WHY,
     ];
 
     /**

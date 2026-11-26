@@ -129,6 +129,9 @@ interface TemplateHelpers
 
     public function pageOwner(): ?object;
 
+    /** The entity the current page is the permalink of (a post, a member), null for any other page and with no page. */
+    public function pageEntity(): ?object;
+
     public function httpStatus(): int;
 
     public function loginUrlFor(string $path): string;

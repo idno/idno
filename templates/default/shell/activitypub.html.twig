@@ -1,4 +1,5 @@
-{% set alt_link = '' %}{% if is_user(user ?? null) %}{% set alt_link = user.getActivityPubActorID() %}{% elseif object %}{% set alt_link = object.getUUID() %}{% endif %}
+{% set alt_link = '' %}{% set entity = page_entity() %}{% if is_user(entity) %}{% set alt_link = entity.getActivityPubActorID() %}{% elseif is_entity(entity) and entity.isPublic() and (entity.getPublishStatus() is empty or entity.getPublishStatus() == 'published') %}{% set alt_link = entity.getUUID() %}{% endif %}
+{% set alt_link = alt_link|http_url %}
 {% if alt_link %}
     <link rel="alternate" type="application/activity+json" href="{{ alt_link }}" />
     {% endif %}

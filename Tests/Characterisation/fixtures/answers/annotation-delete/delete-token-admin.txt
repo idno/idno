@@ -11,6 +11,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/bob-publishes-a-note-anyone-can-read/annotation/delete?permalink={base64:{site}/2026/bob-publishes-a-note-anyone-can-read/annotations/f5ddaf0ca7929578b408c909429f68f2},,>; rel="self"
 location: {site}/2026/bob-publishes-a-note-anyone-can-read#comments
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

@@ -1,8 +1,7 @@
 status 406
-access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
 content-length: <the length of the body>
-content-type: application/activity+json
+content-type: application/json
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
@@ -12,6 +11,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

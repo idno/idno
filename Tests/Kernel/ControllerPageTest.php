@@ -569,7 +569,7 @@ final class ControllerPageTest extends TestCase
         $page->sendVaryAccept();
         $page->sendVaryAccept();
 
-        $this->assertSame(['Vary' => ['Accept', 'Accept']], $page->context()->headers());
+        $this->assertSame(['Vary' => ['Accept']], $page->context()->headers(), 'said once, however often it is asked');
         $this->assertFalse($page->context()->replacesHeader('Vary'));
     }
 

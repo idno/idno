@@ -66,7 +66,7 @@ x-powered-by: https://idno.co
 <meta name="DC.creator" content="Bob Member">
 <meta name="DC.date" content="2025-12-08T12:00:00+00:00">
 <meta name="DC.identifier" content="{site}/2025/bob-will-be-there"><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/bob" />
+<link rel="alternate" type="application/activity+json" href="{site}/view/00000000000040008000000000000068" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Yes: Bob will be there."
       href="{site}/2025/bob-will-be-there?_t=rss"/>

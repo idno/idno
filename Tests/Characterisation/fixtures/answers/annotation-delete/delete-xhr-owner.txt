@@ -12,6 +12,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/85e47ac07ac9d6416168a97e33fa969a}>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

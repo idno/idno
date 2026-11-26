@@ -11,6 +11,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/no-such-slug-here?__bTk={form-token}>; rel="self"
 location: {site}/
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

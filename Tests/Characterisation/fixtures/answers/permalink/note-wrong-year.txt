@@ -66,7 +66,7 @@ x-powered-by: https://idno.co
 <meta name="DC.creator" content="Ada Admin">
 <meta name="DC.date" content="2026-03-01T12:00:00+00:00">
 <meta name="DC.identifier" content="{site}/2026/hello-world-a-note-about-gardens-with-a-link-to"><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
+<link rel="alternate" type="application/activity+json" href="{site}/view/00000000-0000-4000-8000-000000000011" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Hello world: a note about gardens, with ..."
       href="{site}/2025/hello-world-a-note-about-gardens-with-a-link-to?_t=rss"/>

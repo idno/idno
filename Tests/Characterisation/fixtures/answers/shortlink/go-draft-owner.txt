@@ -11,6 +11,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/s/bobdraft>; rel="self"
 location: {site}/2026/bob-has-a-draft-he-has-not-published
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

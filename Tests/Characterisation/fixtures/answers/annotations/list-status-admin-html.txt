@@ -12,6 +12,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/>; rel="self"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
@@ -70,7 +71,6 @@ x-powered-by: https://idno.co
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
 <meta name="DC.title" content="Annotations on: Hello world: a note about gardens, with ...">
 <meta name="DC.description" content="Hello world: a note about gardens, with a link to https://example.org/garden in it."><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
-<link rel="alternate" type="application/activity+json" href="{site}/actor/ada" />
 <!-- To silo is human, to syndicate divine -->
 <link rel="alternate" type="application/rss+xml" title="Annotations on: Hello world: a note about gardens, with ..."
       href="{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=rss"/>

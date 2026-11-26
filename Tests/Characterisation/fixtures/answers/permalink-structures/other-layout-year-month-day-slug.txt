@@ -11,6 +11,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/03/02/a-longer-article-about-templates>; rel="self"
 location: {site}/2026/a-longer-article-about-templates
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 

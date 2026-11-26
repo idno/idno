@@ -127,6 +127,8 @@ final class PermalinkWritesTest extends PermalinkSiteCase
     {
         $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt');
         $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        // (and its type is chosen from the request's Accept header, which every such page says: the recording was made before pages said so)
+        $expected = str_replace("pragma: no-cache\n", "pragma: no-cache\nvary: Accept\n", $expected);
         $this->assertNotSame($recorded, $expected, $case . ': the recording holds the legacy type');
         $this->assertSame($expected, self::normalise(self::scrubbed([], true)($answer), $this->baseUrl()), $case);
     }

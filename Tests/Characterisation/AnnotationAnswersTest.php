@@ -367,6 +367,8 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
         // a signed request is told where to go in the JSON `{"location": ...}`, with the redirect's status; the legacy page sent it as `text/html`
         $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/shortlink/go-signed-api.txt');
         $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        // (and its type is chosen from the request's Accept header, which every such page says: the recording was made before pages said so)
+        $expected = str_replace("pragma: no-cache\n", "pragma: no-cache\nvary: Accept\n", $expected);
         $this->assertNotSame($recorded, $expected, 'the recording holds the legacy type');
         $this->assertSame($expected, self::normalise($signed, $this->baseUrl()));
         // the router's 404 page: a malformed Host is served by the legacy router, which has no page for the address, and the methods the page does not take

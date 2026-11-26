@@ -56,7 +56,7 @@ namespace Tests\Characterisation {
                 ['GET', '/?_t=md', [], 200, 'text/markdown', null, "---\ntitle:", true, $std, true],
                 ['GET', '/', ['Accept' => 'application/json'], 200, 'application/json', null, $json, true, $std, true],
                 // (the home page is no object another server can fetch: it has no ActivityPub form, and says so)
-                ['GET', '/', ['Accept' => 'application/activity+json'], 406, 'application/activity+json', null, 'This page has no ActivityPub representation', true, $std, true],
+                ['GET', '/', ['Accept' => 'application/activity+json'], 406, 'application/json', null, 'This page has no ActivityPub representation', true, $std, false],
                 ['GET', '/?q=fixture', [], 200, 'text/html', null, $html, true, $std, true],
                 // An XHR GET is the HTML page, not JSON, with the headers of a GET that is not XHR: a controller serves it (the legacy router
                 // gave an XHR request Toro's own Expires date and a longer Cache-Control).

@@ -13,6 +13,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=markdown>; rel="self"
 link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/>; rel="canonical"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-content-type-options: nosniff
 x-powered-by: https://idno.co

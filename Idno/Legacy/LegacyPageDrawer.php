@@ -93,6 +93,25 @@ final class LegacyPageDrawer implements PageDrawer
             } : null);
             // A status the draw set (`http_response_code()` in a template or a shell) is the answer's
             $set = $this->php->status();
+            // The type's headers are those of the status the page ends with: a draw that set another one (an error the type has a form for) is
+            // answered with that status's headers, not the ones that were declared when it was still the page's
+            if (is_int($set) && $set !== $status && $drawn !== null) {
+                $declared = $template->shellHeaders($set);
+                if ($declared !== $drawn['headers']) {
+                    if ($lists) {
+                        $names = array_map(static fn (array $header): string => strtolower($header[0]), $declared);
+                        foreach ($drawn['headers'] as [$name]) {
+                            if (!in_array(strtolower($name), $names, true)) {
+                                $this->php->remove($name);
+                            }
+                        }
+                        foreach ($declared as [$name, $value]) {
+                            $this->php->send($name . ': ' . $value, ShellHeaders::replaces($name));
+                        }
+                    }
+                    $drawn['headers'] = $declared;
+                }
+            }
         } finally {
             if (is_int($previous)) {
                 $this->php->setStatus($previous);

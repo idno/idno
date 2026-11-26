@@ -78,7 +78,16 @@ abstract class PageShell extends Page
         // forward and a 304 too, as the controller's listener adds it to every response. (Sent here, once, before anything is answered: what answers goes through
         // `header()`.) What answers a POST or a DELETE does not depend on it, and never said so.
         if ($context->page()->markdownPermalink && in_array($context->request()->getRealMethod(), ['GET', 'HEAD'], true)) {
-            (new PhpHeaders())->send('Vary: Accept', false);
+            $php = new PhpHeaders();
+            $said = false;
+            foreach ($php->queued() as $line) {
+                if (preg_match('/^vary:(.*)$/i', $line, $m) === 1 && in_array('accept', array_map('trim', explode(',', strtolower($m[1]))), true)) {
+                    $said = true;
+                }
+            }
+            if (!$said) {
+                $php->send('Vary: Accept', false);
+            }
         }
         // An account page is closed to an API request whatever route the shell (or a plugin's subclass of it) is registered on: the router refuses the
         // registrations under /account/, and the action's own flag is the rest

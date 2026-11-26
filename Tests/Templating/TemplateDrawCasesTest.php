@@ -444,8 +444,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             if ($owner) {
                 $page->setOwner($owner);
             }
-            $property = new \ReflectionProperty(\Idno\Common\Page::class, 'isPermalinkPage');
-            $property->setValue($page, true);
+            $page->setPermalink(true, $status);
             \Idno\Core\Idno::site()->setCurrentPage($page);
             $live->vars = [];
             $vars = ['title' => 'T', 'description' => 'D', 'body' => '<p>b</p>', 'object' => $status];
@@ -465,9 +464,15 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertDrawn($out);
         $this->assertCount(4, $out);
         $this->assertStringContainsString('<script type="application/ld+json">', (string) $out['owners without pictures']);
-        // The page's owner is bob and the object's is ada: the last icon lookup was for the object, so the ActivityPub link is ada's
-        $this->assertStringContainsString('/actor/ada"', (string) $out['owners without pictures']);
-        $this->assertStringContainsString('/view/', (string) $out['a user that is not a user'], 'a user that is not a user is not one: the object\'s own address is linked');
+        // The page's owner is bob and the object's is ada: the last icon lookup was for the object, which left its user on the template, and the ActivityPub
+        // link is still the post's own address: it is decided from the entity the page is the permalink of
+        foreach ($out as $label => $drawn) {
+            if ($label !== 'a user that is not a user') {
+                $this->assertStringContainsString('/view/', (string) $drawn, $label);
+                $this->assertStringNotContainsString('/actor/', (string) $drawn, $label);
+            }
+        }
+        // (the partial drawn alone, on a template whose page is the permalink of nothing: no link)
         $this->assertStringNotContainsString('/actor/', (string) $out['a user that is not a user']);
         $this->assertStringNotContainsString('ada.png', (string) $out['the object\'s owner has a picture'], 'the picture of the object\'s owner is not printed by the shell');
     }

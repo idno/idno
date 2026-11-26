@@ -8,6 +8,7 @@ link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
 link: <{site}/micropub/endpoint>; rel="micropub"
 pragma: no-cache
+vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
