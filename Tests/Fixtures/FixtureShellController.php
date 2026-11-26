@@ -47,4 +47,14 @@ final class FixtureShellController
     {
         return $this->pages->receive($page);
     }
+
+    /**
+     * A page the action says is served to a visitor of a private site: what decides it on the shell path is the shell's own registration.
+     */
+    #[Route('/{lead}_test/fixture-shell-public-controller{slash}', name: 'idno_test_fixture_shell_public', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
+    #[SitePage(name: FixturePublicShell::class, shell: true, publicOnPrivateSite: true)]
+    public function showPublic(PageContext $page): Response
+    {
+        return $this->pages->draw($page);
+    }
 }

@@ -914,7 +914,7 @@ namespace Idno\Core {
          * is begun. The browser's session is let go of for the rest of the request: a session the request STARTED (it carried no cookie) is destroyed
          * here; one it CARRIED is released without being written (`session_abort()`); then `$_SESSION` and the user held in memory are emptied and the
          * session's cookie is taken off the response, so nothing later (a drawn page, an error page, a redirect, the form token, the messages) reads or
-         * writes the browser's session, and a form token drawn afterwards is the process's own. `currentUser()` is nobody until `authenticateStatelessly()`.
+         * writes the browser's session, and a form token drawn afterwards is the process's own. `currentUser()` is nobody until `authenticateStatelessly()`, and so is Symfony Security's token.
          * Nothing is logged. (What the boot did before this call, authenticating the cookie's user and firing `user/auth/success` for it, is done.)
          */
         public function beginStatelessRequest(): void
@@ -932,6 +932,12 @@ namespace Idno\Core {
             $this->user          = null;
             $this->statelessUser = null;
             $this->apiRequest    = true;
+            // Symfony Security knew the cookie's user too (the firewall stored it before the request reached a page): nobody is making this request there either.
+            // The ONE switch, for a controller's page and a kept shell's.
+            $container = Idno::container();
+            if ($container->has('security.token_storage')) {
+                $container->get('security.token_storage')->setToken(null);
+            }
         }
 
         /**

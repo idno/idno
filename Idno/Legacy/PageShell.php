@@ -13,8 +13,8 @@ use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
 use Idno\Templating\ShellHeaders;
 use Idno\Templating\TypeChain;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -73,6 +73,21 @@ abstract class PageShell extends Page
         $this->noteSubclass();
         $site = Idno::site();
         $context = $this->contextFor($this->currentRequest());
+        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): EVERY answer of it says so, a refusal, a missing page, a forward and a
+        // 304 too, as the controller's listener adds it to every response. (Sent here, once, before anything is answered: what answers goes through `header()`.)
+        if ($context->page()->markdownPermalink) {
+            (new PhpHeaders())->send('Vary: Accept', false);
+        }
+        // An account page is closed to an API request whatever route the shell (or a plugin's subclass of it) is registered on: the router refuses the
+        // registrations under /account/, and the action's own flag is the rest
+        if ($context->page()->accountPage && $site->session()->isAPIRequest()) {
+            $site->logging()->warning('API request to an account page refused: ' . ltrim(static::class, '\\'));
+            $site->template()->autodetectTemplateType();
+            $site->session()->addErrorMessage($site->language()->_('Account pages are not available to API requests.'));
+            (new BarePage())->deniedContent();
+
+            return;
+        }
         $page = new ControllerPage($context, $this->xhr());
         $this->selectTypes($context, $page);
 
@@ -165,7 +180,8 @@ abstract class PageShell extends Page
 
     /**
      * What `LegacyPageLifecycle::begin()` does for a controller's page before it is served: the type the action names when the request names none, and
-     * the Markdown form a permalink's `.md` asked for.
+     * the Markdown form a permalink's `.md` asked for. (A controller selects the type before `page/ready`; a shell does, here, after the events of the
+     * page that the router fired: a listener of those sees the template type the request asked for.)
      */
     private function selectTypes(PageContext $context, ControllerPage $page): void
     {
@@ -187,6 +203,18 @@ abstract class PageShell extends Page
     }
 
     /**
+     * The `#[SitePage]` of the action that serves the page: the SHELL's (a subclass carries the flags of the shell it extends and cannot change them:
+     * `ACTION` is no extension point), null for a shell that names none.
+     */
+    private static function actionPage(): ?SitePage
+    {
+        $shell = static::SHELL;
+        $action = $shell !== '' && defined($shell . '::ACTION') ? constant($shell . '::ACTION') : null;
+
+        return is_array($action) ? SitePage::of($action) : null;
+    }
+
+    /**
      * Whether a request with this method to this shell (or a subclass: it inherits the action) is one whose page takes it without the form token
      * (`formTokenReplacedBy` of its action). `PageHandler::serve()` asks it of the page the router is about to serve and makes that request nobody's
      * before the page is built, as the controller's path does (`page/ready` never sees the session's user): constructing a shell for any other purpose
@@ -194,14 +222,14 @@ abstract class PageShell extends Page
      */
     public static function takesNoFormToken(string $method): bool
     {
-        $page = static::ACTION === null ? null : SitePage::of(static::ACTION);
+        $page = self::actionPage();
 
         return $page !== null && $page->changesStateWithoutFormToken($method);
     }
 
     private function contextFor(Request $request): PageContext
     {
-        $page = static::ACTION === null ? null : SitePage::of(static::ACTION);
+        $page = self::actionPage();
         $context = new PageContext($request, $page?->withName(static::class) ?? new SitePage(name: static::class));
         $context->setMarkdownSuffix(PageHandler::markdownSuffixRequested());
         $context->setArguments(array_map('strval', array_values($this->arguments)));
@@ -223,9 +251,17 @@ abstract class PageShell extends Page
      */
     private function write(Response $response, PageContext $context): void
     {
-        // a permalink's answer depends on the Accept header (the HTML or the Markdown form): every answer of it says so, as the controller's listener adds
-        if ($context->page()->markdownPermalink) {
-            $response->setVary('Accept', false);
+        // a file or a stream is prepared against the request as the kernel prepares a controller's response: `Content-Type` and `Content-Length`, a `Range`
+        // answered 206 with exactly its bytes or 416, a HEAD with no body
+        $sent = $response instanceof StreamedResponse || $response instanceof BinaryFileResponse;
+        if ($sent) {
+            // (with the kernel's charset, as its response listener gives it, so a stream with no type is `text/html; charset=UTF-8` on both paths)
+            $response->setCharset(Idno::container()->get('kernel')->getCharset() ?? 'UTF-8');
+            $response->prepare($context->request());
+            if ($response->getStatusCode() === 416) {
+                // (prepare() leaves the file's own length on the refusal of a range, and the answer has no body)
+                $response->headers->set('Content-Length', '0');
+            }
         }
         // the headers the page asked for, as the controller's listener puts them on its response
         $context->applyTo($response);
@@ -244,9 +280,9 @@ abstract class PageShell extends Page
                 $php->send($name . ': ' . $value, $position === 0 && $replace);
             }
         }
-        if ($response instanceof StreamedResponse || $response instanceof BinaryFileResponse) {
+        if ($sent) {
             // sent as it is made (a file is never held in memory), and never for a HEAD, whose answer has no body: a stream's callback does work
-            if ($context->request()->getMethod() !== 'HEAD') {
+            if ($context->request()->getRealMethod() !== 'HEAD') {
                 \Idno\Pages\File\View::endOutputBuffers();
                 $response->sendContent();
             }

@@ -168,4 +168,14 @@ final class ShellActionsTest extends TestCase
         // (the one that serves the root: `content()` agrees with it on every flag, but it is not what the shell names)
         $this->assertEquals(SitePage::of([HomepageController::class, 'content']), SitePage::of(self::actionOf(Homepage::class)));
     }
+
+    public function testASubclassCarriesTheActionOfTheShellItExtends(): void
+    {
+        $subclass = new class () extends \Tests\Fixtures\FixtureTokenlessShell {
+            public const ACTION = null;
+        };
+
+        $this->assertTrue($subclass::takesNoFormToken('POST'), 'a constant of its own changes nothing: the action is the shell\'s');
+        $this->assertFalse($subclass::takesNoFormToken('GET'));
+    }
 }

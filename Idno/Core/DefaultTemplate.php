@@ -252,15 +252,24 @@ namespace Idno\Core {
             $type = strtolower((string) $this->getTemplateType());
             if (in_array($type, ['default', 'jsonp'], true)) {
                 $current = null;
+                $overridden = false;
                 foreach ($this->url_shell_overrides as $url => $page_shell) {
                     $current ??= (string) \Idno\Core\Idno::site()->currentPage()->currentUrl();
                     $prefix = \Idno\Core\Idno::site()->config()->getDisplayURL() . $url;
                     // The root itself (`/admin`), and everything under it (`/admin/`, `/admin/email`, `/admin?x`); case matters
                     if (strpos($current, $prefix) === 0 && in_array((string) substr($current, strlen($prefix), 1), ['', '/', '?', '#'], true)) {
                         $shell = $page_shell;
+                        $overridden = true;
                         // The HTML settings shell answers a request for a script: it is HTML (ShellHeaders says so), never a script.
                         $this->settingsShellAsJsonp = ($type === 'jsonp');
                     }
+                }
+                // A page that says it is a settings page (a controller's, or a kept shell with the flags of its action) on an address outside the roots above
+                // is drawn in the settings shell as one under them: and a request for a script is answered as HTML
+                $page = \Idno\Core\Idno::site()->currentPage();
+                if (!$overridden && $page instanceof \Idno\Legacy\ControllerPage && \Idno\Core\Idno::site()->routes()->isSettingsPage($page)) {
+                    $shell = 'settings-shell';
+                    $this->settingsShellAsJsonp = ($type === 'jsonp');
                 }
             }
 

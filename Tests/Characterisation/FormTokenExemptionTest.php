@@ -218,6 +218,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
             $next = $this->site()->request('GET', '/_test/site-page/draw-new?case=draw', ['Cookie' => $cookie]);
             $this->assertSame(200, $next->status, $label);
             $this->assertStringContainsString(self::BROWSERS_MESSAGE, $next->body, $label . ': shown on its next ordinary page');
+            $this->assertStringNotContainsString(\Tests\Fixtures\TokenlessCases::MESSAGE, $next->body, $label . ': and the exempt page\'s own message (added while it acted as nobody) is never written to the browser\'s session');
             $this->assertStringContainsString('session/logout', $next->body, $label . ': still logged in');
             foreach ($next->lines('Set-Cookie') as $line) {
                 $this->assertStringStartsNotWith($name . '=', $line, $label . ': the same session id');

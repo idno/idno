@@ -22,10 +22,6 @@ use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Component\Security\Core\Authentication\Token\UsernamePasswordToken;
-use Symfony\Component\Security\Core\User\InMemoryUser;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
@@ -161,16 +157,10 @@ final class PageRequestListenerTest extends TestCase
 
     private int $fetched = 0;
 
-    private int $tokenStorageFetched = 0;
-
-    private TokenStorage $tokenStorage;
-
     protected function setUp(): void
     {
         $this->lifecycle = new RecordingLifecycle();
         $this->fetched = 0;
-        $this->tokenStorageFetched = 0;
-        $this->tokenStorage = new TokenStorage();
     }
 
     private function listener(bool $legacyBooted = true): PageRequestListener
@@ -193,11 +183,6 @@ final class PageRequestListenerTest extends TestCase
                 ++$this->fetched;
 
                 return $this->lifecycle;
-            },
-            function (): TokenStorageInterface {
-                ++$this->tokenStorageFetched;
-
-                return $this->tokenStorage;
             }
         );
     }
@@ -309,27 +294,22 @@ final class PageRequestListenerTest extends TestCase
         $this->listener()->onController($put);
     }
 
-    public function testAnExemptPagesStateChangingRequestIsMadeStatelessFirstAndSymfonysUserIsCleared(): void
+    public function testAnExemptPagesStateChangingRequestIsMadeStatelessFirst(): void
     {
-        $this->tokenStorage->setToken(new UsernamePasswordToken(new InMemoryUser('someone', null, ['ROLE_USER']), 'main', ['ROLE_USER']));
         $post = $this->controllerEvent(Request::create('/', 'POST'), new ListenerExemptController(), 'page');
 
         $this->listener()->onController($post);
 
         $this->assertSame(['beginStatelessRequest', 'begin', 'refusesApiRequest', 'mayView', 'enter'], $this->lifecycle->calls, 'before the page is begun');
-        $this->assertNull($this->tokenStorage->getToken(), 'Symfony no longer knows the browser\'s user');
     }
 
     public function testAnExemptPagesReadingRequestIsLeftAlone(): void
     {
-        $token = new UsernamePasswordToken(new InMemoryUser('someone', null, ['ROLE_USER']), 'main', ['ROLE_USER']);
-        $this->tokenStorage->setToken($token);
         foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
             $this->lifecycle->calls = [];
             $this->listener()->onController($this->controllerEvent(Request::create('/', $method), new ListenerExemptController(), 'page'));
             $this->assertNotContains('beginStatelessRequest', $this->lifecycle->calls, $method);
         }
-        $this->assertSame($token, $this->tokenStorage->getToken());
     }
 
     public function testWithoutTheLegacyApplicationAnExemptPostBuildsNothing(): void
@@ -337,19 +317,13 @@ final class PageRequestListenerTest extends TestCase
         $this->listener(false)->onController($this->controllerEvent(Request::create('/', 'POST'), new ListenerExemptController(), 'page'));
 
         $this->assertSame(0, $this->fetched);
-        $this->assertSame(0, $this->tokenStorageFetched);
     }
 
-    public function testAPageWithNoExemptionNeverTouchesTheTokenStorage(): void
+    public function testAPageWithNoExemptionIsBegunAsEverPage(): void
     {
-        $token = new UsernamePasswordToken(new InMemoryUser('someone', null, ['ROLE_USER']), 'main', ['ROLE_USER']);
-        $this->tokenStorage->setToken($token);
-
         $this->listener()->onController($this->controllerEvent(Request::create('/', 'POST'), new ListenerPostController(), 'page'));
 
         $this->assertSame(['begin', 'refusesApiRequest', 'mayView', 'enter'], $this->lifecycle->calls);
-        $this->assertSame(0, $this->tokenStorageFetched);
-        $this->assertSame($token, $this->tokenStorage->getToken());
     }
 
     public function testARefusalThrowsBeforeEnter(): void
