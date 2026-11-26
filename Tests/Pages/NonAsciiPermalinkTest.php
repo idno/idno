@@ -276,10 +276,20 @@ namespace Tests\Pages {
                 '/entry/edit/abc123'             => 'IdnoPlugins\Text\Pages\Edit',
                 "/$year/café-notes"              => 'Idno\Pages\Entity\View',
                 "/$year/caf%C3%A9-notes/"        => 'Idno\Pages\Entity\View',
-                "/$year/café-notes/annotations/abc123"        => 'Idno\Pages\Annotation\View',
-                "/$year/café-notes/annotations/abc123/delete" => 'Idno\Pages\Annotation\Delete',
-                "/$year/café-notes/annotation/delete"         => 'Idno\Pages\Annotation\Delete',
             ];
+            // The annotation pages are the controllers' now: the table holds the placeholder that names each one's action, where the page classes were
+            $placeholders = [
+                "/$year/café-notes/annotations/abc123"        => 'Idno\Legacy\Placeholder\AnnotationView',
+                "/$year/café-notes/annotations/"              => 'Idno\Legacy\Placeholder\AnnotationView',
+                "/view/abc123/annotations/abc"                => 'Idno\Legacy\Placeholder\AnnotationView',
+                "/$year/café-notes/annotations/abc123/delete" => 'Idno\Legacy\Placeholder\AnnotationDelete',
+                "/$year/café-notes/annotation/delete"         => 'Idno\Legacy\Placeholder\AnnotationDelete',
+                '/s/abc123'                                   => 'Idno\Legacy\ControllerRoute',
+            ];
+            foreach ($placeholders as $path => $class) {
+                $this->assertSame($class, \Idno\Core\PageHandler::chosenFor(Idno::site()->routes(), $path), "$path should be held by $class.");
+                $this->assertFalse(Idno::site()->routes()->getRoute($path), "$path has no legacy page: a controller serves it.");
+            }
             foreach ($expected as $path => $class) {
                 $page = Idno::site()->routes()->getRoute($path);
                 $this->assertNotFalse($page, "$path should have a page.");

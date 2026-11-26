@@ -16,5 +16,5 @@ final class AnnotationView
     /**
      * @var array{0: class-string, 1: string}|null
      */
-    public const ACTION = null;
+    public const ACTION = [\Idno\Http\Controller\AnnotationController::class, 'show'];
 }

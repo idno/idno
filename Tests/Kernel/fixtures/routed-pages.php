@@ -13,6 +13,9 @@ declare(strict_types=1);
 return [
     'idno_permalink' => ['action' => 'Idno\Http\Controller\PermalinkController::view', 'class' => 'Idno\Pages\Entity\View'],
     'idno_permalink_other_layout' => ['action' => 'Idno\Http\Controller\PermalinkController::otherLayout', 'class' => 'Idno\Legacy\Placeholder\PermalinkOtherLayout'],
+    'idno_annotations' => ['action' => 'Idno\Http\Controller\AnnotationController::show', 'class' => 'Idno\Legacy\Placeholder\AnnotationView'],
+    'idno_annotation_delete' => ['action' => 'Idno\Http\Controller\AnnotationController::delete', 'class' => 'Idno\Legacy\Placeholder\AnnotationDelete'],
+    'idno_annotation_other_layout' => ['action' => 'Idno\Http\Controller\AnnotationController::otherLayout', 'class' => 'Idno\Legacy\Placeholder\AnnotationOtherLayout'],
     'idno_test_routed' => ['action' => 'Tests\Fixtures\RoutedFixtureController::show', 'class' => 'Tests\Fixtures\RoutedPlaceholder'],
     'idno_test_routed_shell' => ['action' => 'Tests\Fixtures\RoutedFixtureController::showShell', 'class' => 'Tests\Fixtures\RoutedFixtureShell'],
 ];

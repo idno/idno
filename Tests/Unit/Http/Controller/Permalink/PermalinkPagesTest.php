@@ -400,6 +400,13 @@ final class PermalinksDouble implements Permalinks
         return $this->entity;
     }
 
+    public function byShortUrl(string $code): ?Entity
+    {
+        $this->calls[] = 'byShortUrl:' . $code;
+
+        return $this->entity;
+    }
+
     public function canRead(Entity $entity): bool
     {
         $this->calls[] = 'canRead';

@@ -51,6 +51,16 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/_test/fixture-shell-public/?', FixturePublicShell::class);
             });
         }
+        // With IDNO_TEST_TRANSLATIONS (JSON: locale => {string => translation}) a catalogue of those strings for each locale (TestCatalogue)
+        $translations = getenv('IDNO_TEST_TRANSLATIONS');
+        if (is_string($translations) && $translations !== '') {
+            $dispatcher->addListener('plugins/loaded', static function () use ($translations): void {
+                $catalogues = json_decode($translations, true);
+                foreach (is_array($catalogues) ? $catalogues : [] as $locale => $strings) {
+                    Idno::site()->language()->register(new TestCatalogue((string) $locale, is_array($strings) ? $strings : []));
+                }
+            });
+        }
         // With IDNO_TEST_MENTIONABLE=1 a plugin's legacy page that takes webmentions (MentionablePage), at `/_test/mentionable/:id/?`
         if (getenv('IDNO_TEST_MENTIONABLE') === '1') {
             $dispatcher->addListener('plugins/loaded', static function (): void {

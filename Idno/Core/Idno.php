@@ -144,11 +144,8 @@ namespace Idno\Core {
              * Individual entities / posting / deletion
             */
             $this->routes()->addRoute('/view/:id/?', '\Idno\Pages\Entity\View');
-            $this->routes()->addRoute('/s/:id/?', '\Idno\Pages\Entity\Shortlink');
+            $this->routes()->addRoute('/s/:id/?', \Idno\Legacy\ControllerRoute::class);
             $this->routes()->addRoute($permalink_route . '/?', '\Idno\Pages\Entity\View');
-            // the other layouts a site could choose for a post's address, before it had one: sent to the post's own address
-            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
-            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
             $this->routes()->addRoute('/edit/:id/?', '\Idno\Pages\Entity\Edit');
             $this->routes()->addRoute('/delete/:id/?', '\Idno\Pages\Entity\Delete');
             $this->routes()->addRoute('/withdraw/:id/?', '\Idno\Pages\Entity\Withdraw');
@@ -158,11 +155,20 @@ namespace Idno\Core {
             /**
              * Annotations
             */
-            $this->routes()->addRoute('/view/:id/annotations/:id?', '\Idno\Pages\Annotation\View');
-            $this->routes()->addRoute($permalink_route . '/annotations/:id?', '\Idno\Pages\Annotation\View');
-            $this->routes()->addRoute($permalink_route . '/annotations/:id/delete/?', '\Idno\Pages\Annotation\Delete'); // Delete annotation
-            $this->routes()->addRoute($permalink_route .'/annotation/delete/?', '\Idno\Pages\Annotation\Delete'); // Delete annotation alternate
+            // (the pages of a post's annotations are served by controllers: core's registrations stay where they were, held by placeholders that name the
+            // controller actions, so that the legacy router's rules still decide what a plugin's registration does to them)
+            $this->routes()->addRoute('/view/:id/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationView::class);
+            $this->routes()->addRoute($permalink_route . '/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationView::class);
+            $this->routes()->addRoute($permalink_route . '/annotations/:id/delete/?', \Idno\Legacy\Placeholder\AnnotationDelete::class); // Delete annotation
+            $this->routes()->addRoute($permalink_route .'/annotation/delete/?', \Idno\Legacy\Placeholder\AnnotationDelete::class); // Delete annotation alternate
             $this->routes()->addRoute('/annotation/post/?', '\Idno\Pages\Annotation\Post');
+            // the other layouts a site could choose for a post's address, before it had one: a post's address, and the address of one of its annotations, are
+            // sent to the address they have now. After the annotation routes, so that an address of the one layout is never taken for another's (the list of
+            // the annotations of a post whose slug is two digits, `/2026/12/annotations/`, is the annotation route's)
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/[0-9]{2}/([^/.]+)/?', \Idno\Legacy\Placeholder\PermalinkOtherLayout::class);
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/([^/.]+)/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationOtherLayout::class);
+            $this->routes()->addRoute('/[0-9]{4}/[0-9]{2}/[0-9]{2}/([^/.]+)/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationOtherLayout::class);
 
             /**
              * Bookmarklets and sharing

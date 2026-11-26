@@ -149,6 +149,25 @@ final class WebmentionTargetsTest extends TestCase
         $this->assertSame(['a-note'], array_slice($target->arguments, -1));
     }
 
+    public function testAShortlinkIsATarget(): void
+    {
+        foreach (['s/abc123', 's/abc123/', 's/ab-12'] as $path) {
+            $this->assertSame(['page' => 'Idno\Pages\Entity\Shortlink', 'route' => 'idno_shortlink', 'arguments' => [basename($path)], 'legacy' => false], $this->answer($this->targets()->resolve($this->base() . $path)), $path);
+        }
+        // a code the route does not take is no address of a page
+        $this->assertNull($this->targets()->resolve($this->base() . 's/ab_12'));
+        $this->assertNull($this->targets()->resolve($this->base() . 's/'));
+        $this->assertInstanceOf(\Idno\Http\Controller\Permalink\ShortlinkPages::class, Idno::container()->get(WebmentionReceiverProbe::class)->receiverOf('Idno\Pages\Entity\Shortlink'));
+    }
+
+    public function testAnAnnotationListTakesNoMention(): void
+    {
+        // the pages of a post's annotations had no webmentionContent(): an address of one is no target, in any layout and for the delete
+        foreach ([$this->permalink() . '/annotations/', $this->permalink() . '/annotations/abc123', $this->base() . 'view/abc123/annotations/', $this->base() . '2026/03/a-note/annotations/abc123', $this->base() . '2026/03/14/a-note/annotations/', $this->permalink() . '/annotations/abc123/delete', $this->permalink() . '/annotation/delete'] as $address) {
+            $this->assertNull($this->targets()->resolve($address), $address);
+        }
+    }
+
     public function testAStaticPageIsALegacyTarget(): void
     {
         $this->assertSame(['page' => 'IdnoPlugins\StaticPages\Pages\View', 'route' => '', 'arguments' => ['about'], 'legacy' => true], $this->answer($this->targets()->resolve($this->base() . 'pages/about')));
@@ -266,6 +285,11 @@ final class WebmentionTargetsTest extends TestCase
 
                 $takesMentions = $legacy !== null && (new \ReflectionMethod($legacy['class'], 'webmentionContent'))->getDeclaringClass()->getName() !== Page::class;
                 if (!$takesMentions) {
+                    if ($target !== null && !$target->isLegacy() && $target->page === 'Idno\Pages\Entity\Shortlink' && str_starts_with($spelling, '/s/') && $probe->receiverOf($target->page)?->receivesFor($target->route) === true) {
+                        // the shortlink, a page of core that took mentions and is a controller's now: the legacy table holds a placeholder at its address
+                        ++$targets;
+                        continue;
+                    }
                     if ($target !== null) {
                         $mismatches[] = $address . ' is no page that takes mentions, and resolved to ' . json_encode($this->answer($target));
                     }

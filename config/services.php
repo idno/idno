@@ -401,6 +401,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Legacy\LegacyPermalinks::class);
     $services->alias(\Idno\Http\Controller\Permalink\Permalinks::class, \Idno\Legacy\LegacyPermalinks::class)->public();
     $services->set(\Idno\Http\Controller\Permalink\PermalinkPages::class)->public();
+    // The annotation pages and the shortlink, over the same finders; the controllers take the services
+    $services->set(\Idno\Legacy\LegacyAnnotations::class);
+    $services->alias(\Idno\Http\Controller\Permalink\Annotations::class, \Idno\Legacy\LegacyAnnotations::class);
     // The page of this site an address is, for a webmention aimed at it (found as a GET of it is routed); public: the endpoint asks for it with Idno::container()->get()
     $services->set(\Idno\Legacy\LegacyWebmentionTargets::class)->public();
     $services->alias(\Idno\Http\Webmention\WebmentionTargets::class, \Idno\Legacy\LegacyWebmentionTargets::class)->public();

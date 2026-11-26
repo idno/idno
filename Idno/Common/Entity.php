@@ -2138,7 +2138,7 @@ namespace Idno\Common {
             }
 
             if (!empty($this->annotations)) {
-                $object['annotations'] = $this->annotations;
+                $object['annotations'] = is_array($this->annotations) ? array_map(fn ($list) => is_array($list) ? $this->withCanonicalAnnotationAddresses($list) : $list, $this->annotations) : $this->annotations;
             }
 
             return $object;
@@ -2537,6 +2537,18 @@ namespace Idno\Common {
                                     return true;
                                 }
                             }
+                            // or by the address it is shown at now: an annotation made while the post had another address
+                            // holds that one, and the page prints this post's own
+                            foreach ($array as $local_url => $properties) {
+                                if (isset($properties['permalink']) && is_string($properties['permalink'])
+                                    && $properties['permalink'] !== $this->canonicalAnnotationAddress($properties['permalink'])
+                                    && $this->canonicalAnnotationAddress($properties['permalink']) === $annotation_url) {
+                                    unset($annotations[$subtype][$local_url]);
+                                    $this->annotations = $annotations;
+
+                                    return true;
+                                }
+                            }
                         }
                     }
                 }
@@ -2843,10 +2855,55 @@ namespace Idno\Common {
         function getAnnotations($subtype, $rationalize = true)
         {
             if (!empty($this->annotations) && is_array($this->annotations) && !empty($this->annotations[$subtype])) {
-                return self::rationalizeAnnotationSubArray($this->annotations[$subtype]);
+                return $this->withCanonicalAnnotationAddresses(self::rationalizeAnnotationSubArray($this->annotations[$subtype]));
             }
 
             return array();
+        }
+
+        /**
+         * The address of one of this post's own annotations as the post has it now. A post's address has one layout
+         * (`/YYYY/slug`), but an annotation made on a site that used another keeps the address the post had then
+         * (`/YYYY/MM/slug/annotations/<id>`, as its key and as its permalink); the address of the same annotation now is
+         * returned. Any other address (another site's, or this post's own) is returned as it was.
+         *
+         * @param string $address
+         * @return string
+         */
+        function canonicalAnnotationAddress($address)
+        {
+            $address = (string)$address;
+            $base    = \Idno\Core\Idno::site()->config()->getURL();
+            if ($base === '' || !str_starts_with($address, $base)) {
+                return $address;
+            }
+            if (preg_match('#^[0-9]{4}/(?:[0-9]{2}/){1,2}([^/.]+)/annotations/([A-Za-z0-9\-]+)$#', substr($address, strlen($base)), $matches) !== 1) {
+                return $address;
+            }
+            $own = $this->getURL();
+            if (basename((string)parse_url($own, PHP_URL_PATH)) !== $matches[1]) {
+                return $address;
+            }
+
+            return $own . '/annotations/' . $matches[2];
+        }
+
+        /**
+         * A list of annotations (the annotations of a kind, by the key they are stored under) with each one's own address
+         * as the post has it now (see canonicalAnnotationAddress()). The keys are not changed.
+         *
+         * @param array $annotations
+         * @return array
+         */
+        function withCanonicalAnnotationAddresses($annotations)
+        {
+            foreach ($annotations as $key => $annotation) {
+                if (is_array($annotation) && isset($annotation['permalink']) && is_string($annotation['permalink'])) {
+                    $annotations[$key]['permalink'] = $this->canonicalAnnotationAddress($annotation['permalink']);
+                }
+            }
+
+            return $annotations;
         }
 
         /**

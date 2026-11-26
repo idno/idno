@@ -31,7 +31,7 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
 
     private const HOST_WHY = 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page drew the list)';
 
-    private const CHANGED_AFTER_THE_MOVE = [
+    private const CHANGED = [
         'list-post' => self::METHOD_WHY,
         'list-put' => self::METHOD_WHY,
         'list-delete' => self::METHOD_WHY,
@@ -41,6 +41,7 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
         'go-post' => self::METHOD_WHY,
         'go-put' => self::METHOD_WHY,
         'go-delete' => self::METHOD_WHY,
+        'go-signed-api' => 'the JSON that tells a signed request where to go is sent as application/json (the legacy page sent it as text/html)',
         'go-malformed-host' => 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page redirected)',
     ];
 
@@ -208,6 +209,54 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
         $this->assertTrue($this->runInSite(str_replace(['%CODES%', '%POSTS%'], [$this->literal($codes), $this->literal($posts)], $code)));
     }
 
+    /** A French catalogue of the list's title: core ships none, so the site is given one (`Tests\Fixtures\TestCatalogue`). */
+    protected function siteEnvironment(): array
+    {
+        return ['IDNO_TEST_TRANSLATIONS' => json_encode(['fr_FR' => ['Annotations on: %s' => 'Annotations sur : %s']], JSON_THROW_ON_ERROR)];
+    }
+
+    /**
+     * The title of the list of a post's annotations is a string of the site's translation, as the title of every other page is: it was the English words
+     * whatever the language of the request.
+     */
+    public function testTheListsTitleIsTranslated(): void
+    {
+        $list = $this->target('status') . '/annotations/';
+        $french = $this->site()->request('GET', $list, ['Accept-Language' => 'fr-FR,fr;q=0.9']);
+        $this->assertSame(200, $french->status);
+        $this->assertMatchesRegularExpression('#<title[^>]*>Annotations sur : #', $french->body);
+        $this->assertStringNotContainsString('Annotations on: ', $french->body);
+        $english = $this->site()->request('GET', $list);
+        $this->assertMatchesRegularExpression('#<title[^>]*>Annotations on: #', $english->body);
+        $this->assertStringNotContainsString('Annotations sur', $english->body);
+    }
+
+    /**
+     * Who is answered what for a post that is not public, as the legacy pages answered it: the finders return a post to the viewers who may read it and the page
+     * is the site's missing-content page (410) for everyone else, never a refusal. The list and a single annotation, for each viewer.
+     */
+    public function testAccessAnswersAreUnchangedForEveryViewer(): void
+    {
+        $expected = [
+            'bob-site' => ['visitor' => 410, 'member' => 200, 'owner' => 200, 'admin' => 200],
+            'bob-owner' => ['visitor' => 410, 'member' => 410, 'owner' => 200, 'admin' => 200],
+            'bob-draft' => ['visitor' => 410, 'member' => 410, 'owner' => 200, 'admin' => 200],
+        ];
+        foreach ($expected as $post => $viewers) {
+            foreach ($viewers as $viewer => $status) {
+                foreach (['/annotations/', '/annotations/' . md5('reply')] as $rest) {
+                    $answer = $this->site()->request('GET', $this->target($post) . $rest, $this->asViewer($viewer));
+                    $this->assertSame($status, $answer->status, $post . ' ' . $rest . ' as ' . $viewer);
+                    if ($status === 410) {
+                        $this->assertStringNotContainsString('Carol replies to Bob', $answer->body, $post . ' as ' . $viewer);
+                    } else {
+                        $this->assertStringContainsString('Carol replies to Bob', $answer->body, $post . ' ' . $rest . ' as ' . $viewer);
+                    }
+                }
+            }
+        }
+    }
+
     /** The address a case asks: the post's (or its `/view/<id>` address) and what follows it. */
     private function addressOf(string $post, string $rest): string
     {
@@ -257,14 +306,37 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
         $this->record('list-invalid-utf8', 'GET', '/2026/%FF/annotations/');
         $this->record('list-nul', 'GET', '/2026/%00/annotations/');
         $this->record('list-double-slash', 'GET', '/' . ltrim($list, '/') . '/');
-        $this->record('list-malformed-host', 'GET', $list, ['Host' => 'bad host!']);
-        $this->record('one-malformed-host', 'GET', $one, ['Host' => 'bad host!']);
-        // The methods the page does not take, with no form token (a state-changing request carries one): nothing is changed whatever the answer
-        $this->record('list-post', 'POST', $list, [], 'visitor', ['body' => 'x']);
-        $this->record('one-post', 'POST', $one, [], 'visitor', ['body' => 'x']);
-        $this->record('list-put', 'PUT', $list, [], 'visitor', ['body' => 'x']);
-        $this->record('list-delete', 'DELETE', $list);
+        $this->assertTheRouters404($this->record('list-malformed-host', 'GET', $list, ['Host' => 'bad host!']), 'a malformed Host, the list');
+        $this->assertTheRouters404($this->record('one-malformed-host', 'GET', $one, ['Host' => 'bad host!']), 'a malformed Host, one annotation');
+        // The methods the page does not take, with no form token (a state-changing request carries one): nothing is changed whatever the answer. A page a
+        // controller serves answers the methods it declares: the others are the legacy router's 404 page (the legacy page answered a request with no form
+        // token with a redirect or the 403 page, one with a token with what its own handlers did: it had none)
+        $this->assertTheRouters404($this->record('list-post', 'POST', $list, [], 'visitor', ['body' => 'x']), 'POST of the list');
+        $this->assertTheRouters404($this->record('one-post', 'POST', $one, [], 'visitor', ['body' => 'x']), 'POST of one annotation');
+        $this->assertTheRouters404($this->record('list-put', 'PUT', $list, [], 'visitor', ['body' => 'x']), 'PUT of the list');
+        $this->assertTheRouters404($this->record('list-delete', 'DELETE', $list), 'DELETE of the list');
+        // with a form token too: the member is refused nothing, and the post still holds its annotations
+        $token = $this->tokenOf('owner');
+        foreach (['POST', 'PUT', 'DELETE'] as $method) {
+            $answer = $this->site()->request($method, $this->target('bob-annotated') . '/annotations/?__bTk=' . $token, $this->asViewer('owner'), $method === 'DELETE' ? null : ['__bTk' => $token]);
+            $this->assertSame(404, $answer->status, $method . ' with the form token');
+        }
+        $this->assertStringContainsString('Carol replies to Bob', $this->site()->request('GET', $this->target('bob-annotated') . '/annotations/')->body);
         $this->addToAssertionCount(1);
+    }
+
+    /**
+     * An XHR GET gets the headers of the same request that is not XHR (the legacy router's own lines for it, a JSON type, a date in 1997 and two
+     * Cache-Control lines, are no longer sent), for a page a controller serves: the list of annotations and a shortlink.
+     */
+    public function testAnXhrRequestIsAnsweredAsThePlainRequestIs(): void
+    {
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        foreach ([$this->target('status') . '/annotations/', $this->target('status') . '/annotations/' . md5('reply'), '/s/' . self::CODES['bob-public']] as $path) {
+            $plain = $this->site()->request('GET', $path);
+            $answer = $this->site()->request('GET', $path, $xhr);
+            $this->assertSame(self::normalise($plain, $this->baseUrl()), self::normalise($answer, $this->baseUrl()), $path);
+        }
     }
 
     public function testTheShortlinkOfEachStateOfAPostForEachViewer(): void
@@ -291,11 +363,18 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
         $this->recordGo('go-accept-activitypub', 'GET', $code, ['Accept' => 'application/activity+json']);
         $this->recordGo('go-json', 'GET', $code . '?_t=json');
         $this->recordGo('go-query', 'GET', $code . '?x=1');
-        $this->recordGo('go-signed-api', 'GET', $code, self::signedHeadersFor('bob', $this->bobsKey(), $code));
-        $this->recordGo('go-malformed-host', 'GET', $code, ['Host' => 'bad host!']);
-        $this->recordGo('go-post', 'POST', $code, [], 'visitor', ['x' => 'y']);
-        $this->recordGo('go-put', 'PUT', $code, [], 'visitor', ['x' => 'y']);
-        $this->recordGo('go-delete', 'DELETE', $code);
+        $signed = $this->recordGo('go-signed-api', 'GET', $code, self::signedHeadersFor('bob', $this->bobsKey(), $code));
+        // a signed request is told where to go in the JSON `{"location": ...}`, with the redirect's status; the legacy page sent it as `text/html`
+        $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/shortlink/go-signed-api.txt');
+        $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        $this->assertNotSame($recorded, $expected, 'the recording holds the legacy type');
+        $this->assertSame($expected, self::normalise($signed, $this->baseUrl()));
+        // the router's 404 page: a malformed Host is served by the legacy router, which has no page for the address, and the methods the page does not take
+        // are not its (the legacy page redirected a request with a malformed Host, and answered the others with the invalid-token redirect or the 403 page)
+        $this->assertTheRouters404($this->recordGo('go-malformed-host', 'GET', $code, ['Host' => 'bad host!']), 'a malformed Host');
+        $this->assertTheRouters404($this->recordGo('go-post', 'POST', $code, [], 'visitor', ['x' => 'y']), 'POST');
+        $this->assertTheRouters404($this->recordGo('go-put', 'PUT', $code, [], 'visitor', ['x' => 'y']), 'PUT');
+        $this->assertTheRouters404($this->recordGo('go-delete', 'DELETE', $code), 'DELETE');
         $this->addToAssertionCount(1);
     }
 
@@ -305,6 +384,14 @@ final class AnnotationAnswersTest extends PermalinkSiteCase
      * @param array<string, string>     $headers
      * @param string|array<string>|null $body
      */
+    /** The answer of the legacy router to an address no page of its table serves: the site's 404 page, as for any unknown address. */
+    private function assertTheRouters404(SiteResponse $answer, string $what): void
+    {
+        $this->assertSame(404, $answer->status, $what);
+        $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $what);
+        $this->assertNull($answer->header('Location'), $what);
+    }
+
     private function recordGo(string $case, string $method, string $path, array $headers = [], string $viewer = 'visitor', string|array|null $body = null): SiteResponse
     {
         $response = null;

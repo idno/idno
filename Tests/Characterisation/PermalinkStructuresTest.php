@@ -12,7 +12,9 @@ use Tests\Support\RecordedAnswers;
  * addresses of the other two layouts a site could choose before (`/YYYY/MM/<slug>`, `/YYYY/MM/DD/<slug>`), which are now sent permanently to the post's own
  * address, a missing post and a post the viewer may not read being the same answer there. The answers for the layout are recorded from the legacy page
  * (`Tests/Characterisation/fixtures/answers/permalink-structures/year-slug-*`, unchanged); the others, which the legacy page SERVED under a setting that no longer
- * exists, were captured again on purpose when the setting was removed (`other-layout-*`), and the recordings of the page under those settings are gone.
+ * exists, were captured again on purpose when the setting was removed (`other-layout-*`), and the recordings of the page under those settings are gone. The annotation list of an
+ * old-layout address (`other-layout-annotations`) was a 404 then and is sent to the address the annotations have now since the annotation pages answer it, and was captured
+ * again on purpose for that.
  */
 final class PermalinkStructuresTest extends PermalinkSiteCase
 {

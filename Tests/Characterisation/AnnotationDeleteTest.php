@@ -22,7 +22,8 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
     protected const GROUP = 'annotation-delete';
 
     /** The cases the page that replaced the legacy one answers differently ON PURPOSE, with why; the test of each asserts the answer of the page that serves it now. */
-    private const CHANGED_AFTER_THE_MOVE = [
+    private const CHANGED = [
+        'delete-signed-owner' => 'the JSON that tells a signed request where to go is sent as application/json (the legacy page sent it as text/html)',
         'delete-get' => 'a GET of the delete address is the legacy router\'s 404 page (a page a controller serves answers only the methods it declares; the legacy page answered with the site\'s 404 for a GET it did not define)',
         'delete-put' => 'a PUT is the legacy router\'s 404 page (the legacy page answered the site\'s 403 page for a request with no form token)',
         'delete-delete' => 'a DELETE is the legacy router\'s 404 page (the same)',
@@ -151,7 +152,11 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         $this->record('delete-token-owner-no-permalink', 'POST', $note . '/annotations/' . md5('nothing') . '/delete', [], 'owner', $tokens('owner'), $scrub);
         // a signed request, an XHR request, JSON
         $signed = $this->deleteAddress($note, 'mention');
-        $this->record('delete-signed-owner', 'POST', $signed, self::signedHeadersFor('bob', $this->bobsKey(), $signed), 'visitor', []);
+        $answer = $this->record('delete-signed-owner', 'POST', $signed, self::signedHeadersFor('bob', $this->bobsKey(), $signed), 'visitor', []);
+        $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/delete-signed-owner.txt');
+        $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        $this->assertNotSame($recorded, $expected, 'the recording holds the legacy type');
+        $this->assertSame($expected, self::normalise($answer, $this->baseUrl()));
         $this->record('delete-signed-owner-then', 'GET', $list . '?_t=rss', [], 'owner');
         $this->record('delete-xhr-owner', 'POST', $this->deleteAddress($note, 'share'), ['X-Requested-With' => 'XMLHttpRequest'], 'owner', $tokens('owner'), $scrub);
         $this->record('delete-xhr-owner-then', 'GET', $list . '?_t=rss', [], 'owner');
@@ -167,11 +172,18 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         $this->record('delete-token-admin', 'POST', $this->deleteAddress($public, 'local'), [], 'admin', $tokens('admin'), $scrub);
         $this->record('delete-token-admin-then', 'GET', $public . '/annotations/', [], 'admin');
 
-        // the methods the page does not take
-        $this->record('delete-get', 'GET', $this->deleteAddress($note, 'like'), [], 'owner');
-        $this->record('delete-put', 'PUT', $this->deleteAddress($note, 'like'), [], 'owner', $tokens('owner'), $scrub);
-        $this->record('delete-delete', 'DELETE', $this->deleteAddress($note, 'like'), [], 'owner', null, $scrub);
-        $this->record('delete-override-delete', 'POST', $this->deleteAddress($note, 'like'), ['X-HTTP-Method-Override' => 'DELETE'], 'owner', $tokens('owner'), $scrub);
+        // the methods the page does not take: the legacy router's 404 page (the legacy page answered a GET with the 501 page, a PUT or DELETE with the 403 page
+        // of a request with no form token, and a POST that asks to be handled as a DELETE as the POST it is). What the request asked is not done.
+        foreach ([
+            'delete-get' => ['GET', null],
+            'delete-put' => ['PUT', $tokens('owner')],
+            'delete-delete' => ['DELETE', null],
+        ] as $case => [$method, $body]) {
+            $answer = $this->record($case, $method, $this->deleteAddress($note, 'like'), [], 'owner', $body, $scrub);
+            $this->assertSame(404, $answer->status, $case);
+        }
+        $answer = $this->record('delete-override-delete', 'POST', $this->deleteAddress($note, 'like'), ['X-HTTP-Method-Override' => 'DELETE'], 'owner', $tokens('owner'), $scrub);
+        $this->assertSame(404, $answer->status, 'a POST that asks to be handled as a DELETE: the page takes POST alone, as the real method and the one the header names');
         $this->record('delete-token-owner-final', 'GET', $list, [], 'owner');
         $this->addToAssertionCount(1);
     }

@@ -1575,9 +1575,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
 
         foreach ([
             [],
-            ['single_user' => true, 'open_registration' => true, 'walled_garden' => true, 'show_privacy' => false, 'user_avatar_favicons' => false, 'indieweb_reference' => true, 'permalink_structure' => '/:year/:month/:slug', 'title' => 'A title', 'description' => 'About it', 'homepagetitle' => 'Home', 'items_per_page' => 25, 'hub' => 'https://hub.example/', 'share_backup_url' => 'https://example.org/i.png'],
-            ['single_user' => false, 'open_registration' => false, 'walled_garden' => false, 'show_privacy' => true, 'permalink_structure' => '/:year/:month/:day/:slug', 'title' => $hostile, 'description' => $hostile, 'homepagetitle' => $hostile, 'items_per_page' => $hostile, 'hub' => $hostile, 'share_backup_url' => $hostile],
-            ['permalink_structure' => '/something/else', 'walled_garden' => false, 'show_privacy' => false],
+            ['single_user' => true, 'open_registration' => true, 'walled_garden' => true, 'show_privacy' => false, 'user_avatar_favicons' => false, 'indieweb_reference' => true, 'title' => 'A title', 'description' => 'About it', 'homepagetitle' => 'Home', 'items_per_page' => 25, 'hub' => 'https://hub.example/', 'share_backup_url' => 'https://example.org/i.png'],
+            ['single_user' => false, 'open_registration' => false, 'walled_garden' => false, 'show_privacy' => true, 'title' => $hostile, 'description' => $hostile, 'homepagetitle' => $hostile, 'items_per_page' => $hostile, 'hub' => $hostile, 'share_backup_url' => $hostile],
+            ['walled_garden' => false, 'show_privacy' => false],
         ] as $n => $settings) {
             foreach ($settings as $key => $value) {
                 $config->config[$key] = $value;

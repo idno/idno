@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-25 19:47+0000\n"
+"POT-Creation-Date: 2026-11-26 10:24+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -19,8 +19,8 @@ msgstr ""
 
 #: ./Idno/Common/Page.php:391
 #: ./Idno/Common/Page.php:392
-#: ./Idno/Legacy/LegacyPageLifecycle.php:149
-#: ./Idno/Legacy/LegacyPageLifecycle.php:150
+#: ./Idno/Legacy/LegacyPageLifecycle.php:160
+#: ./Idno/Legacy/LegacyPageLifecycle.php:161
 msgid "Invalid token."
 msgstr ""
 
@@ -29,23 +29,28 @@ msgstr ""
 msgid "Something went wrong."
 msgstr ""
 
-#: ./Idno/Common/Page.php:615
-#: ./Idno/Common/Page.php:704
-#: ./Idno/Legacy/LegacyPageLifecycle.php:147
+#: ./Idno/Common/Page.php:604
+#: ./Idno/Legacy/LegacyPageLifecycle.php:158
 msgid "The page you were on timed out."
 msgstr ""
 
-#: ./Idno/Common/Page.php:629
-#: ./Idno/Common/Page.php:718
+#: ./Idno/Common/Page.php:644
+#: ./Idno/Common/Page.php:733
 msgid "Couldn't say anything about execution, probably something went wrong"
 msgstr ""
 
-#: ./Idno/Common/Page.php:788
+#: ./Idno/Common/Page.php:803
 msgid "This content isn't here."
 msgstr ""
 
-#: ./Idno/Common/Page.php:801
+#: ./Idno/Common/Page.php:816
 msgid "This page can't be found."
+msgstr ""
+
+#: ./Idno/Common/Page.php:997
+#: ./Idno/Legacy/LegacyPermalinks.php:131
+#: ./Idno/Pages/Entity/Delete.php:62
+msgid "%s was deleted."
 msgstr ""
 
 #: ./Idno/Common/Plugin.php:91
@@ -65,12 +70,13 @@ msgstr ""
 msgid "Oh no! Something went wrong."
 msgstr ""
 
-#: ./Idno/Core/Idno.php:446
+#: ./Idno/Core/Idno.php:455
 msgid "Site entity for \"%s\" could not be created"
 msgstr ""
 
-#: ./Idno/Core/PageHandler.php:323
-#: ./Idno/Legacy/LegacyPageLifecycle.php:96
+#: ./Idno/Core/PageHandler.php:411
+#: ./Idno/Legacy/LegacyPageLifecycle.php:97
+#: ./Idno/Legacy/PageShell.php:88
 msgid "Account pages are not available to API requests."
 msgstr ""
 
@@ -102,7 +108,7 @@ msgstr ""
 msgid "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini"
 msgstr ""
 
-#: ./Idno/Core/Session.php:820
+#: ./Idno/Core/Session.php:839
 msgid "Your password was changed, so you have been signed out here. Please sign in again."
 msgstr ""
 
@@ -194,6 +200,10 @@ msgstr ""
 msgid "Check that your upload directory is writeable by the web server and try again."
 msgstr ""
 
+#: ./Idno/Legacy/LegacyAnnotations.php:52
+msgid "Annotations on: %s"
+msgstr ""
+
 #: ./Idno/Pages/Account/Export.php:20
 #: ./templates/classic/account/menu.tpl.php:8
 #: ./templates/default/account/menu.html.twig:18
@@ -234,67 +244,67 @@ msgstr ""
 msgid "Sorry, your passwords either don't match, or are too weak"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:26
+#: ./Idno/Pages/Account/Register.php:28
 msgid "This site is closed to new users."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:30
-#: ./Idno/Pages/Account/Register.php:71
+#: ./Idno/Pages/Account/Register.php:34
+#: ./Idno/Pages/Account/Register.php:83
 msgid "Your invitation doesn't seem to be valid, or has expired."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:37
+#: ./Idno/Pages/Account/Register.php:43
 msgid "Create a new account"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:82
+#: ./Idno/Pages/Account/Register.php:96
 #: ./Idno/Pages/Admin/Users.php:140
 msgid "Please enter a username and email address."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:120
+#: ./Idno/Pages/Account/Register.php:134
 #: ./Idno/Pages/Admin/Users.php:158
 msgid "Please create a username."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:123
+#: ./Idno/Pages/Account/Register.php:137
 #: ./Idno/Pages/Admin/Users.php:161
 msgid "Your username is too long."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:126
+#: ./Idno/Pages/Account/Register.php:140
 msgid "Usernames can only have letters, numbers and underscores."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:129
+#: ./Idno/Pages/Account/Register.php:143
 #: ./Idno/Pages/Admin/Users.php:164
 msgid "Usernames can't contain a slash %s character."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:132
+#: ./Idno/Pages/Account/Register.php:146
 #: ./Idno/Pages/Admin/Users.php:167
 msgid "Unfortunately, someone is already using that username. Please choose another."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:135
+#: ./Idno/Pages/Account/Register.php:149
 #: ./Idno/Pages/Admin/Users.php:170
 msgid "Hey, it looks like there's already an account with that email address. Did you forget your login?"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:138
+#: ./Idno/Pages/Account/Register.php:152
 msgid "Please check that your passwords match and that your password is at least 7 characters long."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:142
+#: ./Idno/Pages/Account/Register.php:156
 #: ./Idno/Pages/Admin/Users.php:174
 msgid "That doesn't seem like it's a valid email address."
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:146
+#: ./Idno/Pages/Account/Register.php:160
 msgid "You've registered! You're ready to get started. Why not add a post to say hello?"
 msgstr ""
 
-#: ./Idno/Pages/Account/Register.php:150
+#: ./Idno/Pages/Account/Register.php:164
 msgid "We couldn't register you."
 msgstr ""
 
@@ -676,14 +686,8 @@ msgstr ""
 msgid "We couldn't find the post."
 msgstr ""
 
-#: ./Idno/Pages/Entity/Delete.php:49
+#: ./Idno/Pages/Entity/Delete.php:51
 msgid "We couldn't find the post to delete."
-msgstr ""
-
-#: ./Idno/Pages/Entity/Delete.php:57
-#: ./Idno/Pages/Entity/View.php:146
-#: ./Idno/Pages/User/View.php:105
-msgid "%s was deleted."
 msgstr ""
 
 #: ./Idno/Pages/Entity/Withdraw.php:48
@@ -706,7 +710,7 @@ msgstr ""
 msgid "There was a problem getting an upload URL for the newly minted file"
 msgstr ""
 
-#: ./Idno/Pages/File/Picker.php:55
+#: ./Idno/Pages/File/Picker.php:56
 msgid "You can only upload images."
 msgstr ""
 
@@ -791,11 +795,11 @@ msgstr ""
 #: ./templates/classic/admin/export.tpl.php:29
 #: ./templates/classic/admin/export.tpl.php:63
 #: ./templates/classic/admin/home.tpl.php:84
-#: ./templates/classic/admin/home.tpl.php:140
-#: ./templates/classic/admin/home.tpl.php:163
-#: ./templates/classic/admin/home.tpl.php:191
-#: ./templates/classic/admin/home.tpl.php:244
-#: ./templates/classic/admin/home.tpl.php:279
+#: ./templates/classic/admin/home.tpl.php:115
+#: ./templates/classic/admin/home.tpl.php:138
+#: ./templates/classic/admin/home.tpl.php:166
+#: ./templates/classic/admin/home.tpl.php:219
+#: ./templates/classic/admin/home.tpl.php:254
 #: ./templates/classic/forms/components/usersearch/user.tpl.php:67
 msgid "Yes"
 msgstr ""
@@ -805,11 +809,11 @@ msgstr ""
 #: ./templates/classic/admin/export.tpl.php:30
 #: ./templates/classic/admin/export.tpl.php:64
 #: ./templates/classic/admin/home.tpl.php:85
-#: ./templates/classic/admin/home.tpl.php:141
-#: ./templates/classic/admin/home.tpl.php:164
-#: ./templates/classic/admin/home.tpl.php:192
-#: ./templates/classic/admin/home.tpl.php:245
-#: ./templates/classic/admin/home.tpl.php:280
+#: ./templates/classic/admin/home.tpl.php:116
+#: ./templates/classic/admin/home.tpl.php:139
+#: ./templates/classic/admin/home.tpl.php:167
+#: ./templates/classic/admin/home.tpl.php:220
+#: ./templates/classic/admin/home.tpl.php:255
 msgid "No"
 msgstr ""
 
@@ -947,9 +951,9 @@ msgid "Specify your timezone."
 msgstr ""
 
 #: ./templates/classic/account/settings.tpl.php:98
-#: ./templates/classic/admin/home.tpl.php:296
+#: ./templates/classic/admin/home.tpl.php:271
 #: ./templates/default/account/settings.html.twig:48
-#: ./templates/default/admin/home.html.twig:139
+#: ./templates/default/admin/home.html.twig:124
 msgid "Save updates"
 msgstr ""
 
@@ -1329,97 +1333,88 @@ msgstr ""
 msgid "Is this a single-user site? If so, your profile information will be shown at the top of the homepage."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:101
-#: ./templates/default/admin/home.html.twig:49
-msgid "Permalink Structure"
-msgstr ""
-
-#: ./templates/classic/admin/home.tpl.php:118
-msgid "How permalinks for individual posts are constructed."
-msgstr ""
-
-#: ./templates/classic/admin/home.tpl.php:128
-#: ./templates/default/admin/home.html.twig:67
+#: ./templates/classic/admin/home.tpl.php:103
+#: ./templates/default/admin/home.html.twig:52
 msgid "Registration and privacy"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:136
-#: ./templates/default/admin/home.html.twig:73
+#: ./templates/classic/admin/home.tpl.php:111
+#: ./templates/default/admin/home.html.twig:58
 msgid "Allow registration"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:146
+#: ./templates/classic/admin/home.tpl.php:121
 msgid "Allow registration if you want others to sign up for your site."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:159
-#: ./templates/default/admin/home.html.twig:82
+#: ./templates/classic/admin/home.tpl.php:134
+#: ./templates/default/admin/home.html.twig:67
 msgid "Make site private"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:168
+#: ./templates/classic/admin/home.tpl.php:143
 msgid "Content on a private site is only visible if you're logged in."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:186
-#: ./templates/default/admin/home.html.twig:92
+#: ./templates/classic/admin/home.tpl.php:161
+#: ./templates/default/admin/home.html.twig:77
 msgid "Per-post privacy"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:197
+#: ./templates/classic/admin/home.tpl.php:172
 msgid "Show per-post privacy settings."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:213
-#: ./templates/default/admin/home.html.twig:101
+#: ./templates/classic/admin/home.tpl.php:188
+#: ./templates/default/admin/home.html.twig:86
 msgid "Technical Settings"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:221
-#: ./templates/default/admin/home.html.twig:104
+#: ./templates/classic/admin/home.tpl.php:196
+#: ./templates/default/admin/home.html.twig:89
 msgid "PubSubHubbub hub"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:224
+#: ./templates/classic/admin/home.tpl.php:199
 msgid "PubSubHubbub hub address"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:228
+#: ./templates/classic/admin/home.tpl.php:203
 msgid "You can probably leave this as is."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:229
+#: ./templates/classic/admin/home.tpl.php:204
 msgid "Learn more about PuSH"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:239
+#: ./templates/classic/admin/home.tpl.php:214
 msgid "Avatar as icon"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:250
+#: ./templates/classic/admin/home.tpl.php:225
 msgid "This uses members' avatar images as the site favicon."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:259
-#: ./templates/default/admin/home.html.twig:118
+#: ./templates/classic/admin/home.tpl.php:234
+#: ./templates/default/admin/home.html.twig:103
 msgid "Backup share image"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:263
-#: ./templates/default/admin/home.html.twig:120
+#: ./templates/classic/admin/home.tpl.php:238
+#: ./templates/default/admin/home.html.twig:105
 msgid "Backup share image URL"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:267
-#: ./templates/default/admin/home.html.twig:122
+#: ./templates/classic/admin/home.tpl.php:242
+#: ./templates/default/admin/home.html.twig:107
 msgid "Specify the URL of an image to use as your default social share image."
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:275
+#: ./templates/classic/admin/home.tpl.php:250
 msgid "Include permalinks"
 msgstr ""
 
-#: ./templates/classic/admin/home.tpl.php:284
+#: ./templates/classic/admin/home.tpl.php:259
 msgid "Always add a link back to your site when you syndicate to external networks."
 msgstr ""
 
@@ -2009,14 +2004,14 @@ msgstr ""
 #: ./templates/classic/shell/pagination.tpl.php:35
 #: ./templates/default/drafts.html.twig:34
 #: ./templates/default/shell/pagination.html.twig:9
-#: ./templates/markdown/shell.tpl.php:170
+#: ./templates/markdown/shell.tpl.php:171
 msgid "Newer"
 msgstr ""
 
 #: ./templates/classic/shell/pagination.tpl.php:36
 #: ./templates/default/drafts.html.twig:39
 #: ./templates/default/shell/pagination.html.twig:14
-#: ./templates/markdown/shell.tpl.php:173
+#: ./templates/markdown/shell.tpl.php:174
 msgid "Older"
 msgstr ""
 
@@ -2271,11 +2266,11 @@ msgstr ""
 msgid "Show profile info on homepage."
 msgstr ""
 
-#: ./templates/default/admin/home.html.twig:113
+#: ./templates/default/admin/home.html.twig:98
 msgid "Avatar as favicon"
 msgstr ""
 
-#: ./templates/default/admin/home.html.twig:129
+#: ./templates/default/admin/home.html.twig:114
 msgid "Include permalinks when syndicating"
 msgstr ""
 
@@ -2730,7 +2725,7 @@ msgstr ""
 msgid "In reply to"
 msgstr ""
 
-#: ./templates/markdown/shell.tpl.php:124
+#: ./templates/markdown/shell.tpl.php:125
 msgid "This page is a settings page and has no Markdown form. Open it in a browser."
 msgstr ""
 

@@ -28,6 +28,13 @@ final class LegacyPermalinks implements Permalinks
         return $entity instanceof Entity ? $entity : null;
     }
 
+    public function byShortUrl(string $code): ?Entity
+    {
+        $entity = Entity::getByShortURL($code);
+
+        return $entity instanceof Entity ? $entity : null;
+    }
+
     public function canRead(Entity $entity): bool
     {
         return (bool) $entity->canRead();

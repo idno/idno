@@ -22,6 +22,11 @@ interface Permalinks
     public function find(string $idOrSlug): ?Entity;
 
     /**
+     * The entity a shortlink's code names; null for none (the finders leave out what the viewer may not read).
+     */
+    public function byShortUrl(string $code): ?Entity;
+
+    /**
      * Whether the viewer may read the entity (its access, and a draft that is the viewer's).
      */
     public function canRead(Entity $entity): bool;
