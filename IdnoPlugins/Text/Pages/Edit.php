@@ -63,6 +63,8 @@ namespace IdnoPlugins\Text\Pages {
                 $object = new \IdnoPlugins\Text\Entry();
             }
 
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 (new \Idno\Core\Autosave())->clearContext('entry');
                 if ($object->getPublishStatus() === 'draft') {

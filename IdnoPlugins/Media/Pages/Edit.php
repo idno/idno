@@ -55,6 +55,8 @@ namespace IdnoPlugins\Media\Pages {
                 $object = new \IdnoPlugins\Media\Media();
             }
 
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 $forward = $this->getInput('forward-to', $object->getDisplayURL());
                 $this->forward($forward);

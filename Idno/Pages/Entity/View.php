@@ -120,8 +120,8 @@ namespace Idno\Pages\Entity {
                 }
             }
 
-            if (empty($object)) {
-                $this->forward(); // TODO: 404
+            if (!$this->editRequestedEntity($object ?? false)) {
+                return;
             }
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getDisplayURL());

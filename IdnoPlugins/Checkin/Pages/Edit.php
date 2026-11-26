@@ -53,6 +53,8 @@ namespace IdnoPlugins\Checkin\Pages {
                 $object = new \IdnoPlugins\Checkin\Checkin();
             }
 
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 if ($object->getPublishStatus() === 'draft') {
                     \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your draft has been saved.'));

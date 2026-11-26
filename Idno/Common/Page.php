@@ -908,6 +908,41 @@ namespace Idno\Common {
         }
 
         /**
+         * For a page that writes to an entity from the request: nothing that has a side effect (a file stored, an address fetched, a post
+         * announced) happens before this has been passed. A visitor is refused, a post the requester may not read is answered as a missing one is
+         * (false: the caller ends there), and a requester who may not edit it is refused.
+         *
+         * @param \Idno\Common\Entity|false|null $object what the lookup found
+         * @return bool whether the caller may go on
+         */
+        function editRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+                return false;
+            }
+            if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+
+            return true;
+        }
+
+        /**
+         * For a page that creates or edits an entity: an entity that is already stored must be one the requester may edit, before any of the
+         * request is read into it. (A new one is the requester's own: `createGatekeeper()` has asked whether they may write.)
+         *
+         * @param \Idno\Common\Entity $object
+         */
+        function editGatekeeper($object)
+        {
+            if (!empty($object->_id) && !$object->canEdit()) {
+                $this->deniedContent();
+            }
+        }
+
+        /**
          * What a DELETE to the address of an entity does: only a logged-in requester who may edit it deletes it (an account only by an
          * administrator's session, which a signed API request never is), and a post the requester may not read is answered as a missing one is,
          * whatever the request: a script's (XHR) request does not forward, so the answer ends here and does not fall through to the delete.
