@@ -106,4 +106,15 @@ Passes when:
 - **Admin, Legacy tables** lists the 1.x tables and the rejected rows, and each rejected row is one you can explain;
 - the 1.x tables are still there, renamed with `legacy_`, until you delete them.
 
+## 8. Files served by the file page, in real browsers
+
+The file page sends every file with `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox`, and the exception for `application/pdf` (the browsers' own viewers need to run) is not exercised by any test. On a staging copy, in Chrome, Firefox and Safari, upload a PDF, a picture, an audio file, an HTML file and an SVG file to posts, and open each file's address (`/file/<id>/<name>`) directly.
+
+Passes when:
+
+- the PDF opens in the browser's viewer, and its links and page controls work;
+- the picture, audio and video files play or show in the post and when opened directly;
+- the HTML and SVG files are offered as downloads (or shown as text), and no script in them runs on the site's origin;
+- a file attached to a private post answers the "not found" page to a visitor who is not signed in, and to a member who may not read the post.
+
 If any check fails, do not release: write down what you saw, the Idno version and the server, and open an issue.

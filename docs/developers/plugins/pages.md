@@ -196,7 +196,7 @@ In each case, execution is halted.
 
 ## Pages served by controllers
 
-Core's own home page, feeds, search, tag pages and small public endpoints are not `Page` classes: each is a Symfony controller that calls a service, and the page classes your plugin extends or registers keep working beside them. A page of your own is still a `\Idno\Common\Page` class, as above: the container imports controller routes only from core's directories (`Idno/Upgrade`, `Idno/Legacy`, `Idno/Http/Controller`), so a plugin does not add a controller route. Read this section to see how core does it, or to replace the home page.
+Core's own home page, feeds, search and tag pages, a post's permalink, shortlink and annotation pages, a member's profile, drafts and following pages, a stored file, the webmention endpoint, the WebSub callback and the small public endpoints are not `Page` classes: each is a Symfony controller that calls a service, and the page classes your plugin extends or registers keep working beside them. Three are kept as deprecated shells that serve the same service (`Idno\Pages\Homepage`, `Idno\Pages\Entity\View` and `Idno\Pages\User\View`, removed in 3.0); the others are deleted, and the table in [Upgrading](upgrading.md) says what replaces each. A page of your own is still a `\Idno\Common\Page` class, as above: the container imports controller routes only from core's directories (`Idno/Upgrade`, `Idno/Legacy`, `Idno/Http/Controller`), so a plugin does not add a controller route. Read this section to see how core does it, or to replace the home page.
 
 The home page is the worked example. `Idno\Http\Controller\HomepageController` declares the routes and the page:
 

@@ -296,7 +296,7 @@ final class ProfileWritesTest extends ProfileSiteCase
     /**
      * A DELETE of the profile's address is no handler of the page: it is answered as one to any other address of the page is, and deletes nothing. The
      * legacy page looked the HANDLE up as an entity's id, so it deleted the account or the post whose id the address held, never the profile of a handle:
-     * an administrator's DELETE of `/profile/<an account's id>` deleted the account. An account is deleted from the Users page (`/delete/<id>`) or from
+     * an administrator's DELETE of `/profile/<an account's id>` deleted the account. An account is deleted from Admin, Users (`/admin/users`), at `/delete/<id>` or from
      * its `/view/<id>` address, by an administrator's session only.
      */
     public function testADeleteOfAProfileIsAnUndeclaredHandler(): void
