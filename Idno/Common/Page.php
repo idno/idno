@@ -545,7 +545,8 @@ namespace Idno\Common {
                     }
                 }
                 if (!$gone) {
-                    $this->forward($referrer);
+                    // Only to a page of this site
+                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($referrer));
                 }
             }
 

@@ -961,7 +961,7 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   changes. The administrators' Users page is the other place accounts are deleted.
 - Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
   address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
-  field the same way (`Login::sanitizeRedirectUrl()`). Don't `forward()` to
+  field the same way (`Login::sanitizeRedirectUrl()`), as does `Page::forwardAfterDelete()`. Don't `forward()` to
   `$_SERVER['HTTP_REFERER']` or to an address from the request directly.
 - The client log (`/service/system/log`, `Idno\Pages\Service\System\Log`, used by `js/src/classes/Logger.js`):
   only a logged-in member's script writes to the site's log, as one line (`Log::clean()`: no
