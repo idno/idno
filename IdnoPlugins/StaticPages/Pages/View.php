@@ -88,11 +88,14 @@ namespace IdnoPlugins\StaticPages\Pages {
                     $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
                 }
             }
-            if (empty($object)) $this->forward(); // TODO: 404
+            // Before anything of the request is kept
+            if (!$this->editRequestedEntity($object ?? false)) {
+                return;
+            }
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getURL());
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardBack();
         }
 
         // Handle DELETE requests to the entity
@@ -105,11 +108,7 @@ namespace IdnoPlugins\StaticPages\Pages {
                     $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
                 }
             }
-            if (empty($object)) $this->forward(); // TODO: 404
-            if ($object->delete()) {
-                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
-            }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->deleteRequestedEntity($object ?? false);
         }
 
     }

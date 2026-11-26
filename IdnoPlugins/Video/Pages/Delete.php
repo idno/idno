@@ -21,12 +21,11 @@ namespace IdnoPlugins\Video\Pages {
             }
             if (empty($object)) {
                 $this->forward();
+
+                return; // A script's request is not forwarded
             }
-            if (!$object->canEdit()) {
-                $this->setResponse(403);
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("You don't have permission to perform this task."));
-                $this->forward();
-            }
+            // Ends the request for anybody who may not delete this
+            $this->deleteGatekeeper($object);
 
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your video was deleted.'));

@@ -37,12 +37,13 @@ namespace IdnoPlugins\Media\Pages {
             if (!empty($this->arguments)) {
                 $object = \IdnoPlugins\Text\Entry::getByID($this->arguments[0]);
             }
-            if (empty($object)) $this->forward();
-            if (!$object->canEdit()) {
-                $this->setResponse(403);
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("You don't have permission to perform this task."));
+            if (empty($object)) {
                 $this->forward();
+
+                return; // A script's request is not forwarded
             }
+            // Ends the request for anybody who may not delete this
+            $this->deleteGatekeeper($object);
 
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your media was deleted.'));

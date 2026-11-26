@@ -283,11 +283,27 @@ namespace Tests\Pages {
             $edit = $this->request('owner', 'GET', $this->path($draft->getEditURL()));
             $form = $this->deleteForm($edit['body'], $draft->getDeleteURL());
 
-            $back = Idno::site()->config()->getURL() . 'content/all/';
+            // The page is one of the site as the web server knows it, which need not be the
+            // name this process uses: a delete page with nothing to delete redirects home
+            $home = $this->request('owner', 'GET', 'video/delete/none')['location'];
+            $this->assertNotEmpty($home, 'The delete page should redirect when it names no post.');
+            $back = rtrim(strtok($home, '?'), '/') . '/content/all/';
             $result = $this->request('owner', 'POST', $this->path($draft->getDeleteURL()), $this->fields($form), ['Referer: ' . $back]);
 
             $this->assertNull($this->reload($draft), 'The draft should be gone.');
             $this->assertStringStartsWith($this->urlPath($back), $this->urlPath($result['location']), 'A request that came from some other page should go back to it.');
+        }
+
+        public function testDeletingNeverSendsTheBrowserToAnotherSite()
+        {
+            $draft = $this->saveDraft(static::types()['status'][1], $this->marker());
+            $edit = $this->request('owner', 'GET', $this->path($draft->getEditURL()));
+            $form = $this->deleteForm($edit['body'], $draft->getDeleteURL());
+
+            $result = $this->request('owner', 'POST', $this->path($draft->getDeleteURL()), $this->fields($form), ['Referer: https://elsewhere.example/landing']);
+
+            $this->assertNull($this->reload($draft), 'The draft should be gone.');
+            $this->assertStringNotContainsString('elsewhere.example', $result['location'], 'The address a request says it came from must not send the browser to another site.');
         }
 
         public function testDeletingAPublishedPostFromItsEditPageDoesNotLandOnTheMissingPost()

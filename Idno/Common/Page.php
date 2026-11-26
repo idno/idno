@@ -545,7 +545,8 @@ namespace Idno\Common {
                     }
                 }
                 if (!$gone) {
-                    $this->forward($referrer);
+                    // Only to a page of this site
+                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($referrer));
                 }
             }
 
@@ -639,7 +640,37 @@ namespace Idno\Common {
                 if ($exit) {
                     exit;
                 }
+            } else if ($exit && $this->xhr) {
+                // A script's request (XMLHttpRequest) is not redirected, but the caller
+                // meant the request to end here: going on would run whatever follows a
+                // refusal that was written as a redirect. (A page whose forwarding was
+                // turned off for another reason, a webmention's, is left to go on.)
+                $this->endWithoutForwarding();
             }
+        }
+
+        /**
+         * End a request that would have been redirected, for a page that does not forward (a
+         * script's POST, PUT or DELETE): the answer a handler that returned at this point
+         * has always had. No Location, the status that was set, and no body, or, for an API
+         * request, the page with the session's messages.
+         */
+        private function endWithoutForwarding()
+        {
+            $session = \Idno\Core\Idno::site()->session();
+            if ($session->isAPIRequest()) {
+                if (http_response_code() == 200) {
+                    $this->setResponse(400);
+                }
+                $messages = $session->getMessages();
+                if (empty($messages)) {
+                    $session->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Something went wrong."));
+                }
+                echo \Idno\Core\Idno::site()->template()->drawPage();
+            }
+            http_response_code($this->response);
+            $session->finishEarly();
+            exit;
         }
 
         /**
@@ -923,6 +954,118 @@ namespace Idno\Common {
                 $this->deniedContent();
             }
             $this->gatekeeper();
+        }
+
+        /**
+         * For a page that changes an entity found from the request (its own address): nothing
+         * with a side effect (a file stored, an address fetched, a post announced) happens
+         * before this has been passed. A visitor is refused; something the requester may not
+         * read is answered as something missing is (false: the caller ends there, because
+         * forward() does not end a script's request); a requester who may not edit is refused.
+         *
+         * @param  \Idno\Common\Entity|false|null $object What the lookup found
+         * @return bool Whether the caller may go on
+         */
+        function editRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+
+                return false;
+            }
+            if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+
+            return true;
+        }
+
+        /**
+         * For a page that creates or edits an entity: one that is already stored must be one
+         * the requester may edit, before any of the request is read into it. (A new one is the
+         * requester's own: createGatekeeper() has asked whether they may write.)
+         *
+         * @param \Idno\Common\Entity $object
+         */
+        function editGatekeeper($object)
+        {
+            if (!empty($object->_id) && !$object->canEdit()) {
+                $this->deniedContent();
+            }
+        }
+
+        /**
+         * For a page that deletes an entity: the requester must be allowed to edit it, and the
+         * answer to anybody else is the 403 page, which ends the request (a refusal written as
+         * a redirect does not end a script's request). An account is not a post: it is deleted
+         * only by an administrator's browser session (which a signed API request never is),
+         * and never one's own.
+         *
+         * @param \Idno\Common\Entity $object
+         */
+        function deleteGatekeeper($object)
+        {
+            $this->gatekeeper();
+            if ($object instanceof \Idno\Entities\User) {
+                $this->adminGatekeeper();
+                if ($object->getUUID() === \Idno\Core\Idno::site()->session()->currentUserUUID()) {
+                    $this->deniedContent();
+                }
+            } else if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+        }
+
+        /**
+         * What a DELETE to the address of an entity does. Only a logged-in requester who may
+         * edit it deletes it, and something they may not read is answered as something missing
+         * is, for a script's request too. An account is deleted only by an administrator's
+         * session (which a signed API request never is), and never one's own: a site keeps an
+         * administrator, and a credential for publishing does not reach account changes.
+         * Entity::delete() does not ask any of this.
+         *
+         * @param \Idno\Common\Entity|false|null $object What the lookup found
+         */
+        function deleteRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+
+                return;
+            }
+            $this->deleteGatekeeper($object);
+            if ($object->delete()) {
+                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
+            }
+            $this->forwardBack();
+        }
+
+        /**
+         * Send the browser back to the page the request says it came from, if that is a page
+         * of this site, and to the home page otherwise.
+         */
+        function forwardBack()
+        {
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+        }
+
+        /**
+         * Where a form asks to go once it is saved (its "forward-to" field), if that is an
+         * address of this site.
+         *
+         * @param  string $default Where to go when the form names nowhere
+         * @return string
+         */
+        function forwardToTarget($default = '')
+        {
+            $asked = $this->getInput('forward-to');
+            if (!is_string($asked) || trim($asked) === '') {
+                return $default;
+            }
+
+            return \Idno\Pages\Session\Login::sanitizeRedirectUrl($asked);
         }
 
         /**

@@ -14,6 +14,7 @@ namespace IdnoPlugins\StaticPages\Pages\Admin {
 
         function postContent()
         {
+            $this->adminGatekeeper();
 
             $category     = $this->getInput('category');
             $new_category = $this->getInput('new_category');

@@ -937,6 +937,47 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   an entity whose publish status is set and not `published` (`Main::shouldFederateDeletion()`),
   as such a post was never delivered. `Tests/Pages/DeleteFromEditPageTest.php` and
   `IdnoPlugins/ActivityPub/Tests/DeleteDraftFederationTest.php` check this.
+- A page that deletes or changes an entity checks `canEdit()` itself: `Entity::delete()` asks
+  nothing of the requester (only the takedown lock), because system code, the queue worker and
+  tests delete with no user, and `save()` asks `canEdit()` last, after an entity's
+  `saveDataFromInput()` may already have stored a file, fetched an address or queued a
+  webmention. A form token or an API signature says who is asking, not that they may. So a
+  request handler asks before anything of the request is used, with the helpers of
+  `Idno\Common\Page`: `editGatekeeper($object)` in a content plugin's `Pages\Edit` (after
+  `createGatekeeper()`, before `saveDataFromInput()`), and `editRequestedEntity($object)` /
+  `deleteRequestedEntity($object)` in the pages that answer a `POST` or `DELETE` at a thing's
+  own address (`Idno\Pages\Entity\View`, `Idno\Pages\User\View`, the StaticPages `View`). A
+  refusal is `deniedContent()` (the 403 page), as `Idno\Pages\Entity\Delete` gives; something
+  the requester may not read is answered as something missing is. Every page that deletes
+  (`Idno\Pages\Entity\Delete` and each plugin's `Pages\Delete`) calls
+  `deleteGatekeeper($object)`, which refuses the same way. An entity whose `saveDataFromInput()` removes something before saving asks
+  `canEdit()` first as well (`Media`, which replaces its file). A new content type's edit page
+  calls `editGatekeeper()`. `Tests/Pages/PermalinkWriteAccessTest.php` and
+  `IdnoPlugins/Media/Tests/MediaReplaceAccessTest.php` check this over HTTP.
+- A script's request is not redirected: `Page::forward()` sends no `Location` for a POST, PUT
+  or DELETE made with `X-Requested-With: XMLHttpRequest`. It used to return to its caller
+  then, so a handler that refused with `forward()` and went on did what it had just refused
+  (every plugin's delete page deleted the post). `forward()` now ends such a request too
+  (`$exit` true, the default): the status already set, no body, or for an API request the page
+  with the session's messages, which is what a handler that returned there always answered.
+  Still, don't write a refusal as a redirect: call `deniedContent()`, `noContent()` or a
+  gatekeeper, and `return` after a `forward()` that is meant to be the end.
+  `Tests/Core/ForwardScriptRequestTest.php` and `Tests/Pages/ScriptRequestRefusalTest.php`
+  check this.
+- Deleting an account: a `DELETE` to a profile's address or to `/view/<id>` of a member, and a
+  `POST` to any delete page with a member's id (`deleteGatekeeper()`), is answered only for an administrator's browser session (`adminGatekeeper()`, which no API
+  request passes), and never for one's own account. A member cannot delete their account
+  there, and no API key can delete one: a credential for publishing does not reach account
+  changes. The administrators' Users page is the other place accounts are deleted.
+- Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
+  address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
+  field the same way (`Login::sanitizeRedirectUrl()`), as does `Page::forwardAfterDelete()`. Don't `forward()` to
+  `$_SERVER['HTTP_REFERER']` or to an address from the request directly.
+- The client log (`/service/system/log`, `Idno\Pages\Service\System\Log`, used by `js/src/classes/Logger.js`):
+  only a logged-in member's script writes to the site's log, as one line (`Log::clean()`: no
+  control characters, `Log::MAX_LENGTH` characters), and a report never mails the
+  administrators, because its text is the client's. `Tests/Pages/Service/ClientLogAccessTest.php`
+  checks this.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
   located `.tpl.php` path onto a private static stack and the scoping closure pops it in the

@@ -151,6 +151,51 @@ namespace Tests {
          */
         protected function request($method, $uri, $body = null, ?User $as = null, array $headers = [])
         {
+            return $this->requestWithJar($as ? $this->jar($as) : null, $method, $uri, $body, $headers);
+        }
+
+        /**
+         * The cookie jar of a browser that nobody is logged in with (one per test class)
+         */
+        protected function visitorJar()
+        {
+            if (empty(static::$jars[' visitor'])) {
+                static::$jars[' visitor'] = tempnam(sys_get_temp_dir(), 'idno-browser-test-');
+            }
+
+            return static::$jars[' visitor'];
+        }
+
+        /**
+         * The form token fields the site gives the browser with this cookie jar for an action,
+         * so that a request passes the form token check and only what comes after is tested.
+         *
+         * @param  string $jar
+         * @param  string $path Path of the action from the root of the site
+         * @return array
+         */
+        protected function tokenFields($jar, $path)
+        {
+            $action = rtrim(Idno::site()->config()->getDisplayURL(), '/') . $path;
+            $issued = $this->requestWithJar($jar, 'GET', '/service/security/csrftoken/?' . http_build_query(['url' => $action]), null, ['X-Requested-With: XMLHttpRequest']);
+            $token = json_decode($issued['body'], true);
+            $this->assertNotEmpty($token['token'] ?? null, 'The site should issue a form token. If this is failing, you may need to set IDNO_DOMAIN.');
+
+            return ['__bTs' => $token['time'], '__bTk' => $token['token'], '__bTa' => $action];
+        }
+
+        /**
+         * Make a request with the cookies of one browser.
+         *
+         * @param  string|null       $jar     A cookie jar file; null for a request without cookies
+         * @param  string            $method
+         * @param  string            $uri
+         * @param  array|null        $body    Form fields; a \CURLFile among them makes the request multipart
+         * @param  string[]          $headers
+         * @return array 'status', 'headers', 'body' and 'location'
+         */
+        protected function requestWithJar($jar, $method, $uri, $body = null, array $headers = [])
+        {
             $base = rtrim(Idno::site()->config()->getDisplayURL(), '/');
             if (strpos($uri, 'http') !== 0) {
                 $uri = $base . $uri;
@@ -161,13 +206,18 @@ namespace Tests {
             curl_setopt($curl, CURLOPT_HEADER, true);
             curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
             curl_setopt($curl, CURLOPT_TIMEOUT, 30);
-            if ($as) {
-                $jar = $this->jar($as);
+            if ($jar) {
                 curl_setopt($curl, CURLOPT_COOKIEFILE, $jar);
                 curl_setopt($curl, CURLOPT_COOKIEJAR, $jar);
             }
             if ($body !== null) {
-                curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($body));
+                $multipart = (bool) array_filter($body, function ($value) {
+                    return $value instanceof \CURLFile;
+                });
+                curl_setopt($curl, CURLOPT_POSTFIELDS, $multipart ? $body : http_build_query($body));
+                if ($multipart) {
+                    $headers[] = 'Expect:';
+                }
             }
             if ($headers) {
                 curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);

@@ -71,12 +71,15 @@ namespace IdnoPlugins\Photo\Pages {
                 $object = new \IdnoPlugins\Photo\Photo();
             }
 
+            // Before any of the request is read into a post that exists
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 if ($object->getPublishStatus() === 'draft') {
                     \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your draft has been saved.'));
                     $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'drafts/');
                 } else {
-                    $forward = $this->getInput('forward-to', $object->getDisplayURL());
+                    $forward = $this->forwardToTarget($object->getDisplayURL());
                     $this->forward($forward);
                 }
             } else if (!\Idno\Core\Idno::site()->session()->isAPIRequest()) {

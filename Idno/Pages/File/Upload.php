@@ -16,7 +16,7 @@ namespace Idno\Pages\File {
 
         function post()
         {
-            if (\Idno\Core\Idno::site()->session()->isLoggedOn()) {
+            if (\Idno\Core\Idno::site()->session()->isLoggedOn() && \Idno\Core\Idno::site()->canWrite()) {
                 if (!empty($_FILES['file']['tmp_name'])) {
                     if (!\Idno\Core\Idno::site()->events()->triggerEvent("file/upload", [], true)) {
                         exit;

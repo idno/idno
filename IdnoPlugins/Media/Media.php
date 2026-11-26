@@ -47,6 +47,12 @@ namespace IdnoPlugins\Media {
                 }
             }
 
+            // The file of an existing post is removed from storage below, before the post is
+            // saved, so ask here whether the requester may change the post at all
+            if (!$new && !$this->canEdit()) {
+                return false;
+            }
+
             $this->title = \Idno\Core\Idno::site()->currentPage()->getInput('title');
             $this->body  = \Idno\Core\Idno::site()->template()->sanitize_html(\Idno\Core\Idno::site()->currentPage()->getInput('body'));
             $this->tags  = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
