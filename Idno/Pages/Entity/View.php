@@ -111,19 +111,15 @@ namespace Idno\Pages\Entity {
                 }
             }
 
-            if (empty($object)) {
-                $this->forward(); // TODO: 404
-            }
-            // Who may change the post is asked here, before anything of the request is kept:
-            // saveDataFromInput() may store or replace files before save() asks
-            $this->gatekeeper();
-            if (!$object->canEdit()) {
-                $this->deniedContent();
+            // Before anything of the request is kept: saveDataFromInput() may store files or
+            // fetch addresses before save() asks who is asking
+            if (!$this->editRequestedEntity($object ?? false)) {
+                return;
             }
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getDisplayURL());
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardBack();
         }
 
         // Handle DELETE requests to the entity
@@ -136,19 +132,7 @@ namespace Idno\Pages\Entity {
                     $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
                 }
             }
-            // Who may delete is asked here: Entity::delete() does not ask
-            $this->gatekeeper();
-            // What the requester may not read is answered as something missing is
-            if (empty($object) || !$object->canRead()) {
-                $this->forward(); // TODO: 404
-            }
-            if (!$object->canEdit()) {
-                $this->deniedContent();
-            }
-            if ($object->delete()) {
-                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
-            }
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            $this->deleteRequestedEntity($object ?? false);
         }
 
     }

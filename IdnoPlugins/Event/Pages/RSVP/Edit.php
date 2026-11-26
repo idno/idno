@@ -52,6 +52,9 @@ namespace IdnoPlugins\Event\Pages\RSVP {
                 $object = new \IdnoPlugins\Event\RSVP();
             }
 
+            // Before any of the request is read into a post that exists
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getDisplayURL());
             }

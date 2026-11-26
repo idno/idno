@@ -926,6 +926,103 @@ namespace Idno\Common {
         }
 
         /**
+         * For a page that changes an entity found from the request (its own address): nothing
+         * with a side effect (a file stored, an address fetched, a post announced) happens
+         * before this has been passed. A visitor is refused; something the requester may not
+         * read is answered as something missing is (false: the caller ends there, because
+         * forward() does not end a script's request); a requester who may not edit is refused.
+         *
+         * @param  \Idno\Common\Entity|false|null $object What the lookup found
+         * @return bool Whether the caller may go on
+         */
+        function editRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+
+                return false;
+            }
+            if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+
+            return true;
+        }
+
+        /**
+         * For a page that creates or edits an entity: one that is already stored must be one
+         * the requester may edit, before any of the request is read into it. (A new one is the
+         * requester's own: createGatekeeper() has asked whether they may write.)
+         *
+         * @param \Idno\Common\Entity $object
+         */
+        function editGatekeeper($object)
+        {
+            if (!empty($object->_id) && !$object->canEdit()) {
+                $this->deniedContent();
+            }
+        }
+
+        /**
+         * What a DELETE to the address of an entity does. Only a logged-in requester who may
+         * edit it deletes it, and something they may not read is answered as something missing
+         * is, for a script's request too. An account is deleted only by an administrator's
+         * session (which a signed API request never is), and never one's own: a site keeps an
+         * administrator, and a credential for publishing does not reach account changes.
+         * Entity::delete() does not ask any of this.
+         *
+         * @param \Idno\Common\Entity|false|null $object What the lookup found
+         */
+        function deleteRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+
+                return;
+            }
+            if ($object instanceof \Idno\Entities\User) {
+                $this->adminGatekeeper();
+                if ($object->getUUID() === \Idno\Core\Idno::site()->session()->currentUserUUID()) {
+                    $this->deniedContent();
+                }
+            } else if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+            if ($object->delete()) {
+                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
+            }
+            $this->forwardBack();
+        }
+
+        /**
+         * Send the browser back to the page the request says it came from, if that is a page
+         * of this site, and to the home page otherwise.
+         */
+        function forwardBack()
+        {
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+        }
+
+        /**
+         * Where a form asks to go once it is saved (its "forward-to" field), if that is an
+         * address of this site.
+         *
+         * @param  string $default Where to go when the form names nowhere
+         * @return string
+         */
+        function forwardToTarget($default = '')
+        {
+            $asked = $this->getInput('forward-to');
+            if (!is_string($asked) || trim($asked) === '') {
+                return $default;
+            }
+
+            return \Idno\Pages\Session\Login::sanitizeRedirectUrl($asked);
+        }
+
+        /**
          * You can't see this.
          */
         function deniedContent($title = '')

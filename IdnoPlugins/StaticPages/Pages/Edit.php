@@ -65,10 +65,13 @@ namespace IdnoPlugins\StaticPages\Pages {
                 $object = new \IdnoPlugins\StaticPages\StaticPage();
             }
 
+            // Before any of the request is read into a post that exists
+            $this->editGatekeeper($object);
+
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getURL());
             } else {
-                $this->forward($_SERVER['HTTP_REFERER']);
+                $this->forwardBack();
             }
 
         }

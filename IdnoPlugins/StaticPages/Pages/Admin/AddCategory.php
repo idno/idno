@@ -14,6 +14,7 @@ namespace IdnoPlugins\StaticPages\Pages\Admin {
 
         function postContent()
         {
+            $this->adminGatekeeper();
 
             $category = $this->getInput('category');
             if ($staticpages = \Idno\Core\Idno::site()->plugins()->get('StaticPages')) {

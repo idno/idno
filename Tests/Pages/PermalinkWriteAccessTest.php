@@ -24,9 +24,6 @@ namespace Tests\Pages {
         private static $other;
         private static $administrator;
 
-        /// Cookie jar of a browser that is not logged in
-        private static $visitorJar;
-
         /// The plugins setting to put back, when a test turned the StaticPages plugin on
         private $savedPlugins = null;
 
@@ -36,15 +33,6 @@ namespace Tests\Pages {
             static::$owner = static::member('delown');
             static::$other = static::member('delother');
             static::$administrator = static::member('deladmin', true);
-            static::$visitorJar = tempnam(sys_get_temp_dir(), 'idno-delete-visitor-');
-        }
-
-        public static function tearDownAfterClass(): void
-        {
-            if (static::$visitorJar && file_exists(static::$visitorJar)) {
-                unlink(static::$visitorJar);
-            }
-            parent::tearDownAfterClass();
         }
 
         protected function tearDown(): void
@@ -164,6 +152,35 @@ namespace Tests\Pages {
             }
         }
 
+        /**
+         * A script's request (XMLHttpRequest) is not redirected, so the answers must end by
+         * themselves: a hidden post and a missing one are answered the same, with no error.
+         */
+        public function testAScriptsRequestIsAnsweredTheSameForAHiddenAndAMissingPost()
+        {
+            $script = ['X-Requested-With: XMLHttpRequest'];
+            $missing = $this->deleteAs('another member', '/view/' . str_repeat('0', 30) . '99', null, $script);
+            $this->assertLessThan(500, $missing['status'], 'A DELETE to an address that names nothing must not be an error of the site.');
+
+            $draft = $this->makePost('status', 'draft');
+            $private = $this->makePost('status', 'published', static::$owner->getUUID());
+            foreach (['a draft' => $draft, 'a private post' => $private] as $what => $post) {
+                $answer = $this->deleteAs('another member', '/view/' . $post->getID(), null, $script);
+
+                $this->assertNotNull($this->stored($post), "A script's request of another member must not delete $what.");
+                $this->assertEquals($missing['status'], $answer['status'], "A script's request for $what should be answered as one for a missing post.");
+                $this->assertEquals($missing['body'], $answer['body'], "A script's request for $what should be answered as one for a missing post.");
+            }
+
+            $public = $this->makePost('status');
+            $answer = $this->deleteAs('another member', '/view/' . $public->getID(), null, $script);
+            $this->assertEquals(403, $answer['status']);
+            $this->assertNotNull($this->stored($public), "A script's request of another member must not delete a post.");
+
+            $this->deleteAs('the owner', '/view/' . $public->getID(), null, $script);
+            $this->assertNull($this->stored($public), "A script's request of the owner deletes the post.");
+        }
+
         public function testTheRedirectAfterADeleteStaysOnThisSite()
         {
             $post = $this->makePost('status');
@@ -172,16 +189,13 @@ namespace Tests\Pages {
             $this->assertNull($this->stored($post));
             $this->assertContains($answer['status'], [301, 302, 303]);
             $this->assertStringNotContainsString('elsewhere.example', $answer['location'], 'The address a request says it came from must not send the browser to another site.');
-            $this->assertEquals(
-                parse_url(Idno::site()->config()->getDisplayURL(), PHP_URL_HOST),
-                parse_url($answer['location'], PHP_URL_HOST) ?: parse_url(Idno::site()->config()->getDisplayURL(), PHP_URL_HOST)
-            );
+            $this->assertEquals(parse_url($this->siteAsServed(), PHP_URL_HOST), parse_url($answer['location'], PHP_URL_HOST), 'The browser should be sent to this site.');
         }
 
         public function testTheRedirectAfterADeleteGoesBackToAPageOfThisSite()
         {
             $post = $this->makePost('status');
-            $back = Idno::site()->config()->getDisplayURL() . 'content/all/';
+            $back = $this->siteAsServed() . 'content/all/';
             $answer = $this->deleteAs('the owner', '/view/' . $post->getID(), $back);
 
             $this->assertNull($this->stored($post));
@@ -228,6 +242,71 @@ namespace Tests\Pages {
             $this->assertStringContainsString($text, $this->stored($post)->body, 'The owner of a post can still change it by a POST to its address.');
         }
 
+        /**
+         * The edit address of each kind of post, and the fields of its form
+         */
+        public static function editAddresses(): array
+        {
+            return [
+                'a status update' => ['status', '/status/edit/', ['body' => 'Changed']],
+                'an article'      => ['article', '/entry/edit/', ['title' => 'Changed', 'body' => 'Changed']],
+                'a bookmark'      => ['bookmark', '/like/edit/', ['body' => 'https://example.com/changed', 'description' => 'Changed']],
+                'a photo'         => ['photo', '/photo/edit/', ['title' => 'Changed', 'body' => 'Changed']],
+            ];
+        }
+
+        /**
+         * Saving a post can store files and fetch addresses before the save itself is refused,
+         * so a request of somebody who may not edit the post is refused before any of that.
+         *
+         * @dataProvider editAddresses
+         */
+        public function testNothingOfARequestIsKeptWhenTheRequesterMayNotEditThePost($type, $edit, $fields)
+        {
+            $post = $this->makePost($type);
+            $before = $this->storedFiles();
+            $picture = tempnam(sys_get_temp_dir(), 'idno-permalink-test-');
+            $image = imagecreatetruecolor(40, 30);
+            imagejpeg($image, $picture);
+            $fields += ['access' => 'PUBLIC', 'photo' => new \CURLFile($picture, 'image/jpeg', 'picture.jpg')];
+
+            foreach (['another member', 'a visitor'] as $who) {
+                foreach ([$edit . $post->getID(), '/view/' . $post->getID()] as $path) {
+                    $answer = $this->postAs($who, $path, $fields);
+
+                    $this->assertEquals(403, $answer['status'], "A POST by $who to $path should be refused before the post's own code reads the request.");
+                }
+            }
+            unlink($picture);
+
+            $this->assertEquals($post->getTitle(), $this->stored($post)->getTitle(), 'The post must be as it was.');
+            if ($before !== null) {
+                $this->assertEquals($before, $this->storedFiles(), 'No file of a refused request must be stored.');
+            }
+        }
+
+        public function testTheOwnerStillEditsAPostAndStaysOnThisSiteAfterwards()
+        {
+            $post = $this->makePost('status');
+            $text = 'Changed ' . static::marker();
+
+            $answer = $this->postAs('the owner', '/status/edit/' . $post->getID(), ['body' => $text, 'access' => 'PUBLIC', 'forward-to' => 'https://elsewhere.example/landing']);
+
+            $this->assertStringContainsString($text, $this->stored($post)->body, 'The owner of a post should still be able to edit it.');
+            $this->assertContains($answer['status'], [301, 302, 303]);
+            $this->assertStringNotContainsString('elsewhere.example', $answer['location'], 'The form must not send the browser to another site.');
+        }
+
+        public function testAFormCanStillSendTheBrowserToAPageOfThisSite()
+        {
+            $post = $this->makePost('status');
+            $back = $this->siteAsServed() . 'content/all/';
+
+            $answer = $this->postAs('the owner', '/status/edit/' . $post->getID(), ['body' => 'Changed ' . static::marker(), 'access' => 'PUBLIC', 'forward-to' => $back]);
+
+            $this->assertEquals('/content/all/', parse_url($answer['location'], PHP_URL_PATH));
+        }
+
         // -----------------------------------------------------------------
         // Profiles
         // -----------------------------------------------------------------
@@ -247,6 +326,38 @@ namespace Tests\Pages {
                     }
                 }
             }
+        }
+
+        /**
+         * An account is deleted by an administrator's own session and nothing else: not by its
+         * member, and not by a request signed with an API key, the member's or an administrator's.
+         */
+        public function testAMemberDoesNotDeleteTheirOwnAccountFromItsAddress()
+        {
+            $member = static::member('delself');
+
+            foreach (['/profile/' . $member->getID(), '/view/' . $member->getID()] as $path) {
+                $answer = $this->deleteAs($member, $path);
+                $this->assertEquals(403, $answer['status'], "A member's DELETE to $path should be refused.");
+                $this->assertNotEmpty(User::getByUUID($member->getUUID(), false), 'A member must not delete their own account this way.');
+
+                $this->request('DELETE', $path, null, null, $this->signature($member, $path));
+                $this->assertNotEmpty(User::getByUUID($member->getUUID(), false), 'A request signed with an API key must not delete the account of its member.');
+
+                $this->request('DELETE', $path, null, null, $this->signature(static::$administrator, $path));
+                $this->assertNotEmpty(User::getByUUID($member->getUUID(), false), 'A request signed with the API key of an administrator must not delete an account.');
+            }
+        }
+
+        public function testAnAdministratorDeletesAnAccountButNotTheirOwn()
+        {
+            $answer = $this->deleteAs('an administrator', '/profile/' . static::$administrator->getID());
+            $this->assertEquals(403, $answer['status']);
+            $this->assertNotEmpty(User::getByUUID(static::$administrator->getUUID(), false), 'An administrator must not delete their own account.');
+
+            $member = static::member('delgone');
+            $this->deleteAs('an administrator', '/profile/' . $member->getID());
+            $this->assertEmpty(User::getByUUID($member->getUUID(), false), 'An administrator should be able to delete the account of a member.');
         }
 
         // -----------------------------------------------------------------
@@ -277,6 +388,23 @@ namespace Tests\Pages {
             $this->assertNull($this->stored($page), 'An administrator should be able to delete a static page.');
         }
 
+        public function testOnlyAnAdministratorChangesTheCategoriesOfStaticPages()
+        {
+            $this->makeStaticPage();
+            $name = 'Category ' . static::marker();
+
+            foreach (['add' => ['category' => $name], 'edit' => ['category' => 'No Category', 'new_category' => $name], 'delete' => ['category' => $name], 'categories' => ['categories' => $name]] as $action => $fields) {
+                foreach (['another member', 'a visitor'] as $who) {
+                    $answer = $this->postAs($who, "/admin/staticpages/$action/", $fields);
+                    $this->assertEquals(403, $answer['status'], "A POST by $who to the $action page of the categories should be refused.");
+                }
+            }
+
+            $answer = $this->postAs('an administrator', '/admin/staticpages/add/', ['category' => $name]);
+            $this->assertContains($answer['status'], [301, 302, 303], 'An administrator should still be able to add a category.');
+            $this->postAs('an administrator', '/admin/staticpages/delete/', ['category' => $name]);
+        }
+
         // -----------------------------------------------------------------
         // Helpers
         // -----------------------------------------------------------------
@@ -291,65 +419,40 @@ namespace Tests\Pages {
          * @param  string $referer The page the request says it came from
          * @return array 'status', 'body' and 'location'
          */
-        private function deleteAs($who, $path, $referer = null)
+        private function deleteAs($who, $path, $referer = null, array $headers = [])
         {
-            return $this->sendAs('DELETE', $who, $path, null, $referer);
+            return $this->sendAs('DELETE', $who, $path, null, $referer, $headers);
         }
 
         /// The same for a POST of form fields
-        private function postAs($who, $path, array $fields)
+        private function postAs($who, $path, array $fields, array $headers = [])
         {
-            return $this->sendAs('POST', $who, $path, $fields);
+            return $this->sendAs('POST', $who, $path, $fields, null, $headers);
         }
 
-        private function sendAs($method, $who, $path, $fields = null, $referer = null)
+        private function sendAs($method, $who, $path, $fields = null, $referer = null, array $headers = [])
         {
-            $referer = 'Referer: ' . ($referer ?? Idno::site()->config()->getDisplayURL());
+            $headers[] = 'Referer: ' . ($referer ?? Idno::site()->config()->getDisplayURL());
 
-            if (strpos($who, 'a signed request') === 0) {
-                $user = $who == 'a signed request of the owner' ? static::$owner : static::$other;
+            if (is_string($who) && strpos($who, 'a signed request') === 0) {
+                $who = $who == 'a signed request of the owner' ? static::$owner : static::$other;
 
-                return $this->request($method, $path, $fields, null, array_merge($this->signature($user, $path), [$referer]));
+                return $this->request($method, $path, $fields, null, array_merge($this->signature($who, $path), $headers));
             }
 
             $users = ['the owner' => static::$owner, 'another member' => static::$other, 'an administrator' => static::$administrator];
-            $jar = isset($users[$who]) ? $this->jar($users[$who]) : static::$visitorJar;
-
-            $action = rtrim(Idno::site()->config()->getDisplayURL(), '/') . $path;
-            $issued = $this->withJar($jar, 'GET', '/service/security/csrftoken/?' . http_build_query(['url' => $action]), ['X-Requested-With: XMLHttpRequest']);
-            $token = json_decode($issued['body'], true);
-            $this->assertNotEmpty($token['token'] ?? null, 'The site should issue a form token. If this is failing, you may need to set IDNO_DOMAIN.');
-            $token = ['__bTs' => $token['time'], '__bTk' => $token['token'], '__bTa' => $action];
+            if ($who instanceof User) {
+                $jar = $this->jar($who);
+            } else {
+                $jar = isset($users[$who]) ? $this->jar($users[$who]) : $this->visitorJar();
+            }
+            $token = $this->tokenFields($jar, $path);
 
             if ($fields === null) {
-                return $this->withJar($jar, $method, $path . '?' . http_build_query($token), [$referer]);
+                return $this->requestWithJar($jar, $method, $path . '?' . http_build_query($token), null, $headers);
             }
 
-            return $this->withJar($jar, $method, $path, [$referer], $token + $fields);
-        }
-
-        /// A request with the cookies of one browser
-        private function withJar($jar, $method, $path, array $headers = [], $fields = null)
-        {
-            $curl = curl_init(rtrim(Idno::site()->config()->getDisplayURL(), '/') . $path);
-            curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
-            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($curl, CURLOPT_HEADER, true);
-            curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
-            curl_setopt($curl, CURLOPT_TIMEOUT, 30);
-            curl_setopt($curl, CURLOPT_COOKIEFILE, $jar);
-            curl_setopt($curl, CURLOPT_COOKIEJAR, $jar);
-            curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
-            if ($fields !== null) {
-                curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields));
-            }
-            $response = (string) curl_exec($curl);
-            $status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
-            $headerSize = curl_getinfo($curl, CURLINFO_HEADER_SIZE);
-            unset($curl); // Writes the cookie jar
-            $location = preg_match('/^Location:\s*(\S+)/mi', substr($response, 0, $headerSize), $match) ? $match[1] : '';
-
-            return ['status' => $status, 'body' => substr($response, $headerSize), 'location' => $location];
+            return $this->requestWithJar($jar, $method, $path, $token + $fields, $headers);
         }
 
         /**
@@ -366,6 +469,15 @@ namespace Tests\Pages {
                 $post = new \IdnoPlugins\Text\Entry();
                 $post->title = 'Article ' . static::marker();
                 $post->body = 'Article text';
+            } else if ($type == 'bookmark') {
+                $post = new \IdnoPlugins\Like\Like();
+                $post->title = 'Bookmark ' . static::marker();
+                $post->bookmark_of = 'https://example.com/page';
+                $post->body = 'https://example.com/page';
+            } else if ($type == 'photo') {
+                $post = new \IdnoPlugins\Photo\Photo();
+                $post->title = 'Photo ' . static::marker();
+                $post->body = 'Photo caption';
             } else {
                 $post = new \IdnoPlugins\Status\Status();
                 $post->body = 'Post ' . static::marker();
@@ -401,6 +513,45 @@ namespace Tests\Pages {
             static::$cleanup[] = $page;
 
             return $page;
+        }
+
+        /**
+         * How many files the site has stored, where that can be counted (a site that keeps
+         * its files in a folder); null where it cannot.
+         */
+        private function storedFiles()
+        {
+            $path = Idno::site()->config()->uploadpath;
+            if (Idno::site()->config()->filesystem !== 'local' || empty($path) || !is_dir($path)) {
+                return null;
+            }
+            $count = 0;
+            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS)) as $file) {
+                if ($file->isFile()) {
+                    $count++;
+                }
+            }
+
+            return $count;
+        }
+
+        /**
+         * The address the web server knows the site by, which need not be the name this
+         * process uses for it (the site takes its address from the request it is serving,
+         * and a redirect is followed only to that address): read from where the site sends a
+         * request for something that does not exist.
+         */
+        private function siteAsServed()
+        {
+            static $address = null;
+            if ($address === null) {
+                $answer = $this->deleteAs('another member', '/view/' . str_repeat('0', 30) . '98');
+                $this->assertNotEmpty($answer['location'], 'A DELETE to an address that names nothing should send the browser to the home page.');
+                $parts = parse_url($answer['location']);
+                $address = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : '') . '/';
+            }
+
+            return $address;
         }
 
         /// The entity as stored now, whoever may read it; null when it is gone

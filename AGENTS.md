@@ -940,17 +940,34 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
 - A page that deletes or changes an entity checks `canEdit()` itself: `Entity::delete()` asks
   nothing of the requester (only the takedown lock), because system code, the queue worker and
   tests delete with no user, and `save()` asks `canEdit()` last, after an entity's
-  `saveDataFromInput()` may already have stored or replaced files. So a request handler calls
-  `gatekeeper()` and then the entity's `canEdit()` before it deletes or changes anything, and
-  answers a refusal with `deniedContent()` (the 403 page), as `Idno\Pages\Entity\Delete` does;
-  something the requester may not read is answered as something missing is. A form token or an
-  API signature says who is asking, not that they may. The pages that answer at a thing's own
-  address do this for `DELETE` and `POST` (`Idno\Pages\Entity\View`, the StaticPages `View`,
-  and `DELETE` on `Idno\Pages\User\View`), and send the browser on only to an address of this
-  site (`Login::sanitizeRedirectUrl()`). An entity whose `saveDataFromInput()` removes something
-  before saving asks `canEdit()` first (`Media`, which replaces its file).
-  `Tests/Pages/PermalinkWriteAccessTest.php` and
+  `saveDataFromInput()` may already have stored a file, fetched an address or queued a
+  webmention. A form token or an API signature says who is asking, not that they may. So a
+  request handler asks before anything of the request is used, with the helpers of
+  `Idno\Common\Page`: `editGatekeeper($object)` in a content plugin's `Pages\Edit` (after
+  `createGatekeeper()`, before `saveDataFromInput()`), and `editRequestedEntity($object)` /
+  `deleteRequestedEntity($object)` in the pages that answer a `POST` or `DELETE` at a thing's
+  own address (`Idno\Pages\Entity\View`, `Idno\Pages\User\View`, the StaticPages `View`). A
+  refusal is `deniedContent()` (the 403 page), as `Idno\Pages\Entity\Delete` gives; something
+  the requester may not read is answered as something missing is. `forward()` does not end a
+  script's request (XMLHttpRequest), so a handler returns after a forward that was meant to
+  end it. An entity whose `saveDataFromInput()` removes something before saving asks
+  `canEdit()` first as well (`Media`, which replaces its file). A new content type's edit page
+  calls `editGatekeeper()`. `Tests/Pages/PermalinkWriteAccessTest.php` and
   `IdnoPlugins/Media/Tests/MediaReplaceAccessTest.php` check this over HTTP.
+- Deleting an account: a `DELETE` to a profile's address (or to `/view/<id>` of a member) is
+  answered only for an administrator's browser session (`adminGatekeeper()`, which no API
+  request passes), and never for one's own account. A member cannot delete their account
+  there, and no API key can delete one: a credential for publishing does not reach account
+  changes. The administrators' Users page is the other place accounts are deleted.
+- Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
+  address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
+  field the same way (`Login::sanitizeRedirectUrl()`). Don't `forward()` to
+  `$_SERVER['HTTP_REFERER']` or to an address from the request directly.
+- The client log (`/service/system/log`, `Idno\Pages\Service\System\Log`, used by `js/src/classes/Logger.js`):
+  only a logged-in member's script writes to the site's log, as one line (`Log::clean()`: no
+  control characters, `Log::MAX_LENGTH` characters), and a report never mails the
+  administrators, because its text is the client's. `Tests/Pages/Service/ClientLogAccessTest.php`
+  checks this.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
   located `.tpl.php` path onto a private static stack and the scoping closure pops it in the

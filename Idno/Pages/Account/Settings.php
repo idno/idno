@@ -40,7 +40,7 @@ namespace Idno\Pages\Account {
                 $currentPassword = $this->getInput('current_password');
                 if (!is_string($currentPassword) || !$user->checkPassword($currentPassword)) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Your current password isn't right, so your details were not changed."));
-                    $this->forward($_SERVER['HTTP_REFERER']);
+                    $this->forwardBack();
                     return;
                 }
             }
@@ -79,7 +79,7 @@ namespace Idno\Pages\Account {
             if ($user->save()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your details were saved."));
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardBack();
         }
 
     }

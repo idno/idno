@@ -22,7 +22,7 @@ namespace Idno\Pages\Session {
 
             $result = \Idno\Core\Idno::site()->session()->logUserOff();
             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("You've signed out. See you soon!"));
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forwardBack();
 
             return $result;
         }
