@@ -4925,7 +4925,7 @@ Each content plugin has an `Entry.php` entity class that defines
 /actor/{handle}/followers     Followers collection
 /actor/{handle}/following     Following collection
 /inbox                        Shared inbox
-/activitypub/quote-stamp      Quote authorization stamp (FEP-044f)
+/activitypub/quote-stamp/<a>/<b>/<hmac>  Quote authorization stamp (FEP-044f); /activitypub/quote-stamp?target=&object=&sig= is the earlier address
 /.well-known/nodeinfo          NodeInfo discovery
 /nodeinfo/2.0                 NodeInfo document
 /admin/activitypub            Admin panel
@@ -4967,9 +4967,17 @@ Each content plugin has an `Entry.php` entity class that defines
 3. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
 4. **Quote posts (FEP-044f)**: All outgoing notes include
-   `interactionPolicy.canQuote.automaticApproval` set to `as:Public`. Incoming
-   QuoteRequests are auto-accepted with an HMAC-signed stamp URL. The stamp
-   endpoint serves `QuoteAuthorization` objects for third-party verification.
+   `interactionPolicy.canQuote.automaticApproval` set to `as:Public`. An incoming QuoteRequest is accepted only for a post of this site that other servers may have
+   (`ActivityBuilder::isFederated()`: found by its uuid, so a draft, a post that is not public, a deleted post and a slug are refused) and a quoting post with an http(s)
+   address (`ActivityHandler::acceptQuoteRequest()`, which sends nothing); the Accept (`buildQuoteAccept()`) holds only the request's own properties, each as an id,
+   and its `result` is the stamp's address. A stamp is not stored: its address is `/activitypub/quote-stamp/<quoted post>/<quoting post>/<hmac>`, the two posts' ids as
+   unpadded base64url (`buildQuoteStampUrl()`) and an HMAC of both made with `site_secret`, which `quoteStampSignature()` refuses to do without. The address has no
+   query string and no percent-encoding because Mastodon normalises an address before it requests it (which decodes `%3A%2F%2F`) and drops the answer unless that address,
+   the address it was given and the document's id are the same string: the earlier address (`?target=...&object=...&sig=...`,
+   `buildLegacyQuoteStampUrl()`) was never accepted by it, and is still served, with that address as its id. `Pages/QuoteStamp.php` serves a stamp only while the quoted post is
+   federated (404 otherwise, a changed signature included). Pinned by `IdnoPlugins/ActivityPub/Tests/QuoteStampTest`. STILL TO COME with the port of the rest of the `dev` branch's ActivityPub
+   work: the banned-owner checks (`isFederated()` and the actor's 410: the moderation plugin) and the private-site check (`Main::federates()`: a private site tells no other server
+   what its members post, `dev` commit `c1048f68a`); a private site's visitors are refused by the page before any of this is asked.
 5. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.

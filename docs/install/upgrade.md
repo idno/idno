@@ -718,6 +718,8 @@ What a site sends to other servers may change when the change is an improvement 
 
 * **A check-in that is anonymous sends no place to other servers.** The post fetched by address, the outbox and the delivery to followers used to carry the check-in's exact position and place name, which the site's own page hides from a visitor for a day. They now carry no `location` for a check-in marked anonymous.
 
+* **A quote of a post can be verified by other servers.** The address of the QuoteAuthorization stamp held the two posts' addresses percent-encoded in its query string, which Mastodon rewrites before it requests it and then rejects, so a quote of a post of this site showed as unavailable to everyone but the person who quoted. A stamp's address is now `/activitypub/quote-stamp/<quoted>/<quoting>/<signature>` (the earlier address is still served). A quote request is accepted, and a stamp served, only for a public, published post of this site; the Accept sent back holds the request's ids only.
+
 ### What behaves differently
 
 On a MySQL, MariaDB or SQLite site, `db()` and the entity finders behave differently from the old
