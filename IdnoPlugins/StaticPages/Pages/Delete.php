@@ -37,11 +37,8 @@ namespace IdnoPlugins\StaticPages\Pages {
             if (!empty($this->arguments)) {
                 $object = \IdnoPlugins\StaticPages\StaticPage::getByID($this->arguments[0]);
             }
-            if (empty($object)) $this->forward();
-            if (!$object->canEdit()) {
-                $this->setResponse(403);
-                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("You don't have permission to perform this task."));
-                $this->forward();
+            if (!$this->mayDeleteRequestedEntity($object ?? false)) {
+                return;
             }
 
             if ($object->delete()) {

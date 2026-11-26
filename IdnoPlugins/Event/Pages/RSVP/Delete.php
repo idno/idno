@@ -37,11 +37,8 @@ namespace IdnoPlugins\Event\Pages\RSVP {
             if (!empty($this->arguments)) {
                 $object = \IdnoPlugins\Event\Event::getByID($this->arguments[0]);
             }
-            if (empty($object)) $this->forward();
-            if (!$object->canEdit()) {
-                $this->setResponse(403);
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("You don't have permission to perform this task."));
-                $this->forward();
+            if (!$this->mayDeleteRequestedEntity($object ?? false)) {
+                return;
             }
 
             if ($object->delete()) {

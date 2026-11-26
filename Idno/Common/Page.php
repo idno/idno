@@ -960,23 +960,40 @@ namespace Idno\Common {
         }
 
         /**
-         * What a DELETE to the address of an entity does: only a logged-in requester who may edit it deletes it (an account only by an
-         * administrator's session, which a signed API request never is), and a post the requester may not read is answered as a missing one is,
-         * whatever the request: a script's (XHR) request does not forward, so the answer ends here and does not fall through to the delete.
+         * Whether the requester may delete the entity a request names, and the answer when not, which ENDS the handler (a handler that goes on after a
+         * refusal deletes what it refused: a script's POST, PUT or DELETE is not redirected). Only a logged-in requester who may edit it deletes it
+         * (an account only by an administrator's session, which a signed API request never is, for an account is deleted by no one else, its owner
+         * included); a post the requester may not read is answered as a missing one is. A caller that gets false returns at once: the page has
+         * answered (a forward, which ends the request, or the 403 page, which does).
          *
          * @param \Idno\Common\Entity|false|null $object what the lookup found
          */
-        function deleteRequestedEntity($object)
+        function mayDeleteRequestedEntity($object): bool
         {
             $this->gatekeeper();
             if (empty($object) || !$object->canRead()) {
                 $this->forward(); // TODO: 404
-                return;
+
+                return false;
             }
             if ($object instanceof \Idno\Entities\User) {
                 $this->adminGatekeeper();
             } else if (!$object->canEdit()) {
                 $this->deniedContent();
+            }
+
+            return true;
+        }
+
+        /**
+         * What a DELETE to the address of an entity does: it is deleted only by a requester `mayDeleteRequestedEntity()` lets through.
+         *
+         * @param \Idno\Common\Entity|false|null $object what the lookup found
+         */
+        function deleteRequestedEntity($object)
+        {
+            if (!$this->mayDeleteRequestedEntity($object)) {
+                return;
             }
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
