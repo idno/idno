@@ -154,11 +154,11 @@ class ActivityBuilder
 
         // Content handling varies by type
         if ($apType === 'Article') {
-            $object['name'] = $entity->getTitle();
+            $object['name'] = $entity->getPublicTitle();
             $object['content'] = $entity->getFormattedContent();
         } elseif ($idnoType === 'image') {
             // For images, use the title as content and attach the image
-            $object['content'] = $entity->getTitle();
+            $object['content'] = $entity->getPublicTitle();
         } else {
             $object['content'] = $entity->getFormattedContent();
         }
@@ -195,25 +195,22 @@ class ActivityBuilder
             ],
         ];
 
-        // Location data (for checkins). A check-in whose place is to be kept vague is drawn
-        // with an inexact position for visitors who are not signed in, which other servers
-        // never are, so it gets no position at all.
-        $vague = method_exists($entity, 'isAnonymous') && $entity->isAnonymous();
-        if (!$vague && ($idnoType === 'place' || !empty($entity->lat))) {
-            if (!empty($entity->lat) && !empty($entity->long)) {
-                $location = [
-                    'type' => 'Place',
-                ];
-                if (!empty($entity->placename)) {
-                    $location['name'] = $entity->placename;
-                }
-                $location['latitude'] = (float)$entity->lat;
-                $location['longitude'] = (float)$entity->long;
-                if (!empty($entity->address)) {
-                    $location['name'] = $location['name'] ?? $entity->address;
-                }
-                $object['location'] = $location;
+        // Location data (for checkins). Other servers are never signed in, so they get what a
+        // visitor may be told (Entity::publicLocation()), whoever is signed in while this is
+        // built; and an inexact position is of no use to them, so then they get none at all.
+        $location = $entity->publicLocation();
+        if ($location['precise'] && !empty($location['latitude']) && !empty($location['longitude'])) {
+            $place = [
+                'type' => 'Place',
+            ];
+            if (!empty($location['placename'])) {
+                $place['name'] = $location['placename'];
+            } elseif (!empty($location['address'])) {
+                $place['name'] = $location['address'];
             }
+            $place['latitude'] = (float) $location['latitude'];
+            $place['longitude'] = (float) $location['longitude'];
+            $object['location'] = $place;
         }
 
         return $object;

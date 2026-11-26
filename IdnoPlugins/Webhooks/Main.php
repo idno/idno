@@ -66,8 +66,8 @@ namespace IdnoPlugins\Webhooks {
                             $payload['username'] = $owner->getHandle();
                         }
                         $payload['content_type'] = $object->getActivityStreamsObjectType();
-                        $payload['text'] = $object->getTitle() . ' <' . $object->getURL() . '>';
-                        $payload['title'] = $object->getTitle();
+                        $payload['text'] = $object->getPublicTitle() . ' <' . $object->getURL() . '>';
+                        $payload['title'] = $object->getPublicTitle();
 
                         Webservice::post($hook_url, json_encode($payload), ['Content-Type: application/json']);
 
