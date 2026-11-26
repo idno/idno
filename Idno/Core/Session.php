@@ -693,8 +693,25 @@ namespace Idno\Core {
 
             $this->sessionUserAtAuth = $_SESSION['user_uuid'] ?? null;
             $this->authFinished = true;
+            $this->endSessionStartedHere();
 
             return $return;
+        }
+
+        /**
+         * A stateless request that STARTED its session (it carried no cookie, or one for a session that does not exist) ends it here, while it
+         * is still open: a page that draws closes the session before the request ends, and a session cannot be destroyed once it is closed. The
+         * session's cookie is taken off the response, and `$_SESSION` stays an array in memory for the rest of the request (a message added later
+         * is drawn, nothing is stored). A session the request CARRIED is left alone.
+         */
+        private function endSessionStartedHere(): void
+        {
+            if (!$this->apiRequest || !$this->sessionStartedHere || session_status() !== PHP_SESSION_ACTIVE) {
+                return;
+            }
+            $_SESSION = [];
+            @session_destroy();
+            $this->removeSessionCookie();
         }
 
         /**
@@ -898,6 +915,7 @@ namespace Idno\Core {
         {
             $this->apiRequest = true;
             $held = $this->refreshSessionUser($user);
+            $this->endSessionStartedHere();
             if ($held) {
                 \Idno\Core\Idno::site()->events()->triggerEvent(
                     "user/auth/success", array(
