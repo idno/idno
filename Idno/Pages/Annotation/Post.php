@@ -46,8 +46,10 @@ namespace Idno\Pages\Annotation {
                     if ($like_annotations = $object->getAnnotations('like')) {
                         foreach ($like_annotations as $like) {
                             if ($like['owner_url'] == \Idno\Core\Idno::site()->session()->currentUser()->getURL()) {
-                                $object->removeAnnotation($like['permalink']);
-                                $object->save();
+                                // (an annotation-only save, made once: a member's unlike is no change of the post, whoever owns it)
+                                if ($object->removeAnnotation($like['permalink'])) {
+                                    $object->saveAnnotations(true);
+                                }
                                 $has_liked = true;
                             }
                         }
@@ -55,9 +57,8 @@ namespace Idno\Pages\Annotation {
                 }
 
                 if (!$has_liked) {
-                    if ($object->addAnnotation($type, $user->getTitle(), $user->getURL(), $user->getIcon(), $body, null, null, '', [], true, true)) {
-                        $object->save();
-                    }
+                    // (addAnnotation() saves the annotation, marked as annotation-only: a second save here would be an unmarked update of the post)
+                    $object->addAnnotation($type, $user->getTitle(), $user->getURL(), $user->getIcon(), $body, null, null, '', [], true, true);
                 }
 
                 if ($this->xhr) {

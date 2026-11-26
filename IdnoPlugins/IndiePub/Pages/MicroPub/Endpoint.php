@@ -499,7 +499,7 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
                     'Saving annotation failed'
                 );
             }
-            $entity->save();
+            // (addAnnotation() has saved it, as an annotation-only change: a second save would be an unmarked update of the post)
             $this->setResponse(204);
             exit();
         }
