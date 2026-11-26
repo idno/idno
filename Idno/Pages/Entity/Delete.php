@@ -23,6 +23,8 @@ namespace Idno\Pages\Entity {
             }
             if (empty($object)) {
                 $this->forward(); // TODO: 404
+
+                return;
             }
 
             $t = \Idno\Core\Idno::site()->template();
@@ -48,9 +50,12 @@ namespace Idno\Pages\Entity {
             if (empty($object)) {
                 Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("We couldn't find the post to delete."));
                 $this->forward();
-            } // TODO: 404
-            if (!$object->canEdit()) {
-                $this->deniedContent();
+
+                return;
+            }
+            // an account is deleted only by an administrator's session; anything else only by who may edit it
+            if (!$this->mayDeleteRequestedEntity($object)) {
+                return;
             }
 
             if ($object->delete()) {
