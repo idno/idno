@@ -517,17 +517,27 @@ namespace Tests\Pages {
 
         /**
          * How many files the site has stored, where that can be counted (a site that keeps
-         * its files in a folder); null where it cannot.
+         * its files in a folder); null where it cannot. Only the site's own folder of the
+         * upload path is looked at: the path may be a shared one, such as /tmp.
          */
         private function storedFiles()
         {
-            $path = Idno::site()->config()->uploadpath;
-            if (Idno::site()->config()->filesystem !== 'local' || empty($path) || !is_dir($path)) {
+            $config = Idno::site()->config();
+            if ($config->filesystem !== 'local' || empty($config->uploadpath)) {
                 return null;
             }
+            $path = rtrim($config->uploadpath, ' /') . '/' . $config->getFileBaseDirName();
+            if (!is_dir($path)) {
+                return 0;
+            }
             $count = 0;
-            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS)) as $file) {
-                if ($file->isFile()) {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::LEAVES_ONLY,
+                \RecursiveIteratorIterator::CATCH_GET_CHILD
+            );
+            foreach ($files as $file) {
+                if ($file->isFile() && substr($file->getFilename(), -5) === '.file') {
                     $count++;
                 }
             }
