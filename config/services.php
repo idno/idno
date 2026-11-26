@@ -417,6 +417,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The page of this site an address is, for a webmention aimed at it (found as a GET of it is routed); public: the endpoint asks for it with Idno::container()->get()
     $services->set(\Idno\Legacy\LegacyWebmentionTargets::class)->public();
     $services->alias(\Idno\Http\Webmention\WebmentionTargets::class, \Idno\Legacy\LegacyWebmentionTargets::class)->public();
+    // What the WebSub callback asks the site, over the legacy application
+    $services->set(\Idno\Legacy\LegacySubscriptions::class);
+    $services->alias(\Idno\Http\Controller\WebSub\Subscriptions::class, \Idno\Legacy\LegacySubscriptions::class);
     // The small public endpoints (robots.txt, the manifest, the service worker, WebFinger, the mention search): their services take these
     // interfaces, implemented over the legacy application and read only when a request asks
     $services->alias(\Idno\Http\Controller\Discovery\SiteIcons::class, \Idno\Legacy\LegacySiteIcons::class);

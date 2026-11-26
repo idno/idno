@@ -129,7 +129,7 @@ namespace Idno\Core {
                         if (!$pending) {
                             $pending = new \stdClass();
                         }
-                        if (!is_array($pending->subscribe)) {
+                        if (!isset($pending->unsubscribe) || !is_array($pending->unsubscribe)) {
                             $pending->unsubscribe = array();
                         }
 
@@ -155,7 +155,7 @@ namespace Idno\Core {
         function registerPages()
         {
             // Create an endpoint for subscription pings
-            Idno::site()->routes()->addRoute('/pubsub/callback/:id/:id/?', '\Idno\Pages\Pubsubhubbub\Callback');
+            Idno::site()->routes()->addRoute('/pubsub/callback/:id/:id/?', \Idno\Legacy\ControllerRoute::class);
 
         }
 

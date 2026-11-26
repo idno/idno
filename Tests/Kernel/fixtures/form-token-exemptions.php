@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 return [
     'Idno\Http\Controller\WebmentionController::__invoke' => 'Webmention (W3C): the sender is anonymous; the source page is fetched through the remote client and must link to the target, which must be a page of this site that takes mentions',
+    'Idno\Http\Controller\WebSubController::__invoke' => 'WebSub content distribution: the hub posts to a callback address unique to one subscriber and one subscription, and the body is only handed to the listeners of websub/received',
     'Tests\Fixtures\FixtureShellController::receive' => 'a test of a shell whose page takes no form token',
     'Tests\Fixtures\SitePageFixtureController::tokenless' => 'a test of the exemption',
 ];

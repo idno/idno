@@ -390,7 +390,8 @@ Idno/
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
                                Discovery/ holding the services of the small public endpoints and the interfaces of what they ask the site; WebmentionController; Webmention/:
                                WebmentionEndpoint (the one implementation of the webmention endpoint), WebmentionSources (what it asks about a mention's source) and
-                               WebmentionTargets, the page an address is for a webmention, with its value objects and ReceivesWebmentions, see "Legacy pages and routes")
+                               WebmentionTargets, the page an address is for a webmention, with its value objects and ReceivesWebmentions, and WebSubController with
+                               WebSub/: WebSubCallbacks and Subscriptions, the WebSub callback, see "Legacy pages and routes")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand, InstallCommand,
                                AdminCreateCommand, SetupLinkCommand
@@ -1433,6 +1434,27 @@ Logged lines carry no more than 200 bytes of what the sender supplied, with cont
 `Tests/Characterisation/WebmentionAnswersTest` holds the endpoint to answers recorded from the legacy one (`fixtures/answers/webmention/`: the page, every refusal, a mention of each kind of address and spelling, a repeat, a source that has gone,
 a sender's cookie, a single-user and a multi-user home page, a private site), with each deliberate difference in `CHANGED` and what it answers now in `EXPECTED`; the sources are real (`Tests\Fixtures\RemoteDocumentController`, see "Kernel and
 services"), so a mention goes through the checks, the fetch and the page it is aimed at. `Tests/Characterisation/WebmentionAnnotationKeysTest` sends real webmentions through the endpoint and asks what members can do afterwards, and `WebmentionLegacyPageTest` one to a plugin's legacy page (`Tests\Fixtures\MentionablePage`).
+
+**The WebSub callback.** `/pubsub/callback/<subscriber>/<subscription>` is `Idno\Http\Controller\WebSubController` (one route, `idno_websub_callback`, GET, HEAD, OPTIONS and POST; `#[SitePage(name: 'Idno\Pages\Pubsubhubbub\Callback',
+publicOnPrivateSite: true, methods: ['GET', 'POST'], formTokenReplacedBy: ...)]`) and one call of `Idno\Http\Controller\WebSub\WebSubCallbacks` (`verify()` for GET and HEAD, `distribute()` for POST); the class
+`Idno\Pages\Pubsubhubbub\Callback` is deleted (the page's name is the legacy class's, which the events and the body class know it by) and core still registers `/pubsub/callback/:id/:id/?` where it always did
+(`Idno\Core\PubSubHubbub::registerPages()`, not public: the attribute opens it), held by `Idno\Legacy\ControllerRoute`. The address is the one hubs hold subscriptions to and never changes. What the service asks the site is
+`Idno\Http\Controller\WebSub\Subscriptions` (`user()`, `entity()`, `pending()`, `savePending()`, `trigger()`, `maxBody()`, `log()`; `Idno\Legacy\LegacySubscriptions` is the adapter), so it is unit-tested on doubles
+(`Tests/Unit/Http/Controller/WebSub/WebSubCallbacksTest`). The POST is EXEMPT from the form token (listed in `Tests/Kernel/fixtures/form-token-exemptions.php`): a hub is another server with no session, and the request ACTS AS
+NOBODY, whatever cookie it carries. The callback is open to a hub on a private site (`publicOnPrivateSite`: a hub is no visitor; the legacy page ran the walled garden's check on its GET, so a private site could not be verified).
+- GET `verify()`: a subscriber that is no member or a subscription that is no entity is the 410 page. `hub.mode` (also `hub_mode`: PHP writes a dot in a name as an underscore; the same for `challenge`) that is `subscribe` or
+  `unsubscribe` is verified when the subscription's uuid OR id is in that mode's list of the subscriber's pending subscriptions (the `follow` listener writes the uuid to `subscribe`, the `unfollow` listener the id to
+  `unsubscribe`): the entry is removed, the list stays an OBJECT of lists (`stdClass`: the legacy page stored the list of the mode as a plain array with the entry still in it, so the next follow failed on it; it also compared
+  uuids only, so an unsubscription was never verified, and it unserialised any class), it is saved with `save(true)` (the hub is no member) and the challenge is answered as `text/plain; charset=utf-8` with `X-Content-Type-Options: nosniff`.
+  A mode that is not text, any other mode, a list that is not there or an entry that is not in it is the 403 page and changes nothing. The topic is not compared (the list holds no topic). `hub.challenge` that is not text is empty.
+- POST `distribute()`: both must be members (410 otherwise); the body is read through the request's stream up to `Subscriptions::maxBody()` bytes (`webservice_max_download`, 10 MB by default: the legacy page read the whole of `php://input`; a
+  longer body is a 413 and handed to nobody), trimmed, and the event `websub/received` is triggered with `subscriber`, `subscription` and `data`; 200 and no body. The legacy page triggered `pubsubhubbub/ping`, the event the site's own
+  hub is pinged with (a content distribution made the listener that publishes the site's own post fail, and an event a plugin listens to for the site's own hub was fired by anyone who knew an address); that event is the site's own again.
+  The event is named `websub/received`, not after the legacy event, because the protocol is called WebSub and nothing used the new event before.
+- Nothing the hub sends is logged as it came: the mode in the debug line is printable ASCII cut to 100 bytes, and the challenge and the body are never logged. No fetch is made in response to a request.
+- The unfollow listener of `Idno\Core\PubSubHubbub` starts the `unsubscribe` list when IT is missing (it tested `subscribe`, and reset the pending unsubscriptions of a list that had no `subscribe`).
+- Pinned by `Tests/Characterisation/WebSubCallbackTest` (the recordings `fixtures/answers/websub`, `websub-pending` and `websub-events`, captured from the legacy page; the cases that differ are listed with their reasons), the unit test above,
+  `Tests/Core/WebSubPendingTest` and `Tests/Pages/Pubsubhubbub/CallbackTest`.
 
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
@@ -5702,8 +5724,8 @@ no installer writes one.
   answered 416 with `Content-Range: bytes */<size>` and `Content-Length: 0`), and the answer holds exactly the bytes
   its `Content-Length` and `Content-Range` name (`FileStream::seekTo()`, then `FileStream::streamRange()`).
   `Tests/Pages/File/RangeRequestTest.php` and `Tests/Characterisation/FileServingTest` check this.
-- WebSub: `Pages\Pubsubhubbub\Callback` answers the hub's challenge, which comes from the
-  request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML.
+- WebSub: the callback (`WebSubCallbacks::verify()`) answers the hub's challenge, which comes from the
+  request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML, and only for a subscription the subscriber has pending.
   `Tests/Pages/Pubsubhubbub/CallbackTest.php` checks this.
 - No Content Security Policy header is sent by the site: only the upgrade page has one (a strict per-response
   nonce policy, `UpgradePage::contentSecurityPolicy()`), and no template sends one. Output escaping, above, is what
@@ -5732,6 +5754,8 @@ no installer writes one.
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
   `Tests/Pages/Admin/VendorMessagesTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
 - Known limits of the security model (stated plainly; none is fixed by the authentication changes):
+  - A WebSub delivery is authenticated only by its address, which is unique to one subscriber and one subscription: the site sends no `hub.secret` when it subscribes, so a hub signs nothing (`X-Hub-Signature`), and anyone who
+    learns a callback address can hand listeners of `websub/received` content (bounded in size, and never acted on by core). A verification does not compare `hub.topic`, because the pending list holds no topic.
   - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.
   - The form token is accepted from the query string as well as the body, and lasts as long as the session.
   - Five POST handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
