@@ -61,7 +61,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_RECORD_PAGES' => self::$recordFile];
+        return ['IDNO_TEST_RECORD_PAGES' => self::$recordFile, 'IDNO_TEST_FIXTURE_SHELL' => '1'];
     }
 
     protected function siteIni(): array
@@ -87,6 +87,18 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         return [$response, $events];
     }
 
+    /**
+     * @return array<string, mixed> the JSON answer of the fixture page less the form token, which the session test reads
+     */
+    private static function answer(SiteResponse $response): array
+    {
+        $json = $response->json();
+        unset($json['form_token']);
+        ksort($json);
+
+        return $json;
+    }
+
     private function administratorCookie(): string
     {
         return $this->loginCookie('ada', 'correct-horse-battery-9');
@@ -97,7 +109,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         [$response, $events] = $this->recorded('POST', self::TOKENLESS);
 
         $this->assertSame(200, $response->status, $response->body);
-        $this->assertSame(['user' => null, 'api' => true, 'granted' => false, 'method' => 'POST'], $response->json());
+        $this->assertSame(['api' => true, 'granted' => false, 'method' => 'POST', 'user' => null], self::answer($response));
         $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($events, 'event'), 'the page is begun, entered and told of the POST');
     }
 
@@ -117,7 +129,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         [$post, $postEvents] = $this->recorded('POST', self::TOKENLESS, ['Cookie' => $cookie]);
 
         $this->assertSame(200, $post->status, $post->body);
-        $this->assertSame(['user' => null, 'api' => true, 'granted' => false, 'method' => 'POST'], $post->json(), 'the controller, the legacy session and Symfony Security see nobody');
+        $this->assertSame(['api' => true, 'granted' => false, 'method' => 'POST', 'user' => null], self::answer($post), 'the controller, the legacy session and Symfony Security see nobody');
         $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($postEvents, 'event'));
         $this->assertSame([null, null, null], array_column($postEvents, 'user'), 'no page event sees the cookie\'s user');
     }
@@ -129,7 +141,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         [$post, $events] = $this->recorded('POST', self::TOKENLESS, $headers);
 
         $this->assertSame(200, $post->status, $post->body);
-        $this->assertSame(['user' => null, 'api' => true, 'granted' => false, 'method' => 'POST'], $post->json(), 'a page that wants the signer authenticates it itself');
+        $this->assertSame(['api' => true, 'granted' => false, 'method' => 'POST', 'user' => null], self::answer($post), 'a page that wants the signer authenticates it itself');
         $this->assertSame([null, null, null], array_column($events, 'user'));
         // (the same signature on a GET is the member, as for every page)
         $this->assertSame(200, $this->site()->request('GET', self::TOKENLESS, self::signedHeadersFor('ada', $this->apiKeyOf('ada'), self::TOKENLESS))->status);
@@ -139,8 +151,8 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
     {
         $cookie = $this->administratorCookie();
 
-        $get = $this->site()->request('GET', self::TOKENLESS . '?draw=1', ['Cookie' => $cookie]);
-        $post = $this->site()->request('POST', self::TOKENLESS . '?draw=1', ['Cookie' => $cookie]);
+        $get = $this->site()->request('GET', self::TOKENLESS . '?case=draw', ['Cookie' => $cookie]);
+        $post = $this->site()->request('POST', self::TOKENLESS . '?case=draw', ['Cookie' => $cookie]);
 
         $this->assertSame(200, $get->status);
         $this->assertStringContainsString('session/logout', $get->body, 'the shell of a GET shows the administrator\'s log out link');
@@ -149,35 +161,104 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         $this->assertStringNotContainsString('admin/', strtolower(preg_replace('~href="[^"]*(?:static|css|js)[^"]*"~', '', $post->body)), 'and no administrator menu');
     }
 
-    public function testTheBrowsersSessionIsIntactAfterwards(): void
+    /**
+     * @return array<string, array{0: string}> the pages that take a request with no form token: the controller's and its shell's
+     */
+    public static function pages(): array
     {
-        $cookie = $this->administratorCookie();
-        $headers = ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'];
-        $before = $this->site()->request('GET', 'service/security/csrftoken/', $headers)->json()['token'];
-
-        $post = $this->site()->request('POST', self::TOKENLESS, ['Cookie' => $cookie]);
-
-        $this->assertSame(200, $post->status);
-        foreach ($post->lines('Set-Cookie') as $line) {
-            $this->assertStringNotContainsString(substr($cookie, (int) strpos($cookie, '=') + 1), $line, 'the session id is not changed or expired');
-            $this->assertStringNotContainsString('=deleted', $line, 'no cookie is expired');
-        }
-        $after = $this->site()->request('GET', self::TOKENLESS, ['Cookie' => $cookie]);
-        $this->assertIsString($after->json()['user'], 'still logged in on the next ordinary request');
-        $this->assertSame([], array_filter($after->lines('Set-Cookie'), static fn (string $line): bool => str_contains($line, 'PHPSESSID') || str_contains($line, 'known')), 'the same session: no new id');
-        $this->assertSame($before, $this->site()->request('GET', 'service/security/csrftoken/', $headers)->json()['token'], 'the same form token');
+        return ['the controller' => [self::TOKENLESS], 'the shell' => ['/_test/fixture-shell-tokenless/']];
     }
 
-    public function testASessionTheRequestStartedIsNotLeftBehind(): void
+    /** What each `case` of the fixture answers: the status (null: any below 400) for a POST. */
+    private const CASES = ['' => 200, 'draw' => 200, 'message' => 200, 'throw' => 500, 'denied' => 403, 'notfound' => 404, 'redirect' => null];
+
+    private const BROWSERS_MESSAGE = 'A message to be shown once';
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function leaveAMessageFor(string $cookie): void
     {
-        $this->administratorCookie();
+        $this->assertSame(302, $this->site()->request('GET', '/_test/site-page/draw-new?case=messages', ['Cookie' => $cookie])->status);
+    }
+
+    private static function cookieName(string $cookie): string
+    {
+        return substr($cookie, 0, (int) strpos($cookie, '='));
+    }
+
+    /**
+     * @dataProvider pages
+     */
+    public function testAnAnswerThatIsDrawnNeverReadsOrWritesTheBrowsersSession(string $page): void
+    {
+        $cookie = $this->administratorCookie();
+        $name = self::cookieName($cookie);
+        $xhr = ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'];
+        $token = $this->site()->request('GET', 'service/security/csrftoken/', $xhr)->json()['token'];
+
+        foreach (self::CASES as $case => $status) {
+            $this->leaveAMessageFor($cookie);
+
+            $response = $this->site()->request('POST', $page . '?case=' . $case, ['Cookie' => $cookie]);
+
+            $label = $page . ' case ' . json_encode($case);
+            if ($status === null) {
+                $this->assertLessThan(400, $response->status, $label . ' ' . $response->body);
+            } else {
+                $this->assertSame($status, $response->status, $label . ' ' . substr($response->body, 0, 500));
+            }
+            $this->assertStringNotContainsString(self::BROWSERS_MESSAGE, $response->body, $label . ': the browser\'s waiting message is not taken and shown');
+            $this->assertStringNotContainsString($token, $response->body, $label . ': the browser\'s form token is not printed');
+            foreach ($response->lines('Set-Cookie') as $line) {
+                $this->assertStringStartsNotWith($name . '=', $line, $label . ': no cookie for the browser\'s session');
+            }
+
+            // the browser's session is as it was: logged in, the same id, the same form token, and the message is still waiting for it
+            $next = $this->site()->request('GET', '/_test/site-page/draw-new?case=draw', ['Cookie' => $cookie]);
+            $this->assertSame(200, $next->status, $label);
+            $this->assertStringContainsString(self::BROWSERS_MESSAGE, $next->body, $label . ': shown on its next ordinary page');
+            $this->assertStringContainsString('session/logout', $next->body, $label . ': still logged in');
+            foreach ($next->lines('Set-Cookie') as $line) {
+                $this->assertStringStartsNotWith($name . '=', $line, $label . ': the same session id');
+            }
+            $this->assertSame($token, $this->site()->request('GET', 'service/security/csrftoken/', $xhr)->json()['token'], $label . ': the same form token');
+        }
+    }
+
+    /**
+     * @dataProvider pages
+     */
+    public function testAFormTheExemptPageDrawsCarriesNoTokenOfTheBrowsers(string $page): void
+    {
+        $cookie = $this->administratorCookie();
+        $token = $this->site()->request('GET', 'service/security/csrftoken/', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'])->json()['token'];
+
+        $response = $this->site()->request('POST', $page . '?case=draw', ['Cookie' => $cookie]);
+
+        $this->assertSame(200, $response->status, $response->body);
+        $this->assertSame(1, preg_match('~form token ([0-9a-f]{64})~', $response->body, $found), 'the page prints a token');
+        $this->assertNotSame($token, $found[1], 'a token that is the process\'s own, never the browser\'s session\'s');
+    }
+
+    /**
+     * @dataProvider pages
+     */
+    public function testASessionTheRequestStartedIsNotLeftBehindWhateverIsDrawn(string $page): void
+    {
+        $name = self::cookieName($this->administratorCookie());
         $sessions = $this->sessionIds();
         $this->assertNotSame([], $sessions, 'the site writes its sessions here (logging in made one)');
 
-        $response = $this->site()->request('POST', self::TOKENLESS);
+        foreach (self::CASES as $case => $status) {
+            $response = $this->site()->request('POST', $page . '?case=' . $case);
 
-        $this->assertSame(200, $response->status);
-        $this->assertSame($sessions, $this->sessionIds(), 'a request with no cookie leaves no session behind, and none of the others is removed');
+            $label = $page . ' case ' . json_encode($case) . ' (' . $response->status . ')';
+            $this->assertSame($sessions, $this->sessionIds(), $label . ': no session is left behind by a request with no cookie, and none of the others is removed');
+            foreach ($response->lines('Set-Cookie') as $line) {
+                $this->assertStringStartsNotWith($name . '=', $line, $label . ': no cookie for a session that does not exist');
+            }
+        }
     }
 
     /**
@@ -232,5 +313,41 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
         $this->assertSame(200, $ok->status);
         $this->assertSame(['page/ready', 'page/head', 'page/post'], array_column($okEvents, 'event'));
         $this->assertTrue($ok->json()['site_page'], 'a page without the exemption is begun as it was');
+    }
+
+    public function testConstructingAShellDuringAnOrdinaryRequestChangesNothing(): void
+    {
+        $cookie = $this->administratorCookie();
+        $xhr = ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'];
+        $token = $this->site()->request('GET', 'service/security/csrftoken/', $xhr)->json()['token'];
+
+        $response = $this->site()->request('POST', '/_test/site-page/post?construct=1', ['Cookie' => $cookie], ['__bTk' => $token]);
+
+        $this->assertSame(200, $response->status, $response->body);
+        $this->assertIsString($response->json()['user'], 'the page that only builds the shell is still the member\'s request');
+        $this->assertFalse($response->json()['api']);
+        $this->assertSame($token, $this->site()->request('GET', 'service/security/csrftoken/', $xhr)->json()['token'], 'and the session is intact');
+        $this->assertStringContainsString('session/logout', $this->site()->request('GET', '/_test/site-page/draw-new?case=draw', ['Cookie' => $cookie])->body);
+    }
+
+    public function testAGetOfTheExemptShellKeepsTheBrowsersUserAndItsPostIsNobodyAtEveryEvent(): void
+    {
+        $cookie = $this->administratorCookie();
+        $shell = '/_test/fixture-shell-tokenless/';
+
+        [$get, $getEvents] = $this->recorded('GET', $shell, ['Cookie' => $cookie]);
+        $this->assertIsString($get->json()['user'], 'a GET is the member\'s');
+        $this->assertContains('page/ready', array_column($getEvents, 'event'));
+        foreach ($getEvents as $event) {
+            $this->assertIsString($event['user'], $event['event']);
+        }
+
+        [$post, $events] = $this->recorded('POST', $shell, ['Cookie' => $cookie]);
+        $this->assertSame(200, $post->status, $post->body);
+        $this->assertNull($post->json()['user']);
+        $this->assertContains('page/ready', array_column($events, 'event'), 'the shell\'s page/ready is recorded');
+        foreach ($events as $event) {
+            $this->assertNull($event['user'], 'nobody at ' . $event['event']);
+        }
     }
 }

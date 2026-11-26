@@ -941,12 +941,20 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   FORM TOKEN EXEMPTION: a page that other servers post to (a webmention endpoint, a WebSub callback) cannot have a form token. It says so with `#[SitePage(formTokenReplacedBy: '<what authenticates its
   state-changing requests instead>')]`: a non-empty sentence (`SitePage`'s constructor throws `\InvalidArgumentException` for an empty one, for one with `accountPage` or `settingsPage`, and for a page whose `methods`
   lists no POST, PUT, PATCH or DELETE). For such a page's state-changing method (`SitePage::changesStateWithoutFormToken()`; GET, HEAD and OPTIONS are untouched) `PageRequestListener::onController()` makes
-  the request nobody's BEFORE the page is begun: `PageLifecycle::beginStatelessRequest()` (`Session::beginStatelessRequest()`: the request's API flag set, NO user, so `currentUser()` is false until the page itself
-  calls `authenticateStatelessly()`; nothing is written to or read from the browser session, nothing is logged, and a session the request started is destroyed at its end as for every stateless request) and
-  `TokenStorageInterface::setToken(null)` (the token storage is a service closure, built only when such a request arrives with the legacy application booted: the firewall has already put the cookie's user there). So
-  `page/ready` and every later event, the template (`is_logged_in()`), `is_granted()` and the controller never see the browser session's user, and a signed API request is nobody too; the walled garden asks about
-  nobody (the page must be `publicOnPrivateSite` to be served there). `enter()` skips the token check. An exempt action never carries `#[IsGranted]` (`SitePageRoutesTest::testNoExemptActionCarriesIsGranted`), and every
-  exemption is listed with its exact sentence in `Tests/Kernel/fixtures/form-token-exemptions.php` (`Tests/Kernel/FormTokenExemptionsTest` reads every action of `Idno/Http/Controller/` and `Tests/Fixtures/` and
+  the request nobody's BEFORE the page is begun: `PageLifecycle::beginStatelessRequest()` (`Session::beginStatelessRequest()`, the ONE switch: a kept shell whose action is exempt gets the same call from `PageHandler::serve()`, ONCE, for the page the router
+  is about to serve (`PageShell::takesNoFormToken()` of the page `handlerFor()` chose, for the exempt state-changing methods only) and BEFORE Toro builds it, so the shell's `page/ready` sees nobody; constructing a shell for any
+  other purpose (`PageHandler::getRoute()`, a `new`) changes nothing) and `TokenStorageInterface::setToken(null)` (the token storage is a service closure, built only when such a request arrives with the legacy application booted: the firewall has already
+  put the cookie's user there). THE SESSION: the browser's PHP session is let go of at the switch, so nothing later reads or writes it. A session the request STARTED (no cookie) is destroyed there; one it
+  CARRIED is released without being written (`session_abort()`); `$_SESSION` and the user held in memory are emptied; the session's own `Set-Cookie` line is taken off the response; the request's API flag is
+  set with NO user, so `currentUser()` is false until the page itself calls `authenticateStatelessly()`. So a page drawn in the shell, the 403, 404 and 500 pages, a forward and the form token printed in a form
+  neither show the browser's waiting messages, nor write the session back, nor print its token (the token storage falls back to the process's own), nor send its cookie, and the browser's session, its id, its
+  form token and its waiting messages are exactly as they were on its next ordinary request. A message the exempt page adds is held in memory and lost. This holds from `page/ready` on: what the boot did before the
+  switch (authenticating the cookie's user, `user/auth/success` for it) has happened. `page/ready` and every later event, the template (`is_logged_in()`), `is_granted()` and the controller see nobody, and a
+  signed API request is nobody too; the walled garden asks about nobody (the page must be `publicOnPrivateSite` to be served there). Being an API request has its own consequences: a forward is answered as
+  JSON (`{"location": ...}`), not as a redirect. `enter()` skips the token because the request is an API request (`requireFormToken()`), never because of the attribute, and throws a `\LogicException` for an
+  exempt page's state-changing request that the switch has not made nobody's (`LegacyPageLifecycleTest`). An exempt action never carries `#[IsGranted]` (`SitePageRoutesTest::testNoExemptActionCarriesIsGranted`), and every
+  exemption is listed with its exact sentence in `Tests/Kernel/fixtures/form-token-exemptions.php` (`Tests/Kernel/FormTokenExemptionsTest` reads every class of `Idno/`, `IdnoPlugins/` and `Tests/Fixtures/` that names an exemption (a method's attribute, a class's for its routed actions, an invokable
+  controller, a page no route reaches as `Class::*`), every route of the container's route collection and the action each kept shell names (`PageShell::ACTION`), and
   fails for an exemption that is not listed or a listed one that is gone): adding one is a reviewed change. The fixture is `SitePageFixtureController::tokenless()` (`/_test/site-page/tokenless`), pinned over HTTP by
   `Tests/Characterisation/FormTokenExemptionTest`. A page that needs a user authenticates a credential of its own and calls `authenticateStatelessly()`. A MEMBER OR AN ADMINISTRATOR: the lifecycle has no gatekeeper of its own; a site page asks with `#[IsGranted('ROLE_USER')]`
   or `#[IsGranted('ROLE_ADMIN')]` on the method, as any controller does. The page is begun and entered first (`page/ready`, `page/head` and `page/get` have fired, as before a legacy
@@ -1168,8 +1176,8 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   request names none), `markdownPermalink` and `formTokenReplacedBy`. A `MarkdownPermalink` shell (the router routes `<path>.md` to it: `PageHandler::markdownSuffixRequested()`) is served as the
   Markdown form: the context's suffix flag is set from it and the `markdown` type selected, and `Vary: Accept` is added (not replacing) to every response of a `markdownPermalink` page, a 304
   included. The `markdown` shell reads the suffix from the current page (`Page::markdownSuffixRequested()`, which a `ControllerPage` answers from its context), so the front matter's `link` of
-  a page that is not a post leaves the `.md` off whoever serves it. A shell whose action is exempt from the form token is made stateless in its constructor, before `page/ready` (a POST, PUT, PATCH or DELETE
-  the action declares: `Session::beginStatelessRequest()`), so `Page::post()` asks for no token and the request is nobody's, as the controller's is. `write()` sends a `StreamedResponse` or a
+  a page that is not a post leaves the `.md` off whoever serves it. A shell whose action is exempt from the form token is made stateless by `PageHandler::serve()` before the router builds it, so before `page/ready` (a POST, PUT, PATCH or DELETE
+  the action declares: `Session::beginStatelessRequest()`; building a shell for another purpose does nothing), so `Page::post()` asks for no token and the request is nobody's, as the controller's is. `write()` sends a `StreamedResponse` or a
   `BinaryFileResponse` with `sendContent()` after ending the output buffers, and sends nothing of it for a HEAD; any other response's content is echoed. `Idno\Pages\Homepage::ACTION` is `HomepageController::home`
   (`content()` has the same flags, and the feeds, the search and the tags are not shells), so a feed's `defaultType` never reaches the home page. `Tests/Kernel/ShellActionsTest` holds every shell of
   `Idno/Pages/` and `Tests/Fixtures/` to an action that exists, carries `shell: true` and names the shell, and every `shell: true` action to a shell that names it (or an action of the same flags
@@ -2427,6 +2435,11 @@ callback, and often `exit`: Symfony's session listener would close the session a
   `mark()`) is set on the Symfony request by the authenticator, so a controller can ask. Bearer tokens stay LOCAL to the Micropub
   endpoint: no firewall, matcher or listener looks at `Authorization` or `access_token`. Pinned by
   `Tests/Characterisation/StatelessAuthenticationTest`, `TokenAgreementTest` and `Tests/Kernel/SessionStatelessTest`.
+- **A request made nobody's for a page with no form token** (`Session::beginStatelessRequest()`, for `#[SitePage(formTokenReplacedBy: ...)]`; see "Adding a route"): like a stateless request, but with NO user, and the
+  browser's session is let go of at once: a session the request started is destroyed, one it carried is released with `session_abort()` (never written), `$_SESSION` and the in-memory user are emptied and the session's
+  `Set-Cookie` line is removed; the stateless-request rules above (nothing written to the session, the browser's session intact for its next request) hold, and so does their consequence for output: a drawn page or error
+  page shows none of the browser's waiting messages and no token of its session (`SessionTokenStorage` then keeps the token in the process). It is the switch the page's own credential check builds on:
+  `authenticateStatelessly()` after it holds the authenticated user in memory.
 - **Denied requests.** On a site page every refusal is the page's own 403 (`PageExceptionListener`, before the firewall: "Legacy pages and routes").
   For every other controller, `Idno\Security\DeniedResponder` (access-denied handler and entry point): the legacy 403 page with status 403
   (`Idno\Legacy\LegacyForbiddenPage`, behind the `Idno\Security\ForbiddenPage` interface: `pages/403` in the page shell, drawn on a

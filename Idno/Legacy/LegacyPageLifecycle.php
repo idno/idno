@@ -116,6 +116,11 @@ final class LegacyPageLifecycle implements PageLifecycle
     public function enter(PageContext $context): void
     {
         $site = Idno::site();
+        // A page that takes state-changing requests without the form token is entered only by a request made stateless first (the switch makes the
+        // request nobody's): the token is skipped because the request is an API request (requireFormToken()), never because of what the attribute says.
+        if ($context->page()->changesStateWithoutFormToken($context->request()->getMethod()) && !$site->session()->isAPIRequest()) {
+            throw new \LogicException('A page with no form token was entered by a request that beginStatelessRequest() had not made nobody\'s.');
+        }
         $page = $site->currentPage();
         if ($page instanceof ControllerPage) {
             // What `<method>_xhr()` did once the visitor was let in: the page is an XHR page from here on.
@@ -132,9 +137,9 @@ final class LegacyPageLifecycle implements PageLifecycle
             return;
         }
         $site->events()->triggerEvent('page/head', ['page' => $page]);
-        if ($method !== 'GET' && !$context->page()->changesStateWithoutFormToken($method)) {
+        if ($method !== 'GET') {
             // A method that changes state is answered only with the session's form token, as Page::post() and put() asked for it:
-            // before the page hears of it. A signed API request needs none, and a page that authenticates its requests itself (`formTokenReplacedBy`) is not asked.
+            // before the page hears of it. A request that is an API request needs none: a signed one, and one made stateless for a page that authenticates its requests itself (`formTokenReplacedBy`).
             $this->requireFormToken($method, $page);
         }
         $site->events()->triggerEvent('page/' . strtolower($method), $data);

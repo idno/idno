@@ -137,6 +137,18 @@ final class ShellFlagsTest extends PrivateSiteTestCase
         $this->assertStringContainsString('class="h-feed"', $response->body, 'the home page\'s stream');
     }
 
+    /**
+     * @param array<string, mixed> $json
+     *
+     * @return array<string, mixed>
+     */
+    private static function withoutToken(array $json): array
+    {
+        unset($json['form_token'], $json['granted']);
+
+        return $json;
+    }
+
     public function testAShellOfAPageThatTakesNoFormTokenServesItsPostAsNobody(): void
     {
         $cookie = $this->loginCookie('ada', 'correct-horse-battery-9');
@@ -148,9 +160,9 @@ final class ShellFlagsTest extends PrivateSiteTestCase
         $controller = $this->site()->request('POST', self::TOKENLESS_CONTROLLER, ['Cookie' => $cookie]);
 
         $this->assertSame(200, $controller->status, $controller->body);
-        $this->assertSame(['user' => null, 'api' => true, 'method' => 'POST'], $controller->json());
+        $this->assertSame(['user' => null, 'api' => true, 'method' => 'POST'], self::withoutToken($controller->json()));
         $this->assertSame(200, $shell->status, 'no form token is asked of the page: ' . $shell->body);
-        $this->assertSame($controller->json(), $shell->json(), 'and the request is nobody\'s, whatever cookie it carries');
+        $this->assertSame(self::withoutToken($controller->json()), self::withoutToken($shell->json()), 'and the request is nobody\'s, whatever cookie it carries');
     }
 
     public function testAShellOfAPageThatNeedsTheTokenStillAsksForIt(): void

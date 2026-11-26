@@ -53,7 +53,7 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
-    public function testAnExemptPagesPostBuildsNeitherTheLifecycleNorTouchesTheTokenStorage(): void
+    public function testAnExemptPagesPostBuildsNoLifecycleWithoutTheLegacyApplication(): void
     {
         $kernel = $this->kernel();
         $handler = self::errorHandler();

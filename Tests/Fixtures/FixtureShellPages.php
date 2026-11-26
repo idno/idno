@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Fixtures;
 
-use Idno\Core\Idno;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRenderer;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -58,9 +56,6 @@ final class FixtureShellPages
      */
     public function receive(PageContext $page): Response
     {
-        $session = Idno::site()->session();
-        $uuid = $session->currentUserUUID();
-
-        return new JsonResponse(['user' => $uuid === false ? null : $uuid, 'api' => $session->isAPIRequest(), 'method' => $page->request()->getMethod()]);
+        return TokenlessCases::answer($page, $this->renderer);
     }
 }

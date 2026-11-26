@@ -157,9 +157,9 @@ final class SitePageRoutesTest extends TestCase
             }
             [$class, $method] = is_array($controller) ? [is_object($controller[0]) ? $controller[0]::class : $controller[0], $controller[1]] : (str_contains($controller, '::') ? explode('::', $controller, 2) : [$controller, '__invoke']);
             $reflection = new \ReflectionClass($class);
-            $attributes = $reflection->getAttributes(IsGranted::class);
+            $attributes = $reflection->getAttributes(IsGranted::class, \ReflectionAttribute::IS_INSTANCEOF);
             if ($reflection->hasMethod($method)) {
-                $attributes = [...$attributes, ...$reflection->getMethod($method)->getAttributes(IsGranted::class)];
+                $attributes = [...$attributes, ...$reflection->getMethod($method)->getAttributes(IsGranted::class, \ReflectionAttribute::IS_INSTANCEOF)];
             }
             if ($attributes !== []) {
                 $found[] = $name . ' (' . $class . '::' . $method . '): an exempt page is asked as nobody, so #[IsGranted] would refuse every request';

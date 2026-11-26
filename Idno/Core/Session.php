@@ -910,14 +910,56 @@ namespace Idno\Core {
 
         /**
          * Makes this request nobody's and an API request (it skips the form token), with no user: for a page that authenticates its own
-         * state-changing requests by something other than the session, and must never act as the browser session's user. `currentUser()`
-         * is nobody until `authenticateStatelessly()` is called; the browser session (if the request carried one) is not read or written,
-         * nothing is logged, and a session the request started is destroyed at its end, as for every stateless request.
+         * state-changing requests by something other than the session, and must never act as the browser session's user. Call it before the page
+         * is begun. The browser's session is let go of for the rest of the request: a session the request STARTED (it carried no cookie) is destroyed
+         * here; one it CARRIED is released without being written (`session_abort()`); then `$_SESSION` and the user held in memory are emptied and the
+         * session's cookie is taken off the response, so nothing later (a drawn page, an error page, a redirect, the form token, the messages) reads or
+         * writes the browser's session, and a form token drawn afterwards is the process's own. `currentUser()` is nobody until `authenticateStatelessly()`.
+         * Nothing is logged. (What the boot did before this call, authenticating the cookie's user and firing `user/auth/success` for it, is done.)
          */
         public function beginStatelessRequest(): void
         {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                if ($this->sessionStartedHere) {
+                    $_SESSION = [];
+                    @session_destroy();
+                } else {
+                    session_abort();
+                }
+            }
+            $_SESSION = [];
+            $this->removeSessionCookie();
+            $this->user          = null;
             $this->statelessUser = null;
             $this->apiRequest    = true;
+        }
+
+        /**
+         * Takes the session's own `Set-Cookie` line off the response PHP has queued (the other cookies stay).
+         */
+        private function removeSessionCookie(): void
+        {
+            $prefix  = session_name() . '=';
+            $cookies = [];
+            $found   = false;
+            foreach (headers_list() as $line) {
+                if (stripos($line, 'Set-Cookie:') !== 0) {
+                    continue;
+                }
+                $cookie = trim(substr($line, strlen('Set-Cookie:')));
+                if (str_starts_with($cookie, $prefix)) {
+                    $found = true;
+                } else {
+                    $cookies[] = $cookie;
+                }
+            }
+            if (!$found) {
+                return;
+            }
+            header_remove('Set-Cookie');
+            foreach ($cookies as $cookie) {
+                header('Set-Cookie: ' . $cookie, false);
+            }
         }
 
         /**

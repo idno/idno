@@ -72,13 +72,22 @@ final class SitePageFixtureController
     #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT'])]
     public function post(Request $request): JsonResponse
     {
+        if ($request->query->get('construct') !== null) {
+            // what the webmention endpoint does for a target: the legacy router builds the page registered for an address (here the shell of a page that takes
+            // no form token) without serving it; who the request is must not change
+            Idno::site()->routes()->getRoute('/_test/fixture-shell-tokenless/');
+            $uuid = Idno::site()->session()->currentUserUUID();
+
+            return new JsonResponse(['user' => $uuid === false ? null : $uuid, 'api' => Idno::site()->session()->isAPIRequest()]);
+        }
+
         return $this->describe($request);
     }
 
     /**
      * A page that takes POST with no form token, because something else authenticates it (an exemption the guard test lists): what the
-     * legacy session, the API flag and Symfony Security make of the request. `?draw=1` draws the page in its shell instead, whose
-     * navigation shows whether the template sees a user.
+     * legacy session, the API flag and Symfony Security make of the request; `?case=` draws a page, a refusal, an error or a redirect
+     * (`TokenlessCases`).
      */
     #[Route('/{lead}_test/site-page/tokenless{slash}', name: 'idno_test_site_page_tokenless', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST'])]
     #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test of the exemption')]
@@ -87,19 +96,8 @@ final class SitePageFixtureController
         if (!PageContext::has($request)) {
             return $this->describe($request);
         }
-        $context = PageContext::of($request);
-        if ($context->input('draw') !== null) {
-            return $this->renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $this->renderer->template('pages/home/blurb', ['offset' => 0])]);
-        }
-        $session = Idno::site()->session();
-        $uuid = $session->currentUserUUID();
 
-        return new JsonResponse([
-            'user' => $uuid === false ? null : $uuid,
-            'api' => $session->isAPIRequest(),
-            'granted' => $this->security->isGranted('ROLE_USER'),
-            'method' => $request->getMethod(),
-        ]);
+        return TokenlessCases::answer(PageContext::of($request), $this->renderer, $this->security->isGranted('ROLE_USER'));
     }
 
     /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */

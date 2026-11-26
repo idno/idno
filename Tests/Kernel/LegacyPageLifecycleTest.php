@@ -10,6 +10,7 @@ use Idno\Http\Page\SitePage;
 use Idno\Legacy\LegacyPageLifecycle;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Tests\Fixtures\RecordingMailTransport;
 
 /**
@@ -64,5 +65,56 @@ final class LegacyPageLifecycleTest extends TestCase
 
         $this->assertStringContainsString('a page failed [', $lines);
         $this->assertStringContainsString(basename(__FILE__), $lines);
+    }
+
+    private function exempt(string $method = 'POST'): PageContext
+    {
+        return new PageContext(Request::create('/', $method), new SitePage('Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test'));
+    }
+
+    public function testAnExemptPagesStateChangingRequestThatWasNotMadeStatelessIsNeverEntered(): void
+    {
+        $lifecycle = new LegacyPageLifecycle();
+        $this->assertFalse(Idno::site()->session()->isAPIRequest());
+
+        try {
+            $lifecycle->enter($this->exempt());
+            $this->fail('an exempt page was entered with the browser session\'s user still the request\'s');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('beginStatelessRequest', $e->getMessage());
+        }
+    }
+
+    public function testTheTokenCheckDependsOnTheRequestBeingStatelessAndNeverOnTheAttribute(): void
+    {
+        $lifecycle = new LegacyPageLifecycle();
+        $check = new \ReflectionMethod($lifecycle, 'requireFormToken');
+        $page = new \Idno\Legacy\BarePage();
+        $session = Idno::site()->session();
+        $saved = $_SESSION ?? [];
+        $uri = $_SERVER['REQUEST_URI'] ?? null;
+        $_SERVER['REQUEST_URI'] = '/';
+
+        try {
+            // (PUT is refused with no token whatever the page declared: the check does not read the attribute)
+            try {
+                $check->invoke($lifecycle, 'PUT', $page);
+                $this->fail('a request that is not stateless needs the token');
+            } catch (AccessDeniedHttpException) {
+                $this->addToAssertionCount(1);
+            }
+            $session->beginStatelessRequest();
+            $check->invoke($lifecycle, 'PUT', $page);
+            $this->assertTrue($session->isAPIRequest());
+            $this->assertFalse($session->isLoggedIn(), 'nobody');
+        } finally {
+            $session->resetStatelessAuthentication();
+            $_SESSION = $saved;
+            if ($uri === null) {
+                unset($_SERVER['REQUEST_URI']);
+            } else {
+                $_SERVER['REQUEST_URI'] = $uri;
+            }
+        }
     }
 }

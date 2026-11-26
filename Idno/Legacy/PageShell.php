@@ -59,8 +59,6 @@ abstract class PageShell extends Page
 
     public function __construct()
     {
-        // (before the page is begun: `page/ready` must never see the session's user on a request the page authenticates itself)
-        $this->beginTokenlessRequest();
         parent::__construct();
         $this->noteSubclass();
     }
@@ -189,23 +187,16 @@ abstract class PageShell extends Page
     }
 
     /**
-     * A page whose action takes state-changing requests without the form token (`formTokenReplacedBy`) serves them as nobody, as the controller's does:
-     * the request is made stateless before the page is built, so the router's check of the token is not asked and the session's user is never the page's.
+     * Whether a request with this method to this shell (or a subclass: it inherits the action) is one whose page takes it without the form token
+     * (`formTokenReplacedBy` of its action). `PageHandler::serve()` asks it of the page the router is about to serve and makes that request nobody's
+     * before the page is built, as the controller's path does (`page/ready` never sees the session's user): constructing a shell for any other purpose
+     * (an address looked up, a page built and not served) changes nothing.
      */
-    private function beginTokenlessRequest(): void
+    public static function takesNoFormToken(string $method): bool
     {
         $page = static::ACTION === null ? null : SitePage::of(static::ACTION);
-        if ($page === null || $page->formTokenReplacedBy === null) {
-            return;
-        }
-        $request = $this->currentRequest();
-        foreach ([$request->getRealMethod(), $request->getMethod()] as $method) {
-            if ($page->changesStateWithoutFormToken($method)) {
-                Idno::site()->session()->beginStatelessRequest();
 
-                return;
-            }
-        }
+        return $page !== null && $page->changesStateWithoutFormToken($method);
     }
 
     private function contextFor(Request $request): PageContext

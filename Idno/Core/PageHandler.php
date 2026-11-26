@@ -312,6 +312,7 @@ namespace Idno\Core {
         public static function serve($routes)
         {
             static::routeMarkdownSuffix($routes);
+            static::beginStatelessRequestIfTheShellTakesNoFormToken($routes);
 
             static::hook(
                 'before_handler', function ($params = array()) {
@@ -327,6 +328,22 @@ namespace Idno\Core {
             );
 
             parent::serve($routes);
+        }
+
+        /**
+         * A request the router is about to serve with a kept shell whose controller action takes state-changing requests without the form token
+         * (`#[SitePage(formTokenReplacedBy: ...)]`) is made nobody's, ONCE, before the router builds the page (so `page/ready` never sees the session's user), as
+         * the controller's path does; GET, HEAD and OPTIONS keep the browser's user. The page is the one Toro will choose (`handlerFor()` is Toro's lookup).
+         * A shell built for any other purpose (`getRoute()`, a `new`) changes nothing.
+         *
+         * @param array $routes
+         */
+        private static function beginStatelessRequestIfTheShellTakesNoFormToken($routes): void
+        {
+            $handler = static::handlerFor($routes, (string) static::pathFrom($_SERVER['PATH_INFO'] ?? null, $_SERVER['ORIG_PATH_INFO'] ?? null, $_SERVER['REQUEST_URI'] ?? null));
+            if (is_string($handler) && is_subclass_of($handler, \Idno\Legacy\PageShell::class) && $handler::takesNoFormToken(strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')))) {
+                \Idno\Core\Idno::site()->session()->beginStatelessRequest();
+            }
         }
 
         function routeTokens()
