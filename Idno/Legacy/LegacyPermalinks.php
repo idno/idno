@@ -91,9 +91,7 @@ final class LegacyPermalinks implements Permalinks
 
     public function updated(Entity $entity): int
     {
-        $updated = $entity->updated;
-
-        return is_numeric($updated) ? (int) $updated : 0;
+        return $entity->lastChangedAt();
     }
 
     public function selectMarkdownIfWanted(PageContext $page): void

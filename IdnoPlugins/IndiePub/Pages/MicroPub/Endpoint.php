@@ -515,14 +515,15 @@ namespace IdnoPlugins\IndiePub\Pages\MicroPub {
             $entity = \Idno\Common\Entity::getByUUID($url);
             if ($entity === false) {
                 \Idno\Core\Idno::site()->events()->triggerEvent('indiepub/post/failure', ['page' => $this]);
-                $this->error(400, 'not_found');
+                $this->error(400, 'not_found', 'Post not found');
             }
 
-            $owner       = $entity->attributes['owner'];
+            $owner       = $entity->attributes['owner'] ?? false;
             $currentUser = \Idno\Core\Idno::site()->session()->currentUserUUID();
-            if ($owner !== $currentUser) {
+            // (an account is no post: it has no owner, which is no accident to rely on, so it is refused by what it is)
+            if ($entity instanceof \Idno\Entities\User || $owner !== $currentUser) {
                 \Idno\Core\Idno::site()->events()->triggerEvent('indiepub/post/failure', ['page' => $this, 'object' => $entity]);
-                $this->error(403, 'forbidden');
+                $this->error(403, 'forbidden', 'Only the owner of a post can delete it');
             }
 
             $entity->delete();

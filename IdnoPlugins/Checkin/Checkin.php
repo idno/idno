@@ -96,6 +96,20 @@ namespace IdnoPlugins\Checkin {
         }
 
         /**
+         * The page of a check-in whose location was protected changes when the protection ends, with no save: from then on a visitor is told the place.
+         */
+        function lastChangedAt(): int
+        {
+            $changed = parent::lastChangedAt();
+            if ($this->isAnonymous() && !empty($this->created) && !$this->isLocationProtected()) {
+                $created = is_numeric($this->created) ? (int) $this->created : (int) strtotime((string) $this->created);
+                $changed = max($changed, $created + self::PROTECTED_FOR);
+            }
+
+            return $changed;
+        }
+
+        /**
          * What a viewer may be told about where this check-in was made. This is the one rule
          * for every form of a check-in: its title and address, its templates, feeds, JSON, KML,
          * Markdown and what other servers get. Nothing else reads lat, long, placename or

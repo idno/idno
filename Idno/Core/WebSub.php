@@ -151,9 +151,16 @@ namespace Idno\Core {
                                 if ($secret !== null) {
                                     $return = Webservice::safeSendWithoutRedirects('post', $following->pubsub_hub, $request);
                                     if (in_array($return['response'] ?? 0, array(301, 302, 303, 307, 308), true)) {
+                                        // (the hub is not asked again at the address it names, even if that is https too: the owner is told, and the hub's
+                                        // settings, or the followed site's, are the thing to put right. Nothing waits for a verification that cannot come.)
                                         unset($secrets[$following->getID()]);
                                         $user->pubsub_secrets = $secrets;
+                                        \Idno\Http\Controller\WebSub\PendingList::remove($pending, 'subscribe', array($following->getUUID()));
+                                        $user->pubsub_pending = serialize($pending);
                                         $user->save();
+                                        Idno::site()->logging()->warning("WebSub subscription was not made: the hub answered with a redirect, which a subscription that carries a secret does not follow", ['response' => (int) $return['response']]);
+
+                                        return;
                                     }
                                 } else {
                                     $return = Webservice::safeSend('post', $following->pubsub_hub, $request);

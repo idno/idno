@@ -559,6 +559,20 @@ namespace Idno\Common {
         }
 
         /**
+         * The time the page of this entity last changed for a viewer: its last save, or later where what the page shows changes with time and not
+         * with a save (a check-in, when the protection of its location ends). A permalink's `Last-Modified` and its answers to a conditional
+         * request are this time.
+         *
+         * @return int Seconds since the epoch, 0 when the entity has never been updated
+         */
+        function lastChangedAt(): int
+        {
+            $updated = $this->updated;
+
+            return is_numeric($updated) ? (int) $updated : 0;
+        }
+
+        /**
          * Where this entity is, as far as a viewer may be told. An entity that keeps its
          * location from some viewers (a check-in, for a while) overrides this method, and only
          * this one: every form of an entity that gives a position, a place name or an address
@@ -2680,8 +2694,8 @@ namespace Idno\Common {
         }
 
         /**
-         * Removes the annotations a webmention from $source stored (those whose address is the source's, or the address the source declared for itself) and
-         * no other: never an annotation made here, whatever the source names.
+         * Removes the annotations a webmention from $source stored (those whose `permalink` is exactly $source: an annotation stored under an address the
+         * source declared for itself is not found by it) and no other: never an annotation made here, whatever the source names.
          *
          * @param string $source The webmention's source URL
          * @return bool Whether any was removed
@@ -2956,8 +2970,9 @@ namespace Idno\Common {
             }
             if (empty($local_url)) {
                 $local_url = $this->getURL() . '/annotations/' . md5(time() . $content); // Invent a URL for this annotation if we don't have one already
-                // (two annotations of one kind with the same words made in one second are two annotations: the second never takes the first's key)
-                for ($n = 1; is_array($existing_annotations) && isset($existing_annotations[$local_url]); $n++) {
+                // (two annotations with the same words made in one second are two annotations, of one kind or of two: a key names one annotation among
+                // all the kinds, because a key is looked up in every kind, so the second never takes the first's key)
+                for ($n = 1; $this->getAnnotation($local_url) !== false; $n++) {
                     $local_url = $this->getURL() . '/annotations/' . md5(time() . $content . $n);
                 }
             }
@@ -3040,10 +3055,9 @@ namespace Idno\Common {
         }
 
         /**
-         * Whether the logged-in member wrote the annotation on this site. The annotation records its owner as the member's own
-         * profile address, and the annotation was made here only when its `permalink` is its own key, the address the site invents for
-         * what a member writes on a post (`addAnnotation()` with no address of its own). A webmention keeps the remote page as its
-         * `permalink`, and its owner is whatever that page's h-card claimed: no remote party can name a member as an author.
+         * Whether the logged-in member wrote the annotation on this site: whether `authoredAnnotationKey()` finds one, that is an annotation the site
+         * made for the member (it carries the mark `made_here`) whose recorded owner is the member's own profile address. A webmention keeps the remote
+         * page as its `permalink` and is never made here, whatever profile its h-card names: no remote party can name a member as an author.
          *
          * @param array|string $annotation The key the annotation is stored under (or its address as shown), or the annotation
          * @return bool

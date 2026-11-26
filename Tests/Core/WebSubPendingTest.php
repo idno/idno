@@ -223,6 +223,21 @@ final class WebSubPendingTest extends IdnoTestCase
         $this->assertArrayNotHasKey('ws-redirect-b', (array) $user->pubsub_secrets, 'no subscription was made, so no secret is kept for it');
     }
 
+    /** @dataProvider redirectStatuses */
+    public function testARedirectedSubscriptionIsSaidToHaveFailedAndIsNoLongerPending(int $status): void
+    {
+        $user = $this->member('ws-failed-a');
+        $following = $this->followed('ws-failed-b', 'https://hub.example/');
+        $this->hubIs('https://hub.example/', ['http_code' => $status, 'response_headers' => ['Location: https://www.hub.example/subscribe']]);
+
+        $this->follow($user, $following);
+
+        $log = (string) file_get_contents($this->errorLog);
+        $this->assertStringContainsString('WebSub subscription was not made: the hub answered with a redirect', $log, 'the owner can find why nothing arrives');
+        $pending = PendingList::read($user->pubsub_pending);
+        $this->assertFalse(PendingList::isPending($pending, 'subscribe', [$following->getUUID()], time()), 'a subscription that was not made waits for no verification');
+    }
+
     public function testASubscriptionToAnHttpsHubThatAnswersAtOnceStillKeepsItsSecret(): void
     {
         $user = $this->member('ws-redirect-c');

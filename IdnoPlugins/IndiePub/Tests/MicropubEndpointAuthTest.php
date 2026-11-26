@@ -247,6 +247,25 @@ namespace IdnoPlugins\IndiePub\Tests {
             $this->assertTrue($this->statusExists($marker));
         }
 
+        public function testBearerTokenCannotDeleteTheAccountItBelongsTo()
+        {
+            $status = $this->createStatus();
+
+            $result = $this->request('POST', 'micropub/endpoint', ['action' => 'delete', 'url' => static::$member->getUUID()], ['Authorization: Bearer ' . static::$token], false);
+
+            $this->assertEquals(403, $result['status'], substr($result['body'], 0, 400) . ' An access token publishes and deletes posts; it is no way to delete an account.');
+            $this->assertNotEmpty(User::getByUUID(static::$member->getUUID()), 'The account is still there.');
+            $this->assertNotEmpty(\IdnoPlugins\Status\Status::getByID($status->getID()));
+        }
+
+        public function testBearerTokenDeleteOfAPostThatIsNotThereIsAMicropubError()
+        {
+            $result = $this->request('POST', 'micropub/endpoint', ['action' => 'delete', 'url' => 'https://nowhere.example/view/none'], ['Authorization: Bearer ' . static::$token], false);
+
+            $this->assertEquals(400, $result['status'], substr($result['body'], 0, 300));
+            $this->assertSame('not_found', json_decode($result['body'], true)['error'] ?? null);
+        }
+
         public function testBearerTokenWorksAlongsideASessionCookie()
         {
             $this->logIn();

@@ -65,4 +65,18 @@ final class RemoveAnnotationTest extends \Tests\IdnoTestCase
 
         $this->assertCount(2, Entity::getByID($this->post->getID())->annotations['like']);
     }
+
+    public function testAnnotationsOfTwoKindsWithTheSameWordsInOneSecondNeverShareAKey(): void
+    {
+        $post = Entity::getByID($this->post->getID());
+
+        $post->addAnnotation('like', 'A', 'https://example.org/a', '', '', null, null, '', [], true, true);
+        $post->addAnnotation('share', 'B', 'https://example.org/b', '', '', null, null, '', [], true, true);
+
+        $likeKey = array_key_first($post->annotations['like']);
+        $shareKey = array_key_first($post->annotations['share']);
+        $this->assertNotSame($likeKey, $shareKey, 'a key names one annotation among all the kinds: unliking must never remove a share');
+        $this->assertTrue($post->removeAnnotationByKey($likeKey));
+        $this->assertCount(1, $post->annotations['share']);
+    }
 }
