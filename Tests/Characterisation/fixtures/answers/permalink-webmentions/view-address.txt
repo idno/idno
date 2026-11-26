@@ -1,0 +1,17 @@
+status 202
+content-type: text/plain
+
+result: true
+stored: {
+    "reply": {
+        "{site}/2026/a-note-to-open-by-its-id-in-a-view/annotations/{id}": {
+            "permalink": "https://remote.example/reply-to-the-post",
+            "owner_name": "Remote Author",
+            "owner_url": "https://remote.example/",
+            "owner_image": "",
+            "content": "A reply from another site.",
+            "time": "{time}",
+            "title": "https://remote.example/reply-to-the-post"
+        }
+    }
+}

@@ -1,0 +1,67 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/vnd.google-earth.kml+xml
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2025/bob-checked-into-the-cafe?_t=kml>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Placemark>
+      <name>Checked into The Cafe</name>
+      <description><![CDATA[
+<div>
+
+    <h2 class="p-name">
+                    <a href="{site}/2025/bob-checked-into-the-cafe">Checked into The Cafe</a>
+            </h2>
+
+    <span class="p-location u-checkin h-card">
+        <data class="p-name" value="The Cafe"></data>
+        <data class="p-latitude" value="51.5033"></data>
+        <data class="p-longitude" value="-0.1195"></data>
+    </span>
+
+            <div id="map_00000000000040008000000000000066" style="height: 250px"></div>
+    
+    <div class="e-content entry-content">
+        
+<p>Coffee with Bob.</p>
+        <i class="fa fa-tag"></i><a href="{site}/tag/%23coffee" class="p-category" rel="tag">#coffee</a>
+            </div>
+
+</div>
+        <script>
+            (function () {
+                var map = L.map('map_00000000000040008000000000000066', {
+                    touchZoom: false,
+                    scrollWheelZoom: false
+                }).setView([51.5033, -0.1195], 16);
+                var layer = new L.StamenTileLayer("toner-lite");
+                map.addLayer(layer);
+                var marker = L.marker([51.5033, -0.1195]);
+                marker.addTo(map);
+                map.scrollWheelZoom.disable();
+                map.touchZoom.disable();
+                map.doubleClickZoom.disable();
+            })();
+        </script>
+<p><small>December 6, 2025</small></p>]]></description>
+      <Point>
+        <coordinates>-0.1195,51.5033</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

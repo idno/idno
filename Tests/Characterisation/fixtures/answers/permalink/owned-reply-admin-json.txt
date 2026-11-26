@@ -1,0 +1,61 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2025/bob-replies-to-something-elsewhere?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000000040008000000000000061",
+        "uuid": "{site}\/view\/00000000000040008000000000000061",
+        "content": "Bob replies to something elsewhere.",
+        "formattedContent": "\n<p><a href=\"https:\/\/example.org\/post\/2\" class=\"u-in-reply-to\"><\/a>Bob replies to something elsewhere.<\/p>\n",
+        "displayName": "Bob replies to something elsewhere.",
+        "objectType": "note",
+        "published": "2025-12-01T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2025\/bob-replies-to-something-elsewhere",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+            "content": "",
+            "formattedContent": "",
+            "displayName": "Bob Member",
+            "objectType": "person",
+            "url": "{site}\/profile\/bob",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-01.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
+    "title": "Bob replies to something elsewhere.",
+    "description": "Bob replies to something elsewhere.",
+    "messages": []
+}

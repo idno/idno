@@ -1,0 +1,70 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2025/bobs-photo?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000000040008000000000000063",
+        "uuid": "{site}\/view\/00000000000040008000000000000063",
+        "content": "The caption of Bob's photo.",
+        "formattedContent": "\n<p>The caption of Bob's photo.<\/p>\n",
+        "displayName": "Bob's photo",
+        "objectType": "image",
+        "published": "2025-12-03T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2025\/bobs-photo",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+            "content": "",
+            "formattedContent": "",
+            "displayName": "Bob Member",
+            "objectType": "person",
+            "url": "{site}\/profile\/bob",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-01.png"
+            }
+        },
+        "attachments": [
+            {
+                "filename": "photo.png",
+                "url": "{site}\/file\/00000000000040008000000000000013\/photo.png",
+                "mime-type": "image\/png",
+                "length": 1234
+            }
+        ],
+        "thumbnails": []
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+        "content": "",
+        "formattedContent": "",
+        "displayName": "Bob Member",
+        "objectType": "person",
+        "url": "{site}\/profile\/bob",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-01.png"
+        }
+    },
+    "title": "Bob's photo",
+    "description": "The caption of Bob's photo.",
+    "messages": []
+}

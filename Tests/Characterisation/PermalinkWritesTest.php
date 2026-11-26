@@ -53,6 +53,35 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         return new SiteResponse($r->status, $r->headers, '[the error page of an exception; it ' . $says . "]\n", $r->lines);
     }
 
+    /**
+     * The scrub of an answer to a request that carried a token (or none): the tokens, the log-in link's address (which holds the request's, in base64), the
+     * trace of an exception page (a site in debug mode draws it, with the server's paths) and, when asked, the time the post was last changed (a write
+     * stamps it with the time of the request).
+     */
+    private static function scrubbed(array $tokens, bool $lastModified = false): \Closure
+    {
+        return static function (SiteResponse $r) use ($tokens, $lastModified): SiteResponse {
+            $swap = static function (string $text) use ($tokens, $lastModified): string {
+                foreach ($tokens as $token) {
+                    $text = str_replace($token, '{form-token}', $text);
+                }
+                $text = (string) preg_replace('/fwd=[A-Za-z0-9+\/=_%-]+/', 'fwd={address}', $text);
+                // the JSON of an exception says where it was thrown, with the server's path
+                $text = (string) preg_replace('/"file": "[^"]*"/', '"file": "{file}"', $text);
+                if ($lastModified) {
+                    $text = (string) preg_replace('/^(last-modified:).*$/mi', '$1 {the time of the write}', $text);
+                    $text = (string) preg_replace('/"updated": "[^"]+"/', '"updated": "{the time of the write}"', $text);
+                    $text = (string) preg_replace('/(<time class="dt-updated"[^>]*datetime=")[^"]+"/', '$1{the time of the write}"', $text);
+                }
+
+                return $text;
+            };
+            $body = str_contains($r->body, '{main}') ? '[the error page of an exception; it ' . (str_contains($r->body, 'The page you were on timed out.') ? 'says the page timed out' : 'does not say the page timed out') . "]\n" : $swap($r->body);
+
+            return new SiteResponse($r->status, array_map($swap, $r->headers), $body, array_map($swap, $r->lines));
+        };
+    }
+
     /** Writes Bob's disposable note (again, after an earlier run deleted it) and returns its address. */
     private function disposableNote(): string
     {
@@ -91,6 +120,12 @@ final class PermalinkWritesTest extends PermalinkSiteCase
     public function testTheSameScenarioOnAnotherSiteAnswersTheSame(): void
     {
         $this->scenario();
+    }
+
+    /** The home page is recorded after the writes, and it counts the posts: the site holds no more than it did when it was recorded. */
+    protected function seedsOwnedPosts(): bool
+    {
+        return false;
     }
 
     protected static function passes(): int
@@ -141,5 +176,84 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         $this->record('delete-token-owner-gone', 'GET', $disposable);
         $this->record('delete-token-owner-next', 'GET', '/', [], 'owner');
         $this->record('delete-missing-post', 'DELETE', '/2026/no-such-slug-here?__bTk=' . $this->tokenOf('owner'), $referer, 'owner', null, self::withoutToken($this->tokenOf('owner')));
+
+        $this->theWaysAPermalinkIsWrittenTo($paths);
+    }
+
+    /**
+     * What the page answers to each other way a post is written to, as the page is today: an edit by the owner that changes the post (and the page read
+     * after it), the Referer branch of the redirect, a post that is not there, an administrator, an XHR request, `?_t=json`, a signed API request, a DELETE
+     * by an administrator and in each of those forms, and the methods the page defines no handler for.
+     *
+     * @param array<string, mixed> $paths
+     */
+    /** The scrub of an answer to a request of any of the three members, with the tokens their sessions hold now. */
+    private function scrubAll(): \Closure
+    {
+        return self::scrubbed([$this->tokenOf('owner'), $this->tokenOf('admin'), $this->tokenOf('member')], true);
+    }
+
+    private function theWaysAPermalinkIsWrittenTo(array $paths): void
+    {
+        $note = '/' . $paths['bob-public'];
+        $elsewhere = ['Referer' => $this->baseUrl() . 'somewhere/else'];
+        $foreign = ['Referer' => 'https://elsewhere.example/page'];
+
+        // an edit that changes the post, with a Referer (a success forwards to the post, whatever the Referer says), and the page read after it
+        $this->record('post-token-change-owner', 'POST', $note, $elsewhere, 'owner', ['__bTk' => $this->tokenOf('owner'), 'body' => 'Bob changes his note.'], $this->scrubAll());
+        $this->record('post-token-change-owner-then', 'GET', $note, [], 'visitor', null, self::scrubbed([], true));
+        $this->record('post-token-change-owner-then-json', 'GET', $note . '?_t=json', [], 'visitor', null, self::scrubbed([], true));
+        // an administrator edits another member's post
+        $this->record('post-token-change-admin', 'POST', $note, [], 'admin', ['__bTk' => $this->tokenOf('admin'), 'body' => 'Ada changes Bob\'s note.'], $this->scrubAll());
+        $this->record('post-token-change-admin-then', 'GET', $note, [], 'visitor', null, self::scrubbed([], true));
+        // the Referer branch: an edit that is refused forwards to where the request came from
+        $this->record('post-token-other-member-referer', 'POST', $note, $elsewhere, 'member', ['__bTk' => $this->tokenOf('member'), 'body' => 'Carol changes it.'], $this->scrubAll());
+        $this->record('post-token-other-member-foreign-referer', 'POST', $note, $foreign, 'member', ['__bTk' => $this->tokenOf('member'), 'body' => 'Carol changes it.'], $this->scrubAll());
+        $this->record('post-token-other-member-no-referer', 'POST', $note, [], 'member', ['__bTk' => $this->tokenOf('member'), 'body' => 'Carol changes it.'], $this->scrubAll());
+        $this->record('post-no-token-referer', 'POST', $note, $elsewhere, 'owner', ['body' => 'No token.'], $this->scrubAll());
+        // a post that is not there, and one that is not readable
+        $this->record('post-token-missing-post', 'POST', '/2026/no-such-slug-here', $elsewhere, 'owner', ['__bTk' => $this->tokenOf('owner'), 'body' => 'x'], $this->scrubAll());
+        $this->record('post-token-private-post-visitor', 'POST', '/' . $paths['bob-owner'], $elsewhere, 'member', ['__bTk' => $this->tokenOf('member'), 'body' => 'x'], $this->scrubAll());
+        // an XHR request and a JSON one
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        $this->record('post-xhr-no-token-owner', 'POST', $note, $xhr, 'owner', ['body' => 'x'], $this->scrubAll());
+        $this->record('post-xhr-token-owner', 'POST', $note, $xhr, 'owner', ['__bTk' => $this->tokenOf('owner'), 'body' => 'Bob changes it by XHR.'], $this->scrubAll());
+        $this->record('post-json-no-token-owner', 'POST', $note . '?_t=json', [], 'owner', ['body' => 'x'], $this->scrubAll());
+        $this->record('post-json-token-owner', 'POST', $note . '?_t=json', [], 'owner', ['__bTk' => $this->tokenOf('owner'), 'body' => 'Bob changes it, as JSON.'], $this->scrubAll());
+
+        // DELETE by an administrator, by XHR, as JSON, signed; each on a post made again
+        $referer = ['Referer' => $this->baseUrl()];
+        $disposable = $this->disposableNote();
+        $this->record('delete-token-admin', 'DELETE', $disposable . '?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
+        $this->record('delete-token-admin-then', 'GET', $disposable);
+        $disposable = $this->disposableNote();
+        $this->record('delete-xhr-token-owner', 'DELETE', $disposable . '?__bTk=' . $this->tokenOf('owner'), $xhr + $referer, 'owner', null, $this->scrubAll());
+        $this->record('delete-xhr-token-owner-then', 'GET', $disposable);
+        $disposable = $this->disposableNote();
+        $this->record('delete-json-token-owner', 'DELETE', $disposable . '?_t=json&__bTk=' . $this->tokenOf('owner'), $referer, 'owner', null, $this->scrubAll());
+        $this->record('delete-json-token-owner-then', 'GET', $disposable);
+        $disposable = $this->disposableNote();
+        $disposable = $this->disposableNote();
+        $this->record('delete-token-owner-foreign-referer', 'DELETE', $disposable . '?__bTk=' . $this->tokenOf('owner'), $foreign, 'owner', null, $this->scrubAll());
+        $this->record('delete-token-owner-no-referer', 'DELETE', $this->disposableNote() . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', null, $this->scrubAll());
+        $this->record('delete-token-missing-post-admin', 'DELETE', '/2026/no-such-slug-here?__bTk=' . $this->tokenOf('admin'), $referer, 'admin', null, $this->scrubAll());
+
+        // the methods the page has no handler for
+        $this->record('put-token-owner', 'PUT', $note . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', ['body' => 'x'], $this->scrubAll());
+        $this->record('put-no-token-owner', 'PUT', $note, [], 'owner', ['body' => 'x'], $this->scrubAll());
+        $this->record('put-visitor', 'PUT', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll());
+        $this->record('patch-token-owner', 'PATCH', $note . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', ['body' => 'x'], $this->scrubAll());
+        $this->record('patch-visitor', 'PATCH', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll());
+
+        // a signed API request, last: the session of a browser that is open does not survive it on this rig (the requests after it carry no cookie)
+        // a signed API request needs no token
+        $signed = self::signedHeadersFor('bob', $this->bobsKey(), $note);
+        $this->record('post-signed-owner', 'POST', $note, $signed, 'visitor', ['body' => 'Bob changes it, signed.'], self::scrubbed([], true));
+        $signedJson = self::signedHeadersFor('bob', $this->bobsKey(), $note . '?_t=json');
+        $this->record('post-signed-json-owner', 'POST', $note . '?_t=json', $signedJson, 'visitor', ['body' => 'Bob changes it, signed, as JSON.'], self::scrubbed([], true));
+        $this->record('post-signed-missing-post', 'POST', '/2026/no-such-slug-here', self::signedHeadersFor('bob', $this->bobsKey(), '/2026/no-such-slug-here'), 'visitor', ['body' => 'x'], self::scrubbed([], true));
+        $disposable = $this->disposableNote();
+        $this->record('delete-signed-owner', 'DELETE', $disposable . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $disposable . '?x=1') + $referer, 'visitor', null, self::scrubbed([], true));
+        $this->record('delete-signed-owner-then', 'GET', $disposable);
     }
 }

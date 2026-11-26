@@ -7,7 +7,7 @@ namespace Tests\Characterisation;
 use Tests\Support\RecordedAnswers;
 
 /**
- * What the post permalink answers on a private site (`walled_garden`), to a visitor and to a member, recorded from the legacy page over HTTP:
+ * What the post permalink answers on a private site (`walled_garden`), to a visitor and to a member (and, for a few posts, to the owner and an administrator), recorded from the legacy page over HTTP:
  * the answers are `Tests/Characterisation/fixtures/answers/permalink-walled/`. The permalink is not public on a private site: a visitor is
  * refused whatever the post, a member is answered as on an open site. The seeded content is `PermalinkSiteCase`'s.
  */
@@ -71,6 +71,33 @@ final class PermalinkWalledAnswersTest extends PermalinkSiteCase
         'type-status-member-html' => ['status', 'member', 'html'],
         'type-status-member-json' => ['status', 'member', 'json'],
         'type-status-member-md' => ['status', 'member', 'md'],
+        'type-article-visitor-html' => ['article', 'visitor', 'html'],
+        'type-article-visitor-json' => ['article', 'visitor', 'json'],
+        'type-article-visitor-jsonp' => ['article', 'visitor', 'jsonp'],
+        'type-article-visitor-rss' => ['article', 'visitor', 'rss'],
+        'type-article-visitor-kml' => ['article', 'visitor', 'kml'],
+        'type-article-visitor-markdown' => ['article', 'visitor', 'markdown'],
+        'type-article-visitor-md' => ['article', 'visitor', 'md'],
+        'type-article-visitor-query' => ['article', 'visitor', 'query'],
+        'type-article-visitor-accept-markdown' => ['article', 'visitor', 'accept-markdown'],
+        'type-article-visitor-accept-activitypub' => ['article', 'visitor', 'accept-activitypub'],
+        'type-article-visitor-accept-json' => ['article', 'visitor', 'accept-json'],
+        'type-article-member-html' => ['article', 'member', 'html'],
+        'type-article-member-json' => ['article', 'member', 'json'],
+        'type-article-member-md' => ['article', 'member', 'md'],
+        'view-address-visitor-html' => ['view-note-id', 'visitor', 'html'],
+        'view-address-visitor-md' => ['view-note-id', 'visitor', 'md'],
+        'view-address-member-html' => ['view-note-id', 'member', 'html'],
+        'view-address-member-md' => ['view-note-id', 'member', 'md'],
+        'type-checkin-member-html' => ['bob-checkin', 'member', 'html'],
+        'type-checkin-member-json' => ['bob-checkin', 'member', 'json'],
+        'type-checkin-member-md' => ['bob-checkin', 'member', 'md'],
+        'annotated-member-html' => ['bob-annotated', 'member', 'html'],
+        'annotated-visitor-json' => ['bob-annotated', 'visitor', 'json'],
+        'state-public-owner-html' => ['bob-public', 'owner', 'html'],
+        'state-public-admin-html' => ['bob-public', 'admin', 'html'],
+        'state-owner-owner-html' => ['bob-owner', 'owner', 'html'],
+        'state-owner-admin-json' => ['bob-owner', 'admin', 'json'],
     ];
 
     public static function tearDownAfterClass(): void

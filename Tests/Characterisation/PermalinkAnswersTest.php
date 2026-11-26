@@ -35,6 +35,8 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         'ims-article-markdown-before' => 'the same, asked as Markdown',
         'ims-article-markdown-after' => 'the same, asked as Markdown',
         'ims-article-head-after' => 'the same, for a HEAD',
+        'ims-article-garbage' => 'a date that is not an HTTP-date is ignored: the legacy rule read it with strtotime() and answered 304',
+        'ims-article-garbage-head' => 'the same, for a HEAD',
         'note-xhr' => 'an XHR GET gets the headers of the same request that is not XHR',
         'note-xhr-head' => 'an XHR HEAD gets the headers of the same request that is not XHR',
     ];
@@ -171,6 +173,8 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         'shape-view-query-md' => ['/view/{view-note}', 'query'],
         'shape-view-dashed-id' => ['/view/{status}', 'html'],
         'shape-view-unknown-id' => ['/view/00000000000040008000000000000999', 'html'],
+        'shape-view-slug' => ['/view/gardening', 'html'],
+        'shape-view-slug-md' => ['/view/gardening', 'md'],
     ];
 
     /**
@@ -276,6 +280,101 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         'absent-user-admin-json' => ['user-id', 'admin', 'json'],
     ];
 
+    /**
+     * What the owner and an administrator are drawn that a visitor is not, for Bob's post of each content type, his draft, his photo for the members and the note
+     * with an annotation of each kind (and Ada's, which has them too): case => [the post, the viewer, the form].
+     *
+     * @var array<string, array{string, string, string}>
+     */
+    private const OWNED_CASES = [
+        'owned-status-owner-html' => ['bob-public', 'owner', 'html'],
+        'owned-status-owner-json' => ['bob-public', 'owner', 'json'],
+        'owned-status-owner-md' => ['bob-public', 'owner', 'md'],
+        'owned-status-admin-html' => ['bob-public', 'admin', 'html'],
+        'owned-status-admin-json' => ['bob-public', 'admin', 'json'],
+        'owned-status-admin-md' => ['bob-public', 'admin', 'md'],
+        'owned-reply-owner-html' => ['bob-reply', 'owner', 'html'],
+        'owned-reply-owner-json' => ['bob-reply', 'owner', 'json'],
+        'owned-reply-owner-md' => ['bob-reply', 'owner', 'md'],
+        'owned-reply-admin-html' => ['bob-reply', 'admin', 'html'],
+        'owned-reply-admin-json' => ['bob-reply', 'admin', 'json'],
+        'owned-reply-admin-md' => ['bob-reply', 'admin', 'md'],
+        'owned-article-owner-html' => ['bob-article', 'owner', 'html'],
+        'owned-article-owner-json' => ['bob-article', 'owner', 'json'],
+        'owned-article-owner-md' => ['bob-article', 'owner', 'md'],
+        'owned-article-admin-html' => ['bob-article', 'admin', 'html'],
+        'owned-article-admin-json' => ['bob-article', 'admin', 'json'],
+        'owned-article-admin-md' => ['bob-article', 'admin', 'md'],
+        'owned-photo-owner-html' => ['bob-photo', 'owner', 'html'],
+        'owned-photo-owner-json' => ['bob-photo', 'owner', 'json'],
+        'owned-photo-owner-md' => ['bob-photo', 'owner', 'md'],
+        'owned-photo-admin-html' => ['bob-photo', 'admin', 'html'],
+        'owned-photo-admin-json' => ['bob-photo', 'admin', 'json'],
+        'owned-photo-admin-md' => ['bob-photo', 'admin', 'md'],
+        'owned-media-owner-html' => ['bob-media', 'owner', 'html'],
+        'owned-media-owner-json' => ['bob-media', 'owner', 'json'],
+        'owned-media-owner-md' => ['bob-media', 'owner', 'md'],
+        'owned-media-admin-html' => ['bob-media', 'admin', 'html'],
+        'owned-media-admin-json' => ['bob-media', 'admin', 'json'],
+        'owned-media-admin-md' => ['bob-media', 'admin', 'md'],
+        'owned-bookmark-owner-html' => ['bob-bookmark', 'owner', 'html'],
+        'owned-bookmark-owner-json' => ['bob-bookmark', 'owner', 'json'],
+        'owned-bookmark-owner-md' => ['bob-bookmark', 'owner', 'md'],
+        'owned-bookmark-admin-html' => ['bob-bookmark', 'admin', 'html'],
+        'owned-bookmark-admin-json' => ['bob-bookmark', 'admin', 'json'],
+        'owned-bookmark-admin-md' => ['bob-bookmark', 'admin', 'md'],
+        'owned-checkin-owner-html' => ['bob-checkin', 'owner', 'html'],
+        'owned-checkin-owner-json' => ['bob-checkin', 'owner', 'json'],
+        'owned-checkin-owner-md' => ['bob-checkin', 'owner', 'md'],
+        'owned-checkin-admin-html' => ['bob-checkin', 'admin', 'html'],
+        'owned-checkin-admin-json' => ['bob-checkin', 'admin', 'json'],
+        'owned-checkin-admin-md' => ['bob-checkin', 'admin', 'md'],
+        'owned-event-owner-html' => ['bob-event', 'owner', 'html'],
+        'owned-event-owner-json' => ['bob-event', 'owner', 'json'],
+        'owned-event-owner-md' => ['bob-event', 'owner', 'md'],
+        'owned-event-admin-html' => ['bob-event', 'admin', 'html'],
+        'owned-event-admin-json' => ['bob-event', 'admin', 'json'],
+        'owned-event-admin-md' => ['bob-event', 'admin', 'md'],
+        'owned-rsvp-owner-html' => ['bob-rsvp', 'owner', 'html'],
+        'owned-rsvp-owner-json' => ['bob-rsvp', 'owner', 'json'],
+        'owned-rsvp-owner-md' => ['bob-rsvp', 'owner', 'md'],
+        'owned-rsvp-admin-html' => ['bob-rsvp', 'admin', 'html'],
+        'owned-rsvp-admin-json' => ['bob-rsvp', 'admin', 'json'],
+        'owned-rsvp-admin-md' => ['bob-rsvp', 'admin', 'md'],
+        'owned-checkin-owner-kml' => ['bob-checkin', 'owner', 'kml'],
+        'owned-status-owner-accept-activitypub' => ['bob-public', 'owner', 'accept-activitypub'],
+        'owned-checkin-admin-kml' => ['bob-checkin', 'admin', 'kml'],
+        'owned-status-admin-accept-activitypub' => ['bob-public', 'admin', 'accept-activitypub'],
+        'owned-checkin-member-md' => ['bob-checkin', 'member', 'md'],
+        'owned-checkin-visitor-md' => ['bob-checkin', 'visitor', 'md'],
+        'draft-article-owner-html' => ['bob-draft-article', 'owner', 'html'],
+        'draft-article-admin-html' => ['bob-draft-article', 'admin', 'html'],
+        'draft-article-member-html' => ['bob-draft-article', 'member', 'html'],
+        'draft-article-visitor-html' => ['bob-draft-article', 'visitor', 'html'],
+        'draft-article-owner-md' => ['bob-draft-article', 'owner', 'md'],
+        'draft-article-admin-json' => ['bob-draft-article', 'admin', 'json'],
+        'site-photo-member-html' => ['bob-site-photo', 'member', 'html'],
+        'site-photo-member-json' => ['bob-site-photo', 'member', 'json'],
+        'site-photo-visitor-json' => ['bob-site-photo', 'visitor', 'json'],
+        'site-photo-owner-json' => ['bob-site-photo', 'owner', 'json'],
+        'site-photo-admin-html' => ['bob-site-photo', 'admin', 'html'],
+        'annotated-visitor-html' => ['bob-annotated', 'visitor', 'html'],
+        'annotated-visitor-json' => ['bob-annotated', 'visitor', 'json'],
+        'annotated-visitor-md' => ['bob-annotated', 'visitor', 'md'],
+        'annotated-member-html' => ['bob-annotated', 'member', 'html'],
+        'annotated-member-json' => ['bob-annotated', 'member', 'json'],
+        'annotated-member-md' => ['bob-annotated', 'member', 'md'],
+        'annotated-owner-html' => ['bob-annotated', 'owner', 'html'],
+        'annotated-owner-json' => ['bob-annotated', 'owner', 'json'],
+        'annotated-owner-md' => ['bob-annotated', 'owner', 'md'],
+        'annotated-admin-html' => ['bob-annotated', 'admin', 'html'],
+        'annotated-admin-json' => ['bob-annotated', 'admin', 'json'],
+        'annotated-admin-md' => ['bob-annotated', 'admin', 'md'],
+        'annotated-adas-admin-html' => ['status', 'admin', 'html'],
+        'annotated-adas-member-html' => ['status', 'member', 'html'],
+        'annotated-adas-admin-json' => ['status', 'admin', 'json'],
+    ];
+
     /** The file the statements of a request are written to, for the class's second server. */
     private static string $statementLog = '';
 
@@ -320,6 +419,15 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
     public function testEachStateOfAPostForEachViewer(): void
     {
         foreach (self::STATE_CASES as $case => [$post, $viewer, $form]) {
+            [$path, $headers] = self::form($this->target($post), $form);
+            $this->record($case, 'GET', $path, $headers, $viewer);
+        }
+        $this->addToAssertionCount(1);
+    }
+
+    public function testWhatTheOwnerAndAnAdministratorAreDrawn(): void
+    {
+        foreach (self::OWNED_CASES as $case => [$post, $viewer, $form]) {
             [$path, $headers] = self::form($this->target($post), $form);
             $this->record($case, 'GET', $path, $headers, $viewer);
         }
@@ -383,6 +491,12 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         $this->record('ims-article-markdown-before', 'GET', $article, $before + ['Accept' => 'text/markdown']);
         $this->record('ims-article-markdown-after', 'GET', $article, $after + ['Accept' => 'text/markdown']);
         $this->record('ims-article-head-after', 'HEAD', $article, $after);
+        // a date that is none: the legacy rule read it with strtotime(), which says false
+        $this->record('ims-article-garbage', 'GET', $article, ['If-Modified-Since' => 'not a date at all']);
+        $this->record('ims-article-garbage-head', 'HEAD', $article, ['If-Modified-Since' => 'not a date at all']);
+        // a post the visitor may not read is not answered 304: the lookup comes first
+        $this->record('ims-site-visitor', 'GET', $this->target('bob-site'), $after);
+        $this->record('ims-site-member', 'GET', $this->target('bob-site'), $after, 'member');
         $this->addToAssertionCount(1);
     }
 

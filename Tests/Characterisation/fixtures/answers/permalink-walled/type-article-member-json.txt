@@ -1,0 +1,62 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/a-longer-article-about-templates?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000012",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000012",
+        "content": "Templates draw pages. Hello again.A second paragraph.",
+        "formattedContent": "<p>Templates draw pages. <strong>Hello<\/strong> again.<\/p><p>A second paragraph.<\/p>",
+        "displayName": "A longer article about templates",
+        "objectType": "article",
+        "published": "2026-03-02T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/a-longer-article-about-templates",
+        "tags": "#templates #idno",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000000040008000000000000003",
+        "uuid": "https:\/\/fixture.example\/view\/00000000000040008000000000000003",
+        "content": "",
+        "formattedContent": "",
+        "displayName": "Carol Member",
+        "objectType": "person",
+        "url": "{site}\/profile\/carol",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-02.png"
+        }
+    },
+    "title": "A longer article about templates",
+    "description": "Templates draw pages. Hello again.A second paragraph.",
+    "messages": []
+}
