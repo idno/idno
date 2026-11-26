@@ -57,6 +57,7 @@ instead of `getContent()`: it stops reading at `$limit` bytes, whether or not th
 * `Webservice::send($verb, $endpoint, $params, $headers)` and its wrappers (`get()`, `post()`, `put()`, `delete()`,
   `head()`, `file_get_contents_ex()`) use the site client.
 * `Webservice::safeSend($verb, $endpoint, $params, $headers)` is `send()` on the remote client.
+* `Webservice::safeSendWithoutRedirects($verb, $endpoint, $params, $headers)` is `safeSend()` that follows no redirect: an answer that is a redirect is the failed result (its status, a non-empty `error`). Use it for a request whose body holds a secret that must reach only the address it was sent to.
 * `Webservice::safeFileGetContents($url)` is `file_get_contents()` on the remote client: the body, or `false`.
 
 `send()` does not throw when a request fails: `response` is 0, `content` is empty and `error` says why (a refused

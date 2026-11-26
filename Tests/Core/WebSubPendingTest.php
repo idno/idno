@@ -64,9 +64,10 @@ final class WebSubPendingTest extends IdnoTestCase
         return $user;
     }
 
-    private function hubIs(string $hub): void
+    /** @param array<string, mixed>|null $subscribeAnswer what the hub answers a request that is not a page fetch (the options of a MockResponse), 202 with no body by default */
+    private function hubIs(string $hub, ?array $subscribeAnswer = null): void
     {
-        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($hub): MockResponse {
+        $client = new MockHttpClient(function (string $method, string $url, array $options) use ($hub, $subscribeAnswer): MockResponse {
             $this->requests[] = [$method, $url, (string) ($options['body'] ?? '')];
             if ($url === 'https://remote.example/profile') {
                 return new MockResponse('<html><head><link type="application/rss+xml" href="https://remote.example/feed.xml"><link href="' . $hub . '" rel="hub"></head></html>');
@@ -75,7 +76,7 @@ final class WebSubPendingTest extends IdnoTestCase
                 return new MockResponse('<rss><channel><atom:link href="https://remote.example/feed.xml" rel="self"/><atom:link href="' . $hub . '" rel="hub"/></channel></rss>');
             }
 
-            return new MockResponse('', ['http_code' => 202]);
+            return new MockResponse('', $subscribeAnswer ?? ['http_code' => 202]);
         });
         Webservice::useClient($client, $client);
     }
@@ -191,6 +192,57 @@ final class WebSubPendingTest extends IdnoTestCase
 
         $this->assertCount(2, $user->pubsub_secrets);
         $this->assertNotSame($user->pubsub_secrets['ws-secret-d'], $user->pubsub_secrets['ws-secret-e']);
+    }
+
+    /** @return array<string, array{int}> */
+    public static function redirectStatuses(): array
+    {
+        return ['a 307' => [307], 'a 308' => [308], 'a 301' => [301], 'a 302' => [302]];
+    }
+
+    /** @dataProvider redirectStatuses */
+    public function testAHubThatRedirectsAnHttpsSubscriptionToHttpIsNeverSentTheSecretTwice(int $status): void
+    {
+        $user = $this->member('ws-redirect-a');
+        $following = $this->followed('ws-redirect-b', 'https://hub.example/');
+        $this->hubIs('https://hub.example/', ['http_code' => $status, 'response_headers' => ['Location: http://hub.example/subscribe']]);
+
+        $this->follow($user, $following);
+
+        $posts = array_values(array_filter($this->requests, static fn (array $r): bool => $r[0] === 'POST'));
+        $this->assertCount(1, $posts, 'the redirect is not followed: the body is sent once');
+        $this->assertSame('https://hub.example/', $posts[0][1], 'and only to the https address');
+        $this->assertSame(1, preg_match('/name="hub\.secret"\r\n\r\n([0-9a-f]{64})\r\n/', $posts[0][2], $match));
+        foreach ($this->requests as [, $url, $body]) {
+            $this->assertStringStartsNotWith('http://hub.example', $url);
+            if ($url !== 'https://hub.example/') {
+                $this->assertStringNotContainsString($match[1], $body);
+            }
+        }
+        $this->assertStringNotContainsString($match[1], (string) file_get_contents($this->errorLog), 'never logged');
+        $this->assertArrayNotHasKey('ws-redirect-b', (array) $user->pubsub_secrets, 'no subscription was made, so no secret is kept for it');
+    }
+
+    public function testASubscriptionToAnHttpsHubThatAnswersAtOnceStillKeepsItsSecret(): void
+    {
+        $user = $this->member('ws-redirect-c');
+
+        $this->follow($user, $this->followed('ws-redirect-d', 'https://hub.example/'));
+
+        $this->assertArrayHasKey('ws-redirect-d', $user->pubsub_secrets);
+    }
+
+    public function testWhenTheFollowedSiteMovesToAnHttpHubTheStoredSecretIsDroppedAndTheSubscriptionIsMadeWithoutOne(): void
+    {
+        $user = $this->member('ws-downgrade-a');
+        $user->pubsub_secrets = ['ws-downgrade-b' => str_repeat('a', 64), 'ws-other' => str_repeat('b', 64)];
+
+        $this->follow($user, $this->followed('ws-downgrade-b', 'http://hub.example/'));
+
+        $posts = array_values(array_filter($this->requests, static fn (array $r): bool => $r[0] === 'POST'));
+        $this->assertCount(1, $posts);
+        $this->assertStringNotContainsString('hub.secret', $posts[0][2]);
+        $this->assertSame(['ws-other' => str_repeat('b', 64)], $user->pubsub_secrets, 'only the secret of this subscription goes');
     }
 
     public function testASubscriptionToAnHttpHubCarriesNoSecret(): void

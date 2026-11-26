@@ -124,20 +124,40 @@ namespace Idno\Core {
                                     'hub.topic'    => $feed, // Subscribe to rss
                                 );
                                 // A hub signs what it delivers with the secret it is given (WebSub: only over https, never over plain http). The secret
-                                // is kept on the subscriber, by the subscription, and is never logged or printed
+                                // is kept on the subscriber, by the subscription, and is never logged or printed. A hub that is no longer https (the
+                                // followed site changed it) is given none, and the secret kept for this subscription goes: it would only make every
+                                // delivery fail its signature
+                                $kept    = is_array($user->pubsub_secrets) ? $user->pubsub_secrets : array();
+                                $secrets = $kept;
+                                $secret  = null;
                                 if (stripos($hubs[0], 'https://') === 0) {
-                                    $secret  = bin2hex(random_bytes(32));
-                                    $secrets = is_array($user->pubsub_secrets) ? $user->pubsub_secrets : array();
+                                    $secret = bin2hex(random_bytes(32));
                                     $secrets[$following->getID()] = $secret;
-                                    $user->pubsub_secrets = $secrets;
                                     $request['hub.secret'] = $secret;
+                                } else {
+                                    unset($secrets[$following->getID()]);
+                                }
+                                if ($secrets !== $kept) {
+                                    $user->pubsub_secrets = $secrets;
                                 }
                                 $user->save();
 
                                 $following->pubsub_hub = $hubs[0];
                                 $following->save();
 
-                                $return = Webservice::safeSend('post', $following->pubsub_hub, $request);
+                                // A request with a secret in it is sent where it was asked to be and nowhere else: an answer that is a redirect (a 307 or
+                                // 308 would send the secret again, to whatever address it names, over plain http if it says so) is a subscription that
+                                // was not made, and its secret goes
+                                if ($secret !== null) {
+                                    $return = Webservice::safeSendWithoutRedirects('post', $following->pubsub_hub, $request);
+                                    if (in_array($return['response'] ?? 0, array(301, 302, 303, 307, 308), true)) {
+                                        unset($secrets[$following->getID()]);
+                                        $user->pubsub_secrets = $secrets;
+                                        $user->save();
+                                    }
+                                } else {
+                                    $return = Webservice::safeSend('post', $following->pubsub_hub, $request);
+                                }
 
                                 Idno::site()->logging()->info("WebSub subscribed", ['response' => $return['response'] ?? 0]);
                             } else {

@@ -1465,6 +1465,8 @@ site could not be verified). The ids in an address are NOT secret (a member's id
   `pubsub_secrets` by the subscription's id (the callback and the subscription are per subscriber, and the followed user's record is shared by everyone who follows them). It is an attribute of the member's record, which no page, JSON form or
   feed prints (a member's `jsonSerialize()` lists named fields), and it is never logged (the listener logs the hub's status only). The record is in `exported_data.sql` as every attribute is. A subscription made before secrets were sent has none
   and is held to the rule of a real subscription alone (Known limits). A secret is not removed when the member unfollows: a delivery for a subscription they no longer have is refused before the signature is read.
+  A subscription that carries a secret is sent with `Webservice::safeSendWithoutRedirects()`: a redirect (a 307 or 308 would send the same body again, `hub.secret` included, to whatever address it names, over plain http if it says so) is a subscription that
+  was not made (logged as the status only), and the secret kept for it is removed. When the followed site's hub is no longer https, a follow makes the subscription with no secret and removes the one kept for it (it would only make every delivery fail its signature).
 - Nothing the hub sends is logged as it came: the mode in the debug line is printable ASCII cut to 100 bytes, and the challenge, the signature and the body are never logged. No fetch is made in response to a request.
 - The unfollow listener started the `unsubscribe` list only when `subscribe` was not a list, which reset the pending unsubscriptions of a list that had none; both listeners now use `PendingList`.
 - Pinned by `Tests/Characterisation/WebSubCallbackTest` (the recordings `fixtures/answers/websub`, `websub-pending` and `websub-events`, captured from the legacy page; the cases that differ are listed with their reasons),
@@ -2471,7 +2473,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   - Every public static method keeps its name, parameters and defaults, and `send()` and its wrappers
     return `['header', 'content', 'response', 'effective_url', 'error']`. `safeSend($verb, $endpoint,
     $params = null, ?array $headers = null)` is `send()` on `idno.http_client.remote`, and `safeFileGetContents($url)` is `file_get_contents()` on
-    it (the body, or false). The clients are
+    it (the body, or false). `safeSendWithoutRedirects()` is `safeSend()` that follows no redirect: a redirect is the failed result (its status, a non-empty `error`), for a body that must reach the address it was sent to and no other (a WebSub subscription's `hub.secret`). The clients are
     fetched from the container at each call, never kept; `Webservice::useClient($client, $remote = null)`
     replaces them (a test's) and `useClient(null)` restores the container's. `webservice_exec()` and
     the cookie jar (the `cookie_jar` setting) are gone. `WebserviceFile::getCurlParameters()` still
@@ -5804,6 +5806,10 @@ no installer writes one.
   - A WebSub subscription made before the site sent `hub.secret` (or to a hub whose address is plain http, which WebSub forbids sending a secret to) has no secret, so its deliveries are not signed: anyone who knows a member's id and the id
     of a user they follow (both appear in public data) can hand the listeners of `websub/received` content for it (bounded in size, and never acted on by core). Unfollowing and following again makes a new subscription with a secret.
     A pending entry stored before entries were dated has no lease.
+  - A pending WebSub subscription can be confirmed by anyone who knows the public ids and the feed's topic, within its one-day lease: that spends the entry, so the real hub's verification is refused and the member gets no pushes until they follow again; it gives no ability to deliver, which needs the subscription and, with a secret, a valid signature.
+  - A hub that signs only with SHA-1 (a hub of the protocol's first versions) has its deliveries to a new subscription ignored, because only SHA-256, SHA-384 and SHA-512 signatures are accepted; nothing tells the site's owner, and nothing in core listens to `websub/received`.
+  - A signed WebSub delivery can be replayed for as long as the subscription exists: the signature covers the body only, WebSub has no nonce or time, and listeners of `websub/received` must be safe to run twice.
+  - The answers to a delivery differ for a real and an unknown subscription (200 or 410), which shows anyone who knows both public ids whether one member follows a user who has a hub.
   - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.
   - The form token is accepted from the query string as well as the body, and lasts as long as the session.
   - Five POST handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,

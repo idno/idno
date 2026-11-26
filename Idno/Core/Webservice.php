@@ -97,6 +97,23 @@ namespace Idno\Core {
         }
 
         /**
+         * Exactly safeSend(), except that a redirect is not followed: the answer that is a redirect (301, 302, 303, 307 or 308 with a
+         * Location) is the failed result, with that status and a non-empty `error`. For a request whose body must reach the address it
+         * was sent to and no other, a secret in it (a WebSub subscription's `hub.secret`) above all: a 307 or 308 would send the same body
+         * again to whatever address the answer names, over plain http if it says so.
+         *
+         * @param  string $verb     The verb to send the request with; one of POST, GET, DELETE, PUT
+         * @param  string $endpoint The URI to send the request to
+         * @param  mixed  $params   Optionally, an array of parameters to send, or the raw body text
+         * @param  array  $headers  Optionally, an array of headers to send with the request
+         * @return array
+         */
+        public static function safeSendWithoutRedirects($verb, $endpoint, $params = null, ?array $headers = null): array
+        {
+            return self::dispatch(true, $verb, $endpoint, $params, $headers, false);
+        }
+
+        /**
          * The result of a request that failed or was refused: nothing arrived to give back.
          *
          * @return array{header: string, content: string, response: int, effective_url: string, error: string}
@@ -117,7 +134,7 @@ namespace Idno\Core {
          * It never throws for a transport failure: that is a result with response 0 and the failure's
          * message in `error`.
          */
-        private static function dispatch(bool $remote, $verb, $endpoint, $params, ?array $headers): array
+        private static function dispatch(bool $remote, $verb, $endpoint, $params, ?array $headers, bool $followRedirects = true): array
         {
             $kind     = strtolower((string)$verb);
             $endpoint = (string)$endpoint;
@@ -267,6 +284,13 @@ namespace Idno\Core {
                     }
 
                     $response->cancel();
+                    if (!$followRedirects) {
+                        $error = 'The answer is a redirect, which this request does not follow.';
+                        self::logFailure($url, $error);
+                        self::$lastResponse = '';
+
+                        return self::failure($status, $url, $error);
+                    }
                     if ($redirects >= self::MAX_REDIRECTS) {
                         $error = 'Maximum (' . self::MAX_REDIRECTS . ') redirects followed.';
                         self::logFailure($url, $error);

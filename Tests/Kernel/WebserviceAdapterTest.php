@@ -527,6 +527,44 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $this->assertStringContainsString("HTTP/1.1 301 Moved Permanently\r\nLocation: /two\r\n\r\n", $result['header']);
     }
 
+    /** @return array<string, array{int}> */
+    public static function redirectStatuses(): array
+    {
+        return ['301' => [301], '302' => [302], '303' => [303], '307' => [307], '308' => [308]];
+    }
+
+    /** @dataProvider redirectStatuses */
+    public function testARequestThatFollowsNoRedirectSendsItsBodyOnceAndANoticedRedirectIsAFailure(int $status): void
+    {
+        $client = $this->client([
+            new MockResponse('', ['http_code' => $status, 'response_headers' => ['Location: http://example.invalid/elsewhere']]),
+            new MockResponse('reached', ['http_code' => 200]),
+        ]);
+        Webservice::useClient($client, $client);
+
+        $result = Webservice::safeSendWithoutRedirects('post', 'https://example.invalid/hub', ['hub.secret' => 'sekrit']);
+
+        $this->assertSame(['https://example.invalid/hub'], array_column($this->seen, 1), 'the redirect is not followed: the body, secret included, is sent to the address asked for and no other');
+        $this->assertSame($status, $result['response']);
+        $this->assertNotSame('', $result['error'], 'a redirect that is not followed is a failure');
+        $this->assertSame('', $result['content']);
+        $this->assertSame('https://example.invalid/hub', $result['effective_url']);
+        $this->assertStringNotContainsString('sekrit', $this->log());
+    }
+
+    public function testARequestThatFollowsNoRedirectIsAnOrdinaryRequestOtherwise(): void
+    {
+        $client = $this->client([new MockResponse('fine', ['http_code' => 202])]);
+        Webservice::useClient($client, $client);
+
+        $result = Webservice::safeSendWithoutRedirects('post', 'https://example.invalid/hub', ['a' => 'b']);
+
+        $this->assertSame(202, $result['response']);
+        $this->assertSame('fine', $result['content']);
+        $this->assertSame('', $result['error']);
+        $this->assertSame('POST', $this->seen[0][0]);
+    }
+
     public function testSigningHeadersDoNotFollowARedirectToAnotherOrigin(): void
     {
         $headers = ['Authorization: Bearer T', 'cookie: a=b', 'Signature: keyId="k"', 'x-idno-service-signature: abc', 'DPoP: proof', 'Accept: text/html'];

@@ -42,7 +42,8 @@ final class WebSubDeliveryTest extends PrivateSiteTestCase
 
     protected function siteEnvironment(): array
     {
-        return ['IDNO_TEST_RECORD_WEBSUB' => $this->eventsFile];
+        // The site's own hub is set here, so that the page sends its hub and self Link headers whatever the default of the setting is
+        return ['IDNO_TEST_RECORD_WEBSUB' => $this->eventsFile, 'IDNO_HUB' => 'https://own-hub.example/'];
     }
 
     /**
@@ -226,6 +227,7 @@ final class WebSubDeliveryTest extends PrivateSiteTestCase
         $response = $this->verify('subscribe', self::TOPIC, 'GET', 'only-in-the-body-1234');
 
         $this->assertSame('only-in-the-body-1234', $response->body);
+        $this->assertCount(1, array_filter($response->lines, static fn (string $line): bool => stripos($line, 'link:') === 0 && str_contains($line, 'rel="self"')), 'the page does send its self Link, which is what the challenge must not be in');
         foreach ($response->lines as $line) {
             $this->assertStringNotContainsString('only-in-the-body-1234', $line, 'not in a header');
         }
