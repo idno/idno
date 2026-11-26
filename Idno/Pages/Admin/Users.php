@@ -49,7 +49,7 @@ namespace Idno\Pages\Admin {
                     break;
                 case 'remove_rights':
                     $uuid = $this->getInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
                         $user->setAdmin(false);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was stripped of their administration rights.", [$user->getTitle()]));
@@ -57,7 +57,7 @@ namespace Idno\Pages\Admin {
                     break;
                 case 'delete':
                     $uuid = $this->getInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
                         if ($user->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
                         }
@@ -203,6 +203,31 @@ namespace Idno\Pages\Admin {
 
         }
 
+
+        /**
+         * Whether the administrator who asks may take this member's rights away or delete the
+         * account: not their own, and not those of the last administrator who can sign in.
+         * The page does not offer either for oneself, but a request can still ask. Says why
+         * when the answer is no.
+         *
+         * @param  User $user
+         * @return bool
+         */
+        protected function mayDemoteOrDelete(User $user)
+        {
+            $session = \Idno\Core\Idno::site()->session();
+            $language = \Idno\Core\Idno::site()->language();
+            if ($user->canBeDemotedOrDeletedBy($session->currentUserUUID())) {
+                return true;
+            }
+            if ((string) $user->getUUID() === (string) $session->currentUserUUID()) {
+                $session->addErrorMessage($language->_("You can't take away your own administration rights or delete your own account here. Another administrator can."));
+            } else {
+                $session->addErrorMessage($language->esc_("%s is the only administrator who can sign in, so nothing was changed.", [$user->getTitle()]));
+            }
+
+            return false;
+        }
 
         /**
          * The invitation a form names, if there is one
