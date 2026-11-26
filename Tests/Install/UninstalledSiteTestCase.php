@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Install;
 
 use PHPUnit\Framework\TestCase;
+use Tests\Support\WebServer;
 
 /**
  * A site that is not installed, served by `php -S` on a free port (never the rig's), for the tests of
@@ -18,8 +19,7 @@ abstract class UninstalledSiteTestCase extends TestCase
     protected string $root = '';
     protected string $base = '';
 
-    /** @var resource|null */
-    private $server = null;
+    private ?WebServer $server = null;
     private string $log = '';
 
     protected function setUp(): void
@@ -55,6 +55,8 @@ abstract class UninstalledSiteTestCase extends TestCase
             'APP_ENV' => 'test',
             'APP_DEBUG' => '1',
             'IDNO_TEST_INSTALL_ROOT' => $this->root,
+            // the temporary directory of the test's own process, so that what the server writes under it is where the test looks
+            'TMPDIR' => sys_get_temp_dir(),
             'PATH' => (string) getenv('PATH'),
         ];
     }
@@ -75,45 +77,17 @@ abstract class UninstalledSiteTestCase extends TestCase
             . "if (PHP_SAPI !== 'cli-server') { http_response_code(404); exit; }\n"
             . "foreach (array_keys(getenv()) as \$name) { if (str_starts_with(\$name, 'IDNO_') || str_starts_with(\$name, 'APP_')) { \$_SERVER[\$name] = getenv(\$name); } }\n"
         . 'return require ' . json_encode($checkout . '/Tests/rig/router.php', JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . ";\n");
-        $server = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-S', '127.0.0.1:' . $port, $router],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->log, 'a'], 2 => ['file', $this->log, 'a']],
-            $pipes,
-            $checkout,
-            $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '2'],
-        );
-        self::assertIsResource($server);
-        $this->server = $server;
-        $deadline = microtime(true) + 20;
-        while (microtime(true) < $deadline) {
-            $probe = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
-            if ($probe !== false) {
-                fclose($probe);
-
-                return;
-            }
-            usleep(50_000);
+        try {
+            // sessions are files in the site's own directory (removed with its root), never the system's shared one
+            $this->server = WebServer::launch($router, $port, $this->environment(), [], $checkout, $this->log, $this->root . '/sessions', 2);
+        } catch (\RuntimeException $e) {
+            self::fail($e->getMessage() . $this->serverLog());
         }
-        self::fail('The web server did not start.' . $this->serverLog());
     }
 
     protected function stopServer(): void
     {
-        if ($this->server === null) {
-            return;
-        }
-        $pid = (int) proc_get_status($this->server)['pid'];
-        exec('pkill -TERM -P ' . $pid . ' 2>/dev/null');
-        proc_terminate($this->server);
-        $deadline = microtime(true) + 5;
-        while (proc_get_status($this->server)['running'] && microtime(true) < $deadline) {
-            usleep(50_000);
-        }
-        if (proc_get_status($this->server)['running']) {
-            exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-            proc_terminate($this->server, 9);
-        }
-        proc_close($this->server);
+        $this->server?->stop();
         $this->server = null;
     }
 
@@ -182,7 +156,7 @@ abstract class UninstalledSiteTestCase extends TestCase
     {
         $checkout = dirname(__DIR__, 2);
         $process = proc_open(
-            array_merge([PHP_BINARY, '-d', 'error_reporting=22527', $checkout . '/bin/console'], $arguments),
+            array_merge([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'session.save_path=' . $this->root . '/sessions', $checkout . '/bin/console'], $arguments),
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $checkout,

@@ -11,6 +11,17 @@ RIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MODE="$(rig_mode)"
 
+# The workers up.sh recorded, signalled whether or not the server's own process is still there: when it has died (killed, or by
+# PHP's hard time limit) they are handed to init and no pid file or parent finds them, and they keep the port. Only a recorded pid
+# whose command line is still this rig's server is signalled.
+if [ -f "$WORKERS_FILE" ]; then
+    while read -r WORKER; do
+        if rig_is_server_process "$WORKER"; then
+            kill "$WORKER" 2>/dev/null || true
+        fi
+    done < "$WORKERS_FILE"
+fi
+
 # Signal only this rig's web server: a pid file left by a server that died may name another process.
 if [ -f "$PID_FILE" ]; then
     SERVER_PID="$(rig_server_pid)"

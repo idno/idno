@@ -19,12 +19,6 @@ final class SignedRequestSessionsTest extends PrivateSiteTestCase
 {
     use LogsIn;
 
-    protected function siteIni(): array
-    {
-        // the session files of this site are in a directory of the test's own: the shared one is written by every process of the machine
-        return ['session.save_path' => $this->sessionDirectory()];
-    }
-
     private function loggedIn(string $cookie): bool
     {
         return $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status === 200;

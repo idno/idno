@@ -47,7 +47,7 @@ elif [ "$RUNNING" = mysql ] && [ "$MODE" = mysql ] && [ "$(rig_mysql_image)" != 
     "$RIG_DIR/down.sh"
 fi
 
-mkdir -p "$STATE_DIR/uploads"
+mkdir -p "$STATE_DIR/uploads" "$STATE_DIR/sessions"
 "$RIG_DIR/write-config.sh" "$MODE"
 
 # The mode file is written only once the database is up, so a start that fails (Docker not running)
@@ -85,12 +85,15 @@ else
     # PHP_CLI_SERVER_WORKERS: four workers, because the site makes requests to itself (a webmention
     # to a page of its own, an outbound request answered by a /_test/ route) while it serves another;
     # with one worker those would wait for ever. CI's servers run eight.
+    # session.save_path: the server's sessions are files in a directory of its own (removed by down.sh): PHP's default,
+    # the system's shared directory, holds every test session of every checkout, and the garbage collection of it that
+    # one request in a thousand runs stats every file in it, for tens of seconds.
     rm -f "$PID_FILE"
     if nc -z "$HOST" "$PORT" 2>/dev/null; then
         echo "Port $PORT on $HOST is already in use by another process; not starting the web server." >&2
         exit 1
     fi
-    APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=4 nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
+    APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=4 nohup php -d error_reporting='E_ALL & ~E_DEPRECATED & ~E_STRICT' -d "session.save_path=$STATE_DIR/sessions" -S "$HOST:$PORT" "$RIG_DIR/router.php" > "$RIG_DIR/.server.log" 2>&1 &
     echo $! > "$PID_FILE"
     started=0
     for _ in $(seq 1 30); do
@@ -101,6 +104,13 @@ else
         fi
         sleep 0.5
     done
+    # The workers' pids, recorded while the server's own process is alive to name them: down.sh stops them by these pids, which
+    # still find them after the server's process has died and they have been handed to init.
+    for _ in $(seq 1 20); do
+        [ "$(pgrep -P "$(cat "$PID_FILE")" 2>/dev/null | wc -l)" -ge 4 ] && break
+        sleep 0.1
+    done
+    pgrep -P "$(cat "$PID_FILE")" > "$WORKERS_FILE" 2>/dev/null || true
     if [ "$started" != 1 ] || ! kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
         echo "The web server failed to start on http://$HOST:$PORT/. Last lines of Tests/rig/.server.log:" >&2
         tail -n 20 "$RIG_DIR/.server.log" >&2 || true

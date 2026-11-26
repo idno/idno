@@ -499,6 +499,88 @@ final class RigScriptsTest extends TestCase
     }
 
     /**
+     * The rig's web server keeps its sessions in a directory of its own, in the rig's per-checkout temporary directory (the system's
+     * shared one holds every test session of every checkout, and PHP's garbage collection of it, run by one request in a thousand, stats
+     * every file in it): `session.save_path` is on its command line, the directory is made by up.sh and removed with the rest of the
+     * rig's state by down.sh.
+     */
+    public function testTheWebServerKeepsItsSessionsInADirectoryOfItsOwn(): void
+    {
+        [$code, $output] = $this->runScript('up.sh');
+        $this->assertSame(0, $code, $output);
+        $command = (string) shell_exec('ps -p ' . $this->serverPid() . ' -o command=');
+
+        $this->assertStringContainsString(' -d session.save_path=' . $this->stateDir() . '/sessions ', $command);
+        $this->assertDirectoryExists($this->stateDir() . '/sessions');
+
+        [$code, $output] = $this->runScript('down.sh');
+        $this->assertSame(0, $code, $output);
+        $this->assertDirectoryDoesNotExist($this->stateDir() . '/sessions');
+    }
+
+    /**
+     * down.sh stops every worker of the rig's server, also when the server's own process has died and the workers have been handed to
+     * init (a pid it can no longer find them by): up.sh records the workers' pids once the server answers, and down.sh signals those, only
+     * while their command line is still this rig's server.
+     */
+    public function testDownStopsTheWorkersOfAServerWhoseMasterHasDied(): void
+    {
+        [$code, $output] = $this->runScript('up.sh');
+        $this->assertSame(0, $code, $output);
+        $master = $this->serverPid();
+        $workers = [];
+        for ($attempt = 0; $attempt < 20 && count($workers) < 4; ++$attempt) {
+            $workers = [];
+            exec('pgrep -P ' . $master . ' 2>/dev/null', $workers);
+            usleep(100000);
+        }
+        $this->assertCount(4, $workers);
+        exec('kill -KILL ' . $master);
+        for ($attempt = 0; $attempt < 50 && self::isRunning($master); ++$attempt) {
+            usleep(100000);
+        }
+        $this->assertFalse(self::isRunning($master), 'the master is dead');
+        $this->assertTrue(self::isRunning((int) $workers[0]), 'and its workers are not');
+
+        [$code, $output] = $this->runScript('down.sh');
+
+        $this->assertSame(0, $code, $output);
+        for ($attempt = 0; $attempt < 30; ++$attempt) {
+            $alive = array_values(array_filter($workers, static fn (string $pid): bool => self::isRunning((int) $pid)));
+            if ($alive === []) {
+                break;
+            }
+            usleep(100000);
+        }
+        $this->assertSame([], $alive, 'down.sh stopped the workers');
+    }
+
+    /**
+     * What down.sh signals is what up.sh recorded and only while the process is still the rig's server: a recorded pid that another
+     * program has since been given is left alone.
+     */
+    public function testDownDoesNotSignalARecordedWorkerThatIsAnotherProgramNow(): void
+    {
+        $sleep = proc_open(['sleep', '30'], [], $pipes);
+        $this->assertIsResource($sleep);
+        try {
+            $pid = proc_get_status($sleep)['pid'];
+            mkdir($this->stateDir(), 0777, true);
+            file_put_contents($this->stateDir() . '/server.workers', $pid . "\n");
+            file_put_contents($this->root . '/Tests/rig/.mode', "sqlite\n");
+
+            [$code, $output] = $this->runScript('down.sh');
+
+            $this->assertSame(0, $code, $output);
+            usleep(200000);
+            $this->assertTrue(proc_get_status($sleep)['running'], 'the unrelated process survived');
+        } finally {
+            proc_terminate($sleep);
+            proc_close($sleep);
+        }
+    }
+
+    /**
      * When the upgrade command fails, up.sh says which step failed on stderr, exits non-zero and
      * starts no web server; the mode stays recorded, so down.sh cleans up.
      */

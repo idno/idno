@@ -177,7 +177,9 @@ jobs:
           # As in the MySQL job: the site at http://localhost/, PHP's built-in web server.
           sudo systemctl stop apache2 2>/dev/null || true
           sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
-          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
+          # The server's sessions are files in a directory of its own, as the rig's are.
+          mkdir -p "$RUNNER_TEMP/idno-sessions"
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -d "session.save_path=$RUNNER_TEMP/idno-sessions" -S localhost:80 -t "${{ github.workspace }}" \
             "${{ github.workspace }}/Tests/build/router.php" \
             > "${{ github.workspace }}/php-server.log" 2>&1 &
           for i in $(seq 1 30); do
@@ -286,7 +288,9 @@ jobs:
           # which also enables the test-only routes in Tests/Fixtures; Tests/build/router.php
           # copies them into $_SERVER. var/ (the compiled container) is in the workspace,
           # which this user owns, so the server can write it.
-          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
+          # The server's sessions are files in a directory of its own, as the rig's are.
+          mkdir -p "$RUNNER_TEMP/idno-sessions"
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -d "session.save_path=$RUNNER_TEMP/idno-sessions" -S localhost:80 -t "${{ github.workspace }}" \
             "${{ github.workspace }}/Tests/build/router.php" \
             > "${{ github.workspace }}/php-server.log" 2>&1 &
 
@@ -377,7 +381,9 @@ jobs:
           # which also enables the test-only routes in Tests/Fixtures; Tests/build/router.php
           # copies them into $_SERVER. var/ (the compiled container) is in the workspace,
           # which this user owns, so the server can write it.
-          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -S localhost:80 -t "${{ github.workspace }}" \
+          # The server's sessions are files in a directory of its own, as the rig's are.
+          mkdir -p "$RUNNER_TEMP/idno-sessions"
+          APP_ENV=test APP_DEBUG=1 PHP_CLI_SERVER_WORKERS=8 nohup php -d "session.save_path=$RUNNER_TEMP/idno-sessions" -S localhost:80 -t "${{ github.workspace }}" \
             "${{ github.workspace }}/Tests/build/router.php" \
             > "${{ github.workspace }}/php-server.log" 2>&1 &
 

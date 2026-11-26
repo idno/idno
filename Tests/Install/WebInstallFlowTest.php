@@ -60,7 +60,7 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         self::assertSame("Idno is not set up yet.\n", $feed['body']);
         self::assertSame(503, $this->request('/webmention/endpoint', ['source' => 'x', 'target' => 'y'])['status']);
         self::assertSame(503, $this->request('/', [], [], ['Accept: text/html'], 'DELETE')['status']);
-        self::assertSame(['router.php', 'server.log'], array_values(array_diff(scandir($this->root) ?: [], ['.', '..', 'configuration', 'data', 'Uploads', 'warmup'])));
+        self::assertSame(['router.php', 'server.log', 'sessions'], array_values(array_diff(scandir($this->root) ?: [], ['.', '..', 'configuration', 'data', 'Uploads', 'warmup'])));
         self::assertSame([], array_values(array_diff(scandir($this->root . '/configuration') ?: [], ['.', '..'])), 'nothing was written');
     }
 

@@ -126,7 +126,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `up.sh`, as CI's servers run eight): the site makes requests to itself while it serves another (a
   webmention to a page of its own, an outbound request answered by a `/_test/` route), which would
   wait for ever with one worker. The workers are children of the server and outlive it, so `down.sh`
-  stops them before it stops the server (`RigScriptsTest` pins the count and that they stop):
+  stops them before it stops the server, and by the pids `up.sh` recorded when the server's own process has died first (`RigScriptsTest` pins the count and that they stop):
   - **SQLite** (`composer test:up`, the default): no Docker, nothing but PHP. The database file
     (`site.sqlite`, with its `-wal`/`-shm` files) and the upload directory (`uploads/`) are in
     `<sys_get_temp_dir()>/idno-test-rig-<first 12 hex digits of the SHA-256 of the checkout's real
@@ -183,6 +183,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
     mean MySQL). `EntityRepositoryTest` and `UpgradeCommandTest` run on both. Nothing else skips
     but `PagePerformanceTest`, which skips without `IDNO_TEST_PERFORMANCE` (the unreachable-database tests run on both: a closed port on MySQL, a database file in a
     missing directory on SQLite); the characterisation suite runs in full on both.
+- Every test server (the rig's, a private site's, an uninstalled site's, the end-to-end tests') keeps its PHP session files in a directory of its own
+  (`session.save_path`: the rig's is `sessions/` in its per-checkout temporary directory, a private site's `sessionDirectory()`, each removed with its owner; CI's servers use `$RUNNER_TEMP/idno-sessions`) and has the
+  temporary directory of the PHPUnit process (`TMPDIR`, so that what it writes there, the mail log and the sinks, is where the test reads it): PHP's default session
+  directory is shared by every process of the machine, accumulates the sessions of every test of every checkout for a week, and the garbage collection of it that one
+  request in a thousand runs stats every file, for tens of seconds. `Tests\Support\WebServer` starts and stops every `php -S` of the tests (it records the workers' pids once the
+  server listens and ends them all in `stop()`, also when the master has died; it signals only a recorded pid whose command line is still its server's); a test that
+  starts a server uses it, never `proc_open()` and `pkill`. A test of a private site that asserts nothing was mailed for a failure calls `MailsAlerts::mailAlertsToAnAdministrator()` first (a site with no `oops_notify` never mails one, so the assertion could not fail).
 - A test that needs a site of its own extends `Tests\Support\PrivateSiteTestCase` (abstract): each test starts
   `php -S` (four workers, a free port, never 8089) on a private database (a private database of the rig's MySQL or
   MariaDB server, or an SQLite file in a temporary directory; the schema from `idno:upgrade`), with its own
@@ -190,8 +197,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `tearDown()`, with an assertion that the rig's shared upload directory gained no file), and stops it and drops the
   database in `tearDown()`. The site is SYNCHRONOUS. It gives `site()`, `baseUrl()`, `console()`, `runInSite()`,
   `registerUser()` (the site's first administrator, made as the installation's last step makes it, then logged in over HTTP; a member on a site that has one)/`publishStatus()` (over HTTP), `sessionCookie()`, `formToken()`, `serverLog()`, and a subclass
-  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches) and to its PHP settings by overriding `siteIni()` (a test that counts session files
-  makes `session.save_path` its own `sessionDirectory()`: the system's shared one is written by every process of the machine, and on MySQL and MariaDB the sessions are the rows of `idno_sessions` in the site's own database, which `siteConnection()` reads; `StatelessAuthenticationTest` proves its property on each); `IDNO_TEST_SERVER_NO_PATH_INFO=1` and
+  adds to the site's environment by overriding `siteEnvironment()` (`IDNO_THEME`, the mail switches) and to its PHP settings by overriding `siteIni()` (the site's sessions are files in `sessionDirectory()`, its own directory, for the site's servers and for `console()` and `runInSite()`; a `session.save_path` in `siteIni()` replaces it; on MySQL and MariaDB the sessions are the rows of `idno_sessions` in the site's own database, which `siteConnection()` reads; `StatelessAuthenticationTest` proves its property on each); `IDNO_TEST_SERVER_NO_PATH_INFO=1` and
   `IDNO_TEST_SUBDIRECTORY=<name>` in the environment make the server behave as Apache or nginx do for the legacy router's path, and serve a site under `/<name>/`). `startExtraServer(array $environment, array $ini = []): string`
   starts a second `php -S` (a free port, stopped in `tearDown()`) on the same database and upload directory, with other
   environment variables or PHP settings (the production environment, opcache), and returns its base URL.

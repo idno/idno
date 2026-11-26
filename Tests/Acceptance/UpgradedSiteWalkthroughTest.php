@@ -8,6 +8,7 @@ use Tests\Characterisation\HttpSiteClient;
 use Tests\Fixtures\Smtp\ScriptedSmtpServer;
 use Tests\Fixtures\TestMailTransportFactory;
 use Tests\Mail\ReceivedMessage;
+use Tests\Support\WebServer;
 use Tests\Upgrade\LegacyFixture;
 
 /**
@@ -47,8 +48,7 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
 
     private ?ScriptedSmtpServer $smtp = null;
 
-    /** @var resource|null */
-    private $server = null;
+    private ?WebServer $server = null;
 
     protected function tearDown(): void
     {
@@ -58,6 +58,7 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
         $this->fixture?->drop();
         $this->fixture = null;
         if ($this->directory !== '' && is_dir($this->directory)) {
+            WebServer::removeTree($this->directory . '/sessions');
             foreach (glob($this->directory . '/{,.}*', GLOB_BRACE) ?: [] as $file) {
                 if (is_file($file)) {
                     unlink($file);
@@ -194,6 +195,7 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
             'IDNO_PROXY_STRING' => '127.0.0.1:9',
             'IDNO_TEST_HTTP_ALLOW' => (string) parse_url($this->url, PHP_URL_HOST) . ':' . (string) parse_url($this->url, PHP_URL_PORT),
             TestMailTransportFactory::DELIVER => '127.0.0.1:' . $this->smtp->port(),
+            'TMPDIR' => sys_get_temp_dir(),
             'PATH' => (string) getenv('PATH'),
         ];
     }
@@ -214,7 +216,7 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
             . 'require ' . self::literal($root . '/Idno/start.php') . ";\n"
             . "\$result = (function () {\n" . $code . "\n})();\n"
         . "fwrite(STDOUT, \"\\n#RESULT#\" . json_encode(\$result, JSON_UNESCAPED_SLASHES));\n");
-        $process = proc_open([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root, $this->environment());
+        $process = proc_open([PHP_BINARY, '-d', 'error_reporting=22527', ...WebServer::sessionArguments($this->directory . '/sessions'), '-d', 'display_errors=stderr', '-d', 'log_errors=0', $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root, $this->environment());
         $this->assertIsResource($process);
         $stdout = (string) stream_get_contents($pipes[1]);
         $stderr = (string) stream_get_contents($pipes[2]);
@@ -240,46 +242,18 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
             . "foreach (array_keys(getenv()) as \$name) { if (str_starts_with(\$name, 'IDNO_')) { \$_SERVER[\$name] = getenv(\$name); } }\n"
         . 'return require ' . self::literal($root . '/Tests/rig/router.php') . ";\n");
         $this->serverLog = $this->directory . '/server.log';
-        $port = (string) parse_url($this->url, PHP_URL_PORT);
-        $server = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-S', '127.0.0.1:' . $port, $router],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->serverLog, 'a'], 2 => ['file', $this->serverLog, 'a']],
-            $pipes,
-            $root,
-            $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '2'],
-        );
-        $this->assertIsResource($server);
-        $this->server = $server;
-        $deadline = microtime(true) + 15;
-        while (microtime(true) < $deadline) {
-            $socket = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
-            if ($socket !== false) {
-                fclose($socket);
-
-                return;
-            }
-            usleep(50_000);
+        $port = (int) parse_url($this->url, PHP_URL_PORT);
+        try {
+            // sessions are files in the test's own directory, never the system's shared one
+            $this->server = WebServer::launch($router, $port, $this->environment(), [], $root, $this->serverLog, $this->directory . '/sessions', 2, 15.0);
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage() . $this->log());
         }
-        $this->fail('The web server did not start.' . $this->log());
     }
 
     private function stopServer(): void
     {
-        if ($this->server === null) {
-            return;
-        }
-        $pid = (int) proc_get_status($this->server)['pid'];
-        exec('pkill -TERM -P ' . $pid . ' 2>/dev/null'); // the workers PHP_CLI_SERVER_WORKERS forks
-        proc_terminate($this->server);
-        $deadline = microtime(true) + 5;
-        while (proc_get_status($this->server)['running'] && microtime(true) < $deadline) {
-            usleep(50_000);
-        }
-        if (proc_get_status($this->server)['running']) {
-            exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-            proc_terminate($this->server, 9);
-        }
-        proc_close($this->server);
+        $this->server?->stop();
         $this->server = null;
     }
 

@@ -95,7 +95,7 @@ final class PagePerformanceTest extends RenderedSiteTestCase
         $url = $this->startExtraServer(['APP_ENV' => 'test', 'APP_DEBUG' => '0', 'IDNO_PROXY_STRING' => '127.0.0.1:9'], ['opcache.enable_cli' => '1']);
         $probe = (new HttpSiteClient($url))->request('GET', '_test/server');
         $this->assertSame(200, $probe->status, 'the server answers' . $this->serverLog());
-        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true], $probe->json(), 'the server is set up as the measurement needs');
+        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true], array_intersect_key($probe->json(), array_flip(['env', 'debug', 'opcache'])), 'the server is set up as the measurement needs');
 
         return $url;
     }

@@ -12,6 +12,7 @@ use Idno\Storage\Files\FileStore;
 use Idno\Storage\SchemaCatalog;
 use PHPUnit\Framework\TestCase;
 use Tests\Storage\PrivateDatabase;
+use Tests\Support\WebServer;
 
 /**
  * `idno:import:mongo` end to end, against a real MongoDB server: the site captured from the old
@@ -49,8 +50,7 @@ final class MongoImportEndToEndTest extends TestCase
     /** @var array<string, string> the served site's database settings */
     private array $targetEnvironment = [];
 
-    /** @var resource|null */
-    private $server = null;
+    private ?WebServer $server = null;
 
     private string $url = '';
 
@@ -633,11 +633,11 @@ final class MongoImportEndToEndTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $process = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments],
+            [PHP_BINARY, '-d', 'error_reporting=22527', ...WebServer::sessionArguments($this->directory . '/sessions'), '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $root,
-            $environment + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9', 'PATH' => (string) getenv('PATH')],
+            $environment + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9', 'TMPDIR' => sys_get_temp_dir(), 'PATH' => (string) getenv('PATH')],
         );
         $this->assertIsResource($process);
         $stdout = (string) stream_get_contents($pipes[1]);
@@ -664,43 +664,18 @@ final class MongoImportEndToEndTest extends TestCase
             . 'return require ' . $literal($root . '/Tests/rig/router.php') . ";\n",
         );
         $this->serverLog = $this->directory . '/server.log';
-        $port = (string) parse_url($this->url, PHP_URL_PORT);
-        $server = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-S', '127.0.0.1:' . $port, $router],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->serverLog, 'a'], 2 => ['file', $this->serverLog, 'a']],
-            $pipes,
-            $root,
-            $this->siteEnvironment() + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9', 'PATH' => (string) getenv('PATH')],
-        );
-        $this->assertIsResource($server);
-        $this->server = $server;
-        $deadline = microtime(true) + 15;
-        while (microtime(true) < $deadline) {
-            $socket = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
-            if ($socket !== false) {
-                fclose($socket);
-
-                return;
-            }
-            usleep(50_000);
+        $port = (int) parse_url($this->url, PHP_URL_PORT);
+        try {
+            // sessions are files in the test's own directory, never the system's shared one
+            $this->server = WebServer::launch($router, $port, $this->siteEnvironment() + ['APP_ENV' => 'test', 'APP_DEBUG' => '1', 'IDNO_PROXY_STRING' => '127.0.0.1:9', 'PATH' => (string) getenv('PATH')], [], $root, $this->serverLog, $this->directory . '/sessions', 1, 15.0);
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage() . $this->log());
         }
-        $this->fail('The web server did not start.' . $this->log());
     }
 
     private function stopServer(): void
     {
-        if ($this->server === null) {
-            return;
-        }
-        proc_terminate($this->server);
-        $deadline = microtime(true) + 5;
-        while (proc_get_status($this->server)['running'] && microtime(true) < $deadline) {
-            usleep(50_000);
-        }
-        if (proc_get_status($this->server)['running']) {
-            proc_terminate($this->server, 9);
-        }
-        proc_close($this->server);
+        $this->server?->stop();
         $this->server = null;
     }
 

@@ -10,7 +10,7 @@ use Symfony\Component\Routing\Attribute\Route;
 
 /**
  * Test-environment only (config/routes/test/fixtures.php): says how the server that answers is set up (the environment, the
- * debug flag, whether opcache is on), so that a test that times pages can check the server it measures.
+ * debug flag, whether opcache is on, where its sessions and temporary files go), so that a test that times pages can check the server it measures.
  */
 final class ServerProbeController
 {
@@ -23,6 +23,8 @@ final class ServerProbeController
             'env' => (string) $request->server->get('APP_ENV'),
             'debug' => (string) $request->server->get('APP_DEBUG'),
             'opcache' => is_array($status) && ($status['opcache_enabled'] ?? false) === true,
+            'session_save_path' => (string) ini_get('session.save_path'),
+            'temp_dir' => sys_get_temp_dir(),
         ], 200, ['Cache-Control' => 'no-store']);
     }
 }

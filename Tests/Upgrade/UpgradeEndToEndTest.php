@@ -25,6 +25,7 @@ use Idno\Upgrade\UpgradeRunner;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Tests\Storage\PrivateDatabase;
+use Tests\Support\WebServer;
 
 /**
  * The upgrade end to end: a site whose database is a 1.x one (LegacyFixture, on a private database
@@ -66,8 +67,7 @@ final class UpgradeEndToEndTest extends TestCase
 
     private ?string $directory = null;
 
-    /** @var resource|null */
-    private $server = null;
+    private ?WebServer $server = null;
 
     private string $url = '';
 
@@ -102,6 +102,7 @@ final class UpgradeEndToEndTest extends TestCase
         }
         $this->connection = null;
         if ($this->directory !== null) {
+            WebServer::removeTree($this->directory . '/sessions');
             foreach (glob($this->directory . '/{,.}*', GLOB_BRACE) ?: [] as $file) {
                 if (is_file($file)) {
                     unlink($file);
@@ -1304,47 +1305,18 @@ final class UpgradeEndToEndTest extends TestCase
             . 'return require ' . json_encode($root . '/Tests/rig/router.php', JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . ";\n";
         file_put_contents($router, $script);
         $this->serverLog = $this->directory . '/server.log';
-        $port = (string) parse_url($this->url, PHP_URL_PORT);
-        $server = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-S', '127.0.0.1:' . $port, $router],
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $this->serverLog, 'a'], 2 => ['file', $this->serverLog, 'a']],
-            $pipes,
-            $root,
-            $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '2'],
-        );
-        $this->assertIsResource($server);
-        $this->server = $server;
-        $deadline = microtime(true) + 15;
-        while (microtime(true) < $deadline) {
-            $socket = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
-            if ($socket !== false) {
-                fclose($socket);
-
-                return;
-            }
-            usleep(50_000);
+        $port = (int) parse_url($this->url, PHP_URL_PORT);
+        try {
+            // sessions are files in the test's own directory, never the system's shared one
+            $this->server = WebServer::launch($router, $port, $this->environment(), [], $root, $this->serverLog, $this->directory . '/sessions', 2, 15.0);
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage() . $this->log());
         }
-        $this->fail('The web server did not start.' . $this->log());
     }
 
     private function stopServer(): void
     {
-        if ($this->server === null) {
-            return;
-        }
-        $pid = (int) proc_get_status($this->server)['pid'];
-        // The workers PHP_CLI_SERVER_WORKERS forks are the server's children.
-        exec('pkill -TERM -P ' . $pid . ' 2>/dev/null');
-        proc_terminate($this->server);
-        $deadline = microtime(true) + 5;
-        while (proc_get_status($this->server)['running'] && microtime(true) < $deadline) {
-            usleep(50_000);
-        }
-        if (proc_get_status($this->server)['running']) {
-            exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-            proc_terminate($this->server, 9);
-        }
-        proc_close($this->server);
+        $this->server?->stop();
         $this->server = null;
     }
 
@@ -1363,6 +1335,7 @@ final class UpgradeEndToEndTest extends TestCase
             'IDNO_DBNAME' => $this->dbname,
             'IDNO_URL' => $this->url,
             'IDNO_PROXY_STRING' => '127.0.0.1:9',
+            'TMPDIR' => sys_get_temp_dir(),
             'PATH' => (string) getenv('PATH'),
         ];
     }
@@ -1516,7 +1489,7 @@ final class UpgradeEndToEndTest extends TestCase
     {
         $root = dirname(__DIR__, 2);
         $process = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments],
+            [PHP_BINARY, '-d', 'error_reporting=22527', ...WebServer::sessionArguments($this->directory . '/sessions'), '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments],
             [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             $root,

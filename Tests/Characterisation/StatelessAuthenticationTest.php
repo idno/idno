@@ -25,12 +25,6 @@ final class StatelessAuthenticationTest extends PrivateSiteTestCase
         return ['IDNO_TEST_AUTH_HOOK' => '1'];
     }
 
-    protected function siteIni(): array
-    {
-        // the session files of this site are in a directory of the test's own: the shared one is written by every process of the machine
-        return ['session.save_path' => $this->sessionDirectory()];
-    }
-
     /**
      * @return array<string, mixed>
      */

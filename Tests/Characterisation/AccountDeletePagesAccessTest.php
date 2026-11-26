@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Characterisation;
 
 use Tests\Fixtures\RecordingMailTransport;
+use Tests\Support\MailsAlerts;
 
 /**
  * An account is deleted only by an administrator's browser session, whichever delete page is given its id (`/delete/<id>`, which takes any entity,
@@ -14,6 +15,15 @@ use Tests\Fixtures\RecordingMailTransport;
  */
 final class AccountDeletePagesAccessTest extends PermalinkSiteCase
 {
+    use MailsAlerts;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // the site has an address for the alert of a failure, so that \"nothing was mailed\" can fail
+        $this->mailAlertsToAnAdministrator();
+    }
+
     /** This class asserts its answers itself and records none (the site case asks every class for the method). */
     protected function assertRecordedAnswer(string $group, string $case, SiteResponse $response): void
     {

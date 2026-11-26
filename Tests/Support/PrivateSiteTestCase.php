@@ -82,10 +82,9 @@ abstract class PrivateSiteTestCase extends TestCase
 
     private string $serverLog = '';
 
-    /** @var resource|null */
-    private $server = null;
+    private ?WebServer $server = null;
 
-    /** @var list<resource> the servers startExtraServer() made */
+    /** @var list<WebServer> the servers startExtraServer() made */
     private array $extraServers = [];
 
     private ?SiteClient $client = null;
@@ -372,7 +371,7 @@ abstract class PrivateSiteTestCase extends TestCase
     {
         $root = dirname(__DIR__, 2);
 
-        return $this->execute([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments], $environment);
+        return $this->execute([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'session.save_path=' . $this->sessionDirectory(), '-d', 'display_errors=stderr', '-d', 'log_errors=0', $root . '/bin/console', ...$arguments], $environment);
     }
 
     /**
@@ -393,7 +392,7 @@ abstract class PrivateSiteTestCase extends TestCase
             . 'require ' . $this->literal($root . '/Idno/start.php') . ";\n"
             . "\$result = (function () {\n" . $code . "\n})();\n"
         . "fwrite(STDOUT, \"\\n#RESULT#\" . json_encode(\$result, JSON_UNESCAPED_SLASHES));\n");
-        [$exit, $stdout, $stderr] = $this->execute([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'display_errors=stderr', '-d', 'log_errors=0', $script]);
+        [$exit, $stdout, $stderr] = $this->execute([PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'session.save_path=' . $this->sessionDirectory(), '-d', 'display_errors=stderr', '-d', 'log_errors=0', $script]);
         unlink($script);
         $this->assertSame(0, $exit, 'script failed: ' . $stdout . $stderr);
         $position = strrpos($stdout, "\n#RESULT#");
@@ -530,7 +529,7 @@ abstract class PrivateSiteTestCase extends TestCase
     /**
      * The environment of every subprocess: the rig's kernel settings, the private database, the
      * site's URL, the asynchronous queue and the test client's allowance for the site's own origin,
-     * with siteEnvironment() and additionalEnvironment() over them. Nothing else is inherited but PATH.
+     * with siteEnvironment() and additionalEnvironment() over them. Nothing else is inherited but PATH and the test's TMPDIR.
      *
      * @return array<string, string>
      */
@@ -551,6 +550,9 @@ abstract class PrivateSiteTestCase extends TestCase
             // one pool, and a count made by one test would be read by another, or by the rig's site.
             'IDNO_CACHEPATH' => $this->directory . '/cache',
             'IDNO_TEST_HTTP_ALLOW' => $origin,
+            // The temporary directory of the test's own process: what a server or a command writes under it (the mail log, a sink)
+            // is where the test reads it. Without it a process has the system's (/var/tmp), where the test does not look.
+            'TMPDIR' => sys_get_temp_dir(),
             'PATH' => (string) getenv('PATH'),
         ];
     }
@@ -657,9 +659,10 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
-     * A directory of the test's own for the site's session files (removed with the site's directory in tearDown()): a test that
-     * counts or reads session files makes `session.save_path` this one in siteIni(), because the system's shared directory is written
-     * by every other process of the machine.
+     * The directory of the site's session files, `session.save_path` of every server of the site (and of the processes that boot it:
+     * console(), runInSite()): a directory of the test's own, removed with the site's directory in tearDown(), because the system's
+     * shared directory is written by every other process of the machine and holds every test session of every checkout. A test that
+     * counts or reads session files reads this one; a siteIni() or startExtraServer() `session.save_path` replaces it for that server.
      */
     protected function sessionDirectory(): string
     {
@@ -672,14 +675,13 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
-     * Starts `php -S` on the port with the site's environment (and $environment over it) and waits until it listens.
+     * Starts `php -S` on the port with the site's environment (and $environment over it) and waits until it listens. Its sessions are
+     * files in the site's own directory (sessionDirectory(), unless $ini names another) and its temporary directory is the test's.
      *
      * @param array<string, string> $environment
      * @param array<string, string> $ini
-     *
-     * @return resource
      */
-    private function launch(int $port, array $environment, array $ini, string $log)
+    private function launch(int $port, array $environment, array $ini, string $log): WebServer
     {
         $root = dirname(__DIR__, 2);
         $router = $this->directory . '/router.php';
@@ -695,35 +697,11 @@ abstract class PrivateSiteTestCase extends TestCase
             . "if (getenv('IDNO_TEST_SERVER_NO_PATH_INFO') === '1') { unset(\$_SERVER['PATH_INFO'], \$_SERVER['ORIG_PATH_INFO']); }\n"
             . 'return require ' . $this->literal($root . '/Tests/rig/router.php') . ";\n";
         file_put_contents($router, $script);
-        $command = [PHP_BINARY, '-d', 'error_reporting=22527'];
-        foreach ($ini as $name => $value) {
-            $command[] = '-d';
-            $command[] = $name . '=' . $value;
+        try {
+            return WebServer::launch($router, $port, $environment + $this->environment(), $ini, $root, $log, $this->sessionDirectory(), 4, self::START_SECONDS);
+        } catch (\RuntimeException $e) {
+            $this->fail($e->getMessage() . (is_file($log) ? "\n" . (string) file_get_contents($log) : ''));
         }
-        array_push($command, '-S', '127.0.0.1:' . $port, $router);
-        $server = proc_open(
-            $command,
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']],
-            $pipes,
-            $root,
-            $environment + $this->environment() + ['PHP_CLI_SERVER_WORKERS' => '4'],
-        );
-        $this->assertIsResource($server);
-        $deadline = microtime(true) + self::START_SECONDS;
-        while (microtime(true) < $deadline) {
-            $socket = @stream_socket_client('tcp://127.0.0.1:' . $port, $errno, $error, 0.2);
-            if ($socket !== false) {
-                fclose($socket);
-
-                return $server;
-            }
-            usleep(50_000);
-        }
-        $pid = (int) proc_get_status($server)['pid'];
-        exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-        proc_terminate($server, 9);
-        proc_close($server);
-        $this->fail('The web server did not start.' . (is_file($log) ? "\n" . (string) file_get_contents($log) : ''));
     }
 
     private function stopServer(): void
@@ -738,27 +716,12 @@ abstract class PrivateSiteTestCase extends TestCase
     }
 
     /**
-     * @param list<resource> $servers
+     * @param list<WebServer> $servers
      */
     private static function stop(array $servers): void
     {
         foreach ($servers as $server) {
-            $pid = (int) proc_get_status($server)['pid'];
-            // The workers PHP_CLI_SERVER_WORKERS forks are the server's children.
-            exec('pkill -TERM -P ' . $pid . ' 2>/dev/null');
-            proc_terminate($server);
-        }
-        foreach ($servers as $server) {
-            $deadline = microtime(true) + 5;
-            while (proc_get_status($server)['running'] && microtime(true) < $deadline) {
-                usleep(50_000);
-            }
-            if (proc_get_status($server)['running']) {
-                $pid = (int) proc_get_status($server)['pid'];
-                exec('pkill -KILL -P ' . $pid . ' 2>/dev/null');
-                proc_terminate($server, 9);
-            }
-            proc_close($server);
+            $server->stop();
         }
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
+use Tests\Support\MailsAlerts;
 use Tests\Support\RecordedAnswers;
 
 /**
@@ -17,6 +18,15 @@ use Tests\Support\RecordedAnswers;
  */
 final class PermalinkWritesTest extends PermalinkSiteCase
 {
+    use MailsAlerts;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // the site has an address for the alert of a failure, so that \"nothing was mailed\" can fail
+        $this->mailAlertsToAnAdministrator();
+    }
+
     use RecordedAnswers;
 
     protected const GROUP = 'permalink-writes';

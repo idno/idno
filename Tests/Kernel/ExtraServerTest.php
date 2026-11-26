@@ -34,7 +34,7 @@ final class ExtraServerTest extends PrivateSiteTestCase
         $probe = (new HttpSiteClient($url))->request('GET', '_test/server');
 
         $this->assertSame(200, $probe->status);
-        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true], $probe->json());
+        $this->assertSame(['env' => 'test', 'debug' => '0', 'opcache' => true], array_intersect_key($probe->json(), array_flip(['env', 'debug', 'opcache'])));
         $own = $this->site()->request('GET', '_test/server')->json();
         $this->assertSame(['test', '1'], [$own['env'], $own['debug']], 'the test\'s own server: debug on');
     }

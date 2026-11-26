@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
+use Tests\Support\MailsAlerts;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
@@ -13,9 +14,12 @@ use Tests\Support\PrivateSiteTestCase;
  */
 final class TokenlessWritesTest extends PrivateSiteTestCase
 {
+    use MailsAlerts;
+
     public function testAPutOrADeleteWithNoTokenIsTheSites403AndReportsNothing(): void
     {
         $cookie = $this->registerUser('ada');
+        $this->mailAlertsToAnAdministrator(); // so that "nobody is mailed" can fail
         $note = (string) parse_url($this->publishStatus($cookie, 'A note to write to.'), PHP_URL_PATH);
         $visitor = ['Cookie' => self::sessionCookie($this->site()->request('GET', '/'))];
 

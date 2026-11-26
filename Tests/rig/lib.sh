@@ -23,6 +23,9 @@ STATE_DIR="$(php -r 'echo rtrim(sys_get_temp_dir(), "/"), "/idno-test-rig-", sub
 MYSQL_IMAGE="${IDNO_RIG_MYSQL_IMAGE:-mysql:8.0}"
 MYSQL_IMAGE_FILE="$STATE_DIR/mysql-image"
 
+# The pids of the web server's workers, written by up.sh once the server answers (deleted with STATE_DIR by down.sh).
+WORKERS_FILE="$STATE_DIR/server.workers"
+
 # The image the MySQL mode's database was started from (the default when none was recorded: a
 # database started before the image could be chosen).
 rig_mysql_image() {
@@ -67,4 +70,16 @@ rig_server_pid() {
     case "$command" in
         *php*" -S 127.0.0.1:"*"$RIG_DIR/router.php"*) echo "$pid" ;;
     esac
+}
+
+# True when the pid is a live `php ... -S 127.0.0.1:<port> ... <this rig's router.php>`: this rig's web server or one of its workers
+# (which are forks of it and show its command line). A zombie shows no such line.
+rig_is_server_process() {
+    local command
+    case "$1" in ''|*[!0-9]*) return 1 ;; esac
+    command="$(ps -p "$1" -o command= 2>/dev/null || true)"
+    case "$command" in
+        *php*" -S 127.0.0.1:"*"$RIG_DIR/router.php"*) return 0 ;;
+    esac
+    return 1
 }
