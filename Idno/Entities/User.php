@@ -1220,8 +1220,14 @@ namespace Idno\Entities {
 
             // First, remove all owned objects
             while ($objects = Entity::get(array('owner' => $this->getUUID(), array(), 100))) {
+                $deleted = 0;
                 foreach ($objects as $object) {
-                    $object->delete();
+                    if ($object->delete()) {
+                        $deleted++;
+                    }
+                }
+                if ($deleted === 0) {
+                    break; // a listener refuses every one that is left: they would be found again for ever
                 }
             }
 

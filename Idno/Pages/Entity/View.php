@@ -139,18 +139,7 @@ namespace Idno\Pages\Entity {
                     $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
                 }
             }
-            $this->gatekeeper();
-            // A post the requester may not read is answered as a missing one is
-            if (empty($object) || !$object->canRead()) {
-                $this->forward(); // TODO: 404
-            }
-            if (!$object->canEdit()) {
-                $this->deniedContent();
-            }
-            if ($object->delete()) {
-                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
-            }
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            $this->deleteRequestedEntity($object ?? false);
         }
 
     }

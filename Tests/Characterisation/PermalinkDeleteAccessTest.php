@@ -115,7 +115,7 @@ final class PermalinkDeleteAccessTest extends PermalinkSiteCase
         $bob = (string) $paths['ids']['bob'];
         foreach (['/profile/' . $bob, '/view/' . $bob] as $path) {
             $answer = $this->site()->request('DELETE', $path . '?__bTk=' . $this->tokenOf('member'), $this->asViewer('member', ['Referer' => $this->baseUrl()]));
-            $this->assertNotSame(200, $answer->status);
+            $this->assertSame(403, $answer->status, $path);
             $this->assertTrue($this->stored($bob), $path . ': the account is still there');
         }
         $cookie = self::sessionCookie($this->site()->request('GET', '/'));
@@ -131,5 +131,60 @@ final class PermalinkDeleteAccessTest extends PermalinkSiteCase
         $this->assertSame(302, $answer->status);
         $location = $answer->lines('location')[0] ?? '';
         $this->assertStringStartsWith($this->baseUrl(), $location);
+    }
+
+    /** The `X-Requested-With` header: a request a script sends (the page does not forward it). */
+    private const XHR = ['X-Requested-With' => 'XMLHttpRequest'];
+
+    public function testAnXhrDeleteStopsWhereAnOrdinaryOneDoes(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $token = $this->tokenOf('member');
+        $headers = $this->asViewer('member', self::XHR);
+        $missing = $this->site()->request('DELETE', '/view/00000000000040008000000000000999?__bTk=' . $token, $headers);
+        $this->assertLessThan(500, $missing->status, 'a missing post is no server error');
+        foreach ([self::BOB_PRIVATE => 'a private post', self::BOB_DRAFT => 'a draft'] as $id => $what) {
+            $answer = $this->site()->request('DELETE', '/view/' . $id . '?__bTk=' . $token, $headers);
+            $this->assertSame($missing->status, $answer->status, $what . ' is answered as a missing post is');
+            $this->assertSame($missing->body, $answer->body, $what . ': the same body');
+            $this->assertTrue($this->stored($id), $what . ' is still there');
+        }
+        $answer = $this->site()->request('DELETE', '/' . $paths['bob-public'] . '?__bTk=' . $token, $headers);
+        $this->assertSame(403, $answer->status, 'not yours');
+        $this->assertTrue($this->stored(self::BOB_NOTE));
+        $answer = $this->site()->request('DELETE', '/' . $paths['bob-public'] . '?__bTk=' . $this->tokenOf('owner'), $this->asViewer('owner', self::XHR));
+        $this->assertLessThan(400, $answer->status, 'yours');
+        $this->assertFalse($this->stored(self::BOB_NOTE), 'the owner deleted it');
+    }
+
+    public function testAnAccountIsDeletedOnlyByAnAdministratorsSession(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $carol = (string) $paths['ids']['carol'];
+        $own = '/profile/' . $carol . '?__bTk=' . $this->tokenOf('member');
+        $answer = $this->site()->request('DELETE', $own, $this->asViewer('member'));
+        $this->assertSame(403, $answer->status, 'a member does not delete their own account');
+        $this->assertTrue($this->stored($carol));
+        $signed = '/profile/' . $carol . '?x=1';
+        $answer = $this->site()->request('DELETE', $signed, self::signedHeadersFor('carol', $this->carolsKey(), $signed));
+        $this->assertSame(403, $answer->status, 'a signed request does not delete the account of its member');
+        $this->assertTrue($this->stored($carol));
+        $answer = $this->site()->request('DELETE', '/view/' . $carol . '?__bTk=' . $this->tokenOf('member'), $this->asViewer('member'));
+        $this->assertSame(403, $answer->status, 'nor by its /view address');
+        $this->assertTrue($this->stored($carol));
+
+        $answer = $this->site()->request('DELETE', '/profile/' . $carol . '?__bTk=' . $this->tokenOf('admin'), $this->asViewer('admin', ['Referer' => $this->baseUrl()]));
+        $this->assertSame(302, $answer->status);
+        $this->assertFalse($this->stored($carol), 'an administrator deletes an account, as the Users page lets them');
+    }
+
+    public function testTheDeletedMessageEscapesTheTitle(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $this->runInSite('$n = \IdnoPlugins\Status\Status::getByID(' . $this->literal(self::BOB_NOTE) . '); $n->body = \'<b id="canary">x</b>\'; $n->save(true); return true;');
+        $owner = $this->asViewer('owner', ['Referer' => $this->baseUrl()]);
+        $this->site()->request('DELETE', '/' . $paths['bob-public'] . '?__bTk=' . $this->tokenOf('owner'), $owner);
+        $next = $this->site()->request('GET', '/', $this->asViewer('owner'));
+        $this->assertStringNotContainsString('<b id="canary">', $next->body);
     }
 }

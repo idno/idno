@@ -908,6 +908,31 @@ namespace Idno\Common {
         }
 
         /**
+         * What a DELETE to the address of an entity does: only a logged-in requester who may edit it deletes it (an account only by an
+         * administrator's session, which a signed API request never is), and a post the requester may not read is answered as a missing one is,
+         * whatever the request: a script's (XHR) request does not forward, so the answer ends here and does not fall through to the delete.
+         *
+         * @param \Idno\Common\Entity|false|null $object what the lookup found
+         */
+        function deleteRequestedEntity($object)
+        {
+            $this->gatekeeper();
+            if (empty($object) || !$object->canRead()) {
+                $this->forward(); // TODO: 404
+                return;
+            }
+            if ($object instanceof \Idno\Entities\User) {
+                $this->adminGatekeeper();
+            } else if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+            if ($object->delete()) {
+                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
+            }
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+        }
+
+        /**
          * Sets the entity on the page to the specified object
          *
          * @param object $entity
