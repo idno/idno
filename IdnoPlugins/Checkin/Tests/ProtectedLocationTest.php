@@ -146,7 +146,9 @@ namespace IdnoPlugins\Checkin\Tests {
             // The search does find it by what its author wrote about it
             $this->assertStringContainsString($text, $this->get('/?q=' . urlencode($text))['body']);
 
-            foreach ([static::$place, 'Checked into ' . static::$place, static::$street] as $query) {
+            // By the place alone: a full-text search for "Checked into <place>" finds every
+            // check-in by the words they all have
+            foreach ([static::$place, static::$street] as $query) {
                 foreach (['', '_t=json&', '_t=rss&'] as $type) {
                     $answer = $this->get('/?' . $type . 'q=' . urlencode($query));
                     $this->assertLessThan(500, $answer['status']);
