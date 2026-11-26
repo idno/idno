@@ -1,0 +1,18 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-type: text/plain; charset=utf-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/pubsub/callback/00000000-0000-4000-8000-000000000002/00000000-0000-4000-8000-000000000001?hub.mode=subscribe&hub.topic=https%3A%2F%2Fada.example%2Ffeed&hub.challenge=challenge-1234&hub.lease_seconds=3600>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+challenge-1234

@@ -20,6 +20,7 @@ final class TestEventHooks
         EventRecorder::install($dispatcher);
         AuthHook::install($dispatcher);
         PageEventRecorder::install($dispatcher);
+        WebSubRecorder::install($dispatcher);
         // The patterns core registered for the pages of the routing fixtures that have no legacy class (a placeholder where core's own registrations are): the first
         // listener of `plugins/loaded`, so before the boundary of plugin time registered below
         $dispatcher->addListener('plugins/loaded', static function (): void {

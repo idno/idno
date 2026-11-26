@@ -1,0 +1,5 @@
+status 200
+content-type: text/plain
+
+{"event":"pubsubhubbub\/ping","subscriber":"bob","subscription":"ada","data":"<?xml version=\"1.0\"?><feed xmlns=\"http:\/\/www.w3.org\/2005\/Atom\"><title>Ada<\/title><\/feed>","user":"https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001"}
+

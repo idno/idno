@@ -1,0 +1,4 @@
+status 200
+content-type: text/plain
+
+a:2:{i:0;s:65:"{bob-uuid}";i:1;s:65:"{ada-uuid}";}

@@ -1,0 +1,4 @@
+status 500
+content-type: text/html;charset=UTF-8
+
+(the 500 page: Undefined property: stdClass::$subscribe)
