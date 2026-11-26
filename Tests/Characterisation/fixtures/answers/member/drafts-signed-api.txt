@@ -1,0 +1,609 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/drafts/>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "drafts": [
+        {
+            "id": "00000000000040008000000010000019",
+            "uuid": "{site}\/view\/00000000000040008000000010000019",
+            "content": "Bob's draft number 25, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 25, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 25, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T11:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-25-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000018",
+            "uuid": "{site}\/view\/00000000000040008000000010000018",
+            "content": "Bob's draft number 24, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 24, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 24, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T10:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-24-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000017",
+            "uuid": "{site}\/view\/00000000000040008000000010000017",
+            "content": "Bob's draft number 23, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 23, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 23, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T09:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-23-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000016",
+            "uuid": "{site}\/view\/00000000000040008000000010000016",
+            "content": "Bob's draft number 22, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 22, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 22, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T08:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-22-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000015",
+            "uuid": "{site}\/view\/00000000000040008000000010000015",
+            "content": "Bob's draft number 21, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 21, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 21, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T07:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-21-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000014",
+            "uuid": "{site}\/view\/00000000000040008000000010000014",
+            "content": "Bob's draft number 20, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 20, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 20, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T06:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-20-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000013",
+            "uuid": "{site}\/view\/00000000000040008000000010000013",
+            "content": "Bob's draft number 19, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 19, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 19, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T05:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-19-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000012",
+            "uuid": "{site}\/view\/00000000000040008000000010000012",
+            "content": "Bob's draft number 18, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 18, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 18, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T04:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-18-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000011",
+            "uuid": "{site}\/view\/00000000000040008000000010000011",
+            "content": "Bob's draft number 17, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 17, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 17, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T03:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-17-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000010",
+            "uuid": "{site}\/view\/00000000000040008000000010000010",
+            "content": "Bob's draft number 16, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 16, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 16, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T02:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-16-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000f",
+            "uuid": "{site}\/view\/0000000000004000800000001000000f",
+            "content": "Bob's draft number 15, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 15, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 15, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T01:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-15-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000e",
+            "uuid": "{site}\/view\/0000000000004000800000001000000e",
+            "content": "Bob's draft number 14, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 14, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 14, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-02T00:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-14-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000d",
+            "uuid": "{site}\/view\/0000000000004000800000001000000d",
+            "content": "Bob's draft number 13, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 13, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 13, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T23:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-13-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000c",
+            "uuid": "{site}\/view\/0000000000004000800000001000000c",
+            "content": "Bob's draft number 12, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 12, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 12, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T22:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-12-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000b",
+            "uuid": "{site}\/view\/0000000000004000800000001000000b",
+            "content": "Bob's draft number 11, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 11, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 11, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T21:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-11-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000001000000a",
+            "uuid": "{site}\/view\/0000000000004000800000001000000a",
+            "content": "Bob's draft number 10, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 10, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 10, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T20:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-10-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000009",
+            "uuid": "{site}\/view\/00000000000040008000000010000009",
+            "content": "Bob's draft number 9, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 9, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 9, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T19:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-9-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000008",
+            "uuid": "{site}\/view\/00000000000040008000000010000008",
+            "content": "Bob's draft number 8, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 8, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 8, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T18:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-8-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000007",
+            "uuid": "{site}\/view\/00000000000040008000000010000007",
+            "content": "Bob's draft number 7, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 7, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 7, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T17:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-7-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000006",
+            "uuid": "{site}\/view\/00000000000040008000000010000006",
+            "content": "Bob's draft number 6, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 6, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 6, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T16:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-6-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000005",
+            "uuid": "{site}\/view\/00000000000040008000000010000005",
+            "content": "Bob's draft number 5, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 5, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 5, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T15:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-5-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000004",
+            "uuid": "{site}\/view\/00000000000040008000000010000004",
+            "content": "Bob's draft number 4, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 4, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 4, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T14:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-4-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000003",
+            "uuid": "{site}\/view\/00000000000040008000000010000003",
+            "content": "Bob's draft number 3, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 3, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 3, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T13:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-3-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000002",
+            "uuid": "{site}\/view\/00000000000040008000000010000002",
+            "content": "Bob's draft number 2, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 2, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 2, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-2-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000010000001",
+            "uuid": "{site}\/view\/00000000000040008000000010000001",
+            "content": "Bob's draft number 1, not yet published.",
+            "formattedContent": "\n<p>Bob's draft number 1, not yet published.<\/p>\n",
+            "displayName": "Bob's draft number 1, not yet published.",
+            "objectType": "note",
+            "published": "2026-04-01T11:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bobs-draft-number-1-not-yet-published",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        }
+    ],
+    "count": 25,
+    "offset": 0,
+    "total": 26,
+    "title": "Drafts",
+    "messages": [
+        {
+            "message": "Warning: Access credentials were sent over a non-secured connection! To disable this warning set disable_cleartext_warning in your config.ini",
+            "message_type": "alert-danger"
+        }
+    ]
+}

@@ -1,0 +1,528 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/html;charset=UTF-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/drafts/?offset=10.7>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drafts</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="200"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon" href="{site}/gfx/logos/logo_k.png">
+<!-- <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+-->
+<!-- Android -->
+<link rel="manifest" href="{site}/chrome/manifest.json">
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Drafts" />
+<meta property="og:site_name" content="Fixture Site" />
+<meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
+<!-- JSON+LD Structured Data -->
+<script type="application/ld+json">
+    {
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "url": "{site}/drafts/?offset=10.7",
+    "name": "Drafts",
+    "description": "",
+    "publisher": "Fixture Site",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "{site}/content/all/?q={search_term}",
+        "query-input": "required name=search_term"
+    }
+}    
+</script>
+<!-- Dublin Core -->
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.title" content="Drafts">
+<meta name="DC.description" content=""><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
+<!-- To silo is human, to syndicate divine -->
+<link rel="alternate" type="application/rss+xml" title="Drafts"
+      href="{site}/drafts/?offset=10.7&amp;_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="Drafts"
+      href="{site}/drafts/?offset=10.7&amp;_t=rss"/>
+<link rel="alternate feed" type="application/rss+xml"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss"/>
+<link rel="alternate" type="application/json"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss" />
+<link rel="feed" type="text/html" title="Fixture Site"
+      href="{site}/content/all"/>
+<!-- Webmention endpoint -->
+<link href="{site}/webmention/" rel="http://webmention.org/"/>
+<link href="{site}/webmention/" rel="webmention"/>
+<!-- WebSub hub -->
+<link href="https://hub.example/" rel="hub"/>
+<link rel="openid.delegate" href="{site}/" />
+<link rel="openid.server" href="https://indieauth.com/openid" />
+<link rel="authorization_endpoint" href="{site}/indieauth/auth">
+<link rel="token_endpoint" href="{site}/indieauth/token">
+<link rel="micropub" href="{site}/micropub/endpoint"><link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.css"/>
+<!--[if lte IE 8]>
+<link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.ie.css"/>
+<![endif]-->
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body class="idno_pages_drafts page-drafts logged-in">
+<div class="idno-shell">
+<nav class="idno-nav-sidebar" aria-label="Main navigation">
+<a href="{site}/" class="idno-nav-logo">
+Fixture Site
+</a>
+<ul class="idno-nav-items">
+<li>
+<a href="{site}/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+<span class="idno-nav-label">Home</span>
+</a>
+</li>
+<li>
+<a href="{site}/profile/bob" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+<span class="idno-nav-label">Profile</span>
+</a>
+</li>
+<li>
+<button type="button" class="idno-nav-item" x-data x-on:click="$dispatch('open-search')">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+<span class="idno-nav-label">Search</span>
+</button>
+</li>
+<li>
+<a href="{site}/drafts/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+<span class="idno-nav-label">Drafts</span>
+</a>
+</li>
+<li>
+<a href="{site}/account/settings/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+<span class="idno-nav-label">Settings</span>
+</a>
+</li>
+<li>
+<a data-form-id="{form-1}"  class="idno-nav-item"   href="{site}/session/logout" onclick="document.getElementById('{form-1}').submit(); return false; "><svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="idno-nav-label">Log out</span></a>
+</li>
+</ul>
+<button class="idno-nav-btn" x-data x-on:click="$dispatch('open-compose')">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1.25rem;height:1.25rem"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+<span class="idno-nav-label">New Post</span>
+</button>
+</nav>
+<main class="idno-main">
+<div class="idno-feed h-feed">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<h1 class="idno-admin-page-title">Your Drafts</h1>
+<div class="idno-grid">
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000f" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 15, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000f" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000e" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 14, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000e" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000d" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 13, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000d" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000c" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 12, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000c" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000b" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 11, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000b" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/0000000000004000800000001000000a" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 10, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/0000000000004000800000001000000a" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000009" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 9, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000009" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000008" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 8, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000008" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000007" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 7, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000007" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000006" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 6, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000006" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000005" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 5, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000005" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000004" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 4, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000004" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000003" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 3, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000003" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000002" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 2, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000002" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000010000001" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob&#039;s draft number 1, not yet published.
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000010000001" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+<div class="idno-entry">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div>
+<a href="{site}/status/edit/00000000000040008000000000000044" style="font-weight:600;color:var(--color-text-strong);text-decoration:none">
+Bob has a draft he has not ...
+</a>
+<div class="idno-entry-meta">
+Mar 20, 2026 12:00pm                        &middot;
+                        Status updates
+</div>
+</div>
+<a href="{site}/status/edit/00000000000040008000000000000044" class="idno-btn idno-btn-ghost idno-btn-sm">
+Edit
+</a>
+</div>
+</div>
+</div>
+<div style="display:flex;justify-content:center;gap:var(--spacing-gap);padding:var(--spacing-lg) 0">
+<a href="{site}/drafts/?offset=0" class="idno-btn idno-btn-ghost">
+&larr; Newer
+</a>
+</div>
+</div>
+</main>
+<div class="idno-spacer" aria-hidden="true"></div>
+</div>
+<div x-data="{ open: false, query: '' }"
+     x-show="open"
+     x-cloak
+     x-on:open-search.window="open = true; $nextTick(() => $refs.searchInput.focus())"
+     x-on:keydown.escape.window="open = false"
+     class="idno-modal-overlay">
+<div class="idno-modal" style="max-width:32rem" x-on:click.outside="open = false">
+<div class="idno-modal-header">
+<h3 class="idno-modal-title">Search</h3>
+<button type="button" class="idno-modal-close" x-on:click="open = false">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+<div class="idno-modal-body">
+<form x-on:submit.prevent="if (query.trim()) window.location.href = '/?q=' + encodeURIComponent(query.trim())"
+                  style="display:flex;gap:0.5rem">
+<input type="search" x-model="query" x-ref="searchInput"
+                       class="idno-input" style="flex:1"
+                       aria-label="Search"
+                       placeholder="Search posts...">
+<button type="submit" class="idno-btn idno-btn-primary">
+Search
+</button>
+</form>
+</div>
+</div>
+</div>
+<div x-data="composeModal" x-show="open" x-cloak class="idno-modal-overlay" x-on:keydown.escape.window="close()">
+<div class="idno-modal idno-modal-lg" x-on:click.outside="close()">
+<!-- Content Type Picker -->
+<template x-if="step === 'picker'">
+<div>
+<div class="idno-modal-header">
+<h2 class="idno-modal-title">New Post</h2>
+<button class="idno-modal-close" x-on:click="close()" type="button">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+<div class="idno-modal-body">
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--spacing-gap)">
+<a href="{site}/status/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Status update</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Short update</div>
+</div>
+</a>
+<a href="{site}/entry/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2m0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Post</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Long-form post</div>
+</div>
+</a>
+<a href="{site}/photo/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Photo</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Image post</div>
+</div>
+</a>
+<a href="{site}/like/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Bookmark</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Save a link</div>
+</div>
+</a>
+<a href="{site}/checkin/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Location</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Share location</div>
+</div>
+</a>
+<a href="{site}/media/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Audio</div>
+</div>
+</a>
+<a href="{site}/event/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">Event</div>
+<div style="font-size:var(--font-size-sm);color:var(--color-text-muted)">Date &amp; location</div>
+</div>
+</a>
+<a href="{site}/rsvp/edit" class="idno-admin-card" style="text-decoration:none;display:flex;align-items:center;gap:var(--spacing-gap);cursor:pointer">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+<div>
+<div style="font-weight:600;color:var(--color-text-strong)">RSVP</div>
+</div>
+</a>
+</div>
+</div>
+</div>
+</template>
+</div>
+</div>
+<script src="{site}/js/idno-2026.min.js" defer></script>
+<div class="blank-footer">
+</div><form action="{site}/session/logout" style="display: none; margin: 0; padding: 0" id="{form-1}" method="POST">
+<textarea name="json">[]</textarea>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="{site}/session/logout" />
+</form>
+</body>
+</html>

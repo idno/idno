@@ -1,0 +1,128 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/drafts/?_t=markdown>; rel="self"
+link: <{site}/drafts/>; rel="canonical"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "Drafts"
+link: "{site}/drafts/"
+---
+
+# Your Drafts
+
+[ Bob's draft number 25, not yet published. ]({site}/status/edit/00000000000040008000000010000019) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000019)
+
+[ Bob's draft number 24, not yet published. ]({site}/status/edit/00000000000040008000000010000018) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000018)
+
+[ Bob's draft number 23, not yet published. ]({site}/status/edit/00000000000040008000000010000017) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000017)
+
+[ Bob's draft number 22, not yet published. ]({site}/status/edit/00000000000040008000000010000016) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000016)
+
+[ Bob's draft number 21, not yet published. ]({site}/status/edit/00000000000040008000000010000015) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000015)
+
+[ Bob's draft number 20, not yet published. ]({site}/status/edit/00000000000040008000000010000014) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000014)
+
+[ Bob's draft number 19, not yet published. ]({site}/status/edit/00000000000040008000000010000013) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000013)
+
+[ Bob's draft number 18, not yet published. ]({site}/status/edit/00000000000040008000000010000012) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000012)
+
+[ Bob's draft number 17, not yet published. ]({site}/status/edit/00000000000040008000000010000011) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000011)
+
+[ Bob's draft number 16, not yet published. ]({site}/status/edit/00000000000040008000000010000010) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000010)
+
+[ Bob's draft number 15, not yet published. ]({site}/status/edit/0000000000004000800000001000000f) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000f)
+
+[ Bob's draft number 14, not yet published. ]({site}/status/edit/0000000000004000800000001000000e) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000e)
+
+[ Bob's draft number 13, not yet published. ]({site}/status/edit/0000000000004000800000001000000d) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000d)
+
+[ Bob's draft number 12, not yet published. ]({site}/status/edit/0000000000004000800000001000000c) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000c)
+
+[ Bob's draft number 11, not yet published. ]({site}/status/edit/0000000000004000800000001000000b) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000b)
+
+[ Bob's draft number 10, not yet published. ]({site}/status/edit/0000000000004000800000001000000a) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/0000000000004000800000001000000a)
+
+[ Bob's draft number 9, not yet published. ]({site}/status/edit/00000000000040008000000010000009) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000009)
+
+[ Bob's draft number 8, not yet published. ]({site}/status/edit/00000000000040008000000010000008) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000008)
+
+[ Bob's draft number 7, not yet published. ]({site}/status/edit/00000000000040008000000010000007) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000007)
+
+[ Bob's draft number 6, not yet published. ]({site}/status/edit/00000000000040008000000010000006) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000006)
+
+[ Bob's draft number 5, not yet published. ]({site}/status/edit/00000000000040008000000010000005) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000005)
+
+[ Bob's draft number 4, not yet published. ]({site}/status/edit/00000000000040008000000010000004) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000004)
+
+[ Bob's draft number 3, not yet published. ]({site}/status/edit/00000000000040008000000010000003) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000003)
+
+[ Bob's draft number 2, not yet published. ]({site}/status/edit/00000000000040008000000010000002) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000002)
+
+[ Bob's draft number 1, not yet published. ]({site}/status/edit/00000000000040008000000010000001) Mar 20, 2026 12:00pm · Status updates
+
+[ Edit ]({site}/status/edit/00000000000040008000000010000001)
+
+[ Older → ]({site}/drafts/?offset=25)
