@@ -14,8 +14,8 @@
         <p><?= \Idno\Core\Idno::site()->language()->_('Bridgy is pulling in replies, favorites, and retweets from Twitter. Click to disable.') ?></p>
         <form action="https://www.brid.gy/delete/start" method="post" style="margin-top:1rem;">
             <input type="hidden" name="feature" value="listen">
-            <input type="hidden" name="key" value="<?= $vars['twitter_key'] ?>">
-            <input type="hidden" name="callback" value="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/bridgy/disabled/?service=twitter' ?>">
+            <input type="hidden" name="key" value="<?= htmlspecialchars((string) ($vars['twitter_key'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="callback" value="<?= htmlspecialchars(\IdnoPlugins\Bridgy\Main::callbackUrl('disabled', 'twitter'), ENT_QUOTES, 'UTF-8') ?>">
             <button type="submit" class="idno-btn" style="color:var(--color-danger,#dc2626);border-color:var(--color-danger,#dc2626);">
                 <?= \Idno\Core\Idno::site()->language()->_('Disconnect Twitter + Bridgy') ?>
             </button>
@@ -25,7 +25,7 @@
         <p><?= \Idno\Core\Idno::site()->language()->_('To get started, activate Bridgy for the social network.') ?></p>
         <form action="https://www.brid.gy/twitter/start" method="post" style="margin-top:1rem;">
             <input type="hidden" name="feature" value="listen">
-            <input type="hidden" name="callback" value="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/bridgy/enabled/?service=twitter' ?>">
+            <input type="hidden" name="callback" value="<?= htmlspecialchars(\IdnoPlugins\Bridgy\Main::callbackUrl('enabled', 'twitter'), ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="user_url" value="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>">
             <button type="submit" class="idno-btn idno-btn-primary">
                 <?= \Idno\Core\Idno::site()->language()->_('Activate Twitter + Bridgy') ?>

@@ -980,6 +980,15 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   request passes), and never for one's own account. A member cannot delete their account
   there, and no API key can delete one: a credential for publishing does not reach account
   changes. The administrators' Users page is the other place accounts are deleted.
+- The Bridgy callbacks (`IdnoPlugins/Bridgy/Pages/Enabled.php`, `Disabled.php`, both
+  `Pages\Callback`): Bridgy sends the member's browser back with a plain GET that changes the
+  member's settings, so the address given to Bridgy carries a state (`Main::callbackState()`:
+  for one member, one of the two pages and one service, made with the site's secret, good for
+  an hour) and the page changes nothing without it. Only a service of `Account::$SERVICES` is
+  kept, the member's Bridgy address only if it is an http or https one, and the status check
+  (`Pages\Check`) fetches it with `Webservice::safeSend()`. Any other page that an outside
+  service redirects a browser to, and that changes something, needs a state of this kind.
+  `IdnoPlugins/Bridgy/Tests/CallbackStateTest.php` checks this over HTTP.
 - Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
   address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
   field the same way (`Login::sanitizeRedirectUrl()`), as does `Page::forwardAfterDelete()`. Don't `forward()` to

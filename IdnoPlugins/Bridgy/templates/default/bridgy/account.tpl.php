@@ -26,8 +26,8 @@
         <?php if ($vars['twitter_enabled']) { ?>
         <form action="https://www.brid.gy/delete/start" method="post">
             <input type="hidden" name="feature" value="listen" />
-            <input type="hidden" name="key" value="<?php echo $vars['twitter_key']?>" />
-            <input type="hidden" name="callback" value="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/bridgy/disabled/?service=twitter'?>" />
+            <input type="hidden" name="key" value="<?php echo htmlspecialchars((string) ($vars['twitter_key'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" />
+            <input type="hidden" name="callback" value="<?php echo htmlspecialchars(\IdnoPlugins\Bridgy\Main::callbackUrl('disabled', 'twitter'), ENT_QUOTES, 'UTF-8') ?>" />
             <p>
                 <button class="connect fb connected"><?php echo \Idno\Core\Idno::site()->language()->_('Twitter + Bridgy connected'); ?></button>
             </p>
@@ -38,7 +38,7 @@
         <?php } else { ?>
         <form action="https://www.brid.gy/twitter/start" method="post">
             <input type="hidden" name="feature" value="listen" />
-            <input type="hidden" name="callback" value="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/bridgy/enabled/?service=twitter'?>" />
+            <input type="hidden" name="callback" value="<?php echo htmlspecialchars(\IdnoPlugins\Bridgy\Main::callbackUrl('enabled', 'twitter'), ENT_QUOTES, 'UTF-8') ?>" />
             <input type="hidden" name="user_url" value="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL()?>" />
             <p>
                 <button class="connect tw"><?php echo \Idno\Core\Idno::site()->language()->_('Activate Twitter + Bridgy'); ?></button>

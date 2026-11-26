@@ -15,6 +15,8 @@ namespace IdnoPlugins\Bridgy\Pages {
     {
         function getContent()
         {
+            $this->gatekeeper();
+
             $user = \Idno\Core\Idno::site()->session()->currentUser();
             $t = \Idno\Core\Idno::site()->template();
             $t->setTemplateType('json');
@@ -39,9 +41,13 @@ namespace IdnoPlugins\Bridgy\Pages {
                 return false;
             }
 
-            $bridgy_url = $user->bridgy[$service]['user'];
-            if (!empty($bridgy_url) and $resp = \Idno\Core\Webservice::get($bridgy_url)) {
-                $parsed = (new \Mf2\Parser($resp['content'], $bridgy_url))->parse();
+            // The address came with a request, so it is fetched as one from another party is
+            $bridgy_url = \Idno\Core\UrlValidator::httpUrl((string) ($user->bridgy[$service]['user'] ?? ''));
+            $resp = $bridgy_url === '' ? false : \Idno\Core\Webservice::safeSend('GET', $bridgy_url, [], []);
+            // Any answer is read, as before (a page that is gone is a listener that is off); a
+            // fetch that was refused or failed changes nothing
+            if (!empty($resp) && !empty($resp['response'])) {
+                $parsed = (new \Mf2\Parser((string) $resp['content'], $bridgy_url))->parse();
                 $status = 'disabled';
                 if (!empty($parsed['items'])) {
                     $hcard = $parsed['items'][0];

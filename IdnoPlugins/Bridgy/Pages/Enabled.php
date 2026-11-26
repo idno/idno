@@ -2,30 +2,21 @@
 
 namespace IdnoPlugins\Bridgy\Pages {
 
-    use Idno\Common\Page;
-
-    class Enabled extends Page
+    /**
+     * Where Bridgy sends the member's browser after they asked it to start listening
+     */
+    class Enabled extends Callback
     {
 
-        function getContent()
+        protected function action()
         {
-            $user = \Idno\Core\Idno::site()->session()->currentUser();
-            // these will be set if this is a callback from bridgy
-            $service = $this->getInput('service');
-
-            if ($user && $service) {
-                // update the user's bridgy-connection status for this service
-                $user->bridgy[$service] = array(
-                    'status' => $this->getInput('result') == 'success' ? 'enabled' : 'disabled',
-                    'user' => $this->getInput('user'),
-                    'key' => $this->getInput('key'));
-                $user->save();
-            }
-
-            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/bridgy/');
+            return 'enabled';
         }
 
+        protected function statusFor($result)
+        {
+            return $result == 'success' ? 'enabled' : 'disabled';
+        }
     }
 
 }
-
