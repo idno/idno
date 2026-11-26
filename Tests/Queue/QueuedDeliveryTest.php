@@ -61,7 +61,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         }
         $names = array_keys($byName);
         sort($names);
-        $this->assertSame(['activitypub/deliver', 'websub/ping', 'webmention/sendall'], $names, 'one event of each kind');
+        $this->assertSame(['activitypub/deliver', 'webmention/sendall', 'websub/ping'], $names, 'one event of each kind');
         foreach ($byName as $name => $list) {
             $this->assertCount(1, $list, $name);
         }
@@ -281,8 +281,8 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             'activitypub/deliver' => $userUuid,
             'idno/queue/probe' => null,
             'idno/queue/probe-named' => $userUuid,
-            'websub/ping' => $userUuid,
             'webmention/sendall' => $userUuid,
+            'websub/ping' => $userUuid,
         ], $stored);
     }
 
