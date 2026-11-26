@@ -150,21 +150,6 @@ abstract class PageShell extends Page
     }
 
     /**
-     * A DELETE with no valid form token to a shell that serves DELETE (it declares a `deleteContent()` of its own) is refused with the site's 403 page, as a
-     * controller's page refuses it: nothing is reported and the administrator is not mailed (a legacy page threw the exception of a timed out page, which was the
-     * reported 500 page). A shell that serves no DELETE keeps the legacy page's answer.
-     */
-    protected function refuseDeleteWithoutToken()
-    {
-        if ((new \ReflectionMethod($this, 'deleteContent'))->getDeclaringClass()->getName() === Page::class) {
-            parent::refuseDeleteWithoutToken();
-
-            return;
-        }
-        $this->deniedContent(Idno::site()->language()->_('The page you were on timed out.'));
-    }
-
-    /**
      * Receives a webmention with the service: `$receive` answers whether the page took it.
      *
      * @param \Closure(): bool $receive

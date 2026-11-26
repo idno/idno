@@ -596,6 +596,15 @@ namespace Idno\Common {
         }
 
         /**
+         * What a PUT or a DELETE with no valid form token does: the site's 403 page (it says the page timed out). It is a refusal, not a failure of the page:
+         * a stranger can send it, so it is neither reported nor mailed to the administrator.
+         */
+        protected function refuseWithoutToken()
+        {
+            $this->deniedContent(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
+        }
+
+        /**
          * Internal function used to handle PUT requests.
          * Performs some administration functions, checks for the
          * presence of a form token, and hands off to postContent().
@@ -618,7 +627,7 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->putContent();
             } else {
-                throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
+                $this->refuseWithoutToken();
             }
 
             if (\Idno\Core\Idno::site()->session()->isAPIRequest()) {
@@ -689,17 +698,6 @@ namespace Idno\Common {
          * Performs some administration functions, checks for the
          * presence of a form token, and hands off to postContent().
          */
-        /**
-         * What a DELETE with no valid form token does: the exception of a timed out page (the reported 500 page). A page served through a shell refuses it
-         * with the site's 403 page instead.
-         *
-         * @throws \Idno\Exceptions\SecurityException
-         */
-        protected function refuseDeleteWithoutToken()
-        {
-            throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
-        }
-
         function delete()
         {
             \Idno\Core\Idno::site()->session()->publicGatekeeper();
@@ -718,7 +716,7 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->deleteContent();
             } else {
-                $this->refuseDeleteWithoutToken();
+                $this->refuseWithoutToken();
             }
 
             if (\Idno\Core\Idno::site()->session()->isAPIRequest()) {

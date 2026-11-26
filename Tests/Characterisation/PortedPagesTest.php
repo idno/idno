@@ -62,10 +62,11 @@ namespace Tests\Characterisation {
                 ['GET', '/', $xhr, 200, 'text/html', null, $html, true, $std, true],
                 // A request whose Host header is not a host name is served as the home page.
                 ['GET', '/', ['Host' => 'bad host!'], 200, 'text/html', null, $html, true, $std, true],
-                // A POST without a form token is a redirect to the home page; PUT and DELETE are a 500 page and PATCH a 404 page.
+                // A POST without a form token is a redirect to the home page; PUT and DELETE are the site's 403 page (they were a reported 500 page,
+                // which a stranger could make mail the administrator) and PATCH a 404 page.
                 ['POST', '/', [], 302, 'text/html', '/', '', false, $std, false],
-                ['PUT', '/', [], 500, 'text/html', null, 'Something went wrong.', false, $std, true],
-                ['DELETE', '/', [], 500, 'text/html', null, 'Something went wrong.', false, $std, true],
+                ['PUT', '/', [], 403, 'text/html', null, 'The page you were on timed out.', false, $std, true],
+                ['DELETE', '/', [], 403, 'text/html', null, 'The page you were on timed out.', false, $std, true],
                 ['PATCH', '/', [], 404, 'text/html', null, $notFound, false, $std, true],
                 // the streams
                 ['GET', '/content/all', [], 200, 'text/html', null, $html, true, $std, true],

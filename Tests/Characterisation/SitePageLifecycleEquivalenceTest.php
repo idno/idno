@@ -236,14 +236,14 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
         $this->assertSame(array_slice($legacy['events'], 0, 2), $fixture['events']);
     }
 
-    public function testAPutWithoutItsTokenIsAServerErrorForALegacyPageAndARefusalForAControllersPage(): void
+    public function testAPutWithoutItsTokenIsARefusalForALegacyPageAndForAControllersPage(): void
     {
         [$headers] = $this->sessionAndToken();
         $legacy = $this->observe($this->site(), 'PUT', self::LEGACY, 'Tests\Fixtures\LegacyPlainPage', $headers);
         $fixture = $this->observe($this->site(), 'PUT', self::FIXTURE_POST, 'Tests\Fixtures\SitePageFixture', $headers);
 
-        // On purpose: a missing token is a refusal (403, nothing reported), where Page::put() threw and was the reported 500 page.
-        $this->assertSame(500, $legacy['status']);
+        // On purpose: a missing token is a refusal (403, nothing reported) for both, where Page::put() threw and was the reported 500 page.
+        $this->assertSame(403, $legacy['status']);
         $this->assertSame(403, $fixture['status']);
         $this->assertSame(['page/ready', 'page/head', 'page/put'], array_column($legacy['events'], 'event'));
         $this->assertSame(['page/ready', 'page/head'], array_column($fixture['events'], 'event'));
@@ -252,10 +252,10 @@ final class SitePageLifecycleEquivalenceTest extends PrivateSiteTestCase
     public function testAMethodThePageDidNotDeclareIsA405WhereALegacyPageRanItsHandlersDefaults(): void
     {
         [$headers] = $this->sessionAndToken();
-        // A legacy page has `put()` and `delete()` whatever it declares: they ask for the token and throw without one. PATCH it never had.
+        // A legacy page has `put()` and `delete()` whatever it declares: they ask for the token and refuse (403) without one. PATCH it never had.
         $legacyPut = $this->site()->request('PUT', self::LEGACY, $headers);
         $legacyPatch = $this->site()->request('PATCH', self::LEGACY, $headers);
-        $this->assertSame(500, $legacyPut->status);
+        $this->assertSame(403, $legacyPut->status);
         $this->assertSame(404, $legacyPatch->status);
 
         $fixture = $this->observe($this->site(), 'PUT', '/_test/site-page/undeclared', 'Tests\Fixtures\SitePageFixture', $headers);

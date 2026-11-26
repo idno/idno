@@ -142,7 +142,7 @@ final class PermalinkPages implements ReceivesWebmentions
             return false;
         }
         $key = (string) ($arguments[0] ?? '');
-        $entity = $key !== '' ? $this->permalinks->find($key) : null;
+        $entity = !in_array($key, ['', '0'], true) ? $this->permalinks->find($key) : null;
         if ($entity === null) {
             // (what the address names is the sender's: no control characters, and no more than 200 bytes, in a log line)
             ($this->logger)()->error('No object was found with ID ' . substr((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $key), 0, 200) . '.');
@@ -160,6 +160,7 @@ final class PermalinkPages implements ReceivesWebmentions
     {
         $key = $page->arguments()[0] ?? '';
 
-        return $key !== '' ? $this->permalinks->find($key) : null;
+        // (the legacy page asked `empty()` of the argument: '0' is no address)
+        return !in_array($key, ['', '0'], true) ? $this->permalinks->find($key) : null;
     }
 }

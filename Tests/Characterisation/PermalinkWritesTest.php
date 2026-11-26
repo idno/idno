@@ -28,6 +28,8 @@ final class PermalinkWritesTest extends PermalinkSiteCase
     private const CHANGED = [
         'delete-no-token-owner' => 'a DELETE with no form token is refused with the site\'s 403 page, nothing reported and nobody mailed (the legacy page threw the exception of a timed out page: the reported 500 page)',
         'delete-visitor' => 'the same, for a visitor',
+        'put-no-token-owner' => 'a PUT with no form token is refused the same way (it was the reported 500 page)',
+        'put-visitor' => 'the same, for a visitor',
         'post-signed-owner' => 'the JSON that tells a signed request where to go is sent as application/json (the legacy page sent it as text/html)',
         'post-signed-json-owner' => 'the same',
         'post-signed-missing-post' => 'the same',
@@ -290,8 +292,8 @@ final class PermalinkWritesTest extends PermalinkSiteCase
 
         // the methods the page has no handler for
         $this->record('put-token-owner', 'PUT', $note . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', ['body' => 'x'], $this->scrubAll());
-        $this->record('put-no-token-owner', 'PUT', $note, [], 'owner', ['body' => 'x'], $this->scrubAll());
-        $this->record('put-visitor', 'PUT', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll());
+        $this->assertRefusedAndNotReported($this->record('put-no-token-owner', 'PUT', $note, [], 'owner', ['body' => 'x'], $this->scrubAll()), 'the owner\'s PUT');
+        $this->assertRefusedAndNotReported($this->record('put-visitor', 'PUT', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll()), 'a visitor\'s PUT');
         $this->record('patch-token-owner', 'PATCH', $note . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', ['body' => 'x'], $this->scrubAll());
         $this->record('patch-visitor', 'PATCH', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll());
 

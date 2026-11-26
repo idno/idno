@@ -81,6 +81,15 @@ final class PermalinkPagesTest extends TestCase
         $this->assertSame(['selectMarkdownIfWanted'], $this->site->calls);
     }
 
+    public function testAnArgumentOfZeroIsNoAddressAsAnEmptyOneIsNot(): void
+    {
+        // the legacy page asked `empty()` of the argument, which '0' is
+        $this->assertSame(410, $this->pages->view($this->context('0'))->getStatusCode());
+        $this->assertSame(['selectMarkdownIfWanted'], $this->site->calls);
+        $this->assertFalse($this->pages->receiveWebmention('idno_permalink', ['0'], new ReceivedWebmention('https://elsewhere.example/a', 'https://example.com/2026/0', [], [])));
+        $this->assertNotContains('find:0', $this->site->calls);
+    }
+
     public function testAPostTheViewerMayNotReadIsDenied(): void
     {
         $this->site->entity = $this->entity();

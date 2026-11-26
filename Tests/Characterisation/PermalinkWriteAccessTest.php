@@ -133,6 +133,37 @@ final class PermalinkWriteAccessTest extends PermalinkSiteCase
         $this->assertSame([], $this->sinkRequests($sink), 'the site fetched nothing for a requester who may not edit');
     }
 
+    /**
+     * A script's (XHR) POST or DELETE of a member to a post they may not read is answered as one to a post that is not there is: the same status, headers
+     * that say the same and an empty body, and the post is neither changed nor deleted.
+     */
+    public function testAScriptsWriteToAHiddenPostIsAnsweredAsOneToAMissingPost(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $hidden = '/' . $paths['bob-owner'];
+        $missing = '/2026/no-such-slug-here';
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        $id = '00000000000040008000000000000043';
+        foreach (['POST', 'DELETE'] as $method) {
+            $answers = [];
+            foreach (['hidden' => $hidden, 'missing' => $missing] as $kind => $path) {
+                $token = $this->tokenOf('member');
+                if ($method === 'POST') {
+                    $answers[$kind] = $this->site()->request('POST', $path, $this->asViewer('member', $xhr), ['__bTk' => $token, 'body' => 'Changed by a script']);
+                } else {
+                    $answers[$kind] = $this->site()->request('DELETE', $path . '?__bTk=' . $token, $this->asViewer('member', $xhr));
+                }
+            }
+            $this->assertSame($answers['missing']->status, $answers['hidden']->status, $method . ': the status');
+            $this->assertSame($answers['missing']->body, $answers['hidden']->body, $method . ': the body');
+            $this->assertSame('', $answers['hidden']->body, $method);
+            $this->assertSame($answers['missing']->header('Content-Type'), $answers['hidden']->header('Content-Type'), $method . ': the type');
+        }
+        $record = $this->runInSite('return \\Idno\\Core\\Idno::container()->get(\\Idno\\Storage\\RecordStore::class)->findById(\'entities\', ' . $this->literal($id) . ');');
+        $this->assertIsArray($record, 'the post is still stored');
+        $this->assertStringNotContainsString('Changed by a script', (string) ($record['body'] ?? ''));
+    }
+
     public function testTheOwnerStillEditsAPostAndStoresAFileThroughItsPermalink(): void
     {
         $paths = $this->seedPermalinkContent();
