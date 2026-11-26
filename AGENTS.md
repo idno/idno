@@ -1422,14 +1422,14 @@ sends it; the legacy endpoint received it as the cookie's user). What the endpoi
 (`Tests/Unit/Http/Webmention/WebmentionEndpointTest`) and the fetch is a method a test calls on mock clients. `receive()` reads `source` and `target` from the form-encoded body (`parse_str()` of the raw body: a multipart body is
 none) and answers in this order, stopping at the first refusal (a 400 whose body is `{"error": ..., "error_text": ...}` as `application/json`; the legacy endpoint sent it as `text/html`):
 1. `unknown_error`: a field missing, empty, not text (`source[]=a`, which was a 500 page), the two equal, over 2048 bytes (`WebmentionEndpoint::MAX_ADDRESS`), or holding white space or a control character. Nothing is looked up.
-2. The fragment is taken off the target and `WebmentionTargets::resolve()` asks for its page: none is `target_not_found`, and the source is NOT fetched (nor checked): a mention of a feed, a tag page, an edit page or another host costs no request.
+2. The fragment is taken off the target and `WebmentionTargets::resolve()` asks for its page: none is `target_not_found`, and the source is NOT fetched (nor checked): a mention of a feed, a tag page, an edit page or another host costs no request. Then, for a page a controller serves, its receiver says whether the target NAMES something (`ReceivesWebmentions::accepts($route, $arguments)`: the post, the post a shortlink names, the account, the profile of a single-user site's owner, that a visitor may see, since the request is nobody's): none is `target_not_found` too, again before anything about the source is asked. A post that does not exist, a private post, a members-only post, a draft and a deleted one are ONE answer, so the endpoint is no oracle for what is hidden, and the multi-user home page, which nothing receives, is refused here (a legacy page is a target when it declares its own `webmentionContent()`, and is not asked). So an anonymous sender cannot make the site fetch a page for a mention of an address that names nothing.
 3. A source that is this site's own address with the target's path (a trailing slash aside) is `target_not_supported` ("A page can't webmention itself"): a page of the site does not mention itself.
 4. `UrlValidator::isSafeUrl()` of the source false is `source_not_allowed` ("The source URL is not allowed."; the legacy endpoint answered it with the self-mention error).
 5. The source is fetched through `Webservice::safeSend()` (the remote client: private and reserved addresses refused on every hop, at `webservice_max_download`); no answer at all is `source_not_found` (`safeSend()` always answers, a failed request with `response` 0 and no content, which is `no_link_found`).
 6. The content must hold the target as written (less its fragment), or the source answered 410 (a source that is gone withdraws its mention): else `no_link_found`.
 7. The mention goes to the receiver of the target's page (a page a controller serves: `ReceivesWebmentions`; a legacy page: its own `webmentionContent()`, built as the router built it, with the request's current page, exception handler and headers put
-   back afterwards): taken is 202 with no body, refused is `source_not_supported`.
-Logged lines carry no more than 200 bytes of what the sender supplied, with control characters replaced. The endpoint's own page (GET) is `pages/webmention` with the title `Webmention endpoint`. PUT and DELETE are the legacy router's 404 page
+   back afterwards, also when its constructor fails): taken is 202 with no body, refused is `source_not_supported`. What `Entity::addWebmentions()` stores changes the post's ANNOTATIONS only: a mention that stores what is already stored (the same source and words again, which keeps the annotation and its time; a withdrawal for a source that has no stored mention) saves nothing, fires no event, announces nothing and sends nothing on (the Salmention forward to the post's reply targets, which goes through the remote client, happens once for a change and never for a repeat); one that changes something is saved once (`Entity::saveAnnotations()`), and the `updated` event it fires says `annotations_only` (below).
+Every answer carries `X-Content-Type-Options: nosniff`, and the JSON of a refusal (which repeats the sender's target) is written with `<`, `>`, `&`, `'` and `"` escaped (`JSON_HEX_*`), so it is no markup in any browser. Logged lines carry no more than 200 bytes of what the sender supplied, with control characters replaced. The endpoint's own page (GET) is `pages/webmention` with the title `Webmention endpoint`. PUT and DELETE are the legacy router's 404 page
 (they were the invalid-token page). Every site page lifecycle runs for a POST, so the answers carry the `Link` headers every page carries (the endpoint, the hub) and `Vary: Accept`; the legacy endpoint overrode `post()` and sent none.
 `Tests/Characterisation/WebmentionAnswersTest` holds the endpoint to answers recorded from the legacy one (`fixtures/answers/webmention/`: the page, every refusal, a mention of each kind of address and spelling, a repeat, a source that has gone,
 a sender's cookie, a single-user and a multi-user home page, a private site), with each deliberate difference in `CHANGED` and what it answers now in `EXPECTED`; the sources are real (`Tests\Fixtures\RemoteDocumentController`, see "Kernel and
@@ -2439,7 +2439,10 @@ the tag pages and the small public endpoints are served through them (and the fi
     fetched) and names it `http://93.184.216.34/<name>`: a public address, which `UrlValidator::isSafeUrl()` accepts with no lookup, that
     `LocalOnlyHttpClient` answers from that route when the site's environment has `IDNO_TEST_REMOTE_STAND_IN=93.184.216.34:80` (a stand-in for another
     server: the request goes to the same path under `/_test/remote` of the site's own origin; read at each request like `IDNO_TEST_HTTP_ALLOW`).
-    The recordings of the webmention endpoint (`Tests/Characterisation/WebmentionAnswersTest`) are made so.
+    The recordings of the webmention endpoint (`Tests/Characterisation/WebmentionAnswersTest`) are made so. A stand-in fetch is answered by the SITE's client (the address is rewritten
+    to the site's own origin, which the remote client's refusal exempts in the test wiring), so these tests prove the checks in front of the fetch, the parser and the page the mention
+    is aimed at, and NOT the private-network refusal of the remote client: that is `RemoteFetchCallSitesTest`, `RemoteFetchRefusalTest` and `RemoteFetchTest`. The directory the
+    stand-in writes in is mode 0700.
   - A plugin's test that needs a remote server to answer (the ActivityPub inbox fetching a sender's actor
     document for its key) installs mock clients with `Webservice::useClient()` and records what they were
     sent: `IdnoPlugins/ActivityPub/Tests/ServesTestActor` is the trait the inbox signature tests use. Tests
@@ -5054,7 +5057,10 @@ Each content plugin has an `Entry.php` entity class that defines
 
 1. **Outgoing**: When an entity is saved/updated/deleted, `Main.php` hooks build
    the activity via `ActivityBuilder` and call `Delivery::deliverToFollowers()`
-   which enqueues signed POSTs to each follower's inbox.
+   which enqueues signed POSTs to each follower's inbox. A save that only adds, updates or removes an ANNOTATION of a post (a member's like or reply, a webmention, the delete
+   of an annotation) is `Entity::saveAnnotations()`: the `updated` event carries `annotations_only`, and the listener sends NO `Update` (the activity does not carry annotations);
+   the sync to a PDS (`StandardSiteSync`) ignores it too. `dev` sent an `Update` to every follower for each like, reply and webmention; here an anonymous sender can no longer
+   make the site deliver to every follower per POST. An edit of the post itself is a plain `save()` and is federated as before.
    The times an activity carries are the post's own, so the same times are built every time (an `Update`'s `id` still ends in the build time,
    `#update-<time()>`; a `Create`'s is `#create`):
    a `Create`'s `published` is its object's `published` (the post's creation time, equal by
@@ -5754,6 +5760,7 @@ no installer writes one.
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
   `Tests/Pages/Admin/VendorMessagesTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
 - Known limits of the security model (stated plainly; none is fixed by the authentication changes):
+  - The webmention endpoint has no rate limit: an anonymous sender can make the site fetch one public page per POST that names a post a visitor may see (at most six requests: the redirects are followed, each hop is checked), and a mention that changes something is saved and, for a post that is itself a reply, forwarded to its reply targets.
   - A WebSub delivery is authenticated only by its address, which is unique to one subscriber and one subscription: the site sends no `hub.secret` when it subscribes, so a hub signs nothing (`X-Hub-Signature`), and anyone who
     learns a callback address can hand listeners of `websub/received` content (bounded in size, and never acted on by core). A verification does not compare `hub.topic`, because the pending list holds no topic.
   - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.

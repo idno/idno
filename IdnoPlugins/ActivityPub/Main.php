@@ -131,6 +131,9 @@ class Main extends Plugin
             // An import brings in history, not news: nothing it imports is federated
             if (\Idno\Core\Idno::importInProgress()) return;
 
+            // A like, a reply or a webmention is no change of the post (the activity does not carry them): followers are not told of an Update
+            if (!empty($eventdata['annotations_only'])) return;
+
             if ($object instanceof User) return;
             if ($object instanceof ActivityPubFollower) return;
             if ($object instanceof \Idno\Entities\AsynchronousQueuedEvent) return;

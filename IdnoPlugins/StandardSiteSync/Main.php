@@ -144,6 +144,11 @@ class Main extends Plugin
                 return;
             }
 
+            // A like, a reply or a webmention is no change of the post
+            if (!empty($eventdata['annotations_only'])) {
+                return;
+            }
+
             if (!$this->shouldSync($object)) {
                 return;
             }

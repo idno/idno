@@ -30,6 +30,9 @@ namespace Idno\Common {
         // Optional entity cache
         private static $entity_cache = [];
 
+        // Whether the save in progress changes nothing but the annotations (see saveAnnotations()); never stored
+        private $annotationsOnlySave = false;
+
         // Store the entity's attributes
         private $attributes = array(
             'access' => 'PUBLIC' // All entites are public by default
@@ -795,13 +798,33 @@ namespace Idno\Common {
                     \Idno\Core\Idno::site()->events()->triggerEvent('saved', ['object' => $this]);
                 } else {
                     $this->linkAttachedFiles();
-                    \Idno\Core\Idno::site()->events()->triggerEvent('updated', ['object' => $this]);
+                    // `annotations_only`: the save changed nothing but the annotations (see saveAnnotations()): the listeners that tell other servers
+                    // about the post's content have nothing to tell
+                    \Idno\Core\Idno::site()->events()->triggerEvent('updated', ['object' => $this, 'annotations_only' => $this->annotationsOnlySave]);
                 }
 
                 self::invalidateCache($this->uuid);
                 return $this->_id;
             } else {
                 return false;
+            }
+        }
+
+        /**
+         * Saves a change that only added, updated or removed annotations (a like, a reply, a webmention): the `updated` event it fires says so
+         * (`annotations_only`), and the listeners that tell other servers about the post's content (federation, the sync to a PDS) do nothing for it. The
+         * flag lasts for this one save.
+         *
+         * @param bool $overrideAccess As save()
+         * @return mixed What save() returns
+         */
+        function saveAnnotations($overrideAccess = true)
+        {
+            $this->annotationsOnlySave = true;
+            try {
+                return $this->save($overrideAccess);
+            } finally {
+                $this->annotationsOnlySave = false;
             }
         }
 
@@ -2439,8 +2462,10 @@ namespace Idno\Common {
         function addWebmentions($source, $target, $source_response, $source_mf2)
         {
             if ($source_response['response'] == 410) {
-                $this->removeWebmentionAnnotations($source);
-                $this->save(true);
+                // a source that has gone withdraws its mention; one that was never stored changes nothing, and nothing is saved or announced for it
+                if ($this->removeWebmentionAnnotations($source)) {
+                    $this->saveAnnotations();
+                }
 
                 return true;
             }
@@ -2478,6 +2503,7 @@ namespace Idno\Common {
                     if (empty($mentions['title'])) {
                         $mentions['title'] = '';
                     }
+                    $before = is_array($this->annotations) ? $this->annotations : [];
                     $this->removeWebmentionAnnotations($source);
                     $hosts = new \Idno\Http\Webmention\TargetHosts((string)\Idno\Core\Idno::site()->config()->getURL());
 
@@ -2502,11 +2528,30 @@ namespace Idno\Common {
                         if ($hosts->isOnSiteHost($permalink)) {
                             $permalink = $source;
                         }
-                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $mention['created'], $mention['title'], $mention['fields'])) {
+                        // a source that gives no date is dated by the first time it was stored: sending it again is not a change
+                        $created = $mention['created'];
+                        if (empty($created)) {
+                            $created = $this->storedWebmentionTime($before, $permalink);
+                        }
+                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $created, $mention['title'], $mention['fields'], true, false, false)) {
                             $return = false;
                         }
                     }
-                    $this->save(true);
+                    $after = is_array($this->annotations) ? $this->annotations : [];
+                    if (self::annotationValues($before) === self::annotationValues($after)) {
+                        // what the source says is what is stored: nothing is saved, announced or sent on (the annotations keep the keys they had)
+                        $this->annotations = $before;
+
+                        return $return;
+                    }
+                    $this->saveAnnotations();
+                    foreach ($after as $subtype => $list) {
+                        foreach (is_array($list) ? $list : [] as $key => $annotation) {
+                            if (!isset($before[$subtype][$key]) || $before[$subtype][$key] !== $annotation) {
+                                \Idno\Core\Idno::site()->events()->triggerEvent('annotation/add/' . $subtype, array('annotation' => $annotation, 'object' => $this));
+                            }
+                        }
+                    }
 
                     if ($return && $this->isReply()) {
                         if ($reply_urls = $this->getReplyToURLs()) {
@@ -2519,6 +2564,51 @@ namespace Idno\Common {
             }
 
             return $return;
+        }
+
+        /**
+         * The annotations as what they say, without the keys they are stored under (a webmention that is sent again is stored under a key of its own):
+         * the values of each kind, in a fixed order.
+         *
+         * @param array $annotations
+         * @return array<string, list<string>>
+         */
+        private static function annotationValues($annotations)
+        {
+            $values = [];
+            foreach (is_array($annotations) ? $annotations : [] as $subtype => $list) {
+                $each = [];
+                foreach (is_array($list) ? $list : [] as $annotation) {
+                    $each[] = (string) json_encode($annotation);
+                }
+                sort($each);
+                if ($each !== []) {
+                    $values[(string) $subtype] = $each;
+                }
+            }
+            ksort($values);
+
+            return $values;
+        }
+
+        /**
+         * The time of the annotation a webmention stored for this address, null when there is none.
+         *
+         * @param array  $annotations
+         * @param string $permalink
+         * @return int|null
+         */
+        private function storedWebmentionTime($annotations, $permalink)
+        {
+            foreach (is_array($annotations) ? $annotations : [] as $list) {
+                foreach (is_array($list) ? $list : [] as $key => $annotation) {
+                    if (is_array($annotation) && empty($annotation['made_here']) && ($annotation['permalink'] ?? null) === $permalink && (string) $key !== $permalink) {
+                        return (int) ($annotation['time'] ?? 0) ?: null;
+                    }
+                }
+            }
+
+            return null;
         }
 
         /**
@@ -2768,7 +2858,7 @@ namespace Idno\Common {
          * @param bool $made_here True only for an annotation this site makes for a member (the post page's like or reply, Micropub, an import): it is stored with the mark `made_here`, which a webmention can never replace and which the author's right to delete rests on
          * @return bool Depending on success
          */
-        function addAnnotation($subtype, $owner_name, $owner_url, $owner_image, $content, $annotation_url = null, $time = null, $title = '', $extra_fields = [], $send_notification = true, $made_here = false)
+        function addAnnotation($subtype, $owner_name, $owner_url, $owner_image, $content, $annotation_url = null, $time = null, $title = '', $extra_fields = [], $send_notification = true, $made_here = false, $persist = true)
         {
             // These are printed as the addresses of links and images, and may come from
             // another site: keep them only if they are http or https addresses.
@@ -2828,7 +2918,11 @@ namespace Idno\Common {
 
             $annotations[$subtype][$local_url] = $annotation;
             $this->annotations = $annotations;
-            $this->save(true);
+            if (!$persist) {
+                // (the caller saves, and announces the annotation, when what it did changed something)
+                return true;
+            }
+            $this->saveAnnotations();
 
             \Idno\Core\Idno::site()->events()->triggerEvent('annotation/add/' . $subtype, array('annotation' => $annotation, 'object' => $this));
 

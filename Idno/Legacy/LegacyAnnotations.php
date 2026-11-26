@@ -114,7 +114,7 @@ final class LegacyAnnotations implements Annotations
 
     public function remove(Entity $entity, string $permalink): bool
     {
-        return (bool) $entity->removeAnnotation($permalink) && (bool) $entity->save();
+        return (bool) $entity->removeAnnotation($permalink) && (bool) $entity->saveAnnotations(false);
     }
 
     public function removeAsAuthor(Entity $entity, string $permalink): bool
@@ -122,7 +122,7 @@ final class LegacyAnnotations implements Annotations
         $key = $entity->authoredAnnotationKey($permalink);
 
         // exactly the key the author is the author of
-        return $key !== null && $entity->removeAnnotationByKey($key) && (bool) $entity->save(true);
+        return $key !== null && $entity->removeAnnotationByKey($key) && (bool) $entity->saveAnnotations(true);
     }
 
     public function templateType(): string
