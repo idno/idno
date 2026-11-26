@@ -2669,41 +2669,42 @@ namespace Idno\Common {
          */
         function removeAnnotation($annotation_url)
         {
-            if (!empty($this->annotations)) {
-                $annotations = $this->annotations;
-                if (is_array($annotations)) {
-                    foreach ($annotations as $subtype => $array) {
-                        if (is_array($array)) {
-                            // try to remove the annotation by its local /annotation url
-                            if (array_key_exists($annotation_url, $array)) {
-                                unset($annotations[$subtype][$annotation_url]);
-                                $this->annotations = $annotations;
+            if (empty($this->annotations) || !is_array($this->annotations)) {
+                return false;
+            }
+            $annotations = $this->annotations;
+            // by the key the annotation is stored under (its local address)
+            foreach ($annotations as $subtype => $array) {
+                if (is_array($array) && array_key_exists($annotation_url, $array)) {
+                    unset($annotations[$subtype][$annotation_url]);
+                    $this->annotations = $annotations;
 
-                                return true;
-                            }
-                            // try to remove the annotation by its source permalink
-                            foreach ($array as $local_url => $properties) {
-                                if (isset($properties['permalink']) && $properties['permalink'] === $annotation_url) {
-                                    unset($annotations[$subtype][$local_url]);
-                                    $this->annotations = $annotations;
-
-                                    return true;
-                                }
-                            }
-                            // or by the address it is shown at now: an annotation made while the post had another address
-                            // holds that one, and the page prints this post's own
-                            foreach ($array as $local_url => $properties) {
-                                if (isset($properties['permalink']) && is_string($properties['permalink'])
-                                    && $properties['permalink'] !== $this->canonicalAnnotationAddress($properties['permalink'])
-                                    && $this->canonicalAnnotationAddress($properties['permalink']) === $annotation_url) {
-                                    unset($annotations[$subtype][$local_url]);
-                                    $this->annotations = $annotations;
-
-                                    return true;
-                                }
-                            }
+                    return true;
+                }
+            }
+            // by the address of the page that sent it, or by the address it is shown at now (an annotation made while the post had another address holds that
+            // one, and the page prints this post's own): only when the address names ONE annotation, never to pick one of several that share it
+            foreach (['direct', 'canonical'] as $how) {
+                $found = [];
+                foreach ($annotations as $subtype => $array) {
+                    foreach (is_array($array) ? $array : [] as $local_url => $properties) {
+                        if (!isset($properties['permalink']) || !is_string($properties['permalink'])) {
+                            continue;
+                        }
+                        $address = $how === 'direct' ? $properties['permalink'] : ($properties['permalink'] !== $this->canonicalAnnotationAddress($properties['permalink']) ? $this->canonicalAnnotationAddress($properties['permalink']) : null);
+                        if ($address === $annotation_url) {
+                            $found[] = [$subtype, $local_url];
                         }
                     }
+                }
+                if (count($found) === 1) {
+                    unset($annotations[$found[0][0]][$found[0][1]]);
+                    $this->annotations = $annotations;
+
+                    return true;
+                }
+                if ($found !== []) {
+                    return false;
                 }
             }
 
@@ -2887,6 +2888,10 @@ namespace Idno\Common {
             }
             if (empty($local_url)) {
                 $local_url = $this->getURL() . '/annotations/' . md5(time() . $content); // Invent a URL for this annotation if we don't have one already
+                // (two annotations of one kind with the same words made in one second are two annotations: the second never takes the first's key)
+                for ($n = 1; is_array($existing_annotations) && isset($existing_annotations[$local_url]); $n++) {
+                    $local_url = $this->getURL() . '/annotations/' . md5(time() . $content . $n);
+                }
             }
             if (empty($time)) {
                 $time = time();

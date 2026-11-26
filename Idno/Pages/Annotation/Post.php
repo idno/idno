@@ -44,13 +44,17 @@ namespace Idno\Pages\Annotation {
                 $has_liked = false;
                 if ($type == 'like') {
                     if ($like_annotations = $object->getAnnotations('like')) {
-                        foreach ($like_annotations as $like) {
-                            if ($like['owner_url'] == \Idno\Core\Idno::site()->session()->currentUser()->getURL()) {
-                                // (an annotation-only save, made once: a member's unlike is no change of the post, whoever owns it)
-                                if ($object->removeAnnotation($like['permalink'])) {
+                        foreach (array_keys($like_annotations) as $like_key) {
+                            // The member's own like is one they are the author of by the rule that lets an author delete an annotation (made on this site, by them):
+                            // a like a webmention sent in their name is not theirs, and the toggle then adds their own. Exactly that annotation is removed, as an
+                            // annotation-only save made once (an unlike is no change of the post, whoever owns it).
+                            $authored = $object->authoredAnnotationKey((string) $like_key);
+                            if ($authored !== null) {
+                                if ($object->removeAnnotationByKey($authored)) {
                                     $object->saveAnnotations(true);
                                 }
                                 $has_liked = true;
+                                break;
                             }
                         }
                     }
