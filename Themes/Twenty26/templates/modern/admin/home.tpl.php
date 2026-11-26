@@ -101,7 +101,7 @@
             <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Technical Settings') ?></h2>
 
             <div class="idno-form-group">
-                <label class="idno-label" for="hub"><?= \Idno\Core\Idno::site()->language()->_('PubSubHubbub hub') ?></label>
+                <label class="idno-label" for="hub"><?= \Idno\Core\Idno::site()->language()->_('WebSub hub') ?></label>
                 <input type="url" id="hub" name="hub" class="idno-input"
                        value="<?= htmlspecialchars(\Idno\Core\Idno::site()->config()->hub) ?>">
             </div>

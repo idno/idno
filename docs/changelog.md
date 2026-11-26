@@ -11,6 +11,7 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.3 or later is now required
+* The protocol that tells a hub about new posts is called WebSub throughout, as the W3C names it: in the settings, the documentation and the code, including in older entries of this list. Nothing changes for a site, its hub or its subscriptions; plugins that use the earlier class or event names keep working, and [the upgrade notes](install/upgrade.md) list the new names
 * New Portfolios plugin: members collect their own posts into named, ordered lists (draft or published) at `/profile/<handle>/portfolios`, add and remove posts from the "More" menu of a post, and show published portfolios from their profile
 * Every post has a "More" menu with "Copy link"; plugins add items to it through `content/menu/items`
 * Fixed the page description being printed unescaped in the Open Graph tags, and the JSON Feed of a page that has no description failing
@@ -164,7 +165,7 @@ February 20, 2016
 * Notifications
 * Improved webmention support
 * Improved RSS feed import
-* Pubsubhubbub now pings the homepage
+* WebSub now pings the homepage
 * Improved MongoDB compatibility
 * Fixed a bug with some hashtag links
 * Fixed an issue with APC caching detection
@@ -305,7 +306,7 @@ May 16, 2015
 May 4, 2015
 
 * Hashtags now handle unicode character sets
-* Improved PubSubHubbub handling
+* Improved WebSub handling
 * Installation now detects rewrite rule support more reliably
 * Sessions do not persist between http and https
 * Site URL in public comments is now optional
@@ -339,7 +340,7 @@ March 31, 2015
 * Improved session handling
 * Thumbnails are higher quality
 * Further improvement to Open Graph tag handling
-* Improvement to PubSubHubbub HTTP headers
+* Improvement to WebSub HTTP headers
 * A number of fixes across plugins
 * Experimental release of WordPress importer
 
@@ -387,7 +388,7 @@ November 24, 2014
 
 * API improvements
 * Cleaner hashtag and username parsing
-* PubSubHubbub implemented by default
+* WebSub implemented by default
 * KML output template
 * Delete users from the user admin panel
 * Better button behavior when saving content

@@ -15,8 +15,32 @@ namespace Idno\Core {
     class EventDispatcher
     {
 
+        /**
+         * Events that were renamed: the earlier name => the name the event has now.
+         *
+         * Both names are one event. A listener added under the earlier name is added to the
+         * event under its name of today, and triggering the earlier name (which code written
+         * before the change does, and so does an event that was queued before it) triggers
+         * that event. A listener added under both names is kept once, so it runs once.
+         * The earlier names are deprecated.
+         */
+        const RENAMED = [
+            'pubsubhubbub/ping' => 'websub/ping',
+        ];
+
         /// Event dispatcher (currently symfony)
         private $dispatcher;
+
+        /**
+         * The name an event has now: the name given, unless that event was renamed.
+         *
+         * @param  string $event
+         * @return string
+         */
+        static function currentName($event)
+        {
+            return self::RENAMED[$event] ?? $event;
+        }
 
         public function __construct()
         {
@@ -36,7 +60,12 @@ namespace Idno\Core {
         function addListener($event, $listener, $priority = 0)
         {
             if (is_callable($listener)) {
-                $this->dispatcher->addListener($event, $listener, $priority);
+                $name = self::currentName($event);
+                if (in_array($name, self::RENAMED, true) && in_array($listener, $this->dispatcher->getListeners($name), true)) {
+                    // Already added under the event's other name
+                    return;
+                }
+                $this->dispatcher->addListener($name, $listener, $priority);
             }
         }
 
@@ -51,6 +80,8 @@ namespace Idno\Core {
          */
         function triggerEvent(string $eventName, $data = array(), $default = true)
         {
+            $eventName = self::currentName($eventName);
+
             $stats = \Idno\Core\Idno::site()->statistics();
             if (!empty($stats)) {
                 $stats->increment("event.$eventName");
@@ -75,7 +106,7 @@ namespace Idno\Core {
          */
         function dispatch(string $eventName, Event $event = null)
         {
-            return $this->dispatcher->dispatch($event, $eventName);
+            return $this->dispatcher->dispatch($event, self::currentName($eventName));
         }
     }
 }

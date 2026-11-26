@@ -33,7 +33,7 @@ namespace Idno\Pages\Admin {
             if (!empty($url)) {
                 $host = parse_url($url, PHP_URL_HOST); // Host can be safely derived from URL
             }
-            $hub = $this->getInput('hub'); // PuSH hub
+            $hub = $this->getInput('hub'); // WebSub hub
             $open_registration = $this->getInput('open_registration') === 'true';
             $walled_garden = $this->getInput('walled_garden') === 'true' && \Idno\Core\Idno::site()->config()->canMakeSitePrivate();
             $show_privacy = $this->getInput('show_privacy') === 'true';

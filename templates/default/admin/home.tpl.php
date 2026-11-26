@@ -218,15 +218,15 @@
 
             <div class="row">
                 <div class="col-md-2">
-                    <p><label class="control-label" for="hub"><strong><?php echo \Idno\Core\Idno::site()->language()->_('PubSubHubbub hub'); ?></strong></label></p>
+                    <p><label class="control-label" for="hub"><strong><?php echo \Idno\Core\Idno::site()->language()->_('WebSub hub'); ?></strong></label></p>
                 </div>
                 <div class="col-md-4">
-                    <input type="url" id="hub" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('PubSubHubbub hub address'); ?>" class="input col-md-4 form-control" name="hub"
+                    <input type="url" id="hub" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('WebSub hub address'); ?>" class="input col-md-4 form-control" name="hub"
                            value="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->hub) ?>">
                 </div>
                 <div class="col-md-6">
                     <p class="config-desc"><?php echo \Idno\Core\Idno::site()->language()->_('You can probably leave this as is.'); ?>
-                        <a href="https://code.google.com/p/pubsubhubbub/" target="_blank"><?php echo \Idno\Core\Idno::site()->language()->_('Learn more about PuSH'); ?></a>.
+                        <a href="https://www.w3.org/TR/websub/" target="_blank"><?php echo \Idno\Core\Idno::site()->language()->_('Learn more about WebSub'); ?></a>.
 
                     </p>
                 </div>

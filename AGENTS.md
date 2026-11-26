@@ -315,7 +315,7 @@ takes effect at once and no post is saved again.
   the servers that have them; posts made while it was private are in the outbox when it is
   public again but are not delivered then.
 - The same rule in core and in Atmosphere: `Webmention::pingMentions()` and
-  `sendWebmentionPayload()` send nothing, `PubSubHubbub::publish()` pings no hub, and
+  `sendWebmentionPayload()` send nothing, `WebSub::publish()` pings no hub, and
   Atmosphere's `Main::shouldSync()` is false, so nothing is written to a member's PDS (a
   record written earlier is deleted when its post is next saved). Anything new that sends
   a post, or word of one, to another server must ask `Config::isPublicSite()` first.
@@ -835,8 +835,33 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
 | **IndieAuth** | `IdnoPlugins\IndiePub` — authorization at `/indieauth/auth`, token at `/indieauth/token` |
 | **Webfinger** | `Idno\Core\Webfinger` — `/.well-known/webfinger` endpoint |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
-| **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
+| **WebSub** | `Idno\Core\WebSub` — tells the site's hub about new posts, subscribes to the hubs of followed members; callback at `/pubsub/callback/{subscriber}/{subscription}` (`Idno\Pages\WebSub\Callback`) |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services |
+
+### WebSub, and the names it had
+
+The protocol is WebSub (the W3C's name), and nothing new is named after what it was called before:
+`Idno\Core\WebSub`, `Idno\Pages\WebSub\Callback`, the event `websub/ping` (`WebSub::PING_EVENT`: queued
+when a public post is published, to ping the site's hub, and triggered by the callback when a hub delivers
+something). What existing sites, hubs and plugins hold was kept, and must stay:
+
+- **The callback address** is `/pubsub/callback/<subscriber id>/<subscription id>` (`WebSub::CALLBACK_PATH`,
+  `WebSub::callbackUrl()`). Hubs hold it for every subscription already made; there is one address, not two.
+- **Stored names**: the `hub` setting, and `pubsub_pending`, `pubsub_self` and `pubsub_hub` on members. No data
+  is migrated.
+- **The protocol's own names** are not ours to change: `rel="hub"`, `rel="self"`, `hub.mode`, `hub.topic`,
+  `hub.challenge`, `hub.callback`.
+- **The earlier class names** are aliases (`class_alias()` at the foot of each class's file), and a stub file
+  at each earlier path only loads the class, so the autoloader finds the earlier name too.
+- **The earlier event name** is in `EventDispatcher::RENAMED` (earlier name => name now). The dispatcher adds
+  a listener for an earlier name to the event's name of today, triggers that event when the earlier name is
+  triggered (plugins do, and so does an event that was queued before the upgrade), and keeps a listener that is
+  added under both names once. Rename an event by adding it there, never by triggering two events.
+- `docs/install/upgrade.md` ("Names that changed") is the one place that tells the history and lists the
+  deprecated names. `Tests/Core/WebSubNamingTest.php` reads every tracked file and fails if an earlier name
+  is anywhere but the files it lists; `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class
+  names, event name and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the
+  callback over HTTP.
 
 ## Code Style
 
