@@ -107,6 +107,8 @@ final class RouteLookupTest extends TestCase
         '/feed\.xml' => 'feed',
         '/exact.md' => 'exact',
         '/staticexact' => 'staticexact',
+        '/alpha/:alpha' => 'alpha',
+        '/opt(/x)?/([a-z]+)' => 'optional',
     ];
 
     private const MARKDOWN_HANDLERS = ['permalink', 'permalinkdated', 'entry', 'staticexact'];
@@ -116,6 +118,8 @@ final class RouteLookupTest extends TestCase
         '/view/abc.md', '/entry/abc/title', '/entry/abc/title.md', '/entry/abc/', '/file/abc', '/file/abc/', '/file/abc/photo.jpg', '/file/abc/photo.md',
         '/profile/ada/a-b', '/profile/ada/a/b/c', '/profile/ada/a-b.md', '/profile/ada', '/number/42/abc', '/number/42/abc.md', '/feed.xml',
         '/exact.md', '/staticexact', '/staticexact.md', '/nothing', '/nothing.md', '/.md', '/2026/a.b.md', '/2026/a/b', '/2026/caf%C3%A9.md',
+        '/alpha/ab-c_d', '/alpha/ab.c', '/alpha/AB', '/alpha/ab.md', '/opt/abc', '/opt/x/abc', '/opt/abc.md', '/OPT/abc', '/2026/HELLO', '/2026/HELLO.md',
+        '//2026/hello', '//2026/hello.md', '/2026/hello//', "/2026/hello\n", '/2026/hello.MD', '/staticexact.md.md',
     ];
 
     private static function permalinkTable(): array
@@ -129,7 +133,9 @@ final class RouteLookupTest extends TestCase
                 eval('namespace ' . __NAMESPACE__ . '; final class ' . $class . $implements . ' { '
                     . 'public function get(...$a): void { ' . $record . ' } '
                     . 'public function head(...$a): void { ' . $record . ' } '
-                . 'public function post(...$a): void { ' . $record . ' } }');
+                    . 'public function post(...$a): void { ' . $record . ' } '
+                    . 'public function put(...$a): void { ' . $record . ' } '
+                . 'public function delete(...$a): void { ' . $record . ' } }');
             }
             $routes[$pattern] = __NAMESPACE__ . '\\' . $class;
         }
@@ -143,7 +149,7 @@ final class RouteLookupTest extends TestCase
     /**
      * @return array{0: ?array{string, list<mixed>}, 1: bool, 2: string} what Toro called, whether the suffix was remembered, the path it routed
      */
-    private function served(array $routes, string $method, string $path, ?string $override = null): array
+    private function served(array $routes, string $method, string $path, ?string $override = null, bool $xhr = false): array
     {
         $saved = $_SERVER;
         try {
@@ -154,6 +160,9 @@ final class RouteLookupTest extends TestCase
             $_SERVER['REQUEST_URI'] = $path === '' ? '/' : $path;
             if ($override !== null) {
                 $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] = $override;
+            }
+            if ($xhr) {
+                $_SERVER['HTTP_X_REQUESTED_WITH'] = 'XMLHttpRequest';
             }
             RouteLookupRecorder::remember($routes);
             $markdown = PageHandler::markdownSuffixRequested();
@@ -170,11 +179,15 @@ final class RouteLookupTest extends TestCase
     {
         $routes = self::permalinkTable();
         $found = 0;
-        foreach ([['GET', null], ['HEAD', null], ['POST', 'GET'], ['POST', null]] as [$method, $override]) {
+        foreach ([['GET', null, false], ['HEAD', null, false], ['POST', 'GET', false], ['POST', null, false], ['PUT', null, false], ['DELETE', null, false], ['GET', null, true], ['POST', null, true]] as [$method, $override, $xhr]) {
             foreach (self::ROUTED_PATHS as $path) {
-                [$call, $markdown, $routedPath] = $this->served($routes, $method, $path, $override);
+                [$call, $markdown, $routedPath] = $this->served($routes, $method, $path, $override, $xhr);
                 $routed = PageHandler::routedFor($routes, $method, $path);
-                $label = $method . ($override !== null ? ' (override ' . $override . ')' : '') . ' ' . $path;
+                $label = $method . ($override !== null ? ' (override ' . $override . ')' : '') . ($xhr ? ' (XHR)' : '') . ' ' . $path;
+                // What Toro really reaches, with no help from the code under test: the flag and the routed path it implies
+                [$expectedMarkdown, $expectedPath] = $this->expectedMarkdown($routes, $method, $path);
+                $this->assertSame($expectedMarkdown, $markdown, 'the router\'s own recording: ' . $label);
+                $this->assertSame($expectedPath, $routedPath, 'PATH_INFO as the router recorded it: ' . $label);
                 if ($call === null) {
                     // (a request whose class has no such method is not dispatched: the choice is still the lookup's)
                     $this->assertSame(PageHandler::chosenFor($routes, $routedPath), $routed['class'] ?? null, $label);
@@ -184,7 +197,7 @@ final class RouteLookupTest extends TestCase
                 $this->assertNotNull($routed, $label);
                 $this->assertSame(__NAMESPACE__ . '\\RouteLookupRecording_' . $call[0], $routed['class'], $label);
                 $this->assertSame($call[1], $routed['arguments'], $label);
-                $this->assertSame($markdown, $routed['markdown'], $label);
+                $this->assertSame($expectedMarkdown, $routed['markdown'], $label);
                 $this->assertSame($routedPath, $routed['path'], $label);
                 $this->assertSame($routed['class'], ltrim($routes[$routed['pattern']], '\\'), $label);
             }
@@ -201,6 +214,115 @@ final class RouteLookupTest extends TestCase
         $this->assertFalse(PageHandler::routedFor($routes, 'POST', '/2026/hello.md')['markdown'] ?? false);
         $this->assertSame('(not a class name)', PageHandler::routedFor(['/x' => static function (): void {
         }], 'GET', '/x')['class']);
+    }
+
+    /**
+     * The handler Toro itself reaches for a path (no suffix rule applied).
+     */
+    private function reachedBy(array $routes, string $method, string $path): ?string
+    {
+        $saved = $_SERVER;
+        try {
+            self::$calls = [];
+            unset($_SERVER['ORIG_PATH_INFO'], $_SERVER['HTTP_X_REQUESTED_WITH']);
+            $_SERVER['REQUEST_METHOD'] = $method;
+            $_SERVER['PATH_INFO'] = $path;
+            $_SERVER['REQUEST_URI'] = $path === '' ? '/' : $path;
+            \Toro::serve($routes);
+
+            return isset(self::$calls[0]) ? __NAMESPACE__ . '\\RouteLookupRecording_' . self::$calls[0][0] : null;
+        } finally {
+            $_SERVER = $saved;
+        }
+    }
+
+    /**
+     * Whether a request is the Markdown form of a permalink and the path then routed, worked out from what Toro reaches for the path as given and without
+     * its suffix, never from the code under test: a GET or HEAD whose last segment has more than `.md`; the path as given reaches a page (it is routed as
+     * it is, and is Markdown when that page is a MarkdownPermalink), or reaches none and the path without the suffix reaches a MarkdownPermalink.
+     *
+     * @return array{0: bool, 1: string}
+     */
+    private function expectedMarkdown(array $routes, string $method, string $path): array
+    {
+        if (!in_array($method, ['GET', 'HEAD'], true) || !preg_match('~[^/]\.md$~', $path)) {
+            return [false, $path];
+        }
+        $given = $this->reachedBy($routes, $method, $path);
+        if ($given !== null) {
+            return [is_a($given, \Idno\Common\MarkdownPermalink::class, true), $path];
+        }
+        $stripped = substr($path, 0, -3);
+        $reached = $this->reachedBy($routes, $method, $stripped);
+
+        return $reached !== null && is_a($reached, \Idno\Common\MarkdownPermalink::class, true) ? [true, $stripped] : [false, $path];
+    }
+
+    public function testAMatchingRouteWithNoHandlerIsTheRoutersNothing(): void
+    {
+        // Toro stops at the first pattern that matches and, with a handler that is false in PHP, serves its 404 hook: it never tries a later pattern
+        $routes = ['/zero' => '0', '/zero/?' => self::permalinkTable()['/staticexact'], '/blank' => '', '/blank/?' => self::permalinkTable()['/staticexact']];
+        foreach (['/zero', '/blank'] as $path) {
+            $this->assertNull($this->reachedBy($routes, 'GET', $path), $path);
+            $this->assertNull(PageHandler::routedFor($routes, 'GET', $path), $path);
+            $this->assertNull(PageHandler::routedFor($routes, 'GET', $path . '.md'), $path);
+        }
+    }
+
+    public function testAPathWithoutTheSuffixAsksTheTableNothingBeforeTheRouterDoes(): void
+    {
+        $table = new class (self::permalinkTable()) implements \ArrayAccess, \IteratorAggregate {
+            public int $looked = 0;
+
+            public function __construct(private array $routes)
+            {
+            }
+
+            public function offsetExists(mixed $offset): bool
+            {
+                $this->looked++;
+
+                return isset($this->routes[$offset]);
+            }
+
+            public function offsetGet(mixed $offset): mixed
+            {
+                return $this->routes[$offset];
+            }
+
+            public function offsetSet(mixed $offset, mixed $value): void
+            {
+            }
+
+            public function offsetUnset(mixed $offset): void
+            {
+            }
+
+            public function getIterator(): \Iterator
+            {
+                $this->looked++;
+
+                return new \ArrayIterator($this->routes);
+            }
+        };
+
+        $saved = $_SERVER;
+        try {
+            unset($_SERVER['ORIG_PATH_INFO']);
+            $_SERVER['REQUEST_METHOD'] = 'GET';
+            foreach (['/2026/hello', '/', '/nothing', '/feed.xml', '/2026/a.mdx'] as $path) {
+                $_SERVER['PATH_INFO'] = $path;
+                RouteLookupRecorder::remember($table);
+                $this->assertSame(0, $table->looked, 'no lookup for ' . $path);
+                $this->assertFalse(PageHandler::markdownSuffixRequested());
+            }
+            $_SERVER['PATH_INFO'] = '/2026/hello.md';
+            RouteLookupRecorder::remember($table);
+            $this->assertGreaterThan(0, $table->looked, 'a path with the suffix is looked up');
+            $this->assertTrue(PageHandler::markdownSuffixRequested());
+        } finally {
+            $_SERVER = $saved;
+        }
     }
 
     public function testAOneEntryTableIsDispatchedAlike(): void
@@ -227,7 +349,7 @@ final class RouteLookupRecorder extends PageHandler
     {
     }
 
-    public static function remember(array $routes): void
+    public static function remember($routes): void
     {
         static::routeMarkdownSuffix($routes);
     }

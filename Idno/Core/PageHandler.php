@@ -135,7 +135,7 @@ namespace Idno\Core {
         /**
          * Toro's lookup for a path with what it keeps of the match: the exact key first (`pattern` the key, `matches` empty), then the first
          * pattern, in order, that matches (`matches` as `preg_match()` gives them: the whole match first, an unmatched trailing group absent, an
-         * unmatched middle one empty). The ONE implementation of the lookup: `handlerFor()` and `routedFor()` read it.
+         * unmatched middle one empty; named groups, which Toro would pass by name, are not used by any registered pattern and arrive positionally). The ONE implementation of the lookup: `handlerFor()` and `routedFor()` read it.
          *
          * @param  iterable $routes pattern => handler, also readable as an array
          * @return array{handler: mixed, pattern: string|int, matches: array}|null
@@ -189,8 +189,9 @@ namespace Idno\Core {
                 return null;
             }
 
+            // (Toro serves the 404 for a matching route whose handler is false in PHP, and tries no later pattern)
             $handler = $match['handler'];
-            if ($handler === null || $handler === '') {
+            if (!$handler) {
                 return null;
             }
 
@@ -336,6 +337,11 @@ namespace Idno\Core {
             // The path Toro::serve() will route
             $path = static::pathFrom($_SERVER['PATH_INFO'] ?? null, $_SERVER['ORIG_PATH_INFO'] ?? null, $_SERVER['REQUEST_URI'] ?? null);
             if (!is_string($path)) {
+                return;
+            }
+
+            // (a path without the suffix is no Markdown request: the table is not asked, Toro asks it once)
+            if (\Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path) === null) {
                 return;
             }
 
