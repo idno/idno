@@ -1,0 +1,17 @@
+status 410
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <not the length of the body>
+content-type: text/html;charset=UTF-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/bob-keeps-a-note-to-himself/annotations/>; rel="self"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+

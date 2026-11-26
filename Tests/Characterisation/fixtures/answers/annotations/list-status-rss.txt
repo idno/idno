@@ -1,0 +1,64 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/rss+xml
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=rss>; rel="self"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Annotations on: Hello world: a note about gardens, with ...</title>
+    <itunes:author>Annotations on: Hello world: a note about gardens, with ...</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://hub.example/" rel="hub"/>
+    <atom:link href="{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=rss" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+    <item>
+      <title>By: Carol</title>
+      <link>https://example.org/carol/reply</link>
+      <guid>https://example.org/carol/reply</guid>
+      <pubDate>Sun, 01 Mar 2026 13:00:00 +0000</pubDate>
+      <dc:creator>Carol</dc:creator>
+      <description><![CDATA[Carol replies: hello to you too.]]></description>
+    </item>
+    <item>
+      <title>By: Dave</title>
+      <link>https://example.org/dave/like</link>
+      <guid>https://example.org/dave/like</guid>
+      <pubDate>Sun, 01 Mar 2026 14:00:00 +0000</pubDate>
+      <dc:creator>Dave</dc:creator>
+      <description><![CDATA[]]></description>
+    </item>
+    <item>
+      <title>By: Erin</title>
+      <link>https://example.org/erin/mention</link>
+      <guid>https://example.org/erin/mention</guid>
+      <pubDate>Sun, 01 Mar 2026 15:00:00 +0000</pubDate>
+      <dc:creator>Erin</dc:creator>
+      <description><![CDATA[Erin mentions this note on her own site.]]></description>
+    </item>
+    <item>
+      <title>By: Frank</title>
+      <link>https://example.org/frank/share</link>
+      <guid>https://example.org/frank/share</guid>
+      <pubDate>Sun, 01 Mar 2026 16:00:00 +0000</pubDate>
+      <dc:creator>Frank</dc:creator>
+      <description><![CDATA[]]></description>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,93 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=json>; rel="self"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000011",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000011",
+        "content": "Hello world: a note about gardens, with a link to https:\/\/example.org\/garden in it.",
+        "formattedContent": "\n<p>Hello world: a note about gardens, with a link to https:\/\/example.org\/garden in it.<\/p>\n",
+        "displayName": "Hello world: a note about gardens, with ...",
+        "objectType": "note",
+        "published": "2026-03-01T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-04.png"
+            }
+        },
+        "annotations": {
+            "reply": {
+                "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotations\/e84afaab83ecb301b3d97ce4174d2773": {
+                    "permalink": "https:\/\/example.org\/carol\/reply",
+                    "owner_name": "Carol",
+                    "owner_url": "https:\/\/example.org\/carol",
+                    "owner_image": "https:\/\/example.org\/carol.png",
+                    "content": "Carol replies: hello to you too.",
+                    "time": 1772370000,
+                    "title": ""
+                }
+            },
+            "like": {
+                "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotations\/be1ab1632e4285edc3733b142935c60b": {
+                    "permalink": "https:\/\/example.org\/dave\/like",
+                    "owner_name": "Dave",
+                    "owner_url": "https:\/\/example.org\/dave",
+                    "owner_image": "https:\/\/example.org\/dave.png",
+                    "content": "",
+                    "time": 1772373600,
+                    "title": ""
+                }
+            },
+            "mention": {
+                "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotations\/1993ee5cbe82b07a09d8b7320a2ab0b6": {
+                    "permalink": "https:\/\/example.org\/erin\/mention",
+                    "owner_name": "Erin",
+                    "owner_url": "https:\/\/example.org\/erin",
+                    "owner_image": "https:\/\/example.org\/erin.png",
+                    "content": "Erin mentions this note on her own site.",
+                    "time": 1772377200,
+                    "title": ""
+                }
+            },
+            "share": {
+                "{site}\/2026\/hello-world-a-note-about-gardens-with-a-link-to\/annotations\/85e47ac07ac9d6416168a97e33fa969a": {
+                    "permalink": "https:\/\/example.org\/frank\/share",
+                    "owner_name": "Frank",
+                    "owner_url": "https:\/\/example.org\/frank",
+                    "owner_image": "https:\/\/example.org\/frank.png",
+                    "content": "",
+                    "time": 1772380800,
+                    "title": ""
+                }
+            }
+        }
+    },
+    "title": "Annotations on: Hello world: a note about gardens, with ...",
+    "description": "Hello world: a note about gardens, with a link to https:\/\/example.org\/garden in it.",
+    "messages": []
+}

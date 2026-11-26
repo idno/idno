@@ -1,0 +1,36 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/?_t=markdown>; rel="self"
+link: <{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/>; rel="canonical"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "Annotations on: Hello world: a note about gardens, with ..."
+description: "Hello world: a note about gardens, with a link to https://example.org/garden in it."
+link: "{site}/2026/hello-world-a-note-about-gardens-with-a-link-to/annotations/"
+---
+
+[![Carol](https://example.org/carol.png)](https://example.org/carol)
+
+Carol replies: hello to you too.
+
+   [](https://example.org/carol.png) [Carol](https://example.org/carol), [Mar 01 2026](https://example.org/carol/reply) on [example.org](https://example.org/carol/reply)
+
+[![Dave](https://example.org/dave.png)](https://example.org/dave)
+
+[Dave](https://example.org/dave) liked this post
+
+[Mar 01 2026](https://example.org/dave/like) on [example.org](https://example.org/dave/like)

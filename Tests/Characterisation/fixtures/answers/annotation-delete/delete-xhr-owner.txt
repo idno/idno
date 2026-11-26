@@ -1,0 +1,17 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+cache-control: post-check=0, pre-check=0
+content-type: application/json
+expires: <past>
+last-modified: {the time of the request}
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/85e47ac07ac9d6416168a97e33fa969a}>; rel="self"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
