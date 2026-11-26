@@ -83,7 +83,9 @@ namespace Idno\Pages\User {
                 $user = \Idno\Entities\User::getByHandle($this->arguments[0]);
             }
             if (empty($user)) {
-                $this->forward(); // TODO: 404
+                $this->noContent();
+
+                return;
             }
             if ($user->saveDataFromInput()) {
                 $this->forward($user->getURL());

@@ -96,4 +96,17 @@ final class AccountDeletePagesAccessTest extends PermalinkSiteCase
         }
         $this->assertSame([], RecordingMailTransport::drain(), 'no failure was mailed to the administrators');
     }
+
+    public function testAVisitorsPostToAProfileThatIsNotThereIsTheSites404WhateverTheRequestAndNothingIsMailed(): void
+    {
+        $this->seedPermalinkContent();
+        $cookie = self::sessionCookie($this->site()->request('GET', '/'));
+        $token = $this->tokenWith(['Cookie' => $cookie]);
+        RecordingMailTransport::drain();
+        foreach ([false, true] as $script) {
+            $answer = $this->site()->request('POST', '/profile/nobody-has-this-handle?__bTk=' . $token, ['Cookie' => $cookie] + ($script ? self::XHR : []));
+            $this->assertSame(404, $answer->status, $script ? 'a script\'s request' : 'an ordinary request');
+        }
+        $this->assertSame([], RecordingMailTransport::drain(), 'no failure was mailed to the administrators');
+    }
 }
