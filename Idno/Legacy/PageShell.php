@@ -8,6 +8,7 @@ use Idno\Common\Page;
 use Idno\Core\Idno;
 use Idno\Core\PageHandler;
 use Idno\Http\Page\PageContext;
+use Idno\Http\Page\PageEnded;
 use Idno\Http\Page\PageNotModified;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
@@ -97,7 +98,7 @@ abstract class PageShell extends Page
         $site->setCurrentPage($page);
         try {
             $response = $serve($context);
-        } catch (PageRedirect | PageNotModified | AccessDeniedHttpException | NotFoundHttpException | GoneHttpException $e) {
+        } catch (PageRedirect | PageNotModified | PageEnded | AccessDeniedHttpException | NotFoundHttpException | GoneHttpException $e) {
             $thrown = $e;
         } finally {
             $site->setCurrentPage($this);
@@ -117,6 +118,12 @@ abstract class PageShell extends Page
             // the page sent its 304 where it asked, and the request ended there, as the legacy gatekeeper's did
             $this->write($thrown->toResponse(), $context);
             exit;
+        }
+        if ($thrown instanceof PageEnded) {
+            // the page forwarded a script's request, which cannot be redirected, and ended there, as `forward()` ends such a request
+            $this->forward();
+
+            return;
         }
         if ($thrown instanceof AccessDeniedHttpException) {
             $this->deniedContent($thrown->getMessage());

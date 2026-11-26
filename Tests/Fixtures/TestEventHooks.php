@@ -32,6 +32,7 @@ final class TestEventHooks
         // a legacy page that only answers, for the lifecycle tests to hold a controller's page to
         $dispatcher->addListener('plugins/loaded', static function (): void {
             Idno::site()->routes()->addRoute('/_test/legacy-plain/?', LegacyPlainPage::class);
+            Idno::site()->routes()->addRoute('/_test/legacy-forward/?', LegacyForwardPage::class);
         });
         // The legacy page the drawing tests compare the controller's answer with, in each directory that has a shell of its own
         $dispatcher->addListener('plugins/loaded', static function (): void {

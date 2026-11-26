@@ -10,6 +10,7 @@ use Idno\Core\Idno;
 use Idno\Entities\User;
 use Idno\Http\Page\HttpDate;
 use Idno\Http\Page\PageContext;
+use Idno\Http\Page\PageEnded;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
@@ -306,13 +307,19 @@ final class ControllerPage extends Page
      * on, records the redirect on the context and returns, and the response carries it. An API request is not redirected: it
      * gets the JSON `{"location": ...}` (with the trace when `forward_trace` is set), as it got from the legacy page. The
      * session is closed first when the page ends, as `finishEarly()` did. A page that cannot forward (a POST, PUT or DELETE sent
-     * as an XHR request) does nothing, as before.
+     * as an XHR request) is ended all the same, by a PageEnded (an empty answer at the page's status), as the legacy page ended; with `$exit`
+     * false it returns.
      */
     public function forward(string $location = '', bool $exit = true)
     {
         // The rule of a forward is the page renderer's, the one place it is written (the container's: a page does not own one)
         $redirect = Idno::container()->get(PageRenderer::class)->forward($this->context, $location, $exit, 302, debug_backtrace());
         if ($redirect === null) {
+            // a script's POST, PUT or DELETE cannot be redirected: a forward that ends the page ends it all the same (what follows a refusal must not run)
+            if ($exit) {
+                throw new PageEnded();
+            }
+
             return;
         }
         if ($exit) {

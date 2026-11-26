@@ -241,6 +241,14 @@ final class PageRequestListener
 
             return;
         }
+        // Where a legacy page ended at a forward that could not redirect (a script's POST, PUT or DELETE), the page throws PageEnded: an empty answer at
+        // the page's status
+        if ($redirect instanceof PageEnded) {
+            $event->allowCustomResponseCode();
+            $event->setResponse(PageEnded::response(PageContext::has($event->getRequest()) ? PageContext::of($event->getRequest())->status() : 200));
+
+            return;
+        }
         if (!$redirect instanceof PageRedirect) {
             return;
         }

@@ -1515,7 +1515,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `deniedContent($title)` `AccessDeniedHttpException` (the title is its message), `noContent()` `NotFoundHttpException`, `goneContent()`
   `GoneHttpException` (each after setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template
   type, when it is not the default, in `_t`; the session closed first, as `finishEarly()` did; `forward_trace` logged and sent as
-  `X-Idno-Forward-Trace`; a POST, PUT or DELETE sent as an XHR request does nothing, as before; an API request gets the JSON
+  `X-Idno-Forward-Trace`; a POST, PUT or DELETE sent as an XHR request cannot be redirected, so it is ENDED instead: `forward()` with `$exit` true throws `Idno\Http\Page\PageEnded`, which the listener answers as an empty response at the page's status (a legacy page's `forward()` exits there, with no `Location`), and with `$exit` false it returns; an API request gets the JSON
   `{"location": ...}` in the redirect's `body` instead of a `Location`), `sslGatekeeper()` a 307 `PageRedirect` (when `Config::hasSSL()` says the site wants https: an https `url` or `force_ssl`; `ConfigHasSslTest`), `exception()` rethrows (the controller
   wiring must not leave the exception handler `Page::init()` installs pointing at a `ControllerPage`); `forward($location, false)`, which a
   legacy page used to send the redirect and carry on, records the redirect on the context and returns, and `PageRequestListener::onResponse()`
@@ -1688,8 +1688,8 @@ the tag pages and the small public endpoints are served through them (and the fi
   (`pages/410`, `t("This content isn't here.")`), `denied($context, $title = '')` (`pages/403`) and `error($context, $e)` (`pages/500` with `exception`, title
   `Exception`) set the context's status (404, 410, 403, 500) and draw the body before the shell, as `noContent()`, `goneContent()`, `deniedContent()` and `exception()`
   did; they log and alert nothing (`reportException()` is the listener's: a caller that uses `error()` alone gets no report). The forward has ONE rule,
-  `PageRenderer::forward($context, $location, $end, $status, $frames)` (what `Page::forward()` did): null for an XHR POST, PUT or DELETE (the page cannot forward and goes
-  on); an empty location is the site's address (`PageDrawer::displayUrl()`); a template type other than `default` is carried in `_t` (`PageDrawer::urlWithVar()`, the template's
+  `PageRenderer::forward($context, $location, $end, $status, $frames)` (what `Page::forward()` did): null for an XHR POST, PUT or DELETE (the page cannot be redirected: its caller, `ControllerPage::forward()`, ends the page with a `PageEnded` when it was to end,
+  and goes on when it was not); an empty location is the site's address (`PageDrawer::displayUrl()`); a template type other than `default` is carried in `_t` (`PageDrawer::urlWithVar()`, the template's
   own `getURLWithVar()`); the session is closed first when the page ends (`PageDrawer::finishSession()`, `finishEarly()`); the trace when the site sets `forward_trace`
   (`PageDrawer::forwardTrace()`: `X-Idno-Forward-Trace` on the context, `trace` in the JSON); and an API request, decided by the SESSION's flag (`PageDrawer::isApiRequest()`,
   `Session::isAPIRequest()`, which stays true when a stateless credential left the request anonymous, a blocked member's signed request) is not redirected but given

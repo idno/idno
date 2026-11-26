@@ -471,15 +471,16 @@ final class ControllerPageTest extends TestCase
         $this->assertSame(302, $redirect->status);
     }
 
-    public function testAnXhrPostCannotForward(): void
+    public function testAnXhrPostCannotBeRedirectedSoAForwardThatEndsThePageEndsItAndOneThatDoesNotReturns(): void
     {
         $request = Request::create('/x', 'POST', [], [], [], ['HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest']);
         $page = new ControllerPage(new PageContext($request, new SitePage('Idno\Pages\Homepage')));
 
-        $page->forward('/somewhere');
         $page->forward('/somewhere', false);
-
         $this->assertNull($page->context()->redirect());
+
+        $this->expectException(\Idno\Http\Page\PageEnded::class);
+        $page->forward('/somewhere');
     }
 
     public function testAnApiRequestGetsTheJsonALegacyPageEchoed(): void

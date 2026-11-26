@@ -159,8 +159,10 @@ final class LegacyPageLifecycle implements PageLifecycle
         }
         $site->logging()->error($site->language()->_('Invalid token.'));
         $site->session()->addErrorMessage($site->language()->_('Invalid token.'));
-        $page->forward();
-        // an XHR page does not forward: it is refused
+        if (!$page->xhr()) {
+            $page->forward();
+        }
+        // an XHR page cannot forward (it would end, empty): it is refused
         throw new AccessDeniedException();
     }
 

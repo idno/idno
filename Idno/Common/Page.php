@@ -422,7 +422,7 @@ namespace Idno\Common {
                     echo $t->__(['result' => $return])->drawPage();
                 }
             } else {
-                $this->forward(); // If we haven't forwarded yet, do so (if we can)
+                $this->forward('', empty($this->xhr)); // If we haven't forwarded yet, do so (if we can): a script's request, which cannot forward, is not ended here
             }
 
             //if (http_response_code() != 200) {
@@ -474,13 +474,19 @@ namespace Idno\Common {
 
         /**
          * If this page is allowed to forward, send a header to move
-         * the browser on. Otherwise, do nothing
+         * the browser on. A POST, PUT or DELETE a script sends (an XHR request) cannot be redirected, so no header is sent; but a
+         * handler forwards to refuse and to finish, and must not go on, so such a request ENDS here (the session closed, the status
+         * the page set, no body) when `$exit` is true, as a request that is redirected does.
          *
          * @param string $location Location to forward to (eg "/foo/bar")
          * @param bool   $exit     If set to true (which it is by default), execution finishes once the header is sent.
          */
         function forward(string $location = '', bool $exit = true)
         {
+            if (empty($this->forward) && $exit && !empty($this->xhr)) {
+                \Idno\Core\Idno::site()->session()->finishEarly();
+                exit;
+            }
             if (empty($location)) {
                 $location = \Idno\Core\Idno::site()->config()->getDisplayURL();
             }
@@ -643,7 +649,7 @@ namespace Idno\Common {
                 }
 
             } else {
-                $this->forward(); // If we haven't forwarded yet, do so (if we can)
+                $this->forward('', empty($this->xhr)); // If we haven't forwarded yet, do so (if we can): a script's request, which cannot forward, is not ended here
             }
 
             if (http_response_code() != 200) {
@@ -743,7 +749,7 @@ namespace Idno\Common {
                 }
 
             } else {
-                $this->forward(); // If we haven't forwarded yet, do so (if we can)
+                $this->forward('', empty($this->xhr)); // If we haven't forwarded yet, do so (if we can): a script's request, which cannot forward, is not ended here
             }
 
             if (http_response_code() != 200) {

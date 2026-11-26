@@ -100,6 +100,19 @@ final class SitePageFixtureController
         return TokenlessCases::answer(PageContext::of($request), $this->renderer, $this->security->isGranted('ROLE_USER'));
     }
 
+    /**
+     * A page that refuses with a forward and then carries on with what the refusal must stop (it answers `CONTINUED`): for an XHR POST, PUT or DELETE,
+     * which cannot forward, the forward ends the page. `?exit=0` forwards without ending it.
+     */
+    #[Route('/{lead}_test/site-page/forward{slash}', name: 'idno_test_site_page_forward', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST', 'PUT', 'DELETE'])]
+    public function forwardAndGoOn(Request $request): Response
+    {
+        Idno::site()->currentPage()->forward('', PageContext::of($request)->input('exit') !== '0');
+
+        return new Response('CONTINUED');
+    }
+
     /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */
     #[Route('/{lead}_test/site-page/patch{slash}', name: 'idno_test_site_page_patch', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'PATCH'])]
     #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'PATCH'])]
