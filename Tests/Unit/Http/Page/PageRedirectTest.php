@@ -65,6 +65,9 @@ final class PageRedirectTest extends TestCase
             },
             static function (): PageLifecycle {
                 throw new \LogicException('no lifecycle is needed to answer a redirect');
+            },
+            static function (): never {
+                throw new \LogicException('no token storage is needed to answer a redirect');
             }
         );
         $event = new ExceptionEvent($this->createMock(HttpKernelInterface::class), Request::create('/'), HttpKernelInterface::MAIN_REQUEST, $redirect);

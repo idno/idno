@@ -25,6 +25,11 @@ final class LegacyPageLifecycle implements PageLifecycle
     {
     }
 
+    public function beginStatelessRequest(PageContext $context): void
+    {
+        Idno::site()->session()->beginStatelessRequest();
+    }
+
     public function begin(PageContext $context): void
     {
         $site = Idno::site();
@@ -127,9 +132,9 @@ final class LegacyPageLifecycle implements PageLifecycle
             return;
         }
         $site->events()->triggerEvent('page/head', ['page' => $page]);
-        if ($method !== 'GET') {
+        if ($method !== 'GET' && !$context->page()->changesStateWithoutFormToken($method)) {
             // A method that changes state is answered only with the session's form token, as Page::post() and put() asked for it:
-            // before the page hears of it. A signed API request needs none.
+            // before the page hears of it. A signed API request needs none, and a page that authenticates its requests itself (`formTokenReplacedBy`) is not asked.
             $this->requireFormToken($method, $page);
         }
         $site->events()->triggerEvent('page/' . strtolower($method), $data);

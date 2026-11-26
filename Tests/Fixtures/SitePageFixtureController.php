@@ -8,6 +8,7 @@ use Idno\Core\Idno;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,7 +30,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[SitePage(name: 'Tests\Fixtures\SitePageFixture')]
 final class SitePageFixtureController
 {
-    public function __construct(private readonly PageRenderer $renderer)
+    public function __construct(private readonly PageRenderer $renderer, private readonly Security $security)
     {
     }
 
@@ -72,6 +73,33 @@ final class SitePageFixtureController
     public function post(Request $request): JsonResponse
     {
         return $this->describe($request);
+    }
+
+    /**
+     * A page that takes POST with no form token, because something else authenticates it (an exemption the guard test lists): what the
+     * legacy session, the API flag and Symfony Security make of the request. `?draw=1` draws the page in its shell instead, whose
+     * navigation shows whether the template sees a user.
+     */
+    #[Route('/{lead}_test/site-page/tokenless{slash}', name: 'idno_test_site_page_tokenless', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST'])]
+    #[SitePage(name: 'Tests\Fixtures\SitePageFixture', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test of the exemption')]
+    public function tokenless(Request $request): Response
+    {
+        if (!PageContext::has($request)) {
+            return $this->describe($request);
+        }
+        $context = PageContext::of($request);
+        if ($context->input('draw') !== null) {
+            return $this->renderer->page($context, ['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $this->renderer->template('pages/home/blurb', ['offset' => 0])]);
+        }
+        $session = Idno::site()->session();
+        $uuid = $session->currentUserUUID();
+
+        return new JsonResponse([
+            'user' => $uuid === false ? null : $uuid,
+            'api' => $session->isAPIRequest(),
+            'granted' => $this->security->isGranted('ROLE_USER'),
+            'method' => $request->getMethod(),
+        ]);
     }
 
     /** A page that declares PATCH (a legacy page had none): the form token is asked for before `page/patch`. */

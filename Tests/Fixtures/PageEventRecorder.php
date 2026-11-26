@@ -14,7 +14,7 @@ use Idno\Core\Idno;
  * `page/ready`, `page/head`, `page/get`, `page/post` and `page/put` append one JSON line each to it: the event's name, the `page_class` and the `arguments` of its
  * data (null when it has none), the class of the current page, the first word of the template's body classes, the
  * template type, whether the page is an XHR one, whether it is a permalink and the handle of the page's owner (null
- * when it has none). On `page/head` it also sends the header `X-Idno-Test-Page-Head: 1`, as a plugin's `page/head`
+ * when it has none) and the uuid of the current user (null when nobody is logged on). On `page/head` it also sends the header `X-Idno-Test-Page-Head: 1`, as a plugin's `page/head`
  * listener may. Listeners only record (and send that one header): they change nothing else. With the variable unset
  * nothing is registered.
  */
@@ -48,6 +48,7 @@ final class PageEventRecorder
                     'xhr' => is_object($page) ? ($page->xhr ?? null) : null,
                     'permalink' => is_object($page) && method_exists($page, 'isPermalink') ? $page->isPermalink() : null,
                     'owner' => is_object($owner) && method_exists($owner, 'getHandle') ? $owner->getHandle() : null,
+                    'user' => Idno::site()->session()->currentUserUUID() ?: null,
                 ]);
                 file_put_contents($file, $line . "\n", FILE_APPEND | LOCK_EX);
                 if ($name === 'page/head') {

@@ -84,4 +84,62 @@ final class SitePageTest extends TestCase
         $this->assertNull(SitePage::of('No\Such\Class::method'));
         $this->assertNull(SitePage::of([]));
     }
+
+    public function testAnExemptionIsASentence(): void
+    {
+        $page = new SitePage('X', methods: ['GET', 'POST'], formTokenReplacedBy: 'the sender signs it');
+
+        $this->assertSame('the sender signs it', $page->formTokenReplacedBy);
+        $this->assertNull((new SitePage('X', methods: ['GET', 'POST']))->formTokenReplacedBy, 'no exemption by default');
+    }
+
+    public function testAnEmptyExemptionIsRefused(): void
+    {
+        foreach (['', '   ', "\n\t"] as $sentence) {
+            try {
+                new SitePage('X', methods: ['GET', 'POST'], formTokenReplacedBy: $sentence);
+                $this->fail('an empty exemption was accepted: ' . json_encode($sentence));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testAnAccountOrSettingsPageCannotBeExempt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new SitePage('X', accountPage: true, methods: ['GET', 'POST'], formTokenReplacedBy: 'why');
+    }
+
+    public function testASettingsPageCannotBeExempt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new SitePage('X', settingsPage: true, methods: ['GET', 'POST'], formTokenReplacedBy: 'why');
+    }
+
+    public function testAnExemptionNeedsAStateChangingMethod(): void
+    {
+        foreach ([['GET'], ['GET', 'HEAD'], []] as $methods) {
+            try {
+                new SitePage('X', methods: $methods, formTokenReplacedBy: 'why');
+                $this->fail('an exemption with no state-changing method was accepted: ' . json_encode($methods));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertNotNull((new SitePage('X', methods: ['delete'], formTokenReplacedBy: 'why'))->formTokenReplacedBy);
+    }
+
+    public function testOnlyStateChangingMethodsOfAnExemptPageSkipTheToken(): void
+    {
+        $exempt = new SitePage('X', methods: ['GET', 'POST', 'PUT'], formTokenReplacedBy: 'why');
+
+        $this->assertTrue($exempt->changesStateWithoutFormToken('POST'));
+        $this->assertTrue($exempt->changesStateWithoutFormToken('put'));
+        foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
+            $this->assertFalse($exempt->changesStateWithoutFormToken($method), $method);
+        }
+        $this->assertFalse($exempt->changesStateWithoutFormToken('DELETE'), 'a method the page does not declare is refused, not exempted');
+        $this->assertFalse((new SitePage('X', methods: ['GET', 'POST']))->changesStateWithoutFormToken('POST'), 'a page with no exemption needs the token');
+    }
 }

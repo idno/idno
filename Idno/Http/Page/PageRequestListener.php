@@ -22,6 +22,7 @@ use Symfony\Component\HttpKernel\Event\TerminateEvent;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 /**
@@ -37,12 +38,15 @@ final class PageRequestListener
 {
     /**
      * @param \Closure(): PageLifecycle $lifecycle
+     * @param \Closure(): TokenStorageInterface $tokenStorage
      */
     public function __construct(
         #[Autowire(service: 'kernel')]
         private readonly Kernel $kernel,
         #[AutowireServiceClosure(PageLifecycle::class)]
         private readonly \Closure $lifecycle,
+        #[AutowireServiceClosure('security.token_storage')]
+        private readonly \Closure $tokenStorage,
     )
     {
     }
@@ -80,6 +84,12 @@ final class PageRequestListener
         // An \Error from a listener of a plugin (the page's own events fire in begin() and enter()) is answered as one from the controller is:
         // Symfony dispatches no exception event for an \Error, so it is carried as a PageError.
         try {
+            // A page that authenticates its state-changing requests itself (never by the session): the request is nobody's from here on. The firewall has
+            // already put the browser session's user in Symfony's token storage, so that is cleared too, before any event of the page fires.
+            if ($page->changesStateWithoutFormToken($request->getMethod())) {
+                $lifecycle->beginStatelessRequest($context);
+                ($this->tokenStorage)()->setToken(null);
+            }
             $lifecycle->begin($context);
 
             // The legacy router refused an API request on an account page for every method, OPTIONS included. A refusal is Symfony

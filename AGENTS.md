@@ -937,7 +937,18 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   `{slash}`, the methods the page declares plus HEAD and OPTIONS, `utf8: false` where a parameter may hold any byte: `PageRoutesTest`). A route under `/account` MUST set `accountPage` and one under
   `/admin` `settingsPage` (or `accountPage`): the flags default to off, so a forgotten one would leave the page open, and `SitePageRoutesTest` fails for the route that forgets it.
   FORM TOKEN: a site page that lists a state-changing method has the session's form token checked by its lifecycle before `page/<method>` fires (a signed API request needs none, as for a legacy
-  page), so it carries NO `#[IsCsrfTokenValid]`; that attribute is for plain controllers. A MEMBER OR AN ADMINISTRATOR: the lifecycle has no gatekeeper of its own; a site page asks with `#[IsGranted('ROLE_USER')]`
+  page), so it carries NO `#[IsCsrfTokenValid]`; that attribute is for plain controllers.
+  FORM TOKEN EXEMPTION: a page that other servers post to (a webmention endpoint, a WebSub callback) cannot have a form token. It says so with `#[SitePage(formTokenReplacedBy: '<what authenticates its
+  state-changing requests instead>')]`: a non-empty sentence (`SitePage`'s constructor throws `\InvalidArgumentException` for an empty one, for one with `accountPage` or `settingsPage`, and for a page whose `methods`
+  lists no POST, PUT, PATCH or DELETE). For such a page's state-changing method (`SitePage::changesStateWithoutFormToken()`; GET, HEAD and OPTIONS are untouched) `PageRequestListener::onController()` makes
+  the request nobody's BEFORE the page is begun: `PageLifecycle::beginStatelessRequest()` (`Session::beginStatelessRequest()`: the request's API flag set, NO user, so `currentUser()` is false until the page itself
+  calls `authenticateStatelessly()`; nothing is written to or read from the browser session, nothing is logged, and a session the request started is destroyed at its end as for every stateless request) and
+  `TokenStorageInterface::setToken(null)` (the token storage is a service closure, built only when such a request arrives with the legacy application booted: the firewall has already put the cookie's user there). So
+  `page/ready` and every later event, the template (`is_logged_in()`), `is_granted()` and the controller never see the browser session's user, and a signed API request is nobody too; the walled garden asks about
+  nobody (the page must be `publicOnPrivateSite` to be served there). `enter()` skips the token check. An exempt action never carries `#[IsGranted]` (`SitePageRoutesTest::testNoExemptActionCarriesIsGranted`), and every
+  exemption is listed with its exact sentence in `Tests/Kernel/fixtures/form-token-exemptions.php` (`Tests/Kernel/FormTokenExemptionsTest` reads every action of `Idno/Http/Controller/` and `Tests/Fixtures/` and
+  fails for an exemption that is not listed or a listed one that is gone): adding one is a reviewed change. The fixture is `SitePageFixtureController::tokenless()` (`/_test/site-page/tokenless`), pinned over HTTP by
+  `Tests/Characterisation/FormTokenExemptionTest`. A page that needs a user authenticates a credential of its own and calls `authenticateStatelessly()`. A MEMBER OR AN ADMINISTRATOR: the lifecycle has no gatekeeper of its own; a site page asks with `#[IsGranted('ROLE_USER')]`
   or `#[IsGranted('ROLE_ADMIN')]` on the method, as any controller does. The page is begun and entered first (`page/ready`, `page/head` and `page/get` have fired, as before a legacy
   page's gatekeeper ran), and the refusal is the page's own 403, drawn as every refusal of a site page is (below: `PageExceptionListener`). No core site page needs one;
   `SitePageFixtureController::drawGranted()` is the fixture and `WhoAmIController` shows the attributes on plain controllers.
@@ -4985,7 +4996,9 @@ no installer writes one.
   serialised work, `no-store`, a same-origin path redirect, encoded output)
 - Pages that override `post()`: `Page::post()` is what checks the form token, so a page
   that overrides it has no CSRF protection of its own and must not act on a session
-  cookie alone. The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
+  cookie alone. The same holds for a site page with `formTokenReplacedBy`: its
+  state-changing requests are made stateless before the page is begun, so they cannot act on a session cookie
+  by construction (see "Adding a route"). The Micropub endpoint (`IdnoPlugins/IndiePub/Pages/MicroPub/Endpoint.php`)
   answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
   makes so (`Session::authenticateStatelessly()`) after an access token (`Authorization: Bearer`
   or the `access_token` field) has matched, and core makes so after a signed API request; otherwise it answers 401 (a GET, for
@@ -5422,8 +5435,8 @@ no installer writes one.
   - The legacy route table decides what a plugin's registration does for a moved path, so a plugin's page registered after core's with another pattern does not take it, and a plugin that extends a deleted page
     class stops the site booting until it is disabled.
   - A site page answers a conditional request with a 304 only when it asks (see "Adding a route"), and then stops before it draws; the home page, the profile and the feeds do not ask and always answer the whole page.
-  - Every state-changing method of a site page needs the session's form token (or a signed API request): a site page cannot take a POST from another
-    server (a webmention, a WebSub callback, an inbox), so such an endpoint stays a legacy page or a plain controller.
+  - Every state-changing method of a site page needs the session's form token (or a signed API request), unless the page says in `#[SitePage(formTokenReplacedBy: ...)]` what authenticates the request
+    instead and is listed in `Tests/Kernel/fixtures/form-token-exemptions.php`: its request then acts as nobody (never as the browser session's user) until the page authenticates a credential itself.
 - The first administrator: an uninstalled site as shipped can be installed by whoever reaches it first (no code to
   paste); where the server shows an earlier site (`EarlierSite::signs()`), any web install, and adopting a database that
   already holds a site, needs the code `Idno\Install\InstallCode` writes on the server, but the site's first administrator can only be created by the browser that wrote the configuration

@@ -12,6 +12,13 @@ namespace Idno\Http\Page;
 interface PageLifecycle
 {
     /**
+     * Makes the request one that is nobody's, before the page is begun: for a page whose state-changing requests are authenticated by
+     * something other than the form token (`SitePage::$formTokenReplacedBy`). The legacy session's user is set aside for the request
+     * (nothing is written to the session), so no event, template or controller sees the browser's user.
+     */
+    public function beginStatelessRequest(PageContext $context): void;
+
+    /**
      * Starts the page, as `Page::init()` did: the page becomes the current page, a referrer is never empty, the template type
      * follows `_t` (the page's default type when the request names none), the embedded flag is read and `page/ready` fires.
      */

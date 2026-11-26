@@ -27,6 +27,10 @@ final class SitePage
      * @param bool         $markdownPermalink   The page is the permalink of a post and answers its Markdown form (a legacy page was a `MarkdownPermalink`): a GET or HEAD request whose
      *                                          route's last parameter ends in `.md` is the request for it, the suffix is taken off the parameter and the `markdown` type selected
      *                                          (the route may take the suffix with its parameter, as the legacy pattern took it); a page whose shell is a `MarkdownPermalink` says so
+     * @param string|null  $formTokenReplacedBy What authenticates the page's state-changing requests (POST, PUT, PATCH, DELETE) in place of the session's form token, as a sentence: null (the default)
+     *                                          means the form token is required. Such a request is made stateless before the page is begun, so it never acts as the browser session's user (the legacy
+     *                                          session's and Symfony Security's), and the page authenticates it itself. Refused with `accountPage` or `settingsPage`, and for a page that declares no state-changing method
+     * @throws \InvalidArgumentException for an exemption that is empty, on an account or settings page, or on a page with no state-changing method
      */
     public function __construct(
         public readonly string $name,
@@ -37,8 +41,33 @@ final class SitePage
         public readonly ?string $defaultType = null,
         public readonly array $methods = ['GET'],
         public readonly bool $markdownPermalink = false,
+        public readonly ?string $formTokenReplacedBy = null,
     )
     {
+        if ($formTokenReplacedBy === null) {
+            return;
+        }
+        if (trim($formTokenReplacedBy) === '') {
+            throw new \InvalidArgumentException('A site page that takes state-changing requests without the form token must say what authenticates them instead.');
+        }
+        if ($accountPage || $settingsPage) {
+            throw new \InvalidArgumentException('An account or settings page cannot take state-changing requests without the form token.');
+        }
+        if (array_filter($methods, static fn (string $method): bool => in_array(strtoupper($method), self::STATE_CHANGING, true)) === []) {
+            throw new \InvalidArgumentException('A form token exemption needs a state-changing method (POST, PUT, PATCH or DELETE) in the page\'s methods.');
+        }
+    }
+
+    /** The methods that change state: the form token is asked for them. */
+    private const STATE_CHANGING = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+    /**
+     * Whether a request with this method is one the page authenticates itself, with no form token: the page is exempt and the method changes state.
+     * GET, HEAD and OPTIONS are never exempt.
+     */
+    public function changesStateWithoutFormToken(string $method): bool
+    {
+        return $this->formTokenReplacedBy !== null && in_array(strtoupper($method), self::STATE_CHANGING, true) && $this->allows($method);
     }
 
     /**

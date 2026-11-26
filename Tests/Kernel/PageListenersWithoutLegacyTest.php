@@ -53,6 +53,21 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
+    public function testAnExemptPagesPostBuildsNeitherTheLifecycleNorTouchesTheTokenStorage(): void
+    {
+        $kernel = $this->kernel();
+        $handler = self::errorHandler();
+
+        $page = $kernel->handle(Request::create('/_test/site-page/tokenless', 'POST'));
+
+        $this->assertFalse($kernel->legacyBooted());
+        $this->assertSame(200, $page->getStatusCode());
+        $this->assertSame(['site_page' => false], json_decode((string) $page->getContent(), true), 'no page context: the lifecycle did not run');
+        $this->assertFalse($kernel->getContainer()->initialized(LegacyPageLifecycle::class));
+        $this->assertSame($handler, self::errorHandler());
+        $kernel->shutdown();
+    }
+
     public function testTheHeadersOfEveryOtherResponseAreExactlyWhatTheyWere(): void
     {
         $kernel = $this->kernel();

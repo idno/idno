@@ -112,6 +112,10 @@ final class ExceptionTestLifecycle implements PageLifecycle
     {
     }
 
+    public function beginStatelessRequest(PageContext $context): void
+    {
+    }
+
     public function begin(PageContext $context): void
     {
     }

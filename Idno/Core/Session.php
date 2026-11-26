@@ -909,6 +909,18 @@ namespace Idno\Core {
         }
 
         /**
+         * Makes this request nobody's and an API request (it skips the form token), with no user: for a page that authenticates its own
+         * state-changing requests by something other than the session, and must never act as the browser session's user. `currentUser()`
+         * is nobody until `authenticateStatelessly()` is called; the browser session (if the request carried one) is not read or written,
+         * nothing is logged, and a session the request started is destroyed at its end, as for every stateless request.
+         */
+        public function beginStatelessRequest(): void
+        {
+            $this->statelessUser = null;
+            $this->apiRequest    = true;
+        }
+
+        /**
          * Forgets any stateless authentication: the user held in memory and the API-request flag. The queue worker
          * handles many messages in one process, and none may see what an earlier one authenticated.
          */

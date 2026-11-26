@@ -9,6 +9,7 @@ use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
+use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[SitePage('Fixture\RoutesAccount', accountPage: true)]
 final class SitePageRoutesAccountController
@@ -30,6 +31,19 @@ final class SitePageRoutesAdminController
 final class SitePageRoutesForgottenController
 {
     public function page(): void
+    {
+    }
+}
+
+#[SitePage('Fixture\RoutesExempt', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test')]
+final class SitePageRoutesExemptController
+{
+    #[IsGranted('ROLE_USER')]
+    public function guarded(): void
+    {
+    }
+
+    public function open(): void
     {
     }
 }
@@ -110,6 +124,67 @@ final class SitePageRoutesTest extends TestCase
 
             $this->assertGreaterThan(0, $sitePages, 'the scan saw the routes of site pages (the fixture\'s)');
             $this->assertSame([], self::violations($routes));
+        } finally {
+            $kernel->shutdown();
+        }
+    }
+
+    /**
+     * @return list<string> the routes of an exempt page (one that takes state-changing requests as nobody) whose controller asks for a user or a role
+     */
+    private static function exemptWithIsGranted(RouteCollection $routes): array
+    {
+        $found = [];
+        foreach ($routes as $name => $route) {
+            $controller = $route->getDefault('_controller');
+            $page = is_string($controller) || is_array($controller) ? SitePage::of($controller) : null;
+            if ($page === null || $page->formTokenReplacedBy === null) {
+                continue;
+            }
+            [$class, $method] = is_array($controller) ? [is_object($controller[0]) ? $controller[0]::class : $controller[0], $controller[1]] : (str_contains($controller, '::') ? explode('::', $controller, 2) : [$controller, '__invoke']);
+            $reflection = new \ReflectionClass($class);
+            $attributes = $reflection->getAttributes(IsGranted::class);
+            if ($reflection->hasMethod($method)) {
+                $attributes = [...$attributes, ...$reflection->getMethod($method)->getAttributes(IsGranted::class)];
+            }
+            if ($attributes !== []) {
+                $found[] = $name . ' (' . $class . '::' . $method . '): an exempt page is asked as nobody, so #[IsGranted] would refuse every request';
+            }
+        }
+
+        return $found;
+    }
+
+    public function testAnExemptActionWithIsGrantedIsFound(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('exempt_guarded', self::route('/x', SitePageRoutesExemptController::class));
+        $routes->get('exempt_guarded')->setDefault('_controller', SitePageRoutesExemptController::class . '::guarded');
+        $routes->add('exempt_open', new Route('/y', ['_controller' => SitePageRoutesExemptController::class . '::open']));
+        $routes->add('not_exempt', self::route('/z', SitePageRoutesForgottenController::class));
+
+        $found = self::exemptWithIsGranted($routes);
+
+        $this->assertCount(1, $found, implode("\n", $found));
+        $this->assertStringStartsWith('exempt_guarded ', $found[0]);
+    }
+
+    public function testNoExemptActionCarriesIsGranted(): void
+    {
+        $kernel = new Kernel('test', true, bootLegacy: false);
+        $kernel->boot();
+        try {
+            $routes = $kernel->getContainer()->get('router')->getRouteCollection();
+            $exempt = 0;
+            foreach ($routes as $route) {
+                $controller = $route->getDefault('_controller');
+                if ((is_string($controller) || is_array($controller)) && SitePage::of($controller)?->formTokenReplacedBy !== null) {
+                    $exempt++;
+                }
+            }
+
+            $this->assertGreaterThan(0, $exempt, 'the scan saw an exempt page (the fixture\'s)');
+            $this->assertSame([], self::exemptWithIsGranted($routes));
         } finally {
             $kernel->shutdown();
         }
